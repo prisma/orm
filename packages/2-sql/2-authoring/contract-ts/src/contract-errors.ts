@@ -21,7 +21,6 @@ type ContractSubcode =
   | 'IDENTITY_INVALID'
   | 'CONSTRAINT_INVALID'
   | 'DEFAULT_INVALID'
-  | 'DEFAULT_SQL_INTERPOLATION'
   | 'ENUM_INVALID'
   | 'CHECK_NAME_RESERVED'
   | 'CHECK_ON_STI_VARIANT'
@@ -32,7 +31,8 @@ type ContractSubcode =
   | 'MODULE_EXPORT_MISSING'
   | 'ENTITY_KIND_UNKNOWN'
   | 'ENTITY_KIND_INVALID'
-  | 'TABLE_MISMATCH';
+  | 'TABLE_MISMATCH'
+  | 'SQL_EXPRESSION_INVALID';
 
 export function contractError(
   code: ContractCode,

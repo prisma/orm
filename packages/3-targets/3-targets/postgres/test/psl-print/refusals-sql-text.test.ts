@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { printingWidget } from './refusal-support';
+import { printingWidget, TEXT_COLUMN, TEXT_FIELD } from './refusal-support';
 
 const WHY =
   'A sql literal is canonicalized when it is read: indentation shared by every line, a blank first or last line, a carriage return and a whitespace-only line are removed, so this text would read back as different SQL.';
@@ -86,6 +86,26 @@ describe('SQL a sql literal cannot write back unchanged', () => {
         why: WHY,
         fix: FIX,
         meta: { namespaceId: 'public', table: 'Widget', policy: 'widget_read' },
+      }),
+    );
+  });
+
+  it('refuses a column default whose expression holds a carriage return', () => {
+    const print = printingWidget({
+      fields: { label: TEXT_FIELD },
+      columns: {
+        label: { ...TEXT_COLUMN, default: { kind: 'function', expression: "lower('a\r\nb')" } },
+      },
+    });
+
+    expect(print).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        message:
+          'contract print: default of column "public"."Widget"."label" holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.',
+        why: WHY,
+        fix: FIX,
+        meta: { coordinate: '"public"."Widget"."label"' },
       }),
     );
   });

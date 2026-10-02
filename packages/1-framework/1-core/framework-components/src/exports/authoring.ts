@@ -74,7 +74,9 @@ export type {
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
   canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
   printTaggedLiteral,
+  resolveTemplateTagEscapes,
   taggedLiteralTextReadsBack,
 } from '../shared/tagged-literal';
 export type { PresetStorageTemplate } from '../shared/temporal-presets';

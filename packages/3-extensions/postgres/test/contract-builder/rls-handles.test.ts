@@ -10,6 +10,7 @@
  *  3. Empty names are rejected at construction.
  */
 
+import { sql } from '@internal/sql-contract/sql-expression';
 import { extensionModel } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import type { RlsRoleHandle } from '../../src/exports/contract-builder';
@@ -71,11 +72,11 @@ describe('rlsEnabled', () => {
 });
 
 describe('policy helpers capture inputs faithfully', () => {
-  it('policySelect: name, roles, string using, model by reference', () => {
+  it('policySelect: name, roles, sql using, model by reference', () => {
     const handle = policySelect(Profile, {
       name: 'profile_owner_read',
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
     });
 
     expect(handle).toEqual({
@@ -84,7 +85,7 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_read',
       refs: { target: Profile },
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
     });
     expect(handle.refs.target).toBe(Profile);
     expect(handle.roles[0]).toBe(authenticated);
@@ -96,7 +97,7 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyDelete(Profile, {
       name: 'profile_owner_delete',
       roles: [authenticated],
-      using: 'true',
+      using: sql`true`,
     });
 
     expect(handle).toEqual({
@@ -105,7 +106,7 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_delete',
       refs: { target: Profile },
       roles: [authenticated],
-      using: 'true',
+      using: sql`true`,
     });
   });
 
@@ -113,7 +114,7 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyInsert(Profile, {
       name: 'profile_owner_insert',
       roles: [authenticated],
-      withCheck: '"userId"::uuid = auth.uid()',
+      withCheck: sql`"userId"::uuid = auth.uid()`,
     });
 
     expect(handle).toEqual({
@@ -122,7 +123,7 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_insert',
       refs: { target: Profile },
       roles: [authenticated],
-      withCheck: '"userId"::uuid = auth.uid()',
+      withCheck: sql`"userId"::uuid = auth.uid()`,
     });
   });
 
@@ -130,8 +131,8 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyUpdate(Profile, {
       name: 'profile_owner_write',
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
-      withCheck: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
+      withCheck: sql`"userId"::uuid = auth.uid()`,
     });
 
     expect(handle).toEqual({
@@ -140,8 +141,8 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_write',
       refs: { target: Profile },
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
-      withCheck: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
+      withCheck: sql`"userId"::uuid = auth.uid()`,
     });
   });
 
@@ -149,7 +150,7 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyUpdate(Profile, {
       name: 'profile_owner_write',
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
     });
 
     expect(handle).toEqual({
@@ -158,7 +159,7 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_write',
       refs: { target: Profile },
       roles: [authenticated],
-      using: '"userId"::uuid = auth.uid()',
+      using: sql`"userId"::uuid = auth.uid()`,
     });
     expect(Object.keys(handle)).not.toContain('withCheck');
   });
@@ -167,7 +168,7 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyAll(Profile, {
       name: 'profile_check_all',
       roles: [authenticated],
-      withCheck: 'true',
+      withCheck: sql`true`,
     });
 
     expect(handle).toEqual({
@@ -176,7 +177,7 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_check_all',
       refs: { target: Profile },
       roles: [authenticated],
-      withCheck: 'true',
+      withCheck: sql`true`,
     });
     expect(Object.keys(handle)).not.toContain('using');
   });
@@ -185,8 +186,8 @@ describe('policy helpers capture inputs faithfully', () => {
     const handle = policyAll(Profile, {
       name: 'profile_owner_all',
       roles: [anon, authenticated],
-      using: 'true',
-      withCheck: 'true',
+      using: sql`true`,
+      withCheck: sql`true`,
     });
 
     expect(handle).toEqual({
@@ -195,16 +196,16 @@ describe('policy helpers capture inputs faithfully', () => {
       name: 'profile_owner_all',
       refs: { target: Profile },
       roles: [anon, authenticated],
-      using: 'true',
-      withCheck: 'true',
+      using: sql`true`,
+      withCheck: sql`true`,
     });
   });
 
   it('rejects an empty policy name', () => {
-    expect(() => policySelect(Profile, { name: '', roles: [anon], using: 'true' })).toThrow(
+    expect(() => policySelect(Profile, { name: '', roles: [anon], using: sql`true` })).toThrow(
       /name must be a non-empty string/,
     );
-    expect(() => policySelect(Profile, { name: '  ', roles: [anon], using: 'true' })).toThrow(
+    expect(() => policySelect(Profile, { name: '  ', roles: [anon], using: sql`true` })).toThrow(
       /name must be a non-empty string/,
     );
   });
@@ -219,8 +220,8 @@ describe('runtime predicate-matrix backstop for untyped callers', () => {
       untypedPolicySelect(Profile, {
         name: 'p_read',
         roles: [anon],
-        using: 'true',
-        withCheck: 'true',
+        using: sql`true`,
+        withCheck: sql`true`,
       }),
     ).toThrow(
       /policySelect: policy "p_read" does not take a `withCheck` predicate; the SELECT operation uses `using` only/,
@@ -233,8 +234,8 @@ describe('runtime predicate-matrix backstop for untyped callers', () => {
       untypedPolicyDelete(Profile, {
         name: 'p_delete',
         roles: [anon],
-        using: 'true',
-        withCheck: 'true',
+        using: sql`true`,
+        withCheck: sql`true`,
       }),
     ).toThrow(
       /policyDelete: policy "p_delete" does not take a `withCheck` predicate; the DELETE operation uses `using` only/,
@@ -247,8 +248,8 @@ describe('runtime predicate-matrix backstop for untyped callers', () => {
       untypedPolicyInsert(Profile, {
         name: 'p_insert',
         roles: [anon],
-        using: 'true',
-        withCheck: 'true',
+        using: sql`true`,
+        withCheck: sql`true`,
       }),
     ).toThrow(
       /policyInsert: policy "p_insert" does not take a `using` predicate; the INSERT operation uses `withCheck` only/,
@@ -272,8 +273,8 @@ describe('runtime predicate-matrix backstop for untyped callers', () => {
 
 describe('handles are inert and reusable', () => {
   it('one role handle is safely shared across two policies', () => {
-    const first = policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' });
-    const second = policyDelete(Profile, { name: 'p_delete', roles: [anon], using: 'true' });
+    const first = policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` });
+    const second = policyDelete(Profile, { name: 'p_delete', roles: [anon], using: sql`true` });
 
     expect(first.roles[0]).toBe(anon);
     expect(second.roles[0]).toBe(anon);
@@ -282,14 +283,14 @@ describe('handles are inert and reusable', () => {
 
   it("mutating the caller's roles array after construction does not change the handle", () => {
     const roles: RlsRoleHandle[] = [anon];
-    const handle = policySelect(Profile, { name: 'p_read', roles, using: 'true' });
+    const handle = policySelect(Profile, { name: 'p_read', roles, using: sql`true` });
     roles.push(authenticated);
     expect(handle.roles).toEqual([anon]);
   });
 
   it('construction has no side effects: two identical calls produce equal, distinct handles', () => {
-    const a = policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' });
-    const b = policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' });
+    const a = policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` });
+    const b = policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` });
     expect(a).toEqual(b);
     expect(a).not.toBe(b);
   });

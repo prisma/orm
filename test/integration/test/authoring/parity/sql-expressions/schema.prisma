@@ -1,0 +1,49 @@
+// use prisma-8
+
+namespace public {
+  model Post {
+    id         Int       @id
+    userId     String
+    email      String
+    body       String
+    archivedAt DateTime?
+    slug       String    @default(sql`
+      lower(
+        'post-' || md5(random()::text)
+      )
+    `)
+
+    @@index([userId], where: sql`
+      "archivedAt" IS NULL
+        AND "userId" <> ''
+    `, name: "post_user_active")
+    @@index(expression: sql`lower("email")`, name: "post_email_lower")
+    @@fullTextIndex([body], where: sql`"archivedAt" IS NULL`, name: "post_body_search")
+    @@check(expression: sql`"email" !~ '\s'`, name: "post_email_no_space")
+    @@map("post")
+    @@rls
+  }
+
+  policy_update post_owner_write {
+    target    = Post
+    roles     = [authenticated]
+    using     = sql`"userId"::uuid = auth.uid()`
+    withCheck = sql`"userId"::uuid = auth.uid() AND "archivedAt" IS NULL`
+  }
+
+  policy_update post_admin_write {
+    target    = Post
+    roles     = [authenticated]
+    using     = sql`
+      "userId"::uuid = auth.uid()
+        OR auth.role() = 'admin'
+    `
+    withCheck = sql`
+      (
+        "userId"::uuid = auth.uid()
+          OR auth.role() = 'admin'
+      )
+      AND "archivedAt" IS NULL
+    `
+  }
+}

@@ -6,6 +6,7 @@
  * the inline `.id()`/`.unique()` field helpers and relation `.sql({ fk })` keep
  * them literal, so these cases pin that inference as much as the check.
  */
+import { sql } from '@internal/sql-contract/sql-expression';
 import { expectTypeOf, test } from 'vitest';
 import { field, model, rel } from '../src/contract-builder';
 import type { ContractModelBuilder } from '../src/contract-dsl';
@@ -79,7 +80,7 @@ test('an expression index reusing a fields index name is rejected', () => {
     table: 'user',
     indexes: [
       constraints.index([cols.email], { name: 'user_idx' }),
-      constraints.index({ expression: 'lower(email)', name: 'user_idx' }),
+      constraints.index({ expression: sql`lower(email)`, name: 'user_idx' }),
     ],
   }));
   expectTypeOf<IsNever<SqlSpecOf<typeof user>>>().toEqualTypeOf<true>();

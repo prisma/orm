@@ -13,6 +13,7 @@ export type {
   PrimaryKeyNode,
   RelationNode,
   ScalarFieldBuilder,
+  SqlExpression,
   UniqueConstraintNode,
 } from '@internal/sql-contract-ts/contract-builder';
 export {

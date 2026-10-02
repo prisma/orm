@@ -38,6 +38,8 @@ import {
   policySelect,
   rlsEnabled,
   role,
+  type SqlExpression,
+  sql,
 } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
@@ -76,8 +78,8 @@ const ALLOW_DESTRUCTIVE: MigrationOperationPolicy = {
 
 type PostgresControlDriver = Awaited<ReturnType<typeof postgresDriverDescriptor.create>>;
 
-const OWNER_PREDICATE = "owner_id = current_setting('app.uid')::int";
-const EDITED_PREDICATE = `${OWNER_PREDICATE} AND deleted_at IS NULL`;
+const OWNER_PREDICATE = sql`owner_id = current_setting('app.uid')::int`;
+const EDITED_PREDICATE = sql`${OWNER_PREDICATE} AND deleted_at IS NULL`;
 
 const appUser = role('app_user');
 
@@ -92,7 +94,7 @@ function makeProfile() {
 }
 
 function buildTsContract(input: {
-  readonly policy?: { readonly prefix: string; readonly using: string };
+  readonly policy?: { readonly prefix: string; readonly using: SqlExpression };
   readonly declaredRoleName?: string;
 }): Contract<SqlStorage> {
   const profile = makeProfile();

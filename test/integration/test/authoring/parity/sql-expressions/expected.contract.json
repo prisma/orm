@@ -1,0 +1,236 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "post": {
+      "model": "Post",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Post": {
+            "fields": {
+              "archivedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "body": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "slug": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "archivedAt": {
+                  "column": "archivedAt"
+                },
+                "body": {
+                  "column": "body"
+                },
+                "email": {
+                  "column": "email"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "slug": {
+                  "column": "slug"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "post"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "policy": {
+            "post_admin_write": {
+              "kind": "policy",
+              "name": "post_admin_write_06087940",
+              "namespaceId": "public",
+              "operation": "update",
+              "permissive": true,
+              "prefix": "post_admin_write",
+              "roles": ["authenticated"],
+              "tableName": "post",
+              "using": "\"userId\"::uuid = auth.uid()\n  OR auth.role() = 'admin'",
+              "withCheck": "(\n  \"userId\"::uuid = auth.uid()\n    OR auth.role() = 'admin'\n)\nAND \"archivedAt\" IS NULL"
+            },
+            "post_owner_write": {
+              "kind": "policy",
+              "name": "post_owner_write_45617e86",
+              "namespaceId": "public",
+              "operation": "update",
+              "permissive": true,
+              "prefix": "post_owner_write",
+              "roles": ["authenticated"],
+              "tableName": "post",
+              "using": "\"userId\"::uuid = auth.uid()",
+              "withCheck": "\"userId\"::uuid = auth.uid() AND \"archivedAt\" IS NULL"
+            }
+          },
+          "rls": {
+            "post": {
+              "kind": "rls",
+              "namespaceId": "public",
+              "tableName": "post"
+            }
+          },
+          "table": {
+            "post": {
+              "checks": [
+                {
+                  "expression": "\"email\" !~ '\\s'",
+                  "name": "post_email_no_space_36d6c4b8",
+                  "prefix": "post_email_no_space"
+                }
+              ],
+              "columns": {
+                "archivedAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
+                },
+                "body": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "email": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "slug": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "expression": "lower(\n  'post-' || md5(random()::text)\n)",
+                    "kind": "function"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "expression": "to_tsvector('english', \"body\")",
+                  "name": "post_body_search_0ff2126f",
+                  "prefix": "post_body_search",
+                  "type": "gin",
+                  "unique": false,
+                  "where": "\"archivedAt\" IS NULL"
+                },
+                {
+                  "expression": "lower(\"email\")",
+                  "name": "post_email_lower_034e6ee8",
+                  "prefix": "post_email_lower",
+                  "unique": false
+                },
+                {
+                  "columns": ["userId"],
+                  "name": "post_user_active_5971704f",
+                  "prefix": "post_user_active",
+                  "unique": false,
+                  "where": "\"archivedAt\" IS NULL\n  AND \"userId\" <> ''"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public"
+      }
+    },
+    "storageHash": "a86b2c7e7180df34ac9202481d470b7a04f6a4921ee5f8651a14eb620f3f91ee"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

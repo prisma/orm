@@ -1,3 +1,4 @@
+import { requireSqlExpression, type SqlExpression } from '@internal/sql-contract/sql-expression';
 import type { ColumnRef, IndexConstraint } from '@internal/sql-contract-ts/contract-builder';
 import type { FullTextSearchLanguage } from '@internal/target-postgres/operation-types';
 import {
@@ -11,7 +12,7 @@ import { postgresError } from '../errors';
 type FullTextIndexOptionsBase = {
   readonly language?: FullTextSearchLanguage;
   /** The SQL predicate restricting rows included in a partial index. */
-  readonly where?: string;
+  readonly where?: SqlExpression;
 };
 
 /**
@@ -85,8 +86,22 @@ export function fullTextIndex(
       },
     },
     type: 'gin',
-    ...(options.where !== undefined ? { where: options.where } : {}),
+    ...(options.where !== undefined
+      ? {
+          where: requireSqlExpression(
+            options.where,
+            `${fullTextIndexOwner(column, options)} where`,
+          ),
+        }
+      : {}),
     ...(options.name !== undefined ? { name: options.name } : {}),
     ...(options.map !== undefined ? { map: options.map } : {}),
   };
+}
+
+function fullTextIndexOwner(column: ColumnRef, options: FullTextIndexOptions): string {
+  const name = options.name ?? options.map;
+  return name === undefined
+    ? `Full-text index on "${column.fieldName}"`
+    : `Full-text index "${name}"`;
 }

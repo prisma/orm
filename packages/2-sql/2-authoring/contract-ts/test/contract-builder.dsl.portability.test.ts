@@ -1,8 +1,8 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import { sql } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { defineContract, field, model, rel } from '../src/contract-builder';
-import { sql } from '../src/sql-default-literal';
 
 import { columnDescriptor } from './helpers/column-descriptor';
 import { unboundTables } from './unbound-tables';

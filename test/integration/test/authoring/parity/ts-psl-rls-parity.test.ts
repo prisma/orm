@@ -26,6 +26,7 @@ import {
   policyUpdate,
   rlsEnabled,
   role,
+  sql,
 } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
@@ -63,7 +64,7 @@ function interpretWithRealPacks(schema: string) {
   );
 }
 
-const OWNER_PREDICATE = '"userId"::uuid = auth.uid()';
+const OWNER_PREDICATE = sql`"userId"::uuid = auth.uid()`;
 
 function buildTsModels() {
   return {
@@ -92,7 +93,7 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
       roles: [authenticated],
       using: OWNER_PREDICATE,
     }),
-    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: 'true' }),
+    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: sql`true` }),
     policyUpdate(Profile, {
       name: 'profile_owner_write',
       roles: [authenticated],
@@ -113,8 +114,8 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
     policyAll(Profile, {
       name: 'profile_admin_all',
       roles: [anon, authenticated],
-      using: 'true',
-      withCheck: 'true',
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
     // Single-predicate update (PSL accepts using-only; hash omits withCheck).
     policyUpdate(Profile, {
@@ -123,7 +124,7 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
       using: OWNER_PREDICATE,
     }),
     // Policy on the @@map'd model (storage name not derivable from the name).
-    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: 'true' }),
+    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: sql`true` }),
     // A declared role — lands in `__unbound__.entries.role`, identical to the
     // PSL `namespace unbound { role app_role {} }` block below.
     role('app_role'),

@@ -1,3 +1,4 @@
+export { type SqlExpression, sql } from '@internal/sql-contract/sql-expression';
 export type {
   ComposedAuthoringHelpers,
   ContractInput,
@@ -58,4 +59,3 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
-export { sql } from '../sql-default-literal';
