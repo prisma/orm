@@ -41,7 +41,7 @@ describe('pgvector extension pack integration', () => {
     const vectorDescriptor = descriptors.find((d) => d.codecId === 'pg/vector@1');
     expect(vectorDescriptor).toBeDefined();
     expect(vectorDescriptor?.codecId).toBe('pg/vector@1');
-    expect(vectorDescriptor?.targetTypes).toEqual(['vector']);
+    expect(vectorDescriptor?.dataType).toBe('pgvector/vector');
   });
 
   it('descriptor provides query operations', () => {

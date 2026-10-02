@@ -35,8 +35,6 @@ export interface SqlColumnDefaultIRInput {
   readonly codecRef?: CodecRef;
   /** See {@link import('./sql-column-ir').SqlColumnIRInput.codecBaseNativeType}. */
   readonly codecBaseNativeType?: string;
-  /** See {@link import('./sql-column-ir').SqlColumnIRInput.codecNamedType}. */
-  readonly codecNamedType?: boolean;
   /** See {@link import('./sql-column-ir').SqlColumnIRInput.dataType}. */
   readonly dataType?: DataType;
 }
@@ -68,8 +66,6 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
   declare readonly codecRef?: CodecRef;
   /** See {@link SqlColumnDefaultIRInput.codecBaseNativeType}. Non-enumerable, same reason as {@link many}. */
   declare readonly codecBaseNativeType?: string;
-  /** See {@link SqlColumnDefaultIRInput.codecNamedType}. Non-enumerable, same reason as {@link many}. */
-  declare readonly codecNamedType?: boolean;
   /** See {@link SqlColumnDefaultIRInput.dataType}. Non-enumerable, same reason as {@link many}. */
   declare readonly dataType?: DataType;
 
@@ -82,7 +78,6 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     defineNonEnumerable(this, 'many', input.many);
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
-    defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
     defineNonEnumerable(this, 'dataType', input.dataType);
     freezeNode(this);
   }

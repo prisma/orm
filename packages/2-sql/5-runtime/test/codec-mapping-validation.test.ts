@@ -16,7 +16,6 @@ function registryWith(...codecIds: string[]): CodecDescriptorRegistry {
     descriptorFor: (codecId) => descriptors.get(codecId),
     codecRefForColumn: () => undefined,
     values: () => descriptors.values(),
-    byTargetType: () => [],
   };
 }
 

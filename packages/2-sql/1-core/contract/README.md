@@ -16,12 +16,12 @@ This package provides TypeScript type definitions, Arktype validators, and facto
 ## StorageColumn Structure
 
 Each `StorageColumn` in SQL contracts includes both:
-- **`nativeType`** (required): Native database type identifier (e.g., `'int4'`, `'text'`, `'vector'`) - used for database structure verification and migration planning
+- **`nativeType`** (required): the base name of the column's database type (e.g., `'int4'`, `'text'`, `'vector'`), written from the data type the column's codec represents. Migration planning and verification write the full type name from that data type and `typeParams`, not from this field
 - **`codecId`** (required): Codec identifier (e.g., `'pg/int4@1'`, `'pg/text@1'`, `'pg/vector@1'`) - used for query builders and runtime codecs
 - **`nullable`** (required): Whether the column is nullable
 - **`default`** (optional): Uses the shared `ColumnDefault` type from `@internal/contract` for db-agnostic defaults (literal or function). Client-generated defaults live in `execution.mutations.defaults`.
 
-Both `nativeType` and `codecId` are required to ensure contracts are consumable by both the application (via codec IDs) and the database (via native types). See `docs/briefs/Sql-Contract-Native-and-Codec-Types.md` for details.
+The database type a column holds comes from the data type its codec represents; see [ADR 254 — Data types and casts](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md). The SQL data type declarations and the functions that write their names are exported from `@internal/sql-contract/data-type`.
 
 ## Package Contents
 
@@ -177,6 +177,8 @@ const c = contract({
 - `./validators`: Arktype validators for structural validation
 - `./factories`: Factory functions for constructing contract IR
 - `./pack-types`: Shared extension/pack typing helpers
+- `./data-type`: SQL data type declarations (`sqlDataType`) and the functions that write a type name, print its catalog text, and recognise a reported type from those declarations (`renderSqlTypeName`, `renderSqlCatalogText`, `sqlBaseName`, `dataTypeParams`, `resolveReportedSqlType`)
+- `./data-type-support`: the helpers SQL targets share to implement their data types and PSL entries (ADR 254): the number classifier, the JSON body reader and printer, `escapePslString`, the 64-bit integer canonical form, and `canonicalDateTime`, the reader the date and time types build their canonical form with
 
 ## Architecture
 

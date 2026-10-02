@@ -41,7 +41,7 @@ Through `mise exec --` and the `:agent` variants, reading the log file each prin
 | After slice | Command | Allowed output |
 | --- | --- | --- |
 | 1 | `git grep -n "targetTypes\|targetTypesFor\|byTargetType\|expandNativeType\|nativeTypeFor\|typeMetadataRegistry\|normalizeNativeType\|validateScalarTypeCodecIds" -- packages` | nothing |
-| 2 | `git grep -n "nativeType" -- packages examples apps test` | the Prisma 6 and Prisma 7 schema readers where it names `@db.*` attributes; `SqlColumnIR.nativeType` and its readers and writers until slice 3; the old-contract refusal and its test, including `test/integration/test/fixtures/contract-format/supabase-before-dbgenerated-removal.contract.json`; the upgrade script and its fixtures |
+| 2 | `git grep -n "nativeType" -- packages examples apps test` | the Prisma 6 and Prisma 7 schema readers where it names `@db.*` attributes; `SqlColumnIR.nativeType` and its readers and writers until slice 3; the old-contract refusal and its test, including `test/integration/test/fixtures/contract-format/supabase-before-dbgenerated-removal.contract.json`; the upgrade script and its fixtures; comments in the pgvector and postgis `migration.ts` files, which the upgrade proof requires unchanged |
 | 3 | `git grep -n "normalizeFormattedType\|normalizeSchemaNativeType\|normalizeSqliteNativeType\|FORMAT_TYPE_DISPLAY\|buildExpectedFormatType\|formatUserDefinedTypeName\|POSTGRES_TO_PSL\|PRESERVED_NATIVE_TYPES\|PARAMETERIZED_NATIVE_TYPES\|CODEC_ID_BY_INFERRED_TYPE\|resolvedNativeType\|codecBaseNativeType" -- packages` | nothing |
 | 3 | `git grep -n "nativeType" -- packages examples apps test` | the Prisma 6 and Prisma 7 schema readers where it names `@db.*` attributes; the old-contract refusal and its test and fixture; the upgrade script and its fixtures |
 | 3 | `git grep -nE '(^\|[^A-Za-z])Unsupported\(' -- packages test examples` | the Prisma 6 and Prisma 7 schema readers, their fixtures and tests; `packages/3-extensions/postgres/README.md`, which documents the Prisma 7 reader |
@@ -51,7 +51,7 @@ Through `mise exec --` and the `:agent` variants, reading the log file each prin
 
 Stop and report to the orchestrator; do not choose an alternative.
 
-- Any committed contract changes in slice 1.
+- Any committed `contract.json` changes in slice 1, or any `contract.d.ts` changes other than the SQLite aggregate rows of design 2.7 item 9.
 - The golden planner test finds a DDL change in slice 1 other than the `typeRef` quoting fix.
 - A reported text from a real database that no claiming text of design 2.6 or section 9 covers, for a type that has a data type.
 - A column in a committed contract whose codec's data type does not reproduce its stored `nativeType` in slice 1.

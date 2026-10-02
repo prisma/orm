@@ -16,14 +16,11 @@ import {
 const TIMESTAMP_NOW_PHASE = { kind: 'generator', id: 'timestampNow' };
 
 describe('temporalCodecPresetWithPrecision', () => {
-  const preset = temporalCodecPresetWithPrecision({
-    codecId: 'pg/timestamp-temporal@1',
-    nativeType: 'timestamp',
-  });
+  const preset = temporalCodecPresetWithPrecision({ codecId: 'pg/timestamp-temporal@1' });
 
   it('declares precision, onCreate, onUpdate args in that order, all optional', () => {
     expect(preset.args).toEqual([
-      { name: 'precision', kind: 'number', optional: true, integer: true, minimum: 0 },
+      { name: 'precision', kind: 'number', optional: true, integer: true },
       { name: 'onCreate', kind: 'option', values: ['now'], optional: true },
       { name: 'onUpdate', kind: 'option', values: ['now'], optional: true },
     ]);
@@ -32,7 +29,6 @@ describe('temporalCodecPresetWithPrecision', () => {
   it('maps the precision arg into typeParams and each phase token to the timestampNow generator', () => {
     expect(preset.output).toEqual({
       codecId: 'pg/timestamp-temporal@1',
-      nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: { kind: 'select', index: 1, cases: { now: TIMESTAMP_NOW_PHASE } },
@@ -45,9 +41,8 @@ describe('temporalCodecPresetWithPrecision', () => {
     expect(
       temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
       }).output,
-    ).toMatchObject({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' });
+    ).toMatchObject({ codecId: 'pg/timestamptz-temporal@1' });
   });
 
   it('declares neither id nor unique, so it takes the plain helper path', () => {
@@ -57,7 +52,7 @@ describe('temporalCodecPresetWithPrecision', () => {
 });
 
 describe('temporalCodecPreset', () => {
-  const preset = temporalCodecPreset({ codecId: 'sqlite/datetime@1', nativeType: 'text' });
+  const preset = temporalCodecPreset({ codecId: 'sqlite/datetime@1' });
 
   it('declares only onCreate and onUpdate args, both optional', () => {
     expect(preset.args).toEqual([
@@ -69,7 +64,6 @@ describe('temporalCodecPreset', () => {
   it('omits typeParams and maps each phase token to the timestampNow generator', () => {
     expect(preset.output).toEqual({
       codecId: 'sqlite/datetime@1',
-      nativeType: 'text',
       executionDefaults: {
         onCreate: { kind: 'select', index: 0, cases: { now: TIMESTAMP_NOW_PHASE } },
         onUpdate: { kind: 'select', index: 1, cases: { now: TIMESTAMP_NOW_PHASE } },
@@ -84,18 +78,15 @@ describe('temporalAuthoringPresets', () => {
     (factory) => {
       const presets = factory({
         codecId: 'pg/timestamptz@1',
-        nativeType: 'timestamptz',
         generatorId: 'dateNow',
       });
       expect(Object.values(presets).map((preset) => preset.output)).toEqual([
         {
           codecId: 'pg/timestamptz@1',
-          nativeType: 'timestamptz',
           executionDefaults: { onCreate: { kind: 'generator', id: 'dateNow' } },
         },
         {
           codecId: 'pg/timestamptz@1',
-          nativeType: 'timestamptz',
           executionDefaults: {
             onCreate: { kind: 'generator', id: 'dateNow' },
             onUpdate: { kind: 'generator', id: 'dateNow' },
@@ -105,14 +96,11 @@ describe('temporalAuthoringPresets', () => {
     },
   );
   it('generates createdAt on create and updatedAt on create and update', () => {
-    expect(
-      temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }),
-    ).toEqual({
+    expect(temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1' })).toEqual({
       createdAt: {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/timestamptz-temporal@1',
-          nativeType: 'timestamptz',
           executionDefaults: { onCreate: TIMESTAMP_NOW_PHASE },
         },
       },
@@ -120,7 +108,6 @@ describe('temporalAuthoringPresets', () => {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/timestamptz-temporal@1',
-          nativeType: 'timestamptz',
           executionDefaults: { onCreate: TIMESTAMP_NOW_PHASE, onUpdate: TIMESTAMP_NOW_PHASE },
         },
       },
@@ -145,7 +132,6 @@ describe('downstream mirrors track the factories', () => {
     expect(temporalCodecPresetMirrors.pgTimestamp).toEqual(
       temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
-        nativeType: 'timestamp',
       }),
     );
   });
@@ -154,20 +140,19 @@ describe('downstream mirrors track the factories', () => {
     expect(temporalCodecPresetMirrors.pgTimestamptz).toEqual(
       temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
       }),
     );
   });
 
   it('contract-psl mirrors the sqlite datetime preset', () => {
     expect(temporalCodecPresetMirrors.sqliteDatetime).toEqual(
-      temporalCodecPreset({ codecId: 'sqlite/datetime@1', nativeType: 'text' }),
+      temporalCodecPreset({ codecId: 'sqlite/datetime@1' }),
     );
   });
 
   it('contract-ts mirrors the precision-bearing preset over its portable codec', () => {
     expect(sqlTimestampPresetMirror).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'test/timestamp@1', nativeType: 'timestamp' }),
+      temporalCodecPresetWithPrecision({ codecId: 'test/timestamp@1' }),
     );
   });
 
@@ -178,13 +163,13 @@ describe('downstream mirrors track the factories', () => {
   // prove a fiction of `updatedAt` identical to the real `timestamptz`.
   it('contract-psl mirrors the postgres createdAt/updatedAt convenience pair', () => {
     expect(temporalConvenienceMirrors.postgres).toEqual(
-      temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }),
+      temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1' }),
     );
   });
 
   it('contract-psl mirrors the sqlite createdAt/updatedAt convenience pair', () => {
     expect(temporalConvenienceMirrors.sqlite).toEqual(
-      temporalAuthoringPresets({ codecId: 'sqlite/datetime@1', nativeType: 'text' }),
+      temporalAuthoringPresets({ codecId: 'sqlite/datetime@1' }),
     );
   });
 });

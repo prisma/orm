@@ -1,3 +1,4 @@
+import { assembleDataTypes, type DataTypeLookup } from '@internal/framework-components/codec';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type {
   Adapter,
@@ -11,6 +12,7 @@ import { isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
 import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import { adapterError } from './adapter-errors';
 import { PostgresControlAdapter } from './control-adapter';
@@ -47,10 +49,16 @@ class PostgresAdapterImpl
 
   readonly profile: AdapterProfile<'postgres'>;
   private readonly codecRegistry: PostgresCodecRegistry;
+  private readonly dataTypeLookup: DataTypeLookup;
 
-  constructor(codecRegistry: PostgresCodecRegistry, profileId?: string) {
+  constructor(
+    codecRegistry: PostgresCodecRegistry,
+    dataTypeLookup: DataTypeLookup,
+    profileId?: string,
+  ) {
     this.codecRegistry = codecRegistry;
-    const controlAdapter = new PostgresControlAdapter(codecRegistry);
+    this.dataTypeLookup = dataTypeLookup;
+    const controlAdapter = new PostgresControlAdapter(codecRegistry, dataTypeLookup);
     this.profile = Object.freeze({
       id: profileId ?? 'postgres/default@1',
       target: 'postgres',
@@ -91,7 +99,7 @@ class PostgresAdapterImpl
         { meta: { surface: 'runtime-adapter' } },
       );
     }
-    return renderLoweredSql(ast, context.contract, this.codecRegistry);
+    return renderLoweredSql(ast, context.contract, this.codecRegistry, this.dataTypeLookup);
   }
 }
 
@@ -139,10 +147,20 @@ export const postgresRawCodecInferer: RawCodecInferer = {
 };
 
 export function createPostgresAdapter(options?: PostgresAdapterOptions) {
-  const codecRegistry = createPostgresCodecRegistryWithBuiltins(options?.codecDescriptors);
-  return Object.freeze(new PostgresAdapterImpl(codecRegistry, options?.profileId));
+  const dataTypeLookup = assembleDataTypes([
+    { id: 'postgres', dataTypes: postgresDataTypes },
+    { id: 'createPostgresAdapter', dataTypes: options?.dataTypes ?? [] },
+  ]).lookup;
+  const codecRegistry = createPostgresCodecRegistryWithBuiltins(
+    options?.codecDescriptors,
+    dataTypeLookup,
+  );
+  return Object.freeze(new PostgresAdapterImpl(codecRegistry, dataTypeLookup, options?.profileId));
 }
 
-export function createPostgresAdapterWithCodecRegistry(codecRegistry: PostgresCodecRegistry) {
-  return Object.freeze(new PostgresAdapterImpl(codecRegistry));
+export function createPostgresAdapterWithCodecRegistry(
+  codecRegistry: PostgresCodecRegistry,
+  dataTypeLookup: DataTypeLookup,
+) {
+  return Object.freeze(new PostgresAdapterImpl(codecRegistry, dataTypeLookup));
 }

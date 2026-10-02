@@ -463,7 +463,6 @@ describe('adapter-postgres codecs', () => {
     it('resolves pgTsqueryDescriptor by codec id, so a bound tsquery parameter renders', () => {
       const resolved = postgresCodecRegistry.descriptorFor('pg/tsquery@1');
       expect(resolved).toBe(pgTsqueryDescriptor);
-      expect(resolved?.targetTypes).toEqual(['tsquery']);
     });
 
     it('claims no traits, so no comparison, ordering or text operation applies to a tsquery', () => {

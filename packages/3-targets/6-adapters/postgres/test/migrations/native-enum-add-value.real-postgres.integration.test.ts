@@ -10,6 +10,7 @@
  * dropped and recreated on a maintenance connection; skips (does not fail)
  * when no real Postgres is reachable.
  */
+
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
@@ -87,10 +88,7 @@ namespace public {
 // PSL → contract helpers (mirrors native-enum-lifecycle-e2e.integration.test.ts)
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<
-  string,
-  { codecId: string; nativeType: string }
-> {
+function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
   return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
 }
 

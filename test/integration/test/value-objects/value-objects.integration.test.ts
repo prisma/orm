@@ -7,12 +7,14 @@ import {
   UNBOUND_DOMAIN_NAMESPACE_ID,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoOrm } from '@internal/mongo-orm';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
@@ -60,12 +62,12 @@ const postgresTarget = {
 };
 
 const postgresScalarTypeDescriptors = new Map([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['Boolean', { codecId: 'pg/bool@1', nativeType: 'bool' }],
-  ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-  ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
-]) as ReadonlyMap<string, { codecId: string; nativeType: string }>;
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['Boolean', { codecId: 'pg/bool@1' }],
+  ['Json', { codecId: 'pg/json@1' }],
+  ['Jsonb', { codecId: 'pg/jsonb@1' }],
+]) as ReadonlyMap<string, { codecId: string }>;
 
 function interpretMongoPsl(schema: string) {
   const mongoScalarTypeDescriptors = new Map([
@@ -86,6 +88,8 @@ function interpretMongoPsl(schema: string) {
     symbolTable,
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypeLookup: createDataTypeLookup(mongoDataTypes),
     controlMutationDefaults: {
       dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
@@ -94,11 +98,11 @@ function interpretMongoPsl(schema: string) {
 }
 
 const postgresScalarAuthoringTypes = Object.fromEntries(
-  [...postgresScalarTypeDescriptors].map(([name, { codecId, nativeType }]) => [
+  [...postgresScalarTypeDescriptors].map(([name, { codecId }]) => [
     name,
     {
       kind: 'typeConstructor' as const,
-      output: { codecId, nativeType },
+      output: { codecId },
     },
   ]),
 );
@@ -112,6 +116,7 @@ function interpretSqlPsl(schema: string) {
   return interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    codecLookup: createPostgresBuiltinCodecLookup(),
     symbolTable,
     sources,
     target: postgresTarget,

@@ -3,10 +3,10 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
   temporalCodecPresetMirrors,
@@ -23,11 +23,12 @@ export const interpretPslDocumentToSqlContract = (
     | 'createNamespace'
     | 'capabilities'
     | 'dataTypeLookup'
+    | 'codecLookup'
   > &
     Partial<
       Pick<
         InterpretPslDocumentToSqlContractInput,
-        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypeLookup'
+        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypeLookup' | 'codecLookup'
       >
     >,
 ) => {
@@ -35,14 +36,14 @@ export const interpretPslDocumentToSqlContract = (
     input;
   return interpretPslDocumentToSqlContractInternal({
     target: postgresTarget,
-    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
-    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
     ...interpreterInput,
-    dataTypeLookup: interpreterInput.dataTypeLookup ?? fixtureDataTypeSupport.lookup,
+    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
+    codecLookup: interpreterInput.codecLookup ?? fixtureTypeLookups.codecLookup,
+    dataTypeLookup: interpreterInput.dataTypeLookup ?? fixtureTypeLookups.dataTypeLookup,
     authoringContributions: {
       ...interpreterInput.authoringContributions,
       dataTypes: {

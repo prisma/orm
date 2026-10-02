@@ -43,6 +43,7 @@ import type {
   SourceFile,
 } from '@internal/psl-parser/syntax';
 import { dottedPathsIn, StringLiteralExprAst } from '@internal/psl-parser/syntax';
+import { sqlDataTypeOfCodec, unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
@@ -498,6 +499,7 @@ export function interpretPrisma7Documents(
         models: modelNodes,
       },
       input.codecLookup,
+      input.dataTypeLookup,
     ),
   );
 }
@@ -776,6 +778,7 @@ function lowerNativeEnums(
       family: input.binding.target.familyId,
       target: input.binding.target.targetId,
       codecLookup: input.codecLookup,
+      dataTypeLookup: input.dataTypeLookup,
       sourceId: declaration.sourceId,
       diagnostics: {
         push: (diagnostic) => {
@@ -1109,6 +1112,11 @@ function readField(args: ReadFieldArgs): void {
     }
     return;
   }
+  const columnTypeName = unquotedSqlBaseNameOfCodec(
+    resolved.descriptor.codecId,
+    resolved.descriptor.typeParams,
+    input,
+  );
   const updatedAtGeneratorId =
     updatedAt === undefined ? undefined : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
   if (updatedAt !== undefined && updatedAtGeneratorId === undefined) {
@@ -1121,7 +1129,7 @@ function readField(args: ReadFieldArgs): void {
     diagnostics.push(
       prisma7Diagnostic(
         'PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
+        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${columnTypeName}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
         sourceId,
         updatedAt.span,
       ),
@@ -1154,7 +1162,11 @@ function readField(args: ReadFieldArgs): void {
             entries: input.authoringContributions?.dataTypes ?? {},
             lookup: input.dataTypeLookup,
           },
-          literalForm: binding.literalDefaultForm(resolved.descriptor),
+          literalForm: binding.literalDefaultForm({
+            codecId: resolved.descriptor.codecId,
+            dataType: sqlDataTypeOfCodec(resolved.descriptor.codecId, input).id,
+            typeParams: resolved.descriptor.typeParams,
+          }),
           enumMembers:
             enumDeclaration === undefined
               ? undefined

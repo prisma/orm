@@ -16,6 +16,7 @@ import { PostgresRoleSchemaNode } from '../../src/core/schema-ir/postgres-role-s
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import type { SqlSchemaDiffNode } from '../../src/core/schema-ir/schema-node-kinds';
 import { postgresRenderDefault } from '../../src/exports/control';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'profiles';
 const SCHEMA_NAME = 'public';
@@ -93,6 +94,8 @@ function makeContract(options: {
 const projectionOptions = {
   annotationNamespace: 'pg',
   renderDefault: postgresRenderDefault,
+  dataTypeLookup: postgresTypeLookups.dataTypeLookup,
+  codecLookup: postgresTypeLookups.codecLookup,
 } as const;
 
 describe('contractToPostgresDatabaseSchemaNode', () => {

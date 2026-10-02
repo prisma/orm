@@ -2,11 +2,11 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
-  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -29,7 +29,6 @@ const varCharishTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -49,7 +48,7 @@ describe('interpretPslDocumentToSqlContract a list field equals the single field
         type: varCharishTypes,
         dataTypes: fixtureDataTypeSupport.entries,
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
@@ -91,7 +90,7 @@ namespace public {
         type: postgresScalarAuthoringTypes,
         dataTypes: fixtureDataTypeSupport.entries,
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
@@ -140,7 +139,7 @@ model Product {
         type: postgresScalarAuthoringTypes,
         valueObjectStorageType: 'Jsonb',
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
@@ -180,8 +179,7 @@ model User {
         pslBlockDescriptors,
         dataTypes: fixtureDataTypeSupport.entries,
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      codecLookup: postgresCodecLookup,
+      ...fixtureTypeLookups,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },

@@ -6,11 +6,11 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
-  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -23,13 +23,12 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 const baseInput = {
   target: postgresTarget,
-  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
     type: postgresScalarAuthoringTypes,
     dataTypes: fixtureDataTypeSupport.entries,
   },
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
@@ -446,7 +445,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadChar" constructor "Char" Argument "length" of Char must be >= 1, received 0',
+            'Named type "BadChar" constructor "Char" Authoring helper argument at Char[0] is invalid: length must be at least 1 (was 0)',
           ),
         }),
         expect.objectContaining({
@@ -458,11 +457,60 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadTimestamp" constructor "Timestamp" Argument "precision" of Timestamp must be >= 0, received -1',
+            'Named type "BadTimestamp" constructor "Timestamp" Authoring helper argument at Timestamp[0] is invalid: precision must be non-negative (was -1)',
           ),
         }),
       ]),
     );
+  });
+
+  it.each([
+    ['VarChar(10485761)', 'length must be at most 10485760 (was 10485761)'],
+    ['Char(10485761)', 'length must be at most 10485760 (was 10485761)'],
+    ['Numeric(1001)', 'precision must be at most 1000 (was 1001)'],
+    ['Numeric(10, 1001)', 'scale must be at most 1000 (was 1001)'],
+    ['Timestamptz(7)', 'precision must be at most 6 (was 7)'],
+    ['Time(7)', 'precision must be at most 6 (was 7)'],
+    ['Timetz(7)', 'precision must be at most 6 (was 7)'],
+  ])('refuses %s, outside its data type’s bounds', (call, message) => {
+    expectDiagnosticForSchema(`model T {\n  id Int @id\n  value ${call}\n}\n`, {
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: expect.stringContaining(message) as unknown as string,
+    });
+  });
+
+  it.each([
+    'VarChar(1)',
+    'VarChar(10485760)',
+    'Char(10485760)',
+    'Numeric(1000, 1000)',
+    'Numeric(1, 0)',
+    'Timestamp(0)',
+    'Timestamptz(6)',
+  ])('accepts %s, at the edge of its data type’s bounds', (call) => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model T {\n  id Int @id\n  value ${call}\n}\n`,
+      sourceId: 'schema.prisma',
+    });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
+  });
+
+  it('reports an argument outside the bounds at the argument', () => {
+    const schema = 'model T {\n  id Int @id\n  value VarChar(10485761)\n}\n';
+    const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics[0]?.span?.start.offset).toBe(schema.indexOf('10485761'));
   });
 
   it('returns diagnostics when relation fields and references lengths differ', () => {
@@ -1194,7 +1242,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       });
 
@@ -1232,7 +1280,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       });
 

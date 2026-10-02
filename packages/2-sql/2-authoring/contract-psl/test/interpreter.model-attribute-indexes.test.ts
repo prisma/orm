@@ -11,7 +11,7 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -92,7 +92,7 @@ function interpret(schema: string, authoringContributions?: AuthoringContributio
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),
   });
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   sqliteBigint,
   sqliteBlob,
+  sqliteCharacter,
+  sqliteCharacterVarying,
   sqliteDataTypes,
   sqliteDatetime,
   sqliteInteger,
@@ -19,6 +21,8 @@ describe('the data types this target registers', () => {
     expect(sqliteDataTypes.map((type) => type.id).sort()).toEqual([
       'sqlite/bigint',
       'sqlite/blob',
+      'sqlite/character',
+      'sqlite/character-varying',
       'sqlite/datetime',
       'sqlite/integer',
       'sqlite/json',
@@ -35,6 +39,8 @@ describe('the data types this target registers', () => {
     ['sqlite/blob', sqliteBlob, ['sqlite/text']],
     ['sqlite/bigint', sqliteBigint, ['sqlite/integer']],
     ['sqlite/real', sqliteReal, ['sqlite/bigint', 'sqlite/integer']],
+    ['sqlite/character', sqliteCharacter, ['sqlite/text']],
+    ['sqlite/character-varying', sqliteCharacterVarying, ['sqlite/text']],
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });
@@ -69,6 +75,20 @@ describe('what each cast converts', () => {
       '2020-01-01T00:00:00Z',
     ],
     ['sqlite/text to sqlite/blob, the text unchanged', sqliteBlob, sqliteText.id, 'AA==', 'AA=='],
+    [
+      'sqlite/text to sqlite/character, the text unchanged',
+      sqliteCharacter,
+      sqliteText.id,
+      'abc',
+      'abc',
+    ],
+    [
+      'sqlite/text to sqlite/character-varying, the text unchanged',
+      sqliteCharacterVarying,
+      sqliteText.id,
+      'abc',
+      'abc',
+    ],
   ])('%s', (_name, type, source, value, converted) => {
     expect(type.casts[source]?.(value)).toEqual(converted);
   });

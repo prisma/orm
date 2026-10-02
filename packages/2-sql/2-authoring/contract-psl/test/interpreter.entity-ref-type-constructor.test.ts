@@ -40,9 +40,10 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -115,19 +116,17 @@ const entityTypes: AuthoringEntityTypeNamespace = {
   },
 };
 
-type EntityRefColumnResult = { readonly typeParams?: Record<string, unknown> } & {
-  readonly nativeType: string;
-};
+type EntityRefColumnResult = { readonly typeParams?: Record<string, unknown> };
 
 function makeCodecDescriptor(options: {
   readonly codecId: string;
+  readonly dataType?: string;
   readonly columnFromEntity?: (entity: unknown) => EntityRefColumnResult | undefined;
 }): AnyCodecDescriptor {
   return {
     codecId: options.codecId,
-    dataType: dataTypeId('demo/fixture'),
+    dataType: dataTypeId(options.dataType ?? 'demo/fixture'),
     traits: ['equality'],
-    targetTypes: ['text'],
     paramsSchema: {
       '~standard': { version: 1, vendor: 'test', validate: (input: unknown) => ({ value: input }) },
     },
@@ -141,18 +140,16 @@ function makeCodecDescriptor(options: {
 
 const nativeEnumCodec = makeCodecDescriptor({
   codecId: 'test/native-enum@1',
+  dataType: 'pg/enum',
   columnFromEntity: (entity) => {
     const enumEntity = entity as TestNativeEnum;
-    return { typeParams: { typeName: enumEntity.typeName }, nativeType: enumEntity.typeName };
+    return { typeParams: { typeName: enumEntity.typeName } };
   },
 });
 
 const plainRefCodec = makeCodecDescriptor({
   codecId: 'test/plain-ref@1',
-  columnFromEntity: (entity) => {
-    const plainEntity = entity as TestPlainRef;
-    return { nativeType: plainEntity.name };
-  },
+  columnFromEntity: () => ({}),
 });
 
 // No `columnFromEntity` hook — used to exercise the contributor-bug throw.
@@ -173,12 +170,14 @@ const codecsById = new Map<string, AnyCodecDescriptor>([
   [rejectsCodec.codecId, rejectsCodec],
 ]);
 
-const codecLookup: CodecLookupWithDescriptors = {
-  get: () => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: (id) => codecsById.get(id),
-};
+const codecLookup: CodecLookupWithDescriptors = testSqlTypeLookups(
+  {},
+  {
+    get: () => undefined,
+    renderOutputTypeFor: () => undefined,
+    descriptorFor: (id) => codecsById.get(id),
+  },
+).codecLookup;
 
 const type: AuthoringTypeNamespace = {
   pg: {
@@ -212,7 +211,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -338,7 +337,7 @@ namespace docs {
             table: {
               Thing: {
                 columns: {
-                  ref: { codecId: 'test/plain-ref@1', nativeType: 'AnyName' },
+                  ref: { codecId: 'test/plain-ref@1', nativeType: 'fixture' },
                 },
               },
             },

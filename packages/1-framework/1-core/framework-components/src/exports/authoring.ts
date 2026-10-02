@@ -65,6 +65,7 @@ export {
   resolveAuthoringTemplateValue,
   resolveEnumCodecId,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeParams,
 } from '../shared/framework-authoring';
 export type { AuthoringOption } from '../shared/option-descriptor';
 export type {

@@ -115,7 +115,6 @@ export const postgresAuthoringTypes = {
       'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
     output: {
       codecId: 'pg/int8number@1',
-      nativeType: 'int8',
     },
   },
   UnboundedInt: {
@@ -124,12 +123,12 @@ export const postgresAuthoringTypes = {
       'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
     output: {
       codecId: 'pg/unboundedint@1',
-      nativeType: 'numeric',
     },
   },
   pg: {
     enum: {
       kind: 'typeConstructor',
+      inferred: true,
       entityRefArg: { index: 0, entityKind: 'native_enum' },
       output: {
         codecId: PG_ENUM_CODEC_ID,
@@ -748,109 +747,91 @@ export const postgresAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/text@1',
-      nativeType: 'text',
     },
   },
   int: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/int4@1',
-      nativeType: 'int4',
     },
   },
   bigint: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/int8@1',
-      nativeType: 'int8',
     },
   },
   float: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/float8@1',
-      nativeType: 'float8',
     },
   },
   decimal: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/numeric@1',
-      nativeType: 'numeric',
     },
   },
   boolean: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/bool@1',
-      nativeType: 'bool',
     },
   },
   json: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/jsonb@1',
-      nativeType: 'jsonb',
     },
   },
   bytes: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/bytea@1',
-      nativeType: 'bytea',
     },
   },
   dateTime: {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/timestamptz-temporal@1',
-      nativeType: 'timestamptz',
     },
   },
   temporal: {
     createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }).createdAt,
     updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }).updatedAt,
     timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalStringAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-      nativeType: 'timestamp',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_TEMPORAL_CODEC_ID],
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMP_STRING_CODEC_ID,
-      nativeType: 'timestamp',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_STRING_CODEC_ID],
     }),
     timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
-      nativeType: 'timestamptz',
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
   },
@@ -858,7 +839,6 @@ export const postgresAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     },
   },
   id: {
@@ -866,7 +846,6 @@ export const postgresAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/uuid@1',
-        nativeType: 'uuid',
         executionDefaults: {
           onCreate: {
             kind: 'generator',
@@ -880,7 +859,6 @@ export const postgresAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/uuid@1',
-        nativeType: 'uuid',
         executionDefaults: {
           onCreate: {
             kind: 'generator',

@@ -35,7 +35,7 @@ import {
 } from '../../src/core/type-constructors';
 import { printPslFromFlat } from './fixtures';
 
-/** The type constructors the printed schema names, as the adapter contributes them. */
+/** The type constructors the printed schema names, as the target contributes them. */
 const authoringTypes = { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes };
 
 const assembled = assembleAuthoringContributions([
@@ -63,7 +63,6 @@ const target = {
 const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => postgresCodecRegistry.descriptorFor(id)?.factory({})({ name: id }),
   descriptorFor: (id) => postgresCodecRegistry.descriptorFor(id),
-  targetTypesFor: (id) => postgresCodecRegistry.descriptorFor(id)?.targetTypes,
   renderOutputTypeFor: () => undefined,
 };
 

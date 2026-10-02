@@ -26,97 +26,97 @@ export type { MongoControlDriverInstance };
 import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring channel. For a codec with one BSON type, `nativeType` is that type (`codecLookup.targetTypesFor(codecId)[0]`). `Json` (several BSON types) and `Bson` (none) have a `nativeType` that names the codec instead; the validator reads the codec's `targetTypes` list, not this value.
+ * The base PSL scalars as zero-arg type constructors in the unified authoring channel. Each names a codec; the collection validator reads the BSON types from the codec, not from the constructor.
  */
 export const mongoScalarAuthoringTypes = {
   String: {
     kind: 'typeConstructor',
     documentation: 'Text, stored as BSON string.',
-    output: { codecId: MONGO_STRING_CODEC_ID, nativeType: 'string' },
+    output: { codecId: MONGO_STRING_CODEC_ID },
   },
   Int32: {
     kind: 'typeConstructor',
     documentation: 'A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
+    output: { codecId: MONGO_INT32_CODEC_ID },
   },
   Bool: {
     kind: 'typeConstructor',
     documentation: 'A true or false value, stored as BSON bool.',
-    output: { codecId: MONGO_BOOLEAN_CODEC_ID, nativeType: 'bool' },
+    output: { codecId: MONGO_BOOLEAN_CODEC_ID },
   },
   Date: {
     kind: 'typeConstructor',
     documentation: 'A date and time with millisecond precision, stored as BSON date.',
-    output: { codecId: MONGO_DATE_CODEC_ID, nativeType: 'date' },
+    output: { codecId: MONGO_DATE_CODEC_ID },
   },
   ObjectId: {
     kind: 'typeConstructor',
     documentation: 'A 12-byte MongoDB identifier, stored as BSON objectId.',
-    output: { codecId: MONGO_OBJECTID_CODEC_ID, nativeType: 'objectId' },
+    output: { codecId: MONGO_OBJECTID_CODEC_ID },
   },
   Double: {
     kind: 'typeConstructor',
     documentation: 'A double-precision floating-point number, stored as BSON double.',
-    output: { codecId: MONGO_DOUBLE_CODEC_ID, nativeType: 'double' },
+    output: { codecId: MONGO_DOUBLE_CODEC_ID },
   },
   Int64: {
     kind: 'typeConstructor',
     documentation: 'A signed 64-bit integer read as a bigint, stored as BSON long.',
-    output: { codecId: MONGO_INT64_CODEC_ID, nativeType: 'long' },
+    output: { codecId: MONGO_INT64_CODEC_ID },
   },
   Int64Number: {
     kind: 'typeConstructor',
     documentation:
       'A signed 64-bit integer read as a JavaScript number within its safe integer range, stored as BSON long.',
-    output: { codecId: MONGO_INT64_NUMBER_CODEC_ID, nativeType: 'long' },
+    output: { codecId: MONGO_INT64_NUMBER_CODEC_ID },
   },
   Decimal128: {
     kind: 'typeConstructor',
     documentation:
       'A 128-bit decimal read as decimal text without an exponent, stored as BSON decimal.',
-    output: { codecId: MONGO_DECIMAL128_CODEC_ID, nativeType: 'decimal' },
+    output: { codecId: MONGO_DECIMAL128_CODEC_ID },
   },
   Binary: {
     kind: 'typeConstructor',
     documentation: 'Bytes read as a Uint8Array, stored as BSON binData.',
-    output: { codecId: MONGO_BINARY_CODEC_ID, nativeType: 'binData' },
+    output: { codecId: MONGO_BINARY_CODEC_ID },
   },
   Json: {
     kind: 'typeConstructor',
     documentation:
       'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
-    output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
+    output: { codecId: MONGO_JSON_CODEC_ID },
   },
   Bson: {
     kind: 'typeConstructor',
     documentation:
       'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
-    output: { codecId: MONGO_BSON_CODEC_ID, nativeType: 'bson' },
+    output: { codecId: MONGO_BSON_CODEC_ID },
   },
   Int: {
     kind: 'typeConstructor',
     documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
+    output: { codecId: MONGO_INT32_CODEC_ID },
     deprecated: { replacement: 'Int32' },
   },
   Float: {
     kind: 'typeConstructor',
     documentation:
       'Deprecated: use Double. A double-precision floating-point number, stored as BSON double.',
-    output: { codecId: MONGO_DOUBLE_CODEC_ID, nativeType: 'double' },
+    output: { codecId: MONGO_DOUBLE_CODEC_ID },
     deprecated: { replacement: 'Double' },
   },
   Boolean: {
     kind: 'typeConstructor',
     documentation: 'Deprecated: use Bool. A true or false value, stored as BSON bool.',
-    output: { codecId: MONGO_BOOLEAN_CODEC_ID, nativeType: 'bool' },
+    output: { codecId: MONGO_BOOLEAN_CODEC_ID },
     deprecated: { replacement: 'Bool' },
   },
   DateTime: {
     kind: 'typeConstructor',
     documentation:
       'Deprecated: use Date. A date and time with millisecond precision, stored as BSON date.',
-    output: { codecId: MONGO_DATE_CODEC_ID, nativeType: 'date' },
+    output: { codecId: MONGO_DATE_CODEC_ID },
     deprecated: { replacement: 'Date' },
   },
 } as const satisfies AuthoringTypeNamespace;

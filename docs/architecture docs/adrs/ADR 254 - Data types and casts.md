@@ -2,7 +2,7 @@
 
 Status: **Proposed**
 
-Built so far: data types with their casts, a codec naming the type it represents, the PSL entries that read and write a type's values, and strict assembly across packs. Lowering entries are gone: every authoring entry names a data type, and `sql` is the tag of `sql/expression`. A follow-up project owns the rest of this decision: a data type's DDL name and aliases (optional, because a type such as `sql/expression` has none), its parameters and their rendering, deriving `nativeType` rather than storing it, type constructors naming a type and a codec, and function parameters typed by a data type. Examples below show the whole decision, so some of them name fields that do not exist yet.
+Built so far: data types with their casts, a codec naming the type it represents, the PSL entries that read and write a type's values, and strict assembly across packs. Lowering entries are gone: every authoring entry names a data type, and `sql` is the tag of `sql/expression`. Each SQL data type also declares its DDL names, its parameters with their bounds, and how its parameterised name is written; the planners and the runtime's parameter casts write a column's type from it, and a codec's parameter schema is its data type's. A type that is never a column's type, such as `sql/expression`, declares no names. A follow-up project owns the rest of this decision: recognising a reported database type through the declared names, storing the data type in the contract rather than `nativeType`, and function parameters typed by a data type. Examples below show the whole decision, so some of them name fields that do not exist yet.
 
 ## Decision
 
@@ -123,7 +123,7 @@ Checks that depend on a column's parameters run in the codec instance built with
 
 A column names a data type, its parameters, and the codec that represents it; its DDL name is rendered from the type and the parameters, so the contract stores no separate native-type string.
 
-A **type constructor** is how PSL names a column's type: `Int`, `Numeric(10, 2)`, `pgvector.Vector(1536)`, `pg.enum(Status)`. It names a data type, maps its arguments onto the type's parameters, and picks the codec that represents the type for this column. `BigInt` is `pg/int8` with `pg/int8@1`; a number-valued variant is the same type with `pg/int8number@1`. A `types { X = ... }` alias is a type constructor call given a name.
+A **type constructor** is how PSL names a column's type: `Int`, `Numeric(10, 2)`, `pgvector.Vector(1536)`, `pg.enum(Status)`. It names the codec that represents the column's type and maps its arguments onto parameters; the data type follows from the codec. `BigInt` is `pg/int8` with `pg/int8@1`; a number-valued variant is the same type with `pg/int8number@1`. A `types { X = ... }` alias is a type constructor call given a name.
 
 ## How PSL writes a value
 
@@ -211,7 +211,7 @@ A family may add checks for its own data types. The SQL family checks that no ty
 
 ## Extending the set of types
 
-A pack that owns a database type registers it once: the data type with its DDL name, parameters, rendering and casts; the codecs that represent it; the type constructor that names it in PSL; and, if values of it are written in PSL, the authoring entry with the tag, `parse`, `print` and documentation. Nothing in the interpreter, the planner, the printer, the language server or the readers changes. A geometry type with a WKT tag is the model case:
+A pack that owns a database type registers it once: the data type with its DDL name, parameters, rendering and casts; the codecs that represent it; the type constructor that names it in PSL; and, if values of it are written in PSL, the authoring entry with the tag, `parse`, `print` and documentation. For a target's types, the target and its adapter are the owner together: the target registers the data types and the authoring entries and defines the type constructors, and the adapter registers the codecs and contributes the constructors, so that they do not become `type.*` helpers of the TypeScript builder ([ADR 241](ADR%20241%20-%20Scalar%20types%20use%20the%20authoring%20type-constructor%20channel.md)). Nothing in the interpreter, the planner, the printer, the language server or the readers changes. A geometry type with a WKT tag is the model case:
 
 ```prisma
 model Place {

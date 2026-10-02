@@ -10,7 +10,7 @@ import {
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, precisionParamsSchema, renderPrecision } from './codec-helpers';
+import { type PrecisionParams, renderPrecision } from './codec-helpers';
 import {
   PG_DATE_STRING_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
@@ -20,6 +20,7 @@ import {
 import {
   pgDate,
   pgDateCanonical,
+  pgPrecisionParams,
   pgTime,
   pgTimeCanonical,
   pgTimestamp,
@@ -34,12 +35,6 @@ import {
   pgTimestampStoredText,
   pgTimestamptzStoredText,
 } from './date-time-stored-text';
-import {
-  PG_DATE_NATIVE_TYPE,
-  PG_TIME_NATIVE_TYPE,
-  PG_TIMESTAMP_NATIVE_TYPE,
-  PG_TIMESTAMPTZ_NATIVE_TYPE,
-} from './temporal-codec-helpers';
 
 export class PgDateStringCodec extends CodecImpl<
   typeof PG_DATE_STRING_CODEC_ID,
@@ -62,16 +57,12 @@ export class PgDateStringCodec extends CodecImpl<
 }
 
 export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
-  protected override nativeType(): string {
-    return PG_DATE_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgDate.id;
   override readonly codecId = PG_DATE_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgDateStringCodec {
     return () => new PgDateStringCodec(this);
@@ -107,18 +98,13 @@ export class PgTimestampStringCodec extends CodecImpl<
 }
 
 export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMP_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamp.id;
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
     return renderPrecision('TimestampString', params);
   }
@@ -163,18 +149,13 @@ export class PgTimestamptzStringCodec extends CodecImpl<
 }
 
 export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
     return renderPrecision('TimestamptzString', params);
   }
@@ -219,18 +200,13 @@ export class PgTimeStringCodec extends CodecImpl<
 }
 
 export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIME_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTime.id;
   override readonly codecId = PG_TIME_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
     return renderPrecision('TimeString', params);
   }

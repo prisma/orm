@@ -1,4 +1,5 @@
 import { int4Column } from '@internal/adapter-postgres/column-types';
+import pgvector from '@internal/extension-pgvector/pack';
 import { autoincrement, defineContract, field, model } from '@internal/postgres/contract-builder';
 
 const embedding1536Type = {
@@ -9,6 +10,7 @@ const embedding1536Type = {
 } as const;
 
 export const contract = defineContract({
+  extensions: { pgvector },
   types: {
     Embedding1536: embedding1536Type,
   },

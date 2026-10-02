@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -76,10 +76,9 @@ ${fields}
       dataTypes: fixtureDataTypeSupport.entries,
       valueObjectStorageType: 'Jsonb',
     },
-    codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
     capabilities: { sql: { scalarList: true } },
     ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),

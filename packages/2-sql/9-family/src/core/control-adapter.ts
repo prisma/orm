@@ -10,7 +10,7 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import type { DefaultNormalizer, NativeTypeNormalizer } from './diff/sql-schema-diff';
+import type { DefaultNormalizer } from './diff/sql-schema-diff';
 
 /**
  * Structural interface for anything that can lower a SQL/DDL AST node to a
@@ -188,13 +188,6 @@ export interface SqlControlAdapter<TTarget extends string = string>
    * with contract defaults (ColumnDefault objects) during schema verification.
    */
   readonly normalizeDefault?: DefaultNormalizer;
-
-  /**
-   * Optional target-specific normalizer for schema native type names.
-   * When provided, schema native types (from introspection) are normalized
-   * before comparison with contract native types during schema verification.
-   */
-  readonly normalizeNativeType?: NativeTypeNormalizer;
 
   /**
    * Ordered DDL queries that bootstrap marker/ledger control tables for migration

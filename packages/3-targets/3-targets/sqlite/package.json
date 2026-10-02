@@ -28,7 +28,8 @@
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.14",
     "@internal/ts-render": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "@standard-schema/spec": "1.1.0"
+    "@standard-schema/spec": "1.1.0",
+    "arktype": "^2.2.2"
   },
   "devDependencies": {
     "@internal/driver-sqlite": "workspace:8.0.0-rc.14",

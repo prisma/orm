@@ -24,8 +24,6 @@ import {
   encodeJsonFloat,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { type as arktype } from 'arktype';
 import {
   SQL_CHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
@@ -47,10 +45,6 @@ import {
 } from './sql-codec-helpers';
 
 type LengthParams = { readonly length?: number };
-
-const lengthParamsSchema = arktype({
-  'length?': 'number.integer > 0',
-}) satisfies StandardSchemaV1<LengthParams>;
 
 export class SqlTextCodec extends CodecImpl<
   typeof SQL_TEXT_CODEC_ID,
@@ -75,7 +69,6 @@ export class SqlTextCodec extends CodecImpl<
 export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
-  override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlTextCodec {
     return () => new SqlTextCodec(this);
@@ -113,7 +106,6 @@ export class SqlIntCodec extends CodecImpl<
 export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_INT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
-  override readonly targetTypes = ['int'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlIntCodec {
     return () => new SqlIntCodec(this);
@@ -151,7 +143,6 @@ export class SqlFloatCodec extends CodecImpl<
 export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_FLOAT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
-  override readonly targetTypes = ['float'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlFloatCodec {
     return () => new SqlFloatCodec(this);
@@ -189,8 +180,7 @@ export class SqlCharCodec extends CodecImpl<
 export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
   override readonly codecId = SQL_CHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
-  override readonly targetTypes = ['char'] as const;
-  override readonly paramsSchema: StandardSchemaV1<LengthParams> = lengthParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderOutputType(params: LengthParams): string | undefined {
     return sqlCharRenderOutputType(params);
   }
@@ -230,8 +220,7 @@ export class SqlVarcharCodec extends CodecImpl<
 export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
   override readonly codecId = SQL_VARCHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
-  override readonly targetTypes = ['varchar'] as const;
-  override readonly paramsSchema: StandardSchemaV1<LengthParams> = lengthParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderOutputType(params: LengthParams): string | undefined {
     return sqlVarcharRenderOutputType(params);
   }

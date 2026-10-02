@@ -3,6 +3,7 @@ import type { TargetPackRef } from '@internal/framework-components/components';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { withDescriptors } from './with-descriptors';
 
@@ -28,7 +29,6 @@ const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
           decodeJson: (json: unknown) => json,
         }
       : undefined,
-  targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
 });
 
@@ -46,7 +46,6 @@ function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLooku
             ...codec,
           };
     },
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
   });
 }
@@ -84,7 +83,7 @@ function buildWithDefault(
         },
       ],
     },
-    codecLookup,
+    ...withTestTypes(codecLookup),
   );
 }
 
@@ -203,7 +202,7 @@ describe('a literal default the codec refuses', () => {
             },
           ],
         },
-        refusingJsonb,
+        ...withTestTypes(refusingJsonb),
       ),
     ).toThrow(
       expect.objectContaining({

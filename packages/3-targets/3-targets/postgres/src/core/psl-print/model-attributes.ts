@@ -1,7 +1,7 @@
 import type { PslModelAttribute } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { StorageTable } from '@internal/sql-contract/types';
 import { pslModelMapName } from '@internal/sql-contract-psl/map-names';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,

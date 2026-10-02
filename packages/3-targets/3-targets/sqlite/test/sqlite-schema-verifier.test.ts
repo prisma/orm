@@ -10,6 +10,7 @@ import { parseSqliteDefault } from '../src/core/default-normalizer';
 import { diffSqliteSchema } from '../src/core/migrations/diff-database-schema';
 import { SqliteSchemaVerifier } from '../src/core/sqlite-schema-verifier';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { sqliteTestComponents } from './sqlite-test-types';
 
 describe('SqliteSchemaVerifier', () => {
   it('extends SqlSchemaVerifierBase', () => {
@@ -81,7 +82,7 @@ describe('diffSqliteSchema resolves authored function defaults like introspected
     const result = diffSqliteSchema({
       contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
       schema: actualSchema('CURRENT_TIMESTAMP'),
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
     });
     expect(result.issues).toEqual([]);
   });
@@ -90,7 +91,7 @@ describe('diffSqliteSchema resolves authored function defaults like introspected
     const result = diffSqliteSchema({
       contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
       schema: actualSchema("'2020-01-01'"),
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
     });
     expect(result.issues).not.toEqual([]);
   });

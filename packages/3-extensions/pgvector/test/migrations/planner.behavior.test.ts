@@ -1,4 +1,4 @@
-import {
+import postgresAdapterDescriptor, {
   createPostgresBuiltinCodecLookup,
   PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
@@ -11,10 +11,14 @@ import {
 } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { type CodecControlHooks, INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { SqlStorage, type SqlStorageInput, type StorageTable } from '@internal/sql-contract/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import { buildBuiltinIdentityValue } from '@internal/target-postgres/planner-identity-values';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
@@ -28,7 +32,40 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import pgvectorDescriptor from '../../src/exports/control';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+
+const postgresComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>> = [
+  postgresTargetDescriptor,
+  postgresAdapterDescriptor,
+];
+
+const testTsvectorComponent = {
+  kind: 'extension',
+  id: 'test-tsvector',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.0-test',
+  create: () => ({ familyId: 'sql', targetId: 'postgres' }) as never,
+  dataTypes: [
+    sqlDataType('test/tsvector', { texts: [{ text: 'tsvector', written: true, catalog: true }] }),
+  ],
+  types: {
+    codecTypes: {
+      codecDescriptors: [
+        {
+          codecId: 'pg/tsvector@1',
+          dataType: 'test/tsvector',
+          traits: [],
+          isParameterized: false,
+          factory: () => () => ({ id: 'pg/tsvector@1' }),
+        } as unknown as AnyCodecDescriptor,
+      ],
+    },
+  },
+} as TargetBoundComponentDescriptor<'sql', 'postgres'>;
 
 describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
   const planner = createPostgresMigrationPlanner(testAdapter);
@@ -66,7 +103,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -107,7 +144,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -158,7 +195,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -219,23 +256,12 @@ describe('NOT NULL column without default uses temporary default', () => {
   });
 
   it('uses length-aware temporary defaults for fixed-length bit columns', async () => {
-    const addCol = await planAddColumn(
-      'flags',
-      {
-        nativeType: 'bit',
-        codecId: 'pg/bit@1',
-        nullable: false,
-        typeParams: { length: 4 },
-      },
-      {
-        frameworkComponents: [
-          createPlannerControlHookComponent('pg/bit@1', {
-            expandNativeType: ({ nativeType, typeParams }) =>
-              `${nativeType}(${String(typeParams?.['length'])})`,
-          }),
-        ],
-      },
-    );
+    const addCol = await planAddColumn('flags', {
+      nativeType: 'bit',
+      codecId: 'pg/bit@1',
+      nullable: false,
+      typeParams: { length: 4 },
+    });
 
     expect(addCol.execute.map((step) => step.sql)).toEqual([
       `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "flags" bit(4) DEFAULT (B'0000') NOT NULL`,
@@ -246,7 +272,8 @@ describe('NOT NULL column without default uses temporary default', () => {
   it('uses empty-array temporary defaults for NOT NULL array columns', async () => {
     const addCol = await planAddColumn('tags', {
       nativeType: 'text[]',
-      codecId: 'pg/text-array@1',
+      codecId: 'pg/text@1',
+      many: true,
       nullable: false,
     });
 
@@ -256,16 +283,22 @@ describe('NOT NULL column without default uses temporary default', () => {
     ]);
   });
 
-  it('uses built-in temporary defaults for NOT NULL tsvector columns', async () => {
-    const addCol = await planAddColumn('searchDocument', {
-      nativeType: 'tsvector',
-      codecId: 'pg/tsvector@1',
-      nullable: false,
-    });
+  it('uses the empty-table fallback for NOT NULL columns of a data type with no built-in identity value', async () => {
+    const addCol = await planAddColumn(
+      'searchDocument',
+      {
+        nativeType: 'tsvector',
+        codecId: 'pg/tsvector@1',
+        nullable: false,
+      },
+      { frameworkComponents: [testTsvectorComponent] },
+    );
 
+    expect(addCol.precheck.map((p) => p.sql)).toContain(
+      `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
+    );
     expect(addCol.execute.map((step) => step.sql)).toEqual([
-      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "searchDocument" tsvector DEFAULT (''::tsvector) NOT NULL`,
-      `ALTER TABLE ${qualifiedUserTable} ALTER COLUMN "searchDocument" DROP DEFAULT`,
+      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "searchDocument" tsvector NOT NULL`,
     ]);
   });
 
@@ -524,53 +557,39 @@ describe('NOT NULL column without default uses temporary default', () => {
 
 describe('buildBuiltinIdentityValue (built-in fallback)', () => {
   it.each([
-    ['text', undefined, "''"],
-    ['character', undefined, "''"],
-    ['bpchar', undefined, "''"],
-    ['character varying', undefined, "''"],
-    ['varchar', undefined, "''"],
-    ['int2', undefined, '0'],
-    ['int4', undefined, '0'],
-    ['int8', undefined, '0'],
-    ['integer', undefined, '0'],
-    ['bigint', undefined, '0'],
-    ['smallint', undefined, '0'],
-    ['float4', undefined, '0'],
-    ['float8', undefined, '0'],
-    ['real', undefined, '0'],
-    ['double precision', undefined, '0'],
-    ['numeric', undefined, '0'],
-    ['decimal', undefined, '0'],
-    ['bool', undefined, 'false'],
-    ['boolean', undefined, 'false'],
-    ['uuid', undefined, "'00000000-0000-0000-0000-000000000000'"],
-    ['json', undefined, "'{}'::json"],
-    ['jsonb', undefined, "'{}'::jsonb"],
-    ['date', undefined, "'epoch'"],
-    ['timestamp', undefined, "'epoch'"],
-    ['timestamptz', undefined, "'epoch'"],
-    ['time', undefined, "'00:00:00'"],
-    ['time without time zone', undefined, "'00:00:00'"],
-    ['timetz', undefined, "'00:00:00+00'"],
-    ['time with time zone', undefined, "'00:00:00+00'"],
-    ['interval', undefined, "'0'"],
-    ['bytea', undefined, "''::bytea"],
-    ['tsvector', undefined, "''::tsvector"],
-    ['bit', undefined, "B'0'"],
-    ['bit', { length: 4 }, "B'0000'"],
-    ['bit varying', undefined, "B''"],
-    ['varbit', undefined, "B''"],
-    ['int4[]', undefined, "'{}'"],
-    ['text[]', undefined, "'{}'"],
-  ] as const)('returns %s with %j → %s', (nativeType, typeParams, expected) => {
-    expect(buildBuiltinIdentityValue(nativeType, typeParams)).toBe(expected);
+    ['pg/text', undefined, "''"],
+    ['pg/char', undefined, "''"],
+    ['pg/varchar', undefined, "''"],
+    ['pg/int2', undefined, '0'],
+    ['pg/int4', undefined, '0'],
+    ['pg/int8', undefined, '0'],
+    ['pg/float4', undefined, '0'],
+    ['pg/float8', undefined, '0'],
+    ['pg/numeric', undefined, '0'],
+    ['pg/bool', undefined, 'false'],
+    ['pg/uuid', undefined, "'00000000-0000-0000-0000-000000000000'"],
+    ['pg/json', undefined, "'{}'::json"],
+    ['pg/jsonb', undefined, "'{}'::jsonb"],
+    ['pg/date', undefined, "'epoch'"],
+    ['pg/timestamp', undefined, "'epoch'"],
+    ['pg/timestamptz', undefined, "'epoch'"],
+    ['pg/time', undefined, "'00:00:00'"],
+    ['pg/timetz', undefined, "'00:00:00+00'"],
+    ['pg/interval', undefined, "'0'"],
+    ['pg/bytea', undefined, "''::bytea"],
+    ['pg/bit', undefined, "B'0'"],
+    ['pg/bit', { length: 4 }, "B'0000'"],
+    ['pg/varbit', undefined, "B''"],
+    ['pg/text-array', undefined, "'{}'"],
+  ] as const)('returns %s with %j → %s', (dataType, typeParams, expected) => {
+    expect(buildBuiltinIdentityValue(dataType, typeParams)).toBe(expected);
   });
 
   it('returns null for unknown types (enum, array, extension)', () => {
-    expect(buildBuiltinIdentityValue('my_enum')).toBeNull();
-    expect(buildBuiltinIdentityValue('tsquery')).toBeNull();
-    expect(buildBuiltinIdentityValue('vector')).toBeNull();
-    expect(buildBuiltinIdentityValue('bit', { length: 0 })).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/enum')).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/tsquery')).toBeNull();
+    expect(buildBuiltinIdentityValue('pgvector/vector')).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/bit', { length: 0 })).toBeNull();
   });
 });
 
@@ -685,6 +704,7 @@ function planAddColumn(
     nativeType: string;
     codecId: string;
     nullable: boolean;
+    many?: boolean;
     typeParams?: Record<string, unknown>;
     typeRef?: string;
     default?: { kind: 'literal'; value: ColumnDefaultLiteralInputValue };
@@ -783,7 +803,7 @@ async function planUserTableOperations(
     schema,
     policy: INIT_ADDITIVE_POLICY,
     fromContract: null,
-    frameworkComponents: options?.frameworkComponents ?? [],
+    frameworkComponents: [...postgresComponents, ...(options?.frameworkComponents ?? [])],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });

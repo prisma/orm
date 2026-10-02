@@ -360,9 +360,8 @@ type EnumFieldHandle<FieldState> = [FieldTypeRefOf<FieldState>] extends [never]
 
 type EnumHandleDescriptor<Handle> = Handle extends {
   readonly codecId: infer CodecId extends string;
-  readonly nativeType: infer NativeType extends string;
 }
-  ? { readonly codecId: CodecId; readonly nativeType: NativeType }
+  ? { readonly codecId: CodecId; readonly nativeType: DescriptorNativeType<Handle> }
   : never;
 
 type ResolveFieldDescriptor<Definition, FieldState> = [EnumFieldHandle<FieldState>] extends [never]

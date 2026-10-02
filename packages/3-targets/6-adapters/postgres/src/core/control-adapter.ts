@@ -12,7 +12,10 @@ import {
 import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -81,10 +84,7 @@ import type {
 } from '@internal/target-postgres/ddl';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
-import {
-  introspectedNativeType,
-  normalizeSchemaNativeType,
-} from '@internal/target-postgres/native-type-normalizer';
+import { introspectedNativeType } from '@internal/target-postgres/native-type-normalizer';
 import {
   isPostgresDateTimeDataType,
   postgresDateTimeDdlText,
@@ -171,20 +171,16 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   readonly familyId = 'sql' as const;
   readonly targetId = 'postgres' as const;
 
-  constructor(private readonly codecRegistry: PostgresCodecRegistry) {}
+  constructor(
+    private readonly codecRegistry: PostgresCodecRegistry,
+    private readonly dataTypeLookup: DataTypeLookup,
+  ) {}
 
   /**
    * Target-specific normalizer for raw Postgres default expressions.
    * Used by schema verification to normalize raw defaults before comparison.
    */
   readonly normalizeDefault = parsePostgresDefault;
-
-  /**
-   * Target-specific normalizer for Postgres schema native type names.
-   * Used by schema verification to normalize introspected type names
-   * before comparison with contract native types.
-   */
-  readonly normalizeNativeType = normalizeSchemaNativeType;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -216,6 +212,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         context.contract,
       ),
       this.codecRegistry,
+      this.dataTypeLookup,
     );
   }
 
@@ -253,7 +250,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'Caller must supply matching contract'>(
       context?.contract,
     );
-    const lowered = renderLoweredSql(ast, contract, this.codecRegistry);
+    const lowered = renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
     const codecRegistry = blindCast<
       ContractCodecRegistry,
       'framework CodecRegistry: its descriptors materialise SQL codecs; the framework Codec type erases to BaseCodec at this boundary'

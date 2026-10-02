@@ -138,7 +138,7 @@ const postgresDefaultFunctionRegistryEntries = [
   ],
 ] satisfies ReadonlyArray<readonly [string, ControlMutationDefaultEntry]>;
 
-export const postgresAuthoringTypes = {
+export const postgresPslTypeConstructors = {
   ...postgresScalarAuthoringTypes,
   ...postgresNativeAuthoringTypes,
 } as const satisfies AuthoringTypeNamespace;

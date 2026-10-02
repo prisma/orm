@@ -5,7 +5,7 @@ import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -73,7 +73,7 @@ function interpretWith(schema: string, authoringContributions?: AuthoringContrib
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
     createNamespace,
     capabilities: { sql: { scalarList: true } },
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),

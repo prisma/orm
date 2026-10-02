@@ -1,5 +1,5 @@
 import 'temporal-polyfill/full/global';
-import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -185,7 +185,8 @@ describe('postgres defineContract encodes literal defaults through the column co
   });
 
   it('keeps a caller-supplied codecLookup', () => {
-    const callerCodec = (id: string): Codec => ({
+    const builtinCodecs = createPostgresBuiltinCodecLookup();
+    const callerCodec = (id: string) => ({
       id,
       encode: async (value: unknown) => value,
       decode: async (wire: unknown) => wire,
@@ -195,15 +196,13 @@ describe('postgres defineContract encodes literal defaults through the column co
     const contract = defineContract(
       {
         codecLookup: {
-          get: callerCodec,
-          descriptorFor: (id) =>
-            ({
-              codecId: id,
-              paramsSchema: undefined,
-              factory: () => () => callerCodec(id),
-            }) as unknown as AnyCodecDescriptor,
-          targetTypesFor: () => undefined,
-          renderOutputTypeFor: () => undefined,
+          ...builtinCodecs,
+          descriptorFor: (id) => {
+            const descriptor = builtinCodecs.descriptorFor(id);
+            return descriptor === undefined
+              ? undefined
+              : Object.assign(Object.create(descriptor), { factory: () => () => callerCodec(id) });
+          },
         },
       },
       ({ field, model }) => ({

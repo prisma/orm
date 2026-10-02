@@ -14,7 +14,6 @@ const HASHES = {
 function literalCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
     renderValueLiteralFor: (_id, value) =>
       typeof value === 'string'

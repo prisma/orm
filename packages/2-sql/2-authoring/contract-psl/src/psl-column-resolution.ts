@@ -4,10 +4,13 @@ import type {
   ValueSetRef,
 } from '@internal/contract/types';
 import type {
+  AuthoringArgumentDescriptor,
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
+  AuthoringStorageTypeTemplate,
   AuthoringTypeConstructorDescriptor,
+  ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
 import {
   checkUncomposedNamespace,
@@ -17,6 +20,7 @@ import {
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeParams,
 } from '@internal/framework-components/authoring';
 import type {
   AnyCodecDescriptor,
@@ -81,7 +85,6 @@ import { type ValueObjectTypes, valueObjectDefaultMismatches } from './value-obj
 
 export type ColumnDescriptor = {
   readonly codecId: string;
-  readonly nativeType: string;
   readonly typeRef?: string;
   readonly typeParams?: Record<string, unknown> | undefined;
   /**
@@ -97,13 +100,64 @@ export type ColumnDescriptor = {
 
 export function toNamedTypeFieldDescriptor(
   typeRef: string,
-  descriptor: Pick<ColumnDescriptor, 'codecId' | 'nativeType'>,
+  descriptor: Pick<ColumnDescriptor, 'codecId'>,
 ): ColumnDescriptor {
-  return {
-    codecId: descriptor.codecId,
-    nativeType: descriptor.nativeType,
-    typeRef,
-  };
+  return { codecId: descriptor.codecId, typeRef };
+}
+
+function argumentSpan(
+  call: ResolvedTypeConstructorCall,
+  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
+  index: number | undefined,
+): PslSpan {
+  if (index === undefined) return call.span;
+  const name = descriptors?.[index]?.name;
+  const named = call.args.find((arg) => arg.kind === 'named' && arg.name === name);
+  const positional = call.args.filter((arg) => arg.kind === 'positional')[index];
+  return (named ?? positional)?.span ?? call.span;
+}
+
+/**
+ * Checks the type parameters a constructor or preset produced against its codec's parameter schema,
+ * reporting a failure at the argument the failing parameter came from. Returns whether they passed.
+ */
+export function checkPslTypeParams(input: {
+  readonly call: ResolvedTypeConstructorCall;
+  readonly subject: string;
+  readonly args: readonly AuthoringArgumentDescriptor[] | undefined;
+  readonly template: AuthoringStorageTypeTemplate;
+  readonly typeParams: Record<string, unknown> | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
+}): boolean {
+  const helperPath = input.call.path.join('.');
+  try {
+    validateAuthoringTypeParams(
+      helperPath,
+      input.template,
+      input.typeParams,
+      input.codecLookup?.descriptorFor(input.template.codecId)?.paramsSchema,
+    );
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    input.diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `${input.subject} ${message}`,
+      ...input.source.at(argumentSpan(input.call, input.args, argumentIndexOf(error))),
+    });
+    return false;
+  }
+}
+
+function argumentIndexOf(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('details' in error)) return undefined;
+  const { details } = error;
+  if (typeof details !== 'object' || details === null || !('argumentIndex' in details)) {
+    return undefined;
+  }
+  return typeof details.argumentIndex === 'number' ? details.argumentIndex : undefined;
 }
 
 /**
@@ -156,16 +210,11 @@ export function replacesUnresolvedTypeVoice(
 export function instantiatePslTypeConstructor(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
-}):
-  | {
-      readonly codecId: string;
-      readonly nativeType: string;
-      readonly typeParams?: Record<string, unknown>;
-    }
-  | undefined {
+}): ScalarTypeConstructorOutput | undefined {
   const helperPath = input.call.path.join('.');
   const args = mapPslHelperArgs({
     args: input.call.args,
@@ -180,9 +229,10 @@ export function instantiatePslTypeConstructor(input: {
     return undefined;
   }
 
+  let output: ScalarTypeConstructorOutput;
   try {
     validateAuthoringHelperArguments(helperPath, input.descriptor.args, args);
-    return instantiateAuthoringTypeConstructor(input.descriptor, args);
+    output = instantiateAuthoringTypeConstructor(input.descriptor, args);
   } catch (error) {
     if (isInternalError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
@@ -193,6 +243,17 @@ export function instantiatePslTypeConstructor(input: {
     });
     return undefined;
   }
+  const passed = checkPslTypeParams({
+    call: input.call,
+    subject: `${input.entityLabel} constructor "${helperPath}"`,
+    args: input.descriptor.args,
+    template: input.descriptor.output,
+    typeParams: output.typeParams,
+    codecLookup: input.codecLookup,
+    diagnostics: input.diagnostics,
+    source: input.source,
+  });
+  return passed ? output : undefined;
 }
 
 function pushUnsupportedTypeConstructorDiagnostic(input: {
@@ -258,13 +319,10 @@ export function resolvePslTypeConstructorDescriptor(input: {
 /**
  * Result of a codec descriptor's `columnFromEntity` authoring hook — the
  * per-column params derived from the entity a type constructor's
- * `entityRefArg` resolved to. `nativeType` mirrors what the codec descriptor's
- * `nativeTypeFor` derives from the same `typeParams` at render time, so the
- * column's declared native type and the render-time cast agree.
+ * `entityRefArg` resolved to.
  */
 interface EntityRefColumnFromEntityResult {
   readonly typeParams?: Record<string, unknown>;
-  readonly nativeType: string;
 }
 
 interface EntityRefResolvingCodecDescriptor extends AnyCodecDescriptor {
@@ -289,8 +347,8 @@ function hasColumnFromEntityHook(
  * namespace's already-lowered extension entities (keyed by the declared
  * `entityRefArg.entityKind`, then block name), and converts the resolved
  * entity to column params via the `columnFromEntity` authoring hook on the
- * codec descriptor registered for `descriptor.output.codecId`. The `nativeType`
- * / `typeParams.typeName` `columnFromEntity` returns are bare — schema
+ * codec descriptor registered for `descriptor.output.codecId`. The
+ * `typeParams.typeName` `columnFromEntity` returns is bare — schema
  * qualification (e.g. `auth.aal_level`) is a target concern, applied later
  * when the target builds the field's namespace. A `valueSet` ref is
  * attached when the same namespace derived a value-set under the same block
@@ -381,7 +439,6 @@ function resolveEntityRefTypeConstructorCall(input: {
     ok: true,
     descriptor: {
       codecId,
-      nativeType: resolved.nativeType,
       ...(resolved.typeParams !== undefined ? { typeParams: resolved.typeParams } : {}),
       ...(valueSet !== undefined ? { valueSet } : {}),
     },
@@ -464,6 +521,21 @@ export function resolveFieldTypeDescriptor(input: {
       if (!instantiated) {
         return { ok: false, alreadyReported: true };
       }
+      const presetPath = input.field.typeConstructor.path.join('.');
+      if (
+        !checkPslTypeParams({
+          call: input.field.typeConstructor,
+          subject: `${input.entityLabel} preset "${presetPath}"`,
+          args: presetDescriptor.args,
+          template: presetDescriptor.output,
+          typeParams: instantiated.descriptor.typeParams,
+          codecLookup: input.codecLookup,
+          diagnostics: input.diagnostics,
+          source,
+        })
+      ) {
+        return { ok: false, alreadyReported: true };
+      }
       const presetContributions: FieldPresetContributions = {
         nullable: instantiated.nullable,
         id: instantiated.id,
@@ -534,6 +606,7 @@ export function resolveFieldTypeDescriptor(input: {
     const instantiated = instantiatePslTypeConstructor({
       call: input.field.typeConstructor,
       descriptor,
+      codecLookup: input.codecLookup,
       diagnostics: input.diagnostics,
       source,
       entityLabel: input.entityLabel,

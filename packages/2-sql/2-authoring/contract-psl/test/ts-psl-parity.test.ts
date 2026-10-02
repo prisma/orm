@@ -13,7 +13,7 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   symbolTableInputFromParseArgs,
@@ -34,7 +34,6 @@ const sqlFamilyPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sql/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -42,7 +41,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'test/timestamp@1',
-            nativeType: 'timestamp',
             default: {
               kind: 'function',
               expression: 'now()',
@@ -82,7 +80,6 @@ const pgvectorExtensionPack = {
           args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
           output: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
             typeParams: {
               length: { kind: 'arg', index: 0 },
             },
@@ -139,14 +136,12 @@ const sqliteTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/integer@1',
-          nativeType: 'integer',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/text@1',
-          nativeType: 'text',
         },
       },
       temporal: temporalConvenienceMirrors.sqlite,
@@ -167,14 +162,12 @@ const postgresTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/int4@1',
-          nativeType: 'int4',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -244,7 +237,7 @@ model Post {
 
 const representativeTsAuthoring = `const Role = enumType('Role', pgText, member('USER', 'user'), member('ADMIN', 'admin'));
 defineContract(
-  { family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
+  { ...fixtureTypeLookups, family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
   ({ type, field, model, rel }) => {
     const types = {
       Embedding1536: type.pgvector.Vector(1536),
@@ -278,6 +271,7 @@ defineContract(
 function buildSqliteTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: sqliteTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -300,6 +294,7 @@ function buildSqliteTimestampTsContract() {
 function buildPostgresTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: postgresTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -356,7 +351,7 @@ describe('TS and PSL authoring parity', () => {
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions: target.authoringContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -411,7 +406,7 @@ model Post {
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -441,6 +436,7 @@ model Post {
     });
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       namespaces: ['auth'],
@@ -488,12 +484,13 @@ model Post {
       authoringContributions,
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
     });
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -556,13 +553,14 @@ model Post {
       authoringContributions,
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
     });
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract(
       {
+        ...fixtureTypeLookups,
         family: sqlFamilyPack,
         target: portablePostgresTargetPack,
         extensions: { indexTypes: indexTypesPack },
@@ -630,12 +628,13 @@ model Post {
       authoringContributions,
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
     });
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -682,12 +681,13 @@ model Post {
       authoringContributions,
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
     });
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -740,13 +740,14 @@ model Post {
       authoringContributions,
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
     });
 
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -802,7 +803,7 @@ model Post {
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         authoringContributions: postgresTimestampAuthoringContributions,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       });
       expect(result.ok).toBe(true);
@@ -813,6 +814,7 @@ model Post {
     const buildTsFullForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -832,6 +834,7 @@ model Post {
     const buildTsConvenienceForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,

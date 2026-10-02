@@ -29,11 +29,13 @@ import {
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -69,9 +71,9 @@ const postgresTarget = {
   defaultNamespaceId: 'public',
 };
 
-const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
 function parsePsl(source: string) {
@@ -103,6 +105,7 @@ function interpret(source: string) {
   return interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
+    codecLookup: postgresCodecLookup,
     symbolTable,
     sources,
     target: postgresTarget,

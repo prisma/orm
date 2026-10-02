@@ -22,6 +22,7 @@ import { PostgresContractSerializer } from '../../src/core/postgres-contract-ser
 import { PostgresRlsEnablement } from '../../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import { PostgresSchema } from '../../src/core/postgres-schema';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 import {
   contractOf,
   NICKNAME_CHECK,
@@ -35,7 +36,10 @@ type Op = SqlMigrationPlanOperation<PostgresPlanTargetDetails>;
 type ContractJson = { readonly storage: { readonly storageHash: string } };
 
 const stack = {
-  adapter: { create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'> },
+  adapter: {
+    ...postgresTypeComponents[0],
+    create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'>,
+  },
   target: { kind: 'target', familyId: 'sql', targetId: 'postgres' },
   extensions: [],
 } as unknown as ControlStack<'sql', 'postgres'>;

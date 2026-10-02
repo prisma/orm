@@ -1,6 +1,10 @@
 import type { ContractField, ContractValueObject, JsonValue } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { MongoValidator } from '@internal/mongo-contract';
+import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 
 /**
  * The permitted values a field's value set restricts it to, keyed by the value set's name — the
@@ -27,12 +31,16 @@ function anyValueSchema(field: ContractField): Record<string, unknown> {
 
 function fieldToBsonSchema(
   field: ContractField,
+  dataTypeLookup: DataTypeLookup,
   valueObjects: Record<string, ContractValueObject> | undefined,
-  codecLookup: CodecLookup | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
   valueSets: FieldValueSets | undefined,
 ): Record<string, unknown> | undefined {
   if (field.type.kind === 'scalar') {
-    const bsonTypes = codecLookup?.targetTypesFor(field.type.codecId);
+    const bsonTypes =
+      codecLookup === undefined
+        ? undefined
+        : bsonTypesOfCodec(field.type.codecId, { codecLookup, dataTypeLookup });
     if (bsonTypes === undefined) return undefined;
     if (bsonTypes.length === 0) return anyValueSchema(field);
     const bsonType = bsonTypeKeyword(bsonTypes);
@@ -62,7 +70,13 @@ function fieldToBsonSchema(
   if (field.type.kind === 'valueObject') {
     const vo = valueObjects?.[field.type.name];
     if (!vo) return undefined;
-    const voSchema = deriveObjectSchema(vo.fields, valueObjects, codecLookup, valueSets);
+    const voSchema = deriveObjectSchema(
+      vo.fields,
+      dataTypeLookup,
+      valueObjects,
+      codecLookup,
+      valueSets,
+    );
     if ('many' in field && field.many) {
       return { bsonType: 'array', items: voSchema };
     }
@@ -77,15 +91,16 @@ function fieldToBsonSchema(
 
 function deriveObjectSchema(
   fields: Record<string, ContractField>,
+  dataTypeLookup: DataTypeLookup,
   valueObjects: Record<string, ContractValueObject> | undefined,
-  codecLookup: CodecLookup | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
   valueSets: FieldValueSets | undefined,
 ): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
   for (const [fieldName, field] of Object.entries(fields)) {
-    const schema = fieldToBsonSchema(field, valueObjects, codecLookup, valueSets);
+    const schema = fieldToBsonSchema(field, dataTypeLookup, valueObjects, codecLookup, valueSets);
     if (schema) {
       properties[fieldName] = schema;
       if (!field.nullable) {
@@ -111,12 +126,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function deriveJsonSchema(
   fields: Record<string, ContractField>,
+  dataTypeLookup: DataTypeLookup,
   valueObjects?: Record<string, ContractValueObject>,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
   valueSets?: FieldValueSets,
 ): MongoValidator {
   return new MongoValidator({
-    jsonSchema: deriveObjectSchema(fields, valueObjects, codecLookup, valueSets),
+    jsonSchema: deriveObjectSchema(fields, dataTypeLookup, valueObjects, codecLookup, valueSets),
     validationLevel: 'strict',
     validationAction: 'error',
   });
@@ -131,11 +147,18 @@ export function derivePolymorphicJsonSchema(
   baseFields: Record<string, ContractField>,
   discriminatorField: string,
   variants: readonly PolymorphicVariant[],
+  dataTypeLookup: DataTypeLookup,
   valueObjects?: Record<string, ContractValueObject>,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
   valueSets?: FieldValueSets,
 ): MongoValidator {
-  const baseSchema = deriveObjectSchema(baseFields, valueObjects, codecLookup, valueSets);
+  const baseSchema = deriveObjectSchema(
+    baseFields,
+    dataTypeLookup,
+    valueObjects,
+    codecLookup,
+    valueSets,
+  );
   const baseProperties = isRecord(baseSchema['properties']) ? baseSchema['properties'] : {};
 
   const oneOf: Record<string, unknown>[] = [];
@@ -150,7 +173,7 @@ export function derivePolymorphicJsonSchema(
     const variantProperties: Record<string, unknown> = {};
     const variantRequired: string[] = [discriminatorField];
     for (const [name, field] of Object.entries(variantOnlyFields)) {
-      const schema = fieldToBsonSchema(field, valueObjects, codecLookup, valueSets);
+      const schema = fieldToBsonSchema(field, dataTypeLookup, valueObjects, codecLookup, valueSets);
       if (schema) {
         variantProperties[name] = schema;
         if (!field.nullable) {

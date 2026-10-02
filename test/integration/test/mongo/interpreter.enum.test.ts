@@ -4,7 +4,11 @@ import {
   mongoFamilyEntityTypes,
   mongoFamilyPslBlockDescriptors,
 } from '@internal/family-mongo/pack';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import {
+  type CodecLookup,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -14,9 +18,13 @@ import {
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
@@ -37,7 +45,7 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
   'mongo/int32@1': ['int'],
 };
 
-const mongoCodecLookup: CodecLookup = {
+const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
     const targetTypes = mongoTargetTypes[id];
     if (!targetTypes) return undefined;
@@ -53,7 +61,7 @@ const mongoCodecLookup: CodecLookup = {
       },
     } as ReturnType<CodecLookup['get']>;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoTargetTypes[id] ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
 };
 
@@ -79,6 +87,7 @@ function interpret(
       defaultFunctionRegistry: new Map(),
     },
     codecLookup: mongoCodecLookup,
+    dataTypeLookup: mongoDataTypeLookup,
     authoringContributions: contributions,
     enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
     ...overrides,

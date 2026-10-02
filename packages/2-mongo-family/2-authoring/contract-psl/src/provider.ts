@@ -42,6 +42,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
           dataTypeEntries: context.authoringContributions.dataTypes,
         },
         codecLookup: context.codecLookup,
+        dataTypeLookup: context.dataTypeLookup,
         authoringContributions: context.authoringContributions,
         composedExtensions: context.composedExtensions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),

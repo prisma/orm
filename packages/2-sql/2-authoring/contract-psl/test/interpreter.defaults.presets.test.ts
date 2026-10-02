@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   sqliteScalarColumnDescriptors,
   sqliteTarget,
@@ -97,7 +97,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: sqliteTemporalContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -202,7 +202,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
               kind: 'fieldPreset',
               output: {
                 codecId: 'pg/text@1',
-                nativeType: 'text',
                 default: { kind: 'function', expression: "'synthetic-default'" },
               },
             },
@@ -262,7 +261,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
               kind: 'fieldPreset',
               output: {
                 codecId: 'pg/text@1',
-                nativeType: 'text',
                 nullable: true,
               },
             },
@@ -314,7 +312,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
               kind: 'fieldPreset',
               output: {
                 codecId: 'pg/timestamptz-temporal@1',
-                nativeType: 'timestamptz',
               },
             },
           },
@@ -325,7 +322,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
               kind: 'typeConstructor',
               output: {
                 codecId: 'pg/text@1',
-                nativeType: 'text',
               },
             },
           },

@@ -1,5 +1,6 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
 import {
   applyNaming,
@@ -30,6 +31,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 };
 
 const { model } = createComposedAuthoringHelpers({
+  ...testTypeLookups,
   family: bareFamilyPack,
   target: postgresTargetPack,
   extensions: { testIndexes: testIndexPack },

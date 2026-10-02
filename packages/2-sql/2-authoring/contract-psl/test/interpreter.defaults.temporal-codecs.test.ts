@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   postgresScalarTypeDescriptors,
   sqliteScalarColumnDescriptors,
@@ -111,6 +111,22 @@ stamped ${field}
     expect(convenience).toEqual(full);
   });
 
+  it('accepts a precision at each edge of the data type’s bounds', () => {
+    expect(interpretTemporal(model('temporal.timestamp(0)')).ok).toBe(true);
+    expect(interpretTemporal(model('temporal.timestamp(6)')).ok).toBe(true);
+  });
+
+  it('reports a precision outside the bounds at the argument, not the call', () => {
+    const schema = model('temporal.timestamp(7)');
+    const result = interpretTemporal(schema);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find((entry) =>
+      entry.message.includes('precision must be at most 6'),
+    );
+    expect(diagnostic?.span?.start.offset).toBe(schema.indexOf('7)'));
+  });
+
   it('accepts precision named as well as positional, lowering identically', () => {
     expect(columnAndDefaults(model('temporal.timestamp(precision: 3)'))).toEqual(
       columnAndDefaults(model('temporal.timestamp(3)')),
@@ -133,7 +149,7 @@ stamped ${field}
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: sqliteTemporalContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -182,6 +198,17 @@ stamped ${field}
       name: 'an unknown named argument',
       field: 'temporal.timestamp(frequency: now)',
       message: /received unknown named argument "frequency"/,
+    },
+    {
+      name: 'a precision below the data type’s bounds, reported at the argument',
+      field: 'temporal.timestamp(-1)',
+      message:
+        /preset "temporal\.timestamp" Authoring helper argument at temporal\.timestamp\[0\] is invalid: precision must be non-negative \(was -1\)/,
+    },
+    {
+      name: 'a precision above the data type’s bounds',
+      field: 'temporal.timestamp(precision: 7)',
+      message: /precision must be at most 6 \(was 7\)/,
     },
   ])('rejects $name', ({ field, message }) => {
     const result = interpretTemporal(model(field));

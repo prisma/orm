@@ -15,7 +15,6 @@ describe('postgresAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/uuid@1',
-        nativeType: 'uuid',
       },
     });
   });
@@ -25,7 +24,6 @@ describe('postgresAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/uuid@1',
-        nativeType: 'uuid',
         executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
         id: true,
       },
@@ -37,7 +35,6 @@ describe('postgresAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/uuid@1',
-        nativeType: 'uuid',
         executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
         id: true,
       },
@@ -49,11 +46,9 @@ describe('postgresAuthoringFieldPresets', () => {
 
     expect(types.get('BigIntNumber')).toEqual({
       codecId: 'pg/int8number@1',
-      nativeType: 'int8',
     });
     expect(types.get('UnboundedInt')).toEqual({
       codecId: 'pg/unboundedint@1',
-      nativeType: 'numeric',
     });
   });
 
@@ -67,7 +62,6 @@ describe('postgresAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/int8@1',
-        nativeType: 'int8',
       },
     });
   });
@@ -93,42 +87,33 @@ describe('postgres temporal per-codec presets', () => {
     expect(postgresAuthoringFieldPresets.temporal).toEqual({
       ...temporalAuthoringPresets({
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
         generatorId: 'instantNow',
       }),
       ...temporalStringAuthoringPresets({
         codecId: 'pg/timestamptz-string@1',
-        nativeType: 'timestamptz',
       }),
       createdAtJsDate: temporalAuthoringPresets({
         codecId: 'pg/timestamptz-date@1',
-        nativeType: 'timestamptz',
       }).createdAt,
       updatedAtJsDate: temporalAuthoringPresets({
         codecId: 'pg/timestamptz-date@1',
-        nativeType: 'timestamptz',
       }).updatedAt,
       timestamptzJsDate: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-date@1',
-        nativeType: 'timestamptz',
       }),
       timestamp: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
-        nativeType: 'timestamp',
         generatorId: 'plainDateTimeNow',
       }),
       timestamptz: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
         generatorId: 'instantNow',
       }),
       timestampString: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-string@1',
-        nativeType: 'timestamp',
       }),
       timestamptzString: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-string@1',
-        nativeType: 'timestamptz',
       }),
     });
   });

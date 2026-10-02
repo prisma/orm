@@ -7,17 +7,22 @@ import type {
 } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslTypeMap } from '@internal/family-sql/psl-build';
+import { requiredParamKeys, validateCodecTypeParams } from '@internal/framework-components/codec';
 import type {
   PslCompositeType,
   PslField,
   PslNamedTypeDeclaration,
   PslTypesBlock,
 } from '@internal/framework-components/psl-ast';
+import {
+  dataTypeParams,
+  isSqlDataType,
+  unquotedSqlBaseName,
+} from '@internal/sql-contract/data-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { resolvedTypeParams, StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
@@ -29,7 +34,10 @@ import {
   refuseValueObjectsOutsideDefaultNamespace,
 } from './refusals';
 
-/** The native type the stack's codec names for a value-object member, which has no column of its own. */
+/**
+ * The type name a value-object member's codec stores, from the data type the codec represents and
+ * the member's type parameters. A member has no column of its own.
+ */
 function nativeTypeOfMember(
   type: ScalarFieldType,
   coordinate: string,
@@ -37,21 +45,23 @@ function nativeTypeOfMember(
 ): string {
   const { codecId } = type;
   const descriptor = context.codecLookup.descriptorFor(codecId);
-  if (!isPostgresCodecDescriptor(descriptor)) {
+  if (descriptor === undefined) refuseMemberCodecWithoutNativeType(codecId, coordinate);
+  const dataType = context.dataTypeLookup.get(descriptor.dataType);
+  if (dataType === undefined || !isSqlDataType(dataType)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
   const typeParams = resolvedTypeParams(type, undefined);
-  if (typeParams !== undefined) {
-    return descriptor.nativeTypeFor({
-      codecId,
-      typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
-    });
+  if (typeParams === undefined) {
+    if (requiredParamKeys(dataType).length > 0) {
+      refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
+    }
+    return unquotedSqlBaseName(dataType, {});
   }
-  try {
-    return descriptor.nativeTypeFor({ codecId });
-  } catch {
-    refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
-  }
+  validateCodecTypeParams(descriptor, {
+    codecId,
+    typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
+  });
+  return unquotedSqlBaseName(dataType, dataTypeParams(dataType, typeParams));
 }
 
 /** The PSL type position of a value-object member: a value object or an enum by name, or a scalar as a column would print. */

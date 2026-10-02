@@ -12,6 +12,7 @@ import {
   ddlColumnFromNode,
   tableConstraintsFromNode,
 } from '../../src/core/migrations/column-ddl-rendering';
+import { sqliteTestTypes } from '../sqlite-test-types';
 import { checkConstraint, expectedColumn, table } from './node-issue-helpers';
 
 describe('tableConstraintsFromNode — checks', () => {
@@ -97,7 +98,7 @@ describe('a contract default its data type does not hold', () => {
   });
 
   it('is refused rather than written, by both DDL paths', () => {
-    expect(() => ddlColumnFromNode(column, false)).toThrow(refusal);
-    expect(() => columnSpecFromNode(column, false)).toThrow(refusal);
+    expect(() => ddlColumnFromNode(column, false, sqliteTestTypes)).toThrow(refusal);
+    expect(() => columnSpecFromNode(column, false, sqliteTestTypes)).toThrow(refusal);
   });
 });

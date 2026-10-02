@@ -16,6 +16,7 @@
  *  - Member-change refusal (R9): rename/removal/reorder each plan zero ops
  *    and leave the database untouched.
  */
+
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
@@ -203,10 +204,7 @@ namespace public {
 // PSL → contract helpers (mirrors rls-lifecycle-e2e.integration.test.ts)
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<
-  string,
-  { codecId: string; nativeType: string }
-> {
+function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
   return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
 }
 

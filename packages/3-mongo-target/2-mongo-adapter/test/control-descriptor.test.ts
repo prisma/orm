@@ -1,4 +1,5 @@
 import { mongoDescriptorById } from '@internal/target-mongo/codecs';
+import { mongoBson, mongoJson } from '@internal/target-mongo/data-types';
 import { describe, expect, it } from 'vitest';
 import mongoAdapterDescriptor, { mongoScalarAuthoringTypes } from '../src/exports/control';
 
@@ -25,7 +26,7 @@ const deprecatedAliases = [
 ] as const;
 
 describe('mongoScalarAuthoringTypes', () => {
-  it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
+  it('pins every base scalar as a zero-arg type constructor naming its codec', () => {
     expect(Object.keys(mongoScalarAuthoringTypes).sort()).toEqual(
       [
         ...expectedScalars.map(([name]) => name),
@@ -38,7 +39,7 @@ describe('mongoScalarAuthoringTypes', () => {
       expect(mongoScalarAuthoringTypes[name]).toEqual({
         kind: 'typeConstructor',
         documentation: expect.stringMatching(/\S/),
-        output: { codecId, nativeType: mongoDescriptorById(codecId)?.targetTypes?.[0] },
+        output: { codecId },
       });
     }
   });
@@ -55,7 +56,8 @@ describe('mongoScalarAuthoringTypes', () => {
   );
 
   it('pins Json to the json native type and the JSON-representable BSON types', () => {
-    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([
+    expect(mongoDescriptorById('mongo/json@1')?.dataType).toBe(mongoJson.id);
+    expect(mongoJson.mongo.bsonTypes).toEqual([
       'object',
       'array',
       'string',
@@ -69,16 +71,17 @@ describe('mongoScalarAuthoringTypes', () => {
       kind: 'typeConstructor',
       documentation:
         'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
-      output: { codecId: 'mongo/json@1', nativeType: 'json' },
+      output: { codecId: 'mongo/json@1' },
     });
   });
 
   it('pins Bson, whose codec declares no BSON type, to the bson native type', () => {
-    expect(mongoDescriptorById('mongo/bson@1')?.targetTypes).toEqual([]);
+    expect(mongoDescriptorById('mongo/bson@1')?.dataType).toBe(mongoBson.id);
+    expect(mongoBson.mongo.bsonTypes).toEqual([]);
     expect(mongoScalarAuthoringTypes['Bson']).toEqual({
       kind: 'typeConstructor',
       documentation: expect.stringContaining('the collection validator does not constrain it'),
-      output: { codecId: 'mongo/bson@1', nativeType: 'bson' },
+      output: { codecId: 'mongo/bson@1' },
     });
   });
 

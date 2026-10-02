@@ -13,6 +13,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { isPostgresSchema, postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -32,6 +33,7 @@ import {
 } from './fixtures/runner-fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 // ============================================================================
 // PSL sources
@@ -133,10 +135,7 @@ namespace public {
 // PSL → contract helpers
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<
-  string,
-  { codecId: string; nativeType: string }
-> {
+function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
   return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
 }
 
@@ -153,6 +152,7 @@ function buildContractFromPsl(psl: string): Contract<SqlStorage> {
   const result = interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
+    codecLookup: postgresCodecLookup,
     symbolTable,
     sources,
     target: {

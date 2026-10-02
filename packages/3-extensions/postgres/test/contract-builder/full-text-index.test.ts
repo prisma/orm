@@ -9,6 +9,7 @@ import { assembleAuthoringContributions } from '@internal/framework-components/c
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
@@ -29,6 +30,7 @@ import {
 } from '../../src/exports/contract-builder';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 /**
  * Both surfaces file the index onto the namespace's `message` table; the two
@@ -80,6 +82,7 @@ function pslIndexes() {
     capabilities: {},
     target: postgresPack,
     dataTypeLookup: postgresDataTypeLookup,
+    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors: new Map([
       ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
       ['String', { codecId: 'pg/text@1', nativeType: 'text' }],

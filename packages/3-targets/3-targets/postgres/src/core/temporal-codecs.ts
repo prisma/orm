@@ -11,7 +11,7 @@ import {
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
+import type { PrecisionParams } from './codec-helpers';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
@@ -21,6 +21,7 @@ import {
 import {
   pgDate,
   pgDateCanonical,
+  pgPrecisionParams,
   pgTime,
   pgTimeCanonical,
   pgTimestamp,
@@ -29,10 +30,6 @@ import {
   pgTimestamptzCanonical,
 } from './data-types';
 import {
-  PG_DATE_NATIVE_TYPE,
-  PG_TIME_NATIVE_TYPE,
-  PG_TIMESTAMP_NATIVE_TYPE,
-  PG_TIMESTAMPTZ_NATIVE_TYPE,
   pgDateTemporalDecode,
   pgDateTemporalEncode,
   pgTimestampTemporalDecode,
@@ -64,16 +61,12 @@ export class PgDateTemporalCodec extends CodecImpl<
 }
 
 export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
-  protected override nativeType(): string {
-    return PG_DATE_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgDate.id;
   override readonly codecId = PG_DATE_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['date'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgDateTemporalCodec {
     return () => new PgDateTemporalCodec(this);
@@ -109,18 +102,13 @@ export class PgTimestampTemporalCodec extends CodecImpl<
 }
 
 export class PgTimestampTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMP_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamp.id;
   override readonly codecId = PG_TIMESTAMP_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['timestamp'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(
     _params: PrecisionParams,
   ): (ctx: CodecInstanceContext) => PgTimestampTemporalCodec {
@@ -162,18 +150,13 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
 }
 
 export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['timestamptz'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(
     _params: PrecisionParams,
   ): (ctx: CodecInstanceContext) => PgTimestamptzTemporalCodec {
@@ -215,18 +198,13 @@ export class PgTimeTemporalCodec extends CodecImpl<
 }
 
 export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIME_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTime.id;
   override readonly codecId = PG_TIME_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['time'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeTemporalCodec {
     return () => new PgTimeTemporalCodec(this);
   }

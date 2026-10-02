@@ -1,5 +1,6 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../../1-core/contract/test/test-type-lookups';
 import { type ContractInput, defineContract } from '../../src/contract-builder';
 
 const bareFamilyPack: FamilyPackRef<'sql'> = {
@@ -20,9 +21,13 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 
 /** `defineContract` with a bare SQL family and a Postgres target, for tests about field authoring. */
 export function defineTestContract<
-  const Definition extends Omit<ContractInput, 'target' | 'family' | 'createNamespace'>,
+  const Definition extends Omit<
+    ContractInput,
+    'target' | 'family' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
+  >,
 >(definition: Definition) {
   return defineContract({
+    ...testTypeLookups,
     family: bareFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,

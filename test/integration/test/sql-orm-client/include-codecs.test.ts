@@ -12,7 +12,6 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type ColumnTypeDescriptor,
-  dataTypeId,
 } from '@internal/framework-components/codec';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
@@ -22,6 +21,8 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
+import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { pgText } from '@internal/target-postgres/data-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
@@ -60,10 +61,9 @@ class IncludedTextCodec extends CodecImpl<
 }
 
 class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
-  override readonly dataType = dataTypeId('demo/fixture');
+  override readonly dataType = pgText.id;
   override readonly codecId = TEST_INCLUDED_TEXT_CODEC_ID;
   override readonly traits = ['textual'] as const;
-  override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = undefined;
 
   override factory(): (ctx: CodecInstanceContext) => IncludedTextCodec {
@@ -77,8 +77,7 @@ class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
  * assuming. This one stores and projects text unchanged.
  */
 const includedTextDescriptor = postgresCodec(new IncludedTextDescriptor(), {
-  dataType: dataTypeId('demo/fixture'),
-  nativeType: () => 'text',
+  dataType: pgText,
   jsonProjection: (expression) => expression,
 });
 const includedTextColumn = {
@@ -121,7 +120,10 @@ const Branch = model('Branch', {
   },
 }).sql({ table: 'codec_branches' });
 
-const contract = defineContract({ models: { Project, Branch } });
+const contract = defineContract({
+  codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
+  models: { Project, Branch },
+});
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({

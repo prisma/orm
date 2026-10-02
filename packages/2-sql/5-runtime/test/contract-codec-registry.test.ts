@@ -41,7 +41,6 @@ function createVectorExtensionDescriptor(): SqlRuntimeExtensionDescriptor<'postg
     codecId: 'pg/vector@1',
     dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
-    targetTypes: ['vector'],
     paramsSchema: {
       '~standard': {
         version: 1,
@@ -74,7 +73,6 @@ function createNonParameterizedExtensionDescriptor(): SqlRuntimeExtensionDescrip
   // Custom codec id avoids colliding with the default test target descriptor's pre-registered codecs (`pg/text@1`, etc.).
   const scalarCodec = defineTestCodec({
     typeId: 'test/scalar@1',
-    targetTypes: ['scalar'],
     encode: (v: string) => v,
     decode: (w: string) => w,
   });
@@ -83,7 +81,6 @@ function createNonParameterizedExtensionDescriptor(): SqlRuntimeExtensionDescrip
     codecId: 'test/scalar@1',
     dataType: dataTypeId('test/scalar'),
     traits: [],
-    targetTypes: ['scalar'],
     paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => scalarCodec,
@@ -281,7 +278,6 @@ describe('CodecDescriptorRegistry', () => {
     expect(descriptor).toBeDefined();
     expect(descriptor?.codecId).toBe('pg/vector@1');
     expect(descriptor?.traits).toEqual(['equality']);
-    expect(descriptor?.targetTypes).toEqual(['vector']);
   });
 
   it('descriptorFor returns the synthesized descriptor for a non-parameterized codec id', () => {
@@ -296,7 +292,6 @@ describe('CodecDescriptorRegistry', () => {
     const descriptor = context.codecDescriptors.descriptorFor('test/scalar@1');
     expect(descriptor).toBeDefined();
     expect(descriptor?.codecId).toBe('test/scalar@1');
-    expect(descriptor?.targetTypes).toEqual(['scalar']);
   });
 
   it('descriptorFor reads use the same call shape for parameterized and non-parameterized codec ids', () => {
@@ -350,26 +345,5 @@ describe('CodecDescriptorRegistry', () => {
 
     const codecIds = Array.from(context.codecDescriptors.values()).map((d) => d.codecId);
     expect(codecIds).toContain('test/scalar@1');
-  });
-
-  it('byTargetType returns descriptors for a given target type', () => {
-    const contract = createTestContract({
-      Doc: {
-        embedding: {
-          nativeType: 'vector',
-          codecId: 'pg/vector@1',
-          nullable: false,
-          typeParams: { length: 1536 },
-        },
-      },
-    });
-
-    const context = createTestContext(contract, createStubAdapter(), {
-      extensions: [createVectorExtensionDescriptor()],
-    });
-
-    const byVector = context.codecDescriptors.byTargetType('vector');
-    expect(byVector.length).toBeGreaterThan(0);
-    expect(byVector.some((d) => d.codecId === 'pg/vector@1')).toBe(true);
   });
 });

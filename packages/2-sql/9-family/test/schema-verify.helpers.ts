@@ -10,7 +10,6 @@ import {
   profileHash,
   type StorageHashBase,
 } from '@internal/contract/types';
-import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   indexInputFromSerialized,
@@ -26,7 +25,6 @@ import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { applicationDomainOf } from '@repo/test-utils';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
-import type { CodecControlHooks, ExpandNativeTypeInput } from '../src/core/migrations/types';
 
 /**
  * Creates a minimal valid contract for testing.
@@ -204,118 +202,4 @@ export function createSchemaTable(
     ),
     ...ifDefined('primaryKey', options?.primaryKey),
   });
-}
-
-/**
- * Mock implementation of expandNativeType for Postgres parameterized types.
- *
- * IMPORTANT: This mirrors the real implementation in
- * `@internal/adapter-postgres/src/core/parameterized-types.ts` (`expandParameterizedNativeType`).
- * If a new parameterized codec type is added there, this mock must be updated to match.
- *
- * We cannot import the real function because this package (family-sql, Layer 3 Tooling)
- * must not depend on the postgres adapter (Layer 6 Adapters).
- */
-function mockExpandParameterizedNativeType(input: ExpandNativeTypeInput): string {
-  const { nativeType, codecId, typeParams } = input;
-
-  if (!typeParams || !codecId) {
-    return nativeType;
-  }
-
-  const isValidNumber = (v: unknown): v is number =>
-    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 0;
-
-  // Length-parameterized types: char, varchar, bit, varbit
-  const lengthCodecs = new Set([
-    'sql/char@1',
-    'sql/varchar@1',
-    'pg/char@1',
-    'pg/varchar@1',
-    'pg/bit@1',
-    'pg/varbit@1',
-    'pg/vector@1',
-  ]);
-  if (lengthCodecs.has(codecId)) {
-    const length = typeParams['length'];
-    if (isValidNumber(length)) {
-      return `${nativeType}(${length})`;
-    }
-    return nativeType;
-  }
-
-  // Numeric with precision and optional scale
-  if (codecId === 'pg/numeric@1') {
-    const precision = typeParams['precision'];
-    const scale = typeParams['scale'];
-
-    if (isValidNumber(precision)) {
-      if (isValidNumber(scale)) {
-        return `${nativeType}(${precision},${scale})`;
-      }
-      return `${nativeType}(${precision})`;
-    }
-    return nativeType;
-  }
-
-  // Temporal types with precision
-  const temporalCodecs = new Set([
-    'pg/timestamp-temporal@1',
-    'pg/timestamptz-temporal@1',
-    'pg/time-temporal@1',
-    'pg/timetz@1',
-    'pg/interval@1',
-  ]);
-  if (temporalCodecs.has(codecId)) {
-    const precision = typeParams['precision'];
-    if (isValidNumber(precision)) {
-      return `${nativeType}(${precision})`;
-    }
-    return nativeType;
-  }
-
-  return nativeType;
-}
-
-/**
- * Creates a mock framework component with expandNativeType hook for Postgres parameterized types.
- * Use this in tests that need to verify parameterized type expansion behavior.
- */
-export function createMockPostgresComponent(): TargetBoundComponentDescriptor<'sql', 'postgres'> {
-  // Create hooks for each parameterized codec type
-  const parameterizedCodecIds = [
-    'sql/char@1',
-    'sql/varchar@1',
-    'pg/char@1',
-    'pg/varchar@1',
-    'pg/bit@1',
-    'pg/varbit@1',
-    'pg/vector@1',
-    'pg/numeric@1',
-    'pg/timestamp-temporal@1',
-    'pg/timestamptz-temporal@1',
-    'pg/time-temporal@1',
-    'pg/timetz@1',
-    'pg/interval@1',
-  ];
-
-  const controlHooks: Record<string, CodecControlHooks> = {};
-  for (const codecId of parameterizedCodecIds) {
-    controlHooks[codecId] = {
-      expandNativeType: mockExpandParameterizedNativeType,
-    };
-  }
-
-  return {
-    kind: 'adapter',
-    familyId: 'sql',
-    targetId: 'postgres',
-    id: 'postgres-mock',
-    version: '1.0.0',
-    types: {
-      codecTypes: {
-        controlPlaneHooks: controlHooks,
-      },
-    },
-  } as TargetBoundComponentDescriptor<'sql', 'postgres'>;
 }

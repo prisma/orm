@@ -7,6 +7,7 @@ import {
   isInlineAutoincrementPrimaryKey,
   renderDefaultLiteral,
 } from '../src/core/migrations/planner-ddl-builders';
+import { sqliteTestTypes } from './sqlite-test-types';
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
@@ -28,16 +29,28 @@ function makeTable(overrides: Partial<StorageTable> = {}): StorageTable {
 }
 
 describe('buildColumnTypeSql', () => {
-  it('uppercases native type', () => {
-    expect(buildColumnTypeSql(makeColumn({ nativeType: 'text' }))).toBe('TEXT');
-    expect(buildColumnTypeSql(makeColumn({ nativeType: 'integer' }))).toBe('INTEGER');
-    expect(buildColumnTypeSql(makeColumn({ nativeType: 'real' }))).toBe('REAL');
-    expect(buildColumnTypeSql(makeColumn({ nativeType: 'blob' }))).toBe('BLOB');
+  it('writes the name of the codec data type in upper case', () => {
+    expect(buildColumnTypeSql(makeColumn({ codecId: 'sqlite/text@1' }), sqliteTestTypes)).toBe(
+      'TEXT',
+    );
+    expect(buildColumnTypeSql(makeColumn({ codecId: 'sqlite/integer@1' }), sqliteTestTypes)).toBe(
+      'INTEGER',
+    );
+    expect(buildColumnTypeSql(makeColumn({ codecId: 'sqlite/real@1' }), sqliteTestTypes)).toBe(
+      'REAL',
+    );
+    expect(buildColumnTypeSql(makeColumn({ codecId: 'sqlite/blob@1' }), sqliteTestTypes)).toBe(
+      'BLOB',
+    );
   });
 
   it('resolves typeRef against storageTypes', () => {
-    const column = makeColumn({ nativeType: 'unused', typeRef: 'my_type' });
-    const sql = buildColumnTypeSql(column, {
+    const column = makeColumn({
+      nativeType: 'unused',
+      codecId: 'unused/codec@1',
+      typeRef: 'my_type',
+    });
+    const sql = buildColumnTypeSql(column, sqliteTestTypes, {
       my_type: {
         kind: 'codec-instance',
         codecId: 'sqlite/text@1',
@@ -46,10 +59,6 @@ describe('buildColumnTypeSql', () => {
       },
     });
     expect(sql).toBe('TEXT');
-  });
-
-  it('rejects unsafe native types', () => {
-    expect(() => buildColumnTypeSql(makeColumn({ nativeType: 'TEXT; DROP' }))).toThrow(/Unsafe/);
   });
 });
 

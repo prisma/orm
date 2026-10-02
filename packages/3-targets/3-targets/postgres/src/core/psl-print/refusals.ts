@@ -18,6 +18,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import {
   type ForeignKey,
   type Index,
@@ -25,7 +26,6 @@ import {
   type SqlStorage,
   StorageColumn,
 } from '@internal/sql-contract/types';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import { postgresError } from '../errors';

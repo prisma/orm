@@ -16,52 +16,44 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { printPslFromFlat } from './fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
-  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
-  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
+  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
+  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
   Timestamptz: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-temporal@1' },
   },
   VarChar: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+    args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
     output: {
-      codecId: 'pg/text@1',
-      nativeType: 'varchar',
+      codecId: 'sql/varchar@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
   Numeric: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      {
-        kind: 'number',
-        name: 'scale',
-        integer: true,
-        minimum: -1000,
-        maximum: 1000,
-        optional: true,
-      },
+      { kind: 'number', name: 'precision', integer: true, optional: true },
+      { kind: 'number', name: 'scale', integer: true, optional: true },
     ],
     output: {
       codecId: 'pg/numeric@1',
-      nativeType: 'numeric',
       typeParams: {
         precision: { kind: 'arg', index: 0 },
         scale: { kind: 'arg', index: 1 },
       },
     },
   },
-  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1', nativeType: 'json' } },
-  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } },
+  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1' } },
+  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } },
 } as const satisfies AuthoringTypeNamespace;
 
 const assembled = assembleAuthoringContributions([
@@ -85,12 +77,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const codecLookup: CodecLookupWithDescriptors = {
-  get: () => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
+const codecLookup: CodecLookupWithDescriptors = createPostgresBuiltinCodecLookup();
 
 function parseAndEmit(source: string) {
   const { document, sources } = parse(source, 'infer-parse-emit.test.psl');
@@ -180,8 +167,8 @@ describe('Postgres PSL inference round trip', () => {
                 nullable: false,
               },
               label: {
-                codecId: 'pg/text@1',
-                nativeType: 'varchar',
+                codecId: 'sql/varchar@1',
+                nativeType: 'character varying',
                 nullable: false,
                 typeParams: { length: 191 },
               },

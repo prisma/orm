@@ -18,8 +18,9 @@ import type { DataTypeAuthoringEntry } from '@internal/framework-components/auth
 import { printTaggedLiteral } from '@internal/framework-components/authoring';
 import type { DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import { numeralText } from '@internal/sql-contract/data-type';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import { printSqlExpressionLiteral } from '@internal/sql-contract/sql-expression';
-import { escapePslString, numeralText } from '@internal/sql-relational-core/ast';
 import { defaultInCanonicalForm } from '@internal/sql-schema-ir/types';
 
 const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
@@ -32,7 +33,7 @@ export interface DefaultMappingOptions {
   /** PSL support for the stack's data types, keyed by data type id. */
   readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>> | undefined;
   /** The stack's data types, whose casts say which other types' values each one takes. */
-  readonly dataTypes?: DataTypeLookup | undefined;
+  readonly dataTypeLookup?: DataTypeLookup | undefined;
   /** The data type of the column's codec. */
   readonly columnDataType?: DataTypeId | undefined;
   /**
@@ -139,10 +140,10 @@ function classifications(value: JsonValue, surface: WritingSurface): readonly Ty
 function admitted(
   candidate: TypedValue,
   columnDataType: DataTypeId,
-  dataTypes: DataTypeLookup,
+  dataTypeLookup: DataTypeLookup,
 ): JsonValue | undefined {
   if (candidate.type === columnDataType) return candidate.value;
-  const cast = dataTypes.get(columnDataType)?.casts[candidate.type];
+  const cast = dataTypeLookup.get(columnDataType)?.casts[candidate.type];
   if (cast === undefined) return undefined;
   try {
     return cast(candidate.value);
@@ -195,19 +196,19 @@ interface WrittenElement {
 function writeScalar(
   value: JsonValue,
   columnDataType: DataTypeId,
-  dataTypes: DataTypeLookup,
+  dataTypeLookup: DataTypeLookup,
   surface: WritingSurface,
 ): string | undefined {
   for (const candidate of classifications(value, surface)) {
     const entry = surface.entryOf.get(candidate.type);
     if (entry === undefined) continue;
-    const stored = admitted(candidate, columnDataType, dataTypes);
+    const stored = admitted(candidate, columnDataType, dataTypeLookup);
     if (stored === undefined || !sameForm(stored, value)) continue;
     const body = printedBody(entry, candidate.value);
     if (body === undefined) continue;
     const reread = readBack(entry, candidate.type, body);
     if (reread === undefined) continue;
-    const restored = admitted(reread, columnDataType, dataTypes);
+    const restored = admitted(reread, columnDataType, dataTypeLookup);
     if (restored === undefined || !sameForm(restored, value)) continue;
     return literalText(entry, body);
   }
@@ -240,10 +241,10 @@ function writeElement(
 function writeListCast(
   value: readonly JsonValue[],
   columnDataType: DataTypeId,
-  dataTypes: DataTypeLookup,
+  dataTypeLookup: DataTypeLookup,
   surface: WritingSurface,
 ): string | undefined {
-  const listCast = dataTypes.get(columnDataType)?.listCast;
+  const listCast = dataTypeLookup.get(columnDataType)?.listCast;
   if (listCast === undefined) return undefined;
   const parts: string[] = [];
   const elements: JsonValue[] = [];
@@ -266,13 +267,17 @@ function writeDefaultLiteral(
   options: DefaultMappingOptions | undefined,
 ): string | undefined {
   if (stored instanceof Date) return undefined;
-  const { dataTypeEntries, dataTypes, columnDataType } = options ?? {};
-  if (dataTypeEntries === undefined || dataTypes === undefined || columnDataType === undefined) {
+  const { dataTypeEntries, dataTypeLookup, columnDataType } = options ?? {};
+  if (
+    dataTypeEntries === undefined ||
+    dataTypeLookup === undefined ||
+    columnDataType === undefined
+  ) {
     return undefined;
   }
   const { value } = defaultInCanonicalForm(
     stored,
-    dataTypes.get(columnDataType)?.toCanonicalForm,
+    dataTypeLookup.get(columnDataType)?.toCanonicalForm,
     options?.list === true,
   );
   if (value instanceof Date) return undefined;
@@ -281,16 +286,16 @@ function writeDefaultLiteral(
     if (!Array.isArray(value)) return undefined;
     const parts: string[] = [];
     for (const element of value) {
-      const written = writeScalar(element, columnDataType, dataTypes, surface);
+      const written = writeScalar(element, columnDataType, dataTypeLookup, surface);
       if (written === undefined) return undefined;
       parts.push(written);
     }
     return `[${parts.join(', ')}]`;
   }
-  const written = writeScalar(value, columnDataType, dataTypes, surface);
+  const written = writeScalar(value, columnDataType, dataTypeLookup, surface);
   if (written !== undefined) return written;
   return Array.isArray(value)
-    ? writeListCast(value, columnDataType, dataTypes, surface)
+    ? writeListCast(value, columnDataType, dataTypeLookup, surface)
     : undefined;
 }
 

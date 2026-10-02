@@ -2,6 +2,7 @@ import { type CodecLookup, emptyCodecLookup } from '@internal/framework-componen
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { test } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../src/contract-builder';
 
 const family: FamilyPackRef<'sql'> = {
@@ -26,6 +27,7 @@ test('the codecLookup option takes only a lookup that resolves codec descriptors
     family,
     target,
     createNamespace: createTestSqlNamespace,
+    dataTypeLookup: testTypeLookups.dataTypeLookup,
     // @ts-expect-error a column's codec is built from its descriptor, so the lookup must have descriptorFor
     codecLookup: withoutDescriptors,
   });
@@ -33,6 +35,7 @@ test('the codecLookup option takes only a lookup that resolves codec descriptors
     family,
     target,
     createNamespace: createTestSqlNamespace,
+    dataTypeLookup: testTypeLookups.dataTypeLookup,
     codecLookup: { ...withoutDescriptors, descriptorFor: () => undefined },
   });
 });

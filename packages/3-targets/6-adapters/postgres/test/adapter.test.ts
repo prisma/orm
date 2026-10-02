@@ -123,7 +123,7 @@ describe('Postgres adapter', () => {
       ProjectionItem.of('value', ref),
     ]);
     expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
-      'SELECT $1::integer AS "value" FROM "user"',
+      'SELECT $1::int4 AS "value" FROM "user"',
     );
   });
 
@@ -548,7 +548,7 @@ describe('Postgres adapter', () => {
     ]);
 
     expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
-      'SELECT "u"."element" AS "element" FROM unnest($1::integer[]) WITH ORDINALITY AS "u"("element", "ord")',
+      'SELECT "u"."element" AS "element" FROM unnest($1::int4[]) WITH ORDINALITY AS "u"("element", "ord")',
     );
   });
 

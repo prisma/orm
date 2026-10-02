@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -30,8 +30,7 @@ function interpretPostgres(schema: string) {
       dataTypes: fixtureDataTypeSupport.entries,
       valueObjectStorageType: 'Jsonb',
     },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
-    codecLookup: postgresCodecLookup,
+    ...fixtureTypeLookups,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },

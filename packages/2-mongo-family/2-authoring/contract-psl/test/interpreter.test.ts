@@ -6,7 +6,7 @@ import {
   crossRef,
   type StorageHashBase,
 } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   buildMongoNamespace,
@@ -23,6 +23,7 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
@@ -48,31 +49,6 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
 ]);
-
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
-
-const mongoCodecLookup: CodecLookup = {
-  get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
-  renderOutputTypeFor: () => undefined,
-};
 
 function mongoCollectionsFromIr(ir: {
   readonly storage: unknown;
@@ -117,6 +93,7 @@ function interpret(
       dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
     },
+    dataTypeLookup: mongoDataTypeLookup,
     codecLookup: mongoCodecLookup,
     ...overrides,
   });
@@ -167,6 +144,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         dataTypeEntries: {},
         defaultFunctionRegistry: new Map(),
       },
+      dataTypeLookup: mongoDataTypeLookup,
       codecLookup: mongoCodecLookup,
       authoringContributions: {
         pslBlockDescriptors: {
@@ -2244,6 +2222,8 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+        dataTypeLookup: mongoDataTypeLookup,
         controlMutationDefaults: {
           dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),
@@ -2278,6 +2258,8 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+        dataTypeLookup: mongoDataTypeLookup,
         controlMutationDefaults: {
           dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),
@@ -2304,6 +2286,8 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+        dataTypeLookup: mongoDataTypeLookup,
         controlMutationDefaults: {
           dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),

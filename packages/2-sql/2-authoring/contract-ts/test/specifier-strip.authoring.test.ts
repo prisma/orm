@@ -8,6 +8,7 @@ import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { typescriptContract, typescriptContractFromPath } from '../src/config-types';
 import { defineContract } from '../src/contract-builder';
 import { applySqlSpecifierControlPolicy } from '../src/derived-checks';
@@ -23,7 +24,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -45,6 +46,7 @@ const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'a
 function buildUser(options?: { readonly control?: ControlPolicy }): Contract<SqlStorage> {
   return defineContract(
     {
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -64,6 +66,7 @@ function buildUser(options?: { readonly control?: ControlPolicy }): Contract<Sql
 function buildMixedControl(): Contract<SqlStorage> {
   return defineContract(
     {
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -105,7 +108,6 @@ const stubContext: ContractSourceContext = {
   dataTypeLookup: createDataTypeLookup([]),
   codecLookup: {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
     descriptorFor: () => undefined,
   },

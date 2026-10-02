@@ -10,6 +10,7 @@ import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
+import { sqliteComponents } from './fixtures/sqlite-components';
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
@@ -63,7 +64,7 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', nullable: false }),
+          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
           name: makeColumn({ nativeType: 'text', nullable: false }),
         },
         primaryKey: { columns: ['id'] },
@@ -75,7 +76,7 @@ describe('SQLite migration planner', () => {
       schema: emptySchema,
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -94,7 +95,7 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', nullable: false }),
+          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
           name: makeColumn({ nativeType: 'text', nullable: false }),
           bio: makeColumn({ nativeType: 'text', nullable: true }),
         },
@@ -123,7 +124,7 @@ describe('SQLite migration planner', () => {
       schema: existingSchema,
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -140,7 +141,7 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', nullable: false }),
+          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
           email: makeColumn({ nativeType: 'text', nullable: false }),
         },
         primaryKey: { columns: ['id'] },
@@ -153,7 +154,7 @@ describe('SQLite migration planner', () => {
       schema: emptySchema,
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -173,7 +174,7 @@ describe('SQLite migration planner', () => {
       schema: emptySchema,
       policy: { allowedOperationClasses: [] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

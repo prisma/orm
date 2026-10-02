@@ -1,6 +1,8 @@
 import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import type { Codec } from '../src/shared/codec';
+import { emptyCodecLookup } from '../src/shared/codec-types';
+import { createDataTypeLookup } from '../src/shared/data-type';
 import { readEnumBlockMembers } from '../src/shared/enum-block-members';
 import type { ParsedPslExtensionBlock } from '../src/shared/psl-extension-block';
 
@@ -40,6 +42,8 @@ function read(values: Record<string, JsonValue | undefined>, codec: Codec = lowe
   const members = readEnumBlockMembers(enumBlock(values), codec.id, codec, {
     family: 'test',
     target: 'test',
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypeLookup: createDataTypeLookup([]),
     sourceId: 'schema.prisma',
     diagnostics: { push: (d) => diagnostics.push(d) },
   });
@@ -99,6 +103,8 @@ describe('readEnumBlockMembers', () => {
       readEnumBlockMembers(enumBlock({ A: 'a' }), 'test/lower-casing@1', codec, {
         family: 'test',
         target: 'test',
+        codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+        dataTypeLookup: createDataTypeLookup([]),
       }),
     ).toThrow(failure);
   });

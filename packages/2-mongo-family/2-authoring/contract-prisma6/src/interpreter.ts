@@ -23,7 +23,10 @@ import {
   isAuthoringEntityTypeDescriptor,
   type ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -92,7 +95,8 @@ export interface InterpretPrisma6DocumentsInput {
   readonly seedDiagnostics: readonly ContractSourceDiagnostic[];
   readonly binding: Prisma6TargetBinding;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
 }
 
 const SUMMARY = 'Prisma 6 MongoDB schema interpretation failed';
@@ -503,6 +507,7 @@ function buildEnum(
     family: input.binding.target.familyId,
     target: input.binding.target.targetId,
     codecLookup: input.codecLookup,
+    dataTypeLookup: input.dataTypeLookup,
     sourceId,
     enumInferenceCodecs: {
       text: input.binding.scalarCodecIds.String,
@@ -1401,7 +1406,7 @@ function assembleContract(input: {
   readonly valueObjects: Record<string, ContractValueObject>;
   readonly enums: ReadonlyMap<string, EnumBuild>;
   readonly executionDefaults: readonly ExecutionMutationDefault[];
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
 }): Contract {
   const target = input.binding.target.targetId;
   const targetFamily = input.binding.target.familyId;

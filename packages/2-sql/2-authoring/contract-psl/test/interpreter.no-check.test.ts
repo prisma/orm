@@ -1,4 +1,4 @@
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -9,9 +9,9 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { withDescriptors } from '../../contract-ts/test/with-descriptors';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresEnumInferenceCodecs,
@@ -41,20 +41,12 @@ const codecsById: Record<string, Codec> = {
   'pg/int4@1': int4Codec,
 };
 
-const targetTypesById: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int4@1': ['int4'],
-};
-
-const testCodecLookup: CodecLookupWithDescriptors = withDescriptors({
+const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
-  targetTypesFor(id: string): readonly string[] | undefined {
-    return targetTypesById[id];
-  },
   renderOutputTypeFor: () => undefined,
-});
+};
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
@@ -78,9 +70,9 @@ function interpret(schema: string) {
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
     authoringContributions,
-    codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
+    codecLookup: testSqlTypeLookups({}, testCodecLookup).codecLookup,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
     capabilities: { sql: { scalarList: true } },
   });
@@ -130,6 +122,7 @@ model Post {
     if (!pslResult.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       enums: { Role: RoleHandle },
@@ -225,6 +218,7 @@ model Post {
     if (!pslResult.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

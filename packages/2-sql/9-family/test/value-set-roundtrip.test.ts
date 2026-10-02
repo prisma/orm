@@ -5,6 +5,7 @@ import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { defineContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../1-core/contract/test/test-type-lookups';
 import { TestSqlContractSerializer as SqlContractSerializer } from './test-sql-contract-serializer';
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -46,6 +47,7 @@ describe('value-set serializer hydration + round-trip', () => {
 
   const authored = defineContract(
     {
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -161,6 +163,7 @@ describe('validators — value-set and enum', () => {
 
   const validContract = defineContract(
     {
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

@@ -5,12 +5,12 @@ import {
   temporalAuthoringPresets,
   temporalCodecPreset,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 
 const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
 
@@ -28,27 +28,6 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['Date', 'mongo/date@1'],
 ]);
-
-const targetTypes: Record<string, readonly string[]> = {
-  'mongo/objectId@1': ['objectId'],
-  'mongo/string@1': ['string'],
-  'mongo/date@1': ['date'],
-};
-
-const codecLookup: CodecLookup = {
-  get(id: string) {
-    if (!targetTypes[id]) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypes[id],
-  renderOutputTypeFor: () => undefined,
-};
 
 function interpret(
   schema: string,
@@ -69,7 +48,8 @@ function interpret(
     sources,
     scalarTypeCodecIds,
     controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup,
+    codecLookup: mongoCodecLookup,
+    dataTypeLookup: mongoDataTypeLookup,
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.composedExtensions ? { composedExtensions: options.composedExtensions } : {}),
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),

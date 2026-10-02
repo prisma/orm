@@ -1,6 +1,6 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { isPslIdentifier } from '@internal/psl-parser';
-import { escapePslString } from '@internal/sql-relational-core/ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import { POLICY_BLOCK_KEYWORDS } from '../authoring';

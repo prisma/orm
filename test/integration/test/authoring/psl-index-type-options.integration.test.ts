@@ -4,15 +4,16 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 // postgresPack is used directly in interpretPslDocumentToSqlContract (not in defineContract).
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 
-const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'pg/text@1' }],
 ]);
 
 function interpret(schema: string) {
@@ -24,6 +25,7 @@ function interpret(schema: string) {
   return interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    codecLookup: createPostgresBuiltinCodecLookup(),
     symbolTable,
     sources,
     target: postgresPack,

@@ -24,7 +24,6 @@ describe('pgvector codecs', () => {
     'has vector codec registered',
     () => {
       expect(pgVectorDescriptor.codecId).toBe('pg/vector@1');
-      expect(pgVectorDescriptor.targetTypes).toEqual(['vector']);
     },
     timeouts.default,
   );

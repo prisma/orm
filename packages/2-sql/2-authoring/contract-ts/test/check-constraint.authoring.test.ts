@@ -20,10 +20,13 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import {
+  testSqlTypeLookups,
+  testTypeLookups,
+} from '../../../1-core/contract/test/test-type-lookups';
 import { check, defineContract } from '../src/contract-builder';
 import { stripDerivedChecksFromNonManagedTables } from '../src/derived-checks';
 import { enumType, member } from '../src/enum-type';
-import { withDescriptors } from './with-descriptors';
 
 const sqlFamilyPack = {
   kind: 'family',
@@ -34,7 +37,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -148,6 +151,7 @@ describe('check emission — scalar domain enum', () => {
   it('emits one wire-named membership check whose suffix hashes the expression', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -167,6 +171,7 @@ describe('check emission — scalar domain enum', () => {
   it('emits one check per enum-restricted column', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -193,6 +198,7 @@ describe('check emission — array domain enum', () => {
   it('emits the containment membership check plus the element-non-null check', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -217,6 +223,7 @@ describe('check emission — plain list column', () => {
   it('emits only the element-non-null check', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -237,6 +244,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
   it('emits no membership check for a scalar native-enum column', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -257,6 +265,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
   it('emits only element-non-null for a native-enum array column', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -280,6 +289,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
     hookCalls.length = 0;
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -312,6 +322,7 @@ describe('check emission — domain enum on a non-pg codec', () => {
     );
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -333,6 +344,7 @@ describe('check emission — a target with no hook writes no checks', () => {
   it('leaves checks absent even for an enum-restricted column', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: bareTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -358,6 +370,7 @@ describe('check emission — guards', () => {
     const longColumn = 'c'.repeat(44);
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -383,6 +396,7 @@ describe('check emission — guards', () => {
     const longColumn = 'c'.repeat(44);
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -412,6 +426,7 @@ describe('check emission — guards', () => {
     const shared = 'c'.repeat(50);
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -450,6 +465,7 @@ describe('check emission — guards', () => {
       expect(() =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -477,6 +493,7 @@ describe('check emission — guards', () => {
       expect(() =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -523,14 +540,15 @@ describe('check emission — guards', () => {
       expect(() =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
             enums: { Normalized },
-            codecLookup: withDescriptors({
-              ...emptyCodecLookup,
-              get: (id) => (id === codec.id ? codec : undefined),
-            }),
+            ...testSqlTypeLookups(
+              {},
+              { ...emptyCodecLookup, get: (id) => (id === codec.id ? codec : undefined) },
+            ),
           },
           ({ field: f, model: m }) => ({
             models: {
@@ -576,14 +594,15 @@ describe('check emission — guards', () => {
       hookCalls.length = 0;
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
           enums: { Level },
-          codecLookup: withDescriptors({
-            ...emptyCodecLookup,
-            get: (id) => (id === codec.id ? codec : undefined),
-          }),
+          ...testSqlTypeLookups(
+            {},
+            { ...emptyCodecLookup, get: (id) => (id === codec.id ? codec : undefined) },
+          ),
         },
         ({ field: f, model: m }) => ({
           models: {
@@ -617,6 +636,7 @@ describe('check emission — guards', () => {
     const Level = enumType('Level', { codecId: 'pg/int4@1', nativeType: 'int4' }, member('One', 1));
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -637,6 +657,7 @@ describe('check emission — JSON round-trip', () => {
   it('hydrates checks back through the stored flat shape', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -687,6 +708,7 @@ describe('noCheck — enforcement opt-out', () => {
   it('scalar domain enum + noCheck("membership") derives nothing and persists the flag', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -711,6 +733,7 @@ describe('noCheck — enforcement opt-out', () => {
   it('list domain enum + noCheck("membership") keeps exactly the elem_not_null check', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -735,6 +758,7 @@ describe('noCheck — enforcement opt-out', () => {
   it('list domain enum + bare noCheck() derives nothing and persists the canonical kind order', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -757,6 +781,7 @@ describe('noCheck — enforcement opt-out', () => {
   it('plain list + noCheck("elementNotNull") derives nothing', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -781,6 +806,7 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -801,6 +827,7 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -822,6 +849,7 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -840,6 +868,7 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -864,6 +893,7 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -889,6 +919,7 @@ describe('noCheck — non-managed tables tolerate the flag', () => {
   it('a source-declared external table builds with a no-op flag', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -911,6 +942,7 @@ describe('noCheck — non-managed tables tolerate the flag', () => {
   it('a specifier-stamped policy leaves the flag and the strip pass unaffected', () => {
     const built = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -978,6 +1010,7 @@ describe('noCheck — wire schema', () => {
   it('an authored noCheck column round-trips: serialize → validate → hydrate → identical bytes', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1038,6 +1071,7 @@ describe('check emission — derivation is scoped to managed tables', () => {
   }): Contract<SqlStorage> {
     return defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1093,6 +1127,7 @@ describe('check emission — a specifier-applied policy strips derived checks', 
   function buildManagedUser(): Contract<SqlStorage> {
     return defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1239,6 +1274,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1259,6 +1295,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1279,6 +1316,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1300,6 +1338,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1321,6 +1360,7 @@ describe('check() — Validation table', () => {
     try {
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1351,6 +1391,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1374,6 +1415,7 @@ describe('check() — Validation table', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -1404,6 +1446,7 @@ describe('check() — authored checks are emitted regardless of control policy',
   it('reaches table.checks on a managed table', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1424,6 +1467,7 @@ describe('check() — authored checks are emitted regardless of control policy',
   it('reaches table.checks on an external (source-declared) table', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1445,6 +1489,7 @@ describe('check() — authored checks are emitted regardless of control policy',
   it('an authored check on a specifier-stamped external table survives the strip that removes derived checks', () => {
     const built = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1480,6 +1525,7 @@ describe('check() — coexists with derived checks on the same table', () => {
   it('keeps both, and both survive a JSON round-trip (canonical sort still holds)', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1529,6 +1575,7 @@ describe('check() — wire vs exact naming, through the built contract', () => {
   it('name: yields name_<8hex>, hashed over the expression', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -1551,6 +1598,7 @@ describe('check() — wire vs exact naming, through the built contract', () => {
     try {
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,

@@ -15,8 +15,8 @@ import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/sym
 import type { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'integer' } },
-  String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'text' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
 };
 
 const relationSpec = fieldAttribute('relation', {

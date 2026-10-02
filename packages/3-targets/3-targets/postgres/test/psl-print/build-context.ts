@@ -17,7 +17,6 @@ import {
 const citextTemplate: CodecDescriptorTemplate = {
   codecId: 'ext/citext@1',
   traits: [],
-  targetTypes: ['citext'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => {
@@ -25,10 +24,9 @@ const citextTemplate: CodecDescriptorTemplate = {
   },
 };
 
-/** A codec the target does not own, as an extension would contribute it: text stored as `citext`. */
+/** A codec the target does not own, as an extension would contribute it, representing text. */
 export const extensionCodec: AnyPostgresCodecDescriptor = postgresCodec(citextTemplate, {
-  dataType: pgText.id,
-  nativeType: () => 'citext',
+  dataType: pgText,
   jsonProjection: (expression) => expression,
 });
 
@@ -55,7 +53,6 @@ export function testBuildContext(
     },
     codecLookup: {
       get: () => undefined,
-      targetTypesFor: () => undefined,
       renderOutputTypeFor: () => undefined,
       descriptorFor: (codecId) =>
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),

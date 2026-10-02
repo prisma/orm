@@ -3,7 +3,7 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   documentScopedTypes,
   pgvectorAuthoringContributions,
@@ -14,7 +14,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -169,7 +169,6 @@ model Post {
               args: [{ kind: 'string' }, { kind: 'stringArray' }],
               output: {
                 codecId: 'custom/enum@1',
-                nativeType: 'enum',
                 typeParams: {
                   name: { kind: 'arg', index: 0 },
                   values: { kind: 'arg', index: 1 },
@@ -220,7 +219,6 @@ model Document {
               args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
               output: {
                 codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
                 typeParams: {
                   length: { kind: 'arg', index: 0 },
                 },
@@ -233,7 +231,6 @@ model Document {
               args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
               output: {
                 codecId: 'custom/vector@1',
-                nativeType: 'vector',
                 typeParams: {
                   length: { kind: 'arg', index: 0 },
                 },
@@ -283,7 +280,6 @@ model Document {
               args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
               output: {
                 codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
                 typeParams: {
                   length: { kind: 'arg', index: 0 },
                 },
@@ -296,7 +292,6 @@ model Document {
               args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
               output: {
                 codecId: 'custom/vector@1',
-                nativeType: 'vector',
                 typeParams: {
                   length: { kind: 'arg', index: 0 },
                 },
@@ -369,7 +364,6 @@ model Document {
               ],
               output: {
                 codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
                 typeParams: {
                   length: { kind: 'arg', index: 0, path: ['length'] },
                   label: { kind: 'arg', index: 0, path: ['label'] },
@@ -412,7 +406,6 @@ model Document {
             ],
             output: {
               codecId: 'custom/varchar@1',
-              nativeType: 'character varying',
               typeParams: {
                 length: { kind: 'arg' as const, index: 0, path: ['length'] },
                 label: { kind: 'arg' as const, index: 0, path: ['label'] },
@@ -583,7 +576,7 @@ namespace public {
     });
 
     const result = interpretPslDocumentToSqlContract({
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       ...symbolTableInput,
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -651,7 +644,7 @@ model Foo {
       });
 
       const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -698,7 +691,7 @@ namespace auth {
       });
 
       const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -746,7 +739,7 @@ namespace auth {
       });
 
       const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,

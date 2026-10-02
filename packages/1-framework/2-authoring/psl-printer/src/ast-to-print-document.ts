@@ -144,7 +144,8 @@ function namedTypeDeclarationToPrinterNamedType(decl: PslNamedTypeDeclaration): 
 
 function formatTypeConstructor(tc: PslTypeConstructorCall): string {
   const path = tc.path.join('.');
-  if (tc.args.length === 0) {
+  const isNamespaced = tc.path.length > 1;
+  if (tc.args.length === 0 && !isNamespaced) {
     return path;
   }
   return `${path}(${tc.args.map(renderAttributeArgument).join(', ')})`;

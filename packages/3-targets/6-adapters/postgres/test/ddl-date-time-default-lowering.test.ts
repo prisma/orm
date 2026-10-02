@@ -1,6 +1,7 @@
 import type { ColumnDefaultLiteralValue } from '@internal/contract/types';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
@@ -20,7 +21,10 @@ async function createTableDefault(
     table: 't',
     columns: [col('v', nativeType, { default: lit(value), codecRef: { codecId, many } })],
   });
-  const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+  const adapter = new PostgresControlAdapter(
+    createPostgresBuiltinCodecLookup(),
+    createPostgresBuiltinDataTypeLookup(),
+  );
   const lowered = await adapter.lowerToExecuteRequest(ast, { contract: {} as PostgresContract });
   return lowered.sql.slice(lowered.sql.indexOf('DEFAULT'), lowered.sql.lastIndexOf('\n'));
 }

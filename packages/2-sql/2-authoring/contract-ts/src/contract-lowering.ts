@@ -103,10 +103,7 @@ function resolveFieldDescriptor(
 
   if ('typeRef' in fieldState && fieldState.typeRef) {
     if (isEnumTypeHandle(fieldState.typeRef)) {
-      return {
-        codecId: fieldState.typeRef.codecId,
-        nativeType: fieldState.typeRef.nativeType,
-      };
+      return { codecId: fieldState.typeRef.codecId };
     }
 
     const typeRef =
@@ -131,11 +128,7 @@ function resolveFieldDescriptor(
       );
     }
 
-    return {
-      codecId: referencedType.codecId,
-      nativeType: referencedType.nativeType,
-      typeRef,
-    };
+    return { codecId: referencedType.codecId, typeRef };
   }
 
   throw contractError(
@@ -968,7 +961,7 @@ function resolveModelNode(
  * `ContractInput`'s `Extensions` parameter defaults to `undefined`, but lowering
  * reads the extension-pack record at runtime, so the input is widened here.
  */
-type LoweringInput = Omit<ContractInput, 'extensions'> & {
+type LoweringInput = Omit<ContractInput, 'extensions' | 'codecLookup' | 'dataTypeLookup'> & {
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>> | undefined;
 };
 

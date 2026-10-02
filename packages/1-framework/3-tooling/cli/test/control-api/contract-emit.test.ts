@@ -343,8 +343,7 @@ describe('executeContractEmit', () => {
   describe('a source that reports a warning', () => {
     const warning = {
       code: 'PSL_DEPRECATED_SCALAR_NAME',
-      message:
-        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
       sourceId: 'prisma/schema.prisma',
       severity: 'warning' as const,
     };

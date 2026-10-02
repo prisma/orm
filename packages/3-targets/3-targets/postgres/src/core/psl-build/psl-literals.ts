@@ -4,7 +4,7 @@ import type {
   PslFieldAttribute,
   PslSpan,
 } from '@internal/framework-components/psl-ast';
-import { escapePslString } from '@internal/sql-relational-core/ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 
 export const SYNTHETIC_SPAN: PslSpan = {
   start: { offset: 0, line: 1, column: 1 },

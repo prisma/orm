@@ -1,7 +1,11 @@
 import { introspectSchema, MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import {
+  type CodecLookup,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { MigrationPlan } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { MongoContract } from '@internal/mongo-contract';
@@ -10,15 +14,19 @@ import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/contr
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient, MongoServerError } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
@@ -68,7 +76,7 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
 // derived validator carries empty `properties`. Closed-by-default schemas then
 // reject every real field, so the validator must be derived with the lookup
 // the production emission path also supplies.
-const mongoCodecLookup: CodecLookup = {
+const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
     const targetTypes = mongoTargetTypes[id];
     if (!targetTypes) return undefined;
@@ -80,7 +88,7 @@ const mongoCodecLookup: CodecLookup = {
       decodeJson: (j: unknown) => j,
     } as ReturnType<CodecLookup['get']>;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoTargetTypes[id] ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
 };
 
@@ -128,6 +136,7 @@ function makeContractFromPsl(): MongoContract {
       defaultFunctionRegistry: new Map(),
     },
     codecLookup: mongoCodecLookup,
+    dataTypeLookup: mongoDataTypeLookup,
   });
   if (!result.ok) {
     throw new Error(

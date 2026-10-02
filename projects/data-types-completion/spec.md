@@ -38,7 +38,7 @@ embedding pgvector.Vector(1536)
 ## Non-goals
 
 - Retiring `types {}` aliases or field presets, or adding mixins (TML-3055). Both keep working.
-- Changing how values are stored or compared: canonical forms of date and time types (TML-3302), codec strictness (TML-3300), and reading or rendering default values (TML-3253). Values are the codec's job, never the data type's.
+- Changing how values are stored or compared: canonical forms of date and time types (TML-3302), codec strictness (TML-3300), and reading or rendering default values (TML-3253). The data type owns its canonical form and its casts (ADR 254); the codec reads, writes and checks values; a data type never parses or prints SQL value literals.
 - Mongo casts, written values, or any change to the collection validator's format.
 - New data types for Postgres types nobody claims today (`money`, ranges, `tsvector`, domains, composite types, interval with fields, `geography`, `halfvec`).
 - Rewriting database ledger rows. Databases are re-signed.
@@ -50,17 +50,17 @@ embedding pgvector.Vector(1536)
 - **Replaces** ADR 171's `expandNativeType` hooks.
 - **Depends on** TML-3253 being merged before slice 3 (TML-3387) starts, and TML-3367 (the `dataTypeValue` argument building block, from the SQL expression literals project) before slice 4 starts.
 - **Is depended on by** TML-3055, whose type constructors need data types to own names and parameters.
-- **Closes** TML-3283 with the answer "no: values are the codec's job".
+- **Closes** TML-3283 with the answer "no: a data type never parses or prints SQL value literals; the codec reads and writes values".
 
 ## Cross-cutting requirements
 
 1. **One source per fact.** After the project no production code holds a table of database type names, and no type name is written in two places. The grep checks in each slice enforce this.
-2. **Migration SQL does not change** for any existing column. A data type's written name is the name contracts store today. The one exception is a fix: a `typeRef` column whose type has no parameters is no longer written as a quoted name (design 3.6).
+2. **Migration SQL does not change** for any existing column. A data type's written name is the name contracts store today. Two exceptions, both fixes: a `typeRef` column whose type has no parameters is no longer written as a quoted name (design 3.6); and on SQLite a `BigInt` column's literal default is written as bare digits (`DEFAULT 42`), like an `Int` column's, because both codecs store digit text after slice 2 (design 9.3).
 3. **Exact comparison.** `db verify` compares a data type id and normalised parameters by equality. Other names are used only while reading a database.
 4. **Extensible by declaration.** An extension's data type is recognised by introspection, verify and infer with no change outside the extension. No production code names a type it does not own.
 5. **No SQL words in the framework layer.** Names, texts and rendering live in the SQL family's data type; the framework `DataType` gains only the parameter schema. `pnpm lint:framework-vocabulary` must not rise.
-6. **Targets declare types; the family declares none** and exports shared helpers.
-7. **A data type is what the database stores.** On SQLite that is `text`, `integer`, `real`, `blob`, and the two character types.
+6. **Targets declare column types; the family declares none** and exports shared helpers. The SQL family's `sql/expression` (TML-3296) is the type of a written SQL expression value, never a column's type: it has no texts and is neither written nor reported, and assembly refuses a SQL stack in which a codec represents it.
+7. **A column's data type is what the database stores.** On SQLite that is `text`, `integer`, `real`, `blob`, and the two character types.
 8. **No backward-compatibility shims.** An old-format contract is refused. The refusal does not mention the upgrade script.
 9. **Tests against a real database** for everything that reads or writes database text.
 10. **Tests before implementation**, each red before the change that makes it green.

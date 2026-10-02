@@ -1,5 +1,6 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
@@ -8,6 +9,8 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { CheckConstraint, SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import { check, defineContract } from '@internal/sql-contract-ts/contract-builder';
 import { composeCheckWirePrefix, computeCheckContentHash } from '@internal/sql-schema-ir/naming';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
@@ -46,6 +49,11 @@ const WIDENING_POLICY: MigrationOperationPolicy = {
 // path. `varchar` exists to reproduce the reprint hazard an authored check
 // exists to route around: Postgres reprints `IN (...)` against a
 // `character varying` column with an `ANY`-array cast, not verbatim.
+const postgresTypeLookups = {
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
+
 const authoringFamilyPack = {
   kind: 'family',
   id: 'sql',
@@ -55,11 +63,11 @@ const authoringFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
       varchar: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/varchar@1', nativeType: 'character varying' },
+        output: { codecId: 'pg/varchar@1' },
       },
     },
   },
@@ -213,6 +221,7 @@ function itemContractWithCheck(input: {
 }): Contract<SqlStorage> {
   return defineContract(
     {
+      ...postgresTypeLookups,
       family: authoringFamilyPack,
       target: authoringTargetPack,
       createNamespace: postgresCreateNamespace,
@@ -241,6 +250,7 @@ function itemContractWithVarcharCheck(input: {
 }): Contract<SqlStorage> {
   return defineContract(
     {
+      ...postgresTypeLookups,
       family: authoringFamilyPack,
       target: authoringTargetPack,
       createNamespace: postgresCreateNamespace,
@@ -872,6 +882,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   }, async () => {
     const optedOut = defineContract(
       {
+        ...postgresTypeLookups,
         family: authoringFamilyPack,
         target: authoringTargetPack,
         createNamespace: postgresCreateNamespace,

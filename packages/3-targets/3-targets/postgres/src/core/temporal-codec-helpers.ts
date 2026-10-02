@@ -1,8 +1,3 @@
-export const PG_DATE_NATIVE_TYPE = 'date';
-export const PG_TIMESTAMP_NATIVE_TYPE = 'timestamp without time zone';
-export const PG_TIMESTAMPTZ_NATIVE_TYPE = 'timestamp with time zone';
-export const PG_TIME_NATIVE_TYPE = 'time';
-
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,

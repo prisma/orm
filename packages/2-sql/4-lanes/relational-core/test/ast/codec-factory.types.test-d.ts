@@ -51,7 +51,6 @@ test('factory rejects an omitted encode — the property is required', () => {
   // @ts-expect-error encode is required at the defineTestCodec() factory call site; the factory installs no identity fallback.
   defineTestCodec({
     typeId: 'demo/no-encode@1',
-    targetTypes: ['text'],
     decode: (wire: string) => wire,
   });
 });

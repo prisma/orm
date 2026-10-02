@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,8 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
     symbolTable,
     sources,
     scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypeLookup: createDataTypeLookup([]),
     controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
   });
   if (result.ok) throw new Error('Expected interpretation to fail');

@@ -2,7 +2,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarAuthoringTypes,
@@ -19,7 +19,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
       authoringContributions: { type: postgresScalarAuthoringTypes },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
       ...symbolTableInputFromParseArgs({
         schema: `model User {

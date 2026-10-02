@@ -28,7 +28,10 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -111,7 +114,8 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly sources: PslSources;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
   readonly composedExtensions?: readonly string[];
@@ -148,7 +152,7 @@ function deprecatedScalarWarner(input: {
       [
         {
           code: 'PSL_DEPRECATED_SCALAR_NAME',
-          message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}" (stored as BSON ${descriptor.output.nativeType}).`,
+          message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}".`,
           ...diagnosticSource(input.sources, typeNode).at(),
         },
       ],
@@ -193,12 +197,7 @@ function unknownTypeMessages(input: {
     if (replacement === undefined) {
       return `${subject}, which is not a scalar type, an enum, a composite type or a model. ${scalarTypes}`;
     }
-    const type = input.types?.[replacement];
-    const stored =
-      type !== undefined && isAuthoringTypeConstructorDescriptor(type)
-        ? ` (stored as BSON ${type.output.nativeType})`
-        : '';
-    return `${subject}, which is not a Mongo scalar type; use "${replacement}"${stored}.`;
+    return `${subject}, which is not a Mongo scalar type; use "${replacement}".`;
   };
 }
 
@@ -1425,7 +1424,8 @@ export function interpretPslDocumentToMongoContract(
       family: 'mongo',
       target: 'mongo',
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
-      ...ifDefined('codecLookup', codecLookup),
+      codecLookup,
+      dataTypeLookup: input.dataTypeLookup,
       diagnostics: {
         push: (d) => {
           diagnostics.pushExternal(
@@ -1745,6 +1745,7 @@ export function interpretPslDocumentToMongoContract(
         modelEntry.fields,
         modelEntry.discriminator.field,
         variantEntries,
+        input.dataTypeLookup,
         valueObjects,
         codecLookup,
         storageValueSets,
@@ -1752,6 +1753,7 @@ export function interpretPslDocumentToMongoContract(
     } else {
       coll['validator'] = deriveJsonSchema(
         modelEntry.fields,
+        input.dataTypeLookup,
         valueObjects,
         codecLookup,
         storageValueSets,

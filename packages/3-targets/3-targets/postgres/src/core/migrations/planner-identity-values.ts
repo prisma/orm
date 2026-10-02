@@ -1,126 +1,104 @@
 import type { CodecControlHooks } from '@internal/family-sql/control';
+import { type SqlTypeLookups, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
+import {
+  pgBit,
+  pgBool,
+  pgBytea,
+  pgChar,
+  pgDate,
+  pgFloat4,
+  pgFloat8,
+  pgInt2,
+  pgInt4,
+  pgInt8,
+  pgInterval,
+  pgJson,
+  pgJsonb,
+  pgNumeric,
+  pgText,
+  pgTextArray,
+  pgTime,
+  pgTimestamp,
+  pgTimestamptz,
+  pgTimetz,
+  pgUuid,
+  pgVarbit,
+  pgVarchar,
+} from '../data-types';
 
 /**
  * Resolves the identity value (monoid neutral element) as a SQL literal for a column's type.
  * Checks codec hooks first (extensions can provide type-specific identity values),
- * then falls back to the built-in map.
+ * then falls back to the built-in map, keyed by the data type the column's codec represents.
  */
 export function resolveIdentityValue(
   column: StorageColumn,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
+  types: SqlTypeLookups,
   storageTypes: Record<string, StorageTypeInstance> = {},
 ): string | null {
   const referencedType = column.typeRef ? storageTypes[column.typeRef] : undefined;
   const codecId = referencedType?.codecId ?? column.codecId;
-  const nativeType = referencedType?.nativeType ?? column.nativeType;
   const typeParams = referencedType?.typeParams ?? column.typeParams;
+  if (column.many === true) return "'{}'";
+  const dataType = sqlDataTypeOfCodec(codecId, types).id;
 
-  if (codecId) {
-    const hookDefault = codecHooks.get(codecId)?.resolveIdentityValue?.({
-      nativeType,
-      codecId,
-      ...ifDefined('typeParams', typeParams),
-    });
-    if (hookDefault !== undefined) {
-      return hookDefault;
-    }
+  const hookDefault = codecHooks.get(codecId)?.resolveIdentityValue?.({
+    dataType,
+    codecId,
+    ...ifDefined('typeParams', typeParams),
+  });
+  if (hookDefault !== undefined) {
+    return hookDefault;
   }
 
-  return buildBuiltinIdentityValue(nativeType, typeParams);
+  return buildBuiltinIdentityValue(dataType, typeParams);
 }
+
+const IDENTITY_VALUES: ReadonlyMap<string, string> = new Map([
+  [pgText.id, "''"],
+  [pgChar.id, "''"],
+  [pgVarchar.id, "''"],
+  [pgInt2.id, '0'],
+  [pgInt4.id, '0'],
+  [pgInt8.id, '0'],
+  [pgFloat4.id, '0'],
+  [pgFloat8.id, '0'],
+  [pgNumeric.id, '0'],
+  [pgBool.id, 'false'],
+  [pgUuid.id, "'00000000-0000-0000-0000-000000000000'"],
+  [pgJson.id, "'{}'::json"],
+  [pgJsonb.id, "'{}'::jsonb"],
+  [pgDate.id, "'epoch'"],
+  [pgTimestamp.id, "'epoch'"],
+  [pgTimestamptz.id, "'epoch'"],
+  [pgTime.id, "'00:00:00'"],
+  [pgTimetz.id, "'00:00:00+00'"],
+  [pgInterval.id, "'0'"],
+  [pgBytea.id, "''::bytea"],
+  [pgVarbit.id, "B''"],
+  [pgTextArray.id, "'{}'"],
+]);
 
 /**
  * Returns the built-in identity value (monoid neutral element) as a SQL literal for the given
- * PostgreSQL native type — e.g. 0 for integers, '' for text, false for booleans.
+ * data type — e.g. 0 for integers, '' for text, false for booleans.
  *
  * This is the planner's fallback when no codec hook provides a type-specific identity value.
  *
- * Returns null for unrecognized types (for example enums and extension-owned types without a
+ * Returns null for other types (for example enums and extension-owned types without a
  * hook), which causes the planner to fall back to the empty-table precheck.
  *
  * @internal Exported for testing only.
  */
 export function buildBuiltinIdentityValue(
-  nativeType: string,
+  dataType: string,
   typeParams?: Record<string, unknown>,
 ): string | null {
-  const normalizedNativeType = normalizeIdentityValueNativeType(nativeType);
-
-  if (normalizedNativeType.endsWith('[]')) {
-    return "'{}'";
-  }
-
-  switch (normalizedNativeType) {
-    case 'text':
-    case 'character':
-    case 'bpchar':
-    case 'character varying':
-    case 'varchar':
-      return "''";
-
-    case 'int2':
-    case 'int4':
-    case 'int8':
-    case 'integer':
-    case 'bigint':
-    case 'smallint':
-    case 'float4':
-    case 'float8':
-    case 'real':
-    case 'double precision':
-    case 'numeric':
-    case 'decimal':
-      return '0';
-
-    case 'bool':
-    case 'boolean':
-      return 'false';
-
-    case 'uuid':
-      return "'00000000-0000-0000-0000-000000000000'";
-
-    case 'json':
-      return "'{}'::json";
-    case 'jsonb':
-      return "'{}'::jsonb";
-
-    case 'date':
-    case 'timestamp':
-    case 'timestamptz':
-    case 'timestamp with time zone':
-    case 'timestamp without time zone':
-      return "'epoch'";
-
-    case 'time':
-    case 'time without time zone':
-      return "'00:00:00'";
-    case 'timetz':
-    case 'time with time zone':
-      return "'00:00:00+00'";
-
-    case 'interval':
-      return "'0'";
-
-    case 'bytea':
-      return "''::bytea";
-    case 'tsvector':
-      return "''::tsvector";
-
-    case 'bit':
-      return buildBitIdentityValue(typeParams);
-    case 'bit varying':
-    case 'varbit':
-      return "B''";
-
-    default:
-      return null;
-  }
-}
-
-function normalizeIdentityValueNativeType(nativeType: string): string {
-  return nativeType.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (dataType === pgBit.id) return buildBitIdentityValue(typeParams);
+  return IDENTITY_VALUES.get(dataType) ?? null;
 }
 
 function buildBitIdentityValue(typeParams?: Record<string, unknown>): string | null {

@@ -4,6 +4,7 @@ import { deriveJsonSchema, derivePolymorphicJsonSchema } from '../src/derive-jso
 import {
   arrayField,
   mongoCodecLookup,
+  mongoDataTypeLookup,
   scalarField,
   voArrayField,
   voField,
@@ -19,6 +20,7 @@ describe('deriveJsonSchema', () => {
         created: scalarField('mongo/date@1'),
         _id: scalarField('mongo/objectId@1'),
       },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -42,6 +44,7 @@ describe('deriveJsonSchema', () => {
   it('handles nullable field with bsonType array including null', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), email: scalarField('mongo/string@1', true) },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -60,6 +63,7 @@ describe('deriveJsonSchema', () => {
   it('handles array field (many: true)', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), tags: arrayField('mongo/string@1') },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -78,6 +82,7 @@ describe('deriveJsonSchema', () => {
   it('handles nullable array field', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), tags: arrayField('mongo/string@1', true) },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -106,6 +111,7 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
+      mongoDataTypeLookup,
       valueObjects,
       mongoCodecLookup,
     );
@@ -141,6 +147,7 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), tags: voArrayField('Tag') },
+      mongoDataTypeLookup,
       valueObjects,
       mongoCodecLookup,
     );
@@ -167,7 +174,7 @@ describe('deriveJsonSchema', () => {
   });
 
   it('derives a minimal closed schema from an empty field set', () => {
-    const result = deriveJsonSchema({}, undefined, mongoCodecLookup);
+    const result = deriveJsonSchema({}, mongoDataTypeLookup, undefined, mongoCodecLookup);
 
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
@@ -184,6 +191,7 @@ describe('deriveJsonSchema', () => {
         bio: scalarField('mongo/string@1', true),
         age: scalarField('mongo/int32@1'),
       },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -208,6 +216,7 @@ describe('deriveJsonSchema', () => {
         name: scalarField('mongo/string@1'),
         custom: scalarField('custom/unknown@1'),
       },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -241,6 +250,7 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
+      mongoDataTypeLookup,
       valueObjects,
       mongoCodecLookup,
     );
@@ -275,6 +285,7 @@ describe('deriveJsonSchema', () => {
   it('maps Double (mongo/double@1) to bsonType "double"', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), price: scalarField('mongo/double@1') },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -299,6 +310,7 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
+      mongoDataTypeLookup,
       valueObjects,
       mongoCodecLookup,
     );
@@ -313,6 +325,7 @@ describe('deriveJsonSchema', () => {
   it('emits the _id property from the declared field', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -331,6 +344,7 @@ describe('derivePolymorphicJsonSchema', () => {
         { discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } },
         { discriminatorValue: 'Cat', fields: { indoor: scalarField('mongo/bool@1') } },
       ],
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -347,6 +361,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       '_type',
       [{ discriminatorValue: 'OnlyVariant', fields: {} }],
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -367,6 +382,7 @@ describe('derivePolymorphicJsonSchema', () => {
         { discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } },
         { discriminatorValue: 'Cat', fields: { indoor: scalarField('mongo/bool@1') } },
       ],
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -395,6 +411,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       '_type',
       [{ discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } }],
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );
@@ -408,6 +425,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       'kind',
       [{ discriminatorValue: 'a', fields: { extra: scalarField('mongo/string@1') } }],
+      mongoDataTypeLookup,
       undefined,
       mongoCodecLookup,
     );

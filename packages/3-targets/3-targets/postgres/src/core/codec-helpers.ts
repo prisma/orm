@@ -14,11 +14,9 @@ import {
   decodeJsonMatching,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
-import { numeralText } from '@internal/sql-relational-core/ast';
+import { numeralText } from '@internal/sql-contract/data-type';
 import { structuredError } from '@internal/utils/structured-error';
 import { withoutTrailing } from '@internal/utils/text';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
 
 /**
@@ -54,10 +52,6 @@ export function fitsFloat4(value: number): boolean {
 }
 
 export type PrecisionParams = { readonly precision?: number };
-
-export const precisionParamsSchema = arktype({
-  'precision?': 'number.integer >= 0 & number.integer <= 6',
-}) satisfies StandardSchemaV1<PrecisionParams>;
 
 export function renderLength(
   typeName: string,

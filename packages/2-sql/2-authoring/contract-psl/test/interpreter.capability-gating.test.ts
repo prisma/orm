@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
@@ -34,7 +34,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: sqliteScalarColumnDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: sqliteCapabilities,
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
@@ -64,7 +64,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: postgresCapabilities,
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
@@ -96,7 +96,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: {},
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,

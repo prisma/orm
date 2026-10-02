@@ -7,7 +7,8 @@ import type {
   CodecLookupWithDescriptors,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { dataType, dataTypeId } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -45,10 +46,14 @@ function withTextDefaultsCastToNull(
 }
 
 function withBrokenTextType(lookup: DataTypeLookup): DataTypeLookup {
-  const brokenText = dataType(BROKEN_TEXT, { casts: { 'pg/text': () => null } });
+  const brokenText = sqlDataType(BROKEN_TEXT, {
+    texts: [{ text: 'text', written: true }],
+    casts: { 'pg/text': () => null },
+  });
   return {
     get: (id) => (id === BROKEN_TEXT ? brokenText : lookup.get(id)),
     has: (id) => id === BROKEN_TEXT || lookup.has(id),
+    all: () => [...lookup.all(), brokenText],
   };
 }
 

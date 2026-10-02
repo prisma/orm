@@ -4,6 +4,7 @@ import {
   type ModelNode,
 } from '@internal/postgres/contract-builder';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { postgresTypeLookups } from '../../postgres-type-lookups';
 
 const idDescriptor = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
 const textDescriptor = { codecId: 'pg/text@1', nativeType: 'text' } as const;
@@ -84,10 +85,14 @@ const profile: ModelNode = {
   ],
 };
 
-export const contract = buildSqlContractFromDefinition({
-  warnings: undefined,
-  target: postgresTargetPack,
-  namespaces: ['public', 'auth'],
-  models: [publicUser, profile, authUser],
-  createNamespace: postgresCreateNamespace,
-});
+export const contract = buildSqlContractFromDefinition(
+  {
+    warnings: undefined,
+    target: postgresTargetPack,
+    namespaces: ['public', 'auth'],
+    models: [publicUser, profile, authUser],
+    createNamespace: postgresCreateNamespace,
+  },
+  postgresTypeLookups.codecLookup,
+  postgresTypeLookups.dataTypeLookup,
+);

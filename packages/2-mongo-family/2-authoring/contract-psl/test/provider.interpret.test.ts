@@ -16,10 +16,10 @@ import { mongoContract } from '../src/exports/provider';
 const SOURCE_ID = './schema.prisma';
 
 const mongoScalarAuthoringTypes = {
-  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1', nativeType: 'string' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
   ObjectId: {
     kind: 'typeConstructor',
-    output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
+    output: { codecId: 'mongo/objectId@1' },
   },
 } as const;
 

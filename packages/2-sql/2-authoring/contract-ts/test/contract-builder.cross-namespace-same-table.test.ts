@@ -3,6 +3,7 @@ import type { ForeignKey, SqlStorage } from '@internal/sql-contract/types';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import type { ModelNode } from '../src/contract-definition';
 
@@ -83,13 +84,17 @@ const profile: ModelNode = {
 };
 
 describe('same bare table name across namespaces with a cross-namespace FK', () => {
-  const contract = buildSqlContractFromDefinition({
-    warnings: undefined,
-    target: postgresTargetPack,
-    namespaces: ['public', 'auth'],
-    createNamespace: createTestSqlNamespace,
-    models: [publicUser, profile, authUser],
-  });
+  const contract = buildSqlContractFromDefinition(
+    {
+      warnings: undefined,
+      target: postgresTargetPack,
+      namespaces: ['public', 'auth'],
+      createNamespace: createTestSqlNamespace,
+      models: [publicUser, profile, authUser],
+    },
+    testTypeLookups.codecLookup,
+    testTypeLookups.dataTypeLookup,
+  );
   const storage = contract.storage as SqlStorage;
 
   it('lowers both same-named tables into their own namespace with differing columns', () => {
@@ -141,13 +146,17 @@ describe('same bare table name across non-Postgres default and explicit namespac
     namespaceId: 'public',
   };
 
-  const contract = buildSqlContractFromDefinition({
-    warnings: undefined,
-    target: sqliteTargetPack,
-    namespaces: ['public'],
-    models: [unboundUser, publicUserWithSameTable],
-    createNamespace: createTestSqlNamespace,
-  });
+  const contract = buildSqlContractFromDefinition(
+    {
+      warnings: undefined,
+      target: sqliteTargetPack,
+      namespaces: ['public'],
+      models: [unboundUser, publicUserWithSameTable],
+      createNamespace: createTestSqlNamespace,
+    },
+    testTypeLookups.codecLookup,
+    testTypeLookups.dataTypeLookup,
+  );
   const storage = contract.storage as SqlStorage;
 
   it('keeps the unbound default coordinate distinct from public', () => {

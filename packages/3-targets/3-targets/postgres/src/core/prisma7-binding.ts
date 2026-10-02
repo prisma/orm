@@ -1,21 +1,31 @@
+import {
+  dataTypeParams,
+  renderSqlTypeName,
+  type SqlDataType,
+  sqlBaseName,
+} from '@internal/sql-contract/data-type';
+import {
+  pgBytea,
+  pgDate,
+  pgJson,
+  pgJsonb,
+  pgTime,
+  pgTimestamp,
+  pgTimestamptz,
+  pgTimetz,
+} from './data-types';
 import { postgresTargetDescriptorMeta } from './descriptor-meta';
 import { postgresNowGeneratorIdFor } from './now-generators';
 import { postgresCreateNamespace } from './postgres-schema';
-import { storedTemporalText, type TemporalNativeType } from './prisma7-temporal-defaults';
+import { storedTemporalText } from './prisma7-temporal-defaults';
 import { prisma7PostgresTypeMap } from './prisma7-type-map';
 import { junctionRelationFieldNames } from './psl-infer/junction-relation-field-names';
 
-const TEMPORAL_NATIVE_TYPES: ReadonlySet<string> = new Set<TemporalNativeType>([
-  'timestamp',
-  'timestamptz',
-  'date',
-  'time',
-  'timetz',
-]);
+const TEMPORAL_TYPES: ReadonlyMap<string, SqlDataType> = new Map(
+  [pgTimestamp, pgTimestamptz, pgDate, pgTime, pgTimetz].map((type) => [type.id, type]),
+);
 
-function isTemporalNativeType(nativeType: string): nativeType is TemporalNativeType {
-  return TEMPORAL_NATIVE_TYPES.has(nativeType);
-}
+const BYTEA_LIST_TYPE = sqlBaseName(pgBytea, {}).toUpperCase();
 
 function sqlStringLiteral(value: string | undefined): string | undefined {
   return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
@@ -57,26 +67,26 @@ export const prisma7PostgresBinding = {
   junctionRelationFieldNames,
   updatedAtGeneratorId: postgresNowGeneratorIdFor,
   literalDefaultForm: ({
-    nativeType,
+    dataType,
     typeParams,
   }: {
-    readonly nativeType: string;
+    readonly dataType: string;
     readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
   }) => {
-    if (nativeType === 'json' || nativeType === 'jsonb') return { kind: 'json' } as const;
-    if (nativeType === 'bytea') {
+    if (dataType === pgJson.id || dataType === pgJsonb.id) return { kind: 'json' } as const;
+    if (dataType === pgBytea.id) {
       return {
         kind: 'sqlExpression',
         literal: (text: string) => sqlStringLiteral(base64ToHex(text)),
-        list: (literals: readonly string[]) => arrayLiteral(literals, 'BYTEA'),
+        list: (literals: readonly string[]) => arrayLiteral(literals, BYTEA_LIST_TYPE),
       } as const;
     }
-    if (!isTemporalNativeType(nativeType)) return undefined;
-    const precision = typeParams?.['precision'];
-    const typeName = `${nativeType.toUpperCase()}${typeof precision === 'number' ? `(${precision})` : ''}`;
+    const type = TEMPORAL_TYPES.get(dataType);
+    if (type === undefined) return undefined;
+    const typeName = renderSqlTypeName(type, dataTypeParams(type, typeParams)).toUpperCase();
     return {
       kind: 'sqlExpression',
-      literal: (text: string) => sqlStringLiteral(storedTemporalText(text, nativeType)),
+      literal: (text: string) => sqlStringLiteral(storedTemporalText(text, type.id)),
       list: (literals: readonly string[]) => arrayLiteral(literals, typeName),
     } as const;
   },

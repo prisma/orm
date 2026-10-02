@@ -1,4 +1,4 @@
-export type TemporalNativeType = 'timestamp' | 'timestamptz' | 'date' | 'time' | 'timetz';
+import { pgDate, pgTime, pgTimestamptz, pgTimetz } from './data-types';
 
 const RFC_3339 =
   /^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:[Zz]|([+-])(\d{2}):(\d{2}))$/;
@@ -43,10 +43,7 @@ function offsetText(minutes: number): string {
  * Fractional seconds are rounded to microseconds; the column's own precision
  * does not change a stored default.
  */
-export function storedTemporalText(
-  text: string,
-  nativeType: TemporalNativeType,
-): string | undefined {
+export function storedTemporalText(text: string, dataType: string): string | undefined {
   const match = RFC_3339.exec(text);
   if (match === null) return undefined;
   const [
@@ -62,7 +59,7 @@ export function storedTemporalText(
     offsetHours,
     offsetMinutes,
   ] = match;
-  if (nativeType === 'date') return `${year}-${month}-${day}`;
+  if (dataType === pgDate.id) return `${year}-${month}-${day}`;
 
   const micros = fractionMicros(fraction);
   const clockSeconds =
@@ -76,18 +73,18 @@ export function storedTemporalText(
       ? 0
       : (sign === '-' ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes));
 
-  if (nativeType === 'time' || nativeType === 'timetz') {
+  if (dataType === pgTime.id || dataType === pgTimetz.id) {
     const clock = `${pad(Math.floor(clockSeconds / 3600))}:${pad(Math.floor(clockSeconds / 60) % 60)}:${pad(clockSeconds % 60)}${fractional}`;
-    return nativeType === 'time' ? clock : `${clock}${offsetText(offsetMinutesTotal)}`;
+    return dataType === pgTime.id ? clock : `${clock}${offsetText(offsetMinutesTotal)}`;
   }
 
   const midnight = new Date(0);
   midnight.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
-  const utcShift = nativeType === 'timestamptz' ? offsetMinutesTotal * 60 : 0;
+  const utcShift = dataType === pgTimestamptz.id ? offsetMinutesTotal * 60 : 0;
   const stamp = new Date(midnight.getTime() + (clockSeconds - utcShift) * 1000);
   const astronomicalYear = stamp.getUTCFullYear();
   const eraYear = astronomicalYear > 0 ? astronomicalYear : 1 - astronomicalYear;
   const wallClock = `${pad(eraYear, 4)}-${pad(stamp.getUTCMonth() + 1)}-${pad(stamp.getUTCDate())} ${pad(stamp.getUTCHours())}:${pad(stamp.getUTCMinutes())}:${pad(stamp.getUTCSeconds())}${fractional}`;
   const era = astronomicalYear > 0 ? '' : ' BC';
-  return nativeType === 'timestamptz' ? `${wallClock}+00${era}` : `${wallClock}${era}`;
+  return dataType === pgTimestamptz.id ? `${wallClock}+00${era}` : `${wallClock}${era}`;
 }

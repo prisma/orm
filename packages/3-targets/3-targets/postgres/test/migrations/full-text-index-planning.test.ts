@@ -25,6 +25,7 @@ import {
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { PostgresCreateIndex } from '../../src/core/ddl/nodes';
 import { postgresTargetDescriptorMeta } from '../../src/core/descriptor-meta';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
@@ -32,8 +33,10 @@ import { postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const TYPED_ATTRIBUTE_SCHEMA = `
 model Message {
@@ -58,8 +61,8 @@ const assembled = assembleAuthoringContributions([
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
       modelAttributes: postgresAuthoringModelAttributes,
       type: {
-        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
-        String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
+        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
       },
     },
   },
@@ -78,6 +81,7 @@ function authoredContract(schema: string): Contract<SqlStorage> {
     capabilities: {},
     target: postgresTargetDescriptorMeta,
     dataTypeLookup: postgresDataTypeLookup,
+    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors: new Map([
       ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
       ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
@@ -137,7 +141,7 @@ async function plannedCreateIndexNodes(schema: string): Promise<readonly Postgre
     schema: liveSchemaWithoutTheIndex(),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });

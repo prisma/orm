@@ -26,7 +26,7 @@ describe('postgis codecs', () => {
     'has geometry descriptor registered',
     () => {
       expect(postgisGeometryDescriptor.codecId).toBe('pg/geometry@1');
-      expect(postgisGeometryDescriptor.targetTypes).toEqual(['geometry']);
+      expect(postgisGeometryDescriptor.dataType).toBe('postgis/geometry');
     },
     timeouts.default,
   );
@@ -183,14 +183,6 @@ describe('postgis codecs', () => {
       expect(spec.codecId).toBe('pg/geometry@1');
       expect(spec.nativeType).toBe('geometry');
       expect(spec.typeParams).toEqual({ srid: 4326 });
-    });
-
-    it('rejects a non-integer srid', () => {
-      expect(() => pgGeometryColumn({ srid: 1.5 })).toThrow('srid must be a non-negative integer');
-    });
-
-    it('rejects a negative srid', () => {
-      expect(() => pgGeometryColumn({ srid: -1 })).toThrow('srid must be a non-negative integer');
     });
   });
 

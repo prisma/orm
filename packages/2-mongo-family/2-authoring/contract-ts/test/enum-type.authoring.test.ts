@@ -19,7 +19,6 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   codecId: id,
   dataType: dataTypeId('demo/fixture'),
   traits: ['equality'],
-  targetTypes: ['string'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () =>
@@ -268,7 +267,6 @@ describe('defineContract() — codec-encoded value set', () => {
     codecId: 'test/upper@1',
     dataType: dataTypeId('test/upper'),
     traits: ['equality'],
-    targetTypes: ['string'],
     paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>

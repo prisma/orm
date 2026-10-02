@@ -8,7 +8,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -25,6 +25,7 @@ describe('composed mutation default registries', () => {
       | 'createNamespace'
       | 'capabilities'
       | 'dataTypeLookup'
+      | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -33,7 +34,7 @@ describe('composed mutation default registries', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });

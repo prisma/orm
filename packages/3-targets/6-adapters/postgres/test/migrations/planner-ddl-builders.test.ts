@@ -1,18 +1,34 @@
-import type { CodecControlHooks } from '@internal/family-sql/control';
-import type { StorageColumn } from '@internal/sql-contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
+import { type StorageColumn, toStorageTypeInstance } from '@internal/sql-contract/types';
 import { col as ddlColumn, fn, lit } from '@internal/sql-relational-core/contract-free';
-import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import {
+  createPostgresBuiltinCodecLookup,
+  postgresCodecDescriptorRegistry,
+} from '@internal/target-postgres/codecs';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import {
   buildColumnTypeSql,
+  type DefaultColumn,
   renderDefaultLiteral,
 } from '@internal/target-postgres/planner-ddl-builders';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
-const noHooks = new Map<string, CodecControlHooks>();
+const types: SqlTypeLookups = {
+  codecLookup: postgresCodecDescriptorRegistry,
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
 
 function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
   return { codecId: 'pg/text@1', nullable: true, ...overrides };
+}
+
+function listColumn(nativeType: string): DefaultColumn {
+  return { nativeType, dataTypeId: 'pg/text', many: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -20,54 +36,56 @@ function col(overrides: Partial<StorageColumn> & { nativeType: string }): Storag
 // ---------------------------------------------------------------------------
 
 describe('buildColumnTypeSql', () => {
-  it('returns native type for plain columns', () => {
-    expect(buildColumnTypeSql(col({ nativeType: 'text' }), noHooks)).toBe('text');
+  it('returns the data type name for plain columns', () => {
+    expect(buildColumnTypeSql(col({ nativeType: 'text' }), types)).toBe('text');
   });
 
   it('returns SERIAL for int4 with autoincrement', () => {
     const column = col({
       nativeType: 'int4',
+      codecId: 'pg/int4@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('SERIAL');
+    expect(buildColumnTypeSql(column, types)).toBe('SERIAL');
   });
 
   it('returns BIGSERIAL for int8 with autoincrement', () => {
     const column = col({
       nativeType: 'int8',
+      codecId: 'pg/int8@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('BIGSERIAL');
+    expect(buildColumnTypeSql(column, types)).toBe('BIGSERIAL');
   });
 
   it('returns SMALLSERIAL for int2 with autoincrement', () => {
     const column = col({
       nativeType: 'int2',
+      codecId: 'pg/int2@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('SMALLSERIAL');
+    expect(buildColumnTypeSql(column, types)).toBe('SMALLSERIAL');
   });
 
-  it('quotes type name for typeRef columns', () => {
-    const column = col({ nativeType: 'my_enum', typeRef: 'my_enum' });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"my_enum"');
-  });
-
-  it('quotes each segment of a schema-qualified typeRef native type', () => {
+  it('writes a typeRef column as a column of the referenced type', () => {
     const column = col({ nativeType: 'auth.aal_level', typeRef: 'AalLevel' });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"auth"."aal_level"');
+    const storageTypes = {
+      AalLevel: toStorageTypeInstance({
+        codecId: 'pg/enum@1',
+        nativeType: 'auth.aal_level',
+        typeParams: { typeName: 'auth.aal_level' },
+      }),
+    };
+    expect(buildColumnTypeSql(column, types, storageTypes)).toBe('"auth"."aal_level"');
   });
 
-  // A native-enum column carries `typeParams.typeName` (the referenced named
-  // database type); it renders through the general named-type path, keyed off
-  // that signal — never a codec-id branch.
   it('renders an unqualified named-type column as a single quoted identifier', () => {
     const column = col({
       nativeType: 'order_status',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'order_status' },
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"order_status"');
+    expect(buildColumnTypeSql(column, types)).toBe('"order_status"');
   });
 
   it('renders a schema-qualified named-type column segment-by-segment', () => {
@@ -76,7 +94,7 @@ describe('buildColumnTypeSql', () => {
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'auth.aal_level' },
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"auth"."aal_level"');
+    expect(buildColumnTypeSql(column, types)).toBe('"auth"."aal_level"');
   });
 
   it('appends [] for a named-type array column', () => {
@@ -86,40 +104,20 @@ describe('buildColumnTypeSql', () => {
       typeParams: { typeName: 'order_status' },
       many: true,
     });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"order_status"[]');
+    expect(buildColumnTypeSql(column, types)).toBe('"order_status"[]');
   });
 
-  it('keys the named-type path off typeParams.typeName, not the codec id', () => {
+  it('writes the parameters of a parameterized data type', () => {
     const column = col({
-      nativeType: 'my_domain.my_type',
-      codecId: 'some/other-codec@1',
-      typeParams: { typeName: 'my_domain.my_type' },
-    });
-    expect(buildColumnTypeSql(column, noHooks)).toBe('"my_domain"."my_type"');
-  });
-
-  it('rejects unsafe native type names', () => {
-    expect(() => buildColumnTypeSql(col({ nativeType: 'text; DROP TABLE' }), noHooks)).toThrow(
-      'Unsafe native type',
-    );
-  });
-
-  it('uses expandNativeType hook for parameterized types', () => {
-    const hooks = new Map<string, CodecControlHooks>([
-      [
-        'pg/vector@1',
-        {
-          expandNativeType: ({ nativeType, typeParams }) =>
-            `${nativeType}(${typeParams?.['length']})`,
-        },
-      ],
-    ]);
-    const column = col({
-      nativeType: 'vector',
-      codecId: 'pg/vector@1',
+      nativeType: 'character varying',
+      codecId: 'pg/varchar@1',
       typeParams: { length: 3 },
     });
-    expect(buildColumnTypeSql(column, hooks)).toBe('vector(3)');
+    expect(buildColumnTypeSql(column, types)).toBe('character varying(3)');
+  });
+
+  it('ignores the contract native type', () => {
+    expect(buildColumnTypeSql(col({ nativeType: 'text; DROP TABLE' }), types)).toBe('text');
   });
 });
 
@@ -128,7 +126,10 @@ describe('buildColumnTypeSql', () => {
 // ---------------------------------------------------------------------------
 
 describe('the DEFAULT clause the Postgres adapter writes in every DDL statement', () => {
-  const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+  const adapter = new PostgresControlAdapter(
+    createPostgresBuiltinCodecLookup(),
+    createPostgresBuiltinDataTypeLookup(),
+  );
 
   it.each([
     ['no default', ddlColumn('c', 'text'), ''],
@@ -209,7 +210,10 @@ describe('renderDefaultLiteral', () => {
   });
 
   it('renders JSON object for jsonb column', () => {
-    const result = renderDefaultLiteral({ key: 'val' }, col({ nativeType: 'jsonb' }));
+    const result = renderDefaultLiteral(
+      { key: 'val' },
+      { nativeType: 'jsonb', dataTypeId: 'pg/jsonb' },
+    );
     expect(result).toBe(`'{"key":"val"}'::jsonb`);
   });
 
@@ -219,17 +223,17 @@ describe('renderDefaultLiteral', () => {
   });
 
   it('renders an empty array literal for a list column', () => {
-    const result = renderDefaultLiteral([], col({ nativeType: 'text', many: true }));
+    const result = renderDefaultLiteral([], listColumn('text'));
     expect(result).toBe("'{}'");
   });
 
   it('renders a populated array literal for a list column, cast to the list type', () => {
-    const result = renderDefaultLiteral(['a', 'b'], col({ nativeType: 'text', many: true }));
+    const result = renderDefaultLiteral(['a', 'b'], listColumn('text'));
     expect(result).toBe(`ARRAY['a', 'b']::text[]`);
   });
 
   it('renders a mixed-type array literal element-by-element', () => {
-    const result = renderDefaultLiteral([1, true, null], col({ nativeType: 'int4', many: true }));
+    const result = renderDefaultLiteral([1, true, null], listColumn('int4'));
     expect(result).toBe('ARRAY[1, true, NULL]::int4[]');
   });
 });

@@ -7,18 +7,17 @@ import type { AnyCodecDescriptor } from '../src/ast/codec-types';
 import { buildCodecDescriptorRegistry } from '../src/codec-descriptor-registry';
 import { AggregateExpr, LiteralColumnDefault, sqlCharRenderOutputType } from '../src/exports/ast';
 
-const stub = (codecId: string, targetTypes: readonly string[]): AnyCodecDescriptor =>
+const stub = (codecId: string): AnyCodecDescriptor =>
   ({
     codecId,
     traits: [],
-    targetTypes,
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: codecId }) as never,
   }) as unknown as AnyCodecDescriptor;
 
 const codecWithTraits = (codecId: string, traits: readonly CodecTrait[]): AnyCodecDescriptor =>
-  ({ ...stub(codecId, []), traits }) as unknown as AnyCodecDescriptor;
+  ({ ...stub(codecId), traits }) as unknown as AnyCodecDescriptor;
 
 const sumOverNumeric: SqlAggregateDescriptor = {
   operation: 'sum',
@@ -39,7 +38,7 @@ function capture(fn: () => unknown): unknown {
 describe('relational-core structured error codes', () => {
   it('duplicate codec descriptor id raises RUNTIME.DUPLICATE_CODEC', () => {
     const error = capture(() =>
-      buildCodecDescriptorRegistry([stub('lib/dup@1', ['ta']), stub('lib/dup@1', ['tb'])]),
+      buildCodecDescriptorRegistry([stub('lib/dup@1'), stub('lib/dup@1')]),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({

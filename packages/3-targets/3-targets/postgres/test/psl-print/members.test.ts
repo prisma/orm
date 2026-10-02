@@ -13,7 +13,7 @@ describe('value-object members are written as the type their domain type reads b
         ext: {
           Citext: {
             kind: 'typeConstructor',
-            output: { codecId: extensionCodec.codecId, nativeType: 'citext' },
+            output: { codecId: extensionCodec.codecId },
           },
         },
       },

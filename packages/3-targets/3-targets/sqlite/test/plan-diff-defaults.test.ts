@@ -10,6 +10,7 @@ import { parseSqliteDefault } from '../src/core/default-normalizer';
 import { columnSpecFromNode, ddlColumnFromNode } from '../src/core/migrations/column-ddl-rendering';
 import { buildSqlitePlanDiff } from '../src/core/migrations/diff-database-schema';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { sqliteTestComponents, sqliteTestTypes } from './sqlite-test-types';
 
 function liveSchema(rawDefault: string): SqlSchemaIR {
   return new SqlSchemaIR({
@@ -69,7 +70,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     const diff = buildSqlitePlanDiff({
       contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
       actualSchema: liveSchema('CURRENT_TIMESTAMP'),
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
     });
     expect(diff.issues).toEqual([]);
   });
@@ -78,7 +79,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     const diff = buildSqlitePlanDiff({
       contract: contractWithDefault({ kind: 'function', expression: "'x'" }),
       actualSchema: liveSchema("'x'"),
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
     });
     expect(diff.issues).toEqual([]);
   });
@@ -89,13 +90,13 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
       const diff = buildSqlitePlanDiff({
         contract: contractWithDefault({ kind: 'function', expression }),
         actualSchema: new SqlSchemaIR({ tables: {} }),
-        frameworkComponents: [],
+        frameworkComponents: sqliteTestComponents,
       });
       const column = diff.expected.tables['event']?.columns['at'];
       if (column === undefined) throw new Error('expected column derived');
       expect({
-        spec: columnSpecFromNode(column, false).default,
-        ddl: ddlColumnFromNode(column, false).default,
+        spec: columnSpecFromNode(column, false, sqliteTestTypes).default,
+        ddl: ddlColumnFromNode(column, false, sqliteTestTypes).default,
       }).toEqual({
         spec: { kind: 'function', expression },
         ddl: new FunctionColumnDefault(expression),

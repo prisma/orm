@@ -10,11 +10,13 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -22,14 +24,14 @@ const assembled = assembleAuthoringContributions([
       entityTypes: postgresAuthoringEntityTypes,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
       type: {
-        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
+        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
       },
     },
   },
 ]);
 
-const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarTypeDescriptors = new Map<string, { codecId: string }>([
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
 function interpret(source: string) {
@@ -41,6 +43,7 @@ function interpret(source: string) {
   return interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
+    codecLookup: postgresCodecLookup,
     symbolTable,
     sources,
     capabilities: {},

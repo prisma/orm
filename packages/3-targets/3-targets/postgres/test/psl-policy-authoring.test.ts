@@ -26,12 +26,14 @@ import {
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { computeContentHash } from '../src/core/rls/canonicalize';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -204,17 +206,17 @@ namespace public {
     defaultNamespaceId: 'public',
   };
 
-  const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-    ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-    ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-    ['Boolean', { codecId: 'pg/bool@1', nativeType: 'bool' }],
-    ['BigInt', { codecId: 'pg/int8@1', nativeType: 'int8' }],
-    ['Float', { codecId: 'pg/float8@1', nativeType: 'float8' }],
-    ['Decimal', { codecId: 'pg/numeric@1', nativeType: 'numeric' }],
-    ['DateTime', { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }],
-    ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-    ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
-    ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
+  const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+    ['String', { codecId: 'pg/text@1' }],
+    ['Int', { codecId: 'pg/int4@1' }],
+    ['Boolean', { codecId: 'pg/bool@1' }],
+    ['BigInt', { codecId: 'pg/int8@1' }],
+    ['Float', { codecId: 'pg/float8@1' }],
+    ['Decimal', { codecId: 'pg/numeric@1' }],
+    ['DateTime', { codecId: 'pg/timestamptz-temporal@1' }],
+    ['Json', { codecId: 'pg/json@1' }],
+    ['Jsonb', { codecId: 'pg/jsonb@1' }],
+    ['Bytes', { codecId: 'pg/bytea@1' }],
   ]);
 
   function interpret(text: string) {
@@ -225,6 +227,7 @@ namespace public {
     });
     return interpretPslDocumentToSqlContract({
       dataTypeLookup: postgresDataTypeLookup,
+      codecLookup: postgresCodecLookup,
       documents: [document],
       symbolTable,
       sources,
@@ -260,6 +263,7 @@ namespace public {
     const result = interpretPslDocumentToSqlContract({
       documents: [document],
       dataTypeLookup: postgresDataTypeLookup,
+      codecLookup: postgresCodecLookup,
       symbolTable,
       sources,
       target: postgresTarget,

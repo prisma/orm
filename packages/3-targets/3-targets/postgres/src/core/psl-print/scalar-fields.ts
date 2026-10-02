@@ -2,9 +2,9 @@ import type { Contract, ContractEnum, ExecutionMutationDefault } from '@internal
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type { PslField, PslFieldAttribute } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import { pslFieldMapName } from '@internal/sql-contract-psl/map-names';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
