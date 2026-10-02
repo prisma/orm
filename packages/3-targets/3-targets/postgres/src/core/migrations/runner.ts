@@ -235,7 +235,8 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       options.callbacks?.onOperationStart?.(operation);
       try {
         // Idempotency probe: only run if both postchecks and idempotency checks are enabled
-        if (runPostchecks && runIdempotency) {
+        // and the operation does not opt out (its postcheck cannot prove the op already ran).
+        if (runPostchecks && runIdempotency && !operation.skipIdempotencyProbe) {
           const postcheckAlreadySatisfied = await this.expectationsAreSatisfied(
             driver,
             operation.postcheck,
