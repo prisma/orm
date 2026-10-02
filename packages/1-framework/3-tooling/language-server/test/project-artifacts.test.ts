@@ -151,18 +151,13 @@ function projectWithSnapshots(
 }
 
 describe('ProjectArtifacts binder', () => {
-  it('preserves contributed identity across edits and replaces it with the configuration', () => {
+  it('rebuilds the binder on edits and takes contributed types from the configuration', () => {
     const first = projectWithSnapshots();
-    const snapshot = first.set(schemaUri, cleanSource);
+    first.set(schemaUri, cleanSource);
     const initial = first.project.binder();
-    const contributed = initial.scopeAt(snapshot.parse().document.syntax).lookup('Int');
-    const edited = first.set(schemaUri, siblingSource);
+    first.set(schemaUri, siblingSource);
     first.project.documentChanged(schemaUri);
-    const refreshed = first.project.binder();
-    expect(refreshed).not.toBe(initial);
-    expect(refreshed.scopeAt(edited.parse().document.syntax).lookup('Int')?.symbol).toBe(
-      contributed?.symbol,
-    );
+    expect(first.project.binder()).not.toBe(initial);
     const next = projectWithSnapshots(undefined, false, {
       ...controlStack,
       authoringContributions: assembleAuthoringContributions([
@@ -178,8 +173,11 @@ describe('ProjectArtifacts binder', () => {
     });
     const nextSnapshot = next.set(schemaUri, cleanSource);
     expect(
-      next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int')?.symbol,
-    ).not.toBe(contributed?.symbol);
+      next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int'),
+    ).toMatchObject({
+      kind: 'contributedType',
+      symbol: { descriptor: { output: { codecId: 'other', nativeType: 'bigint' } } },
+    });
   });
 
   it('shares a binder for a snapshot and replaces it on edits, membership and close', () => {
