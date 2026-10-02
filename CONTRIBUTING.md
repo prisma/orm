@@ -104,9 +104,10 @@ A GitHub status check will fail if any commit on the PR is missing a `Signed-off
 When you open a PR, the [pull request template](./.github/PULL_REQUEST_TEMPLATE.md) will be pre-filled. Please:
 
 1. **Link the issue you opened** (or "n/a — small change" if you skipped step 1 because the change was small).
-2. **Summarise the change** in one or two sentences focused on *why*, not file-by-file *what*.
-3. **List the testing you ran.** "Ran `pnpm test:packages`" is fine for small changes; bigger changes should run more.
-4. **Confirm DCO signoff.** The status check will tell you if anything is missing.
+2. **Show the change at a glance** with a short, real example: a code sample, a command and its output, or a before/after. A reviewer should see what changes before reading why.
+3. **Summarise the change** in one or two sentences focused on *why*, not file-by-file *what*.
+4. **List the testing you ran.** "Ran `pnpm test:packages`" is fine for small changes; bigger changes should run more.
+5. **Confirm DCO signoff.** The status check will tell you if anything is missing.
 
 A few conventions that will save review round-trips:
 
