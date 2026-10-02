@@ -389,7 +389,7 @@ describe('RecreateTableCall', () => {
         column.default?.kind === 'literal'
           ? `DEFAULT '${String(column.default.value)}' /* ${table} */`
           : column.default?.kind === 'function'
-            ? `DEFAULT (${column.default.expression})`
+            ? `DEFAULT (${column.default.expression.text})`
             : '',
     };
     const call = new RecreateTableCall({

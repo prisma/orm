@@ -34,6 +34,7 @@ import {
   DdlColumn,
   FunctionColumnDefault,
   LiteralColumnDefault,
+  opaqueSql,
 } from '@internal/sql-relational-core/ast';
 import { namingOf } from '@internal/sql-schema-ir/naming';
 import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
@@ -47,6 +48,7 @@ import {
   tableExistsAst,
 } from '../../contract-free/checks';
 import * as contractFreeDdl from '../../contract-free/ddl';
+import type { CreateIndexElements } from '../ddl/nodes';
 import { postgresError } from '../errors';
 import type { PostgresRlsPolicy, RenderedRlsPolicyLiteral } from '../postgres-rls-policy';
 import {
@@ -78,13 +80,7 @@ import {
   renameConstraintLabel,
 } from './operations/constraints';
 import { createExtension } from './operations/dependencies';
-import {
-  type CreateIndexElements,
-  type CreateIndexExtras,
-  createIndex,
-  dropIndex,
-  renameIndex,
-} from './operations/indexes';
+import { type CreateIndexExtras, createIndex, dropIndex, renameIndex } from './operations/indexes';
 import { createNativeEnumType, dropNativeEnumType } from './operations/native-enum-types';
 import {
   createRlsPolicy,
@@ -146,10 +142,10 @@ export function postgresDefaultToDdlColumnDefault(
       return new LiteralColumnDefault(columnDefault.value);
     case 'function':
       if (columnDefault.expression === 'autoincrement()') return undefined;
-      return new FunctionColumnDefault(columnDefault.expression);
+      return new FunctionColumnDefault(opaqueSql(columnDefault.expression));
     case 'sequence':
       return new FunctionColumnDefault(
-        `nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`,
+        opaqueSql(`nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`),
       );
     default: {
       const exhaustive: never = columnDefault;
@@ -170,7 +166,7 @@ function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${jsonToTsSource(def.expression)})`;
+  return `fn(${jsonToTsSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(col: DdlColumn): string {
@@ -202,7 +198,7 @@ function renderDdlConstraintAsTsCall(constraint: DdlTableConstraint): string {
       return `unique(${jsonToTsSource(constraint.columns)}${nameOpt})`;
     }
     case 'check-expression':
-      return `checkExpression(${jsonToTsSource(constraint.name)}, ${jsonToTsSource(constraint.expression)})`;
+      return `checkExpression(${jsonToTsSource(constraint.name)}, ${jsonToTsSource(constraint.expression.text)})`;
   }
 }
 

@@ -76,7 +76,7 @@ function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${jsonToTsSource(def.expression)})`;
+  return `fn(${jsonToTsSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(column: DdlColumn): string {

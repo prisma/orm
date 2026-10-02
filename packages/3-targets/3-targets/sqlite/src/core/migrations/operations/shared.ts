@@ -12,6 +12,7 @@ import {
   DdlColumn,
   FunctionColumnDefault,
   LiteralColumnDefault,
+  opaqueSql,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -66,7 +67,7 @@ export function sqliteDefaultToDdlColumnDefault(
       return new LiteralColumnDefault(columnDefault.value);
     case 'function':
       if (columnDefault.expression === 'autoincrement()') return undefined;
-      return new FunctionColumnDefault(columnDefault.expression);
+      return new FunctionColumnDefault(opaqueSql(columnDefault.expression));
     default: {
       const exhaustive: never = columnDefault;
       return assertNever(

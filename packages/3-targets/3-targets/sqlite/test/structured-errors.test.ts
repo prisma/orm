@@ -1,5 +1,4 @@
-import { CheckExpressionConstraint } from '@internal/sql-relational-core/ast';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { checkExpression, col } from '@internal/sql-relational-core/contract-free';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { sqliteBigintDescriptor, sqliteRealDescriptor } from '../src/core/codecs';
@@ -132,7 +131,7 @@ describe('structured error codes', () => {
     const call = new CreateTableCall(
       'user',
       [col('id', 'INTEGER')],
-      [new CheckExpressionConstraint({ name: 'chk', expression: '1 = 1' })],
+      [checkExpression('chk', '1 = 1')],
     );
     const error = capture(() => call.renderTypeScript());
     expect(isStructuredError(error)).toBe(true);

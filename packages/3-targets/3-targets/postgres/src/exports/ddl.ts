@@ -3,6 +3,7 @@ export {
   type AlterTableActionVisitor,
   type AnyAlterTableAction,
   type AnyPostgresDdlNode,
+  type CreateIndexElements,
   type DdlIndexElements,
   DropDefaultAction,
   PostgresAlterIndexRename,
