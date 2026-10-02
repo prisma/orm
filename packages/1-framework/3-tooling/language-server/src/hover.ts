@@ -7,10 +7,14 @@ import type {
   Binder,
   BlockSymbol,
   CompositeTypeSymbol,
+  ConstantSymbol,
   ContributedTypeSymbol,
   FieldSymbol,
+  FunctionSymbol,
   ModelSymbol,
   NamedTypeSymbol,
+  ParameterSymbol,
+  PositionalParam,
   Resolution,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
@@ -38,7 +42,10 @@ type HoverEntitySymbol =
 type HoverResult =
   | { readonly kind: 'entity'; readonly symbol: HoverEntitySymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
-  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
+  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
+  | { readonly kind: 'parameter'; readonly symbol: ParameterSymbol }
+  | { readonly kind: 'function'; readonly symbol: FunctionSymbol }
+  | { readonly kind: 'constant'; readonly symbol: ConstantSymbol };
 
 export function providePslHover(input: ProvidePslHoverInput): Hover | null {
   const offset = input.sourceFile.offsetAt(input.position);
@@ -90,6 +97,12 @@ function narrowHoverResult(resolution: Resolution | undefined): HoverResult | un
       return { kind: 'attribute', symbol: resolution.symbol };
     case 'contributedType':
       return { kind: 'contributedType', symbol: resolution.symbol };
+    case 'parameter':
+      return { kind: 'parameter', symbol: resolution.symbol };
+    case 'function':
+      return { kind: 'function', symbol: resolution.symbol };
+    case 'constant':
+      return { kind: 'constant', symbol: resolution.symbol };
     default:
       return undefined;
   }
@@ -98,7 +111,10 @@ function narrowHoverResult(resolution: Resolution | undefined): HoverResult | un
 function renderHoverResult(result: HoverResult): string {
   if (result.kind === 'entity') return renderEntityContent(result.symbol);
   if (result.kind === 'attribute') return renderAttributeContent(result.symbol);
-  return renderContributedTypeContent(result.symbol);
+  if (result.kind === 'contributedType') return renderContributedTypeContent(result.symbol);
+  if (result.kind === 'parameter') return renderParameterContent(result.symbol);
+  if (result.kind === 'function') return renderFunctionContent(result.symbol);
+  return renderConstantContent(result.symbol);
 }
 
 function renderEntityContent(entity: HoverEntitySymbol): string {
@@ -119,6 +135,26 @@ function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
   const documentation =
     symbol.descriptor.kind === 'typeConstructor' ? symbol.descriptor.documentation : undefined;
   return withDocumentation(fence, documentation);
+}
+
+function renderParameterContent(symbol: ParameterSymbol): string {
+  const part: PositionalParam<unknown, never> = { key: symbol.name, ...symbol.param };
+  const { parts } = renderSignatureLabel('', { documentation: '', positional: [] }, [part]);
+  const text = parts[0]?.text ?? `${symbol.name}: ${symbol.param.type.label}`;
+  const fence = ['```prisma', text, '```'].join('\n');
+  return withDocumentation(fence, symbol.param.documentation);
+}
+
+function renderFunctionContent(symbol: FunctionSymbol): string {
+  const params = resolveSignatureParameters(symbol.signature, undefined);
+  const { label } = renderSignatureLabel(symbol.name, symbol.signature, params);
+  const fence = ['```prisma', label, '```'].join('\n');
+  return withDocumentation(fence, symbol.signature.documentation);
+}
+
+function renderConstantContent(symbol: ConstantSymbol): string {
+  const fence = ['```prisma', symbol.name, '```'].join('\n');
+  return withDocumentation(fence, symbol.documentation);
 }
 
 function withDocumentation(fence: string, documentation: string | undefined): string {
