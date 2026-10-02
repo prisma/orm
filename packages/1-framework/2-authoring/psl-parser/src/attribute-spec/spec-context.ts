@@ -1,7 +1,13 @@
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { Resolution } from '../binder';
-import type { BlockSymbol, FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
-import type { AttributeCtx, AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './types';
+import type { BlockSpecContext } from '../block-spec/types';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
+import type {
+  AttributeSpec,
+  BlockAttributeCtx,
+  FieldAttributeCtx,
+  ModelAttributeCtx,
+} from './types';
 
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
@@ -27,11 +33,6 @@ export interface AttributeSpecNamespace {
   readonly field: Readonly<Record<string, FieldAttributeSpecFactory>>;
 }
 
-export interface BlockAttributeSpecContext {
-  readonly symbols: SymbolTable;
-  readonly block: BlockSymbol;
-}
-
 export type BlockAttributeSpecFactory = (
-  ctx: BlockAttributeSpecContext,
-) => AttributeSpec<never, AttributeCtx>;
+  ctx: BlockSpecContext,
+) => AttributeSpec<never, BlockAttributeCtx>;

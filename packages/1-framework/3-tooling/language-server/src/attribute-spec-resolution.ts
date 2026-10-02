@@ -82,9 +82,8 @@ function blockValueGrammar(
   source: AttributeSpecSource,
 ): ArgumentGrammar | undefined {
   const descriptor = findBlockDescriptor(source.pslBlockDescriptors, owner.blockKeyword);
-  const block = source.binder.declaredSymbol(owner.block.syntax);
-  if (descriptor === undefined || block?.kind !== 'block') return undefined;
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
+  if (descriptor === undefined) return undefined;
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
   if (spec.mode === 'map') return spec.value.type;
   return Object.hasOwn(spec.parameters, owner.key) ? spec.parameters[owner.key]?.type : undefined;
 }
@@ -96,15 +95,13 @@ export function attributeSpecResolver(
   switch (context.ownerKind) {
     case 'block': {
       const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
-      const block = source.binder.declaredSymbol(context.block.syntax);
-      if (block?.kind !== 'block') return () => undefined;
       return (name) => {
         const factory = descriptor?.attributes?.[name];
         if (factory === undefined) return undefined;
         return blindCast<
           BlockAttributeSpecFactory,
           'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-        >(factory)({ symbols: source.symbolTable, block });
+        >(factory)({ symbols: source.symbolTable });
       };
     }
     case 'model': {

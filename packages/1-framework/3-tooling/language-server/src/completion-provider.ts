@@ -381,9 +381,7 @@ function genericBlockDeclarationKeywordCandidates(
       insertText: `${keyword} `,
       snippetText: genericBlockSnippet(
         keyword,
-        descriptor === undefined
-          ? undefined
-          : blockSpecFactoryOf(descriptor)({ symbols, block: undefined }),
+        descriptor === undefined ? undefined : blockSpecFactoryOf(descriptor)({ symbols }),
       ),
       detail: descriptor?.documentation || 'Generic block keyword',
       kind: CompletionItemKind.Keyword,
@@ -443,11 +441,7 @@ function provideGenericBlockKeyCompletionItems(
   if (descriptor === undefined) {
     return [];
   }
-  const block = source.binder.declaredSymbol(context.block.syntax);
-  if (block?.kind !== 'block') {
-    return [];
-  }
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
   if (spec.mode !== 'struct') {
     return [];
   }

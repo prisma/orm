@@ -5,6 +5,7 @@ import type {
 } from '@internal/framework-components/authoring';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { AttributeSpecNamespace } from '../src/attribute-spec/spec-context';
+import type { BlockAttributeCtx } from '../src/attribute-spec/types';
 import {
   type Binder,
   type BinderContext,
@@ -12,8 +13,10 @@ import {
   type DescribeUnresolvedType,
   type DescribeUnsupportedAttribute,
 } from '../src/binder';
+import { parse } from '../src/parse';
 import type { PslSources, Range, SourceFile } from '../src/source-file';
-import type { SymbolTable } from '../src/symbol-table';
+import { buildSymbolTable, type SymbolTable } from '../src/symbol-table';
+import type { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
 
 /**
@@ -145,4 +148,25 @@ export function supportBinder(input: {
         : { pslBlockDescriptors: input.pslBlockDescriptors },
     ),
   }).binder;
+}
+
+/** The single `@@` attribute of a `fixture` block, with the parse context its block gives it. */
+export function blockAttributeFixture(attributeSource: string): {
+  readonly node: ModelAttributeAst;
+  readonly ctx: BlockAttributeCtx;
+} {
+  const { document, sources } = parse(`fixture Probe {\n  ${attributeSource}\n}`, 'schema.prisma');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const block = symbolTable.topLevel.blocks['Probe'];
+  const node = block === undefined ? undefined : [...block.node.attributes()][0];
+  if (block === undefined || node === undefined) throw new Error('expected a block attribute');
+  return {
+    node,
+    ctx: {
+      sources,
+      symbols: symbolTable,
+      binder: supportBinder({ sources, symbolTable }),
+      selfBlock: block,
+    },
+  };
 }

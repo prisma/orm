@@ -13,7 +13,6 @@ import {
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
-  type BlockSpecContext,
   blockAttribute,
   buildSymbolTable,
   entityRef,
@@ -418,28 +417,6 @@ function completionItemByLabel(items: readonly CompletionItem[], label: string):
 }
 
 describe('providePslCompletionItems', () => {
-  it('binds the correct block owner when declarations in different files have identical spans', () => {
-    const { items } = completeWithSource({
-      markedSource: 'policy Other { | }',
-      siblings: ['policy First {  }'],
-      pslBlockDescriptors: {
-        policy: {
-          kind: 'pslBlock',
-          keyword: 'policy',
-          discriminator: 'policy',
-          name: { required: true },
-          spec: ({ block }: BlockSpecContext) =>
-            structBlock({
-              parameters: {
-                [block?.name ?? 'Unnamed']: { type: str(), documentation: '' },
-              },
-            }),
-        },
-      },
-    });
-    expect(items.map(({ label }) => label)).toEqual(['Other']);
-  });
-
   it('filters candidates after nearest-name shadowing and includes namespace locals', () => {
     const { items } = completeWithSource({
       pslBlockDescriptors,
@@ -1361,7 +1338,7 @@ namespace app {
     expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
   });
 
-  it('binds the spec with the resolved block symbol and never invokes rule parsing', () => {
+  it('calls the spec factory with the symbol table only and never invokes rule parsing', () => {
     const factoryContexts: unknown[] = [];
     const throwingRule = {
       kind: 'str' as const,
@@ -1394,9 +1371,8 @@ namespace app {
     expect(items.map((item) => item.label)).toEqual(['shield']);
     expect(items[0]?.detail).toBe('The shield key.');
     expect(factoryContexts).toHaveLength(2);
-    for (const raw of factoryContexts) {
-      const ctx = raw as { symbols: unknown; block: { name: string } };
-      expect(ctx.block.name).toBe('Rule');
+    for (const ctx of factoryContexts) {
+      expect(ctx).toEqual({ symbols: expect.any(Object) });
     }
   });
 
