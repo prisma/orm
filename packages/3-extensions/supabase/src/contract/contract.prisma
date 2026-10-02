@@ -71,16 +71,16 @@ namespace auth {
     webauthnChallenges       WebauthnChallenges[]
     webauthnCredentials      WebauthnCredentials[]
 
-    @@index([confirmationToken], map: "confirmation_token_idx", where: "((confirmation_token)::text !~ '^[0-9 ]*$'::text)", unique: true)
-    @@index([emailChangeTokenCurrent], map: "email_change_token_current_idx", where: "((email_change_token_current)::text !~ '^[0-9 ]*$'::text)", unique: true)
-    @@index([emailChangeTokenNew], map: "email_change_token_new_idx", where: "((email_change_token_new)::text !~ '^[0-9 ]*$'::text)", unique: true)
-    @@index([reauthenticationToken], map: "reauthentication_token_idx", where: "((reauthentication_token)::text !~ '^[0-9 ]*$'::text)", unique: true)
-    @@index([recoveryToken], map: "recovery_token_idx", where: "((recovery_token)::text !~ '^[0-9 ]*$'::text)", unique: true)
-    @@index([email], map: "users_email_partial_key", where: "(is_sso_user = false)", unique: true)
-    @@index(expression: "instance_id, lower(email::text)", map: "users_instance_id_email_idx")
+    @@index([confirmationToken], map: "confirmation_token_idx", where: sql`((confirmation_token)::text !~ '^[0-9 ]*$'::text)`, unique: true)
+    @@index([emailChangeTokenCurrent], map: "email_change_token_current_idx", where: sql`((email_change_token_current)::text !~ '^[0-9 ]*$'::text)`, unique: true)
+    @@index([emailChangeTokenNew], map: "email_change_token_new_idx", where: sql`((email_change_token_new)::text !~ '^[0-9 ]*$'::text)`, unique: true)
+    @@index([reauthenticationToken], map: "reauthentication_token_idx", where: sql`((reauthentication_token)::text !~ '^[0-9 ]*$'::text)`, unique: true)
+    @@index([recoveryToken], map: "recovery_token_idx", where: sql`((recovery_token)::text !~ '^[0-9 ]*$'::text)`, unique: true)
+    @@index([email], map: "users_email_partial_key", where: sql`(is_sso_user = false)`, unique: true)
+    @@index(expression: sql`instance_id, lower(email::text)`, map: "users_instance_id_email_idx")
     @@index([instanceId], map: "users_instance_id_idx")
     @@index([isAnonymous], map: "users_is_anonymous_idx")
-    @@check(expression: "((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2))", map: "users_email_change_confirm_status_check")
+    @@check(expression: sql`((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2))`, map: "users_email_change_confirm_status_check")
     @@rls
     @@map("users")
   }
@@ -123,10 +123,10 @@ namespace auth {
     sessions                AuthSession[]
 
     @@index([deletedAt], map: "oauth_clients_deleted_at_idx")
-    @@check(expression: "(char_length(client_name) <= 1024)", map: "oauth_clients_client_name_length")
-    @@check(expression: "(char_length(client_uri) <= 2048)", map: "oauth_clients_client_uri_length")
-    @@check(expression: "(char_length(logo_uri) <= 2048)", map: "oauth_clients_logo_uri_length")
-    @@check(expression: "(token_endpoint_auth_method = ANY (ARRAY['client_secret_basic'::text, 'client_secret_post'::text, 'none'::text]))", map: "oauth_clients_token_endpoint_auth_method_check")
+    @@check(expression: sql`(char_length(client_name) <= 1024)`, map: "oauth_clients_client_name_length")
+    @@check(expression: sql`(char_length(client_uri) <= 2048)`, map: "oauth_clients_client_uri_length")
+    @@check(expression: sql`(char_length(logo_uri) <= 2048)`, map: "oauth_clients_logo_uri_length")
+    @@check(expression: sql`(token_endpoint_auth_method = ANY (ARRAY['client_secret_basic'::text, 'client_secret_post'::text, 'none'::text]))`, map: "oauth_clients_token_endpoint_auth_method_check")
     @@map("oauth_clients")
   }
 
@@ -155,7 +155,7 @@ namespace auth {
     @@index([oauthClientId], map: "sessions_oauth_client_id_idx")
     @@index([userId], map: "sessions_user_id_idx")
     @@index([userId, createdAt], map: "user_id_created_at_idx")
-    @@check(expression: "(char_length(scopes) <= 4096)", map: "sessions_scopes_length")
+    @@check(expression: sql`(char_length(scopes) <= 4096)`, map: "sessions_scopes_length")
     @@rls
     @@map("sessions")
   }
@@ -190,24 +190,24 @@ namespace auth {
     @@index([enabled], map: "custom_oauth_providers_enabled_idx")
     @@index([identifier], map: "custom_oauth_providers_identifier_idx")
     @@index([providerType], map: "custom_oauth_providers_provider_type_idx")
-    @@check(expression: "((authorization_url IS NULL) OR (authorization_url ~~ 'https://%'::text))", map: "custom_oauth_providers_authorization_url_https")
-    @@check(expression: "((authorization_url IS NULL) OR (char_length(authorization_url) <= 2048))", map: "custom_oauth_providers_authorization_url_length")
-    @@check(expression: "((char_length(client_id) >= 1) AND (char_length(client_id) <= 512))", map: "custom_oauth_providers_client_id_length")
-    @@check(expression: "((discovery_url IS NULL) OR (char_length(discovery_url) <= 2048))", map: "custom_oauth_providers_discovery_url_length")
-    @@check(expression: "(identifier ~ '^[a-z0-9][a-z0-9:-]{0,48}[a-z0-9]$'::text)", map: "custom_oauth_providers_identifier_format")
-    @@check(expression: "((issuer IS NULL) OR ((char_length(issuer) >= 1) AND (char_length(issuer) <= 2048)))", map: "custom_oauth_providers_issuer_length")
-    @@check(expression: "((jwks_uri IS NULL) OR (jwks_uri ~~ 'https://%'::text))", map: "custom_oauth_providers_jwks_uri_https")
-    @@check(expression: "((jwks_uri IS NULL) OR (char_length(jwks_uri) <= 2048))", map: "custom_oauth_providers_jwks_uri_length")
-    @@check(expression: "((char_length(name) >= 1) AND (char_length(name) <= 100))", map: "custom_oauth_providers_name_length")
-    @@check(expression: "((provider_type <> 'oauth2'::text) OR ((authorization_url IS NOT NULL) AND (token_url IS NOT NULL) AND (userinfo_url IS NOT NULL)))", map: "custom_oauth_providers_oauth2_requires_endpoints")
-    @@check(expression: "((provider_type <> 'oidc'::text) OR (discovery_url IS NULL) OR (discovery_url ~~ 'https://%'::text))", map: "custom_oauth_providers_oidc_discovery_url_https")
-    @@check(expression: "((provider_type <> 'oidc'::text) OR (issuer IS NULL) OR (issuer ~~ 'https://%'::text))", map: "custom_oauth_providers_oidc_issuer_https")
-    @@check(expression: "((provider_type <> 'oidc'::text) OR (issuer IS NOT NULL))", map: "custom_oauth_providers_oidc_requires_issuer")
-    @@check(expression: "(provider_type = ANY (ARRAY['oauth2'::text, 'oidc'::text]))", map: "custom_oauth_providers_provider_type_check")
-    @@check(expression: "((token_url IS NULL) OR (token_url ~~ 'https://%'::text))", map: "custom_oauth_providers_token_url_https")
-    @@check(expression: "((token_url IS NULL) OR (char_length(token_url) <= 2048))", map: "custom_oauth_providers_token_url_length")
-    @@check(expression: "((userinfo_url IS NULL) OR (userinfo_url ~~ 'https://%'::text))", map: "custom_oauth_providers_userinfo_url_https")
-    @@check(expression: "((userinfo_url IS NULL) OR (char_length(userinfo_url) <= 2048))", map: "custom_oauth_providers_userinfo_url_length")
+    @@check(expression: sql`((authorization_url IS NULL) OR (authorization_url ~~ 'https://%'::text))`, map: "custom_oauth_providers_authorization_url_https")
+    @@check(expression: sql`((authorization_url IS NULL) OR (char_length(authorization_url) <= 2048))`, map: "custom_oauth_providers_authorization_url_length")
+    @@check(expression: sql`((char_length(client_id) >= 1) AND (char_length(client_id) <= 512))`, map: "custom_oauth_providers_client_id_length")
+    @@check(expression: sql`((discovery_url IS NULL) OR (char_length(discovery_url) <= 2048))`, map: "custom_oauth_providers_discovery_url_length")
+    @@check(expression: sql`(identifier ~ '^[a-z0-9][a-z0-9:-]{0,48}[a-z0-9]$'::text)`, map: "custom_oauth_providers_identifier_format")
+    @@check(expression: sql`((issuer IS NULL) OR ((char_length(issuer) >= 1) AND (char_length(issuer) <= 2048)))`, map: "custom_oauth_providers_issuer_length")
+    @@check(expression: sql`((jwks_uri IS NULL) OR (jwks_uri ~~ 'https://%'::text))`, map: "custom_oauth_providers_jwks_uri_https")
+    @@check(expression: sql`((jwks_uri IS NULL) OR (char_length(jwks_uri) <= 2048))`, map: "custom_oauth_providers_jwks_uri_length")
+    @@check(expression: sql`((char_length(name) >= 1) AND (char_length(name) <= 100))`, map: "custom_oauth_providers_name_length")
+    @@check(expression: sql`((provider_type <> 'oauth2'::text) OR ((authorization_url IS NOT NULL) AND (token_url IS NOT NULL) AND (userinfo_url IS NOT NULL)))`, map: "custom_oauth_providers_oauth2_requires_endpoints")
+    @@check(expression: sql`((provider_type <> 'oidc'::text) OR (discovery_url IS NULL) OR (discovery_url ~~ 'https://%'::text))`, map: "custom_oauth_providers_oidc_discovery_url_https")
+    @@check(expression: sql`((provider_type <> 'oidc'::text) OR (issuer IS NULL) OR (issuer ~~ 'https://%'::text))`, map: "custom_oauth_providers_oidc_issuer_https")
+    @@check(expression: sql`((provider_type <> 'oidc'::text) OR (issuer IS NOT NULL))`, map: "custom_oauth_providers_oidc_requires_issuer")
+    @@check(expression: sql`(provider_type = ANY (ARRAY['oauth2'::text, 'oidc'::text]))`, map: "custom_oauth_providers_provider_type_check")
+    @@check(expression: sql`((token_url IS NULL) OR (token_url ~~ 'https://%'::text))`, map: "custom_oauth_providers_token_url_https")
+    @@check(expression: sql`((token_url IS NULL) OR (char_length(token_url) <= 2048))`, map: "custom_oauth_providers_token_url_length")
+    @@check(expression: sql`((userinfo_url IS NULL) OR (userinfo_url ~~ 'https://%'::text))`, map: "custom_oauth_providers_userinfo_url_https")
+    @@check(expression: sql`((userinfo_url IS NULL) OR (char_length(userinfo_url) <= 2048))`, map: "custom_oauth_providers_userinfo_url_length")
     @@map("custom_oauth_providers")
   }
 
@@ -280,7 +280,7 @@ namespace auth {
     user                      AuthUser              @relation(fields: [userId], references: [id], onDelete: Cascade, map: "mfa_factors_user_id_fkey")
 
     @@index([userId, createdAt], map: "factor_id_created_at_idx")
-    @@index([friendlyName, userId], map: "mfa_factors_user_friendly_name_unique", where: "(TRIM(BOTH FROM friendly_name) <> ''::text)", unique: true)
+    @@index([friendlyName, userId], map: "mfa_factors_user_friendly_name_unique", where: sql`(TRIM(BOTH FROM friendly_name) <> ''::text)`, unique: true)
     @@index([userId], map: "mfa_factors_user_id_idx")
     @@index([userId, phone], map: "unique_phone_factor_per_user", unique: true)
     @@rls
@@ -323,15 +323,15 @@ namespace auth {
     client              OauthClients                      @relation(fields: [clientId], references: [id], onDelete: Cascade, map: "oauth_authorizations_client_id_fkey", index: false)
     user                AuthUser?                         @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_authorizations_user_id_fkey", index: false)
 
-    @@index([expiresAt], map: "oauth_auth_pending_exp_idx", where: "(status = 'pending'::auth.oauth_authorization_status)")
-    @@check(expression: "(char_length(authorization_code) <= 255)", map: "oauth_authorizations_authorization_code_length")
-    @@check(expression: "(char_length(code_challenge) <= 128)", map: "oauth_authorizations_code_challenge_length")
-    @@check(expression: "(expires_at > created_at)", map: "oauth_authorizations_expires_at_future")
-    @@check(expression: "(char_length(nonce) <= 255)", map: "oauth_authorizations_nonce_length")
-    @@check(expression: "(char_length(redirect_uri) <= 2048)", map: "oauth_authorizations_redirect_uri_length")
-    @@check(expression: "(char_length(resource) <= 2048)", map: "oauth_authorizations_resource_length")
-    @@check(expression: "(char_length(scope) <= 4096)", map: "oauth_authorizations_scope_length")
-    @@check(expression: "(char_length(state) <= 4096)", map: "oauth_authorizations_state_length")
+    @@index([expiresAt], map: "oauth_auth_pending_exp_idx", where: sql`(status = 'pending'::auth.oauth_authorization_status)`)
+    @@check(expression: sql`(char_length(authorization_code) <= 255)`, map: "oauth_authorizations_authorization_code_length")
+    @@check(expression: sql`(char_length(code_challenge) <= 128)`, map: "oauth_authorizations_code_challenge_length")
+    @@check(expression: sql`(expires_at > created_at)`, map: "oauth_authorizations_expires_at_future")
+    @@check(expression: sql`(char_length(nonce) <= 255)`, map: "oauth_authorizations_nonce_length")
+    @@check(expression: sql`(char_length(redirect_uri) <= 2048)`, map: "oauth_authorizations_redirect_uri_length")
+    @@check(expression: sql`(char_length(resource) <= 2048)`, map: "oauth_authorizations_resource_length")
+    @@check(expression: sql`(char_length(scope) <= 4096)`, map: "oauth_authorizations_scope_length")
+    @@check(expression: sql`(char_length(state) <= 4096)`, map: "oauth_authorizations_state_length")
     @@map("oauth_authorizations")
   }
 
@@ -356,12 +356,12 @@ namespace auth {
     user      AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_consents_user_id_fkey", index: false)
 
     @@unique([userId, clientId], map: "oauth_consents_user_client_unique")
-    @@index([clientId], map: "oauth_consents_active_client_idx", where: "(revoked_at IS NULL)")
-    @@index([userId, clientId], map: "oauth_consents_active_user_client_idx", where: "(revoked_at IS NULL)")
+    @@index([clientId], map: "oauth_consents_active_client_idx", where: sql`(revoked_at IS NULL)`)
+    @@index([userId, clientId], map: "oauth_consents_active_user_client_idx", where: sql`(revoked_at IS NULL)`)
     @@index([userId, grantedAt], map: "oauth_consents_user_order_idx")
-    @@check(expression: "((revoked_at IS NULL) OR (revoked_at >= granted_at))", map: "oauth_consents_revoked_after_granted")
-    @@check(expression: "(char_length(scopes) <= 2048)", map: "oauth_consents_scopes_length")
-    @@check(expression: "(char_length(TRIM(BOTH FROM scopes)) > 0)", map: "oauth_consents_scopes_not_empty")
+    @@check(expression: sql`((revoked_at IS NULL) OR (revoked_at >= granted_at))`, map: "oauth_consents_revoked_after_granted")
+    @@check(expression: sql`(char_length(scopes) <= 2048)`, map: "oauth_consents_scopes_length")
+    @@check(expression: sql`(char_length(TRIM(BOTH FROM scopes)) > 0)`, map: "oauth_consents_scopes_not_empty")
     @@map("oauth_consents")
   }
 
@@ -378,7 +378,7 @@ namespace auth {
     @@index([relatesTo], map: "one_time_tokens_relates_to_hash_idx", type: "hash")
     @@index([tokenHash], map: "one_time_tokens_token_hash_hash_idx", type: "hash")
     @@index([userId, tokenType], map: "one_time_tokens_user_id_token_type_key", unique: true)
-    @@check(expression: "(char_length(token_hash) > 0)", map: "one_time_tokens_token_hash_check")
+    @@check(expression: sql`(char_length(token_hash) > 0)`, map: "one_time_tokens_token_hash_check")
     @@rls
     @@map("one_time_tokens")
   }
@@ -414,9 +414,9 @@ namespace auth {
     samlRelayStates SamlRelayStates[]
     ssoDomains      SsoDomains[]
 
-    @@index(expression: "lower(resource_id)", map: "sso_providers_resource_id_idx", unique: true)
+    @@index(expression: sql`lower(resource_id)`, map: "sso_providers_resource_id_idx", unique: true)
     @@index([resourceId], map: "sso_providers_resource_id_pattern_idx")
-    @@check(expression: "((resource_id = NULL::text) OR (char_length(resource_id) > 0))", map: "resource_id not empty")
+    @@check(expression: sql`((resource_id = NULL::text) OR (char_length(resource_id) > 0))`, map: "resource_id not empty")
     @@rls
     @@map("sso_providers")
   }
@@ -434,9 +434,9 @@ namespace auth {
     ssoProvider      SsoProviders @relation(fields: [ssoProviderId], references: [id], onDelete: Cascade, map: "saml_providers_sso_provider_id_fkey")
 
     @@index([ssoProviderId], map: "saml_providers_sso_provider_id_idx")
-    @@check(expression: "(char_length(entity_id) > 0)", map: "entity_id not empty")
-    @@check(expression: "((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))", map: "metadata_url not empty")
-    @@check(expression: "(char_length(metadata_xml) > 0)", map: "metadata_xml not empty")
+    @@check(expression: sql`(char_length(entity_id) > 0)`, map: "entity_id not empty")
+    @@check(expression: sql`((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))`, map: "metadata_url not empty")
+    @@check(expression: sql`(char_length(metadata_xml) > 0)`, map: "metadata_xml not empty")
     @@rls
     @@map("saml_providers")
   }
@@ -456,7 +456,7 @@ namespace auth {
     @@index([createdAt], map: "saml_relay_states_created_at_idx")
     @@index([forEmail], map: "saml_relay_states_for_email_idx")
     @@index([ssoProviderId], map: "saml_relay_states_sso_provider_id_idx")
-    @@check(expression: "(char_length(request_id) > 0)", map: "request_id not empty")
+    @@check(expression: sql`(char_length(request_id) > 0)`, map: "request_id not empty")
     @@rls
     @@map("saml_relay_states")
   }
@@ -476,9 +476,9 @@ namespace auth {
     updatedAt     Timestamptz? @map("updated_at")
     ssoProvider   SsoProviders @relation(fields: [ssoProviderId], references: [id], onDelete: Cascade, map: "sso_domains_sso_provider_id_fkey")
 
-    @@index(expression: "lower(domain)", map: "sso_domains_domain_idx", unique: true)
+    @@index(expression: sql`lower(domain)`, map: "sso_domains_domain_idx", unique: true)
     @@index([ssoProviderId], map: "sso_domains_sso_provider_id_idx")
-    @@check(expression: "(char_length(domain) > 0)", map: "domain not empty")
+    @@check(expression: sql`(char_length(domain) > 0)`, map: "domain not empty")
     @@rls
     @@map("sso_domains")
   }
@@ -494,7 +494,7 @@ namespace auth {
 
     @@index([expiresAt], map: "webauthn_challenges_expires_at_idx")
     @@index([userId], map: "webauthn_challenges_user_id_idx")
-    @@check(expression: "(challenge_type = ANY (ARRAY['signup'::text, 'registration'::text, 'authentication'::text]))", map: "webauthn_challenges_challenge_type_check")
+    @@check(expression: sql`(challenge_type = ANY (ARRAY['signup'::text, 'registration'::text, 'authentication'::text]))`, map: "webauthn_challenges_challenge_type_check")
     @@map("webauthn_challenges")
   }
 
@@ -594,7 +594,7 @@ namespace storage {
     icebergNamespaces IcebergNamespaces[]
     icebergTables     IcebergTables[]
 
-    @@index([name], map: "buckets_analytics_unique_name_idx", where: "(deleted_at IS NULL)", unique: true)
+    @@index([name], map: "buckets_analytics_unique_name_idx", where: sql`(deleted_at IS NULL)`, unique: true)
     @@rls
     @@map("buckets_analytics")
   }
@@ -732,7 +732,7 @@ namespace storage {
 
     @@index([bucketId, name], map: "bucketid_objname", unique: true)
     @@index([bucketId, name], map: "idx_objects_bucket_id_name")
-    @@index(expression: "bucket_id, lower(name)", map: "idx_objects_bucket_id_name_lower")
+    @@index(expression: sql`bucket_id, lower(name)`, map: "idx_objects_bucket_id_name_lower")
     @@index([name], map: "name_prefix_search")
     @@rls
     @@map("objects")

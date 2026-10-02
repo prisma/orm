@@ -13,14 +13,9 @@
 
 import type { Contract } from '@internal/contract/types';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import {
-  buildSymbolTable,
-  createBinder,
-  EMPTY_DATA_TYPES,
-  interpretExtensionBlocks,
-} from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { type BoundPslSchema, bindPslSchema } from '@internal/psl-parser/test';
@@ -31,7 +26,6 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -44,8 +38,7 @@ import { PostgresRlsEnablement } from '../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { PostgresRole } from '../src/core/postgres-role';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
 const assembled = assembleAuthoringContributions([
   {
@@ -70,7 +63,7 @@ function blockResolutionBinder(
         pslBlockDescriptors: assembled.pslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
-      dataTypes: EMPTY_DATA_TYPES,
+      dataTypes: postgresDataTypeSupport,
     },
   }).binder;
 }
@@ -110,7 +103,7 @@ function contextFor(authoringContributions: typeof assembled): BoundPslSchema['c
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-    dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+    dataTypes: postgresDataTypeSupport,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
   };
@@ -132,6 +125,7 @@ function interpretWithSymbolDiagnostics(
       sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
       binder: blockResolutionBinder(symbolTable, sources),
+      dataTypes: postgresDataTypeSupport,
     }).diagnostics,
   ];
 
@@ -175,7 +169,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `;
@@ -312,7 +306,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `);
@@ -336,7 +330,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 
   model profile {
@@ -359,7 +353,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 
   model profile {
@@ -387,7 +381,7 @@ namespace public {
   policy_select p_read {
     target = porfile
     roles  = [app_user]
-    using  = "true"
+    using  = sql\`true\`
   }
 }
 `);
@@ -418,7 +412,7 @@ namespace public {
   policy_select p_read {
     target = Profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `);
@@ -590,7 +584,7 @@ namespace public {
     expect(policy?.withCheck).toBeUndefined();
   });
 
-  it('decodes escaped predicate strings through the shared grammar', () => {
+  it('decodes the escapes of a double-quoted sql literal through the shared grammar', () => {
     const result = interpret(`
 namespace public {
   model profile {
@@ -601,7 +595,7 @@ namespace public {
 
   policy_select p_read {
     target = profile
-    using  = "name = 'line\\nbreak \\"quoted\\"'"
+    using  = sql"name = 'line\\nbreak \\"quoted\\"'"
   }
 }
 `);
@@ -623,7 +617,7 @@ namespace public {
 
   policy_select p_read {
     target     = profile
-    using      = "true"
+    using      = sql\`true\`
     permissive = false
   }
 }
@@ -645,7 +639,7 @@ namespace unbound {
   policy_select p_read {
     target = profile
     roles  = [zz_declared, aa_external]
-    using  = "true"
+    using  = sql\`true\`
   }
 }
 
@@ -672,7 +666,7 @@ namespace public {
 
   policy_select p_read {
     target = profile
-    using  = "true"
+    using  = sql\`true\`
   }
 }
 `);

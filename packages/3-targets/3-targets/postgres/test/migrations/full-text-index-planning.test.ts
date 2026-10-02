@@ -9,7 +9,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -23,7 +23,6 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
@@ -38,8 +37,7 @@ import { postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 
 const TYPED_ATTRIBUTE_SCHEMA = `
 model Message {
@@ -53,7 +51,7 @@ const HAND_WRITTEN_EXPRESSION_SCHEMA = `
 model Message {
   id   Int    @id
   text String
-  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_search")
+  @@index(expression: sql\`to_tsvector('english', "text")\`, type: "gin", name: "message_text_search")
 }
 `;
 
@@ -98,7 +96,7 @@ function authoredContract(schema: string): Contract<SqlStorage> {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: {},
     },

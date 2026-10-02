@@ -464,7 +464,7 @@ model Post {
       `model User {
   id    Int    @id
   email String
-  @@index(expression: "lower(email)", name: "users_email_eq")
+  @@index(expression: sql\`lower(email)\`, name: "users_email_eq")
   @@map("user")
 }
 `,
@@ -528,7 +528,7 @@ model Post {
       `model User {
   id    Int    @id
   email String
-  @@index(expression: "eql_v3.eq_term(email)", where: "(deleted_at IS NULL)", unique: true, name: "users_email_eq", type: "bm25", options: {})
+  @@index(expression: sql\`eql_v3.eq_term(email)\`, where: sql\`(deleted_at IS NULL)\`, unique: true, name: "users_email_eq", type: "bm25", options: {})
   @@map("user")
 }
 `,

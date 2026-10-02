@@ -147,7 +147,7 @@ function valueItems(
   }
   if (syntax === 'functionName') return [];
   if (qualifier !== undefined) return qualifiedItems(input, type, qualifier);
-  if (type.kind === 'taggedLiteral') {
+  if (type.kind === 'taggedLiteral' || type.kind === 'dataTypeValue') {
     return type.tags.map((tag) => ({
       ...completionItem(
         input,
@@ -178,7 +178,6 @@ function valueItems(
         selector: type.expected,
         namespaces: true,
       });
-    case 'dataTypeValue':
     case 'list':
     case 'record':
     case 'int':

@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -18,19 +18,17 @@ import {
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+import { postgresDataTypeSupport } from '../helpers/postgres-data-type-support';
 import {
   controlAdapter,
   frameworkComponents,
   postgresTargetDescriptor,
 } from './fixtures/runner-fixtures';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // `migration plan` runs offline (no live database): it derives the schema from
 // the contract via the target's `contractToSchema` hook and plans against it.
@@ -49,7 +47,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `;
@@ -68,8 +66,8 @@ namespace public {
   policy_update p_write {
     target    = profile
     roles     = [app_user]
-    using     = "owner_id = current_setting('app.uid')::int"
-    withCheck = "owner_id = current_setting('app.uid')::int"
+    using     = sql\`owner_id = current_setting('app.uid')::int\`
+    withCheck = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `;
@@ -105,7 +103,7 @@ function buildPslContract(psl: string = PSL) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

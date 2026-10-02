@@ -180,6 +180,7 @@ Postgres computes `to_tsvector` per row unless an index covers the predicate's e
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
 ```
 
 The TypeScript contract builder has the same helper, exported from the facade's contract-builder entry:
@@ -190,7 +191,13 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 }));
 ```
 
-It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. An expression index still works for anything the attribute does not cover — but then the expression is yours to keep in step:
+
+```prisma
+@@index(expression: sql`to_tsvector('english', "text")`, type: "gin", name: "message_text_search_custom")
+```
+
+Every argument that holds raw SQL (`where:`, `expression:`, and a policy's `using` and `withCheck`) takes a `sql` literal; a plain string is refused. See [ADR 260](../../../../docs/architecture%20docs/adrs/ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
 
 ## Codec descriptor authoring
 

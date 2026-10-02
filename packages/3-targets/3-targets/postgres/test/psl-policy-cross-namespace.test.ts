@@ -1,4 +1,4 @@
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -8,7 +8,6 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -16,8 +15,7 @@ import {
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
 const assembled = assembleAuthoringContributions([
   {
@@ -73,7 +71,7 @@ function interpret(text: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },
@@ -143,7 +141,7 @@ describe('policies that reference another namespace', () => {
 policy_select p_read {
   target = auth.account
   roles  = [unbound.auditor, app_user]
-  using  = "true"
+  using  = sql\`true\`
 }
 `),
     ).toEqual({
@@ -158,7 +156,7 @@ namespace public {
   policy_all p_admin {
     target = auth.account
     roles  = [unbound.auditor]
-    using  = "true"
+    using  = sql\`true\`
   }
 }
 `),

@@ -2,6 +2,7 @@ import type {
   PslAttributeArgument,
   PslModelAttribute,
 } from '@internal/framework-components/psl-ast';
+import { printSqlExpressionLiteral } from '@internal/sql-contract/sql-expression';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
@@ -43,7 +44,7 @@ export type AttributeNaming =
  * live name parses as a wire name AND that hash recomputes from the
  * introspected content; otherwise exact.
  */
-function detectIndexNaming(index: IndexAttributeSource): AttributeNaming {
+export function detectIndexNaming(index: IndexAttributeSource): AttributeNaming {
   const parsed = parseWireName(index.name);
   const recomputed = computeIndexContentHash({
     ...(index.columns !== undefined ? { columns: index.columns } : {}),
@@ -81,13 +82,13 @@ export function buildIndexAttribute(
       index.expression,
       `buildIndexAttribute: index "${index.name}" carries neither columns nor expression; SqlIndexIR enforces exactly one`,
     );
-    args.push(namedArg('expression', `"${escapePslString(index.expression)}"`));
+    args.push(namedArg('expression', printSqlExpressionLiteral(index.expression)));
   }
 
   args.push(namingArg(naming, index.name));
 
   if (index.where !== undefined) {
-    args.push(namedArg('where', `"${escapePslString(index.where)}"`));
+    args.push(namedArg('where', printSqlExpressionLiteral(index.where)));
   }
   if (index.unique) {
     args.push(namedArg('unique', 'true'));
@@ -129,7 +130,7 @@ export function buildCheckAttribute(
   naming: AttributeNaming = { kind: 'exact' },
 ): PslModelAttribute {
   return buildAttribute('model', 'check', [
-    namedArg('expression', `"${escapePslString(check.expression)}"`),
+    namedArg('expression', printSqlExpressionLiteral(check.expression)),
     namingArg(naming, check.name),
   ]);
 }

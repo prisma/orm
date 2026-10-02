@@ -43,7 +43,7 @@ function interpret(schema: string) {
   const result = interpretMongoContract(schema, {
     scalarTypeCodecIds,
     authoringContributions,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
     reportWarning: (diagnostic) => {
       warnings.push(diagnostic);
     },
@@ -89,7 +89,7 @@ describe('deprecated Mongo PSL scalar names', () => {
     const result = interpretMongoContract(schemaWith('Int'), {
       scalarTypeCodecIds,
       authoringContributions,
-      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      defaultFunctionRegistry: new Map(),
     });
     expect(result.ok).toBe(true);
   });

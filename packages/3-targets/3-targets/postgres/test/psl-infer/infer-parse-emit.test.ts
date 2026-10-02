@@ -1,6 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -11,17 +10,20 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import {
+  computeIndexContentHash,
+  formatWireName,
+  parseNaming,
+} from '@internal/sql-schema-ir/naming';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { assert, describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
+import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { printPslFromFlat } from './fixtures';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
@@ -108,7 +110,7 @@ function parseAndEmit(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: {},
     },
@@ -237,5 +239,60 @@ describe('Postgres PSL inference round trip', () => {
       },
       types: undefined,
     });
+  });
+
+  it('leaves out an exact-named index whose where would not read back and keeps a wire-named one by name', () => {
+    const where = '(owner_id > 0)\n';
+    const wireName = formatWireName(
+      'sample_owner_idx',
+      computeIndexContentHash({ columns: ['owner_id'], where, unique: false }),
+    );
+    const partialIndex = (name: string) => ({
+      naming: parseNaming(name, undefined),
+      columns: ['owner_id'],
+      where,
+      unique: false,
+      partial: true,
+      type: undefined,
+      options: undefined,
+      annotations: undefined,
+      dependsOn: undefined,
+    });
+    const schemaIR = new SqlSchemaIR({
+      tables: {
+        sample: {
+          name: 'sample',
+          columns: {
+            id: { name: 'id', nativeType: 'int4', nullable: false },
+            owner_id: { name: 'owner_id', nativeType: 'int4', nullable: false },
+          },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [partialIndex('sample_adopted'), partialIndex(wireName)],
+        },
+      },
+    });
+
+    const inferred = printPslFromFlat(schemaIR);
+    expect(inferred).toContain(
+      '// prisma: skipped index "sample_adopted": its SQL cannot be written as a sql literal that reads back unchanged. It is not in this schema, so migration plan will drop it. A sql literal written by hand holds different text, so migration plan then stops with a conflict for an index or check, or drops and recreates a policy. Either change the SQL in the database to the text of the literal, or add the object without map: or @@map so Prisma names it.',
+    );
+
+    const emitted = parseAndEmit(inferred);
+    if (!emitted.ok) {
+      assert.fail(JSON.stringify(emitted.failure.diagnostics));
+    }
+    const storage = emitted.value.storage as SqlStorage;
+    const namespace = storage.namespaces['public'] as PostgresSchema;
+    expect(namespace.entries.table?.['sample']?.indexes).toEqual([
+      {
+        columns: ['owner_id'],
+        where: '(owner_id > 0)',
+        prefix: 'sample_owner_idx',
+        name: wireName,
+        unique: false,
+      },
+    ]);
   });
 });

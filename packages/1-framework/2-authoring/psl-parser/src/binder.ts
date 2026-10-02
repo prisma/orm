@@ -4,7 +4,7 @@ import type {
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import type {
-  ControlDefaultRegistries,
+  ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
@@ -27,6 +27,7 @@ import type {
   PositionalParam,
 } from './attribute-spec/types';
 import { blockSpecFactoryOf } from './block-spec/descriptor';
+import { blockSpecContext } from './block-spec/spec-context';
 import {
   type ContributedTypeNamespace,
   type ContributedTypeSymbol,
@@ -143,7 +144,7 @@ interface BindingInputs {
   readonly symbolTable: SymbolTable;
   readonly contributedTypes: ContributedTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
@@ -252,9 +253,7 @@ export function createBinder(input: CreateBinderInput): BinderResult {
     contributedTypes: mergeContributedTypes(contributions.field, contributions.type),
     attributeSpecs: assembleAttributeSpecs(contributions),
     pslBlockDescriptors: contributions.pslBlockDescriptors,
-    controlMutationDefaults: {
-      defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
-    },
+    defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
     dataTypes: context.dataTypes,
     ...(describeUnsupportedAttributeFactory !== undefined
       ? { describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources) }
@@ -271,7 +270,7 @@ function bind(options: BindingInputs): BinderResult {
     symbolTable,
     contributedTypes,
     attributeSpecs,
-    controlMutationDefaults,
+    defaultFunctionRegistry,
     dataTypes,
     describeUnsupportedAttribute,
     describeUnresolvedType,
@@ -351,7 +350,7 @@ function bind(options: BindingInputs): BinderResult {
     };
     const specContext =
       entity.kind === 'model'
-        ? { symbols: symbolTable, model: entity, controlMutationDefaults, dataTypes }
+        ? { symbols: symbolTable, model: entity, defaultFunctionRegistry, dataTypes }
         : undefined;
     bindAttributes(
       entity,
@@ -379,6 +378,7 @@ function bind(options: BindingInputs): BinderResult {
   const blockContext = {
     pslBlockDescriptors,
     symbolTable,
+    dataTypes,
     sources,
     references,
     diagnostics,
@@ -407,12 +407,17 @@ interface ReferenceContext {
 interface BlockBindContext extends ReferenceContext {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly symbolTable: SymbolTable;
+  readonly dataTypes: DataTypeSupport;
 }
 
 function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
   const descriptor = findBlockDescriptor(ctx.pslBlockDescriptors, block.keyword);
   if (descriptor === undefined) return;
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: ctx.symbolTable });
+  const specContext = blockSpecContext({
+    symbols: ctx.symbolTable,
+    dataTypes: ctx.dataTypes,
+  });
+  const spec = blockSpecFactoryOf(descriptor)(specContext);
 
   for (const entry of block.node.entries()) {
     const key = entry.key()?.name();
@@ -436,7 +441,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
     const attributeSpec = blindCast<
       BlockAttributeSpecFactory,
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; the binder restores the factory type the descriptor surface documents'
-    >(factory)({ symbols: ctx.symbolTable });
+    >(factory)(specContext);
     bindArguments(attribute, attributeSpec, ctx);
   }
 }

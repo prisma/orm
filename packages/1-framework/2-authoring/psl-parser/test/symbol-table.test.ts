@@ -4,6 +4,7 @@ import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { str } from '../src/attribute-spec/combinators/str';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
@@ -30,6 +31,7 @@ function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorN
       symbolTable: result.symbolTable,
       pslBlockDescriptors,
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return { ...result, blocks };
 }

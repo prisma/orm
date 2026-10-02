@@ -47,9 +47,9 @@ export function printSqlExpressionLiteral(text: string): string;
 // Returns `printTaggedLiteral(SQL_EXPRESSION_TAG, text)` (section 11.1).
 
 // Slice 2b, next to its only caller (section 11.2)
-/** Whether `text` reads back unchanged when printed as a `sql` literal. */
-export function sqlTextReadsBack(text: string): boolean;
-// `const canonical = canonicalizeTaggedLiteralBody(text); return canonical.ok && canonical.body === text;`
+/** Whether every present text reads back unchanged when printed as a `sql` literal. */
+export function sqlTextsReadBack(texts: readonly (string | undefined)[]): boolean;
+// Each text: `taggedLiteralTextReadsBack(text)`, the framework's tag-agnostic predicate beside `printTaggedLiteral`.
 
 // Slice 3
 const SQL_EXPRESSION_MARKER: unique symbol = Symbol.for('@prisma/sql-expression');
@@ -96,7 +96,7 @@ It performs no other check. An empty text is allowed.
 
 In slice 3, add `'SQL_EXPRESSION_INTERPOLATION'` and `'SQL_EXPRESSION_INVALID'` to `ContractSubcode` in `packages/2-sql/1-core/contract/src/contract-errors.ts`.
 
-Imports: `dataType`, `dataTypeId`, `DataType`, `DataTypeId` from `@internal/framework-components/codec`; `DataTypeAuthoringEntry`, `canonicalizeTaggedLiteralBody`, `describeTaggedLiteralFailure`, `resolveTemplateTagEscapes`, `printTaggedLiteral` from `@internal/framework-components/authoring`; `JsonValue` from `@internal/contract/types`; `InternalError` from `@internal/utils/internal-error`; `contractError` from `./contract-errors`. Each function is added to `packages/1-framework/1-core/framework-components/src/exports/authoring.ts` (shared plane) in the slice that first imports it from there: `printTaggedLiteral` in slice 2a, `canonicalizeTaggedLiteralBody` in slice 2b (for `sqlTextReadsBack`), and `describeTaggedLiteralFailure` and `resolveTemplateTagEscapes` in slice 3. The last three keep their existing exports from `control.ts`; `printTaggedLiteral` is exported from `authoring.ts` only.
+Imports: `dataType`, `dataTypeId`, `DataType`, `DataTypeId` from `@internal/framework-components/codec`; `DataTypeAuthoringEntry`, `canonicalizeTaggedLiteralBody`, `describeTaggedLiteralFailure`, `resolveTemplateTagEscapes`, `printTaggedLiteral` from `@internal/framework-components/authoring`; `JsonValue` from `@internal/contract/types`; `InternalError` from `@internal/utils/internal-error`; `contractError` from `./contract-errors`. Each function is added to `packages/1-framework/1-core/framework-components/src/exports/authoring.ts` (shared plane) in the slice that first imports it from there: `printTaggedLiteral` in slice 2a, `canonicalizeTaggedLiteralBody` and `taggedLiteralTextReadsBack` in slice 2b (`canonicalizeTaggedLiteralBody` is then exported from `authoring.ts` only, and its `control.ts` export is removed), and `describeTaggedLiteralFailure` and `resolveTemplateTagEscapes` in slice 3. The last three keep their existing exports from `control.ts`; `printTaggedLiteral` is exported from `authoring.ts` only.
 
 ## 3. Registration and the removal of lowering entries (slice 2a)
 
@@ -280,7 +280,7 @@ Construction never throws. The language server builds every spec only to list at
    - `unwritable`: code `PSL_VALUE_TYPE_INCOMPATIBLE`, message `` `This target has no data type for a ${syntax} value; write ${F}` ``.
    - `unreadable`: code `PSL_INVALID_LITERAL`, message `refusal.message`.
 3. `const cast = castTypedValue(support, T, read.value)`. A refusal is `describeRefusal(refusal, R)`, where `R` is `` `it as ${printTaggedLiteral(tags[0], literal.written.text)}` `` when `literal.written.kind === 'string'` and `tags.length > 0`, and `F` otherwise:
-   - `no-cast` of a string for a type with a tag: code `PSL_VALUE_TYPE_INCOMPATIBLE`, message `` `${T} has no cast from ${valueType}; write it as ${printTaggedLiteral(tags[0], literal.written.text)}` ``. The message ends with the exact rewrite.
+   - `no-cast` of a string for a type with a tag: code `PSL_VALUE_TYPE_INCOMPATIBLE`, message `` `${T} has no cast from ${valueType}; write it as ${printTaggedLiteral(tags[0], literal.written.text)}` ``. The message ends with the exact rewrite. When the text would not read back unchanged from that literal (`canonicalizeTaggedLiteralBody(text)` fails or differs from the text, for example `"  x"` or a text holding a carriage return), the message ends `write it as a ${tags[0]} literal` instead, for example `sql/expression has no cast from pg/text; write it as a sql literal`. The check is the framework's `taggedLiteralTextReadsBack`, which `sqlTextsReadBack` also uses. (Added in slice 2b.)
    - other `no-cast`: code `PSL_VALUE_TYPE_INCOMPATIBLE`, message `` `${T} has no cast from ${valueType}; write ${F}` ``.
    - `unreadable`: code `PSL_INVALID_LITERAL`, message `refusal.message`.
 4. Return `ok({ type: T, value: cast.value.value, span: nodePslSpan(arg.syntax, ctx.sources) })`.
@@ -307,6 +307,11 @@ Examples on Postgres:
   - Tests: every test that builds `controlMutationDefaults` with `dataTypeEntries` moves the entries to `dataTypes` ([research/rebase-delta.md](research/rebase-delta.md) B.3).
 - The block spec context: section 9.1.
 
+### 7.1 Carried over from the slice 2t review, done in slice 2b
+
+- `ControlDefaultRegistries` is deleted. `AttributeSpecContext` carries `readonly defaultFunctionRegistry: ControlMutationDefaultRegistry` in place of `controlMutationDefaults`. `CreateBinderOptions`, `createSqlBinder`, `createMongoBinder`, `modelSpecContext`, `fieldSpecContext` and the Mongo interpreter input take `defaultFunctionRegistry`; the Mongo provider passes `context.controlMutationDefaults.defaultFunctionRegistry`. The language server passes `source.controlMutationDefaults.defaultFunctionRegistry`.
+- The `@default` literal arms yield a written scalar with its span. `psl-parser` exports `writtenScalar(arm)`, which wraps a literal arm, keeps its kind and metadata, and yields `ParsedWrittenScalar` (`{ kind: 'scalar', written, span }`, or `{ kind: 'scalar', written: undefined, reason: 'nul' | 'too-large', span }` for a tagged literal that does not canonicalize), and `writtenList(of)`, generic over the context like `writtenScalar`, which yields `ParsedWrittenList` (`{ kind: 'list', elements, span }`). The other `@default` arms yield `{ kind: 'default-function', call }` (`DefaultFunctionCall`, a call to a registered default function, named apart from the contract's `{ kind: 'function' }` storage default) and `{ kind: 'member', name }`, so lowering switches on `kind`. `lowerDataTypeDefault` takes `spans: DefaultSpans` (`attribute`, `value`, `elements`) and returns the `span` to report at; `DefaultRefusalPlace`, `writtenScalar`, `defaultValueExpression` and `listElements` in `psl-column-resolution.ts` are gone. Every `@default` diagnostic keeps its code, message and span.
+
 ## 8. The attribute places (slice 2b)
 
 ### 8.1 `@@index` and `@@check`
@@ -319,7 +324,7 @@ In `packages/2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts`:
 
 In `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts`, in `buildModelNodeFromPsl`:
 
-- Build one context per model: `const specContext = modelSpecContext({ symbols: input.symbolTable, model, controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry }, dataTypes: input.dataTypes, ...ifDefined('parsedBlocks', input.parsedBlocks) })`; `modelSpecContext` gains an optional `parsedBlocks` input it copies.
+- Build one context per model: `const specContext = modelSpecContext({ symbols: input.symbolTable, model, defaultFunctionRegistry: input.defaultFunctionRegistry, dataTypes: input.dataTypes })`. (Corrected in slice 2b: `AttributeSpecContext` has no `parsedBlocks` field on `main`, so there is none to copy; the context carries `defaultFunctionRegistry` directly, see below.)
 - Pass it to `sqlAttributeSpecs.model.index(specContext)`, `sqlAttributeSpecs.model.check(specContext)` and the contributed model attribute factory (replacing the inline object at about line 1154). The other `sqlAttributeSpecs.model.*` factories take no argument.
 - `@@index` node: `...ifDefined('expression', parsed.expression === undefined ? undefined : sqlTextFromCanonical(parsed.expression.value))` and `where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value)`.
 - `@@check` node: `expression: sqlTextFromCanonical(parsed.expression.value)`.
@@ -343,7 +348,7 @@ Serhii, the author of #30381, agreed (2026-09-25) that block specs may receive t
 ### 9.1 The block spec context carries the stack's data types
 
 - `BlockSpecContext` gains `readonly dataTypes: DataTypeSupport`, the same field and value as `AttributeSpecContext.dataTypes` (section 7).
-- `InterpretExtensionBlocksInput` gains a required `readonly dataTypes: DataTypeSupport`, and `interpretExtensionBlocks` passes it into every `BlockSpecContext` it builds, for block specs and block attributes.
+- `InterpretExtensionBlocksInput` gains a required `readonly dataTypes: DataTypeSupport`, and `interpretExtensionBlocks` passes it into every `BlockSpecContext` it builds, for block specs and block attributes. `InterpretExtensionBlockInput` and `InterpretExtensionBlockAttributesInput` take it too. The binder also builds block spec contexts, when it binds block values and block attribute arguments; it puts its own `dataTypes` into them. (Corrected in slice 2b: the design missed the binder and the two single-block inputs.)
 - The SQL interpreter passes its `dataTypes`, which its input carries. The Mongo interpreter passes the same value it puts in its attribute contexts.
 - The language server's block attribute and block key completion contexts (`attribute-spec-resolution.ts`, `completion-provider.ts`) set `dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES`. They build specs and never parse values, so the empty value cannot reach step 0 of section 6.
 
@@ -420,12 +425,13 @@ export function printTaggedLiteral(tag: string, text: string): string {
 
 ### 11.2 `contract infer` prints the six places (slice 2b)
 
-- `packages/3-targets/3-targets/postgres/src/core/psl-infer/infer-index-attributes.ts`: `buildIndexAttribute` prints `namedArg('expression', printSqlExpressionLiteral(index.expression))` and `namedArg('where', printSqlExpressionLiteral(index.where))`; `buildCheckAttribute` prints `namedArg('expression', printSqlExpressionLiteral(check.expression))`.
+- `packages/3-targets/3-targets/postgres/src/core/psl-build/index-attributes.ts` (corrected in slice 2b; the design named `psl-infer/infer-index-attributes.ts`): `buildIndexAttribute` prints `namedArg('expression', printSqlExpressionLiteral(index.expression))` and `namedArg('where', printSqlExpressionLiteral(index.where))`; `buildCheckAttribute` prints `namedArg('expression', printSqlExpressionLiteral(check.expression))`.
 - `packages/3-targets/3-targets/postgres/src/core/psl-infer/infer-policy-blocks.ts`: `{ expression: printSqlExpressionLiteral(policy.using), span: SYNTHETIC_SPAN }` and likewise `withCheck` (about lines 105-110).
-- **Skipping bodies that do not read back.** An adopted object compares its body byte for byte with the database, so infer never prints a body that would read back changed:
-  - In `buildModel` (`infer-model-blocks.ts`, about lines 124-135), for each index whose `expression` or `where` fails `sqlTextReadsBack`, and each non-derived check whose `expression` fails it, skip the attribute and add the note `` `// prisma: skipped ${kind} "${name}": its SQL cannot be written as a sql literal that reads back unchanged` `` (`kind` is `index` or `check`) to the model's comment lines, after any policy notes.
-  - In `buildPolicyBlocks` (`infer-policy-blocks.ts`), a policy whose `using` or `withCheck` fails `sqlTextReadsBack` is skipped with `` `// prisma: skipped policy "${policy.name}": its SQL cannot be written as a sql literal that reads back unchanged` ``, through the existing `skipNotesByTable`.
-  - Function defaults keep printing unconditionally: they are compared by parsing both sides, not byte for byte.
+- `contract print` shares `buildIndexAttribute` and `buildCheckAttribute`, and `psl-print/row-level-security.ts` prints policy predicates with `printSqlExpressionLiteral` too (added in slice 2b). `printSqlExpressionLiteral` throws an internal error for a text that does not read back, so every caller checks first with `sqlTextsReadBack`. `contract print` refuses an index, check or policy whose SQL fails it with `CONTRACT.PRINT_UNSUPPORTED` through `refuseSqlTextThatDoesNotReadBack` in `psl-print/refusals.ts` (`dispatches/2b-findings.md` finding 1).
+- **Bodies that do not read back.** An exact-named (`map:`) object compares its body with the database byte for byte, so infer never prints a body that would read back changed. A wire-named object is compared by name, and `normalizeSqlBody` gives its canonical text the same name, so infer prints it with that text. `psl-infer/infer-sql-text.ts` holds the note text and `printableIndex`:
+  - In `buildModel` (`infer-model-blocks.ts`), `printableIndex` returns an index unchanged when its `expression` and `where` read back, the index with canonical texts when they do not and its naming is wire, and `undefined` otherwise. Infer detects every live check and policy as exact-named, so a non-derived check whose `expression` fails `sqlTextsReadBack` is skipped. Each skip adds the note `` `// prisma: skipped ${kind} "${name}": its SQL cannot be written as a sql literal that reads back unchanged. It is not in this schema, so migration plan will drop it. A sql literal written by hand holds different text, so migration plan then stops with a conflict for an index or check, or drops and recreates a policy. Either change the SQL in the database to the text of the literal, or add the object without map: or @@map so Prisma names it.` `` (`kind` is `index` or `check`) to the model's comment lines, after any policy notes.
+  - In `buildIntrospectedPolicyBlocks` (`infer-policy-blocks.ts`), a policy whose `using` or `withCheck` fails `sqlTextsReadBack` is skipped with the same note, `policy` as its kind, through the existing `skipNotesByTable`.
+  - Function defaults keep printing unconditionally, with `printTaggedLiteral` rather than the checking printer. Default expressions are compared with case and whitespace ignored (`resolvedDefaultsEqual`), not byte for byte, and canonicalization changes only whitespace, so the canonical text never shows as a difference. A string constant inside a default whose whitespace canonicalization changes reads back as a different value; `plan.md` records this.
 
 ## 12. Language server (slice 2b)
 
@@ -696,7 +702,7 @@ These fail at run time, not compile time:
 
 ## 19. Documentation and ADRs
 
-A new ADR 256, "Raw SQL is a value of the data type `sql/expression`", written in slice 2b, holds design-notes decisions 1–7, 11 and 12 with their rejected alternatives. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 are amended briefly and link to it.
+A new ADR 260, "Raw SQL is a value of the data type `sql/expression`", written in slice 2b (numbered 260 because `main` and open branches already use 256 to 259), holds design-notes decisions 1–7, 11 and 12 with their rejected alternatives. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 are amended briefly and link to it.
 
 | Doc | Slice | Change |
 | --- | --- | --- |

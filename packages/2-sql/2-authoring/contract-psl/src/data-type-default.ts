@@ -27,7 +27,7 @@ import type {
   DataTypeId,
 } from '@internal/framework-components/codec';
 import { codecForRef } from '@internal/framework-components/codec';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { ContributedPslDiagnosticCode, PslSpan } from '@internal/framework-components/psl-ast';
 import { SQL_EXPRESSION_TAG } from '@internal/sql-contract/sql-expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -102,13 +102,12 @@ type StoredReadResult =
 
 type DefaultFailure = Extract<ReadDefaultResult, { readonly ok: false }>;
 
-/**
- * Where a refused default is reported: a cast-rule refusal at the written value, or the element of
- * a written list it is about; a refusal only defaults have at the `@default` attribute.
- */
-export type DefaultRefusalPlace =
-  | { readonly kind: 'written-value'; readonly elementIndex: number | undefined }
-  | { readonly kind: 'attribute' };
+/** Where the parts of a written default are: the `@default` attribute, the written value, and each element of a written list. */
+export interface DefaultSpans {
+  readonly attribute: PslSpan;
+  readonly value: PslSpan;
+  readonly elements: readonly PslSpan[];
+}
 
 export type DefaultDiagnosticResult =
   | { readonly ok: true; readonly value: JsonValue }
@@ -116,7 +115,7 @@ export type DefaultDiagnosticResult =
       readonly ok: false;
       readonly code: string;
       readonly message: string;
-      readonly place: DefaultRefusalPlace;
+      readonly span: PslSpan;
     };
 
 function messageOf(error: unknown): string {
@@ -206,9 +205,13 @@ export function readStoredValue(input: {
   readonly column: DefaultColumn;
   readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly fieldPath: string;
-}): DefaultDiagnosticResult {
+}):
+  | { readonly ok: true; readonly value: JsonValue }
+  | { readonly ok: false; readonly code: string; readonly message: string } {
   const reading = storedValueReader(input).read(input.value, undefined);
-  return reading.ok ? reading : codecRefusalDiagnostic(reading.refusal, input.fieldPath);
+  return reading.ok
+    ? reading
+    : { ok: false, ...codecRefusalMessage(reading.refusal, input.fieldPath) };
 }
 
 /**
@@ -334,9 +337,14 @@ function formsOf(dataTypes: DataTypeSupport, types: readonly DataTypeId[]): stri
   return forms.length === 0 ? `${SQL_EXPRESSION_TAG}\`...\`` : forms.join(' or ');
 }
 
-/** {@link readDataTypeDefault} worded as a PSL diagnostic's code and message. */
+/**
+ * {@link readDataTypeDefault} worded as a PSL diagnostic's code, message and span: a cast-rule
+ * refusal at the written value, or the element of a written list it is about; a refusal only
+ * defaults have at the `@default` attribute.
+ */
 export function lowerDataTypeDefault(input: {
   readonly written: WrittenValue;
+  readonly spans: DefaultSpans;
   readonly isList: boolean;
   readonly column: DefaultColumn;
   readonly codecLookup: CodecLookupWithDescriptors | undefined;
@@ -352,6 +360,7 @@ export function lowerDataTypeDefault(input: {
         atSourceElement(read.refusal, input.sourceElementIndexes),
         input.fieldPath,
         formsOf(input.dataTypes, read.suggestedTypes),
+        input.spans,
       );
 }
 
@@ -366,53 +375,67 @@ function atSourceElement(
 
 type DefaultDiagnostic = Extract<DefaultDiagnosticResult, { readonly ok: false }>;
 
-function codecRefusalDiagnostic(refusal: CodecRefusal, fieldPath: string): DefaultDiagnostic {
+function codecRefusalMessage(
+  refusal: CodecRefusal,
+  fieldPath: string,
+): { readonly code: string; readonly message: string } {
   return {
-    ok: false,
     code: PSL_INVALID_DEFAULT_LITERAL,
     message: `${location(fieldPath, refusal.elementIndex)}: ${refusal.message}`,
-    place: { kind: 'attribute' },
   };
 }
 
-/** A refusal worded as a PSL diagnostic's code, message and place; `forms` says what to write instead. */
+/** A refusal worded as a PSL diagnostic's code, message and span; `forms` says what to write instead. */
 function refusalDiagnostic(
   refusal: DefaultRefusal,
   fieldPath: string,
   forms: string,
+  spans: DefaultSpans,
 ): DefaultDiagnostic {
   const where = location(fieldPath, refusal.elementIndex);
-  const atWrittenValue: DefaultRefusalPlace = {
-    kind: 'written-value',
-    elementIndex: refusal.elementIndex,
-  };
+  const atWrittenValue = writtenValueSpan(spans, refusal.elementIndex, fieldPath);
   switch (refusal.kind) {
     case 'not-a-list':
       return {
         ok: false,
         code: PSL_DEFAULT_LIST_EXPECTED,
         message: `${where}: this column holds a list, so its default is a list literal, as in [1, 2]`,
-        place: { kind: 'attribute' },
+        span: spans.attribute,
       };
     case 'refused-by-codec':
-      return codecRefusalDiagnostic(refusal, fieldPath);
+      return { ok: false, ...codecRefusalMessage(refusal, fieldPath), span: spans.attribute };
     case 'no-list-cast':
       return {
         ok: false,
         code: PSL_VALUE_TYPE_INCOMPATIBLE,
         message: `${where}: ${refusal.receivingType} has no cast from a list; write ${forms}`,
-        place: atWrittenValue,
+        span: atWrittenValue,
       };
     case 'no-element-cast':
       return {
         ok: false,
         code: PSL_VALUE_TYPE_INCOMPATIBLE,
         message: `${where}: ${refusal.receivingType} has no cast from a list holding ${refusal.valueType}; write ${forms}`,
-        place: atWrittenValue,
+        span: atWrittenValue,
       };
     default: {
       const { code, message } = describeRefusal(refusal, forms);
-      return { ok: false, code, message: `${where}: ${message}`, place: atWrittenValue };
+      return { ok: false, code, message: `${where}: ${message}`, span: atWrittenValue };
     }
   }
+}
+
+function writtenValueSpan(
+  spans: DefaultSpans,
+  elementIndex: number | undefined,
+  fieldPath: string,
+): PslSpan {
+  if (elementIndex === undefined) return spans.value;
+  const span = spans.elements[elementIndex];
+  if (span === undefined) {
+    throw new InternalError(
+      `Field "${fieldPath}": a refused @default list element ${elementIndex + 1} has no written span.`,
+    );
+  }
+  return span;
 }

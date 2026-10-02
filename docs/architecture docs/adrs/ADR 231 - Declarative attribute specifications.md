@@ -1,6 +1,6 @@
 # ADR 231 — Declarative attribute specifications: composable argument combinators with typed inference
 
-**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md).
+**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md). Amended 2026-09-30: `dataTypeValue` types the arguments that take raw SQL (`@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)` and a policy's `using` and `withCheck`) — see [ADR 260 — Raw SQL is a value of the data type `sql/expression`](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
@@ -191,13 +191,21 @@ record(int({ min: 1, max: 99_999 }))
 
 This is intentionally narrower than an arbitrary JSON value. Its shipped use is Mongo's partial index filter, whose nested document is passed through rather than interpreted as a typed PSL record.
 
+### Tagged literals and JSON values
+
+`taggedLiteral(tags, { documentation })` reads a tagged literal (`` tag`...` ``, `tag"..."` or `tag'...'`) and returns its tag, its canonicalization and its span. It accepts any tag; `tags` and `documentation` describe the registered tags for completion. `@default` uses it, wrapped in `writtenScalar`, for its tagged-literal arms, and lowering reads the tag through the stack's authoring entries ([ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md)).
+
+`jsonValue()` reads a native JSON-compatible literal (a string, a finite number, a boolean, `null`, a list or a record of such values) and returns it as JSON. Block specs use it for members whose value is arbitrary JSON ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
+
 ### Values of a data type
 
 `dataTypeValue(dataType, support)` takes a value of one data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)). It accepts any literal: a quoted string, a number, a boolean or a tagged literal. The stack's authoring entries read the literal into a value of some type, and the ADR 254 cast rule admits it when that type is `dataType` or a type `dataType` casts from. It returns the canonical value with the type id and the span. It reports every refusal at the written value, with the general codes: `PSL_INVALID_ATTRIBUTE_SYNTAX` for an expression that is not a literal; `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` for a tagged literal it cannot canonicalize; and `PSL_UNKNOWN_LITERAL_TAG`, `PSL_VALUE_TYPE_INCOMPATIBLE` and `PSL_INVALID_LITERAL` from the cast rule, worded by the framework's `describeRefusal`. A refusal ends with what to write instead; a quoted string refused by a type that has a tag gets the literal to write. The label of a type with a tag is its tag, as in ``sql`...` ``; the label of a type without one is the forms it admits, as in `a number`. `support` is the spec context's `dataTypes` ([ADR 249](ADR%20249%20-%20Central%20attribute-spec%20registry.md)).
 
 Building the argument never throws, because the language server builds every spec, including on stacks that lack the type. Parsing throws an internal error when the stack does not register `dataType`: a spec that names a type its stack lacks is a pack bug. The argument carries `tags` and `documentation` for completion.
 
-`dataTypeValue` is used as a parameter in a `funcCall` signature, not as a bare arm of `oneOf`, whose aggregate diagnostic would hide the message that says how to write the value.
+`dataTypeValue` is used as a named attribute argument, such as `@@index(where:)`, as a block parameter, such as a policy's `using`, or as a parameter in a `funcCall` signature. It is never a bare arm of `oneOf`, whose aggregate diagnostic would hide the message that says how to write the value. The places that take raw SQL receive `sql/expression` through it, so only a `sql` literal is admitted there ([ADR 260 — Raw SQL is a value of the data type `sql/expression`](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
+
+`writtenScalar(arm)` wraps a literal arm and yields the literal as a written scalar with its span; `writtenList(of)` does the same for a list of them. They are the reading step that `dataTypeValue` performs before it casts, for a position whose receiving type is known only at lowering, such as `@default`, which receives the column's type. They leave a tagged literal that cannot be canonicalized for lowering to report, because a parse failure inside `oneOf` would be replaced by `Expected one of: …`. Both are built on `mapArg(arm, map)`, which passes the value an arm parses through `map` and keeps the arm's `kind` and metadata, which describe the syntax it accepts, for tooling. An arm that needs a different output from the same syntax, such as the `@default` function-call and enum-member arms, uses `mapArg` too.
 
 ### Alternatives
 
@@ -341,7 +349,7 @@ The current implementation is sufficient for interpreter consumption but not yet
 
 - Add central spec discovery and traversable combinator metadata for language-tooling consumers.
 - Revisit signature-derived `TypedFuncCall` output types if downstream code needs statically discriminated call unions.
-- Decide whether literal-to-field-type compatibility should remain in lowering or gain a dedicated field-context combinator.
+- Literal-to-type compatibility is decided: a position with a fixed receiving type uses `dataTypeValue`, and `@default`, whose receiving type comes from the column, casts in lowering.
 
 ---
 

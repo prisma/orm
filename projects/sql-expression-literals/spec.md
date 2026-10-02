@@ -90,7 +90,7 @@ Postgres and SQLite. The SQL family registers `sql/expression` and its entry; th
 
 ## ADR pointer
 
-A new ADR 256, "Raw SQL is a value of the data type `sql/expression`", records the decision. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 are amended briefly and link to it. Details are in [design.md](design.md) section 19.
+A new ADR 260, "Raw SQL is a value of the data type `sql/expression`", records the decision. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 are amended briefly and link to it. Details are in [design.md](design.md) section 19.
 
 ## Project DoD
 
@@ -101,7 +101,7 @@ A new ADR 256, "Raw SQL is a value of the data type `sql/expression`", records t
 - `@default` and the six places report cast-rule refusals with the same codes; the framework has no lowering-entry kind.
 - `fixtures:check` shows no `contract.json` change for any existing fixture.
 - A newly generated `migration.ts` writes a single-line SQL text holding both quote kinds as a template literal, and the committed example migrations still produce their committed `ops.json`.
-- ADR 256 exists, the amended ADRs, docs and `prisma-8` skill references use the new form (checked by grep), and upgrade instructions with the codemod are recorded.
+- ADR 260 exists, the amended ADRs, docs and `prisma-8` skill references use the new form (checked by grep), and upgrade instructions with the codemod are recorded.
 - The team DoD in [`drive/calibration/dod.md`](../../drive/calibration/dod.md) holds, including a manual QA script for each slice that changes diagnostics.
 
 ## Open questions

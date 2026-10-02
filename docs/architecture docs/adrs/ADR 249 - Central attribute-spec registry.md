@@ -13,8 +13,8 @@ Every model-level and field-level PSL attribute a family accepts is registered i
 ```ts
 export const sqlAttributeSpecs = {
   model: {
-    index: () => indexModelSpec,
-    check: () => checkModelSpec,
+    index: (ctx) => indexModelSpec(ctx),
+    check: (ctx) => checkModelSpec(ctx),
   },
   field: {
     id: () => idFieldSpec,
@@ -23,9 +23,9 @@ export const sqlAttributeSpecs = {
 } as const satisfies AttributeSpecNamespace;
 ```
 
-Every entry is a spec *factory* taking a framework-owned construction-time context, never a plain spec value. `index` and `check` ignore the context and return a hoisted constant; `default` builds its spec from the declaring field, because `@default`'s accepted argument grammar depends on whether the field is a list, which enum members exist, and which mutation-default functions the composed stack registered.
+Every entry is a spec *factory* taking a framework-owned construction-time context, never a plain spec value. `index` and `check` build their specs from the context's `dataTypes`, because their SQL arguments receive the stack's `sql/expression` data type ([ADR 260](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)); `default` builds its spec from the declaring field, because `@default`'s accepted argument grammar depends on whether the field is a list, which enum members exist, and which mutation-default functions the composed stack registered.
 
-The family interpreter calls a factory through its own namespace, where the key set is statically known and access is total:
+The family interpreter calls a factory through its own namespace, where the key set is statically known and access is total. It passes the context to every factory, including one whose spec does not read it, so a spec that starts to read the context needs no call-site change:
 
 ```ts
 const spec = sqlAttributeSpecs.field.default(
@@ -33,7 +33,7 @@ const spec = sqlAttributeSpecs.field.default(
     symbols: input.symbolTable,
     model,
     field,
-    controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypes: input.dataTypes,
   }),
 );
@@ -46,7 +46,7 @@ const specs = assembleAttributeSpecs(interpretation.context.authoringContributio
 const spec = specs.model['rls']?.({
   symbols: pipeline.symbolTable,
   model,
-  controlMutationDefaults: interpretation.context.controlMutationDefaults,
+  defaultFunctionRegistry: interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
   dataTypes: interpretation.context.dataTypes,
 });
 ```
@@ -80,7 +80,7 @@ The registry is descriptive. It supplies the specs the interpreters run; it does
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
 }
 
@@ -97,7 +97,7 @@ export type FieldAttributeSpecFactory = (
 ) => AttributeSpec<never, FieldAttributeCtx>;
 ```
 
-The facts are exactly what the dynamic specs consume. `ControlDefaultRegistries` holds only the default function registry. `dataTypes` is the stack's data types and their authoring entries ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)); a stack that registers none passes `EMPTY_DATA_TYPES`. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `controlMutationDefaults` to pin one `funcCall` arm per registered mutation-default function, reads `dataTypes` for the tags it offers, and reads `symbols` to find the enum block named by the field's type and pin one `identifier` arm per member. Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
+The facts are exactly what the dynamic specs consume. `defaultFunctionRegistry` is the stack's registry of default functions. `dataTypes` is the stack's data types and their authoring entries ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)); a stack that registers none passes `EMPTY_DATA_TYPES`. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `defaultFunctionRegistry` to pin one `funcCall` arm per registered mutation-default function, reads `dataTypes` for the tags it offers, and reads `symbols` to find the enum block named by the field's type and pin one `identifier` arm per member. SQL's `@@index` and `@@check` pass `dataTypes` to `dataTypeValue` for their `expression` and `where` arguments. Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
 
 Uniformity is what makes the registry consumable at all. A factory whose signature is specific to its family — one taking a list flag and a registry, another taking a list of enum member names — can only be called by the interpreter that owns it. Any other consumer would have to know, per attribute, what arguments to assemble, which is the opacity that declarative specs exist to remove ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). A single context type both consumers can construct replaces that per-attribute knowledge with one contract: the interpreter builds it from the document it is lowering, the language server builds it from the symbol table its pipeline produced and the mutation defaults on the resolved interpretation.
 

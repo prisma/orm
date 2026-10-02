@@ -1,6 +1,6 @@
 import type { ColumnDefault } from '@internal/contract/types';
+import { canonicalizeTaggedLiteralBody } from '@internal/framework-components/authoring';
 import {
-  canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
   resolveTemplateTagEscapes,
 } from '@internal/framework-components/control';

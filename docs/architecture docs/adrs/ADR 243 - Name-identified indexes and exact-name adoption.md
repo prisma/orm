@@ -45,9 +45,11 @@ The motivating case is the Cipherstash team's EQL encrypted search, which needs 
 model User {
   id    Int    @id
   email String
-  @@index(expression: "eql_v3.eq_term(email)", name: "users_email_eq", type: "btree")
+  @@index(expression: sql`eql_v3.eq_term(email)`, name: "users_email_eq", type: "btree")
 }
 ```
+
+The expression is a `sql` literal, the only form PSL takes for raw SQL ([ADR 260](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 Lowering hashes the canonical content tuple and stores the wire name in the contract:
 
@@ -68,7 +70,7 @@ Adoption of the same index created by someone else's tooling:
 
 ```prisma
 // emitted by `contract infer` — note map:, and the body is Postgres's reprint
-@@index(expression: "eql_v3.eq_term(email)", map: "users_email_eq", type: "btree")
+@@index(expression: sql`eql_v3.eq_term(email)`, map: "users_email_eq", type: "btree")
 ```
 
 Verify pairs the node by the verbatim name and compares the stored reprint against the introspected reprint. They are byte-equal, so there is zero drift and zero operations. The emitted contract signs the live database.

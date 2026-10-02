@@ -46,9 +46,8 @@ describe('postgres attribute specs are consumable from a resolved language-serve
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
       dataTypes: interpretation.context.dataTypes,
     };
 
@@ -98,9 +97,8 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
       dataTypes: interpretation.context.dataTypes,
     };
 
@@ -169,9 +167,8 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       model,
       field,
       typeResolution: undefined,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
       dataTypes: interpretation.context.dataTypes,
     });
 

@@ -13,4 +13,4 @@ Raw SQL in PSL and in the TypeScript contract builder is written one way everywh
 - [research/](research/): the code survey the design is based on. Most reports cite commit `6a5b58ecb7`; `block-specs.md`, `rebase-delta.md` and `review-followups.md` cite `47d727b70d`, the head of PR #30381 before it was rebuilt and merged.
 - [research/](research/) also holds the architect and principal-engineer reviews of the first design, and the verification of the second. The current design applies their findings.
 
-This directory is transient. It is deleted at close-out, after its decisions have moved into ADR 256 and the ADRs it amends.
+This directory is transient. It is deleted at close-out, after its decisions have moved into ADR 260 and the ADRs it amends.

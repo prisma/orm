@@ -28,7 +28,7 @@ function contextForInterpretOptions(
     Pick<
       InterpretPslDocumentToMongoContractInput,
       | 'authoringContributions'
-      | 'controlMutationDefaults'
+      | 'defaultFunctionRegistry'
       | 'codecLookup'
       | 'scalarTypeCodecIds'
       | 'reportWarning'
@@ -71,8 +71,7 @@ function contextForInterpretOptions(
     },
     dataTypes: options.dataTypes ?? EMPTY_DATA_TYPES,
     controlMutationDefaults: {
-      defaultFunctionRegistry:
-        options.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
+      defaultFunctionRegistry: options.defaultFunctionRegistry,
       generatorDescriptors: [],
     },
     resolvedInputs: [],

@@ -18,7 +18,11 @@ import {
 } from '../psl-build/index-attributes';
 import { buildAttribute, buildMapAttribute, positionalArg } from '../psl-build/psl-literals';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
-import { refuseUnwritableIndexOptions, refuseUnwritableObjectName } from './refusals';
+import {
+  refuseSqlTextThatDoesNotReadBack,
+  refuseUnwritableIndexOptions,
+  refuseUnwritableObjectName,
+} from './refusals';
 
 /** A check the PSL source derives for a table, which the printer does not write. */
 export interface DerivedCheck {
@@ -154,6 +158,13 @@ export function buildModelAttributes(input: {
   }
   for (const check of entry.table.checks ?? []) {
     if (derivedChecksByName.has(check.name) || !owns(undefined)) continue;
+    refuseSqlTextThatDoesNotReadBack({
+      kind: 'check',
+      namespaceId: entry.namespaceId,
+      table: entry.tableName,
+      name: check.name,
+      texts: [check.expression],
+    });
     attributes.push(
       buildCheckAttribute(
         check,
@@ -170,6 +181,13 @@ export function buildModelAttributes(input: {
   for (const index of entry.table.indexes) {
     if (!owns(index.columns)) continue;
     refuseUnwritableIndexOptions(entry, index);
+    refuseSqlTextThatDoesNotReadBack({
+      kind: 'index',
+      namespaceId: entry.namespaceId,
+      table: entry.tableName,
+      name: index.name,
+      texts: [index.expression, index.where],
+    });
     attributes.push(
       buildIndexAttribute(
         index,

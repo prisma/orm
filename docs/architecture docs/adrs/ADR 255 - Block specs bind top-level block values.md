@@ -1,6 +1,6 @@
 # ADR 255 — Block specs bind top-level block values
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-09-30: block specs may read the stack's data types, so a policy's predicates take `sql` literals ([ADR 260](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 **Date:** 2026-09-22
 **Builds on:** [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 126 — PSL top-level block SPI](ADR%20126%20-%20PSL%20top-level%20block%20SPI.md), [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md)
 
@@ -11,9 +11,20 @@
 A contributed top-level PSL block declares its member-value grammar with the same argument combinators attributes use (ADR 231), through one of two constructors. A closed key set is a `structBlock`; the Postgres `policy_select` keyword declares exactly the keys a SELECT policy takes:
 
 ```ts
-import { entityRef, structBlock, identifier, list, oneOf, optional, str, bool } from '@internal/psl-parser';
+import {
+  type BlockSpecContext,
+  bool,
+  dataTypeValue,
+  entityRef,
+  identifier,
+  list,
+  oneOf,
+  optional,
+  structBlock,
+} from '@internal/psl-parser';
+import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
 
-export function policyUsingOnlySpec() {
+export function policyUsingOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: {
@@ -25,7 +36,7 @@ export function policyUsingOnlySpec() {
         documentation: 'The database roles to which this policy applies.',
       },
       using: {
-        type: optional(str()),
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
         documentation: 'A SQL predicate controlling which rows this policy permits.',
       },
       permissive: {
@@ -82,7 +93,7 @@ export const sqlFamilyPslBlockDescriptors = {
 
 ## Decision
 
-Top-level extension blocks have one value grammar: a **block spec** built from the shared argument combinators. The spec is a factory — `(ctx: BlockSpecContext) => BlockSpec` with `BlockSpecContext = { symbols: SymbolTable; block: BlockSymbol }` — registered on the block's `AuthoringPslBlockDescriptor` as the `spec` field. Symbol-table construction collects every declaration without interpreting blocks. Consumers then create the snapshot's binder with the registered block descriptors and interpret each registered block's member expressions and `@@` attributes directly against the expression AST. Only blocks whose values and attributes all interpret successfully publish a **typed envelope** (`ParsedPslExtensionBlock`), and lowering consumes envelopes exclusively. Parsed AST is never rendered back to text: `PslExtensionBlock` is a **producer-only print shape**, constructed by generators whose text is born from their own values (database inference among them) and consumed by the printer alone; no validator, classifier, or lowering path reads it.
+Top-level extension blocks have one value grammar: a **block spec** built from the shared argument combinators. The spec is a factory — `(ctx: BlockSpecContext) => BlockSpec` with `BlockSpecContext = { symbols: SymbolTable; dataTypes: DataTypeSupport }` — registered on the block's `AuthoringPslBlockDescriptor` as the `spec` field. Symbol-table construction collects every declaration without interpreting blocks. Consumers then create the snapshot's binder with the registered block descriptors and interpret each registered block's member expressions and `@@` attributes directly against the expression AST. Only blocks whose values and attributes all interpret successfully publish a **typed envelope** (`ParsedPslExtensionBlock`), and lowering consumes envelopes exclusively. Parsed AST is never rendered back to text: `PslExtensionBlock` is a **producer-only print shape**, constructed by generators whose text is born from their own values (database inference among them) and consumed by the printer alone; no validator, classifier, or lowering path reads it.
 
 Two constructors cover the block shapes PSL has:
 
@@ -108,7 +119,7 @@ const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
 });
 ```
 
-Because every declaration is collected first, references — forward references included — resolve against the complete table. The snapshot's binder (`createBinder`, given the registered `pslBlockDescriptors`) eagerly binds the reference-kinded rules of every registered block's value entries and `@@` attribute arguments in the same pass that binds attribute arguments, under the same scope chain — declaring namespace, then top level, then the contributed-type scope; siblings never. Reference rules (`entityRef`) read the binder's resolutions; an unresolved block-entry reference is reported once in the binder's voice (`PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "..."`), except where the rule's grammar also accepts an unrestricted identifier — an undeclared name is then legal and binds silently. `BlockSpecContext.block` serves attribute interpretation and metadata inspection, not reference resolution.
+Because every declaration is collected first, references — forward references included — resolve against the complete table. The snapshot's binder (`createBinder`, given the registered `pslBlockDescriptors`) eagerly binds the reference-kinded rules of every registered block's value entries and `@@` attribute arguments in the same pass that binds attribute arguments, under the same scope chain — declaring namespace, then top level, then the contributed-type scope; siblings never. Reference rules (`entityRef`) read the binder's resolutions; an unresolved block-entry reference is reported once in the binder's voice (`PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "..."`), except where the rule's grammar also accepts an unrestricted identifier — an undeclared name is then legal and binds silently. The spec context does not carry the block. A block attribute's parse and refine receive the block being interpreted as `BlockAttributeCtx.selfBlock`.
 
 Only successful blocks enter `parsedBlocks`. An invalid block has no entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: the consumer that resolves the table's blocks. Each family interpreter constructs one binder per interpretation snapshot — covering attributes and block entries alike — and calls `interpretExtensionBlocks` once at its entry with that binder, surfacing the returned diagnostics with its other authoring failures, anchored to the original expression and entry spans. Block-value squiggles reach the editor through interpreter diagnostics when an interpreter is configured.
 
@@ -158,6 +169,10 @@ The hook picks only the destination namespace — entity kind and key stay fixed
 
 `AuthoringPslBlockDescriptor.requiresModelAttribute: { parameter, attribute }` declares that the model selected by a ref parameter must carry a bare `@@` attribute (Postgres policies require `@@rls` on their target). The family interpreter enforces it generically over the whole document — declaration order does not matter — and anchors `PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE` on the original parameter span.
 
+### Block specs may read the stack's data types
+
+A block spec may depend on the stack's data types. `BlockSpecContext.dataTypes` is the same value as `AttributeSpecContext.dataTypes`, and `interpretExtensionBlocks` and the binder put it into every block spec and block attribute context they build. This is how a policy's `using` and `withCheck` receive `sql/expression` through `dataTypeValue`, so they take only a `sql` literal ([ADR 260](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). Admitting a value of a data type chooses no codec and no stored representation, so the reason below for keeping codec registries out of parsing does not apply.
+
 ---
 
 ## Consequences
@@ -165,7 +180,7 @@ The hook picks only the destination namespace — entity kind and key stay fixed
 - One grammar, three consumers. The spec a block validates against is the spec the language server inspects for key completion and documentation and the spec the lowering factory's input type derives from (`InferBlock`). None of the three can drift, because all three read the same value.
 - Lowering paths receive decoded values and spans. Family enum lowering keeps codec selection, decoding, emptiness, and decoded-value-uniqueness checks — semantic concerns over typed values — while member recognition belongs to the grammar.
 - Alternate producers construct envelopes, not text. A producer that already holds decoded values (an earlier Prisma version's schema reader, per ADR 252) builds a trusted `ParsedPslExtensionBlock` directly rather than synthesizing source for reparsing.
-- Editor metadata binds specs with the same `{ symbols, block }` context. Fixed keys complete with their documentation; arbitrary-key blocks invent no candidates. Because binding a spec requires a declared block symbol, a snippet for a not-yet-written block cannot enumerate its keys; key completion begins once the block declaration exists.
+- Editor metadata binds specs with the same `{ symbols, dataTypes }` context. Fixed keys complete with their documentation; arbitrary-key blocks invent no candidates. A spec is built without a declared block, so the snippet for a block that is not yet written lists its keys.
 - The cost is one more registration concept: a block author writes a spec factory instead of a parameter table, and decides per rule whether a constraint is grammar (a combinator or `optional`), block interpretation, or family semantics.
 
 ---

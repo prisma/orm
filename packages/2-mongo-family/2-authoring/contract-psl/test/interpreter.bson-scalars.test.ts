@@ -50,7 +50,7 @@ function interpretPost() {
     SCHEMA,
     {
       scalarTypeCodecIds,
-      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      defaultFunctionRegistry: new Map(),
       codecLookup,
     },
     'bson-scalars.prisma',

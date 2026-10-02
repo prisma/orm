@@ -24,7 +24,7 @@ import {
   createPostgresTestContext,
 } from './fixtures';
 
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
+const { defaultFunctionRegistry } = createBuiltinLikeControlMutationDefaults();
 
 function project(schema: string, modelName: string, namespaceName?: string) {
   const input = buildSymbolTableInput(schema);
@@ -95,7 +95,7 @@ function interpretDefault(schema: string, fieldName: string, namespaceName?: str
         model,
         field: target,
         binder,
-        controlMutationDefaults,
+        defaultFunctionRegistry,
         dataTypes: fixtureDataTypeSupport,
       }),
     ),
@@ -124,7 +124,14 @@ namespace scoped {
     const value = interpretModelAttribute({
       node,
       symbols: input.symbolTable,
-      spec: sqlAttributeSpecs.model.base(),
+      spec: sqlAttributeSpecs.model.base(
+        modelSpecContext({
+          symbols: input.symbolTable,
+          model,
+          defaultFunctionRegistry,
+          dataTypes: fixtureDataTypeSupport,
+        }),
+      ),
       model,
       sources: input.sources,
       binder: createBinder({
@@ -149,7 +156,7 @@ describe('sqlAttributeSpecs', () => {
   const modelCtx = modelSpecContext({
     symbols: symbolTable,
     model,
-    controlMutationDefaults,
+    defaultFunctionRegistry,
     dataTypes: fixtureDataTypeSupport,
   });
   const fieldCtx = fieldSpecContext({
@@ -157,7 +164,7 @@ describe('sqlAttributeSpecs', () => {
     model,
     field: field(model, 'id'),
     binder,
-    controlMutationDefaults,
+    defaultFunctionRegistry,
     dataTypes: fixtureDataTypeSupport,
   });
 
@@ -213,7 +220,7 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes the @relation named arguments through the spec', () => {
-    expect(Object.keys(sqlAttributeSpecs.field.relation().named).sort()).toEqual([
+    expect(Object.keys(sqlAttributeSpecs.field.relation(fieldCtx).named).sort()).toEqual([
       'fields',
       'index',
       'map',
@@ -225,7 +232,7 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL relation field-reference metadata from the actual factory', () => {
-    const spec = sqlAttributeSpecs.field.relation();
+    const spec = sqlAttributeSpecs.field.relation(fieldCtx);
     const fields = listMetadata(namedType(spec, 'fields'));
     const references = listMetadata(namedType(spec, 'references'));
 
@@ -241,11 +248,11 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL model container metadata from actual factories', () => {
-    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id()));
+    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id(modelCtx)));
     expect(idFields).toMatchObject({ kind: 'list', allowEmpty: false, unique: true });
     expect(idFields.of).toMatchObject({ kind: 'fieldRef' });
 
-    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(), 'options'));
+    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(modelCtx), 'options'));
     expect(options).toMatchObject({ kind: 'record', optional: true });
     expect(options.of).toMatchObject({ kind: 'str', value: undefined });
   });
@@ -261,7 +268,7 @@ describe('sqlAttributeSpecs.field.default', () => {
     model,
     field: field(model, 'id'),
     binder,
-    controlMutationDefaults,
+    defaultFunctionRegistry,
     dataTypes: fixtureDataTypeSupport,
   });
 
@@ -308,9 +315,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model,
       field: field(model, 'id'),
       binder,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-      },
+      defaultFunctionRegistry,
       dataTypes: EMPTY_DATA_TYPES,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
@@ -324,7 +329,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model,
       field: field(model, 'tags'),
       binder,
-      controlMutationDefaults,
+      defaultFunctionRegistry,
       dataTypes: fixtureDataTypeSupport,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
@@ -356,7 +361,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model,
       field: field(model, 'tags'),
       binder,
-      controlMutationDefaults,
+      defaultFunctionRegistry,
       dataTypes: fixtureDataTypeSupport,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
@@ -378,7 +383,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model: enumProject.model,
       field: priority,
       binder: enumProject.binder,
-      controlMutationDefaults,
+      defaultFunctionRegistry,
       dataTypes: fixtureDataTypeSupport,
     });
     const enumDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(enumCtx)));
@@ -397,7 +402,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model: emptyProject.model,
       field: kind,
       binder: emptyProject.binder,
-      controlMutationDefaults,
+      defaultFunctionRegistry,
       dataTypes: fixtureDataTypeSupport,
     });
     const emptyDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(emptyCtx)));
@@ -422,7 +427,7 @@ model Post {
 }
 `;
     expect(interpretDefault(schema('Low'), 'priority')).toEqual({
-      value: { value: 'Low' },
+      value: { value: { kind: 'member', name: 'Low' } },
       diagnostics: [],
     });
     const rejected = interpretDefault(schema('Urgent'), 'priority');
@@ -446,7 +451,7 @@ model Post {
 }
 `;
     expect(interpretDefault(schema, 'role')).toEqual({
-      value: { value: 'Member' },
+      value: { value: { kind: 'member', name: 'Member' } },
       diagnostics: [],
     });
   });
@@ -468,7 +473,7 @@ namespace ns {
 }
 `;
     expect(interpretDefault(schema, 'role', 'ns')).toEqual({
-      value: { value: 'Member' },
+      value: { value: { kind: 'member', name: 'Member' } },
       diagnostics: [],
     });
   });
@@ -492,29 +497,63 @@ model Post {
     ]);
   });
 
-  it('accepts scalar literals on a scalar field, keeping a number as written', () => {
+  it('accepts scalar literals on a scalar field as written scalars with their spans', () => {
     const schema = 'model Post {\n  id Int @id\n  price Decimal @default(1.50)\n}\n';
     expect(interpretDefault(schema, 'price')).toEqual({
-      value: { value: { text: '1.50' } },
+      value: {
+        value: {
+          kind: 'scalar',
+          written: { kind: 'number', text: '1.50' },
+          span: spanOf(schema, '1.50'),
+        },
+      },
       diagnostics: [],
     });
   });
 
   it('accepts a list literal on a list field and on a scalar field, where the codec decides', () => {
-    expect(
-      interpretDefault('model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n', 'tags'),
-    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
-    expect(
-      interpretDefault('model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n', 'tag'),
-    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
+    const element = (schema: string) => ({
+      kind: 'scalar',
+      written: { kind: 'string', text: 'a' },
+      span: spanOf(schema, '"a"'),
+    });
+    const listSchema = 'model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n';
+    const scalarSchema = 'model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n';
+    expect(interpretDefault(listSchema, 'tags')).toEqual({
+      value: {
+        value: { kind: 'list', elements: [element(listSchema)], span: spanOf(listSchema, '["a"]') },
+      },
+      diagnostics: [],
+    });
+    expect(interpretDefault(scalarSchema, 'tag')).toEqual({
+      value: {
+        value: {
+          kind: 'list',
+          elements: [element(scalarSchema)],
+          span: spanOf(scalarSchema, '["a"]'),
+        },
+      },
+      diagnostics: [],
+    });
   });
 
   it('accepts a registered default function and rejects an unregistered one', () => {
     expect(
       interpretDefault('model Post {\n  id Int @id @default(autoincrement())\n}\n', 'id').value,
-    ).toEqual({ value: expect.objectContaining({ fn: 'autoincrement' }) });
+    ).toEqual({
+      value: { kind: 'default-function', call: expect.objectContaining({ fn: 'autoincrement' }) },
+    });
     const rejected = interpretDefault('model Post {\n  id Int @id @default(nope())\n}\n', 'id');
     expect(rejected.value).toBeUndefined();
     expect(rejected.diagnostics).toHaveLength(1);
   });
 });
+
+function spanOf(text: string, needle: string) {
+  const position = (offset: number) => {
+    const before = text.slice(0, offset);
+    return { offset, line: before.split('\n').length, column: offset - before.lastIndexOf('\n') };
+  };
+  const start = text.indexOf(needle);
+  return { start: position(start), end: position(start + needle.length) };
+}

@@ -1,5 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { blockAttribute, interpretExtensionBlocks, str, structBlock } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
@@ -60,6 +61,7 @@ function fixture(
       symbolTable: result.symbolTable,
       pslBlockDescriptors: descriptors,
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
   const scope =
     namespace === undefined

@@ -17,13 +17,17 @@ import { temporalAuthoringPresets } from '@internal/framework-components/authori
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
+  AttributeSpecContext,
+  BlockSpecContext,
   InferBlock,
   ModelAttributeSpecFactory,
+  ParsedTypedValue,
   PslBlockSpecDescriptor,
 } from '@internal/psl-parser';
 import {
   blockAttribute,
   bool,
+  dataTypeValue,
   entityRef,
   fieldRef,
   identifier,
@@ -44,6 +48,10 @@ import type {
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
+import {
+  SQL_EXPRESSION_DATA_TYPE_ID,
+  sqlTextFromCanonical,
+} from '@internal/sql-contract/sql-expression';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-schema-ir/naming';
 import { assertDefined, invariant } from '@internal/utils/assertions';
@@ -146,49 +154,53 @@ const policyRolesParam = {
   type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
   documentation: 'The database roles to which this policy applies.',
 };
-const policyUsingParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate controlling which rows this policy permits.',
-};
-const policyWithCheckParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate checking rows being written by this policy.',
-};
+function policyUsingParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate controlling which rows this policy permits.',
+  };
+}
+function policyWithCheckParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate checking rows being written by this policy.',
+  };
+}
 const policyPermissiveParam = {
   type: optional(bool()),
   documentation:
     'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
 };
 
-export function policyUsingOnlySpec() {
+export function policyUsingOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
+      using: policyUsingParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyWithCheckOnlySpec() {
+export function policyWithCheckOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      withCheck: policyWithCheckParam,
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyBothPredicatesSpec() {
+export function policyBothPredicatesSpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
-      withCheck: policyWithCheckParam,
+      using: policyUsingParam(ctx),
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
@@ -301,8 +313,12 @@ function lowerRlsPolicyFromBlock(
       : block.values.roles
           .map((role) => (typeof role === 'string' ? role : role.declaration.name))
           .sort();
-  const using = block.values.using;
-  const withCheck = block.values.withCheck;
+  const using =
+    block.values.using === undefined ? undefined : sqlTextFromCanonical(block.values.using.value);
+  const withCheck =
+    block.values.withCheck === undefined
+      ? undefined
+      : sqlTextFromCanonical(block.values.withCheck.value);
   const permissive = block.values.permissive ?? true;
 
   // `@@map("physical name")` adopts an EXACT-named policy: the lowered
@@ -603,81 +619,84 @@ const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
 
-const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
-  documentation:
-    'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
-  positional: [
-    {
-      key: 'fields',
-      type: list(fieldRef(), { allowEmpty: false, unique: true }),
-      documentation: 'The single field to index.',
-    },
-  ],
-  named: {
-    language: {
-      type: optional(
-        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
-      ),
-      documentation:
-        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
-    },
-    name: {
-      type: optional(str()),
-      documentation: 'The index name. Mutually exclusive with `map`.',
-    },
-    map: {
-      type: optional(str()),
-      documentation: 'The database index name. Mutually exclusive with `name`.',
-    },
-    where: {
-      type: optional(str()),
-      documentation: 'The SQL predicate restricting rows included in a partial index.',
-    },
-  },
-  refine: (value, ctx, attributeNode) => {
-    const diagnostics = [];
-    if (value.fields.length !== 1) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
-          PSL_FULL_TEXT_INDEX_ONE_FIELD,
+function postgresFullTextIndexSpec(ctx: AttributeSpecContext) {
+  return modelAttribute('fullTextIndex', {
+    documentation:
+      'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
+    positional: [
+      {
+        key: 'fields',
+        type: list(fieldRef(), { allowEmpty: false, unique: true }),
+        documentation: 'The single field to index.',
+      },
+    ],
+    named: {
+      language: {
+        type: optional(
+          oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
         ),
-      );
-    }
-    if (value.name === undefined && value.map === undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
-          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
-        ),
-      );
-    }
-    if (value.name !== undefined && value.map !== undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` takes at most one of `name` and `map`',
-          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
-        ),
-      );
-    }
-    return diagnostics;
-  },
-});
+        documentation:
+          'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+      },
+      name: {
+        type: optional(str()),
+        documentation: 'The index name. Mutually exclusive with `map`.',
+      },
+      map: {
+        type: optional(str()),
+        documentation: 'The database index name. Mutually exclusive with `name`.',
+      },
+      where: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation: 'The SQL predicate restricting rows included in a partial index.',
+      },
+    },
+    refine: (value, ctx, attributeNode) => {
+      const diagnostics = [];
+      if (value.fields.length !== 1) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
+            PSL_FULL_TEXT_INDEX_ONE_FIELD,
+          ),
+        );
+      }
+      if (value.name === undefined && value.map === undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
+            PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+          ),
+        );
+      }
+      if (value.name !== undefined && value.map !== undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` takes at most one of `name` and `map`',
+            PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+          ),
+        );
+      }
+      return diagnostics;
+    },
+  });
+}
 
-const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = (ctx) =>
+  postgresFullTextIndexSpec(ctx);
 
 type PostgresFullTextIndexParsed = {
   readonly fields: readonly string[];
   readonly language?: FullTextSearchLanguage;
   readonly name?: string;
   readonly map?: string;
-  readonly where?: string;
+  readonly where?: ParsedTypedValue;
 };
 
 /**
@@ -733,7 +752,7 @@ export const postgresAuthoringModelAttributes = {
           ),
           type: 'gin',
           options: undefined,
-          where: parsed.where,
+          where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value),
           unique: undefined,
           name: parsed.name,
           map: parsed.map,

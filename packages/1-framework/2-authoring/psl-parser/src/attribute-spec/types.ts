@@ -1,7 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { TypedValue } from '@internal/framework-components/authoring';
+import type {
+  TaggedLiteralCanonicalization,
+  TypedValue,
+} from '@internal/framework-components/authoring';
 import type { DataTypeId } from '@internal/framework-components/codec';
-import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';

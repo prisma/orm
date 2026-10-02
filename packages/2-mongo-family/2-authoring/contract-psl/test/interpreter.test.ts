@@ -133,9 +133,7 @@ function interpret(
     schema,
     {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map(),
-      },
+      defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       ...overrides,
     },
@@ -291,7 +289,7 @@ model Item {
         symbolTable,
         binder,
         scalarTypeCodecIds: new Map(),
-        controlMutationDefaults: context.controlMutationDefaults,
+        defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
@@ -2644,9 +2642,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 
@@ -2672,9 +2668,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 
@@ -2696,9 +2690,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 

@@ -109,7 +109,7 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
     dataTypes: EMPTY_DATA_TYPES,
   };
   return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };

@@ -37,10 +37,12 @@ or equivalently in PSL:
 policy_update profile_owner_write {
   target    = Profile
   roles     = [authenticated]
-  using     = "\"userId\"::uuid = auth.uid()"
-  withCheck = "\"userId\"::uuid = auth.uid()"
+  using     = sql`"userId"::uuid = auth.uid()`
+  withCheck = sql`"userId"::uuid = auth.uid()`
 }
 ```
+
+PSL writes each predicate as a `sql` literal, so the quoted column name needs no escaping ([ADR 260](ADR%20260%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 The lowering normalizes the content, hashes it, and stores the full wire name in the IR:
 
@@ -134,7 +136,7 @@ policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], usin
 policy_select profile_owner_read {
   target = Profile
   roles  = [authenticated]
-  using  = "true"
+  using  = sql`true`
 }
 ```
 

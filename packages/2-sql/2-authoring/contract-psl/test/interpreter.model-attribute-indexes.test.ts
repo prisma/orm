@@ -116,7 +116,7 @@ describe('a contributed model attribute that lowers to an index', () => {
       `model Message {
   id Int @id
   text String
-  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_search")
+  @@index(expression: sql\`to_tsvector('english', "text")\`, type: "gin", name: "message_text_search")
 }`,
     );
 

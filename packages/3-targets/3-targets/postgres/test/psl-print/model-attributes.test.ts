@@ -97,8 +97,8 @@ describe('keys and indexes', () => {
       },
     });
     expect(model?.attributes.map(attributeText)).toEqual([
-      '@@check(expression: "id > 0", map: "widget_id_positive")',
-      '@@check(expression: "id < 100", map: "widget_id_small")',
+      '@@check(expression: sql`id > 0`, map: "widget_id_positive")',
+      '@@check(expression: sql`id < 100`, map: "widget_id_small")',
     ]);
   });
 

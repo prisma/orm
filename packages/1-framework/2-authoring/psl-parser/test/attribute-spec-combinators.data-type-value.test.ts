@@ -333,6 +333,23 @@ describe('dataTypeValue', () => {
   });
 
   it.each([
+    ['indented text', '"  a = 1"'],
+    ['a carriage return', '"a = 1\\r\\nAND b = 2"'],
+    ['a blank last line', '"a = 1\\n"'],
+  ])(
+    'refuses a string holding %s without a rewrite that would read back differently',
+    (_, source) => {
+      expect(parse(sqlExpression.id, source)).toEqual(
+        refusal(
+          source,
+          'PSL_VALUE_TYPE_INCOMPATIBLE',
+          'sql/expression has no cast from pg/text; write it as a sql literal',
+        ),
+      );
+    },
+  );
+
+  it.each([
     ['42', 'pg/int2'],
     ['true', 'pg/bool'],
   ])('refuses %s for a type with a tag by naming its written form', (source, valueType) => {

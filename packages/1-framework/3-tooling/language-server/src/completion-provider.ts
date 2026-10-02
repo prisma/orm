@@ -1,5 +1,6 @@
 import {
   type AuthoringPslBlockDescriptorNamespace,
+  type DataTypeSupport,
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
 import {
@@ -7,7 +8,9 @@ import {
   type AttributeSpec,
   assembleAttributeSpecs,
   type BlockSpec,
+  blockSpecContext,
   blockSpecFactoryOf,
+  EMPTY_DATA_TYPES,
   findBlockDescriptor,
   isNamespaceLike,
   memberEntries,
@@ -349,7 +352,11 @@ function declarationKeywordCandidates(
     scope === 'namespace' ? namespaceNativeDeclarationKeywords : documentNativeDeclarationKeywords;
   return [
     ...nativeCandidates,
-    ...genericBlockDeclarationKeywordCandidates(source.pslBlockDescriptors, source.symbolTable),
+    ...genericBlockDeclarationKeywordCandidates(
+      source.pslBlockDescriptors,
+      source.symbolTable,
+      source.dataTypes ?? EMPTY_DATA_TYPES,
+    ),
   ];
 }
 
@@ -372,6 +379,7 @@ function nativeDeclarationKeyword(
 function genericBlockDeclarationKeywordCandidates(
   descriptors: AuthoringPslBlockDescriptorNamespace,
   symbols: SymbolTable,
+  dataTypes: DataTypeSupport,
 ): readonly DeclarationKeywordCompletionCandidate[] {
   return descriptorBlockKeywords(descriptors).map((keyword) => {
     const descriptor = findBlockDescriptor(descriptors, keyword);
@@ -381,7 +389,9 @@ function genericBlockDeclarationKeywordCandidates(
       insertText: `${keyword} `,
       snippetText: genericBlockSnippet(
         keyword,
-        descriptor === undefined ? undefined : blockSpecFactoryOf(descriptor)({ symbols }),
+        descriptor === undefined
+          ? undefined
+          : blockSpecFactoryOf(descriptor)(blockSpecContext({ symbols, dataTypes })),
       ),
       detail: descriptor?.documentation || 'Generic block keyword',
       kind: CompletionItemKind.Keyword,
@@ -441,7 +451,12 @@ function provideGenericBlockKeyCompletionItems(
   if (descriptor === undefined) {
     return [];
   }
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
+  const spec = blockSpecFactoryOf(descriptor)(
+    blockSpecContext({
+      symbols: source.symbolTable,
+      dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
+    }),
+  );
   if (spec.mode !== 'struct') {
     return [];
   }

@@ -5,7 +5,7 @@ import { interpretMongoContract } from './interpreter-test-helpers';
 function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
   const result = interpretMongoContract(schema, {
     scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
   });
   if (result.ok) throw new Error('Expected interpretation to fail');
   return result.failure.diagnostics;
