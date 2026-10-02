@@ -10,7 +10,7 @@ The language server declares `hoverProvider` and answers `textDocument/hover` fo
 - contributed types;
 - block keywords.
 
-`binder.ts` does not change.
+`binder.ts` changes in one place: each declaration's symbol is also recorded on its name's identifier node (project spec decision 10).
 
 ## Chosen design
 
@@ -26,7 +26,7 @@ hover.ts   providePslHover(input): Hover | null
 1. Take `document.syntax.tokenAtOffset(offset)` and keep the `Ident` token. If no `Ident` token is there, return `null`.
 2. Walk up from the token through its ancestors.
    - For each ancestor, take the first `binder.symbolForNode(ancestor)` that is defined. That gives a reference resolution.
-   - If the token is the name of a declaration, use `binder.declaredSymbol(declarationNode)` instead.
+   - A declaration's name carries its own resolution (project spec decision 10), so the same walk covers declarations and references.
    - If the token is the keyword of a generic block, the result is a block keyword.
 3. If `lsp-go-to-definition` slice 2 has landed by then with a cursor-to-resolution helper, reuse it rather than writing a second one.
 
@@ -69,7 +69,7 @@ Everything here is the language server's hover path, from the request handler to
 - the hover section in the language-server README.
 
 **Out:**
-- any `binder.ts` change: no `parameter`, `function` or `constant` resolutions, and no block attributes (slice `hover-arguments`);
+- any other `binder.ts` change: no `parameter`, `function` or `constant` resolutions, and no block attributes (slice `hover-arguments`);
 - hover on argument keys, function names and constants;
 - the manual QA script and run (slice 2 runs it over the full spec table).
 

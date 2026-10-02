@@ -40,7 +40,7 @@ model Post {
 | `id` in `references: [id]` | `field` (`referencedFieldRef`) | `id Int @id` in `User` |
 | `authorId` in `@@index([authorId])` | `field` (`fieldRef`) | `authorId Int` |
 | an `entityRef` argument in an attribute or a block value | `model` / `compositeType` / `block` / … | that declaration |
-| `User` in `model User {` | declaration, not a reference | `null` |
+| `User` in `model User {` | the declared symbol, recorded on the name node | `model User` itself (amended 2026-10-02, lsp-hover decision 10: the binder records declarations on their name nodes, and definition on a declaration name returns the declaration, as tsserver and rust-analyzer do) |
 | `pgvector.Vector`, `supabase:auth.User`, `@relation`, unresolved names | `contributed*` / `crossSpace` / `attribute` / `unresolved` | `null` |
 
 The server finds the target in two steps. It walks up from the token under the cursor to the nearest node that has a resolution in `binder.symbolForNode`, then maps the resolved symbol to its declaration nodes. It returns `LocationLink[]`: `originSelectionRange` is the reference node, `targetRange` is the whole declaration, and `targetSelectionRange` is the declaration's name. Clients that do not declare `textDocument.definition.linkSupport` get `Location[]` with the name range.

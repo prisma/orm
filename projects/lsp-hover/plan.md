@@ -37,7 +37,7 @@ The project has two stacked slices.
      - tests for references across files;
      - the README entry.
 
-     No `binder.ts` changes.
+     The only `binder.ts` change records declarations on their name nodes (spec decision 10).
 
 2. **Slice `hover-arguments`**. Linear: none. Folder: `projects/lsp-hover/slices/hover-arguments/`
    - **Outcome:** The binder records:

@@ -80,6 +80,7 @@ Two changes make this possible:
    - Declaration lines for models, fields, named types and blocks are rendered from the AST: the header only, without the body.
 8. **Hover from a reference shows the declaration's `///` documentation, even when the declaration is in another file of the same project.** Symbols carry their declaration node.
 9. **The block keyword is handled by the hover provider, not the binder.** It is a token, not a symbol. It shows `AuthoringPslBlockDescriptor.documentation`, and returns `null` when that is unset.
+10. **The binder records each declaration's symbol on its name's identifier node too**, in the map `symbolForNode` reads. This covers models, composite types, fields, named types and blocks, but not namespaces, which can be declared more than once. Hovering a declaration's name and hovering a reference to it then go through the same lookup, so hover needs no special case for declaration names. `declaredSymbol` stays keyed on the declaration node for its existing callers (attribute-spec resolution and completion). (Added 2026-10-02 by the operator.)
 
 ## Non-goals
 
@@ -113,7 +114,7 @@ Two changes make this possible:
 
 ## Cross-cutting requirements
 
-- **Hover and diagnostics agree on resolution.** Hover reads `binder.symbolForNode` / `binder.declaredSymbol` and never resolves names on its own.
+- **Hover and diagnostics agree on resolution.** Hover reads `binder.symbolForNode` and never resolves names on its own.
 - **The new `Resolution` kinds leave every other binder consumer unchanged:** the SQL and Mongo interpreters, completion, semantic tokens, signature help and definition. Existing tests in those packages pass without edits to their expectations.
 - **No dependency on a target or family.** Documentation comes only from contributed specs and descriptors. The language server does not branch on target.
 
