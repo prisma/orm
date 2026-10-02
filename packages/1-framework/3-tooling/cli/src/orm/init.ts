@@ -1,4 +1,3 @@
-import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
@@ -27,7 +26,7 @@ import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { type ResolvedInitInputs, resolveInitInputs } from './init-inputs';
-import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import { installProjectDependencies } from './init-packages';
 import {
   createPrisma7SourceCheck,
   type ImportFromProject,
@@ -218,6 +217,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
+      const runtimePackage = targetPackageName(inputs.target, scaffold.resolveImportSpecifier);
       // Prisma 7 requires CLI and client at the same version, so when the CLI
       // moves aside as @prisma/prisma7 a client below the 7 line moves with it.
       const movePackages = inputs.sideBySide?.movePackages ?? null;
@@ -229,7 +229,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        runtimePackage,
         'dotenv',
         ...targetPeerPackages(inputs.target),
         ...(moveClient ? ['@prisma/client@7'] : []),
@@ -240,14 +240,14 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // standalone shim is no longer published). It is the package that
       // carries the `prisma` binary, which is what the scaffolded scripts
       // invoke. `@prisma/cli-engine` — the config file's
-      // definePrismaConfig import — is deliberately absent here: the CLI declares it
-      // as an exact peer, so it installs in a second step at the version the
-      // just-installed CLI names. Under moduleResolution 'bundler' the
+      // definePrismaConfig import — is added by the install itself, in the
+      // same `add` as `prisma`, at the exact version the just-installed
+      // runtime's toolchain peers on. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
       const cliDevDeps = ['prisma@latest'];
-      const devDeps: string[] = [
+      let devDeps: string[] = [
         ...(scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node']),
         ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
       ];
@@ -338,6 +338,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           packages: ctx.packages,
           cwd: ctx.cwd,
           deps: depsToInstall,
+          runtimePackage,
           devDeps,
           catalogWarnings:
             packageManager === 'pnpm'
@@ -352,19 +353,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           findings.push(installFailedFinding(outcome.failure, scaffold.filesWritten));
           return settle(4);
         }
-        const engineSpec = engineDevDependencySpec(ctx.cwd);
-        const engineInstall = await ctx.packages.install({
-          packages: [engineSpec],
-          dev: true,
-          cwd: ctx.cwd,
-          ...ifDefined('manager', outcome.manager),
-        });
-        if (!engineInstall.ok) {
-          packagesInstalled = 'failed';
-          findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
-          return settle(4);
-        }
-        devDeps.push(engineSpec);
+        devDeps = [...outcome.devDeps];
         packagesInstalled = 'installed';
 
         const emitStep = 'Emit the contract';
@@ -381,7 +370,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version the runtime's @prisma/orm-toolchain declares as its peer dependency, as development dependencies in a single install)`,
           ),
         );
       }
