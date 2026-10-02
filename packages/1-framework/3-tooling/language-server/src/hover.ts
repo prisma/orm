@@ -11,16 +11,11 @@ import type {
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
-  PslSymbol,
   Resolution,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
 import {
-  CompositeTypeDeclarationAst,
-  FieldDeclarationAst,
   GenericBlockDeclarationAst,
-  ModelDeclarationAst,
-  NamedTypeDeclarationAst,
   type SyntaxNode,
   type SyntaxToken,
 } from '@internal/psl-parser/syntax';
@@ -80,26 +75,7 @@ function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined
 
 function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | undefined {
   const identifier = token.parent;
-  const declared = declaredEntityAt(binder, identifier);
-  if (declared !== undefined) return { kind: 'entity', symbol: declared };
   return identifier.findAncestor((node) => narrowHoverResult(binder.symbolForNode(node)));
-}
-
-function declaredEntityAt(binder: Binder, identifier: SyntaxNode): HoverEntitySymbol | undefined {
-  const owner = declarationNamedBy(identifier);
-  return owner === undefined ? undefined : narrowDeclaredSymbol(binder.declaredSymbol(owner));
-}
-
-function declarationNamedBy(identifier: SyntaxNode): SyntaxNode | undefined {
-  const parent = identifier.parent;
-  if (parent === undefined) return undefined;
-  const declaration =
-    ModelDeclarationAst.cast(parent) ??
-    CompositeTypeDeclarationAst.cast(parent) ??
-    GenericBlockDeclarationAst.cast(parent) ??
-    NamedTypeDeclarationAst.cast(parent) ??
-    FieldDeclarationAst.cast(parent);
-  return declaration?.name()?.syntax === identifier ? parent : undefined;
 }
 
 function narrowHoverResult(resolution: Resolution | undefined): HoverResult | undefined {
@@ -114,19 +90,6 @@ function narrowHoverResult(resolution: Resolution | undefined): HoverResult | un
       return { kind: 'attribute', symbol: resolution.symbol };
     case 'contributedType':
       return { kind: 'contributedType', symbol: resolution.symbol };
-    default:
-      return undefined;
-  }
-}
-
-function narrowDeclaredSymbol(symbol: PslSymbol | undefined): HoverEntitySymbol | undefined {
-  switch (symbol?.kind) {
-    case 'model':
-    case 'compositeType':
-    case 'namedType':
-    case 'block':
-    case 'field':
-      return symbol;
     default:
       return undefined;
   }
