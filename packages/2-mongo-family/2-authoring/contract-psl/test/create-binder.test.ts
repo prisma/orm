@@ -164,6 +164,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'map', level: 'field' },
       { kind: 'field', name: 'createdAt' },
       { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'score' },
       { kind: 'contributedType', name: 'Points', path: ['Points'] },
       { kind: 'field', name: 'weird' },

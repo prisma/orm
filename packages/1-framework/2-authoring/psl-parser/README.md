@@ -105,7 +105,7 @@ A named type's base (`Uuid = Uuid` in `types { }`) is resolved without the named
 
 For `ns.Name`, first resolve `ns` through the lexical scope chain and require a user or contributed namespace. Then look up `Name` only within that selected namespace. A user namespace hides a contributed namespace of the same name without fallthrough; a missing member never falls back to a top-level or contributed type.
 
-Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`, the segments `app` and `Item` do not resolve separately — the one `QualifiedName` node carries the one resolution.
+A qualified reference's resolution is recorded on the whole `QualifiedName` node: in `app.Item`, that node carries the resolution of `Item` within `app`. The qualifier segment carries its own resolution: when `app` resolves to a user namespace, its `IdentifierAst` node resolves to `namespace` (whose symbol lists every block that declares it), and to `contributedNamespace` for a contributed namespace. A qualifier that is not a namespace, or does not resolve, records nothing on its segment. The member segment `Item` and the segments of a cross-space reference record nothing of their own.
 
 ### Resolution kinds
 

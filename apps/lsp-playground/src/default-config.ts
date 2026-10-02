@@ -16,8 +16,9 @@ export const SCRATCH_DIR = join(PLAYGROUND_DIR, 'scratch');
 
 /**
  * The scratch project's seed files: two directive-carrying files forming a
- * cross-file relation (`Order.customer` -> `Customer`) and a namespace
- * (`catalog`) reopened across both, plus one directive-less file that
+ * cross-file relation (`Order.customer` -> `Customer`), a namespace
+ * (`catalog`) reopened across both, a qualified cross-file reference
+ * (`Order.product` -> `catalog.Product`), plus one directive-less file that
  * demonstrates membership exclusion — it matches the glob but carries no
  * `// use prisma-8` directive, so it is quietly not part of the schema
  * (design-decisions.md entry 2).
@@ -41,9 +42,11 @@ namespace catalog {
   'order.prisma': `// use prisma-8
 
 model Order {
-  id         Int      @id
-  customer   Customer @relation(fields: [customerId], references: [id])
+  id         Int             @id
+  customer   Customer        @relation(fields: [customerId], references: [id])
   customerId Int
+  product    catalog.Product @relation(fields: [productId], references: [id])
+  productId  Int
 }
 
 namespace catalog {

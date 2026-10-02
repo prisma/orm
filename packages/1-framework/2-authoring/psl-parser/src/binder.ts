@@ -299,6 +299,7 @@ function bind(options: BindingInputs): BinderResult {
     const outcome = resolveTypeReference(name, baseScope);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
+    bindQualifier(name, baseScope, references);
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -335,13 +336,13 @@ function bind(options: BindingInputs): BinderResult {
       if (fieldName !== undefined) references.set(fieldName, { kind: 'field', symbol: field });
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(
-        field.node.typeAnnotation()?.name(),
-        stack.current(),
-        (written) => describeUnresolvedType?.({ field, owner: entity, written }),
+      const name = field.node.typeAnnotation()?.name();
+      const outcome = resolveTypeReference(name, stack.current(), (written) =>
+        describeUnresolvedType?.({ field, owner: entity, written }),
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
+      if (name !== undefined) bindQualifier(name, stack.current(), references);
       if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
@@ -757,6 +758,20 @@ interface TypeReferenceOutcome {
   readonly resolution: Resolution;
   readonly message?: string;
   readonly name?: string;
+}
+
+function bindQualifier(
+  name: QualifiedNameAst,
+  scope: Scope,
+  references: WeakMap<SyntaxNode, Resolution>,
+): void {
+  const qualifier = name.namespace();
+  const id = qualifier?.name();
+  if (qualifier === undefined || id === undefined || name.space() !== undefined) return;
+  const resolution = scope.lookup(id);
+  if (resolution !== undefined && isNamespaceLike(resolution)) {
+    references.set(qualifier.syntax, resolution);
+  }
 }
 
 function resolveTypeReference(

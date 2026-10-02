@@ -290,6 +290,55 @@ policy Probe { target = Invoice\n value = Int }`);
     ]);
   });
 
+  it('classifies a qualifier from its binder resolution', () => {
+    const source = `namespace pgvector { model Vector { id Int } }
+model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.Vector\n remote other:pgvector.Vector }`;
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const typeConstructor = {
+      kind: 'typeConstructor',
+      output: { codecId: 'fixture/scalar', nativeType: 'fixture' },
+    } as const;
+    const binder = testBinder({
+      sources,
+      symbolTable,
+      authoringContributions: {
+        field: {},
+        type: {
+          pgvector: { Vector: typeConstructor },
+          postgis: { Geometry: typeConstructor },
+        },
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: { model: {}, field: {} },
+        dataTypes: {},
+      },
+    });
+    const details = collectDetails({
+      binder,
+      document,
+      sourceFile: sources.sourceFileFor(document.syntax),
+      symbolTable,
+      scalarTypes,
+    });
+
+    expect(
+      details
+        .filter(({ line }) => line > 0)
+        .filter(({ text }) => ['pgvector', 'Vector', 'postgis', 'Geometry', 'Doc'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Doc', tokenType: 'class', modifiers: ['declaration'] },
+      { text: 'pgvector', tokenType: 'namespace', modifiers: [] },
+      { text: 'Vector', tokenType: 'class', modifiers: [] },
+      { text: 'postgis', tokenType: 'namespace', modifiers: [] },
+      { text: 'Geometry', tokenType: 'type', modifiers: ['defaultLibrary'] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
   it('keeps the semantic token legend stable', () => {
     expect(semanticTokenTypes).toEqual([
       'keyword',

@@ -31,6 +31,7 @@ import {
   type SymbolTable,
 } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
+import { QualifiedNameAst } from '../src/syntax/ast/qualified-name';
 import type { SyntaxNode } from '../src/syntax/red';
 import { binderContext } from './support';
 
@@ -649,6 +650,95 @@ describe('createBinder — qualified references', () => {
       name: 'app.Missing',
     });
     expect(diagnostics.map(({ code }) => code)).toEqual(['PSL_UNRESOLVED_REFERENCE']);
+  });
+});
+
+describe('createBinder — qualifier resolution', () => {
+  function qualifierNode(typeNode: SyntaxNode): SyntaxNode {
+    const qualifier = QualifiedNameAst.cast(typeNode)?.namespace();
+    if (qualifier === undefined) throw new Error('no qualifier');
+    return qualifier.syntax;
+  }
+
+  it('resolves the qualifier to a namespace declared in two blocks across documents', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'namespace auth {\n  model User {\n    id Int\n  }\n}',
+      'namespace auth {\n  model Session {\n    id Int\n  }\n}\nmodel Post {\n  author auth.User\n}',
+    );
+    const auth = symbolTable.topLevel.namespaces['auth']!;
+    const typeNode = typeNodeOf(symbolTable, 'Post', 'author');
+
+    expect(diagnostics).toEqual([]);
+    expect(auth.declarations).toHaveLength(2);
+    expect(binder.symbolForNode(qualifierNode(typeNode))).toEqual({
+      kind: 'namespace',
+      symbol: auth,
+    });
+    expect(binder.symbolForNode(typeNode)).toEqual({
+      kind: 'model',
+      symbol: auth.models['User'],
+      namespace: auth,
+    });
+  });
+
+  it('resolves the qualifier to a contributed namespace', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'model Doc {\n  embedding pgvector.Vector\n}',
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(
+      binder.symbolForNode(qualifierNode(typeNodeOf(symbolTable, 'Doc', 'embedding'))),
+    ).toMatchObject({ kind: 'contributedNamespace', symbol: { kind: 'contributedNamespace' } });
+  });
+
+  it('resolves the qualifier of a named-type base', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'types {\n  Embedding = pgvector.Vector(3)\n}',
+    );
+    const base = symbolTable.topLevel.namedTypes['Embedding']!.node.typeAnnotation()!.name()!;
+
+    expect(diagnostics).toEqual([]);
+    expect(binder.symbolForNode(qualifierNode(base.syntax))).toMatchObject({
+      kind: 'contributedNamespace',
+    });
+  });
+
+  it('resolves the qualifier when the member is missing, without a new diagnostic', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'namespace app {\n  model Item {\n    id Int\n  }\n}\nmodel Cart {\n  item app.Missing\n}',
+    );
+    const typeNode = typeNodeOf(symbolTable, 'Cart', 'item');
+
+    expect(binder.symbolForNode(qualifierNode(typeNode))).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.topLevel.namespaces['app'],
+    });
+    expect(binder.symbolForNode(typeNode)).toEqual({ kind: 'unresolved', name: 'app.Missing' });
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find type "app.Missing"']);
+  });
+
+  it('records nothing on a qualifier that is not a namespace or does not resolve', () => {
+    const { symbolTable, binder } = bind(
+      'model app {\n  id Int\n}\nmodel Cart {\n  slot app.Thing\n  other nowhere.Thing\n}',
+    );
+
+    expect(binder.symbolForNode(qualifierNode(typeNodeOf(symbolTable, 'Cart', 'slot')))).toBe(
+      undefined,
+    );
+    expect(binder.symbolForNode(qualifierNode(typeNodeOf(symbolTable, 'Cart', 'other')))).toBe(
+      undefined,
+    );
+  });
+
+  it('records nothing on the namespace segment of a cross-space reference', () => {
+    const { symbolTable, binder } = bind(
+      'namespace auth {\n  model User {\n    id Int\n  }\n}\nmodel Cart {\n  user supabase:auth.User\n}',
+    );
+
+    expect(binder.symbolForNode(qualifierNode(typeNodeOf(symbolTable, 'Cart', 'user')))).toBe(
+      undefined,
+    );
   });
 });
 
