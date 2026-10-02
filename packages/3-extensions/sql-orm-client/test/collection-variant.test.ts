@@ -150,6 +150,13 @@ describe('Collection.variant()', () => {
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: 'variant("admin") cannot narrow model "User": it declares no discriminator values',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'admin',
+          declaredValues: [],
+        },
       }),
     );
   });
@@ -162,6 +169,13 @@ describe('Collection.variant()', () => {
         code: 'ORM.ARGUMENT_INVALID',
         message:
           'variant("Admin") cannot narrow model "User": the declared discriminator values are "admin", "regular"',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'Admin',
+          declaredValues: ['admin', 'regular'],
+        },
       }),
     );
   });

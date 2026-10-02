@@ -505,7 +505,15 @@ export class CollectionBase<
         declaredValues.length === 0
           ? `variant("${value}") cannot narrow model "${this.modelName}": it declares no discriminator values`
           : `variant("${value}") cannot narrow model "${this.modelName}": the declared discriminator values are ${declaredValues.map((declared) => `"${declared}"`).join(', ')}`,
-        { meta: { modelName: this.modelName, value, declaredValues } },
+        {
+          meta: {
+            method: 'variant',
+            argument: 'value',
+            model: this.modelName,
+            value,
+            declaredValues,
+          },
+        },
       );
     }
 
