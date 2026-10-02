@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
-        - '\.variant\(\s*[''"`]'
+        - '\.variant\('
 ---
 
 ## `variant-takes-discriminator-value`
@@ -23,7 +23,7 @@ db.orm.public.Task.variant('bug');
 db.orm.events.variant('view-product');
 ```
 
-Custom collection methods that call `this.variant('<ModelName>')`, and helpers or closures that call `.variant()`, change the same way. Update code comments and READMEs that show `.variant('<ModelName>')` too.
+Custom collection methods that call `this.variant('<ModelName>')`, and helpers or closures that call `.variant()`, change the same way. When the argument is a variable or a forwarded parameter, follow it back to where the model name is written and replace it there, including in type annotations that list variant model names. Update code comments and READMEs that show `.variant('<ModelName>')` too.
 
 The type checker catches most old call sites, because the parameter only accepts the base model's declared values. It does not catch a call whose model-name argument happens to equal a declared value, for example a variant model declared with `@@base(Base, "Admin")`. Such a call keeps compiling and now selects the variant declaring that value, so check every call site against the contract rather than relying on type errors.
 
