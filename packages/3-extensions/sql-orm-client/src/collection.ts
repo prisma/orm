@@ -119,6 +119,7 @@ import {
   type CollectionState,
   type CollectionTypeState,
   type DefaultCollectionTypeState,
+  type DefaultModelInputRow,
   type DefaultModelRow,
   emptyGroupPagingState,
   emptyState,
@@ -2003,7 +2004,7 @@ class CollectionImpl<
   async upsert(
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
-      update: Partial<DefaultModelRow<TContract, ModelName>>;
+      update: Partial<DefaultModelInputRow<TContract, ModelName>>;
       conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2190,7 +2191,7 @@ class CollectionImpl<
       const rows = await narrowed.#updateAllWithAnnotations(
         blindCast<
           State['hasWhere'] extends true
-            ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
+            ? Partial<DefaultModelInputRow<TContract, ModelName, State['nsId']>>
             : never,
           'absence of nested callbacks selects the scalar update input'
         >(data),
@@ -2227,7 +2228,7 @@ class CollectionImpl<
    */
   updateAll(
     data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
+      ? Partial<DefaultModelInputRow<TContract, ModelName, State['nsId']>>
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<Row> {
@@ -2239,7 +2240,7 @@ class CollectionImpl<
 
   #updateAllWithAnnotations(
     data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
+      ? Partial<DefaultModelInputRow<TContract, ModelName, State['nsId']>>
       : never,
     annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
   ): AsyncIterableResult<Row> {
@@ -2302,7 +2303,7 @@ class CollectionImpl<
    */
   async updateAndCount(
     data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
+      ? Partial<DefaultModelInputRow<TContract, ModelName, State['nsId']>>
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
