@@ -26,7 +26,6 @@ import {
 } from '@internal/psl-parser/syntax';
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
-import { readDocComment } from './doc-comment';
 import { renderSignatureLabel, resolveSignatureParameters } from './signature-help';
 
 export interface ProvidePslHoverInput extends PslCursorInput {
@@ -141,7 +140,7 @@ function renderHoverResult(result: HoverResult): string {
 
 function renderEntityContent(entity: HoverEntitySymbol): string {
   const fence = ['```prisma', renderDeclarationLine(entity), '```'].join('\n');
-  return withDocumentation(fence, readDocComment(entity.node.syntax));
+  return withDocumentation(fence, entity.node.docComment());
 }
 
 function renderAttributeContent(symbol: AttributeSymbol): string {
