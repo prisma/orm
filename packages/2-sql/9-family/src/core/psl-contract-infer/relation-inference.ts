@@ -22,9 +22,15 @@ export type InferredRelations = {
   readonly relationsByTable: ReadonlyMap<string, readonly RelationField[]>;
 };
 
+/**
+ * `backsForeignKey` says whether an index of a given type serves a foreign key's lookups, as the
+ * target's index type registrations declare it; an index that does not leaves the foreign key
+ * without a backing index.
+ */
 export function inferRelations(
   tables: Record<string, SqlTableIR>,
   modelNameMap: ReadonlyMap<string, string>,
+  backsForeignKey: (indexType: string) => boolean,
 ): InferredRelations {
   const relationsByTable = new Map<string, RelationField[]>();
 
@@ -79,7 +85,7 @@ export function inferRelations(
         fk,
         childOptional,
         relationName,
-        table,
+        { table, backsForeignKey },
       );
 
       addRelationField(relationsByTable, childTableName, childRelField);
@@ -163,15 +169,14 @@ function deriveRelationName(
  * `tables` (e.g. a cross-space reference into another contract) can reuse the
  * same normalization instead of duplicating it.
  *
- * `hostTable` is the table the FK is declared on (i.e. `table`, not the
+ * `host.table` is the table the FK is declared on (i.e. `table`, not the
  * referenced parent) — its own indexes/uniques/primary key are what a
- * backing index for this FK would be. When none of them exactly match the
- * FK's source columns (in order), `index: false` is stamped so the emitted
- * `@relation` opts out of the framework's default derived backing-index
- * expectation, matching what `db verify` will find live. Passing the table
- * is optional so existing single-FK callers (e.g. cross-space resolution
- * before a host table reference is threaded through) can omit it and keep
- * the framework default.
+ * backing index for this FK would be. When none of them backs the FK's
+ * source columns (in order; see `backingIndexColumnKeys` for which indexes
+ * count), `index: false` is stamped so the emitted `@relation` opts out of
+ * the framework's default derived backing-index expectation, matching what
+ * `db verify` will find live. Passing the host is optional so a caller
+ * without the host table keeps the framework default.
  */
 export function buildChildRelationField(
   fieldName: string,
@@ -179,23 +184,25 @@ export function buildChildRelationField(
   fk: SqlForeignKeyIR,
   optional: boolean,
   relationName?: string,
-  hostTable?: SqlTableIR,
+  host?: {
+    readonly table: SqlTableIR;
+    readonly backsForeignKey: (indexType: string) => boolean;
+  },
 ): RelationField {
   const onDelete = fk.onDelete && fk.onDelete !== DEFAULT_ON_DELETE ? fk.onDelete : undefined;
   const onUpdate = fk.onUpdate && fk.onUpdate !== DEFAULT_ON_UPDATE ? fk.onUpdate : undefined;
   const index =
-    hostTable &&
+    host &&
     !isBackedByColumnKeys(
       fk.columns,
-      // Only indexes the inferrer actually emits can back the FK in the
-      // emitted contract: partial indexes (and expression indexes, which
-      // carry no column tuple) are not emitted yet, so
-      // they must not suppress the explicit `index: false`.
-      backingIndexColumnKeys({
-        indexes: hostTable.indexes.filter((i) => i.where === undefined),
-        uniques: hostTable.uniques,
-        primaryKey: hostTable.primaryKey,
-      }),
+      backingIndexColumnKeys(
+        {
+          indexes: host.table.indexes,
+          uniques: host.table.uniques,
+          primaryKey: host.table.primaryKey,
+        },
+        host.backsForeignKey,
+      ),
     )
       ? false
       : undefined;

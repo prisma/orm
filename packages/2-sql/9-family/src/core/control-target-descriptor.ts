@@ -11,6 +11,7 @@ import type {
   SchemaVerifier,
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import type { IndexTypeRegistry } from '@internal/sql-contract/index-types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlOperationDescriptors } from '@internal/sql-operations';
 import type { SqlSchemaIR, SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
@@ -41,6 +42,11 @@ export interface SqlPslBuildContext {
   readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'dataTypes'>;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypeLookup: DataTypeLookup;
+  /**
+   * The index types the target and the extension packs register, which say whether an index of a
+   * type can back a foreign key. `contract infer` reads the same answer `contract emit` does.
+   */
+  readonly indexTypes: Pick<IndexTypeRegistry, 'backsForeignKey'>;
 }
 
 export interface SqlControlTargetDescriptor<

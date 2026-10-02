@@ -2,8 +2,8 @@ import { defineIndexTypes } from '@internal/sql-contract/index-types';
 import { type } from 'arktype';
 
 const testIndexTypes = defineIndexTypes()
-  .add('bm25', { options: type('object') })
-  .add('hash', { options: type('object') });
+  .add('bm25', { options: type('object'), backsForeignKey: false })
+  .add('hash', { options: type('object'), backsForeignKey: true });
 
 export const testIndexPack = {
   kind: 'extension',

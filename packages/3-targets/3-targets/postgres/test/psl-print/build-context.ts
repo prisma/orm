@@ -4,10 +4,12 @@ import {
   type CodecDescriptorTemplate,
   createDataTypeLookup,
 } from '@internal/framework-components/codec';
+import { indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/codec-descriptor';
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
+import { postgresIndexTypes } from '../../src/core/index-types';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
 import {
   postgresNativeAuthoringTypes,
@@ -61,5 +63,6 @@ export function testBuildContext(
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),
     },
     dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    indexTypes: indexTypeRegistryOf([{ id: 'postgres', indexTypes: postgresIndexTypes }]),
   };
 }

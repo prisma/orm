@@ -107,6 +107,13 @@ describe('postgresIndexTypes', () => {
       expect(result instanceof type.errors).toBe(false);
     }
   });
+
+  it('lets btree and hash back a foreign key, and nothing else', () => {
+    expect(postgresIndexTypes.entries.filter((e) => e.backsForeignKey).map((e) => e.type)).toEqual([
+      'btree',
+      'hash',
+    ]);
+  });
 });
 
 describe('postgresTargetDescriptorMeta', () => {
