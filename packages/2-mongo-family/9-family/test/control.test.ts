@@ -408,6 +408,39 @@ describe('toSchemaView', () => {
     ]);
   });
 
+  it('joins the types of a property that admits several BSON types with |', () => {
+    const instance = createInstance();
+    const ir = new MongoSchemaIR([
+      new MongoSchemaCollection({
+        name: 'posts',
+        validator: new MongoSchemaValidator({
+          jsonSchema: {
+            bsonType: 'object',
+            required: ['meta'],
+            properties: {
+              meta: {
+                bsonType: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+              },
+              subtitle: { bsonType: ['null', 'string'] },
+            },
+          },
+          validationLevel: 'strict',
+          validationAction: 'error',
+        }),
+      }),
+    ]);
+
+    const view = instance.toSchemaView(ir);
+
+    const validatorNode = view.root.children![0]!.children!.find(
+      (n) => n.id === 'validator-posts',
+    )!;
+    expect(validatorNode.children!.map((n) => n.label)).toEqual([
+      'meta: object | array | string | double | int | long | bool | null (required)',
+      'subtitle: null | string',
+    ]);
+  });
+
   it('maps collection options to a child node', () => {
     const instance = createInstance();
     const ir = new MongoSchemaIR([
