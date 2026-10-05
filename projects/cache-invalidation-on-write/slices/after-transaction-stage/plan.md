@@ -1,6 +1,6 @@
 # Slice 1 — `afterTransaction` stage: dispatch plan
 
-Spec: [`../../spec.md`](../../spec.md) § Slice 1. Design: [`../../adr-draft-after-transaction-stage.md`](../../adr-draft-after-transaction-stage.md).
+Spec: [`../../spec.md`](../../spec.md) § Slice 1. Design: [ADR 260](../../../../docs/architecture%20docs/adrs/ADR%20260%20-%20Every%20query%20has%20an%20afterTransaction%20stage%20that%20fires%20when%20its%20enclosing%20transaction%20ends.md).
 
 Branch `feat/after-transaction-stage`, based on `docs/cache-middleware-design` (PR #30600). One PR to `main`.
 

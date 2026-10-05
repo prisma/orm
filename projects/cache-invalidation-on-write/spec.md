@@ -35,7 +35,7 @@ This is the default path, not an edge case. These ORM mutations run in a transac
 
 ## Slice 1: the `afterTransaction` stage (TML-3399)
 
-The decision itself, with its reasoning, prior art and the alternatives that were rejected, is written up as an ADR draft in [`adr-draft-after-transaction-stage.md`](adr-draft-after-transaction-stage.md). This section holds the implementation detail the slice needs.
+The decision itself, with its reasoning, prior art and the alternatives that were rejected, is written up in [ADR 260](../../docs/architecture%20docs/adrs/ADR%20260%20-%20Every%20query%20has%20an%20afterTransaction%20stage%20that%20fires%20when%20its%20enclosing%20transaction%20ends.md). This section holds the implementation detail the slice needs.
 
 ### Surface
 
@@ -78,7 +78,7 @@ Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](..
 - `commit()` and `rollback()` resolve only after the hooks have run. A write that has returned has already had its stage run.
 - The stage fires after `commit()` or `rollback()` resolves and before the connection is released. The hook must not use the connection.
 
-The transaction remembers a plan when the plan's first hook runs on it. A query whose row stream the caller abandons inside a transaction therefore still gets its `afterTransaction` stage when the transaction ends, with its plan and the transaction's outcome. Outside a transaction such a query fires no after-hook, and therefore no stage.
+The runtime remembers a plan on the transaction once the query's encoded plan exists and before the query runs. A query whose row stream the caller abandons inside a transaction therefore still gets its `afterTransaction` stage when the transaction ends, with its plan and the transaction's outcome. Outside a transaction such a query fires no after-hook, and therefore no stage. A query that fails before its encoded plan exists, for example while encoding its parameters, has no plan to remember and gets no stage.
 
 A transaction that never ends, such as an abandoned manual `connection().transaction()`, never fires the stage for its plans.
 
@@ -116,7 +116,7 @@ Hooks for transactions are a later, separate decision. When one is needed, it go
 
 ### Docs
 
-- An ADR of its own: the stage, its outcomes (including `unknown` for every rejected commit), where it fires inside and outside a transaction, the exactly-once rule, that `commit()` and `rollback()` wait for the hooks, and why transaction hooks are left for later.
+- [ADR 260](../../docs/architecture%20docs/adrs/ADR%20260%20-%20Every%20query%20has%20an%20afterTransaction%20stage%20that%20fires%20when%20its%20enclosing%20transaction%20ends.md): the stage, its outcomes (including `unknown` for every rejected commit), where it fires inside and outside a transaction, the exactly-once rule, that `commit()` and `rollback()` wait for the hooks, and why transaction hooks are left for later.
 - The runtime subsystem doc ([`4. Runtime & Middleware Framework.md`](../../docs/architecture%20docs/subsystems/4.%20Runtime%20&%20Middleware%20Framework.md)) adds the stage to the query lifecycle.
 - The runtime skill reference ([`runtime.md`](../../skills/prisma-8/references/runtime.md)) lists the hook.
 

@@ -172,7 +172,7 @@ How connections read rows, and the `cursor` option on the serverless client (wit
 
 ## Workflow — Custom middleware (query log, slow-query warning)
 
-The concept: a middleware is a plain object with `name`, `familyId: 'sql'`, and any of the hooks `beforeQuery`, `interceptQuery`, `afterQuery`. There is no separate telemetry package — observe queries with `afterQuery`, which fires once per execution after the rows are consumed, with `result.latencyMs`, `result.rowCount`, and `result.source` (`'driver'` or `'middleware'` for a cache hit). The `SqlMiddleware` type comes from `@prisma/orm-postgres/family-runtime`. `examples/prisma-8-demo/src/prisma/slow-query-warning.ts` is the canonical example:
+The concept: a middleware is a plain object with `name`, `familyId: 'sql'`, and any of the hooks `beforeQuery`, `interceptQuery`, `afterQuery`, `afterTransaction`. `afterTransaction(plan, result, ctx)` fires once per query when its effects are final: right after `afterQuery`/`afterExecute` outside a transaction, or when the enclosing transaction ends, with `result.outcome` `'committed'`, `'rolled-back'` or `'unknown'` (a commit that failed and may have landed). There is no separate telemetry package — observe queries with `afterQuery`, which fires once per execution after the rows are consumed, with `result.latencyMs`, `result.rowCount`, and `result.source` (`'driver'` or `'middleware'` for a cache hit). The `SqlMiddleware` type comes from `@prisma/orm-postgres/family-runtime`. `examples/prisma-8-demo/src/prisma/slow-query-warning.ts` is the canonical example:
 
 ```typescript
 import type { SqlMiddleware } from '@prisma/orm-postgres/family-runtime';
