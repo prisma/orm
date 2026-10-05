@@ -19,11 +19,7 @@ export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec | undefine
 /**
  * Runtime view of a domain enum, built at the client from the contract's `ContractEnum` JSON and read through the enum's codec.
  *
- * This deliberately mirrors the accessor shape of the authoring-time
- * `EnumTypeHandle` (in `contract-ts`) rather than reusing it: that handle carries
- * the literal value generics and lives in the authoring layer, which the
- * foundation layer cannot depend on. The two are the same surface seen from the
- * two planes, authoring and runtime, and hold the same member values.
+ * Its shape mirrors the authoring-time `EnumTypeHandle` (in `contract-ts`), which carries the literal value generics and lives in the authoring layer the foundation layer cannot depend on. The two compare values differently: the handle compares by identity, while this accessor finds a value equal to a member, so a date equal to a date member is found here and not on the handle.
  */
 export interface EnumAccessor {
   readonly values: readonly unknown[];
@@ -35,42 +31,74 @@ export interface EnumAccessor {
   ordinalOf(v: unknown): number;
 }
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function kindOf(value: object): string {
+  return Object.prototype.toString.call(value);
+}
+
 /**
- * Builds the accessor for one enum. Each member holds the value `codec` reads from its stored form, which is the value a query returns. A value is a member when it has the member's JavaScript type and `codec` stores it as the member is stored, so two equal dates match; a value `codec` refuses is no member. Without a codec, members are their stored forms.
+ * Builds the accessor for one enum. Each member holds the value `codec` reads from its stored form, which is the value a query returns; a member that is an object is read again on every access, so changing a value read from the accessor leaves the enum unchanged. A value is a member when it equals one: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form `codec` stores it in, so two equal dates match. Without a codec, members are their stored forms.
  */
 export function createEnumAccessor(
   contractEnum: ContractEnum,
   codec?: EnumMemberCodec,
 ): EnumAccessor {
-  const values = Object.freeze(
-    contractEnum.members.map((m) => (codec === undefined ? m.value : codec.decodeJson(m.value))),
-  );
-  const names = Object.freeze(contractEnum.members.map((m) => m.name));
-  const members: Readonly<Record<string, unknown>> = Object.freeze(
-    Object.fromEntries(names.map((name, i) => [name, values[i]])),
-  );
-  const storedForm = (value: unknown): unknown =>
-    codec === undefined ? value : codec.encodeJson(value);
+  const read = (stored: JsonValue): unknown => {
+    const copy = structuredClone(stored);
+    return codec === undefined ? copy : codec.decodeJson(copy);
+  };
+  const storedFormKey = (value: object): string =>
+    canonicalStringify(codec === undefined ? value : codec.encodeJson(value));
 
+  const entries = contractEnum.members.map((member) => ({
+    name: member.name,
+    stored: member.value,
+    value: read(member.value),
+  }));
+  const memberValue = (entry: (typeof entries)[number]): unknown =>
+    isObject(entry.value) ? read(entry.stored) : entry.value;
+
+  const names = Object.freeze(entries.map((entry) => entry.name));
   const nameSet = Object.freeze(new Set(names));
-  const ordinalByStoredForm = new Map(
-    values.map((value, i) => [canonicalStringify(storedForm(value)), i]),
+  const members: Readonly<Record<string, unknown>> = Object.freeze(
+    Object.defineProperties(
+      {},
+      Object.fromEntries(
+        entries.map((entry) => [entry.name, { enumerable: true, get: () => memberValue(entry) }]),
+      ),
+    ),
   );
+  const holdsObjects = entries.some((entry) => isObject(entry.value));
+  const primitiveValues = Object.freeze(entries.map((entry) => entry.value));
+
+  const primitiveOrdinals = new Map<unknown, number>();
+  const objectOrdinals = new Map<string, number>();
+  entries.forEach((entry, ordinal) => {
+    if (isObject(entry.value)) objectOrdinals.set(storedFormKey(entry.value), ordinal);
+    else primitiveOrdinals.set(entry.value, ordinal);
+  });
 
   const ordinalOf = (v: unknown): number => {
+    if (!isObject(v)) return primitiveOrdinals.get(v) ?? -1;
     let key: string;
     try {
-      key = canonicalStringify(storedForm(v));
+      key = storedFormKey(v);
     } catch (error) {
       if (isInternalError(error)) throw error;
       return -1;
     }
-    const ordinal = ordinalByStoredForm.get(key);
-    return ordinal !== undefined && typeof values[ordinal] === typeof v ? ordinal : -1;
+    const ordinal = objectOrdinals.get(key) ?? -1;
+    const member = entries[ordinal]?.value;
+    return isObject(member) && kindOf(member) === kindOf(v) ? ordinal : -1;
   };
 
   return {
-    values,
+    get values() {
+      return holdsObjects ? Object.freeze(entries.map(memberValue)) : primitiveValues;
+    },
     names,
     members,
     has: (v: unknown) => ordinalOf(v) !== -1,

@@ -121,15 +121,16 @@ describe('createEnumAccessor() with the enum codec', () => {
   });
 
   it('passes on an internal error the codec raises', () => {
+    const broken = new Date(0);
     const failing: EnumMemberCodec = {
-      decodeJson: (json) => json,
+      decodeJson: (json) => new Date(json as string),
       encodeJson: (value) => {
-        if (value === 'broken') throw new InternalError('codec bug');
-        return value as JsonValue;
+        if (value === broken) throw new InternalError('codec bug');
+        return (value as Date).toISOString();
       },
     };
-    const accessor = createEnumAccessor(levelEnum, failing);
-    expect(() => accessor.has('broken')).toThrow(InternalError);
+    const accessor = createEnumAccessor(launchEnum, failing);
+    expect(() => accessor.has(broken)).toThrow(InternalError);
   });
 
   it('refuses a member the codec does not read', () => {
