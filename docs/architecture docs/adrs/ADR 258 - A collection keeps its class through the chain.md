@@ -174,11 +174,11 @@ The requirement is about the receiver, so the receiver is where it is checked: n
 
 **Methods that narrow the row.** A signature that mentions the polymorphic `this` is instantiated again for every receiver type, and `select` and `variant` have large signatures. `select` infers the state and the row from its `this` parameter, which is instantiated once per receiver type, so `select` after `include` keeps the included relations. `variant` infers the state the same way. Each also carries an overload without the `this` parameter, for a receiver whose state is not one type, such as a union of differently flagged collections. That overload returns the root state, which refuses writes and `cursor`, so it is sound. It also uses the model's own row, so on such a receiver the included relations are missing from the type after `select`, although the rows still have them.
 
-**Cost.** Measured as type instantiations, TypeScript 5.9.3, on `examples/prisma-8-demo`, an application with four custom collection classes, and on the client package:
+**Cost.** Measured as type instantiations, TypeScript 5.9.3, with `pnpm typecheck --extendedDiagnostics` after a fresh build, on `examples/prisma-8-demo`, an application with four custom collection classes, and on the client package. Both are measured on the files that existed before this decision; the test files it adds bring the application to 720,992 and the client package to 1,392,764.
 
 | | Whole application | Per use |
 | --- | --- | --- |
-| The properties, `this`-typed methods and rows read through `this` | −5.9% on the application (744,614 to 700,735), −11% on the client package (1,512,211 to 1,348,389) | a ten-call chain, about 60 to 160; the same on a custom class |
+| The properties, `this`-typed methods and rows read through `this` | −6.8% on the application (744,614 to 693,649), −12.5% on the client package (1,512,211 to 1,322,999) | a ten-call chain, about 60 to 160; the same on a custom class |
 | A conditional between two collections | none | 10,000 to 14,000 once per pair of collection types, then under 10 |
 
 The cost stays low because `include` adds one small property to its receiver instead of building a new collection type from a deep simplification of the whole row, and because no chaining signature is rebuilt per receiver type.
