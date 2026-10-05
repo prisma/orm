@@ -207,16 +207,20 @@ export class Project {
     const data = await this.#resolveMember(uri);
     const document = data?.artifacts.document(uri);
     if (data === undefined || document === undefined) return null;
-    return provideDefinition(
-      {
-        document: document.parse().document,
-        sourceFile: document.sourceFile,
-        sources: data.artifacts.sources,
-        binder: data.artifacts.binder(),
-      },
-      position,
-      linkSupport,
-    );
+    try {
+      return provideDefinition(
+        {
+          document: document.parse().document,
+          sourceFile: document.sourceFile,
+          sources: data.artifacts.sources,
+          binder: data.artifacts.binder(),
+        },
+        position,
+        linkSupport,
+      );
+    } catch {
+      return null;
+    }
   }
 
   async foldingRanges(uri: string): Promise<FoldingRange[]> {
