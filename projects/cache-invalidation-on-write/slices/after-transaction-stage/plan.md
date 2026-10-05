@@ -12,13 +12,13 @@ Builds on: nothing. Hands to: D2, D3 (the runner and the type).
 
 ## D2 — SQL runtime fires the stage
 
-Outcome: outside a transaction the SQL runtime fires the stage with `committed` right after the after-hook on both the query and the execute paths, including the failure path; `wrapTransaction` remembers each plan with its context from its first hook and, when `commit()` or `rollback()` resolves or rejects, fires once per plan in execution order with `committed` / `rolled-back` / `unknown` per the spec table, before `commit()`/`rollback()` resolve, with nothing more after a rollback that follows a rejected commit. Tests: the lifecycle cases listed in the spec, plus a Postgres integration test that an ORM single-row `update()` fires `committed` once.
+Outcome: outside a transaction the SQL runtime fires the stage when the query ends, `committed` right after the after-hook when it completed and `unknown` when it did not; `wrapTransaction` remembers each plan with its context once the query's encoded plan exists and before it runs and, when `commit()` or `rollback()` resolves or rejects, fires once per plan in execution order with `committed` / `rolled-back` / `unknown` per the spec table, before `commit()`/`rollback()` resolve, with nothing more after a rollback that follows a rejected commit. Tests: the lifecycle cases listed in the spec, plus a Postgres integration test that an ORM single-row `update()` fires `committed` once.
 
 Builds on: D1. Hands to: D3 (nothing structural; D3 mirrors the outside-transaction firing).
 
 ## D3 — Mongo runtime, docs, ADR
 
-Outcome: the Mongo runtime fires `committed` right after its after-hook on both paths; the ADR draft moves to `docs/architecture docs/adrs/ADR 260 - …` with Status Accepted and an ADR-INDEX row; the runtime subsystem doc and the runtime skill reference describe the stage; `spec.md`/`plan.md` in the project folder point at the ADR instead of the draft.
+Outcome: the Mongo runtime fires the stage as a query outside a transaction on both paths; the ADR draft moves to `docs/architecture docs/adrs/ADR 260 - …` with Status Accepted and an ADR-INDEX row; the runtime subsystem doc and the runtime skill reference describe the stage; `spec.md`/`plan.md` in the project folder point at the ADR instead of the draft.
 
 Builds on: D1, D2.
 

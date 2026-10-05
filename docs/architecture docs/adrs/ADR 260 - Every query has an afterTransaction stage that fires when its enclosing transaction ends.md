@@ -37,7 +37,7 @@ sequenceDiagram
     R-->>App: transaction resolves
 ```
 
-The middleware lifecycle gains one more stage per query. Today a middleware sees a query from `beforeQuery` or `beforeExecute` through `afterQuery` or `afterExecute`, and the last of those fires when the statement completes. Inside a transaction that is before the commit, so a middleware that must act only once the query's effects are final has nowhere to do it. `afterTransaction(plan, result, ctx)` is that place. It fires once per query, with the same plan object `afterQuery` or `afterExecute` received and the same context as the query's other hooks, and `result.outcome` says how the query's transaction ended: `committed`, `rolled-back`, or `unknown`.
+The middleware lifecycle gains one more stage per query. Today a middleware sees a query from `beforeQuery` or `beforeExecute` through `afterQuery` or `afterExecute`, and the last of those fires when the statement completes. Inside a transaction that is before the commit, so a middleware that must act only once the query's effects are final has nowhere to do it. `afterTransaction(plan, result, ctx)` is that place. It is the query's last hook, and it fires exactly once for every query whose encoded plan exists. It receives the same plan object `afterQuery` or `afterExecute` received and the same context as the query's other hooks, and `result.outcome` says how the query's transaction ended: `committed`, `rolled-back`, or `unknown`.
 
 The stage is part of the query's lifecycle, not an event about transactions. A middleware author reasons about one query from start to final and never has to match a transaction event to the queries that ran in it. There is no transaction identity on the context, no hook that speaks about a transaction without a query, and no way to attach data to a transaction.
 
@@ -51,27 +51,36 @@ Giving the middleware a stage per query, rather than a hook per transaction, kee
 
 ## How it works
 
+### Which queries get the stage
+
+Every query whose encoded plan exists gets exactly one `afterTransaction`, and it is the query's last hook. That holds inside and outside a transaction, whether the query completes, fails, or the caller stops reading its rows. A query that fails before its encoded plan exists, for example in a before-hook or while encoding its parameters, has no plan to deliver and gets no stage.
+
 ### Outside a transaction
 
-A query in `'runtime'` or `'connection'` scope commits on its own, as a statement. The runtime fires `afterTransaction` with `committed` immediately after `afterQuery` or `afterExecute`. It fires whether or not the query completed, because a write can apply and still report a failure. Every Mongo query is outside a transaction, so the Mongo runtime fires the stage the same way for every query, and the lifecycle is the same on both families.
+A query in `'runtime'` or `'connection'` scope commits on its own, as a statement. The runtime fires `afterTransaction` when the query ends:
+
+- `committed` when the query completed, right after `afterQuery` or `afterExecute`.
+- `unknown` when it did not complete: the driver or a hook failed, the signal aborted between rows, a row failed to decode, or the caller stopped reading the rows. A statement that fails on the response path may already have applied, which is the same reason a rejected commit is `unknown` below.
+
+The framework's base runtime, `RuntimeCore`, delivers the stage this way from its own `query` and `execute`, with the helpers `queryWithAfterTransaction` and `executeWithAfterTransaction`. The SQL and Mongo runtimes override those methods and call the same helpers. Every Mongo query is outside a transaction, so the lifecycle is the same on both families.
 
 ### Inside a transaction
 
-The SQL runtime wraps every transaction, whether it came from `db.transaction(fn)`, from a manual `connection().transaction()`, or from the ORM's own mutations, and every query run on the transaction passes through that wrapper with `scope: 'transaction'`. The runtime remembers each plan, with its context, once the query's encoded plan exists and before the query runs. When the transaction ends it fires `afterTransaction` once for each remembered plan, in execution order:
+Every transaction the SQL runtime hands out goes through one wrapper, `wrapTransaction`: transactions from `db.transaction(fn)`, from a manual `connection().transaction()`, from the ORM's own mutations, and from a Supabase role session. Every query run on the wrapper has `scope: 'transaction'`. While the transaction is open, the runtime remembers each query's plan, with its context, once its encoded plan exists and before it runs. When the transaction ends it fires `afterTransaction` once for each remembered plan, in execution order:
 
 - `committed` when the driver's `commit()` resolves.
-- `rolled-back` when `rollback()` resolves and no commit was attempted.
-- `unknown` when `commit()` rejects, whether or not a rollback is then attempted and succeeds. A `COMMIT` that errors may already have landed on the server, and a cleanup `ROLLBACK` that succeeds is a no-op in that case and proves nothing. A consumer that must not miss a committed write treats `unknown` like `committed`.
+- `rolled-back` when `rollback()` settles, resolved or rejected, and no commit was attempted. No `COMMIT` was sent, so none of the transaction's writes can have landed.
+- `unknown` when `commit()` rejects, whether or not a rollback is then attempted and succeeds. A `COMMIT` that errors may already have landed on the server, and a cleanup `ROLLBACK` that succeeds is a no-op in that case and proves nothing. A `rollback()` that settles while a `commit()` is still pending also fires `unknown`. A consumer that must not miss a committed write treats `unknown` like `committed`.
 
-A `rollback()` that follows a rejected `commit()` fires nothing more. Each plan gets exactly one `afterTransaction` per transaction. `commit()` and `rollback()` resolve only after the hooks have run, so by the time `db.transaction(fn)` returns, every middleware has seen the final stage of every query in it.
+A `rollback()` that follows a rejected `commit()` fires nothing more. Each remembered plan gets exactly one `afterTransaction`. `commit()` and `rollback()` resolve only after the hooks have run, so by the time `db.transaction(fn)` returns, every middleware has seen the final stage of every query in it.
 
-Remembering the plan before the query runs means a query whose row stream the caller stops reading early still gets its stage when the transaction ends. Outside a transaction such a query fires no after-hook and therefore no stage, because nothing marks its end. A query that fails before its encoded plan exists, for example while encoding its parameters, has no plan to remember and gets no stage.
+Remembering the plan before the query runs means a query whose row stream the caller stops reading early still gets its stage when the transaction ends, with the transaction's outcome.
 
-The stage receives the same plan object as `afterQuery` or `afterExecute`.
+The transaction stops remembering when it ends. A query run on a `RuntimeTransaction` after its `commit()` or `rollback()` runs outside any transaction on Postgres (in autocommit), so it gets its stage as a query outside a transaction does, although its `ctx.scope` still says `'transaction'`. Whether the runtime remembers a query is decided by the open transaction it runs on, not by `ctx.scope`, which only describes how the caller reached the query.
 
 ### Per-query state in a middleware
 
-`beforeQuery` and `beforeExecute` receive the draft plan. The later hooks, from `interceptQuery` or `interceptExecute` through `afterTransaction`, receive the encoded plan, which is a different object. A middleware that carries data from a before-hook to a later hook keys it by `ctx.planExecutionId`. A middleware whose state starts in `interceptQuery` or later may key it by the plan object. Either way it clears the entry in `afterTransaction`, which is the query's last hook. The runtime adds no slot for middleware data on the query.
+`beforeQuery` and `beforeExecute` receive the draft plan. The later hooks, from `interceptQuery` or `interceptExecute` through `afterTransaction`, receive the encoded plan, which may be a different object. A middleware that carries data from a before-hook to a later hook keys it by `ctx.planExecutionId`. A middleware whose state starts in `interceptQuery` or later may key it by the plan object. Either way it clears the entry in `afterTransaction`, which is the query's last hook and fires for every query whose encoded plan exists. A query that fails in a before-hook or while encoding never reaches `afterTransaction`, so state written in a before-hook can outlive it; a middleware that writes state there keeps it in a `WeakMap` keyed by an object the query owns, or bounds it. The runtime adds no slot for middleware data on the query.
 
 ### Hook errors
 
@@ -83,7 +92,7 @@ The stage fires after the driver's commit or rollback has resolved and before th
 
 ### Runtimes without an afterTransaction middleware
 
-The runtime checks once, when it is created, whether any of its middleware declares `afterTransaction`. When none does, it remembers no plans on transactions and fires nothing, outside a transaction or when one ends. A user without such a middleware pays one check per query.
+The runtime checks once, when it is created, whether any of its middleware declares `afterTransaction`. `RuntimeCore` makes the check, so every family runtime shares it. When none does, the runtime remembers no plans on transactions and fires nothing, outside a transaction or when one ends. A user without such a middleware pays one check per query.
 
 ## Prior art
 
@@ -93,9 +102,9 @@ ActiveRecord's `after_commit` is declared on the record being saved, not on the 
 
 - Middleware that reacts to writes moves that reaction from `afterExecute` or `afterQuery` to `afterTransaction`, and is then correct inside transactions without any transaction-specific code.
 - A middleware that needs state across a query's hooks keys it as described under [Per-query state in a middleware](#per-query-state-in-a-middleware).
-- The runtime holds, per open transaction, the plans and contexts of the queries run on it. A transaction that never commits or rolls back holds them until its connection is destroyed.
+- The runtime holds, per open transaction, the plans and contexts of the queries run on it, and drops them when the transaction ends. A transaction that never commits or rolls back keeps them until the application drops its reference to the transaction.
 - A runtime whose middleware do not declare `afterTransaction` holds no plans and runs no stage, so the stage costs nothing to applications that do not use it.
-- Transaction-oriented hooks, if a consumer ever needs them (a span per transaction, a per-transaction audit record, session setup before the first statement), are added as a `transaction` sub-object on the middleware with its own begin and end. They stay apart from the query hooks so that the query model keeps its rule: every query hook is about the query in hand.
+- Transaction-oriented hooks, if a consumer ever needs them (a span per transaction, a per-transaction audit record, session setup before the first statement), stay apart from the query hooks, so that the query model keeps its rule: every query hook is about the query in hand. Their shape is a later decision; a separate object on the middleware with its own begin and end hooks is the expected direction.
 
 ## Alternatives considered
 

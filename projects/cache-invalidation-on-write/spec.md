@@ -60,9 +60,11 @@ Read it as "the transaction enclosing this query has ended, with this outcome". 
 
 ### When it fires
 
-Outside a transaction (`ctx.scope` is `'runtime'` or `'connection'`), the runtime fires it right after `afterQuery` or `afterExecute`, with `committed`. It fires whether or not the query completed. A statement run on its own has committed, or failed without effect, by the time it returns.
+Every query whose encoded plan exists gets exactly one `afterTransaction`, and it is the query's last hook, inside or outside a transaction.
 
-Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](../../packages/2-sql/5-runtime/src/sql-runtime.ts)) remembers every plan executed on the transaction, with its context. When the transaction ends, it fires the stage once for each plan, in execution order:
+Outside a transaction (`ctx.scope` is `'runtime'` or `'connection'`), the runtime fires it when the query ends. It fires `committed` when the query completed, right after `afterQuery` or `afterExecute`. It fires `unknown` when the query did not complete: the driver or a hook failed, the signal aborted between rows, a row failed to decode, or the caller stopped reading the rows. A statement that errors on the response path may already have applied, the same reasoning as a rejected commit. `RuntimeCore` delivers the stage this way with `queryWithAfterTransaction` and `executeWithAfterTransaction` ([`run-with-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/run-with-middleware.ts)), and the SQL and Mongo runtimes call the same helpers.
+
+Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](../../packages/2-sql/5-runtime/src/sql-runtime.ts)) remembers every plan executed on the transaction, with its context. Every transaction the runtime hands out goes through it, including a Supabase role session's. When the transaction ends, it fires the stage once for each plan, in execution order:
 
 | What happened | Outcome |
 |---|---|
@@ -70,6 +72,7 @@ Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](..
 | `rollback()` resolves, no commit attempted | `rolled-back` |
 | `rollback()` rejects, no commit attempted | `rolled-back` |
 | `commit()` rejects | `unknown` |
+| `rollback()` settles while `commit()` is pending | `unknown` |
 
 - `unknown` fires for every rejected `commit()`, whether or not the `rollback()` that follows succeeds. A `COMMIT` that errors may already have landed, for example when it fails on the response path. A cleanup `ROLLBACK` that succeeds proves nothing about it.
 - A rejected `rollback()` with no commit attempted fires `rolled-back`, because no `COMMIT` was sent, so none of the transaction's writes can have landed.
@@ -78,7 +81,9 @@ Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](..
 - `commit()` and `rollback()` resolve only after the hooks have run. A write that has returned has already had its stage run.
 - The stage fires after `commit()` or `rollback()` resolves and before the connection is released. The hook must not use the connection.
 
-The runtime remembers a plan on the transaction once the query's encoded plan exists and before the query runs. A query whose row stream the caller abandons inside a transaction therefore still gets its `afterTransaction` stage when the transaction ends, with its plan and the transaction's outcome. Outside a transaction such a query fires no after-hook, and therefore no stage. A query that fails before its encoded plan exists, for example while encoding its parameters, has no plan to remember and gets no stage.
+The runtime remembers a plan on the transaction once the query's encoded plan exists and before the query runs. A query whose row stream the caller abandons inside a transaction therefore still gets its `afterTransaction` stage when the transaction ends, with its plan and the transaction's outcome. A query that fails before its encoded plan exists, for example in a before-hook or while encoding its parameters, has no plan and gets no stage.
+
+The transaction stops remembering when it ends. A query run on it after `commit()` or `rollback()` runs in autocommit on Postgres, so it fires its stage when it ends, as a query outside a transaction does.
 
 A transaction that never ends, such as an abandoned manual `connection().transaction()`, never fires the stage for its plans.
 
@@ -86,7 +91,7 @@ The runtime checks once, when it is created, whether any of its middleware decla
 
 Why `wrapTransaction` and not `withTransaction`: the ORM's `withMutationScope` calls `runtime.connection()`, then `connection.transaction()`, and then `commit()` or `rollback()` on the returned wrapper. It never goes through `withTransaction`. A stage fired from `withTransaction` would miss every ORM mutation that opens its own transaction.
 
-Mongo declares the hook and fires it with `committed` right after `afterQuery` or `afterExecute`, since every Mongo query runs outside a transaction.
+Mongo fires the stage as a query outside a transaction, through the same helpers, since every Mongo query runs outside a transaction.
 
 ### Hook errors
 
@@ -101,18 +106,23 @@ ActiveRecord's `after_commit` is declared on the record being saved. It runs onc
 - No `beforeTransaction`, and no hook that belongs to a transaction rather than to a query.
 - No transaction id, and no way to store data on a transaction or on a context.
 
-Hooks for transactions are a later, separate decision. When one is needed, it goes in a `transaction` object on the middleware with its own begin and end hooks, kept apart from the query hooks. That way a middleware author never has to match a transaction's events to its queries.
+Hooks for transactions are a later, separate decision. Whatever their shape, they stay apart from the query hooks, so a middleware author never has to match a transaction's events to its queries. A separate object on the middleware with its own begin and end hooks is the expected direction.
 
 ### Tests
 
 - Runner: calls hooks in registration order; a throwing hook is logged through `ctx.log.error`, swallowed, and does not stop later hooks.
 - SQL runtime lifecycle:
-  - a query in runtime scope, and one in connection scope, fires `committed` right after its after-hook, including when the query fails;
+  - a query in runtime scope, and one in connection scope, fires `committed` right after its after-hook, and `unknown` when it fails, when the caller stops reading its rows, or when the signal aborts between rows;
+  - a query whose before-hook throws gets no stage, inside or outside a transaction;
+  - a query run on a hand-driven transaction after `commit()` fires its stage right after its after-hook;
+  - a `rollback()` that settles while `commit()` is pending fires `unknown` once;
   - every `withTransaction` branch fires once per plan with the right outcome: resolved commit gives `committed`; callback error then resolved or rejected rollback gives `rolled-back`; rejected commit gives `unknown`, whether the cleanup rollback then succeeds or fails, with no second call;
   - the same outcomes through `connection().transaction()` driven by hand, as the ORM does;
   - several plans on one transaction fire in execution order, each with the same `planExecutionId` its other hooks saw;
   - a throwing hook does not fail `commit()`;
-  - `commit()` resolves only after the hooks have run.
+  - `commit()` and `rollback()` resolve only after the hooks have run.
+- `RuntimeCore`: a mock family fires `committed` after the after-hook, and `unknown` on failure and when the caller stops reading.
+- Supabase: a role session's transaction fires `committed` after its commit and `rolled-back` after its rollback, once per query.
 - Postgres integration: an ORM single-row `update()` fires `afterTransaction` with `committed` once.
 - Type test: a middleware with `afterTransaction` is assignable to `SqlMiddleware[]` and to `MongoMiddleware[]`.
 
