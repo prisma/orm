@@ -53,7 +53,9 @@ Giving the middleware a stage per query, rather than a hook per transaction, kee
 
 ### Which queries get the stage
 
-Every query whose encoded plan exists gets exactly one `afterTransaction`, and it is the query's last hook. That holds inside and outside a transaction, whether the query completes, fails, or the caller stops reading its rows. A query that fails before its encoded plan exists, for example in a before-hook or while encoding its parameters, has no plan to deliver and gets no stage.
+Every query whose encoded plan exists gets exactly one `afterTransaction`, and it is the query's last hook. That holds inside and outside a transaction, whether the query completes, fails, or the caller stops reading its rows. A query that fails before its encoded plan exists, for example in a before-hook or while encoding its parameters, has no plan to deliver and gets no stage. Every runtime, `RuntimeCore`, SQL and Mongo, runs the before-hooks before it arms the stage.
+
+One known limit: when a transaction ends while one of its queries is still running, that query's stage fires at the end, before its after-hook.
 
 ### Outside a transaction
 
@@ -68,13 +70,14 @@ The framework's base runtime, `RuntimeCore`, delivers the stage this way from it
 
 Every transaction the SQL runtime hands out goes through one wrapper, `wrapTransaction`: transactions from `db.transaction(fn)`, from a manual `connection().transaction()`, from the ORM's own mutations, and from a Supabase role session. Every query run on the wrapper has `scope: 'transaction'`. While the transaction is open, the runtime remembers each query's plan, with its context, once its encoded plan exists and before it runs. When the transaction ends it fires `afterTransaction` once for each remembered plan, in execution order:
 
-- `committed` when the driver's `commit()` resolves.
+- `committed` when the driver's `commit()` resolves and every query on the transaction completed.
 - `rolled-back` when `rollback()` settles, resolved or rejected, and no commit was attempted. No `COMMIT` was sent, so none of the transaction's writes can have landed.
 - `unknown` when `commit()` rejects, whether or not a rollback is then attempted and succeeds. A `COMMIT` that errors may already have landed on the server, and a cleanup `ROLLBACK` that succeeds is a no-op in that case and proves nothing. A `rollback()` that settles while a `commit()` is still pending also fires `unknown`. A consumer that must not miss a committed write treats `unknown` like `committed`.
+- `unknown` also when `commit()` resolves after one of the transaction's queries did not complete: it failed, a row failed to decode, or the caller stopped reading its rows. Postgres answers `COMMIT` on a transaction that a failed statement aborted with a rollback, and the driver's `commit()` still resolves; other databases keep the transaction. `unknown` is the answer that is true on every database. The transaction learns whether each query completed from the same helpers that deliver the stage outside a transaction.
 
 A `rollback()` that follows a rejected `commit()` fires nothing more. Each remembered plan gets exactly one `afterTransaction`. `commit()` and `rollback()` resolve only after the hooks have run, so by the time `db.transaction(fn)` returns, every middleware has seen the final stage of every query in it.
 
-Remembering the plan before the query runs means a query whose row stream the caller stops reading early still gets its stage when the transaction ends, with the transaction's outcome.
+Remembering the plan before the query runs means a query whose row stream the caller stops reading early still gets its stage when the transaction ends. The query did not complete, so a commit reports `unknown`, as above.
 
 The transaction stops remembering when it ends. A query run on a `RuntimeTransaction` after its `commit()` or `rollback()` runs outside any transaction on Postgres (in autocommit), so it gets its stage as a query outside a transaction does, although its `ctx.scope` still says `'transaction'`. Whether the runtime remembers a query is decided by the open transaction it runs on, not by `ctx.scope`, which only describes how the caller reached the query.
 
@@ -88,7 +91,7 @@ An error thrown by an `afterTransaction` hook is passed to `ctx.log.error` and s
 
 ### Ordering and the connection
 
-The stage fires after the driver's commit or rollback has resolved and before the connection returns to the pool. The hook receives no queryable and must not use the connection.
+The stage fires after the driver's commit or rollback has settled and before the connection returns to the pool. The hook receives no queryable and must not use the connection.
 
 ### Runtimes without an afterTransaction middleware
 
