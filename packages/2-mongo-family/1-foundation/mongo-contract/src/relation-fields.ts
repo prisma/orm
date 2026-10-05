@@ -1,4 +1,6 @@
 import type { ContractModelBase, ContractToOneRelation } from '@internal/contract/types';
+import { castAs } from '@internal/utils/casts';
+import type { MongoModelStorage } from './contract-types';
 
 export type MongoToOneRelationFields = {
   /** False for the back side of a 1:1, whose local field is the document id. */
@@ -17,12 +19,16 @@ export function resolveMongoToOneRelationFields(
   model: ContractModelBase,
   relation: ContractToOneRelation,
 ): MongoToOneRelationFields {
+  const storageFields = castAs<MongoModelStorage['fields']>(model.storage['fields']);
   const fields = relation.on.localFields.map((name) => ({
     name,
     nullable: model.fields[name]?.nullable ?? true,
   }));
   const ownsForeignKey = !(
-    relation.cardinality === '1:1' && fields.every((field) => field.name === DOCUMENT_ID_FIELD)
+    relation.cardinality === '1:1' &&
+    fields.every(
+      (field) => (storageFields?.[field.name]?.field ?? field.name) === DOCUMENT_ID_FIELD,
+    )
   );
   return { ownsForeignKey, fields };
 }

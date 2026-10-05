@@ -36,6 +36,7 @@ export interface MongoIndexKey {
 
 export type MongoModelStorage = {
   readonly collection?: string;
+  readonly fields?: Readonly<Record<string, { readonly field: string }>>;
   readonly relations?: Record<string, { readonly field: string }>;
 };
 

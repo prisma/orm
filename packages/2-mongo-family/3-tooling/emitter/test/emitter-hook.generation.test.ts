@@ -12,6 +12,30 @@ import {
 const testHashes = { storageHash: 'test-storage-hash', profileHash: 'test-profile-hash' };
 
 describe('mongoEmission.generateContractTypes', () => {
+  it('emits application field names and separate mapped storage names', () => {
+    const contract = createMongoContract({
+      models: {
+        Post: {
+          relations: {},
+          fields: {
+            updatedAt: {
+              type: { kind: 'scalar', codecId: 'mongo/date@1' },
+              nullable: false,
+              many: false,
+            },
+          },
+          storage: { collection: 'Post', fields: { updatedAt: { field: 'updated_at' } } },
+        },
+      },
+    });
+    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    expect(types).toContain('readonly updatedAt: CodecTypes["mongo/date@1"]["output"]');
+    expect(types).not.toContain('readonly updated_at:');
+    expect(types).toContain(
+      'readonly fields: { readonly updatedAt: { readonly field: "updated_at" } }',
+    );
+  });
+
   it('generates Contract and TypeMaps exports', () => {
     const contract = createMongoContract();
     const types = generateContractDts(contract, mongoEmission, [], testHashes);

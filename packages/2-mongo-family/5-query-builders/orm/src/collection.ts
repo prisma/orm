@@ -39,6 +39,7 @@ import {
   InsertOneCommand,
   isMongoFilterExpr,
   MongoAndExpr,
+  MongoExistsExpr,
   MongoFieldFilter,
   UpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
@@ -63,6 +64,7 @@ import {
   type FieldOperation,
   type UpdateOperator,
 } from './field-accessor';
+import { applicationFieldName, mapStorageRow, storageFieldName } from './field-mapping';
 import { ormError } from './orm-errors';
 import type {
   DefaultModelRow,
@@ -266,7 +268,7 @@ class MongoCollectionImpl<
     }
 
     const filter = MongoFieldFilter.eq(
-      model.discriminator.field,
+      this.#storageField(model.discriminator.field),
       new MongoParamRef(variantEntry.value),
     );
     return this.#cloneWithVariant<V>({ filters: [...this.#state.filters, filter] }, variantName);
@@ -277,7 +279,17 @@ class MongoCollectionImpl<
   ): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
     if (isMongoFilterExpr(filter)) {
       const encoded = filter.rewrite({
-        field: (fieldFilter) => this.#encodeFieldFilter(fieldFilter),
+        field: (fieldFilter) => {
+          const encodedField = this.#encodeFieldFilter(fieldFilter);
+          const storedField = this.#storageField(encodedField.field);
+          return storedField === encodedField.field
+            ? encodedField
+            : MongoFieldFilter.of(storedField, encodedField.op, encodedField.value);
+        },
+        exists: (expr) => {
+          const storedField = this.#storageField(expr.field);
+          return storedField === expr.field ? expr : new MongoExistsExpr(storedField, expr.exists);
+        },
       });
       return this.#clone({ filters: [...this.#state.filters, encoded] });
     }
@@ -350,8 +362,8 @@ class MongoCollectionImpl<
       relationName,
       targetModel,
       from: resolveCollectionName(targetModel, targetModelName),
-      localField,
-      foreignField,
+      localField: storageFieldName(model, localField),
+      foreignField: storageFieldName(targetModel, foreignField),
       cardinality: ref.cardinality,
     };
 
@@ -411,10 +423,7 @@ class MongoCollectionImpl<
     const document = this.#toDocument(normalized);
     const command = new InsertOneCommand(this.#collectionName, document);
     const results = await this.#drainPlan(command, this.#insertOneResultShape());
-    return blindCast<
-      IncludedRow<TContract, ModelName, TIncludes>,
-      'the insert result carries the written document, decoded through the model result shape like a read'
-    >(
+    return this.#mapRow(
       blindCast<InsertOneResult, 'InsertOneCommand yields one InsertOneResult'>(results[0])
         .document,
     );
@@ -450,10 +459,7 @@ class MongoCollectionImpl<
         'InsertManyCommand yields one InsertManyResult'
       >(results[0]);
       for (const document of documents) {
-        yield blindCast<
-          IncludedRow<TContract, ModelName, TIncludes>,
-          'the insert result carries the written documents, decoded through the model result shape like a read'
-        >(document);
+        yield self.#mapRow(document);
       }
     }
     return new AsyncIterableResult(gen());
@@ -500,12 +506,7 @@ class MongoCollectionImpl<
     const command = new FindOneAndUpdateCommand(this.#collectionName, filter, updateDoc, false);
     const results = await this.#drainPlan(command, this.#modelResultShape());
     const result = results[0];
-    return result === undefined
-      ? null
-      : blindCast<
-          IncludedRow<TContract, ModelName, TIncludes>,
-          'FindOneAndUpdateCommand plan carries the model resultShape; the runtime decodes the returned document like a read'
-        >(result);
+    return result === undefined ? null : this.#mapRow(result);
   }
 
   updateAll(
@@ -557,12 +558,7 @@ class MongoCollectionImpl<
     const command = new FindOneAndDeleteCommand(this.#collectionName, filter);
     const results = await this.#drainPlan(command, this.#modelResultShape());
     const result = results[0];
-    return result === undefined
-      ? null
-      : blindCast<
-          IncludedRow<TContract, ModelName, TIncludes>,
-          'FindOneAndDeleteCommand plan carries the model resultShape; the runtime decodes the returned document like a read'
-        >(result);
+    return result === undefined ? null : this.#mapRow(result);
   }
 
   deleteAll(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -620,7 +616,7 @@ class MongoCollectionImpl<
     if (typeof input.update === 'function') {
       const accessor = createFieldAccessor<TContract, ModelName>();
       const ops = input.update(accessor);
-      const idOp = ops.find((op) => op.field === '_id');
+      const idOp = ops.find((op) => this.#storageField(op.field) === '_id');
       if (idOp) {
         throw ormError('ORM.FIELD_IMMUTABLE', 'Mutation payloads cannot modify `_id`', {
           meta: { field: '_id' },
@@ -636,9 +632,7 @@ class MongoCollectionImpl<
           { meta: { method: 'upsert', field: dotPathOp.field } },
         );
       }
-      updateDoc = compileFieldOperations(ops, (field, value, operator) =>
-        this.#wrapFieldOpValue(field, value, operator),
-      );
+      updateDoc = this.#compileFieldOperations(ops);
     } else {
       const setFields = this.#toSetFields(
         blindCast<
@@ -655,7 +649,9 @@ class MongoCollectionImpl<
     const explicitUpdateFields = topLevelUpdateFields(updateDoc);
     const withUpdateDefaults = this.#withUpdateDefaults(updateDoc, defaultValueCache);
     const generatedSetByCreate = Object.keys(withUpdateDefaults['$set'] ?? {}).filter(
-      (field) => !explicitUpdateFields.has(field) && Object.hasOwn(explicitCreate, field),
+      (field) =>
+        !explicitUpdateFields.has(field) &&
+        Object.hasOwn(explicitCreate, this.#applicationField(field)),
     );
     if (generatedSetByCreate.length === 0) {
       return this.#upsertCommand(filter, withUpdateDefaults, allCreateFields);
@@ -675,10 +671,7 @@ class MongoCollectionImpl<
       ),
       this.#modelResultShape(),
     );
-    return blindCast<
-      IncludedRow<TContract, ModelName, TIncludes>,
-      'FindOneAndUpdateCommand upsert plan carries the model resultShape; the runtime decodes the returned document like a read'
-    >(results[0]);
+    return this.#mapRow(results[0]);
   }
 
   async #upsertCommand(
@@ -702,16 +695,13 @@ class MongoCollectionImpl<
       true,
     );
     const results = await this.#drainPlan(command, this.#modelResultShape());
-    return blindCast<
-      IncludedRow<TContract, ModelName, TIncludes>,
-      'FindOneAndUpdateCommand upsert plan carries the model resultShape; the runtime decodes the returned document like a read'
-    >(results[0]);
+    return this.#mapRow(results[0]);
   }
 
   async #readMatchingIds(): Promise<unknown[]> {
     const idQuery = this.#clone({
       includes: [],
-      selectedFields: ['_id'],
+      selectedFields: [this.#applicationField('_id')],
       orderBy: undefined,
       limit: undefined,
       offset: undefined,
@@ -736,17 +726,22 @@ class MongoCollectionImpl<
 
   #query(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     const plan = this.#compile();
-    return this.#executor.query(plan);
+    const result = this.#executor.query(plan);
+    const self = this;
+    async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
+      for await (const row of result) yield self.#mapRow(row);
+    }
+    return new AsyncIterableResult(rows());
   }
 
-  #compile(): MongoQueryPlan<IncludedRow<TContract, ModelName, TIncludes>> {
+  #compile(): MongoQueryPlan<unknown> {
     const model = this.#modelWithVariantFields();
     if (!model) {
       throw ormError('ORM.MODEL_UNKNOWN', `Unknown model: "${this.#modelName}".`, {
         meta: { model: this.#modelName },
       });
     }
-    return compileMongoQuery<IncludedRow<TContract, ModelName, TIncludes>>(
+    return compileMongoQuery(
       this.#collectionName,
       this.#state,
       this.#contract.storage.storageHash,
@@ -795,11 +790,39 @@ class MongoCollectionImpl<
     >(models[this.#variantName]);
     return variant === undefined
       ? model
-      : { ...model, fields: { ...model.fields, ...variant.fields } };
+      : {
+          ...model,
+          fields: { ...model.fields, ...variant.fields },
+          storage: {
+            ...model.storage,
+            fields: { ...model.storage.fields, ...variant.storage.fields },
+          },
+        };
+  }
+
+  #storageField(path: string): string {
+    return storageFieldName(this.#modelWithVariantFields(), path);
+  }
+
+  #applicationField(stored: string): string {
+    return applicationFieldName(this.#modelWithVariantFields(), stored);
+  }
+
+  #mapRow(row: unknown): IncludedRow<TContract, ModelName, TIncludes> {
+    return blindCast<
+      IncludedRow<TContract, ModelName, TIncludes>,
+      'decoded storage rows are translated to application names at the Mongo ORM boundary'
+    >(
+      mapStorageRow(this.#modelWithVariantFields(), row, (name) =>
+        castAs<MongoModelDefinition | undefined>(
+          domainModelsAtDefaultNamespace(this.#contract.domain)[name],
+        ),
+      ),
+    );
   }
 
   #idFieldShape(): MongoFieldShape {
-    const idField = this.#modelFields()['_id'];
+    const idField = this.#modelFields()[this.#applicationField('_id')];
     return idField
       ? contractFieldToMongoFieldShape(idField)
       : Object.freeze({ kind: 'unknown' as const });
@@ -847,7 +870,7 @@ class MongoCollectionImpl<
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       const wrapped = this.#wrapFieldValue(value, fields[key], key, 'filter');
-      filters.push(MongoFieldFilter.eq(key, wrapped));
+      filters.push(MongoFieldFilter.eq(this.#storageField(key), wrapped));
     }
     return filters;
   }
@@ -1026,7 +1049,7 @@ class MongoCollectionImpl<
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined) {
-        doc[key] = this.#wrapFieldValue(value, fields[key], key, 'write');
+        doc[this.#storageField(key)] = this.#wrapFieldValue(value, fields[key], key, 'write');
       }
     }
     return doc;
@@ -1036,13 +1059,13 @@ class MongoCollectionImpl<
     const fields = this.#modelFields();
     const result: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (key === '_id' && value !== undefined) {
+      if (this.#storageField(key) === '_id' && value !== undefined) {
         throw ormError('ORM.FIELD_IMMUTABLE', 'Mutation payloads cannot modify `_id`', {
           meta: { field: '_id' },
         });
       }
       if (value !== undefined) {
-        result[key] = this.#wrapFieldValue(value, fields[key], key, 'write');
+        result[this.#storageField(key)] = this.#wrapFieldValue(value, fields[key], key, 'write');
       }
     }
     return result;
@@ -1058,10 +1081,14 @@ class MongoCollectionImpl<
         op,
         namespace: UNBOUND_NAMESPACE_ID,
         entry: this.#collectionName,
-        values,
+        values: Object.fromEntries(
+          Object.entries(values).map(([field, value]) => [this.#storageField(field), value]),
+        ),
         defaultValueCache,
       }) ?? [];
-    return Object.fromEntries(applied.map(({ field, value }) => [field, value]));
+    return Object.fromEntries(
+      applied.map(({ field, value }) => [this.#applicationField(field), value]),
+    );
   }
 
   #withCreateDefaults(
@@ -1076,7 +1103,7 @@ class MongoCollectionImpl<
     defaultValueCache: Map<string, unknown>,
   ): Record<string, Record<string, MongoValue>> {
     const explicit = Object.fromEntries(
-      [...topLevelUpdateFields(updateDoc)].map((field) => [field, true]),
+      [...topLevelUpdateFields(updateDoc)].map((field) => [this.#applicationField(field), true]),
     );
     const generated = this.#appliedDefaults('update', explicit, defaultValueCache);
     if (Object.keys(generated).length === 0) {
@@ -1107,7 +1134,7 @@ class MongoCollectionImpl<
     if (typeof dataOrCallback === 'function') {
       const accessor = createFieldAccessor<TContract, ModelName>();
       const ops = dataOrCallback(accessor);
-      const idOp = ops.find((op) => op.field === '_id');
+      const idOp = ops.find((op) => this.#storageField(op.field) === '_id');
       if (idOp) {
         throw ormError('ORM.FIELD_IMMUTABLE', 'Mutation payloads cannot modify `_id`', {
           meta: { field: '_id' },
@@ -1116,15 +1143,27 @@ class MongoCollectionImpl<
       if (ops.length === 0) {
         return { $set: {} };
       }
-      return compileFieldOperations(ops, (field, value, operator) =>
-        this.#wrapFieldOpValue(field, value, operator),
-      );
+      return this.#compileFieldOperations(ops);
     }
     return this.#toUpdateDocument(
       blindCast<
         Record<string, unknown>,
         'partial Mongo update input is a model-field value record after callback narrowing'
       >(dataOrCallback),
+    );
+  }
+
+  #compileFieldOperations(ops: FieldOperation[]): Record<string, Record<string, MongoValue>> {
+    const compiled = compileFieldOperations(ops, (field, value, operator) =>
+      this.#wrapFieldOpValue(field, value, operator),
+    );
+    return Object.fromEntries(
+      Object.entries(compiled).map(([operator, values]) => [
+        operator,
+        Object.fromEntries(
+          Object.entries(values).map(([field, value]) => [this.#storageField(field), value]),
+        ),
+      ]),
     );
   }
 

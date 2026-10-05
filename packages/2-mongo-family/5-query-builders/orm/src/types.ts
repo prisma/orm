@@ -236,6 +236,27 @@ type ExecutionDefaultEntry<TContract extends MongoContract> =
     ? Entry
     : never;
 
+type ApplicationField<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+  StoredField extends string,
+> = {
+  [Field in keyof MongoModelsMap<TContract>[ModelName]['fields'] &
+    string]: MongoModelsMap<TContract>[ModelName] extends {
+    readonly storage: { readonly fields: infer Fields };
+  }
+    ? Field extends keyof Fields
+      ? Fields[Field] extends { readonly field: StoredField }
+        ? Field
+        : never
+      : Field extends StoredField
+        ? Field
+        : never
+    : Field extends StoredField
+      ? Field
+      : never;
+}[keyof MongoModelsMap<TContract>[ModelName]['fields'] & string];
+
 /**
  * Fields of the model's collection that an execution default fills on create; the create input makes them optional, mirroring `IsOptionalCreateField` in the SQL ORM client.
  */
@@ -251,7 +272,7 @@ type GeneratedOnCreateFields<
     }
   > extends infer Matched
     ? Matched extends { readonly ref: { readonly field: infer Field extends string } }
-      ? Field
+      ? ApplicationField<TContract, ModelName, Field>
       : never
     : never;
 
@@ -271,7 +292,10 @@ type NullableFields<
 type OptionalOnCreate<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-> = '_id' | GeneratedOnCreateFields<TContract, ModelName> | NullableFields<TContract, ModelName>;
+> =
+  | ApplicationField<TContract, ModelName, '_id'>
+  | GeneratedOnCreateFields<TContract, ModelName>
+  | NullableFields<TContract, ModelName>;
 
 export type CreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
@@ -317,7 +341,7 @@ export type VariantCreateInput<
   Partial<
     Pick<
       ResolvedInputRow<TContract, ModelName>,
-      '_id' & keyof ResolvedInputRow<TContract, ModelName>
+      ApplicationField<TContract, ModelName, '_id'> & keyof ResolvedInputRow<TContract, ModelName>
     >
   > &
   Partial<

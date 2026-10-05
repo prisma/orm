@@ -63,7 +63,7 @@ describe('BSON scalar field types', () => {
   it('emits the codec id of each type', () => {
     const contract = interpretPost();
     expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
-      _id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
       views: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
       price: {
         many: false,

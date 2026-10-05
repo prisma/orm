@@ -22,6 +22,7 @@ import {
 } from '@internal/mongo-query-builder';
 import { ifDefined } from '@internal/utils/defined';
 import type { MongoCollectionState, MongoIncludeExpr } from './collection-state';
+import { storageFieldName } from './field-mapping';
 
 function isToOne(include: MongoIncludeExpr): boolean {
   return include.cardinality === 'N:1' || include.cardinality === '1:1';
@@ -80,7 +81,16 @@ export function compileMongoQuery<Row = unknown>(
   }
 
   if (state.orderBy) {
-    stages.push(new MongoSortStage(state.orderBy));
+    stages.push(
+      new MongoSortStage(
+        Object.fromEntries(
+          Object.entries(state.orderBy).map(([field, direction]) => [
+            storageFieldName(model, field),
+            direction,
+          ]),
+        ),
+      ),
+    );
   }
 
   if (state.offset !== undefined) {
@@ -94,7 +104,7 @@ export function compileMongoQuery<Row = unknown>(
   if (state.selectedFields && state.selectedFields.length > 0) {
     const projection: Record<string, 0 | 1> = {};
     for (const field of state.selectedFields) {
-      projection[field] = 1;
+      projection[storageFieldName(model, field)] = 1;
     }
     for (const inc of state.includes) {
       projection[inc.relationName] = 1;
