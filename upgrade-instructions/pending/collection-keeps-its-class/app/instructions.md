@@ -7,7 +7,7 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.(?:updateAll|updateAndCount|deleteAll|deleteAndCount)\s*\('
-        - '\.update\s*\(\s*\{'
+        - '\.update\s*\('
         - '\.delete\s*\(\s*(?:\)|\()'
   - id: cursor-and-distinct-on-check-the-receiver
     summary: |
