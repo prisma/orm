@@ -325,10 +325,9 @@ function bind(options: BindingInputs): BinderResult {
     const declaredName = symbol.node.name()?.syntax;
     if (declaredName !== undefined) references.set(declaredName, { kind: 'namedType', symbol });
     const name = symbol.node.typeAnnotation()?.name();
-    const outcome = resolveTypeReference(name, baseScope);
+    const outcome = resolveTypeReference(name, baseScope, references);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
-    bindQualifier(typeQualifier(name), baseScope, references);
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -366,12 +365,11 @@ function bind(options: BindingInputs): BinderResult {
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
       const name = field.node.typeAnnotation()?.name();
-      const outcome = resolveTypeReference(name, stack.current(), (written) =>
+      const outcome = resolveTypeReference(name, stack.current(), references, (written) =>
         describeUnresolvedType?.({ field, owner: entity, written }),
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
-      if (name !== undefined) bindQualifier(typeQualifier(name), stack.current(), references);
       if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
@@ -633,10 +631,13 @@ function tryBindExpression(
       const written = writtenEntityReference(node);
       if (written === undefined) return { matched: false, references, diagnostics };
       const failures: ParseDiagnostic[] = [];
-      const resolution = resolveEntity(written, node, { ...ctx, diagnostics: failures });
+      const resolution = resolveEntity(
+        written,
+        node,
+        { ...ctx, diagnostics: failures },
+        references,
+      );
       references.set(node, resolution);
-      if (written.namespace !== undefined)
-        bindQualifier(entityQualifier(node), ctx.scope, references);
       for (const diagnostic of failures) diagnostics.set(node, diagnostic);
       return {
         matched: resolution.kind !== 'unresolved',
@@ -839,11 +840,16 @@ function resolveEntity(
   written: WrittenEntityReference,
   node: SyntaxNode,
   ctx: ReferenceContext,
+  references: ResolutionSink,
 ): Resolution {
   const found =
     written.namespace === undefined
       ? ctx.scope.lookup(written.name)
-      : qualifiedMember(written.namespace, written.name, ctx.scope);
+      : qualifiedMember(
+          written.namespace,
+          written.name,
+          bindQualifier(entityQualifier(node), ctx.scope, references),
+        );
   if (found === undefined) {
     const name = describeWrittenEntityReference(written);
     if (written.name !== '') report(`Cannot find entity "${name}"`, node, ctx, 'entity');
@@ -880,10 +886,6 @@ interface ResolutionSink {
   set(node: SyntaxNode, resolution: Resolution): unknown;
 }
 
-function typeQualifier(name: QualifiedNameAst): IdentifierAst | undefined {
-  return name.space() === undefined ? name.namespace() : undefined;
-}
-
 function entityQualifier(node: SyntaxNode): IdentifierAst | undefined {
   const path = PathExprAst.cast(node);
   if (path === undefined) return undefined;
@@ -895,27 +897,32 @@ function bindQualifier(
   qualifier: IdentifierAst | undefined,
   scope: Scope,
   references: ResolutionSink,
-): void {
+): ScopeResolution | undefined {
   const id = qualifier?.name();
-  if (qualifier === undefined || id === undefined) return;
+  if (qualifier === undefined || id === undefined) return undefined;
   const resolution = scope.lookup(id);
   if (resolution !== undefined && isNamespaceLike(resolution)) {
     references.set(qualifier.syntax, resolution);
   }
+  return resolution;
 }
 
 function resolveTypeReference(
   reference: QualifiedNameAst | undefined,
   scope: Scope,
+  references: ResolutionSink,
   describeUnresolved?: (written: string) => string | undefined,
 ): TypeReferenceOutcome | undefined {
   if (reference === undefined || reference.isOverQualified()) return undefined;
   if (reference.space() !== undefined) return { resolution: { kind: 'crossSpace' } };
   const name = reference.identifier()?.name();
   if (name === undefined || name === '') return undefined;
-  const namespaceId = reference.namespace()?.name();
+  const qualifier = reference.namespace();
+  const namespaceId = qualifier?.name();
   const found =
-    namespaceId === undefined ? scope.lookup(name) : qualifiedMember(namespaceId, name, scope);
+    namespaceId === undefined
+      ? scope.lookup(name)
+      : qualifiedMember(namespaceId, name, bindQualifier(qualifier, scope, references));
   if (found === undefined) {
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
     const message = describeUnresolved?.(written) ?? `Cannot find type "${written}"`;
@@ -951,9 +958,8 @@ interface BadQualifier {
 function qualifiedMember(
   namespaceId: string,
   name: string,
-  scope: Scope,
+  qualifier: ScopeResolution | undefined,
 ): ScopeResolution | BadQualifier | undefined {
-  const qualifier = scope.lookup(namespaceId);
   if (qualifier === undefined) return undefined;
   if (!isNamespaceLike(qualifier)) {
     return {
