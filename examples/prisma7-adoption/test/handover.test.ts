@@ -6,9 +6,9 @@
  * ledger table as unclaimed, Prisma 7 sees no drift, and both clients read
  * the new shape.
  */
-import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
-import { join } from 'pathe';
+import { basename, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
   copyExample,
@@ -178,6 +178,15 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           const destructivePlan = await v8('migration', 'plan', '--name', 'drop-bio');
           expect(destructivePlan).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(destructivePlan['baselineDir']).toBeUndefined();
+          expect(
+            readdirSync(join(dir, 'migrations/app'))
+              .filter((entry) => entry !== 'refs')
+              .sort(),
+          ).toEqual(
+            [additivePlan['baselineDir'], additivePlan['dir'], destructivePlan['dir']].map(
+              (bundleDir) => basename(String(bundleDir)),
+            ),
+          );
           const destructive = readBundle(dir, String(destructivePlan['dir']));
           expect(destructive).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(operationClasses(destructive)).toEqual([
