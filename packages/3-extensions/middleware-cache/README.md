@@ -289,7 +289,7 @@ The middleware bypasses the cache entirely when `RuntimeMiddlewareContext.scope`
 
 ## Scope
 
-This package is a read-through cache with a control surface. It carries data between the annotations and the store and never interprets it. Its primitives are:
+This package is a read-through cache with a control surface. It carries data between the annotations and the store and never interprets it. [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20The%20cache%20middleware%20is%20a%20control%20surface%20and%20the%20store%20owns%20lookup%2C%20lifetime%20and%20version.md) records this design and the alternatives it rejected. Its primitives are:
 
 - keys: the annotation `key`, and the `deriveKey` option with its default `deriveKeyFromContentHash`;
 - `meta` on the annotation, handed to the store's `get` and `set`;
