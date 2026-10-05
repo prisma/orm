@@ -23,7 +23,7 @@ Adds `invalidateAnnotation<TMeta>({ keys, meta })` with `applicableTo: ['write']
 Done when:
 
 - the type, middleware and integration tests in the spec pass, including a rolled-back transaction leaving the entry in place;
-- the package README documents the annotation, its timing and its known limits, and ADR 259 no longer lists write-driven invalidation as outside the package.
+- the package README documents the annotation, its timing and its known limits, and ADR 259's write-driven invalidation entry describes the shipped annotation instead of a planned one.
 
 ## Close-out
 
