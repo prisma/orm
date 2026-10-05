@@ -24,10 +24,9 @@ For a qualified type reference `ns.Name`, the binder keeps the resolution it rec
 | `namespace` | one per entry in `NamespaceSymbol.declarations` |
 | `contributedType`, `contributedNamespace`, `crossSpace`, `attribute`, `unresolved` | none → `null` |
 
-- A cursor on a declaration's own name (`binder.declaredSymbol`) returns `null`.
+- A cursor on a declaration's own name returns `null`. Since #30569 the binder records the declaration on its name node, so the provider returns `null` when the resolved node is the target declaration's name.
 - Response: `LocationLink[]` when the client declares `textDocument.definition.linkSupport` (`originSelectionRange` = the reference node, `targetRange` = whole declaration, `targetSelectionRange` = declaration name); otherwise `Location[]` with the name range. The capability is read in `resolveClientCapabilities` like the others.
 - Targets in another file of the project use that file's URI (`sources.sourceFileFor(node)`).
-- No binder (project without a PSL interpretation and without a control stack) → `null`.
 
 ## Coverage (tests)
 
