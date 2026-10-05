@@ -184,7 +184,7 @@ describe('client.scope', () => {
     client.scope<typeof deletedAt, { readonly hasWhere: true; readonly hasOrderBy: true }>(
       deletedAt,
       // @ts-expect-error the body applied no filter, so it cannot be typed as filtering
-      (rows) => rows,
+      (rows: unknown) => rows,
     );
   });
 
@@ -236,7 +236,7 @@ describe('client.scope', () => {
     // @ts-expect-error scope is the namespace, not the method
     scopeNamespaceClient.scope(
       { title: { codecId: 'pg/text@1', nullable: false } },
-      (rows) => rows,
+      (rows: unknown) => rows,
     );
   });
 });
