@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type {
-  ColumnTypeDescriptor,
+  CodecDescriptorRef,
   ScalarFieldDeclarationBuilder,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
@@ -38,7 +38,7 @@ export interface DeclaredField<
 export type ScopeFieldBuilder<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
-> = ScalarFieldDeclarationBuilder<ColumnTypeDescriptor<CodecId>, Nullable>;
+> = ScalarFieldDeclarationBuilder<CodecDescriptorRef<CodecId>, Nullable>;
 
 /** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
 export type ScopeFieldDeclarations<CodecId extends string = string> = Readonly<

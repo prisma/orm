@@ -88,7 +88,7 @@ The body receives a collection whose model accessor has only the declared fields
 
 The body's collection carries its facts under its own property, not under the `StateType` property of ADR 258, although the facts are the same two flags. A real collection has `StateType`, so with that property a body could return any collection, such as `db.orm.public.Post.where(...)`, in place of the one it received, and the type would accept it. The separate property is what refuses that.
 
-The scope is generic over the collection it receives. It accepts any collection, of any model, whose fields include the declared ones with the same column type and nullability: a root collection, a custom class, a chained collection, one narrowed by `select`, an include refinement, `this` in a class. It returns that collection's own type plus what the body established: a `where` in the body gives `Filtered<Self>`, so `update` is allowed after it, and an `orderBy` gives `Ordered<Self>`. The body may also call `limit` and `offset`, which the type does not record. The writes that change every matching row (`update`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`) cannot apply a limit or an offset, so they throw `ORM.ARGUMENT_INVALID` on a collection that has one, whether a scope added it or the chain did; an order is ignored by those writes, as before. The receiver is a plain type parameter, constrained to the collections of the models that have the fields, so the result keeps the receiver's own name, such as `Collection<Contract, 'Post', ...>`, and an exported chain emits a declaration. A model that lacks a field, has it with another column type, or has it with another nullability is refused, and the error names the field. For a scope that declares `deletedAt` and `title`, applied to a model that has only `deletedAt`:
+The scope is generic over the collection it receives. It accepts any collection, of any model, whose fields include the declared ones with the same column type and nullability: a root collection, a custom class, a chained collection, one narrowed by `select`, an include refinement, `this` in a class. It returns that collection's own type plus what the body established: a `where` in the body gives `Filtered<Self>`, so `update` is allowed after it, and an `orderBy` gives `Ordered<Self>`. The body may also call `limit` and `offset`, which the type does not record. The writes that change every matching row (`update`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`) cannot apply a limit or an offset, so they throw `ORM.ARGUMENT_INVALID` on a collection that has one, whether a scope added it or the chain did; an order is ignored by those writes, as before. The scope reads the receiver's contract, model and namespace from the receiver's type and checks the declared fields against that one model only; a union of collections is accepted when every model in it has the fields. `apply` builds the result from the receiver's own type and the facts the scope carries in its type, so the result keeps the receiver's own name, such as `Collection<Contract, 'Post', ...>`, and an exported chain emits a declaration. A model that lacks a field, has it with another column type, or has it with another nullability is refused, and the error names the field. For a scope that declares `deletedAt` and `title`, applied to a model that has only `deletedAt`:
 
 ```
 Property ''the model has no field with the codec and nullability the scope declares'' is missing in type 'CollectionBase<Contract, "Comment", ...>' but required in type '{ readonly 'the model has no field with the codec and nullability the scope declares': "title"; }'.
@@ -129,17 +129,30 @@ Post.orderBy(orderByField(Post, input.sort, input.direction, ['title', 'createdA
 
 ## What it costs
 
-Measured as type instantiations with TypeScript 5.9.3 on the `prisma-8-demo` example, which checks at about 730,000 instantiations without these helpers. Every count was measured twice with the same result. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline.
+Measured as type instantiations with TypeScript 5.9.3. Every count was measured twice with the same result.
+
+On the `prisma-8-demo` example, which checks at about 730,000 instantiations without these helpers. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline.
 
 | Feature | Present but unused | Definition | Ten uses, over the same code written inline |
 | --- | --- | --- | --- |
 | A conditional inside `apply` | none | — | 10,000 to 14,000 once per pair of collection types, then under 10 |
-| `db.orm.scope` and `Post.scope` together | +286 (+0.04%) | | |
-| `db.orm.scope` | | 211 | +1,342 with the definition: 2,111 for the definition and ten uses, against 769 for the same ten sites written inline |
-| `Post.scope` | | 21 | −7,516: the body is typed once instead of at each site |
+| `db.orm.scope` and `Post.scope` together | +342 (+0.05%) | | |
+| `db.orm.scope` | | 211 | +2,888 with the definition: 3,657 for the definition and ten uses, against 769 for the same ten sites written inline |
+| `Post.scope` | | 21 | −7,109: the body is typed once instead of at each site |
 | `orderByField` | none | — | about 550 once, then under 20 |
 
-The models that have a scope's fields are computed once per scope type, from the contract and the declared fields; each use then checks the receiver against that list. That list grows with the contract. On a generated contract of 200 models, half of them with `deletedAt`, one `db.orm.scope` definition costs 18,182 instantiations and its first use 55,242, while each further use costs about 500. Ten uses on ten models cost 77,996 with the definition, against 17,132 for the same ten filters written inline. An application with many models and many scopes for any model pays this once per distinct scope.
+On a generated contract of 200 models, half of them with `deletedAt`, with a scope that filters on `deletedAt` and ten uses on ten different models:
+
+| | Instantiations |
+| --- | --- |
+| One `db.orm.scope` definition | 18,182 |
+| Its first use | 1,262 |
+| Each later use | about 860 |
+| Ten uses, with the definition | 27,157 |
+| The same ten filters written inline | 17,132 |
+| Ten uses over inline, with the definition | +10,025 |
+
+Each use checks the declared fields against the receiver's model only, and computes nothing for the other models of the contract. The definition costs more on the larger contract; which part of the contract's type drives that was not measured.
 
 ## Consequences
 

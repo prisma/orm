@@ -256,7 +256,7 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     'test/integration/test/namespaced-accessors/fixtures/generated/contract.json',
     {
       reason: 'is declared in more than one namespace',
-      meta: { modelName: 'User', namespaces: ['auth', 'public'] },
+      meta: { modelName: 'Note', namespaces: ['auth', 'public'] },
     },
   ],
   [
