@@ -628,7 +628,8 @@
                 "columns": [
                   "A",
                   "B"
-                ]
+                ],
+                "name": "_PostToTag_AB_pkey"
               },
               "uniques": []
             }
@@ -647,7 +648,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7e0fbcfc4cc5178d89ab0cda93756513a0a823a3dea3708476207b0527c2e423"
+    "storageHash": "08be0c3a7027a4fbe97ae9aa57ac572ab4aa868c34f3218d6b32b52d10886037"
   },
   "execution": {
     "executionHash": "76ee8948067fff39e1b787eafdf2c9319ebe5e0f5029f71536b4f58b92d7790e",
