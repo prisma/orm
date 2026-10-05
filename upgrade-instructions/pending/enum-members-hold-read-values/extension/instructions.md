@@ -14,6 +14,13 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\bmongoOrm\s*(?:<[^>]*>)?\s*\('
+  - id: define-contract-carries-enums
+    summary: |
+      A target facade whose `defineContract` wraps `buildBoundContract` must carry the contract's enums as an `Enums` generic and export an `enumType` bound to its pack's codec types, as `@internal/postgres` and now `@internal/sqlite` do. Without them `db.enums` types each member as `JsonValue`, while it holds the value its codec reads, such as a bigint or a `Date`.
+    detection:
+      glob: "**/*.{ts,tsx,mts,cts}"
+      matches:
+        - '\bbuildBoundContract\s*\('
   - id: contract-dts-enum-member-types
     summary: |
       An emitted `contract.d.ts` now gives every namespace that declares enums an `enumMemberTypes` entry, which types each member as `db.enums` holds it. Re-emit bundled contracts that declare enums. `contract.json`, every hash and migration snapshots are unchanged.
@@ -75,6 +82,66 @@ const orm = mongoOrm<TContract>({
 ```
 
 Without `codecs`, the ORM compares a written enum value with the enum's stored forms, which refuses every value of an enum whose codec's stored form is not the value, such as a bigint or a date member.
+
+## `define-contract-carries-enums`
+
+Give the facade's `defineContract` an `Enums` type parameter on both overloads, pass it to `buildBoundContract` through the definition type, and merge the scaffold's and the factory's enums in the factory overload:
+
+```ts
+import type {
+  EnumTypeHandle,
+  MergeEnums,
+} from '@internal/sql-contract-ts/contract-builder';
+
+type EnumsConstraint = Record<string, EnumTypeHandle>;
+
+type Result<Types, Models, Extensions, Enums extends EnumsConstraint> = ReturnType<
+  typeof buildBoundContract<
+    SqlFamily,
+    TargetPack,
+    {
+      readonly types?: Types;
+      readonly models?: Models;
+      readonly extensions?: Extensions;
+      readonly enums?: Enums;
+      readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
+    }
+  >
+>;
+
+export function defineContract<
+  const Types extends TypesConstraint = Record<never, never>,
+  const Models extends ModelsConstraint = Record<never, never>,
+  const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
+  const Enums extends EnumsConstraint = Record<never, never>,
+>(definition: Definition<Types, Models, Extensions, Enums>): Result<Types, Models, Extensions, Enums>;
+
+export function defineContract<
+  const Types extends TypesConstraint = Record<never, never>,
+  const Models extends ModelsConstraint = Record<never, never>,
+  const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
+  const ScaffoldEnums extends EnumsConstraint = Record<never, never>,
+  const FactoryEnums extends EnumsConstraint = Record<never, never>,
+>(
+  scaffold: Scaffold<Extensions, ScaffoldEnums>,
+  factory: (helpers: ComposedAuthoringHelpers<SqlFamily, TargetPack, Extensions>) => {
+    readonly types?: Types;
+    readonly models?: Models;
+    readonly enums?: FactoryEnums;
+  },
+): Result<Types, Models, Extensions, MergeEnums<ScaffoldEnums, FactoryEnums>>;
+```
+
+Add `'enums'` to the keys the base scaffold omits from `ContractInput`, add `readonly enums?: Enums` to the definition and scaffold types, and type the implementation's `enums` as `EnumsConstraint`. Then export an `enumType` bound to the pack's codec types, and `member`, from the facade's contract builder:
+
+```ts
+import {
+  bindEnumType,
+  type ExtractCodecTypesFromPack,
+} from '@internal/sql-contract-ts/contract-builder';
+
+export const enumType = bindEnumType<ExtractCodecTypesFromPack<typeof targetPack>>();
+```
 
 ## `contract-dts-enum-member-types`
 
