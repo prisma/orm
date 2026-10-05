@@ -1,11 +1,20 @@
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import type { AfterTransactionResult } from '@internal/framework-components/runtime';
-import type { SqlDriver } from '@internal/sql-relational-core/ast';
-import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
+import {
+  type MarkerReadResult,
+  RawQueryAst,
+  type SqlDriver,
+} from '@internal/sql-relational-core/ast';
+import {
+  planFromAst,
+  type SqlExecutionPlan,
+  type SqlQueryPlan,
+} from '@internal/sql-relational-core/plan';
 import { vi } from 'vitest';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
 import { createSqlExecutionStack } from '../src/sql-context';
 import type { Log } from '../src/sql-runtime';
+import { defineTestCodec } from './test-codec';
 import {
   createTestRuntime as createRuntime,
   createStubAdapter,
@@ -106,6 +115,7 @@ export interface SetupOptions {
   readonly failures?: DriverFailures;
   readonly afterTransaction?: SqlMiddleware['afterTransaction'];
   readonly beforeHookFailure?: Error;
+  readonly readMarker?: () => Promise<MarkerReadResult>;
   readonly log?: Log;
   readonly declaresAfterTransaction?: boolean;
 }
@@ -121,7 +131,14 @@ export function createSetup(options: SetupOptions = {}) {
     options.declaresAfterTransaction === false
       ? withoutAfterTransaction
       : { ...withoutAfterTransaction, afterTransaction };
-  const adapter = createStubAdapter();
+  const stubAdapter = createStubAdapter();
+  const { readMarker } = options;
+  const adapter = {
+    ...stubAdapter,
+    __codecs: [...stubAdapter.__codecs, failingDecodeCodec],
+    profile:
+      readMarker === undefined ? stubAdapter.profile : { ...stubAdapter.profile, readMarker },
+  };
   const stack = createSqlExecutionStack({
     target: createTestTargetDescriptor(),
     adapter: createTestAdapterDescriptor(adapter),
@@ -131,7 +148,7 @@ export function createSetup(options: SetupOptions = {}) {
     stackInstance: instantiateExecutionStack(stack),
     context: createTestContext(testContract, adapter),
     driver: createDriver(events, options.failures ?? {}),
-    verifyMarker: false,
+    verifyMarker: readMarker === undefined ? false : 'onFirstUse',
     middleware: [middleware],
     ...(options.log ? { log: options.log } : {}),
   });
@@ -149,6 +166,24 @@ export const meta = {
 
 export function rawPlan(sql: string): SqlExecutionPlan {
   return { sql, params: [], ast: stubAst(), meta };
+}
+
+const failingDecodeCodec = defineTestCodec({
+  typeId: 'test/failing-decode@1',
+  targetTypes: ['int4'],
+  encode: (value: number) => value,
+  decode: (): number => {
+    throw new Error('decode failed');
+  },
+});
+
+export function failingDecodePlan(): SqlQueryPlan<{ id: number }> {
+  return planFromAst(
+    RawQueryAst.rows(['select id from t'], {
+      id: { codecId: failingDecodeCodec.id, nullable: false },
+    }),
+    testContract,
+  );
 }
 
 export const names = (events: readonly HookEvent[]) => events.map((event) => event.name);

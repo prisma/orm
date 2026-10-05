@@ -6,6 +6,7 @@ import { withTransaction } from '../src/sql-runtime';
 import {
   afterHookNames,
   createSetup,
+  failingDecodePlan,
   meta,
   names,
   rawPlan,
@@ -87,6 +88,55 @@ describe('afterTransaction outside a transaction', () => {
       ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
 
       expect(afterHookNames(setup.events)).toEqual(['afterTransaction:unknown']);
+    });
+
+    it('fires unknown once when a row fails to decode', async () => {
+      const setup = createSetup();
+      const queryable = await queryableOf(setup);
+
+      await expect(queryable.query(failingDecodePlan()).toArray()).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+      });
+
+      expect(afterHookNames(setup.events)).toEqual(['afterTransaction:unknown']);
+    });
+
+    it('fires unknown without afterExecute when the signal aborts during the marker read', async () => {
+      const controller = new AbortController();
+      const setup = createSetup({
+        readMarker: async () => {
+          controller.abort();
+          return { kind: 'absent' };
+        },
+      });
+      const queryable = await queryableOf(setup);
+
+      await expect(
+        queryable.execute(rawPlan('update t set x = 1'), { signal: controller.signal }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
+
+      expect(afterHookNames(setup.events)).toEqual(['afterTransaction:unknown']);
+    });
+
+    it('fires unknown without an after-hook when the marker read fails', async () => {
+      const setup = createSetup({
+        readMarker: async () => {
+          throw new Error('marker read failed');
+        },
+      });
+      const queryable = await queryableOf(setup);
+
+      await expect(queryable.execute(rawPlan('update t set x = 1'))).rejects.toThrow(
+        'marker read failed',
+      );
+      await expect(queryable.query(rawPlan('select 1')).toArray()).rejects.toThrow(
+        'marker read failed',
+      );
+
+      expect(afterHookNames(setup.events)).toEqual([
+        'afterTransaction:unknown',
+        'afterTransaction:unknown',
+      ]);
     });
 
     it('fires nothing for a query whose before-hook throws before its plan is encoded', async () => {

@@ -1,15 +1,23 @@
+import { RawQueryAst } from '@internal/sql-relational-core/ast';
+import type { AffectedCount } from '@internal/sql-relational-core/expression';
+import { planFromAst } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeConnection } from '../src/sql-runtime';
+import type { RuntimeConnection, RuntimeQueryable } from '../src/sql-runtime';
 import { withTransaction } from '../src/sql-runtime';
 import {
   createSetup,
+  type DriverFailures,
+  failingDecodePlan,
   type HookEvent,
+  meta,
   names,
   rawPlan,
   type Setup,
   stages,
+  testContract,
   transactionCases,
 } from './after-transaction-fixtures';
+import { stubAst } from './utils';
 
 function held(): { readonly promise: Promise<void>; readonly release: () => void } {
   let release = (): void => undefined;
@@ -183,7 +191,7 @@ describe('afterTransaction on a transaction driven by hand', () => {
     });
   });
 
-  it('fires at commit for a query whose row stream the caller abandoned', async () => {
+  it('fires unknown at commit for a query whose row stream the caller abandoned', async () => {
     const setup = createSetup();
     const connection = await setup.runtime.connection();
     const transaction = await connection.transaction();
@@ -199,7 +207,7 @@ describe('afterTransaction on a transaction driven by hand', () => {
     const fired = setup.events.filter((event) => event.name.startsWith('afterTransaction'));
     expect(fired).toEqual([
       expect.objectContaining({
-        name: 'afterTransaction:committed',
+        name: 'afterTransaction:unknown',
         planExecutionId: before?.planExecutionId,
       }),
     ]);
@@ -247,5 +255,105 @@ describe('afterTransaction on a transaction driven by hand', () => {
     hookHeld.release();
     await ending;
     expect(ended).toBe(true);
+  });
+});
+
+interface IncompleteQueryCase {
+  readonly title: string;
+  readonly failures: DriverFailures;
+  readonly run: (tx: RuntimeQueryable) => Promise<void>;
+}
+
+const incompleteQueryCases: ReadonlyArray<IncompleteQueryCase> = [
+  {
+    title: 'the driver fails an execute',
+    failures: { execute: new Error('execute failed') },
+    run: async (tx) => {
+      await tx.query(rawPlan('select 1')).toArray();
+      await expect(tx.execute(rawPlan('update t set x = 1'))).rejects.toThrow('execute failed');
+    },
+  },
+  {
+    title: 'the driver fails a row stream',
+    failures: { query: new Error('query failed') },
+    run: async (tx) => {
+      await tx.execute(rawPlan('update t set x = 1'));
+      await expect(tx.query(rawPlan('select 1')).toArray()).rejects.toThrow('query failed');
+    },
+  },
+  {
+    title: 'a row fails to decode',
+    failures: {},
+    run: async (tx) => {
+      await tx.execute(rawPlan('update t set x = 1'));
+      await expect(tx.query(failingDecodePlan()).toArray()).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+      });
+    },
+  },
+  {
+    title: 'the caller stops reading the rows',
+    failures: {},
+    run: async (tx) => {
+      await tx.execute(rawPlan('update t set x = 1'));
+      for await (const _row of tx.query(rawPlan('select 1'))) {
+        break;
+      }
+    },
+  },
+];
+
+describe.each(incompleteQueryCases)('a transaction in which $title', ({ failures, run }) => {
+  it('fires nothing before it ends, then unknown for every query when commit resolves', async () => {
+    const setup = createSetup({ failures });
+    const transaction = await (await setup.runtime.connection()).transaction();
+
+    await run(transaction);
+    expect(stages(setup.events)).toEqual([]);
+    await transaction.commit();
+
+    expect(stages(setup.events)).toEqual(['afterTransaction:unknown', 'afterTransaction:unknown']);
+  });
+
+  it('fires rolled-back for every query when rollback resolves', async () => {
+    const setup = createSetup({ failures });
+    const transaction = await (await setup.runtime.connection()).transaction();
+
+    await run(transaction);
+    await transaction.rollback();
+
+    expect(stages(setup.events)).toEqual([
+      'afterTransaction:rolled-back',
+      'afterTransaction:rolled-back',
+    ]);
+  });
+
+  it('fires unknown for every query when withTransaction commits', async () => {
+    const setup = createSetup({ failures });
+
+    await withTransaction(setup.runtime, run);
+
+    expect(stages(setup.events)).toEqual(['afterTransaction:unknown', 'afterTransaction:unknown']);
+  });
+});
+
+describe('prepared statements in a transaction', () => {
+  it('fire committed for a prepared query and a prepared execute once commit resolves', async () => {
+    const setup = createSetup();
+    const rows = await setup.runtime.prepare({}, () => ({ ast: stubAst(), params: [], meta }));
+    const count = await setup.runtime.prepare({}, () =>
+      planFromAst<AffectedCount>(RawQueryAst.affectedCount(['update t set x = 1']), testContract),
+    );
+    const transaction = await (await setup.runtime.connection()).transaction();
+
+    await rows.query(transaction, {}).toArray();
+    await count.execute(transaction, {});
+    expect(stages(setup.events)).toEqual([]);
+    await transaction.commit();
+
+    expect(stages(setup.events)).toEqual([
+      'afterTransaction:committed',
+      'afterTransaction:committed',
+    ]);
   });
 });

@@ -163,6 +163,8 @@ export interface TransactionContext extends RuntimeQueryable {
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
 
 type FireAfterTransaction = (result: AfterTransactionResult) => Promise<void>;
+// Remembers a query's afterTransaction hooks on an open transaction, and returns what the query calls when it ends, which tells the transaction whether the query completed.
+type RememberOnTransaction = (fireAfterTransaction: FireAfterTransaction) => FireAfterTransaction;
 
 function isExecutionPlan(plan: SqlExecutionPlan | SqlQueryPlan): plan is SqlExecutionPlan {
   return 'sql' in plan;
@@ -207,8 +209,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
   readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
-  // For each open transaction this runtime wrapped, the afterTransaction hooks of the queries run on it, which fire when it ends.
-  readonly #awaitingTransactionEnd = new WeakMap<SqlQueryable, FireAfterTransaction[]>();
+  // For each open transaction this runtime wrapped, how a query run on it is remembered until it ends.
+  readonly #openTransactions = new WeakMap<SqlQueryable, RememberOnTransaction>();
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
 
@@ -427,19 +429,18 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.#inFlight.begin();
   }
 
-  // Returns the hooks to fire when the query ends. On an open transaction it hands them to the transaction instead, which fires them when it ends, and returns undefined.
+  // Returns what to call when the query ends. Outside a transaction that fires the query's hooks. On an open transaction the hooks are remembered until it ends, and the query's end only tells the transaction whether it completed.
   private scheduleAfterTransaction(
     queryable: SqlQueryable,
     exec: SqlExecutionPlan,
     ctx: RuntimeMiddlewareContext,
   ): FireAfterTransaction | undefined {
     const fireAfterTransaction = this.afterTransactionHooks(exec, ctx);
-    const awaitingTransactionEnd = this.#awaitingTransactionEnd.get(queryable);
-    if (fireAfterTransaction === undefined || awaitingTransactionEnd === undefined) {
+    const rememberOnTransaction = this.#openTransactions.get(queryable);
+    if (fireAfterTransaction === undefined || rememberOnTransaction === undefined) {
       return fireAfterTransaction;
     }
-    awaitingTransactionEnd.push(fireAfterTransaction);
-    return undefined;
+    return rememberOnTransaction(fireAfterTransaction);
   }
 
   protected getListDecoder(): ListDecoder {
@@ -996,17 +997,23 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` hooks once when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper.
+   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` hooks once when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper. The wrapper does not add the transaction to the queryables that read the contract marker through themselves; the caller decides that.
    */
   protected wrapTransaction(driverTx: SqlTransaction): RuntimeTransaction {
     const awaitingTransactionEnd: FireAfterTransaction[] = [];
-    this.#awaitingTransactionEnd.set(driverTx, awaitingTransactionEnd);
+    let aQueryDidNotComplete = false;
+    this.#openTransactions.set(driverTx, (fireAfterTransaction) => {
+      awaitingTransactionEnd.push(fireAfterTransaction);
+      return async ({ outcome }) => {
+        if (outcome !== 'committed') aQueryDidNotComplete = true;
+      };
+    });
     let commitAttempted = false;
     let ended = false;
     const end = async (outcome: AfterTransactionResult['outcome']): Promise<void> => {
       if (ended) return;
       ended = true;
-      this.#awaitingTransactionEnd.delete(driverTx);
+      this.#openTransactions.delete(driverTx);
       for (const fireAfterTransaction of awaitingTransactionEnd) {
         await fireAfterTransaction({ outcome });
       }
@@ -1023,7 +1030,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           await end('unknown');
           throw error;
         }
-        await end('committed');
+        await end(aQueryDidNotComplete ? 'unknown' : 'committed');
       },
       async rollback(): Promise<void> {
         try {
