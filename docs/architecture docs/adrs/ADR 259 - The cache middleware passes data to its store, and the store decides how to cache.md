@@ -214,9 +214,18 @@ function createTagStore(): CacheStore<TagMeta> {
     }
   };
 
+  const index = (key: string, meta: TagMeta | undefined) => {
+    for (const tag of meta?.tags ?? []) {
+      keysByTag.set(tag, (keysByTag.get(tag) ?? new Set()).add(key));
+    }
+  };
+
   return {
     async get({ key, meta }) {
       const value = values.get(key);
+      if (value !== undefined) {
+        index(key, meta);
+      }
       return {
         key,
         meta,
@@ -229,9 +238,7 @@ function createTagStore(): CacheStore<TagMeta> {
         return false;
       }
       values.set(entry.key, value);
-      for (const tag of entry.meta?.tags ?? []) {
-        keysByTag.set(tag, (keysByTag.get(tag) ?? new Set()).add(entry.key));
-      }
+      index(entry.key, entry.meta);
       return true;
     },
     async unset({ keys, meta }) {
@@ -250,7 +257,7 @@ function createTagStore(): CacheStore<TagMeta> {
 }
 ```
 
-Invalidating the `users` tag increases the tag's version, so a read tagged `users` that was in flight is refused even if the store had never seen its key. It also increases the version of every key it removes, so a read of one of those keys under different `meta` is refused too. Removing a key takes it out of every tag's index, so a later invalidation of another tag cannot remove an entry stored again under different tags.
+Invalidating the `users` tag increases the tag's version, so a read tagged `users` that was in flight is refused even if the store had never seen its key. It also increases the version of every key it removes, so a read of one of those keys under different `meta` is refused too. Removing a key takes it out of every tag's index, so a later invalidation of another tag cannot remove an entry stored again under different tags. A hit under tags the entry was not stored with registers the key under those tags too, so invalidating any tag a reader used removes the entry that reader was served.
 
 ## Consequences
 
