@@ -21,6 +21,7 @@
 | 7 | Constant hover | A fixed-identifier value inside a multi-alternative `oneOf` renders its own doc | tmpdir | S1-7, S2-5 |
 | 8 | Null-case hover | Namespace, cross-space, unresolved and non-identifier positions all answer `null` | tmpdir | S1-10 |
 | 9 | Exploratory: real-schema hover sweep | Probe hover across the shipped `examples/prisma-8-demo` schema for anything the scripted scenarios didn't anticipate | tmpdir | (no AC; charter) |
+| 10 | Struct-block entry key and block keyword (real `policy_select`) | A struct-mode block the bare postgres target actually registers gives real positions for a struct-block entry key and its own keyword | tmpdir | S2-3 |
 
 > Scenario 6 is a **negative-control-shaped judgement scenario**: it names an explicit oracle (the project spec's own headline example, `@default(autoincrement())`) and the runner judges the observed hover against it. It is not scripted as "plant a violation, observe a gate fire" because there is no guardrail here — it is read-only hover.
 
@@ -29,7 +30,8 @@
 | Row | Why it's not a manual-QA scenario here |
 |---|---|
 | S2-2 — a named arg key inside a function call (e.g. `dbgenerated(expr: "…")`) | The real postgres target's `@default` function registry (`autoincrement`, `now`, `uuid`, `cuid`, `ulid`, `nanoid`) has no function with a *named* argument — only positional ones (`uuid(version)`, `cuid(version)`, `nanoid(size)`) — and `dbgenerated(...)` is explicitly rejected by the real target (`defaultValueArm` in `sql-attribute-specs.ts` reports it as a removed function). There is no real-world postgres position for this row today. `hover.test.ts`'s `'shows a named function-call-argument key and its documentation'` test covers it with a synthetic fixture instead. |
-| S2-3 — a struct-block entry key (e.g. `using` in a `policy` block) | The only generic PSL block the real postgres target contributes is `enum`, which is `mapBlock`-mode (bare values), not `structBlock`-mode. No struct-mode block exists anywhere in the real postgres control stack to hover a struct entry key on. `hover.test.ts`'s `'shows a struct-block entry key and its documentation'` test covers it with a synthetic fixture instead. |
+
+> **Corrected (2026-10-05, F8):** an earlier version of this table also listed S2-3 (a struct-block entry key) as N/A, on the premise that the bare postgres target contributes no struct-mode PSL block. That premise was wrong: `packages/3-targets/3-targets/postgres/src/core/authoring.ts` registers five real struct-mode blocks (`policy_select`, `policy_insert`, `policy_update`, `policy_delete`, `policy_all`), no extension needed. See Scenario 10.
 
 ## Pre-flight
 
@@ -130,9 +132,25 @@ model Oddity {
   external auth:User
   missing  Nope
 }
+
+namespace public {
+  model Profile {
+    id      Int @id
+    ownerId Int
+
+    @@rls
+  }
+
+  /// Restricts row visibility to the row's own owner.
+  policy_select ReadOwn {
+    target = Profile
+    roles  = [app_user]
+    using  = "ownerId = current_setting('app.uid')::int"
+  }
+}
 ```
 
-This is a real, if deliberately small, postgres-target project: `sql.String` is the family's built-in contributed scalar constructor (the "pg.Varchar" row's real-world equivalent — the bare postgres target registers no extension-contributed types without an extension), `autoincrement()` / `now()` / `uuid()` are the real registered default functions, `onDelete: Cascade` is the real `@relation` referential-action argument, `@@type(...)` is the real `enum` block's only contributed block attribute, and `@@map` is a real model attribute. `Oddity` exists purely to exercise the four null-case rows (a namespace named as a type, a cross-space-qualified reference, an unresolved type name, and a non-identifier positional value).
+This is a real, if deliberately small, postgres-target project: `sql.String` is the family's built-in contributed scalar constructor (the "pg.Varchar" row's real-world equivalent — the bare postgres target registers no extension-contributed types without an extension), `autoincrement()` / `now()` / `uuid()` are the real registered default functions, `onDelete: Cascade` is the real `@relation` referential-action argument, `@@type(...)` is the real `enum` block's only contributed block attribute, and `@@map` is a real model attribute. `Oddity` exists purely to exercise the four null-case rows (a namespace named as a type, a cross-space-qualified reference, an unresolved type name, and a non-identifier positional value). The `public` namespace's `Profile` model and `policy_select` block are real, struct-mode row-level-security authoring (`packages/3-targets/3-targets/postgres/src/core/authoring.ts`), for Scenario 10.
 
 ## Scenario 1 — Entity hover (model, field, named type, block)
 
@@ -159,6 +177,8 @@ Hover at each of the following positions (character picked inside the named word
 4. `shared.prisma`, inside `posts` in `posts Post[]` (a field declaration with no `///` above it).
 5. `main.prisma`, inside `Role` in `enum Role {` (a block declaration name).
 6. `main.prisma`, inside `Role` in `role      Role` (a block reference).
+7. `shared.prisma`, inside `Email` in `Email = sql.String(255)` (the named type's own declaration, inside `types { }`, with a `///` directly above it).
+8. `shared.prisma`, inside `Email` in `email Email  @unique` (a reference to that named type, from the field's type annotation — a different token from `email`, step 3).
 
 ### What you should see
 
@@ -166,12 +186,14 @@ Hover at each of the following positions (character picked inside the named word
 - (3) returns fence `email Email @unique` and documentation `Primary contact address.`.
 - (4) returns fence `posts Post[]` with **no** documentation section (no blank trailing line, no empty string — the markdown value ends right after the closing fence).
 - (5) and (6) both return fence `enum Role` and documentation `A role an account can hold.`.
+- (7) and (8) both return fence `Email = sql.String(255)` and documentation `A bounded email address.` — confirming named-type hover resolves identically at the declaration and at a field's type-annotation reference, the same pattern (1)/(2) prove for models.
 
 ### Failure modes
 
 - A reference does not match the declaration's own hover (stale/duplicated documentation logic).
 - A no-`///` field grows a spurious trailing blank documentation section.
 - A cross-file reference returns `null` or an empty fence (symbol table not merging both scratch files).
+- (7)/(8): the named type's hover is confused with the field's own hover (step 3), or with the contributed-type call it aliases (Scenario 3) — these are three distinct tokens on the same line and must not collapse into one.
 
 ## Scenario 2 — Attribute hover (field, model, block)
 
@@ -367,6 +389,37 @@ Hover at each of the following positions (character picked inside the named word
 
 **Notes capture:** record what you tried and anything that felt off, even if you can't yet classify it. File it as a finding in the run report the same way a scripted scenario's finding would be filed.
 
+## Scenario 10 — Struct-block entry key and block keyword (real `policy_select`)
+
+**What you're proving from the user's seat:** a struct-mode block the bare postgres target actually registers — `policy_select` (row-level security), no extension needed — gives real positions for a struct-block entry key and its own block keyword. This closes a prior false N/A: an earlier version of this script claimed no struct-mode block existed in the real postgres stack.
+
+**Covers:** S2-3
+
+**Isolation:** `tmpdir`
+
+**Oracle:** hover-arguments spec's row for a struct-block entry key: `key?: <ArgType.label>` + `Param.documentation`; the project spec's row for a block keyword: `AuthoringPslBlockDescriptor.documentation`. Both drawn from `packages/3-targets/3-targets/postgres/src/core/authoring.ts`'s `postgresAuthoringPslBlockDescriptors`, `policyUsingParam` and `policyTargetParam`.
+
+**Preconditions:** same scratch project as Scenario 1, with `main.prisma` extended by the `namespace public { model Profile { ... @@rls } policy_select ReadOwn { ... } }` block shown above (real, struct-mode row-level-security authoring — `target` must name a model declaring `@@rls`, which `Profile` does).
+
+### Steps
+
+1. `main.prisma`, inside `using` in `using  = "ownerId = current_setting('app.uid')::int"` (a struct-block entry key).
+2. `main.prisma`, inside `target` in `target = Profile` (a second struct-block entry key, whose type is itself an `entityRef`).
+3. `main.prisma`, inside the `policy_select` keyword of `policy_select ReadOwn {`.
+
+### What you should see
+
+- (1) shows fence `using?: string` and documentation "A SQL predicate controlling which rows this policy permits."
+- (2) shows fence `target: model reference` (no `?` — this parameter is required, unlike `using`) and documentation "The model protected by this policy; it must declare @@rls."
+- (3) shows **only** the descriptor's documentation, "Defines a row-level security policy controlling which rows can be selected.", with no fenced code block — the same keyword-hover shape Scenario 4 proves for `enum`.
+
+### Failure modes
+
+- (1)/(2) show the whole block's struct-mode parameter list instead of just the hovered key (mirrors Scenario 5's failure mode, now for a block rather than an attribute).
+- (2) shows a `?` despite `target` being a required parameter, or vice versa for `using`.
+- (3) shows a fenced declaration line alongside the keyword documentation.
+- Any of the three returns `null` — the real struct-mode block exists but a real-stack-specific gap (unit tests use only synthetic struct-block fixtures) keeps it from resolving.
+
 ## Sign-off coverage map
 
 | Row | Scenario(s) | Notes |
@@ -383,7 +436,7 @@ Hover at each of the following positions (character picked inside the named word
 | S1-10 null cases | 8 | — |
 | S2-1 attribute-argument key | 5 | — |
 | S2-2 function-call-argument key | (CI only) | see "Scenarios deliberately not in this script" |
-| S2-3 struct-block entry key | (CI only) | see "Scenarios deliberately not in this script" |
+| S2-3 struct-block entry key | 10 | — |
 | S2-4 function (new kind) | 6 | — |
 | S2-5 constant (new kind) | 7 | — |
 | S2-6 block attribute | 2 | — |
