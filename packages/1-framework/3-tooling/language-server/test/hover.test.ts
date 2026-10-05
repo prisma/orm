@@ -1,7 +1,10 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
+  type ArgType,
+  type AttributeCtx,
   blockAttribute,
+  bool,
   buildSymbolTable,
   entityRef,
   fieldAttribute,
@@ -10,12 +13,14 @@ import {
   identifier,
   list,
   modelAttribute,
+  numLiteral,
   oneOf,
   optional,
   str,
   structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
+import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { providePslHover } from '../src/hover';
 import { testBinder } from './helpers/binder';
@@ -64,6 +69,32 @@ const defaultSpec = fieldAttribute('default', {
     { key: 'value', type: oneOf(autoincrementFunc, dbgeneratedFunc), documentation: '' },
   ],
 });
+/** Mirrors the SQL family's local `nullLiteral()`: kind `null`, matching only the identifier `null`. */
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
+const autoincrementRealOrderFunc = funcCall('autoincrement', {
+  documentation: 'Generates sequential integers.',
+});
+/** The real postgres `@default` arm order: scalar leaves before the function alternatives. */
+const defaultRealOrderSpec = fieldAttribute('default', {
+  documentation: '',
+  positional: [
+    {
+      key: 'value',
+      type: oneOf(str(), numLiteral(), bool(), nullLiteral(), autoincrementRealOrderFunc),
+      documentation: '',
+    },
+  ],
+});
 const someBlockAttribute = blockAttribute('someBlockAttribute', {
   documentation: 'Does something.',
   positional: [{ key: 'value', type: str(), documentation: 'The value.' }],
@@ -78,6 +109,7 @@ const authoringContributions = assembleAuthoringContributions([
           relation: () => relationSpec,
           onDeleteExample: () => onDeleteSpec,
           default: () => defaultSpec,
+          defaultRealOrder: () => defaultRealOrderSpec,
         },
         model: { guardedBy: () => guardedBy, index: () => indexSpec },
       },
@@ -490,6 +522,17 @@ describe('providePslHover', () => {
         value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
       },
       range: { start: { line: 1, character: 18 }, end: { line: 1, character: 31 } },
+    });
+  });
+
+  it('shows a function name past leading scalar leaves, in the real @default arm order', () => {
+    const result = hover('model User {\n  id Int @defaultRealOrder(autoincreme|nt())\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
+      },
+      range: { start: { line: 1, character: 27 }, end: { line: 1, character: 40 } },
     });
   });
 

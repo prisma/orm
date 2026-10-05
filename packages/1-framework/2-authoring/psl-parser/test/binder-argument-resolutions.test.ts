@@ -1,17 +1,34 @@
+import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
+import { bool } from '../src/attribute-spec/combinators/bool';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { funcCall } from '../src/attribute-spec/combinators/func-call';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
+import { numLiteral } from '../src/attribute-spec/combinators/num-literal';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
+import type { ArgType, AttributeCtx } from '../src/attribute-spec/types';
 import { createBinder } from '../src/binder';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FunctionCallAst } from '../src/syntax/ast/expressions';
 import { binderContext } from './support';
+
+/** Mirrors the SQL family's local `nullLiteral()`: kind `null`, matching only the identifier `null`. */
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
 
 const scalarTypes = {
   Int: {
@@ -116,6 +133,42 @@ describe('createBinder — function calls', () => {
     const callArg = [...attribute.argList()!.args()][0]!;
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
     expect(binder.symbolForNode(call.name()!.syntax)).toBeUndefined();
+  });
+
+  it('records a function past leading scalar leaves, in the real @default arm order', () => {
+    const autoincrementFunc = funcCall('autoincrement', {
+      documentation: 'Generates sequential integers.',
+    });
+    const defaultSpec = fieldAttribute('default', {
+      documentation: '',
+      positional: [
+        {
+          key: 'value',
+          type: oneOf(str(), numLiteral(), bool(), nullLiteral(), autoincrementFunc),
+          documentation: '',
+        },
+      ],
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  id Int @default(autoincrement())\n}',
+      binderContext({
+        contributedTypes: scalarTypes,
+        attributeSpecs: { field: { default: () => defaultSpec }, model: {} },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['id']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const callArg = [...attribute.argList()!.args()][0]!;
+    const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
+    expect(binder.symbolForNode(call.name()!.syntax)).toEqual({
+      kind: 'function',
+      symbol: {
+        kind: 'function',
+        name: 'autoincrement',
+        signature: autoincrementFunc.signature,
+      },
+    });
   });
 });
 

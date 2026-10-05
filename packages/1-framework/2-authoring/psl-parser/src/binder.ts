@@ -64,9 +64,13 @@ import type {
 import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
 import {
   ArrayLiteralAst,
+  BooleanLiteralExprAst,
   type ExpressionAst,
   FunctionCallAst,
+  NumberLiteralExprAst,
   ObjectLiteralExprAst,
+  StringLiteralExprAst,
+  TaggedLiteralExprAst,
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
@@ -660,8 +664,30 @@ function tryBindExpression(
         diagnostics,
       };
     }
-    default:
-      return { matched: true, references, diagnostics };
+    case 'str':
+    case 'json': {
+      const matched = StringLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'num':
+    case 'int': {
+      const matched = NumberLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'bool': {
+      const matched = BooleanLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'null': {
+      const matched = IdentifierAst.cast(expression.syntax)?.name() === 'null';
+      return { matched, references, diagnostics };
+    }
+    case 'taggedLiteral': {
+      const matched = TaggedLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'rejecting':
+      return { matched: false, references, diagnostics };
   }
 }
 
