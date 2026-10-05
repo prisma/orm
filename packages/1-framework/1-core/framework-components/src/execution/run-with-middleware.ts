@@ -241,7 +241,7 @@ export async function runAfterTransaction<TExec extends ExecutionPlan>(
 }
 
 /**
- * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading. Delegate to the result with `yield*` from a running generator, so the call also happens when the caller stops before reading a row. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
+ * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading, including before the first row. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
  */
 export function queryWithAfterTransaction<Row>(
   fireAfterTransaction: ((result: AfterTransactionResult) => Promise<void>) | undefined,
@@ -252,7 +252,38 @@ export function queryWithAfterTransaction<Row>(
     : rowsThenAfterTransaction(fireAfterTransaction, rows);
 }
 
-async function* rowsThenAfterTransaction<Row>(
+function rowsThenAfterTransaction<Row>(
+  fireAfterTransaction: (result: AfterTransactionResult) => Promise<void>,
+  rows: () => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<Row, void, undefined> {
+      const generator = streamThenAfterTransaction(fireAfterTransaction, rows);
+      let started = false;
+      const fireIfStoppedBeforeStart = async (): Promise<void> => {
+        if (started) return;
+        started = true;
+        await fireAfterTransaction({ outcome: 'unknown' });
+      };
+      return {
+        next: () => {
+          started = true;
+          return generator.next();
+        },
+        return: async () => {
+          await fireIfStoppedBeforeStart();
+          return generator.return(undefined);
+        },
+        throw: async (error: unknown) => {
+          await fireIfStoppedBeforeStart();
+          return generator.throw(error);
+        },
+      };
+    },
+  };
+}
+
+async function* streamThenAfterTransaction<Row>(
   fireAfterTransaction: (result: AfterTransactionResult) => Promise<void>,
   rows: () => AsyncIterable<Row>,
 ): AsyncGenerator<Row, void, unknown> {

@@ -185,6 +185,32 @@ describe('queryWithAfterTransaction', () => {
     expect(events).toEqual(['row 1', 'afterTransaction:unknown']);
   });
 
+  it('fires unknown once when the caller stops before reading a row, without delegating', async () => {
+    const events: string[] = [];
+    const iterator = queryWithAfterTransaction(recordStage(events), () => rows(events))[
+      Symbol.asyncIterator
+    ]();
+
+    await iterator.return?.();
+    await iterator.return?.();
+    await iterator.next();
+
+    expect(events).toEqual(['afterTransaction:unknown']);
+  });
+
+  it('fires unknown once and rethrows when the caller throws into it before reading a row', async () => {
+    const events: string[] = [];
+    const failure = new Error('caller failed');
+    const iterator = queryWithAfterTransaction(recordStage(events), () => rows(events))[
+      Symbol.asyncIterator
+    ]();
+
+    await expect(iterator.throw?.(failure)).rejects.toBe(failure);
+    await iterator.return?.();
+
+    expect(events).toEqual(['afterTransaction:unknown']);
+  });
+
   it('returns the rows unchanged when there is nothing to fire', () => {
     const events: string[] = [];
     const source = rows(events);
