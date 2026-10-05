@@ -25,7 +25,11 @@ import {
 } from '@internal/psl-parser/syntax';
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
-import { renderSignatureLabel, resolveSignatureParameters } from './signature-help';
+import {
+  namedParameterText,
+  renderSignatureLabel,
+  resolveSignatureParameters,
+} from './signature-help';
 
 export interface ProvidePslHoverInput extends PslCursorInput {
   readonly binder: Binder;
@@ -139,9 +143,7 @@ function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
 
 function renderParameterContent(symbol: ParameterSymbol): string {
   const part: PositionalParam<unknown, never> = { key: symbol.name, ...symbol.param };
-  const { parts } = renderSignatureLabel('', { documentation: '', positional: [] }, [part]);
-  const text = parts[0]?.text ?? `${symbol.name}: ${symbol.param.type.label}`;
-  const fence = ['```prisma', text, '```'].join('\n');
+  const fence = ['```prisma', namedParameterText(part), '```'].join('\n');
   return withDocumentation(fence, symbol.param.documentation);
 }
 

@@ -48,7 +48,7 @@ function bind(source: string, context: ReturnType<typeof binderContext>) {
 }
 
 describe('createBinder — attribute-argument parameters', () => {
-  it('resolves a named attribute-argument key to the owning attribute', () => {
+  it('resolves a named attribute-argument key to its parameter', () => {
     const referencesParam = { type: str(), documentation: 'Referenced fields.' };
     const relationSpec = fieldAttribute('relation', {
       documentation: 'Declares a relation.',
@@ -67,12 +67,7 @@ describe('createBinder — attribute-argument parameters', () => {
     const keyNode = [...attribute.argList()!.args()][0]!.name()!.syntax;
     expect(binder.symbolForNode(keyNode)).toEqual({
       kind: 'parameter',
-      symbol: {
-        kind: 'parameter',
-        name: 'references',
-        param: referencesParam,
-        owner: { kind: 'attribute', name: 'relation', level: 'field', spec: relationSpec },
-      },
+      symbol: { kind: 'parameter', name: 'references', param: referencesParam },
     });
   });
 });
@@ -106,7 +101,7 @@ describe('createBinder — function calls', () => {
     expect(binder.symbolForNode(nameNode)).toEqual({ kind: 'function', symbol: functionSymbol });
     expect(binder.symbolForNode(modeKeyNode)).toEqual({
       kind: 'parameter',
-      symbol: { kind: 'parameter', name: 'mode', param: modeParam, owner: functionSymbol },
+      symbol: { kind: 'parameter', name: 'mode', param: modeParam },
     });
   });
 
@@ -304,7 +299,7 @@ describe('createBinder — constants', () => {
 });
 
 describe('createBinder — block parameters and attributes', () => {
-  it('resolves a struct-block entry key to the owning block', () => {
+  it('resolves a struct-block entry key to its parameter', () => {
     const usingParam = { type: str(), documentation: 'The policy filter.' };
     const { symbolTable, binder, diagnostics } = bind(
       'policy ReadOwn {\n  using = "x"\n}',
@@ -325,7 +320,7 @@ describe('createBinder — block parameters and attributes', () => {
     const entry = [...block.node.entries()][0]!;
     expect(binder.symbolForNode(entry.key()!.syntax)).toEqual({
       kind: 'parameter',
-      symbol: { kind: 'parameter', name: 'using', param: usingParam, owner: block },
+      symbol: { kind: 'parameter', name: 'using', param: usingParam },
     });
   });
 
@@ -385,7 +380,7 @@ describe('createBinder — block parameters and attributes', () => {
     const labelKeyNode = [...attribute.argList()!.args()][0]!.name()!.syntax;
     expect(binder.symbolForNode(labelKeyNode)).toEqual({
       kind: 'parameter',
-      symbol: { kind: 'parameter', name: 'label', param: labelParam, owner: attributeSymbol },
+      symbol: { kind: 'parameter', name: 'label', param: labelParam },
     });
   });
 });

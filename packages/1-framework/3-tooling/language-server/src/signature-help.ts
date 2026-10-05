@@ -129,6 +129,11 @@ export interface SignatureLabel {
   readonly parts: readonly SignatureLabelPart[];
 }
 
+export function namedParameterText(param: PositionalParam<unknown, never>): string {
+  const optional = 'optional' in param.type && param.type.optional === true;
+  return `${param.key}${optional ? '?' : ''}: ${param.type.label}`;
+}
+
 export function renderSignatureLabel(
   name: string,
   signature: ArgumentSignature,
@@ -141,9 +146,7 @@ export function renderSignatureLabel(
     const optional = 'optional' in param.type && param.type.optional === true;
     const typeLabel =
       optional && param.type.label.includes(' | ') ? `(${param.type.label})` : param.type.label;
-    const text = positional
-      ? `${typeLabel}${optional ? '?' : ''}`
-      : `${param.key}${optional ? '?' : ''}: ${param.type.label}`;
+    const text = positional ? `${typeLabel}${optional ? '?' : ''}` : namedParameterText(param);
     const start = label.length;
     label += text;
     return { param, text, start, end: label.length, positional };

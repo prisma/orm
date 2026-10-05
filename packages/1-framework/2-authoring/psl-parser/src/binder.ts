@@ -95,7 +95,6 @@ export interface ParameterSymbol {
   readonly kind: 'parameter';
   readonly name: string;
   readonly param: Param<unknown, never>;
-  readonly owner: AttributeSymbol | FunctionSymbol | BlockSymbol;
 }
 
 export interface FunctionSymbol {
@@ -476,7 +475,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
       if (keyNode !== undefined) {
         ctx.references.set(keyNode, {
           kind: 'parameter',
-          symbol: { kind: 'parameter', name: key, param: parameter, owner: block },
+          symbol: { kind: 'parameter', name: key, param: parameter },
         });
       }
     }
@@ -502,7 +501,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
     if (nameNode !== undefined) {
       ctx.references.set(nameNode, { kind: 'attribute', symbol: attributeSymbol });
     }
-    bindArguments(attribute, attributeSpec, ctx, attributeSymbol);
+    bindArguments(attribute, attributeSpec, ctx);
   }
 }
 
@@ -595,7 +594,7 @@ function tryBindExpression(
           if (keyNode !== undefined) {
             references.set(keyNode, {
               kind: 'parameter',
-              symbol: { kind: 'parameter', name: key, param: parameter, owner: functionSymbol },
+              symbol: { kind: 'parameter', name: key, param: parameter },
             });
           }
         }
@@ -742,7 +741,7 @@ function bindAttributes<Factory>(
     if (nameNode !== undefined) {
       ctx.references.set(nameNode, { kind: 'attribute', symbol: attributeSymbol });
     }
-    bindArguments(attribute, spec, ctx, attributeSymbol, ctx);
+    bindArguments(attribute, spec, ctx, ctx);
   });
 }
 
@@ -750,7 +749,6 @@ function bindArguments(
   attribute: ResolvedAttribute,
   spec: BindingArguments,
   ctx: ReferenceContext,
-  owner: AttributeSymbol | FunctionSymbol | BlockSymbol,
   modelContext?: BindContext,
 ): void {
   const rawArgs = Array.from(attribute.node.argList()?.args() ?? []);
@@ -767,7 +765,7 @@ function bindArguments(
       if (keyNode !== undefined) {
         ctx.references.set(keyNode, {
           kind: 'parameter',
-          symbol: { kind: 'parameter', name: arg.name, param: parameter, owner },
+          symbol: { kind: 'parameter', name: arg.name, param: parameter },
         });
       }
     }
