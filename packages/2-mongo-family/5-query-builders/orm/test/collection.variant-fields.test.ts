@@ -6,6 +6,7 @@ import type { Contract } from '../../../1-foundation/mongo-contract/test/fixture
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
+import { noEnumCodecs } from './no-enum-codecs';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -36,7 +37,7 @@ function paramRefs(value: unknown): MongoParamRef[] {
 describe('a variant collection', () => {
   it("encodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'Task', executor)
+    await createMongoCollection(contract, 'Task', executor, noEnumCodecs)
       .variant('Bug')
       .create({ title: 'Crash', assigneeId: 'a1', severity: 'high', comments: [] });
 
@@ -52,7 +53,10 @@ describe('a variant collection', () => {
 
   it("decodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'Task', executor).variant('Bug').all().toArray();
+    await createMongoCollection(contract, 'Task', executor, noEnumCodecs)
+      .variant('Bug')
+      .all()
+      .toArray();
 
     expect(plans[0]?.resultShape).toMatchObject({
       kind: 'document',

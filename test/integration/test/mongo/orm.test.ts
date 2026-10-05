@@ -28,7 +28,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.orderBy({ name: 1 }).all();
 
     expect(results).toHaveLength(2);
@@ -43,7 +43,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.where(MongoFieldFilter.eq('email', 'alice@example.com')).all();
 
     expect(results).toHaveLength(1);
@@ -67,7 +67,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.tasks.include('assignee').all();
 
     expect(results).toHaveLength(1);
@@ -88,7 +88,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       ],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const users = await orm.users.all();
 
     expect(users).toHaveLength(1);
@@ -109,7 +109,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [{ _id: new ObjectId(), text: 'Found it!', createdAt: new Date('2025-01-01') }],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const tasks = await orm.tasks.all();
 
     expect(tasks).toHaveLength(1);
@@ -138,7 +138,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const tasks = await orm.tasks.all();
 
     expect(tasks).toHaveLength(2);
@@ -162,7 +162,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.tasks.all();
     const r0 = results[0]!;
 
@@ -184,7 +184,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Charlie', email: 'charlie@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.where(MongoFieldFilter.eq('name', 'Alice').not()).all();
 
     expect(results).toHaveLength(2);
@@ -200,7 +200,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.orderBy({ name: 1 }).all();
 
     expect(results).toHaveLength(3);
@@ -217,7 +217,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Charlie', email: 'charlie@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.orderBy({ name: 1 }).offset(1).limit(1).all();
 
     expect(results).toHaveLength(1);
@@ -231,7 +231,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const results = await orm.users.select('name').all();
 
     expect(results).toHaveLength(2);
@@ -262,7 +262,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [{ _id: new ObjectId(), text: 'LGTM', createdAt: new Date() }],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
 
     const users = await orm.users.where(MongoFieldFilter.eq('name', 'Alice')).all();
     expect(users).toHaveLength(1);

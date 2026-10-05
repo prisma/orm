@@ -79,7 +79,7 @@ describe('mongo-demo cache middleware integration', {
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
     const cache = createCacheMiddleware();
     const runtime = createMongoRuntime({ context, driver, middleware: [cache] });
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, codecs: context.codecs });
     const query = mongoQuery<Contract>({ contractJson });
     return { runtime, orm, query, driver, driverExecuteSpy };
   }

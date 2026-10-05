@@ -26,7 +26,7 @@ describeWithMongoDB('Mongo no-emit integration', (ctx) => {
       comments: [{ _id: commentId, text: 'Investigating', createdAt: new Date('2025-01-01') }],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ contract, executor: ctx.runtime, codecs: ctx.codecs });
     const tasks = await orm.tasks.include('assignee').all();
 
     expect(tasks).toHaveLength(1);

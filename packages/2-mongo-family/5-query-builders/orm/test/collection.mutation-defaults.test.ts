@@ -16,6 +16,7 @@ import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
+import { noEnumCodecs } from './no-enum-codecs';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -104,7 +105,7 @@ function commandOf(plans: readonly MongoQueryPlan[], kind: string) {
 }
 
 function users(executor: MongoQueryExecutor, defaults: MutationDefaults) {
-  return createMongoCollection(contract, 'User', executor, defaults);
+  return createMongoCollection(contract, 'User', executor, noEnumCodecs, defaults);
 }
 
 const byEmail = MongoFieldFilter.eq('email', 'a@b.c');
@@ -315,7 +316,7 @@ describe('mongoOrm', () => {
         },
       },
     } as unknown as Contract;
-    expect(() => mongoOrm({ contract: withDefaults, executor })).toThrow(
+    expect(() => mongoOrm({ contract: withDefaults, executor, codecs: noEnumCodecs })).toThrow(
       expect.objectContaining({
         code: 'ORM.MUTATION_DEFAULTS_MISSING',
         message: expect.stringContaining('mutationDefaults: context'),
@@ -325,14 +326,19 @@ describe('mongoOrm', () => {
 
   it('builds a contract without execution defaults without mutationDefaults', () => {
     const { executor } = recordingExecutor();
-    expect(() => mongoOrm({ contract, executor })).not.toThrow();
+    expect(() => mongoOrm({ contract, executor, codecs: noEnumCodecs })).not.toThrow();
   });
 
   it('passes mutationDefaults to every root collection', async () => {
     const { executor, plans } = recordingExecutor([
       { insertedId: 'id-1', document: { _id: 'id-1' } },
     ]);
-    const orm = mongoOrm({ contract, executor, mutationDefaults: fakeMutationDefaults() });
+    const orm = mongoOrm({
+      contract,
+      executor,
+      codecs: noEnumCodecs,
+      mutationDefaults: fakeMutationDefaults(),
+    });
     await orm.users.create(input(userData));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toMatchObject({ loginCount: 7 });
   });

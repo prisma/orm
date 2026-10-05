@@ -23,7 +23,11 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
   ) as unknown as MongoVOContract;
 
   it('create and read value objects with correct types', async () => {
-    const ormClient = mongoOrm<MongoVOContract>({ contract, executor: ctx.runtime });
+    const ormClient = mongoOrm<MongoVOContract>({
+      contract,
+      executor: ctx.runtime,
+      codecs: ctx.codecs,
+    });
 
     const shopCollection = ormClient['shop']!;
     const created = await shopCollection.create({
@@ -74,7 +78,11 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
   });
 
   it('non-null value object field roundtrips through update', async () => {
-    const ormClient = mongoOrm<MongoVOContract>({ contract, executor: ctx.runtime });
+    const ormClient = mongoOrm<MongoVOContract>({
+      contract,
+      executor: ctx.runtime,
+      codecs: ctx.codecs,
+    });
     const shopCollection = ormClient['shop']!;
 
     await shopCollection.create({

@@ -1,4 +1,6 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { type MongoQueryExecutor, mongoOrm } from '@internal/mongo-orm';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
@@ -55,7 +57,28 @@ const contract = defineContract({
 });
 
 const contractJson = new MongoContractSerializer().serializeContract(contract);
-const { enums } = mongoStatic<typeof contract>({ contractJson });
+const { enums, context } = mongoStatic<typeof contract>({ contractJson });
+
+const unreachableDatabase: MongoQueryExecutor = {
+  query: () =>
+    new AsyncIterableResult(
+      (async function* () {
+        yield* [];
+        throw new Error('no database');
+      })(),
+    ),
+  execute: async () => {
+    throw new Error('no database');
+  },
+};
+
+const reading = {
+  text: enums.TextLevel.members.High,
+  int32: enums.Int32Level.members.High,
+  int64: enums.Int64Level.members.High,
+  date: enums.DateLevel.members.Sunset,
+  double: enums.DoubleLevel.members.Whole,
+};
 
 const isMember = (accessor: { has(value: unknown): boolean }, value: unknown) =>
   accessor.has(value);
@@ -105,5 +128,42 @@ describe('db.enums member types', () => {
     expectTypeOf(enums.Int64Level.members.Low).toEqualTypeOf<1n>();
     expectTypeOf(enums.DateLevel.members.Launch).toEqualTypeOf<Date>();
     expectTypeOf(enums.DoubleLevel.members.Half).toEqualTypeOf<1.5>();
+  });
+});
+
+describe('the Mongo ORM checks a written enum value through the runtime codecs', () => {
+  it('looks up each enum codec once, however many writes check it', async () => {
+    const lookups: string[] = [];
+    const orm = mongoOrm({
+      contract,
+      executor: unreachableDatabase,
+      codecs: {
+        get: (codecId) => {
+          lookups.push(codecId);
+          return context.codecs.get(codecId);
+        },
+      },
+    });
+    await expect(orm.readings.create(reading)).rejects.toThrow('no database');
+    await expect(orm.readings.create(reading)).rejects.toThrow('no database');
+    expect(lookups.sort()).toEqual([
+      'mongo/date@1',
+      'mongo/double@1',
+      'mongo/int32@1',
+      'mongo/int64@1',
+      'mongo/string@1',
+    ]);
+  });
+
+  it('refuses a write when the runtime has no codec for the enum', async () => {
+    const orm = mongoOrm({
+      contract,
+      executor: unreachableDatabase,
+      codecs: { get: () => undefined },
+    });
+    await expect(orm.readings.create(reading)).rejects.toMatchObject({
+      code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+      message: "No codec is registered for codecId 'mongo/string@1', which enum TextLevel uses.",
+    });
   });
 });

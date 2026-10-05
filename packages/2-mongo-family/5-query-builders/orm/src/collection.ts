@@ -1,5 +1,10 @@
-import { createEnumAccessor, type EnumMemberCodec } from '@internal/contract/enum-accessor';
 import {
+  createEnumAccessor,
+  type EnumAccessor,
+  type EnumMemberCodec,
+} from '@internal/contract/enum-accessor';
+import {
+  type ContractEnum,
   type ContractField,
   type ContractReferenceRelation,
   type ContractValueObject,
@@ -205,10 +210,37 @@ function topLevelUpdateFields(
 }
 
 /**
- * The codecs of the runtime the ORM writes through, by codec id. The ORM checks a written enum value through the enum's codec, as `db.enums` does; without one it compares the enum's stored forms.
+ * The codecs of the runtime the ORM writes through, by codec id. The ORM checks a written enum value through the enum's codec, as `db.enums` does.
  */
 export interface MongoOrmCodecs {
   get(codecId: string): EnumMemberCodec | undefined;
+}
+
+/** The accessor of the contract enum a value set names, or `undefined` when the contract has no such enum. */
+export type EnumAccessorFor = (namespaceId: string, enumName: string) => EnumAccessor | undefined;
+
+/**
+ * Reads each of the contract's enums through its codec once, when a write first checks a value against it, and reuses that accessor for every later write.
+ */
+export function enumAccessorsFor(contract: MongoContract, codecs: MongoOrmCodecs): EnumAccessorFor {
+  const built = new Map<ContractEnum, EnumAccessor>();
+  return (namespaceId, enumName) => {
+    const contractEnum = contract.domain.namespaces[namespaceId]?.enum?.[enumName];
+    if (contractEnum === undefined) return undefined;
+    const cached = built.get(contractEnum);
+    if (cached !== undefined) return cached;
+    const codec = codecs.get(contractEnum.codecId);
+    if (codec === undefined) {
+      throw runtimeError(
+        'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        `No codec is registered for codecId '${contractEnum.codecId}', which enum ${enumName} uses.`,
+        { codecId: contractEnum.codecId },
+      );
+    }
+    const accessor = createEnumAccessor(contractEnum, codec);
+    built.set(contractEnum, accessor);
+    return accessor;
+  };
 }
 
 function describeValue(value: unknown): string {
@@ -235,7 +267,7 @@ class MongoCollectionImpl<
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults | undefined;
-  readonly #codecs: MongoOrmCodecs | undefined;
+  readonly #enumAccessorFor: EnumAccessorFor;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
@@ -245,13 +277,13 @@ class MongoCollectionImpl<
     modelName: ModelName,
     executor: MongoQueryExecutor,
     mutationDefaults: MutationDefaults | undefined,
-    codecs: MongoOrmCodecs | undefined,
+    enumAccessorFor: EnumAccessorFor,
   ) {
     this.#contract = contract;
     this.#modelName = modelName;
     this.#executor = executor;
     this.#mutationDefaults = mutationDefaults;
-    this.#codecs = codecs;
+    this.#enumAccessorFor = enumAccessorFor;
     const model = blindCast<
       MongoModelDefinition,
       'modelName is constrained to Mongo contract model keys but namespace lookup erases storage type'
@@ -983,8 +1015,8 @@ class MongoCollectionImpl<
     if (valueSet === undefined || valueSet.entityKind !== 'enum' || value === null) return;
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
-    if (contractEnum === undefined) return;
-    const accessor = createEnumAccessor(contractEnum, this.#codecs?.get(contractEnum.codecId));
+    const accessor = this.#enumAccessorFor(valueSet.namespaceId, valueSet.entityName);
+    if (contractEnum === undefined || accessor === undefined) return;
     const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
     const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
     if (outside === -1) return;
@@ -1253,7 +1285,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
-      this.#codecs,
+      this.#enumAccessorFor,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1270,7 +1302,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
-      this.#codecs,
+      this.#enumAccessorFor,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1286,8 +1318,28 @@ export function createMongoCollection<
   contract: TContract,
   modelName: ModelName,
   executor: MongoQueryExecutor,
+  codecs: MongoOrmCodecs,
   mutationDefaults?: MutationDefaults,
-  codecs?: MongoOrmCodecs,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults, codecs);
+  return new MongoCollectionImpl(
+    contract,
+    modelName,
+    executor,
+    mutationDefaults,
+    enumAccessorsFor(contract, codecs),
+  );
+}
+
+/** A root collection of an ORM whose collections share one set of enum accessors. */
+export function createRootCollection<
+  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+>(
+  contract: TContract,
+  modelName: ModelName,
+  executor: MongoQueryExecutor,
+  mutationDefaults: MutationDefaults | undefined,
+  enumAccessorFor: EnumAccessorFor,
+): MongoCollection<TContract, ModelName> {
+  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults, enumAccessorFor);
 }
