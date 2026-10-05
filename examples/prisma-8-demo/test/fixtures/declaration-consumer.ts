@@ -53,7 +53,7 @@ export async function chainingMethods() {
   expectTypeOf(posts.distinctTitles()).toEqualTypeOf<PostLibrary>();
   expectTypeOf(posts.distinctOnTitle()).toEqualTypeOf<Ordered<PostLibrary>>();
   expectTypeOf(posts.after('p1')).toEqualTypeOf<Ordered<PostLibrary>>();
-  expectTypeOf(posts.piped()).toEqualTypeOf<Filtered<Ordered<PostLibrary>>>();
+  expectTypeOf(posts.applied()).toEqualTypeOf<Filtered<Ordered<PostLibrary>>>();
   expectTypeOf(posts.filteredAndOrdered()).toEqualTypeOf<Filtered<Ordered<PostLibrary>>>();
   expectTypeOf<keyof CollectionRowOf<ReturnType<PostLibrary['titles']>>>().toEqualTypeOf<
     'id' | 'title'

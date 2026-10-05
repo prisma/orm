@@ -12,13 +12,13 @@ An application lists posts for a request that may or may not carry a search term
 
 ```ts
 const posts = await db.Post
-  .pipe((posts) => (input.search ? posts.where((p) => p.title.ilike(`%${input.search}%`)) : posts))
+  .apply((posts) => (input.search ? posts.where((p) => p.title.ilike(`%${input.search}%`)) : posts))
   .orderBy((p) => p.createdAt.desc())
   .limit(20)
   .all();
 ```
 
-- `pipe` applies a step, a function from a collection to a collection, and returns whatever the step returns (ADR 258).
+- `apply` runs a step, a function from a collection to a collection, and returns whatever the step returns (ADR 258).
 - The step may contain any code: here a conditional, elsewhere an early return or a loop.
 - The result is a collection that may or may not be filtered. Its type says the filter is not known, so `deleteAll` would be refused on it.
 
@@ -26,9 +26,9 @@ A query is a chain of calls, so a piece of a query that is shared between places
 
 ## Decision
 
-A **query fragment** is a function. A **row fragment** is a function from the model accessor to an expression, and `where` and `orderBy` take it. A **step** is a function from a collection to a collection, and `pipe` applies it.
+A **query fragment** is a function. A **row fragment** is a function from the model accessor to an expression, and `where` and `orderBy` take it. A **step** is a function from a collection to a collection, and a collection's `apply` method runs it.
 
-1. **A step is applied with `pipe`** (ADR 258). The step receives the caller's exact type, including a custom collection class, and the result is whatever the step returns.
+1. **A step is run with `apply`** (ADR 258). The step receives the caller's exact type, including a custom collection class, and the result is whatever the step returns.
 2. **The query API has no control-flow methods.** Whatever the application would write in a function body, it writes inside the step. The type stays sound because a filtered collection is a subtype of an unfiltered one, so a step that may or may not filter yields the unfiltered type (ADR 258).
 3. **A field type is named by its codec.** `CodecField<Contract, CodecId, Nullable>` is the model accessor's type for any field with that codec and nullability. It has the same set of comparison methods and operations as such a field on the model accessor, and it checks values against the codec's output type. A row fragment typed with it fits every model that has such a field.
 4. **A step that changes the row is defined once per model.** `modelStep<Contract, Model>()(body)` types the body against the plain collection of one model of the contract and returns a step. The step accepts a collection of that model under two conditions:
@@ -44,34 +44,34 @@ A query is a chain of method calls on a collection. Each call returns a collecti
 
 Applications share parts of queries. The same filter for deleted rows belongs on every query of a model. The same conditional filters are built from every list request. The same `select` and `include` serve every endpoint that returns a summary. In a query language made of objects these are objects, spread into each query. In a query language made of calls they are functions, applied to each collection.
 
-A step can be called with no support from the collection at all: `step(db.Post)`. `pipe` exists so that applying a step reads in the same order as the rest of the chain, and so that a step can be applied in the middle of one.
+A step can be called with no support from the collection at all: `step(db.Post)`. `apply` exists so that a step reads in the same order as the rest of the chain, and so that it can sit in the middle of one.
 
 ## How it works
 
-### 1. A step is applied with `pipe`
+### 1. `apply` runs a step
 
 ```ts
 const byUser = (posts: PostCollection) => posts.where((p) => p.userId.eq(userId)).orderBy((p) => p.createdAt.desc());
-db.Post.pipe(byUser);   // Ordered<Filtered<PostCollection>>
+db.Post.apply(byUser);   // Ordered<Filtered<PostCollection>>
 ```
 
-`pipe` calls the step with the receiver (ADR 258). A custom collection class receives itself, an include refinement receives the refinement, a collection after `select` receives the narrowed row. A step that filters yields `Filtered<Self>`, and a step that selects yields a new row.
+`apply` calls the step with the receiver (ADR 258). A custom collection class receives itself, an include refinement receives the refinement, a collection after `select` receives the narrowed row. A step that filters yields `Filtered<Self>`, and a step that selects yields a new row.
 
 ### 2. Any function body is sound
 
 ```ts
-db.Post.pipe((posts) => (search ? posts.where((p) => p.title.ilike(`%${search}%`)) : posts));
+db.Post.apply((posts) => (search ? posts.where((p) => p.title.ilike(`%${search}%`)) : posts));
 
 class PostCollection extends Collection<Contract, 'Post'> {
   matching(search: string | undefined) {
-    return this.pipe((posts) => (search ? posts.where((p) => p.title.ilike(`%${search}%`)) : posts));
+    return this.apply((posts) => (search ? posts.where((p) => p.title.ilike(`%${search}%`)) : posts));
   }
 }
 ```
 
 The two branches have the types `Filtered<Self>` and `Self`. The first is a subtype of the second, so TypeScript reduces the union to `Self`: the unfiltered collection, or the unfiltered class. `update`, `delete` and `cursor` stay refused. An `if` with an early return, a `switch`, a loop that may run zero times, and a reassigned `let` reduce the same way. A function whose every return path filters yields `Filtered<Self>`, and `update` is allowed on it.
 
-All of this is the subtyping rule of ADR 258. `pipe` adds nothing to it.
+All of this is the subtyping rule of ADR 258. `apply` adds nothing to it.
 
 ### 3. A row fragment names its fields by codec
 
@@ -98,11 +98,11 @@ The error for a refused fragment names the field. For `db.Tag.where(notDeleted)`
 const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
 type PostSummary = CollectionRowOf<ReturnType<typeof summary>>;
 
-db.Post.pipe(summary);
-db.Post.where({ userId }).pipe(summary);
-db.User.include('posts', (posts) => posts.pipe(summary));
-db.Comment.pipe(summary);                  // error: not a Post collection
-db.Post.select('id').pipe(summary);        // error: the rows no longer have every Post field
+db.Post.apply(summary);
+db.Post.where({ userId }).apply(summary);
+db.User.include('posts', (posts) => posts.apply(summary));
+db.Comment.apply(summary);                  // error: not a Post collection
+db.Post.select('id').apply(summary);        // error: the rows no longer have every Post field
 ```
 
 A step that calls `select` produces a new row, so its type cannot be the caller's type. `modelStep` types the body once, against the plain collection of the model, and returns a `ModelStep<Contract, Model, Result>`: a step whose parameter is `UnnarrowedCollection<Contract, Model>`. The model name must be one model of the contract; a misspelled name or a union of names is a compile error. A model name that is a type parameter is refused too, because TypeScript cannot tell whether a type parameter is one name or a union, so `modelStep` is called with a literal model name.
@@ -111,7 +111,7 @@ A step that calls `select` produces a new row, so its type cannot be the caller'
 
 `CollectionRowOf` reads the row type off the result, so the application can name it.
 
-The step's result has the default state. A filter or order applied before the step still runs, but it is not recorded after it, so `update` is refused after `pipe(summary)` even when a `where` came first. Row-changing steps are for reading.
+The step's result has the default state. A filter or order applied before the step still runs, but it is not recorded after it, so `update` is refused after `apply(summary)` even when a `where` came first. Row-changing steps are for reading.
 
 ### 5. A field to order by, from a request
 
@@ -133,7 +133,7 @@ Measured as type instantiations, TypeScript 5.9.3, on `examples/prisma-8-demo`, 
 
 | Feature | Present but unused | Per use |
 | --- | --- | --- |
-| `pipe` | +608 (+0.08%) | about 7 |
+| `apply` | +608 (+0.08%) | about 7 |
 | A conditional step | none | 10,000 to 14,000 once per pair of collection types, then under 10 |
 | `CodecField` row fragment | none | about 20 once, then no more than the same `where` written inline |
 | `modelStep` | none | about 700 less than the same `select` and `include` written inline |
@@ -144,7 +144,7 @@ The three helpers present and unused cost the application nothing: it checks wit
 ## Consequences
 
 - **Any function is a step.** Control flow stays in the language. The query API gains no combinators.
-- **A package can offer a fragment for any model.** A row fragment typed with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a step built from the index definition, and the application applies it with `pipe`.
+- **A package can offer a fragment for any model.** A row fragment typed with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a step built from the index definition, and the application runs it with `apply`.
 - **A shared fragment checks values more loosely than the field.** Where a field refines its codec's value, a `CodecField` fragment accepts values the field does not. Filters that depend on an enum's members are written on the model.
 - **A refused row fragment is reported against each overload of `where`.** The message is long, but the first overload's part names the missing or mismatched field. `where` keeps three overloads so that this stays true.
 - **A row-changing step is written against one model.** `modelStep` cannot serve two models that share fields; a filter that serves several models is a `CodecField` row fragment instead.
@@ -152,7 +152,7 @@ The three helpers present and unused cost the application nothing: it checks wit
 
 ## Non-goals
 
-- **A default fragment per model.** A filter that every query of a model must apply, such as soft delete, is a separate feature. `pipe` is applied per query.
+- **A default fragment per model.** A filter that every query of a model must apply, such as soft delete, is a separate feature. `apply` is called per query.
 - **Recording a fragment's filter after a row-changing step.** `modelStep` produces the default state.
 - **A field-keyed fragment type** that takes a field's own value type for enum-like fields. One fragment serving several models can only rely on the codec.
 
@@ -161,5 +161,5 @@ The three helpers present and unused cost the application nothing: it checks wit
 - **A `when(value, step)` combinator** whose result keeps the caller's type, as the way to write conditional steps. It moves control flow into the query API, and every construct would need its own combinator. The subtyping rule of ADR 258 makes the plain conditional sound.
 - **`where(undefined)` and `orderBy(undefined)` as no-ops**, so that a conditional filter is `posts.where(search ? (p) => ... : undefined)`. It adds an overload to every `where` and `orderBy`, costs about 7.5% more type checking in the client package when unused, and covers only those two methods.
 - **A plain function typed with `Pick<typeof db.Post, 'select'>`** as the row-changing step, with no helper. It is accepted wherever `modelStep` is, but each use costs about 1,800 type instantiations in the demo application, because TypeScript compares the collection's `select` method with the picked one, where a `modelStep` use saves about 700 over the same chain written inline. It also accepts a collection narrowed by `select` or `variant`, because the picked `select` does not depend on the row. A function typed with `Collection<Contract, 'Post'>` is refused on the client's root collections, whose type state names their namespace, and in include refinements; one typed with `Pick` of it is refused on the client's root collections.
-- **A `fragment` builder** that declares the fields a step needs by codec and applies it with `pipe`, keeping the caller's type. It works, but its result's state is not updated, and one definition costs about 10,000 instantiations for a reason not found. `CodecField` covers the same need as a plain row fragment.
+- **A `fragment` builder** that declares the fields a step needs by codec and runs it with `apply`, keeping the caller's type. It works, but its result's state is not updated, and one definition costs about 10,000 instantiations for a reason not found. `CodecField` covers the same need as a plain row fragment.
 - **Query fragments as objects**, as in a query language made of objects. The chain is the query language here, and an object fragment would need a second way to express every method, kept in step with the first.

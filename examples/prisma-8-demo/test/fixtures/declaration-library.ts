@@ -64,8 +64,8 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
     return this.select('id', 'title');
   }
 
-  piped() {
-    return this.pipe((posts) => posts.filtered().orderBy((post) => post.createdAt.desc()));
+  applied() {
+    return this.apply((posts) => posts.filtered().orderBy((post) => post.createdAt.desc()));
   }
 
   allRows() {

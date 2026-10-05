@@ -432,7 +432,7 @@ export class CollectionBase<
   /**
    * Call `step` with this collection and return its result.
    */
-  pipe<Self, Out>(this: Self, step: Step<Self, Out>): Out {
+  apply<Self, Out>(this: Self, step: Step<Self, Out>): Out {
     return step(this);
   }
 

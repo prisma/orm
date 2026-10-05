@@ -29,7 +29,7 @@ export type Ordered<C> = C & HasOrderBy;
 /** A collection whose rows also have the fields of `Added`, such as an included relation. */
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
 
-/** A function from one collection to another; `collection.pipe(step)` applies it. */
+/** A function from one collection to another; `collection.apply(step)` applies it. */
 export type Step<In, Out> = (collection: In) => Out;
 
 /** The type state of a collection. */
