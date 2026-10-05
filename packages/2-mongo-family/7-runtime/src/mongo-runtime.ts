@@ -7,6 +7,7 @@ import {
   type RuntimeExecuteOptions,
   type RuntimeMiddlewareContext,
   type RuntimeStatementStats,
+  runAfterTransaction,
   runBeforeExecuteChain,
   runBeforeQueryChain,
   runExecuteWithMiddleware,
@@ -29,6 +30,19 @@ import {
 } from './param-ref-mutator';
 
 function noop() {}
+
+async function* thenAfterTransaction<Row>(
+  rows: AsyncIterable<Row>,
+  afterTransaction: () => Promise<void>,
+): AsyncGenerator<Row, void, unknown> {
+  try {
+    yield* rows;
+  } catch (error) {
+    await afterTransaction();
+    throw error;
+  }
+  await afterTransaction();
+}
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -240,11 +254,14 @@ class MongoRuntimeImpl
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
       const exec = await self.prepareQueryExecution(plan, codecCtx, middlewareCtx);
-      const stream = runQueryWithMiddleware<MongoExecutionPlan, Record<string, unknown>>(
-        exec,
-        self.middleware,
-        middlewareCtx,
-        () => self.runDriver(exec),
+      const stream = thenAfterTransaction(
+        runQueryWithMiddleware<MongoExecutionPlan, Record<string, unknown>>(
+          exec,
+          self.middleware,
+          middlewareCtx,
+          () => self.runDriver(exec),
+        ),
+        () => self.afterTransaction(exec, middlewareCtx),
       );
       for await (const rawRow of stream) {
         checkAborted(codecCtx, 'stream');
@@ -276,7 +293,11 @@ class MongoRuntimeImpl
     checkAborted(codecCtx, 'stream');
     return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
       this.runExecute(exec),
-    );
+    ).finally(() => this.afterTransaction(exec, middlewareCtx));
+  }
+
+  private afterTransaction(exec: MongoExecutionPlan, ctx: MongoMiddlewareContext): Promise<void> {
+    return runAfterTransaction(exec, this.middleware, { outcome: 'committed' }, ctx);
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {
