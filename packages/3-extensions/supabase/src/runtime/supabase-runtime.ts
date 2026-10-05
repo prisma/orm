@@ -119,59 +119,7 @@ export class SupabaseRuntimeImpl<
       },
 
       async transaction(): Promise<RuntimeTransaction> {
-        const tx = await conn.beginTransaction();
-        const roleTransaction: RuntimeTransaction &
-          PreparedStatementQueryTarget &
-          PreparedStatementExecuteTarget = {
-          async commit(): Promise<void> {
-            await tx.commit();
-          },
-          async rollback(): Promise<void> {
-            await tx.rollback();
-          },
-          query<Row>(
-            plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
-            options?: RuntimeExecuteOptions,
-          ): AsyncIterableResult<Row> {
-            return self.queryAgainstQueryable<Row>(plan, tx, { ...options, scope: 'transaction' });
-          },
-          execute(
-            plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
-            options?: RuntimeExecuteOptions,
-          ): Promise<SqlStatementStats> {
-            return self.executeStatisticsAgainstQueryable(plan, tx, {
-              ...options,
-              scope: 'transaction',
-            });
-          },
-          [preparedStatementQuery]<Params, Row>(
-            prepared: PreparedStatement<Params, Row>,
-            params: Params,
-            options?: RuntimeExecuteOptions,
-          ): AsyncIterableResult<Row> {
-            return self.runPreparedQueryAgainstRoleQueryable(
-              prepared,
-              params,
-              tx,
-              options,
-              'transaction',
-            );
-          },
-          [preparedStatementExecute]<Params>(
-            prepared: PreparedExecution<Params>,
-            params: Params,
-            options?: RuntimeExecuteOptions,
-          ): Promise<SqlStatementStats> {
-            return self.runPreparedExecuteAgainstRoleQueryable(
-              prepared,
-              params,
-              tx,
-              options,
-              'transaction',
-            );
-          },
-        };
-        return roleTransaction;
+        return self.wrapTransaction(await conn.beginTransaction());
       },
 
       /**
