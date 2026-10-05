@@ -14,7 +14,7 @@ import {
 import * as contractFreeDdl from '../../../contract-free/ddl';
 import { postgresError } from '../../errors';
 import { escapeLiteral, quoteIdentifier } from '../../sql-utils';
-import { autoincrementSequenceType } from '../autoincrement-sequence-type';
+import { autoincrementWidth } from '../autoincrement-widths';
 import { boundSchema } from '../bound-schema';
 import { defaultSequenceName } from '../default-sequence-name';
 import { qualifyTableName } from '../planner-sql-checks';
@@ -285,7 +285,7 @@ async function setAutoincrementDefault(
   operationClass: 'additive' | 'widening',
 ): Promise<Op> {
   const columnName = column.name;
-  const sequenceType = autoincrementSequenceType(column.type);
+  const sequenceType = autoincrementWidth(column.type)?.sequenceType;
   if (sequenceType === undefined) {
     throw postgresError(
       'CONTRACT.DEFAULT_INVALID',

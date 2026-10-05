@@ -168,7 +168,7 @@ describe('buildSetDefaultColumn', () => {
     },
   );
 
-  it('refuses an autoincrement default on a column that is not an integer', () => {
+  it('carries an autoincrement default on a column that is not an integer, for setDefault to refuse', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'function', expression: 'autoincrement()' },
       nativeTypeContext: 'text',
@@ -176,13 +176,8 @@ describe('buildSetDefaultColumn', () => {
       codecBaseNativeType: 'text',
     });
 
-    expect(() => buildSetDefaultColumn('v', defaultNode, noHooks)).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.DEFAULT_INVALID',
-        message:
-          'Column "v" has an autoincrement() default, which needs a smallint, integer or bigint column; its type is "text".',
-        meta: { column: 'v', nativeType: 'text', reason: 'set-default-autoincrement' },
-      }),
+    expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toEqual(
+      col('v', 'text', { default: fn('autoincrement()'), codecRef: { codecId: 'pg/text@1' } }),
     );
   });
 

@@ -5,6 +5,7 @@ import { isPgEnumParams } from '../codecs';
 import { postgresDateTimeDdlText } from '../date-time-ddl-text';
 import { postgresError } from '../errors';
 import { escapeLiteral, quoteQualifiedName } from '../sql-utils';
+import { autoincrementWidth } from './autoincrement-widths';
 import { resolveColumnTypeMetadata } from './planner-type-resolution';
 
 /**
@@ -46,15 +47,8 @@ export function buildColumnTypeSql(
   if (allowPseudoTypes) {
     const columnDefault = column.default;
     if (columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()') {
-      if (resolved.nativeType === 'int4' || resolved.nativeType === 'integer') {
-        return 'SERIAL';
-      }
-      if (resolved.nativeType === 'int8' || resolved.nativeType === 'bigint') {
-        return 'BIGSERIAL';
-      }
-      if (resolved.nativeType === 'int2' || resolved.nativeType === 'smallint') {
-        return 'SMALLSERIAL';
-      }
+      const width = autoincrementWidth(resolved.nativeType);
+      if (width !== undefined) return width.serialType;
     }
   }
 
