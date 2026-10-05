@@ -20,6 +20,7 @@ import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/con
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
+  AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
@@ -51,10 +52,12 @@ import type {
   ModelSymbol,
   NamespaceSymbol,
   PslSpan,
+  Resolution,
   SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
+  contributedTypeOf,
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
@@ -63,12 +66,16 @@ import {
   nodePslSpan,
   type PslDiagnostic,
   type PslDiagnosticCollector,
+  typeReferenceNode,
 } from '@internal/psl-parser';
 import {
   claimedBlockKeywords,
   enumMemberAttributeDiagnostics,
   fkRelationPairKey,
   type InvalidFkPairing,
+  isBareTypeConstructor,
+  reportPresetNotCalled,
+  reportTypeConstructorNotCalled,
   unsupportedBlockDiagnostic,
 } from '@internal/psl-parser/interpret';
 import {
@@ -91,9 +98,6 @@ import {
   resolveFieldPreset,
 } from './field-presets';
 import {
-  createMongoBinder,
-  findFieldAttributeNode,
-  findModelAttributeNode,
   interpretFieldAttribute,
   interpretModelAttribute,
   mongoAttributeSpecs,
@@ -109,38 +113,29 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
   readonly codecLookup?: CodecLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
-  readonly composedExtensions?: readonly string[];
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   /** Receives a warning for each field typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
-  /** Scalar names an earlier Prisma schema used that this schema does not accept, with the codec each maps to; a field typed with one is refused with the name that stores the same way. */
-  readonly formerScalarCodecIds?: ReadonlyMap<string, string>;
 }
 
 /**
  * Reports `PSL_DEPRECATED_SCALAR_NAME` at the type of a field whose scalar name is a deprecated alias, naming the replacement. The alias resolves to the same codec, so the contract does not change.
  */
 function deprecatedScalarWarner(input: {
-  readonly types: AuthoringTypeNamespace | undefined;
   readonly sources: PslSources;
   readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
-}): (field: FieldSymbol) => void {
+}): (field: FieldSymbol, descriptor: AuthoringTypeConstructorDescriptor) => void {
   const { reportWarning } = input;
   if (reportWarning === undefined) return () => {};
-  return (field) => {
-    if (field.typeConstructor !== undefined) return;
-    const descriptor = input.types?.[field.typeName];
-    if (
-      descriptor === undefined ||
-      !isAuthoringTypeConstructorDescriptor(descriptor) ||
-      descriptor.deprecated === undefined
-    ) {
+  return (field, descriptor) => {
+    if (descriptor.deprecated === undefined) {
       return;
     }
     const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
@@ -159,47 +154,10 @@ function deprecatedScalarWarner(input: {
 }
 
 interface ScalarNames {
-  readonly warnDeprecated: (field: FieldSymbol) => void;
-  readonly unknownTypeMessage: (field: FieldSymbol, ownerName: string) => string;
-  /** Every enum the schema declares, including one whose own declaration failed and was already reported. */
-  readonly declaredEnums: ReadonlySet<string>;
-}
-
-/**
- * The words for a field type the schema cannot resolve: a name from an earlier Prisma that maps to a codec gets the current name for that codec; any other name gets the list of scalar types.
- */
-function unknownTypeMessages(input: {
-  readonly types: AuthoringTypeNamespace | undefined;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly formerScalarCodecIds: ReadonlyMap<string, string>;
-}): ScalarNames['unknownTypeMessage'] {
-  const current = [...input.scalarTypeCodecIds].filter(([name]) => {
-    const type = input.types?.[name];
-    return !(
-      type !== undefined &&
-      isAuthoringTypeConstructorDescriptor(type) &&
-      type.deprecated !== undefined
-    );
-  });
-  const names = current.map(([name]) => name);
-  const scalarTypes =
-    names.length === 0
-      ? 'No Mongo scalar types are registered.'
-      : `The Mongo scalar types are ${names.length === 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`}.`;
-  return (field, ownerName) => {
-    const subject = `Field "${ownerName}.${field.name}" has type "${field.typeName}"`;
-    const codecId = input.formerScalarCodecIds.get(field.typeName);
-    const replacement = current.find(([, id]) => id === codecId)?.[0];
-    if (replacement === undefined) {
-      return `${subject}, which is not a scalar type, an enum, a composite type or a model. ${scalarTypes}`;
-    }
-    const type = input.types?.[replacement];
-    const stored =
-      type !== undefined && isAuthoringTypeConstructorDescriptor(type)
-        ? ` (stored as BSON ${type.output.nativeType})`
-        : '';
-    return `${subject}, which is not a Mongo scalar type; use "${replacement}"${stored}.`;
-  };
+  readonly warnDeprecated: (
+    field: FieldSymbol,
+    descriptor: AuthoringTypeConstructorDescriptor,
+  ) => void;
 }
 
 /**
@@ -270,15 +228,6 @@ function validateNamespaceBlocksForMongoTarget(input: {
   }
 }
 
-interface FieldMappings {
-  readonly pslNameToMapped: Map<string, string>;
-}
-
-interface MongoModelMetadata {
-  readonly collectionName: string;
-  readonly fieldMappings: FieldMappings;
-}
-
 function relationNullabilityMismatchDiagnostic(
   modelName: string,
   field: FieldSymbol,
@@ -295,48 +244,20 @@ function relationNullabilityMismatchDiagnostic(
   };
 }
 
-function resolveFieldMappings(input: {
+function resolvePhysicalNames(input: {
   readonly model: ModelSymbol;
+  readonly physicalNames: Map<ModelSymbol | FieldSymbol, string>;
   readonly specContext: AttributeSpecContext;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
-}): FieldMappings {
-  const { model, specContext, sources, binder, diagnostics } = input;
-  const pslNameToMapped = new Map<string, string>();
-  for (const field of Object.values(model.fields)) {
-    const mapNode = findFieldAttributeNode(field, 'map');
-    const mapped =
-      (mapNode
-        ? interpretFieldAttribute({
-            symbols: specContext.symbols,
-            node: mapNode,
-            spec: mongoAttributeSpecs.field.map({ ...specContext, field }),
-            model,
-            field,
-            sources,
-            binder,
-            diagnostics,
-          })?.name
-        : undefined) ?? field.name;
-    pslNameToMapped.set(field.name, mapped);
-  }
-  return { pslNameToMapped };
-}
-
-function resolveCollectionName(input: {
-  readonly model: ModelSymbol;
-  readonly specContext: AttributeSpecContext;
-  readonly sources: PslSources;
-  readonly binder: Binder;
-  readonly diagnostics: PslDiagnosticCollector;
-}): string {
-  const { model, specContext, sources, binder, diagnostics } = input;
-  const mapNode = findModelAttributeNode(model, 'map');
-  const name = mapNode
+}): void {
+  const { model, physicalNames, specContext, sources, binder, diagnostics } = input;
+  const modelMap = model.attributes.find((attr) => attr.name === 'map');
+  const collectionName = modelMap
     ? interpretModelAttribute({
         symbols: specContext.symbols,
-        node: mapNode,
+        node: modelMap.node,
         spec: mongoAttributeSpecs.model.map(specContext),
         model,
         sources,
@@ -344,7 +265,37 @@ function resolveCollectionName(input: {
         diagnostics,
       })?.name
     : undefined;
-  return name ?? defaultCollectionName(model.name);
+  physicalNames.set(model, collectionName ?? defaultCollectionName(model.name));
+  for (const field of Object.values(model.fields)) {
+    const fieldMap = field.attributes.find((attr) => attr.name === 'map');
+    const mapped = fieldMap
+      ? interpretFieldAttribute({
+          symbols: specContext.symbols,
+          node: fieldMap.node,
+          spec: mongoAttributeSpecs.field.map({
+            ...specContext,
+            field,
+            typeResolution: fieldTypeResolution(field, binder),
+          }),
+          model,
+          field,
+          sources,
+          binder,
+          diagnostics,
+        })?.name
+      : undefined;
+    physicalNames.set(field, mapped ?? field.name);
+  }
+}
+
+function physicalName(
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+  symbol: ModelSymbol | FieldSymbol | undefined,
+): string {
+  assertDefined(symbol, 'Physical names require a bound declaration');
+  const name = physicalNames.get(symbol);
+  assertDefined(name, 'Physical names must be populated before lowering');
+  return name;
 }
 
 interface MongoModelEntry {
@@ -373,12 +324,26 @@ function mongoCrossRef(modelName: string): CrossReference {
   return crossRef(modelName, UNBOUND_NAMESPACE_ID);
 }
 
+function isStringTyped(
+  field: FieldSymbol,
+  stringCodecId: string | undefined,
+  binder: Binder,
+): boolean {
+  const scalar = contributedTypeOf(fieldTypeResolution(field, binder), binder);
+  return (
+    stringCodecId !== undefined &&
+    scalar?.descriptor.kind === 'typeConstructor' &&
+    scalar.descriptor.output.codecId === stringCodecId
+  );
+}
+
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
   specContextFor: (model: ModelSymbol) => AttributeSpecContext,
-  modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
   sources: PslSources,
   binder: Binder,
+  stringCodecId: string | undefined,
   diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
@@ -389,7 +354,7 @@ function collectPolymorphismDeclarations(
 
   for (const model of models) {
     const specContext = specContextFor(model);
-    const discNode = findModelAttributeNode(model, 'discriminator');
+    const discNode = model.attributes.find((attr) => attr.name === 'discriminator')?.node;
     if (discNode) {
       const parsed = interpretModelAttribute({
         symbols: specContext.symbols,
@@ -404,7 +369,7 @@ function collectPolymorphismDeclarations(
         const fieldName = parsed.field;
         const discField = model.fields[fieldName];
         // Semantic check — stays: the discriminator field must be a String.
-        if (discField && discField.typeName !== 'String') {
+        if (discField && !isStringTyped(discField, stringCodecId, binder)) {
           diagnostics.push({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
             message: `Discriminator field "${fieldName}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
@@ -419,7 +384,7 @@ function collectPolymorphismDeclarations(
         }
       }
     }
-    const baseNode = findModelAttributeNode(model, 'base');
+    const baseNode = model.attributes.find((attr) => attr.name === 'base')?.node;
     if (baseNode) {
       const parsed = interpretModelAttribute({
         symbols: specContext.symbols,
@@ -431,8 +396,7 @@ function collectPolymorphismDeclarations(
         diagnostics,
       });
       if (parsed) {
-        const collectionName =
-          modelMetadataByName.get(model.name)?.collectionName ?? defaultCollectionName(model.name);
+        const collectionName = physicalName(physicalNames, model);
         baseDeclarations.set(model, {
           base: parsed.base.declaration,
           value: parsed.value,
@@ -455,7 +419,7 @@ function resolvePolymorphism(input: {
   baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
-  modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>;
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   indexSources: ReadonlyMap<MongoIndex, DiagnosticSource>;
   sources: PslSources;
 }): {
@@ -467,7 +431,7 @@ function resolvePolymorphism(input: {
   const {
     discriminatorDeclarations,
     baseDeclarations,
-    modelMetadataByName,
+    physicalNames,
     indexSpans,
     modelIndexesByName,
     indexSources,
@@ -491,9 +455,10 @@ function resolvePolymorphism(input: {
     const model = patched[modelName];
     if (!model) continue;
 
-    const mappedDiscriminatorField =
-      modelMetadataByName.get(modelName)?.fieldMappings.pslNameToMapped.get(decl.fieldName) ??
-      decl.fieldName;
+    const mappedDiscriminatorField = physicalName(
+      physicalNames,
+      declaration.fields[decl.fieldName],
+    );
 
     if (!Object.hasOwn(model.fields, mappedDiscriminatorField)) {
       diagnostics.push({
@@ -566,8 +531,7 @@ function resolvePolymorphism(input: {
       };
     }
 
-    const variantCollectionName =
-      modelMetadataByName.get(variantName)?.collectionName ?? defaultCollectionName(variantName);
+    const variantCollectionName = physicalName(physicalNames, variant);
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
         roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseName) };
@@ -750,7 +714,7 @@ type TextIndexArgs = InferAttr<ReturnType<typeof mongoAttributeSpecs.model.textI
 
 interface IndexBuildContext {
   readonly pslModel: ModelSymbol;
-  readonly fieldMappings: FieldMappings;
+  readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   readonly indexableFieldNames: ReadonlySet<string>;
   readonly source: DiagnosticSource;
   readonly span: PslSpan;
@@ -792,10 +756,10 @@ function resolveIndexKeys(
   const keys = parsedFields.map((field) => {
     if (field.kind === 'wildcard') {
       if (field.scope === undefined) return { field: '$**', direction: defaultDirection };
-      const mappedScope = ctx.fieldMappings.pslNameToMapped.get(field.scope) ?? field.scope;
+      const mappedScope = physicalName(ctx.physicalNames, ctx.pslModel.fields[field.scope]);
       return { field: `${mappedScope}.$**`, direction: defaultDirection };
     }
-    const mappedName = ctx.fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
+    const mappedName = physicalName(ctx.physicalNames, ctx.pslModel.fields[field.name]);
     return { field: mappedName, direction: field.direction ?? defaultDirection };
   });
   return { keys, hasWildcard: wildcardCount === 1 };
@@ -966,14 +930,12 @@ function nestedIndexPath(
 function nestedIndexPathMessage(
   path: readonly string[],
   pslModel: ModelSymbol,
-  compositeTypeNames: ReadonlySet<string>,
+  binder: Binder,
 ): string {
   const [root = ''] = path;
   const label = `Index field "${path.join('.')}" on model "${pslModel.name}"`;
-  const rootType = Object.hasOwn(pslModel.fields, root)
-    ? pslModel.fields[root]?.typeName
-    : undefined;
-  return rootType !== undefined && compositeTypeNames.has(rootType)
+  const rootField = Object.hasOwn(pslModel.fields, root) ? pslModel.fields[root] : undefined;
+  return rootField !== undefined && fieldTypeResolution(rootField, binder)?.kind === 'compositeType'
     ? `${label} is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "${pslModel.name}" or remove the index.`
     : `${label} is a dotted path, but "${root}" is not a field of "${pslModel.name}" whose type is a composite type, so the path names no field. List fields of "${pslModel.name}" by name.`;
 }
@@ -981,9 +943,7 @@ function nestedIndexPathMessage(
 function collectIndexes(
   pslModel: ModelSymbol,
   specContext: AttributeSpecContext,
-  fieldMappings: FieldMappings,
-  modelNames: ReadonlySet<string>,
-  compositeTypeNames: ReadonlySet<string>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
@@ -994,17 +954,21 @@ function collectIndexes(
   let textIndexCount = 0;
   const indexableFieldNames = new Set<string>();
   for (const field of Object.values(pslModel.fields)) {
-    if (!modelNames.has(field.typeName)) indexableFieldNames.add(field.name);
+    if (fieldTypeResolution(field, binder)?.kind !== 'model') indexableFieldNames.add(field.name);
   }
 
   for (const field of Object.values(pslModel.fields)) {
-    if (modelNames.has(field.typeName)) continue;
-    const uniqueNode = findFieldAttributeNode(field, 'unique');
+    if (fieldTypeResolution(field, binder)?.kind === 'model') continue;
+    const uniqueNode = field.attributes.find((attr) => attr.name === 'unique')?.node;
     if (!uniqueNode) continue;
     const unique = interpretFieldAttribute({
       symbols: specContext.symbols,
       node: uniqueNode,
-      spec: mongoAttributeSpecs.field.unique({ ...specContext, field }),
+      spec: mongoAttributeSpecs.field.unique({
+        ...specContext,
+        field,
+        typeResolution: fieldTypeResolution(field, binder),
+      }),
       model: pslModel,
       field,
       sources,
@@ -1012,7 +976,7 @@ function collectIndexes(
       diagnostics,
     });
     if (unique === undefined) continue;
-    const mappedName = fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
+    const mappedName = physicalName(physicalNames, field);
     const fieldUniqueIndex = new MongoIndex({
       keys: [{ field: mappedName, direction: 1 }],
       unique: true,
@@ -1022,15 +986,13 @@ function collectIndexes(
     indexSources.set(fieldUniqueIndex, diagnosticSource(sources, uniqueNode.syntax));
   }
 
-  const attributeNodes = Array.from(pslModel.node.attributes());
-  for (const [attrIndex, attr] of pslModel.attributes.entries()) {
+  for (const attr of pslModel.attributes) {
     if (attr.name !== 'index' && attr.name !== 'unique' && attr.name !== 'textIndex') continue;
-    const node = attributeNodes[attrIndex];
-    if (!node) continue;
+    const node = attr.node;
     const source = diagnosticSource(sources, node.syntax);
     const ctx: IndexBuildContext = {
       pslModel,
-      fieldMappings,
+      physicalNames,
       indexableFieldNames,
       source,
       span: attr.span,
@@ -1041,7 +1003,7 @@ function collectIndexes(
     if (nested !== undefined) {
       diagnostics.push({
         code: 'PSL_INVALID_INDEX',
-        message: nestedIndexPathMessage(nested.path, pslModel, compositeTypeNames),
+        message: nestedIndexPathMessage(nested.path, pslModel, binder),
         ...source.at(nodePslSpan(nested.syntax, sources)),
       });
       continue;
@@ -1094,19 +1056,13 @@ function collectIndexes(
   return indexes;
 }
 
-function isRelationField(field: FieldSymbol, modelNames: ReadonlySet<string>): boolean {
-  return modelNames.has(field.typeName);
+function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | undefined {
+  const node = typeReferenceNode(field);
+  return node === undefined ? undefined : binder.symbolForNode(node);
 }
 
 // PSL scalar type name whose codec is mandated for a Mongo model's `_id`.
 const MONGO_OBJECT_ID_PSL_TYPE = 'ObjectId';
-
-function resolveFieldCodecId(
-  field: FieldSymbol,
-  scalarTypeCodecIds: ReadonlyMap<string, string>,
-): string | undefined {
-  return scalarTypeCodecIds.get(field.typeName);
-}
 
 interface PresetExecutionDefault {
   readonly modelName: string;
@@ -1176,84 +1132,106 @@ interface ResolvedNonRelationField {
 function resolveNonRelationField(
   field: FieldSymbol,
   owner: { readonly name: string; readonly kind: 'model' | 'compositeType' },
-  compositeTypeNames: ReadonlySet<string>,
-  scalarTypeCodecIds: ReadonlyMap<string, string>,
+  resolution: Resolution | undefined,
   codecIdByEnumName: ReadonlyMap<string, string>,
   presetContext: FieldPresetContext,
   scalarNames: ScalarNames,
 ): ResolvedNonRelationField | undefined {
-  const { sources, diagnostics } = presetContext;
   const ownerName = owner.name;
-  if (compositeTypeNames.has(field.typeName)) {
-    const result: ContractField = {
-      type: { kind: 'valueObject', name: field.typeName },
-      nullable: field.optional,
+  if (resolution?.kind === 'compositeType') {
+    return {
+      field: {
+        type: { kind: 'valueObject', name: resolution.symbol.name },
+        nullable: field.optional,
+        many: field.list ? { elementNullable: field.elementOptional } : false,
+      },
     };
-    return { field: field.list ? { ...result, many: true } : result };
   }
 
-  // If this field's declared type is a known enum name, treat the field as a scalar
-  // with that enum's codec and stamp the domain valueSet ref.
-  const enumCodecId = codecIdByEnumName.get(field.typeName);
-  if (enumCodecId !== undefined) {
+  if (resolution?.kind === 'block' && resolution.symbol.keyword === 'enum') {
+    const enumCodecId = codecIdByEnumName.get(resolution.symbol.name);
+    if (enumCodecId === undefined) return undefined;
     const valueSet: ValueSetRef = {
       plane: 'domain',
       entityKind: 'enum',
       namespaceId: UNBOUND_NAMESPACE_ID,
-      entityName: field.typeName,
+      entityName: resolution.symbol.name,
     };
-    const result: ContractField = {
-      type: { kind: 'scalar', codecId: enumCodecId },
-      nullable: field.optional,
-      valueSet,
+    return {
+      field: {
+        type: { kind: 'scalar', codecId: enumCodecId },
+        nullable: field.optional,
+        many: field.list ? { elementNullable: field.elementOptional } : false,
+        valueSet,
+      },
     };
-    return { field: field.list ? { ...result, many: true } : result };
   }
 
-  // Avoid cascading unsupported-type diagnostics after invalid qualification.
-  if (field.malformedType) {
+  if (
+    resolution?.kind === 'model' ||
+    resolution?.kind === 'namedType' ||
+    resolution?.kind === 'block' ||
+    resolution?.kind === 'crossSpace'
+  ) {
+    presetContext.diagnostics.push({
+      code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+      message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
+      ...diagnosticSource(presetContext.sources, field.node.syntax).at(field.span),
+    });
     return undefined;
   }
-
-  const preset = resolveFieldPreset({
-    field,
-    ownerName,
-    ownerKind: owner.kind,
-    context: presetContext,
-  });
-  if (preset.kind === 'invalid') {
+  if (resolution?.kind !== 'contributedType') {
     return undefined;
   }
-  if (preset.kind === 'preset') {
+  const { descriptor, path } = resolution.symbol;
+  const call = field.typeConstructor;
+  const entityLabel = `Field "${ownerName}.${field.name}"`;
+  const source = diagnosticSource(presetContext.sources, field.node.syntax);
+  if (descriptor.kind === 'fieldPreset') {
+    if (call === undefined) {
+      reportPresetNotCalled({
+        entityLabel,
+        presetPath: path.join('.'),
+        source,
+        span: field.span,
+        diagnostics: presetContext.diagnostics,
+      });
+      return undefined;
+    }
+    const preset = resolveFieldPreset({
+      field,
+      call,
+      descriptor,
+      ownerName,
+      ownerKind: owner.kind,
+      context: presetContext,
+    });
+    if (preset.kind === 'invalid') return undefined;
     return {
       field: preset.field,
       ...ifDefined('executionDefaults', preset.executionDefaults),
     };
   }
-
-  const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
-  if (!codecId && scalarNames.declaredEnums.has(field.typeName)) {
-    return undefined;
-  }
-  if (!codecId) {
-    const typeNode = field.node.typeAnnotation()?.name()?.syntax;
-    const source = diagnosticSource(sources, field.node.syntax);
-    diagnostics.push({
-      code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: scalarNames.unknownTypeMessage(field, ownerName),
-      ...(typeNode === undefined
-        ? source.at(field.span)
-        : diagnosticSource(sources, typeNode).at()),
+  if (call === undefined && !isBareTypeConstructor(descriptor)) {
+    reportTypeConstructorNotCalled({
+      entityLabel,
+      path: path.join('.'),
+      descriptor,
+      source,
+      span: field.span,
+      diagnostics: presetContext.diagnostics,
     });
     return undefined;
   }
 
-  scalarNames.warnDeprecated(field);
-  const result: ContractField = {
-    type: { kind: 'scalar', codecId },
-    nullable: field.optional,
+  if (call === undefined) scalarNames.warnDeprecated(field, descriptor);
+  return {
+    field: {
+      type: { kind: 'scalar', codecId: descriptor.output.codecId },
+      nullable: field.optional,
+      many: field.list ? { elementNullable: field.elementOptional } : false,
+    },
   };
-  return { field: field.list ? { ...result, many: true } : result };
 }
 
 function processEnumDeclarations(input: {
@@ -1322,7 +1300,6 @@ export function interpretPslDocumentToMongoContract(
   const diagnostics = createPslDiagnosticCollector(sources);
   const presetContext: FieldPresetContext = {
     authoringContributions: input.authoringContributions,
-    composedExtensions: new Set(input.composedExtensions ?? []),
     sources,
     diagnostics,
     warnPresetWithoutEffect: presetWithoutEffectWarner({
@@ -1335,31 +1312,11 @@ export function interpretPslDocumentToMongoContract(
   const presetExecutionDefaults: PresetExecutionDefault[] = [];
   const scalarNames: ScalarNames = {
     warnDeprecated: deprecatedScalarWarner({
-      types: input.authoringContributions?.type,
       sources,
       reportWarning: input.reportWarning,
     }),
-    unknownTypeMessage: unknownTypeMessages({
-      types: input.authoringContributions?.type,
-      scalarTypeCodecIds,
-      formerScalarCodecIds: input.formerScalarCodecIds ?? new Map(),
-    }),
-    declaredEnums: new Set(
-      Object.values(symbolTable.topLevel.blocks)
-        .filter((block) => block.keyword === 'enum')
-        .map((block) => block.name),
-    ),
   };
-  const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
-    symbolTable,
-    sources,
-    scalarTypeCodecIds,
-    controlMutationDefaults: input.controlMutationDefaults,
-    authoringContributions: input.authoringContributions,
-  });
-  diagnostics.push(
-    ...binderDiagnostics.filter((diagnostic) => diagnostic.data?.['reference'] !== 'type'),
-  );
+  const { binder } = input;
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
@@ -1376,31 +1333,20 @@ export function interpretPslDocumentToMongoContract(
   });
   const allModels: ModelSymbol[] = Object.values(topLevel.models);
   const allCompositeTypes: CompositeTypeSymbol[] = Object.values(topLevel.compositeTypes);
-  const modelNames = new Set(allModels.map((m) => m.name));
-  const compositeTypeNames = new Set(allCompositeTypes.map((ct) => ct.name));
   const specContextFor = (model: ModelSymbol): AttributeSpecContext => ({
     symbols: symbolTable,
     model,
     controlMutationDefaults: input.controlMutationDefaults,
   });
-  const modelMetadataByName = new Map<string, MongoModelMetadata>();
+  const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();
   for (const model of allModels) {
-    const specContext = specContextFor(model);
-    modelMetadataByName.set(model.name, {
-      collectionName: resolveCollectionName({
-        model,
-        specContext,
-        sources,
-        binder,
-        diagnostics,
-      }),
-      fieldMappings: resolveFieldMappings({
-        model,
-        specContext,
-        sources,
-        binder,
-        diagnostics,
-      }),
+    resolvePhysicalNames({
+      model,
+      physicalNames,
+      specContext: specContextFor(model),
+      sources,
+      binder,
+      diagnostics,
     });
   }
 
@@ -1454,22 +1400,26 @@ export function interpretPslDocumentToMongoContract(
 
   for (const pslModel of allModels) {
     const modelSource = diagnosticSource(sources, pslModel.node.syntax);
-    const metadata = modelMetadataByName.get(pslModel.name);
-    if (!metadata) continue;
-    const { collectionName, fieldMappings } = metadata;
+    const collectionName = physicalName(physicalNames, pslModel);
     const specContext = specContextFor(pslModel);
 
     const fields: Record<string, ContractField> = {};
     const relations: Record<string, ContractReferenceRelation> = {};
 
     for (const field of Object.values(pslModel.fields)) {
-      if (isRelationField(field, modelNames)) {
-        const relationNode = findFieldAttributeNode(field, 'relation');
+      const resolution = fieldTypeResolution(field, binder);
+      if (resolution?.kind === 'model') {
+        const target = resolution.symbol;
+        const relationNode = field.attributes.find((attr) => attr.name === 'relation')?.node;
         const relation = relationNode
           ? interpretFieldAttribute({
               symbols: specContext.symbols,
               node: relationNode,
-              spec: mongoAttributeSpecs.field.relation({ ...specContext, field }),
+              spec: mongoAttributeSpecs.field.relation({
+                ...specContext,
+                field,
+                typeResolution: fieldTypeResolution(field, binder),
+              }),
               model: pslModel,
               field,
               sources,
@@ -1481,7 +1431,7 @@ export function interpretPslDocumentToMongoContract(
         if (field.list || !(relation?.fields && relation?.references)) {
           backrelationCandidates.push({
             modelName: pslModel.name,
-            targetModelName: field.typeName,
+            targetModelName: target.name,
             ...ifDefined('relationName', relation?.name),
             cardinality: field.list ? '1:N' : '1:1',
             field,
@@ -1501,20 +1451,21 @@ export function interpretPslDocumentToMongoContract(
           if (nullability.contradiction !== undefined) {
             diagnostics.push(relationNullabilityMismatchDiagnostic(pslModel.name, field, sources));
             invalidFkPairings.push({
-              pairKey: fkRelationPairKey(pslModel.name, field.typeName),
+              pairKey: fkRelationPairKey(pslModel.name, target.name),
               ...ifDefined('relationName', relation.name),
             });
             continue;
           }
-          const localMapped = relation.fields.map((f) => fieldMappings.pslNameToMapped.get(f) ?? f);
-
-          const targetFieldMappings = modelMetadataByName.get(field.typeName)?.fieldMappings;
-          const targetMapped = relation.references.map(
-            (f) => targetFieldMappings?.pslNameToMapped.get(f) ?? f,
+          if (!physicalNames.has(target)) continue;
+          const localMapped = relation.fields.map((name) =>
+            physicalName(physicalNames, pslModel.fields[name]),
+          );
+          const targetMapped = relation.references.map((name) =>
+            physicalName(physicalNames, target.fields[name]),
           );
 
           relations[field.name] = {
-            to: mongoCrossRef(field.typeName),
+            to: mongoCrossRef(target.name),
             cardinality: 'N:1' as const,
             nullable: field.optional,
             on: {
@@ -1525,7 +1476,7 @@ export function interpretPslDocumentToMongoContract(
 
           allFkRelations.push({
             declaringModel: pslModel.name,
-            targetModel: field.typeName,
+            targetModel: target.name,
             ...ifDefined('relationName', relation.name),
             localFields: localMapped,
             targetFields: targetMapped,
@@ -1537,15 +1488,14 @@ export function interpretPslDocumentToMongoContract(
       const resolved = resolveNonRelationField(
         field,
         { name: pslModel.name, kind: 'model' },
-        compositeTypeNames,
-        scalarTypeCodecIds,
+        resolution,
         codecIdByEnumName,
         presetContext,
         scalarNames,
       );
       if (!resolved) continue;
 
-      const mappedName = fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
+      const mappedName = physicalName(physicalNames, field);
       fields[mappedName] = resolved.field;
       if (resolved.executionDefaults) {
         presetExecutionDefaults.push({
@@ -1560,13 +1510,17 @@ export function interpretPslDocumentToMongoContract(
     const isVariantModel = pslModel.attributes.some((attr) => attr.name === 'base');
     const hasIdField =
       Object.values(pslModel.fields).filter((field) => {
-        const idNode = findFieldAttributeNode(field, 'id');
+        const idNode = field.attributes.find((attr) => attr.name === 'id')?.node;
         if (!idNode) return false;
         return (
           interpretFieldAttribute({
             symbols: specContext.symbols,
             node: idNode,
-            spec: mongoAttributeSpecs.field.id({ ...specContext, field }),
+            spec: mongoAttributeSpecs.field.id({
+              ...specContext,
+              field,
+              typeResolution: fieldTypeResolution(field, binder),
+            }),
             model: pslModel,
             field,
             sources,
@@ -1610,9 +1564,7 @@ export function interpretPslDocumentToMongoContract(
     const modelIndexes = collectIndexes(
       pslModel,
       specContext,
-      fieldMappings,
-      modelNames,
-      compositeTypeNames,
+      physicalNames,
       sources,
       binder,
       diagnostics,
@@ -1637,8 +1589,7 @@ export function interpretPslDocumentToMongoContract(
       const resolved = resolveNonRelationField(
         field,
         { name: compositeType.name, kind: 'compositeType' },
-        compositeTypeNames,
-        scalarTypeCodecIds,
+        fieldTypeResolution(field, binder),
         codecIdByEnumName,
         presetContext,
         scalarNames,
@@ -1663,9 +1614,10 @@ export function interpretPslDocumentToMongoContract(
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     allModels,
     specContextFor,
-    modelMetadataByName,
+    physicalNames,
     sources,
     binder,
+    scalarTypeCodecIds.get('String'),
     diagnostics,
   );
   const polyResult = resolvePolymorphism({
@@ -1677,7 +1629,7 @@ export function interpretPslDocumentToMongoContract(
     baseDeclarations,
     indexSpans,
     modelIndexesByName,
-    modelMetadataByName,
+    physicalNames,
     indexSources,
   });
   const executionDefaults = resolvePresetExecutionDefaults({

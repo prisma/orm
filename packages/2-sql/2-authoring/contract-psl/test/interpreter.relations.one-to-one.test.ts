@@ -1,13 +1,12 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
+  interpretSqlContract,
   modelsOf,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const baseInput = {
@@ -23,8 +22,8 @@ type RelationModels = Record<string, { relations?: Record<string, unknown> }>;
 
 describe('interpretPslDocumentToSqlContract 1:1 back-relation FK uniqueness', () => {
   it('resolves a 1:1 back-relation whose FK is covered by a composite @@unique', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Users {
+    const result = interpretSqlContract(
+      `model Users {
   tenantId Int
   id       Int
   profiles Profiles?
@@ -39,10 +38,8 @@ model Profiles {
   @@unique([userTenantId, userId])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -62,8 +59,8 @@ model Profiles {
   });
 
   it('resolves a 1:1 back-relation whose FK columns are declared in a different order than the @@unique', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Users {
+    const result = interpretSqlContract(
+      `model Users {
   tenantId Int
   id       Int
   profiles Profiles?
@@ -78,10 +75,8 @@ model Profiles {
   @@unique([userTenantId, userId])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -101,8 +96,8 @@ model Profiles {
   });
 
   it('resolves a 1:1 back-relation whose FK is covered by the target model @id', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Users {
+    const result = interpretSqlContract(
+      `model Users {
   id       Int @id
   profiles Profiles?
 }
@@ -112,10 +107,8 @@ model Profiles {
   user Users @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -135,8 +128,8 @@ model Profiles {
   });
 
   it('rejects a required 1:1 back-relation and tells the user to make it optional', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id      Int @id
   profile Profile
 }
@@ -147,10 +140,8 @@ model Profile {
   user   User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -166,8 +157,8 @@ model Profile {
   });
 
   it('rejects a singular back-relation whose matched FK is not unique', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Users {
+    const result = interpretSqlContract(
+      `model Users {
   id       Int @id
   profiles Profiles?
 }
@@ -178,10 +169,8 @@ model Profiles {
   user Users @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -197,8 +186,8 @@ model Profiles {
   });
 
   it('rejects a singular back-relation whose FK is only a subset of a composite @@unique', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Users {
+    const result = interpretSqlContract(
+      `model Users {
   id       Int @id
   profiles Profiles?
 }
@@ -211,10 +200,8 @@ model Profiles {
   @@unique([userId, other])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

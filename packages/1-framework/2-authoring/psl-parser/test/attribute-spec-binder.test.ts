@@ -13,6 +13,7 @@ import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
+import { binderContext } from './support';
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
   Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'integer' } },
@@ -59,12 +60,10 @@ function bind(text: string) {
   const { binder, diagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: TYPE_CONSTRUCTORS,
-    attributeSpecs: ATTRIBUTE_SPECS,
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext({
+      contributedTypes: TYPE_CONSTRUCTORS,
+      attributeSpecs: ATTRIBUTE_SPECS,
+    }),
   });
   return { sources, symbolTable, binder, binderDiagnostics: diagnostics };
 }

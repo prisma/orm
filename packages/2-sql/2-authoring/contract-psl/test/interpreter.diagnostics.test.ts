@@ -9,6 +9,7 @@ import {
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   modelsOf,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
@@ -41,10 +42,8 @@ function expectDiagnosticForSchema(
   schema: string,
   diagnostic: { readonly code: string; readonly message?: string },
 ): void {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  const result = interpretPslDocumentToSqlContract({
+  const result = interpretSqlContract(schema, {
     ...baseInput,
-    ...document,
     controlMutationDefaults: builtinControlMutationDefaults,
   });
 
@@ -76,10 +75,7 @@ ${['First', 'Second', 'Third']
 }`,
   )
   .join('\n')}`;
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-      });
+      const result = interpretSqlContract(schema, { ...baseInput });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(
@@ -98,10 +94,7 @@ ${['First', 'Second', 'Third']
     'rejects empty mapped names in $declaration with an attribute span',
     ({ declaration, attribute, column }) => {
       const schema = `model User {\n  id Int @id\n  ${declaration}\n}`;
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-      });
+      const result = interpretSqlContract(schema, { ...baseInput });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       const offset = schema.indexOf(attribute);
@@ -127,19 +120,13 @@ ${['First', 'Second', 'Third']
 
   it.each(['display_name', ' '])('accepts nonempty mapped names %j', (name) => {
     const schema = `model User {\n  id Int @id\n  name String @map("${name}")\n  @@map("${name}")\n}`;
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(schema, { ...baseInput });
     expect(result.ok).toBe(true);
   });
 
   it('retains other field diagnostics alongside an empty mapped name', () => {
     const schema = 'model User {\n  id Int @id\n  name String @map("")\n  bad MissingType\n}';
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(schema, { ...baseInput });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
@@ -166,18 +153,15 @@ ${['First', 'Second', 'Third']
   });
 
   it('guards against named type declarations missing both base type and constructor', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Broken
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -191,9 +175,30 @@ ${['First', 'Second', 'Third']
     );
   });
 
+  it('reports an unregistered named-type constructor without a binder reference', () => {
+    const result = interpretSqlContract(
+      `types {
+  Weird = pgvector.vector(3)
+}`,
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
+        message: 'Named type "Weird" references unsupported constructor "pgvector.vector"',
+      }),
+    ]);
+  });
+
   it('returns diagnostics for unsupported named types, field lists, missing keys, and an unresolved relation target', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   DisplayName = VarChar(191)
   Weird = Unsupported
 }
@@ -209,14 +214,11 @@ model User {
   ghostId Int
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -229,20 +231,17 @@ model User {
   });
 
   it('returns diagnostics when @map and @@map arguments are not quoted string literals', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id @map(team_id)
   @@map(org_team)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -257,24 +256,21 @@ model User {
   });
 
   it('returns diagnostics for unsupported model attributes', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id
   @@unsupported([id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+    expect(result.failure.summary).toBe('Schema has 1 error');
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -335,92 +331,92 @@ model User {
     );
   });
 
-  it('returns diagnostics for model attributes with unrecognized extension namespace', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+  it('returns PSL_UNSUPPORTED_MODEL_ATTRIBUTE for a model attribute with an unrecognized namespace', () => {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id
   @@pgvector.index(length: 3)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: [],
-    });
+      {
+        ...baseInput,
+        composedExtensions: [],
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+    expect(result.failure.summary).toBe('Schema has 1 error');
+    expect(result.failure.diagnostics).toHaveLength(1);
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-          message: expect.stringContaining('uses unrecognized namespace "pgvector"'),
+          code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+          message: 'Model "Team" uses unsupported attribute "@@pgvector.index"',
         }),
       ]),
     );
   });
 
-  it('returns diagnostics when namespace is unrecognized', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Document {
+  it('returns PSL_UNSUPPORTED_FIELD_ATTRIBUTE for a field attribute with an unrecognized namespace', () => {
+    const result = interpretSqlContract(
+      `model Document {
   id Int @id
   embedding Bytes @pgvector.column(length: 1536)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: [],
-    });
+      {
+        ...baseInput,
+        composedExtensions: [],
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+    expect(result.failure.summary).toBe('Schema has 1 error');
+    expect(result.failure.diagnostics).toHaveLength(1);
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+          message: 'Field "Document.embedding" uses unsupported attribute "@pgvector.column"',
           sourceId: 'schema.prisma',
           span: expect.objectContaining({
             start: expect.objectContaining({ line: 3 }),
           }),
-          data: { namespace: 'pgvector', suggestedPack: 'pgvector' },
         }),
       ]),
     );
   });
 
   it('returns diagnostics for list fields with unknown types', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   things Unknown[]
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
 
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Unknown"' },
-    ]);
+    expect(result.failure.summary).toBe('Schema has 1 error');
+    expect(result.failure.diagnostics).toHaveLength(1);
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Unknown'),
+        }),
+      ]),
+    );
   });
 
   it('returns diagnostics for invalid Postgres native type constructor usage', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   BadChar = Char(0)
   BadReal = Real(1)
   BadTimestamp = Timestamp(-1)
@@ -433,10 +429,8 @@ model InvalidNativeTypes {
   badTimestamp BadTimestamp
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -466,8 +460,8 @@ model InvalidNativeTypes {
   });
 
   it('returns diagnostics when relation fields and references lengths differ', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -478,10 +472,8 @@ model Post {
   user User @relation(fields: [authorId, reviewerId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -498,8 +490,8 @@ model Post {
   });
 
   it('returns diagnostics when navigation list fields use unsupported attributes', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[] @unique
 }
@@ -510,10 +502,8 @@ model Post {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -530,8 +520,8 @@ model Post {
   });
 
   it('returns diagnostics when backrelation list declares FK-side relation arguments', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[] @relation(fields: [id], references: [userId])
 }
@@ -542,10 +532,8 @@ model Post {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -562,8 +550,8 @@ model Post {
   });
 
   it('returns diagnostics for orphaned backrelation list fields', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -572,10 +560,8 @@ model Post {
   id Int @id
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -592,8 +578,8 @@ model Post {
   });
 
   it('returns diagnostics for ambiguous backrelation list matches', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -606,10 +592,8 @@ model Post {
   secondaryUser User @relation(fields: [secondaryUserId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -626,8 +610,8 @@ model Post {
   });
 
   it('preserves parser diagnostics with source spans', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `datasource db {
+    const result = interpretSqlContract(
+      `datasource db {
   provider = "postgresql"
 }
 
@@ -635,10 +619,8 @@ model User {
   id Int @id
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -658,29 +640,26 @@ model User {
     );
   });
 
-  it('does not report family/target namespaces as uncomposed attribute namespaces', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+  it('reports attributes prefixed with the family or target id as plain unsupported attributes', () => {
+    const result = interpretSqlContract(
+      `model User {
   id    Int    @id
   name  String @sql.foo
   email String @postgres.bar
   @@sql.qux("x")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: [],
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        composedExtensions: [],
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     const codes = result.failure.diagnostics.map((d) => d.code);
-    expect(codes).not.toContain('PSL_EXTENSION_NAMESPACE_NOT_COMPOSED');
+    expect(codes).toHaveLength(3);
     expect(codes).toEqual(
       expect.arrayContaining([
         'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
@@ -690,8 +669,8 @@ model User {
   });
 
   it('surfaces value-object field errors through the diagnostics gate', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
+    const result = interpretSqlContract(
+      `type Address {
   street String
   bogus  Missing
 }
@@ -701,19 +680,16 @@ model User {
   address Address
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      authoringContributions: {
-        ...baseInput.authoringContributions,
-        valueObjectStorageType: 'Jsonb',
+      {
+        ...baseInput,
+        authoringContributions: {
+          ...baseInput.authoringContributions,
+          valueObjectStorageType: 'Jsonb',
+        },
+        composedExtensions: [],
+        controlMutationDefaults: builtinControlMutationDefaults,
       },
-      composedExtensions: [],
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -732,70 +708,70 @@ model User {
     ]);
   });
 
-  it('emits distinct diagnostic codes for malformed versus uncomposed constructor calls', () => {
-    const malformed = symbolTableInputFromParseArgs({
-      schema: `model User {
+  it('reports PSL_UNRESOLVED_REFERENCE for an incomplete constructor call and for an unrecognized namespace', () => {
+    const incompleteCallResult = interpretSqlContract(
+      `model User {
   id Int @id
   name sql.String(
 }
 `,
-      sourceId: 'schema.prisma',
-    });
+      {
+        ...baseInput,
+        composedExtensions: [],
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
-    const malformedResult = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...malformed,
-      composedExtensions: [],
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+    expect(incompleteCallResult.ok).toBe(false);
+    if (incompleteCallResult.ok) return;
+    expect(incompleteCallResult.failure.diagnostics).toHaveLength(1);
+    expect(incompleteCallResult.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "sql.String"',
+        }),
+      ]),
+    );
 
-    expect(malformedResult.ok).toBe(false);
-    if (malformedResult.ok) return;
-    const malformedCodes = malformedResult.failure.diagnostics.map((d) => d.code);
-    expect(malformedCodes).not.toContain('PSL_EXTENSION_NAMESPACE_NOT_COMPOSED');
-
-    const uncomposed = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const unresolvedResult = interpretSqlContract(
+      `model User {
   id        Int @id
   embedding pgvector.Vector(1536)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
+      {
+        ...baseInput,
+        composedExtensions: [],
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
-    const uncomposedResult = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...uncomposed,
-      composedExtensions: [],
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(uncomposedResult.ok).toBe(false);
-    if (uncomposedResult.ok) return;
-    expect(uncomposedResult.failure.diagnostics).toEqual(
+    expect(unresolvedResult.ok).toBe(false);
+    if (unresolvedResult.ok) return;
+    expect(unresolvedResult.failure.diagnostics).toHaveLength(1);
+    expect(unresolvedResult.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-          data: { namespace: 'pgvector', suggestedPack: 'pgvector' },
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "pgvector.Vector"',
         }),
       ]),
     );
   });
 
   it('rejects @@id with no field list argument', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   @@id()
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -809,19 +785,17 @@ model User {
   });
 
   it('rejects @@id with empty bracketed field list', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   @@id([])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -834,38 +808,55 @@ model User {
     );
   });
 
-  it('leaves an uncomposed namespace to the composition diagnostic alone', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: 'model Document {\n  id Int @id\n  embedding pgvector.Vector(1536)\n}',
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
+  it('reports an unrecognized namespace-qualified type as a single unresolved reference', () => {
+    const result = interpretSqlContract(
+      'model Document {\n  id Int @id\n  embedding pgvector.Vector(1536)\n}',
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+    ]);
+  });
+
+  it('reports an unqualified unknown type name as a single unresolved reference', () => {
+    const result = interpretSqlContract('model User {\n  id Int @id\n  ghost Ghostly\n}', {
       ...baseInput,
-      ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
-      'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "Ghostly"',
+        sourceId: 'schema.prisma',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ line: 3 }),
+        }),
+        data: { reference: 'type', name: 'Ghostly', constructorCall: false },
+      },
     ]);
   });
 
   it('rejects @@id referencing an unknown field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   @@id([nope])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -879,19 +870,17 @@ model User {
   });
 
   it('rejects inline @id together with @@id', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String @id
   @@id([email])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -905,19 +894,17 @@ model User {
   });
 
   it('rejects @@id with non-quoted map argument', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   @@id([email], map: not_a_string)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -931,21 +918,19 @@ model User {
   });
 
   it('rejects two @@id declarations on the same model', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   token String
   @@id([email])
   @@id([token])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -959,19 +944,17 @@ model User {
   });
 
   it('rejects @@id with duplicate fields in the list', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String
   @@id([email, email])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -985,18 +968,16 @@ model User {
   });
 
   it('rejects inline @id on an optional field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String? @id
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1011,19 +992,17 @@ model User {
   });
 
   it('rejects @@id including an optional field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   email String?
   @@id([email])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1038,19 +1017,17 @@ model User {
   });
 
   it('rejects inline @id on multiple fields', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   a Int @id
   b Int @id
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1065,19 +1042,17 @@ model User {
   });
 
   it('rejects field @unique with a non-quoted map argument', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   id    Int @id
   email String @unique(map: not_a_string)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1091,20 +1066,18 @@ model User {
   });
 
   it('rejects @@unique with duplicate fields in the list', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   id    Int @id
   email String
   @@unique([email, email])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1118,20 +1091,18 @@ model User {
   });
 
   it('rejects @@index with duplicate fields in the list', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Thing {
+    const result = interpretSqlContract(
+      `model Thing {
   id    Int @id
   email String
   @@index([email, email])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -1146,16 +1117,15 @@ model User {
 
   describe('per-target namespace dispatch', () => {
     it('locates every rejected namespace declaration separately', () => {
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...symbolTableInputFromParseArgs({
-          schema: `namespace auth {}
+      const result = interpretSqlContract(
+        `namespace auth {}
 namespace auth {}`,
-          sourceId: 'schema.prisma',
-        }),
-        target: sqliteTarget,
-        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-      });
+        {
+          ...baseInput,
+          target: sqliteTarget,
+          scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+        },
+      );
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error('Expected namespace rejection');
       expect(result.failure.diagnostics).toEqual([
@@ -1177,26 +1147,23 @@ namespace auth {}`,
     });
 
     it('SQLite rejects every explicit `namespace { … }` block with a SQLite-flavoured diagnostic', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace auth {
+      const result = interpretSqlContract(
+        `namespace auth {
   model User {
     id Int @id
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        target: sqliteTarget,
-        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-        composedExtensionContracts: new Map(),
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-        createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          target: sqliteTarget,
+          scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+          composedExtensionContracts: new Map(),
+          controlMutationDefaults: builtinControlMutationDefaults,
+          createNamespace: createTestSqlNamespace,
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -1215,26 +1182,23 @@ namespace auth {}`,
     });
 
     it('SQLite also rejects `namespace unbound { … }` (no late-binding semantics on SQLite)', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   model Tenant {
     id Int @id
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        target: sqliteTarget,
-        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-        composedExtensionContracts: new Map(),
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-        createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          target: sqliteTarget,
+          scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+          composedExtensionContracts: new Map(),
+          controlMutationDefaults: builtinControlMutationDefaults,
+          createNamespace: createTestSqlNamespace,
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -1247,8 +1211,8 @@ namespace auth {}`,
     });
 
     it('Postgres rejects a model-carrying `namespace unbound { … }` alongside a sibling named namespace', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   model Tenant {
     id Int @id
   }
@@ -1260,14 +1224,11 @@ namespace auth {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-      });
+        {
+          ...baseInput,
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -1284,8 +1245,8 @@ namespace auth {
     });
 
     it('Postgres rejects the raw sentinel spelling `namespace __unbound__ { … }` with models alongside a sibling named namespace', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace __unbound__ {
+      const result = interpretSqlContract(
+        `namespace __unbound__ {
   model Tenant {
     id Int @id
   }
@@ -1297,14 +1258,11 @@ namespace auth {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-      });
+        {
+          ...baseInput,
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -1336,8 +1294,8 @@ namespace auth {
         pslBlockDescriptors: rolePslBlockDescriptors,
       };
 
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   role a {
   }
 }
@@ -1354,15 +1312,12 @@ namespace auth {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        authoringContributions: roleAuthoringContributions,
-        controlMutationDefaults: builtinControlMutationDefaults,
-      });
+        {
+          ...baseInput,
+          authoringContributions: roleAuthoringContributions,
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -1380,21 +1335,18 @@ namespace auth {
     });
 
     it('Postgres accepts `namespace unbound { … }` when it is the only named namespace', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   model Tenant {
     id Int @id
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        controlMutationDefaults: builtinControlMutationDefaults,
-      });
+        {
+          ...baseInput,
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -1418,20 +1370,17 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
   });
 
   it('authors a plain scalar list field with no diagnostics', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   tags String[]
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1442,7 +1391,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
           tags: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
+            many: { elementNullable: false },
           },
         },
       },
@@ -1472,20 +1421,17 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
   });
 
   it('lowers an empty-array default on a list field to a literal empty array', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   tags String[] @default([])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1494,111 +1440,207 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       nativeType: 'text',
       codecId: 'pg/text@1',
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [] },
     });
   });
 
   it('lowers a literal-list default encoding each element against the element codec', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   tags String[] @default(["a", "b"])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: ['a', 'b'] },
     });
   });
 
+  it('lowers null as the literal default for a nullable scalar', () => {
+    const result = interpretSqlContract(
+      `model Post {
+  id Int @id
+  title String? @default(null)
+}
+`,
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['title']).toMatchObject({
+      nullable: true,
+      default: { kind: 'literal', value: null },
+    });
+  });
+
+  it('rejects null as the literal default for a non-nullable scalar', () => {
+    expectDiagnosticForSchema(
+      `model Post {
+  id Int @id
+  title String @default(null)
+}
+`,
+      {
+        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      },
+    );
+  });
+
+  it('lowers a null-containing literal default for nullable list elements', () => {
+    const result = interpretSqlContract(
+      `model Post {
+  id Int @id
+  tags String?[] @default(["a", null])
+}
+`,
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
+      many: { elementNullable: true },
+      default: { kind: 'literal', value: ['a', null] },
+    });
+  });
+
+  it('preserves quoted null as a string beside a bare null in a nullable string-list default', () => {
+    const result = interpretSqlContract(
+      `model Post {
+  id Int @id
+  tags String?[] @default(["null", null])
+}
+`,
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toEqual({
+      nativeType: 'text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      many: { elementNullable: true },
+      default: { kind: 'literal', value: ['null', null] },
+    });
+  });
+
+  it('rejects a null-containing literal default for strict list elements at the null span', () => {
+    const schema = `model Post {
+  id Int @id
+  tags String[] @default(["a", null])
+}
+`;
+    const result = interpretSqlContract(schema, {
+      ...baseInput,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find(
+      (candidate) => candidate.code === 'PSL_INVALID_DEFAULT_APPLICABILITY',
+    );
+    const nullOffset = schema.indexOf('null');
+    expect(diagnostic?.span).toEqual({
+      start: { offset: nullOffset, line: 3, column: 32 },
+      end: { offset: nullOffset + 4, line: 3, column: 36 },
+    });
+  });
+
   it('lowers a numeric-list default to a literal number array', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   scores Int[] @default([1, 2])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['scores']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [1, 2] },
     });
   });
 
   it('lowers a boolean-list default to a literal boolean array', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   flags Boolean[] @default([true, false])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['flags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [true, false] },
     });
   });
 
   it('preserves commas inside a quoted list-default element', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Post {
+    const result = interpretSqlContract(
+      `model Post {
   id Int @id
   tags String[] @default(["a,b", "c"])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: ['a,b', 'c'] },
     });
   });
@@ -1606,10 +1648,8 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
 describe('@@index parameter matrix diagnostics', () => {
   function indexDiagnosticsFor(schema: string) {
-    const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-    const result = interpretPslDocumentToSqlContract({
+    const result = interpretSqlContract(schema, {
       ...baseInput,
-      ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
     });
     expect(result.ok).toBe(false);

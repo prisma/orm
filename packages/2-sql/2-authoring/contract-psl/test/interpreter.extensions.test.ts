@@ -2,15 +2,14 @@ import { structBlock } from '@internal/psl-parser';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   documentScopedTypes,
+  interpretSqlContract,
   pgvectorAuthoringContributions,
   pgvectorExtensionPack,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const baseInput = {
@@ -24,8 +23,8 @@ const baseInput = {
 
 describe('interpretPslDocumentToSqlContract extensions', () => {
   it('rejects legacy pgvector.column attributes even when the extension is composed', () => {
-    const namedTypeDocument = symbolTableInputFromParseArgs({
-      schema: `types {
+    const namedTypeResult = interpretSqlContract(
+      `types {
   Embedding1536 = Bytes @pgvector.column(length: 1536)
 }
 
@@ -34,15 +33,12 @@ model Document {
   embedding Embedding1536
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const namedTypeResult = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...namedTypeDocument,
-      composedExtensions: ['pgvector'],
-      authoringContributions: pgvectorAuthoringContributions,
-    });
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
     expect(namedTypeResult.ok).toBe(false);
     if (namedTypeResult.ok) return;
     expect(namedTypeResult.failure.diagnostics).toEqual(
@@ -54,20 +50,18 @@ model Document {
       ]),
     );
 
-    const fieldDocument = symbolTableInputFromParseArgs({
-      schema: `model Document {
+    const fieldResult = interpretSqlContract(
+      `model Document {
   id Int @id
   embedding Bytes @pgvector.column(length: 1536)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const fieldResult = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...fieldDocument,
-      composedExtensions: ['pgvector'],
-      authoringContributions: pgvectorAuthoringContributions,
-    });
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
     expect(fieldResult.ok).toBe(false);
     if (fieldResult.ok) return;
     expect(fieldResult.failure.diagnostics).toEqual(
@@ -81,8 +75,8 @@ model Document {
   });
 
   it('rejects attributes attached to constructor-based named types', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Embedding1536 = pgvector.Vector(1536) @pgvector.column
 }
 
@@ -91,15 +85,12 @@ model Document {
   embedding Embedding1536
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: ['pgvector'],
-      authoringContributions: pgvectorAuthoringContributions,
-    });
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -114,8 +105,8 @@ model Document {
   });
 
   it('preserves composed extension pack versions when refs are provided', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Embedding1536 = pgvector.Vector(1536)
 }
 
@@ -124,16 +115,13 @@ model Document {
   embedding Embedding1536
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: ['pgvector'],
-      composedExtensionPackRefs: [pgvectorExtensionPack],
-      authoringContributions: pgvectorAuthoringContributions,
-    });
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        composedExtensionPackRefs: [pgvectorExtensionPack],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -145,8 +133,8 @@ model Document {
   });
 
   it('parses stringArray arguments whose elements contain commas', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Tag = sql.Enum('Tag', ["hello, world", "a,b,c", 'plain'])
 }
 
@@ -155,31 +143,28 @@ model Post {
   tag Tag
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      authoringContributions: {
-        type: {
-          sql: {
-            Enum: {
-              kind: 'typeConstructor',
-              args: [{ kind: 'string' }, { kind: 'stringArray' }],
-              output: {
-                codecId: 'custom/enum@1',
-                nativeType: 'enum',
-                typeParams: {
-                  name: { kind: 'arg', index: 0 },
-                  values: { kind: 'arg', index: 1 },
+      {
+        ...baseInput,
+        authoringContributions: {
+          type: {
+            sql: {
+              Enum: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'string' }, { kind: 'stringArray' }],
+                output: {
+                  codecId: 'custom/enum@1',
+                  nativeType: 'enum',
+                  typeParams: {
+                    name: { kind: 'arg', index: 0 },
+                    values: { kind: 'arg', index: 1 },
+                  },
                 },
               },
             },
           },
         },
       },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -193,8 +178,8 @@ model Post {
   });
 
   it('instantiates family-owned and extension-owned constructor expressions from shared authoring contributions', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   ShortName = sql.String(length: 35)
   Embedding1536 = pgvector.Vector(1536)
 }
@@ -205,44 +190,43 @@ model Document {
   embedding Embedding1536
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: ['pgvector'],
-      authoringContributions: {
-        type: {
-          sql: {
-            String: {
-              kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
-              output: {
-                codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
-                typeParams: {
-                  length: { kind: 'arg', index: 0 },
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: {
+          type: {
+            sql: {
+              String: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                output: {
+                  codecId: 'custom/varchar@1',
+                  nativeType: 'character varying',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
                 },
               },
             },
-          },
-          pgvector: {
-            Vector: {
-              kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
-              output: {
-                codecId: 'custom/vector@1',
-                nativeType: 'vector',
-                typeParams: {
-                  length: { kind: 'arg', index: 0 },
+            pgvector: {
+              Vector: {
+                kind: 'typeConstructor',
+                args: [
+                  { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 },
+                ],
+                output: {
+                  codecId: 'custom/vector@1',
+                  nativeType: 'vector',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
                 },
               },
             },
           },
         },
       },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -261,51 +245,50 @@ model Document {
   });
 
   it('instantiates inline field constructor expressions from shared authoring contributions', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Document {
+    const result = interpretSqlContract(
+      `model Document {
   id Int @id
   shortName sql.String(length: 35)
   embedding pgvector.Vector(length: 1536)?
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      composedExtensions: ['pgvector'],
-      authoringContributions: {
-        type: {
-          sql: {
-            String: {
-              kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
-              output: {
-                codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
-                typeParams: {
-                  length: { kind: 'arg', index: 0 },
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: {
+          type: {
+            sql: {
+              String: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                output: {
+                  codecId: 'custom/varchar@1',
+                  nativeType: 'character varying',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
                 },
               },
             },
-          },
-          pgvector: {
-            Vector: {
-              kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
-              output: {
-                codecId: 'custom/vector@1',
-                nativeType: 'vector',
-                typeParams: {
-                  length: { kind: 'arg', index: 0 },
+            pgvector: {
+              Vector: {
+                kind: 'typeConstructor',
+                args: [
+                  { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 },
+                ],
+                output: {
+                  codecId: 'custom/vector@1',
+                  nativeType: 'vector',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
                 },
               },
             },
           },
         },
       },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -337,8 +320,8 @@ model Document {
   });
 
   it('instantiates constructor expressions with JS-like object literal arguments', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   ShortName = sql.String({ length: 35, label: 'short' })
 }
 
@@ -347,39 +330,36 @@ model Document {
   shortName ShortName
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      authoringContributions: {
-        type: {
-          sql: {
-            String: {
-              kind: 'typeConstructor',
-              args: [
-                {
-                  kind: 'object',
-                  properties: {
-                    length: { kind: 'number', integer: true, minimum: 1 },
-                    label: { kind: 'string', optional: true },
+      {
+        ...baseInput,
+        authoringContributions: {
+          type: {
+            sql: {
+              String: {
+                kind: 'typeConstructor',
+                args: [
+                  {
+                    kind: 'object',
+                    properties: {
+                      length: { kind: 'number', integer: true, minimum: 1 },
+                      label: { kind: 'string', optional: true },
+                    },
                   },
-                },
-              ],
-              output: {
-                codecId: 'custom/varchar@1',
-                nativeType: 'character varying',
-                typeParams: {
-                  length: { kind: 'arg', index: 0, path: ['length'] },
-                  label: { kind: 'arg', index: 0, path: ['label'] },
+                ],
+                output: {
+                  codecId: 'custom/varchar@1',
+                  nativeType: 'character varying',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0, path: ['length'] },
+                    label: { kind: 'arg', index: 0, path: ['label'] },
+                  },
                 },
               },
             },
           },
         },
       },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -424,9 +404,8 @@ model Document {
     };
 
     const interpretWith = (schema: string) =>
-      interpretPslDocumentToSqlContract({
+      interpretSqlContract(schema, {
         ...baseInput,
-        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
         authoringContributions: objectArgContributions,
       });
 
@@ -568,8 +547,8 @@ model Doc {
       return createTestSqlNamespace(input);
     };
 
-    const symbolTableInput = symbolTableInputFromParseArgs({
-      schema: `
+    const result = interpretSqlContract(
+      `
 namespace public {
   model Foo {
     id Int @id
@@ -579,19 +558,16 @@ namespace public {
   }
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      ...symbolTableInput,
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      composedExtensionContracts: new Map(),
-      authoringContributions,
-      createNamespace,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        authoringContributions,
+        createNamespace,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -638,8 +614,8 @@ namespace public {
         return createTestSqlNamespace(input);
       };
 
-      const symbolTableInput = symbolTableInputFromParseArgs({
-        schema: `
+      const result = interpretSqlContract(
+        `
 top_thing my_entry {
 }
 
@@ -647,19 +623,16 @@ model Foo {
   id Int @id
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        ...symbolTableInput,
-        target: postgresTarget,
-        scalarColumnDescriptors: postgresScalarTypeDescriptors,
-        composedExtensionContracts: new Map(),
-        authoringContributions: topThingAuthoringContributions,
-        createNamespace,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -681,8 +654,8 @@ model Foo {
         return createTestSqlNamespace(input);
       };
 
-      const symbolTableInput = symbolTableInputFromParseArgs({
-        schema: `
+      const result = interpretSqlContract(
+        `
 namespace unbound {
   top_thing my_entry {
   }
@@ -694,19 +667,16 @@ namespace auth {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        ...symbolTableInput,
-        target: postgresTarget,
-        scalarColumnDescriptors: postgresScalarTypeDescriptors,
-        composedExtensionContracts: new Map(),
-        authoringContributions: topThingAuthoringContributions,
-        createNamespace,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -729,8 +699,8 @@ namespace auth {
         return createTestSqlNamespace(input);
       };
 
-      const symbolTableInput = symbolTableInputFromParseArgs({
-        schema: `
+      const result = interpretSqlContract(
+        `
 namespace __unbound__ {
   top_thing my_entry {
   }
@@ -742,19 +712,16 @@ namespace auth {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        ...symbolTableInput,
-        target: postgresTarget,
-        scalarColumnDescriptors: postgresScalarTypeDescriptors,
-        composedExtensionContracts: new Map(),
-        authoringContributions: topThingAuthoringContributions,
-        createNamespace,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -789,8 +756,8 @@ namespace auth {
     };
 
     it('rejects two reopened unbound spellings declaring the same named entity under the same entries kind', () => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   thing shared {
   }
 }
@@ -800,14 +767,11 @@ namespace __unbound__ {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        authoringContributions: thingAuthoringContributions,
-      });
+        {
+          ...baseInput,
+          authoringContributions: thingAuthoringContributions,
+        },
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -831,8 +795,8 @@ namespace __unbound__ {
         return createTestSqlNamespace(input);
       };
 
-      const document = symbolTableInputFromParseArgs({
-        schema: `namespace unbound {
+      const result = interpretSqlContract(
+        `namespace unbound {
   thing entry_a {
   }
 }
@@ -842,15 +806,12 @@ namespace __unbound__ {
   }
 }
 `,
-        sourceId: 'schema.prisma',
-      });
-
-      const result = interpretPslDocumentToSqlContract({
-        ...baseInput,
-        ...document,
-        authoringContributions: thingAuthoringContributions,
-        createNamespace,
-      });
+        {
+          ...baseInput,
+          authoringContributions: thingAuthoringContributions,
+          createNamespace,
+        },
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;

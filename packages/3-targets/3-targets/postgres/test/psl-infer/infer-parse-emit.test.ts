@@ -1,14 +1,16 @@
-import {
-  type AuthoringTypeNamespace,
-  collectScalarTypeConstructors,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { assert, describe, expect, it } from 'vitest';
@@ -93,24 +95,36 @@ const codecLookup: CodecLookupWithDescriptors = {
 };
 
 function parseAndEmit(source: string) {
-  const { document, sources } = parse(source, 'infer-parse-emit.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(source, {
+    sourceId: 'infer-parse-emit.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...authoringTypes, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: {},
+    },
   });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: postgresDataTypeLookup,
-    symbolTable,
-    sources,
-    capabilities: {},
-    target,
-    scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    codecLookup,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 describe('Postgres PSL inference round trip', () => {
@@ -162,27 +176,55 @@ describe('Postgres PSL inference round trip', () => {
         table: {
           sample: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              uuid_value: { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false },
-              ip_address: { codecId: 'pg/inet@1', nativeType: 'inet', nullable: false },
+              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false, many: false },
+              uuid_value: {
+                codecId: 'pg/uuid@1',
+                nativeType: 'uuid',
+                nullable: false,
+                many: false,
+              },
+              ip_address: {
+                codecId: 'pg/inet@1',
+                nativeType: 'inet',
+                nullable: false,
+                many: false,
+              },
               amount: {
                 codecId: 'pg/numeric@1',
                 nativeType: 'numeric',
                 nullable: false,
+                many: false,
                 typeParams: { precision: 10, scale: 2 },
               },
-              bare_amount: { codecId: 'pg/numeric@1', nativeType: 'numeric', nullable: false },
-              json_value: { codecId: 'pg/json@1', nativeType: 'json', nullable: false },
-              jsonb_value: { codecId: 'pg/jsonb@1', nativeType: 'jsonb', nullable: false },
+              bare_amount: {
+                codecId: 'pg/numeric@1',
+                nativeType: 'numeric',
+                nullable: false,
+                many: false,
+              },
+              json_value: {
+                codecId: 'pg/json@1',
+                nativeType: 'json',
+                nullable: false,
+                many: false,
+              },
+              jsonb_value: {
+                codecId: 'pg/jsonb@1',
+                nativeType: 'jsonb',
+                nullable: false,
+                many: false,
+              },
               occurred_at: {
                 codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
                 nullable: false,
+                many: false,
               },
               label: {
                 codecId: 'pg/text@1',
                 nativeType: 'varchar',
                 nullable: false,
+                many: false,
                 typeParams: { length: 191 },
               },
             },

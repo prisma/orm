@@ -16,6 +16,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 const referenceRule = entityRef({ kind: 'model' });
 const parseReference = vi.fn(referenceRule.parse);
@@ -62,6 +63,7 @@ it.each([
       position: sourceFile.positionAt(offset),
       clientSupportsLabelOffsets: true,
       candidates: {
+        binder: testBinder({ sources, symbolTable }),
         symbolTable,
         pslBlockDescriptors: {},
         controlMutationDefaults: assembleControlMutationDefaults([]),

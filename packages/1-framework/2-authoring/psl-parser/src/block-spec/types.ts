@@ -1,19 +1,18 @@
-import type { ArgType, AttributeCtx, Param } from '../attribute-spec/types';
-import type { BlockSymbol, SymbolTable } from '../symbol-table';
+import type { ArgType, BlockAttributeCtx, Param } from '../attribute-spec/types';
+import type { SymbolTable } from '../symbol-table';
 
 export interface BlockSpecContext {
   readonly symbols: SymbolTable;
-  readonly block: BlockSymbol;
 }
 
 export interface BlockEntryValueSpec {
-  readonly type: ArgType<unknown, AttributeCtx>;
+  readonly type: ArgType<unknown, BlockAttributeCtx>;
   readonly documentation: string;
 }
 
 export interface StructBlockSpec<Out = unknown> {
   readonly mode: 'struct';
-  readonly parameters: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
+  readonly parameters: Readonly<Record<string, Param<unknown, BlockAttributeCtx>>>;
   readonly _out?: Out;
 }
 

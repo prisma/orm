@@ -873,7 +873,7 @@ type ContractBase = Omit<
               readonly items: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'CartItem' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly userId: {
                 readonly nullable: false;
@@ -941,7 +941,7 @@ type ContractBase = Omit<
               readonly items: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'InvoiceLineItem' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly orderId: {
                 readonly nullable: false;
@@ -1015,7 +1015,7 @@ type ContractBase = Omit<
               readonly items: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'OrderLineItem' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly shippingAddress: {
                 readonly nullable: false;
@@ -1024,7 +1024,7 @@ type ContractBase = Omit<
               readonly statusHistory: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'StatusEntry' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly type: {
                 readonly nullable: false;
@@ -1087,7 +1087,7 @@ type ContractBase = Omit<
               readonly embedding: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly image: {
                 readonly nullable: false;

@@ -22,7 +22,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int2 to smallint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
+          { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
           noHooks,
         ),
       ).toBe('smallint');
@@ -31,7 +31,12 @@ describe('buildExpectedFormatType', () => {
     it('maps timestamptz to timestamp with time zone', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'timestamptz', codecId: 'pg/timestamptz-temporal@1', nullable: false },
+          {
+            many: false,
+            nativeType: 'timestamptz',
+            codecId: 'pg/timestamptz-temporal@1',
+            nullable: false,
+          },
           noHooks,
         ),
       ).toBe('timestamp with time zone');
@@ -41,10 +46,13 @@ describe('buildExpectedFormatType', () => {
   it('names a fixed-length type without a length as format_type does, with a length of 1', () => {
     expect([
       buildExpectedFormatType(
-        { nativeType: 'character', codecId: 'sql/char@1', nullable: false },
+        { many: false, nativeType: 'character', codecId: 'sql/char@1', nullable: false },
         noHooks,
       ),
-      buildExpectedFormatType({ nativeType: 'bit', codecId: 'pg/bit@1', nullable: false }, noHooks),
+      buildExpectedFormatType(
+        { many: false, nativeType: 'bit', codecId: 'pg/bit@1', nullable: false },
+        noHooks,
+      ),
     ]).toEqual(['character(1)', 'bit(1)']);
   });
 
@@ -55,7 +63,9 @@ describe('buildExpectedFormatType', () => {
         { nativeType: 'varchar', codecId: 'sql/varchar@1' },
         { nativeType: 'int', codecId: 'sql/int@1' },
         { nativeType: 'float', codecId: 'sql/float@1' },
-      ].map((column) => buildExpectedFormatType({ ...column, nullable: false }, noHooks)),
+      ].map((column) =>
+        buildExpectedFormatType({ ...column, many: false, nullable: false }, noHooks),
+      ),
     ).toEqual(['character(1)', 'character varying', 'integer', 'double precision']);
   });
 
@@ -82,7 +92,7 @@ describe('buildExpectedFormatType', () => {
         { nativeType: 'timetz', typeParams: { precision: 2 } },
       ].map((column) =>
         buildExpectedFormatType(
-          { ...column, codecId: 'pg/timestamptz-temporal@1', nullable: false },
+          { ...column, many: false, codecId: 'pg/timestamptz-temporal@1', nullable: false },
           withParams,
         ),
       ),
@@ -98,7 +108,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for text', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           noHooks,
         ),
       ).toBe('text');
@@ -109,7 +119,13 @@ describe('buildExpectedFormatType', () => {
     it('returns simple lowercase UDT name unquoted', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'my_status', codecId: 'app/udt@1', nullable: false, typeRef: 'MyStatus' },
+          {
+            many: false,
+            nativeType: 'my_status',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'MyStatus',
+          },
           noHooks,
         ),
       ).toBe('my_status');
@@ -118,7 +134,13 @@ describe('buildExpectedFormatType', () => {
     it('quotes reserved word used as UDT name', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'user', codecId: 'app/udt@1', nullable: false, typeRef: 'User' },
+          {
+            many: false,
+            nativeType: 'user',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'User',
+          },
           noHooks,
         ),
       ).toBe('"user"');
@@ -128,6 +150,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'OrderStatus',
             codecId: 'app/udt@1',
             nullable: false,
@@ -158,6 +181,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'numeric',
             codecId: 'pg/decimal@1',
             nullable: false,
@@ -172,6 +196,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: 'pg/int4@1',
             nullable: false,
@@ -187,6 +212,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: 'pg/int4@1',
             nullable: false,
@@ -201,6 +227,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: '',
             nullable: false,
@@ -216,7 +243,13 @@ describe('buildExpectedFormatType', () => {
     it('resolves nativeType/codecId from the referenced storage type, then formats as a UDT name (typeRef wins over the display map)', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'unused', codecId: 'unused', nullable: false, typeRef: 'MyStatus' },
+          {
+            many: false,
+            nativeType: 'unused',
+            codecId: 'unused',
+            nullable: false,
+            typeRef: 'MyStatus',
+          },
           noHooks,
           { MyStatus: toStorageTypeInstance({ codecId: 'pg/int4@1', nativeType: 'int4' }) },
         ),

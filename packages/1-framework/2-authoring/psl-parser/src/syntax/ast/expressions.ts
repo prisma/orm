@@ -76,9 +76,13 @@ export class PathExprAst implements AstNode {
     yield* filterChildren(this.syntax, IdentifierAst.cast);
   }
 
-  /** The segment names, in source order: `['address', 'city']` for `address.city`. */
+  /**
+   * The segment names, in source order: `['address', 'city']` for `address.city`. A path that ends
+   * in a `.` with no name after it, as in `address.`, ends in an empty name.
+   */
   path(): readonly string[] {
-    return segmentNames(this.syntax);
+    const segments = segmentNames(this.syntax);
+    return this.syntax.lastToken?.kind === 'Dot' ? [...segments, ''] : segments;
   }
 
   static cast(node: SyntaxNode): PathExprAst | undefined {

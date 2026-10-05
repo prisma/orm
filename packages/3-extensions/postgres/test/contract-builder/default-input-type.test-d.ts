@@ -54,6 +54,12 @@ test('.default() takes the input type of the field codec', () => {
             rawSql: field.text().default(sql`'x'`),
             optionalThenDefault: field.bigint().optional().default(1n),
             list: field.bigint().many().default([1n, 2n]),
+            nullableElements: field.bigint().many({ elementsNullable: true }).default([1n, null]),
+            nullableList: field.bigint().many().optional().default(null),
+            nullableEnumElements: field
+              .namedType(Level)
+              .many({ elementsNullable: true })
+              .default([Level.members.Low, null]),
             level: field.namedType(Level).default(Level.members.Low),
             bigLevel: field.namedType(BigLevel).default(BigLevel.members.Low),
             levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),

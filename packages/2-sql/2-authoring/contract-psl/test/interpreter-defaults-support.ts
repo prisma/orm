@@ -1,11 +1,9 @@
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import {
-  type InterpretPslDocumentToSqlContractInput,
-  interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
-} from '../src/interpreter';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
@@ -14,9 +12,14 @@ import {
 } from './fixtures';
 
 export const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
-export const interpretPslDocumentToSqlContract = (
+export const interpretPostgresSchema = (
+  schema: string,
   input: Omit<
     InterpretPslDocumentToSqlContractInput,
+    | 'documents'
+    | 'sources'
+    | 'symbolTable'
+    | 'binder'
     | 'target'
     | 'scalarColumnDescriptors'
     | 'composedExtensionContracts'
@@ -33,7 +36,7 @@ export const interpretPslDocumentToSqlContract = (
 ) => {
   const { scalarColumnDescriptors = postgresNativeScalarTypeDescriptors, ...interpreterInput } =
     input;
-  return interpretPslDocumentToSqlContractInternal({
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
     codecLookup: postgresCodecLookup,

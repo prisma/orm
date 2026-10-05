@@ -160,7 +160,9 @@
                 }
               },
               "permissions": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -312,8 +314,8 @@
             "workspace_role": {
               "checks": [
                 {
-                  "expression": "\"permissions\"::text[] <@ ARRAY['HELLO', 'WORLD']::text[]",
-                  "name": "workspace_role_permissions_check_f45c4d4b",
+                  "expression": "array_remove(\"permissions\"::text[], NULL) <@ ARRAY['HELLO', 'WORLD']::text[]",
+                  "name": "workspace_role_permissions_check_201b87fe",
                   "prefix": "workspace_role_permissions_check"
                 },
                 {
@@ -338,7 +340,9 @@
                 },
                 "permissions": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
@@ -373,7 +377,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8beb060aa674cb67f64b19e1f5b5803bb39b87bbad4ef05b861e794aeb39a9ac"
+    "storageHash": "662035ba79aad4ffa7c278a5c26940194c92c01a2eea918871640bee521e3f0e"
   },
   "capabilities": {
     "postgres": {

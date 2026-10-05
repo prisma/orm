@@ -125,7 +125,8 @@ export function buildCompositeTypes(input: {
           typeName,
           ...ifDefined('typeConstructor', typeConstructor),
           optional: field.nullable,
-          list: field.many === true,
+          list: !!field.many,
+          elementOptional: !!field.many && field.many.elementNullable,
           attributes: [],
           span: SYNTHETIC_SPAN,
         };

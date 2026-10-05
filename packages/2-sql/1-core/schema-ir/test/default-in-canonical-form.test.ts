@@ -33,6 +33,18 @@ describe('defaultInCanonicalForm', () => {
     });
   });
 
+  it('preserves null defaults and null list elements', () => {
+    expect({
+      scalar: defaultInCanonicalForm(null, toCanonicalForm, false),
+      container: defaultInCanonicalForm(null, toCanonicalForm, true),
+      elements: defaultInCanonicalForm([null, '2026-01-01T00:00:00.000Z'], toCanonicalForm, true),
+    }).toEqual({
+      scalar: { value: null, refusal: undefined },
+      container: { value: null, refusal: undefined },
+      elements: { value: [null, '2026-01-01T00:00:00Z'], refusal: undefined },
+    });
+  });
+
   it('keeps a value the type refuses as it is, with the refusal message', () => {
     expect({
       scalar: defaultInCanonicalForm('2026-01-01 00:00:00', toCanonicalForm, false),

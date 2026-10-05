@@ -43,7 +43,13 @@ function makeMinimalContract(overrides: MongoContractTestOverrides = {}): MongoC
   const { models, domain, ...rest } = overrides;
   const defaultModels: Record<string, MongoModelDefinition> = {
     Item: {
-      fields: { _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false } },
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+      },
       storage: { collection: 'items' },
       relations: {},
     },
@@ -73,7 +79,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: {
               collection: 'items',
@@ -85,7 +95,11 @@ describe('validateMongoStorage()', () => {
           },
           Tag: {
             fields: {
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'tags' },
             relations: {},
@@ -101,7 +115,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: {
               collection: 'items',
@@ -113,7 +131,11 @@ describe('validateMongoStorage()', () => {
           },
           Tag: {
             fields: {
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'tags' },
             relations: {},
@@ -136,7 +158,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {
@@ -145,14 +171,22 @@ describe('validateMongoStorage()', () => {
           },
           Other: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},
           },
           Tag: {
             fields: {
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: {},
             relations: {},
@@ -170,7 +204,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: {
               collection: 'items',
@@ -182,7 +220,11 @@ describe('validateMongoStorage()', () => {
           },
           Tag: {
             fields: {
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: {},
             relations: {},
@@ -195,7 +237,10 @@ describe('validateMongoStorage()', () => {
   });
 
   describe('to-one relation nullability against fields', () => {
-    const objectId = { type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' } };
+    const objectId = {
+      many: false as const,
+      type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
+    };
     function toOneContract(input: {
       readonly nullable: boolean | undefined;
       readonly authorIdNullable: boolean;
@@ -308,7 +353,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {
@@ -322,7 +371,11 @@ describe('validateMongoStorage()', () => {
           },
           User: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'users' },
             relations: {},
@@ -339,8 +392,16 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              ownerId: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              ownerId: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {
@@ -354,7 +415,11 @@ describe('validateMongoStorage()', () => {
           },
           User: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'users' },
             relations: {},
@@ -375,8 +440,16 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              ownerId: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              ownerId: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {
@@ -390,7 +463,11 @@ describe('validateMongoStorage()', () => {
           },
           User: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'users' },
             relations: {},
@@ -411,8 +488,16 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},
@@ -421,7 +506,11 @@ describe('validateMongoStorage()', () => {
           },
           SpecialItem: {
             fields: {
-              extra: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              extra: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'other' },
             relations: {},
@@ -440,8 +529,16 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},
@@ -450,7 +547,11 @@ describe('validateMongoStorage()', () => {
           },
           SpecialItem: {
             fields: {
-              extra: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              extra: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},
@@ -469,7 +570,11 @@ describe('validateMongoStorage()', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},

@@ -1,15 +1,14 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
+  interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
 } from './fixtures';
 
@@ -31,8 +30,8 @@ describe('interpretPslDocumentToSqlContract types', () => {
   const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
   it('lowers preserved native type named types into storage descriptors', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Id = Uuid
   Slug = VarChar(191)
   Rating = SmallInt
@@ -52,14 +51,11 @@ model Event {
   amount Amount
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -141,8 +137,8 @@ model Event {
   });
 
   it('lowers additional Postgres native type attributes on named types', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Code = Char(12)
   Score = Real
   CreatedAt = Timestamp(3)
@@ -160,14 +156,11 @@ model Event {
   reminderAt ReminderAt
   ip Ip
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

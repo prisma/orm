@@ -9,10 +9,18 @@ export const blogContract = createMongoContract({
   models: {
     User: {
       fields: {
-        _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-        name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        bio: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        _id: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+        },
+        name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        email: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        },
+        bio: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
       },
       relations: {
         posts: {
@@ -25,10 +33,26 @@ export const blogContract = createMongoContract({
     },
     Post: {
       fields: {
-        _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-        title: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        content: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        authorId: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+        _id: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+        },
+        title: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        },
+        content: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        },
+        authorId: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+        },
       },
       relations: {
         author: {
@@ -49,9 +73,17 @@ export const blogContract = createMongoContract({
     },
     Comment: {
       fields: {
-        _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-        text: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        createdAt: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/date@1' } },
+        _id: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+        },
+        text: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        createdAt: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'mongo/date@1' },
+        },
       },
       relations: {},
       storage: {},

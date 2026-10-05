@@ -13,11 +13,19 @@
  *     factory chain (no test-side hand-lowering).
  */
 
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
+import { type BoundPslSchema, bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -50,10 +58,13 @@ function blockResolutionBinder(
   return createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: assembled.pslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    },
   }).binder;
 }
 
@@ -217,24 +228,49 @@ namespace public {
     ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
   ]);
 
-  function interpret(text: string) {
-    const { document, sources } = parse(text, 'psl-policy-authoring.test.psl');
-    const { symbolTable } = buildSymbolTable({
-      documents: [document],
-      sources,
-    });
-    return interpretPslDocumentToSqlContract({
-      dataTypeLookup: postgresDataTypeLookup,
-      documents: [document],
-      symbolTable,
-      sources,
-      target: postgresTarget,
-      scalarColumnDescriptors,
-      authoringContributions: assembled,
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...scalarColumnDescriptors].map(([name, output]) => [
+        name,
+        { kind: 'typeConstructor' as const, output },
+      ]),
+    );
+
+  function contextFor(): BoundPslSchema['context'] {
+    return {
+      composedExtensions: [],
       composedExtensionContracts: new Map(),
-      createNamespace: postgresCreateNamespace,
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
+    };
+  }
+
+  function interpret(text: string) {
+    const bound = bindPslSchema(text, {
+      sourceId: 'psl-policy-authoring.test.psl',
+      context: contextFor(),
     });
+    return withSeedDiagnostics(
+      interpretPslDocumentToSqlContract({
+        documents: bound.documents,
+        sources: bound.sources,
+        symbolTable: bound.symbolTable,
+        binder: bound.binder,
+        ...sqlContextInput(bound.context),
+        target: postgresTarget,
+        createNamespace: postgresCreateNamespace,
+      }),
+      bound.seedDiagnostics,
+    );
   }
 
   it('reads a policy expression as a JSON string, and keeps any other backslash sequence as written', () => {
@@ -253,22 +289,26 @@ namespace public {
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
+    const { diagnostics } = buildSymbolTable({ documents: [document], sources });
 
     expect(diagnostics).toEqual([]);
 
-    const result = interpretPslDocumentToSqlContract({
-      documents: [document],
-      dataTypeLookup: postgresDataTypeLookup,
-      symbolTable,
-      sources,
-      target: postgresTarget,
-      scalarColumnDescriptors,
-      authoringContributions: assembled,
-      composedExtensionContracts: new Map(),
-      createNamespace: postgresCreateNamespace,
-      capabilities: { sql: { scalarList: true } },
+    const bound = bindPslSchema(source, {
+      sourceId: 'psl-policy-authoring.test.psl',
+      context: contextFor(),
     });
+    const result = withSeedDiagnostics(
+      interpretPslDocumentToSqlContract({
+        documents: bound.documents,
+        sources: bound.sources,
+        symbolTable: bound.symbolTable,
+        binder: bound.binder,
+        ...sqlContextInput(bound.context),
+        target: postgresTarget,
+        createNamespace: postgresCreateNamespace,
+      }),
+      bound.seedDiagnostics,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

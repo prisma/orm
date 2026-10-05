@@ -74,6 +74,10 @@
       "types": "./dist/resolution.d.mts",
       "import": "./dist/resolution.mjs"
     },
+    "./test": {
+      "types": "./dist/test.d.mts",
+      "import": "./dist/test.mjs"
+    },
     "./package.json": {
       "types": "./package.json",
       "import": "./package.json"

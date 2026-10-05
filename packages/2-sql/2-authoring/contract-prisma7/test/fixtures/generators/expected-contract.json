@@ -45,63 +45,72 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "uuid4": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "uuid4Again": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "uuid7": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "cuid1": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "cuid2": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "ulid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "nanoid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "nanoidSized": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -117,6 +126,7 @@
     }
   },
   "execution": {
+    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b",
     "mutations": {
       "defaults": [
         {
@@ -211,8 +221,7 @@
           }
         }
       ]
-    },
-    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b"
+    }
   },
   "extensions": {},
   "capabilities": {},
@@ -231,47 +240,56 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "uuid4": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "uuid4Again": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "uuid7": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "cuid1": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "cuid2": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "ulid": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "nanoid": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "nanoidSized": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],

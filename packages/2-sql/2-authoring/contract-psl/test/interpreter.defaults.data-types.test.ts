@@ -1,15 +1,14 @@
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   pgvectorAuthoringContributions,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
@@ -25,9 +24,7 @@ function interpret(
   codecLookup = postgresCodecLookup,
   dataTypes = fixtureDataTypeSupport.entries,
 ) {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
     authoringContributions: { ...pgvectorAuthoringContributions, dataTypes },

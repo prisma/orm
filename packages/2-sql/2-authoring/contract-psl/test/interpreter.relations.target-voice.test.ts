@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const baseInput = {
@@ -21,10 +20,7 @@ const baseInput = {
 } as const;
 
 function refusalFor(schema: string): readonly { code: string; message: string }[] {
-  const result = interpretPslDocumentToSqlContract({
-    ...baseInput,
-    ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-  });
+  const result = interpretSqlContract(schema, { ...baseInput });
   expect(result.ok).toBe(false);
   if (result.ok) throw new Error('interpretation unexpectedly succeeded');
   return result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
@@ -107,7 +103,7 @@ model Person {
     ).toEqual([{ code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Province"' }]);
   });
 
-  it('leaves a type-constructor call into an unavailable namespace to SQL alone', () => {
+  it('leaves a type-constructor call into an unavailable namespace to the binder alone', () => {
     expect(
       refusalFor(`model Document {
   id Int @id
@@ -115,11 +111,7 @@ model Person {
 }
 `),
     ).toEqual([
-      {
-        code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-        message:
-          'Type constructor "pgvector.Vector" uses unrecognized namespace "pgvector". Add extension pack "pgvector" to extensions in prisma.config.ts.',
-      },
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "pgvector.Vector"' },
     ]);
   });
 

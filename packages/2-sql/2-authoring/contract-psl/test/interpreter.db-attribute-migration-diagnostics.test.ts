@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const baseInput = {
@@ -22,8 +21,7 @@ const baseInput = {
 } as const;
 
 function diagnosticCodesAndMessages(schema: string) {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+  const result = interpretSqlContract(schema, { ...baseInput });
 
   expect(result.ok).toBe(false);
   if (result.ok) return [];

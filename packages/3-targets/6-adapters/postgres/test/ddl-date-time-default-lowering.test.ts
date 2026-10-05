@@ -63,6 +63,19 @@ describe('a date or time default in CREATE TABLE', () => {
     },
   );
 
+  it.each([
+    ['jsonb[]', 'pg/jsonb@1'],
+    ['timestamptz[]', 'pg/timestamptz-temporal@1'],
+  ])('writes a null %s container as SQL NULL with %s', async (nativeType, codecId) => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const column = col('v', nativeType, {
+      default: lit(null),
+      codecRef: { codecId, many: true },
+    });
+    expect(await createTableDefault(nativeType, codecId, null, true)).toBe('DEFAULT NULL');
+    expect(await adapter.renderColumnDefault(column, 't')).toBe('DEFAULT NULL');
+  });
+
   it('writes each element of a list default the same way', async () => {
     expect(
       await createTableDefault(

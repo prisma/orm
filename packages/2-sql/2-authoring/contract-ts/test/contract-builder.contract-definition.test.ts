@@ -48,6 +48,7 @@ describe('shared contract definition lowering', () => {
                 typeParams: { length: 36 },
               },
               nullable: false,
+              many: false,
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
             },
             {
@@ -59,6 +60,7 @@ describe('shared contract definition lowering', () => {
                 typeRef: 'Role',
               },
               nullable: false,
+              many: false,
             },
           ],
           id: {
@@ -92,6 +94,7 @@ describe('shared contract definition lowering', () => {
                 nativeType: 'int4',
               },
               nullable: false,
+              many: false,
             },
             {
               fieldName: 'authorId',
@@ -102,6 +105,7 @@ describe('shared contract definition lowering', () => {
                 typeParams: { length: 36 },
               },
               nullable: false,
+              many: false,
             },
           ],
           id: {
@@ -228,6 +232,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'timestamptz',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'literal',
                   value: new Date('2025-01-01T00:00:00.000Z'),
@@ -292,6 +297,7 @@ describe('shared contract definition lowering', () => {
             tableName: 'document',
             fields: [
               {
+                many: false,
                 fieldName: 'embedding',
                 columnName: 'embedding',
                 descriptor: {
@@ -315,6 +321,86 @@ describe('shared contract definition lowering', () => {
     });
   });
 
+  it('encodes nullable list defaults without invoking the element codec for null', () => {
+    const encoded: unknown[] = [];
+    const codecLookup: CodecLookupWithDescriptors = withDescriptors({
+      get: (id) =>
+        id === 'app/value@1'
+          ? {
+              id,
+              encode: async (value: unknown) => value,
+              decode: async (wire: unknown) => wire,
+              encodeJson: (value: unknown) => {
+                encoded.push(value);
+                return `encoded:${String(value)}`;
+              },
+              decodeJson: (json: unknown) => json,
+            }
+          : undefined,
+      targetTypesFor: () => ['text'],
+      renderOutputTypeFor: () => undefined,
+    });
+
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Post',
+            tableName: 'post',
+            fields: [
+              {
+                fieldName: 'tags',
+                columnName: 'tags',
+                descriptor: { codecId: 'app/value@1', nativeType: 'text' },
+                nullable: false,
+                many: true,
+                elementNullable: true,
+                default: { kind: 'literal', value: ['value', null] },
+              },
+            ],
+          },
+        ],
+      },
+      codecLookup,
+    );
+
+    expect(unboundTables(contract.storage)['post']?.columns['tags']?.default).toEqual({
+      kind: 'literal',
+      value: ['encoded:value', null],
+    });
+    expect(encoded).toEqual(['value']);
+  });
+
+  it('rejects null elements in strict list defaults', () => {
+    expect(() =>
+      buildSqlContractFromDefinition({
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Post',
+            tableName: 'post',
+            fields: [
+              {
+                fieldName: 'tags',
+                columnName: 'tags',
+                descriptor: { codecId: 'app/value@1', nativeType: 'text' },
+                nullable: false,
+                many: true,
+                elementNullable: false,
+                default: { kind: 'literal', value: ['value', null] },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('Literal default on a strict list column cannot contain null elements');
+  });
+
   it('builds phase-specific execution defaults', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
@@ -333,6 +419,7 @@ describe('shared contract definition lowering', () => {
                 nativeType: 'timestamptz',
               },
               nullable: false,
+              many: false,
               executionDefaults: {
                 onCreate: { kind: 'generator', id: 'timestampNow' },
                 onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -371,6 +458,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'function',
                   expression: 'gen_random_uuid()',
@@ -408,6 +496,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'function',
                   expression: 'gen_random_uuid()',
@@ -445,6 +534,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
             ],
             id: { columns: ['id'] },
@@ -461,6 +551,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
               {
                 fieldName: 'authorId',
@@ -470,6 +561,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
             ],
             id: { columns: ['id'] },
@@ -512,6 +604,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: true,
+                many: false,
                 executionDefaults: {
                   onCreate: {
                     kind: 'generator',
@@ -547,6 +640,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: true,
+                many: false,
               },
             ],
             id: {
@@ -577,6 +671,7 @@ describe('shared contract definition lowering', () => {
                 columnName: 'severity',
                 descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
                 nullable: true,
+                many: false,
               },
             ],
             checks: [
@@ -607,12 +702,14 @@ describe('M:N through descriptor lowering', () => {
         columnName: 'id',
         descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
         nullable: false,
+        many: false as const,
       },
       {
         fieldName: 'slug',
         columnName: 'slug',
         descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
         nullable: false,
+        many: false as const,
       },
     ],
     ...target,
@@ -633,6 +730,7 @@ describe('M:N through descriptor lowering', () => {
               columnName: 'id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
           ],
           id: { columns: ['id'] },
@@ -666,12 +764,14 @@ describe('M:N through descriptor lowering', () => {
               columnName: 'post_id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
             {
               fieldName: 'tagId',
               columnName: 'tag_id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
           ],
           id: { columns: ['post_id', 'tag_id'] },

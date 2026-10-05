@@ -4,6 +4,7 @@ import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
+import { ifDefined } from '@internal/utils/defined';
 import type { LspControlStack } from './lsp-control-stack';
 import {
   hasPslInputs,
@@ -93,6 +94,7 @@ function lspControlStackFromStack(stack: ControlStack): LspControlStack {
     ...(stack.controlMutationDefaults === undefined
       ? {}
       : { controlMutationDefaults: stack.controlMutationDefaults }),
+    ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
   };
 }
 
@@ -111,6 +113,7 @@ function resolveInterpretation(
       composedExtensions: stack.extensions.map((p) => p.id),
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,
+      ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
       codecLookup: stack.codecLookup,
       dataTypeLookup: stack.dataTypeLookup,
       controlMutationDefaults: stack.controlMutationDefaults,

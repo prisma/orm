@@ -46,6 +46,29 @@ describe('deriveJsonSchema BSON type lists', () => {
     });
   });
 
+  it.each([
+    [false, false, 'array'],
+    [false, true, 'array'],
+    [true, false, ['null', 'array']],
+    [true, true, ['null', 'array']],
+  ] as const)(
+    'derives unconstrained list nullable=%s elementNullable=%s',
+    (nullable, elementNullable, bsonType) => {
+      const result = deriveJsonSchema(
+        { tags: arrayField('test/unconstrained@1', nullable, elementNullable) },
+        undefined,
+        mongoCodecLookup,
+      );
+
+      expect(result.jsonSchema).toEqual({
+        bsonType: 'object',
+        ...(nullable ? {} : { required: ['tags'] }),
+        properties: { tags: { bsonType, items: {} } },
+        additionalProperties: false,
+      });
+    },
+  );
+
   it('leaves a Bson field unconstrained when required, nullable or a list', () => {
     const result = deriveJsonSchema(
       {

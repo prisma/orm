@@ -175,9 +175,9 @@ export function buildMixedPolyContract(): TestContract {
   const domainModels = unboundDomainModels(raw);
   domainModels['Task'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      title: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-      type: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      title: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      type: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {},
     storage: {
@@ -190,7 +190,9 @@ export function buildMixedPolyContract(): TestContract {
   };
 
   domainModels['Bug'] = {
-    fields: { severity: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+    fields: {
+      severity: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    },
     relations: {},
     storage: {
       namespaceId: POSTGRES_DEFAULT_NAMESPACE_ID,
@@ -201,7 +203,9 @@ export function buildMixedPolyContract(): TestContract {
   };
 
   domainModels['Feature'] = {
-    fields: { priority: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } } },
+    fields: {
+      priority: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+    },
     relations: {},
     storage: {
       namespaceId: POSTGRES_DEFAULT_NAMESPACE_ID,
@@ -251,6 +255,7 @@ export function buildStiPolyContract(): TestContract {
   const userModel = domainModels['User']!;
   userModel.fields['kind'] = {
     nullable: false,
+    many: false,
     type: { kind: 'scalar', codecId: 'pg/text@1' },
   };
   (userModel.storage as { fields: Record<string, { column: string }> }).fields['kind'] = {
@@ -263,7 +268,9 @@ export function buildStiPolyContract(): TestContract {
   };
 
   domainModels['Admin'] = {
-    fields: { role: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+    fields: {
+      role: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    },
     relations: {},
     storage: {
       namespaceId: POSTGRES_DEFAULT_NAMESPACE_ID,
@@ -274,7 +281,9 @@ export function buildStiPolyContract(): TestContract {
   };
 
   domainModels['Regular'] = {
-    fields: { plan: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+    fields: {
+      plan: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    },
     relations: {},
     storage: {
       namespaceId: POSTGRES_DEFAULT_NAMESPACE_ID,
