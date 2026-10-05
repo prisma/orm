@@ -40,7 +40,7 @@ changes:
         - '\bhas(?:Where|OrderBy|UniqueFilter)\s*:\s*false\b'
   - id: read-collection-state-and-row-with-helpers
     summary: |
-      A collection's type state and row are read with `CollectionStateOf<C>` and `CollectionRowOf<C>`, not by inferring the type arguments of `Collection`. The type arguments keep what the collection started with.
+      A collection's type state and row are read with `CollectionTypeStateOf<C>` and `CollectionRowOf<C>`, not by inferring the type arguments of `Collection`. The type arguments keep what the collection started with.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -53,13 +53,13 @@ changes:
       matches:
         - '\bReturnType<[^>]*\[[''"](?:where|orderBy|limit|offset|distinct|distinctOn|cursor|include)[''"]\]'
         - '\bReturnType<\s*typeof\s+[\w$.]+\.(?:where|orderBy|limit|offset|distinct|distinctOn|cursor|include)\b'
-  - id: include-takes-no-explicit-type-argument
+  - id: chaining-methods-take-no-explicit-type-arguments
     summary: |
-      `include` with an explicit type argument no longer works: `posts.include<'user'>('user')` does not compile, and `ReturnType<typeof posts.include<'user'>>` is `never`. Call `include` with the relation name as a value.
+      `include`, `distinct` and `distinctOn` with explicit type arguments no longer compile: `posts.include<'user'>('user')` and `posts.distinct<['title']>('title')` fail, and `ReturnType<typeof posts.include<'user'>>` is `never`. Drop the type arguments; they are inferred from the arguments, so `posts.distinct('title')` needs none.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\.include<'
+        - '\.(?:include|distinct|distinctOn)<'
   - id: custom-collection-methods-chain
     summary: |
       Optional. Custom collection methods now stay available after the built-in chaining methods. Where code repeats a class method's body inline after a chaining call, it can call the method instead.
@@ -157,15 +157,15 @@ Only classes that extend the SQL `Collection` are affected; skip matches in othe
 `DefaultCollectionTypeState` declares `hasWhere`, `hasOrderBy` and `hasUniqueFilter` as `boolean`, meaning not known. A method that establishes a flag sets it to `true`. Where your code expects `false`, expect `boolean`:
 
 ```diff
-- type Check = Equal<CollectionStateOf<typeof users>['hasOrderBy'], false>;
-+ type Check = Equal<CollectionStateOf<typeof users>['hasOrderBy'], boolean>;
+- type Check = Equal<CollectionTypeStateOf<typeof users>['hasOrderBy'], false>;
++ type Check = Equal<CollectionTypeStateOf<typeof users>['hasOrderBy'], boolean>;
 ```
 
 A type of your own that sets a flag to `false` should set it to `boolean`. The writes still need `hasWhere: true`, and `cursor` and `distinctOn` still need `hasOrderBy: true`.
 
-## Read the state and the row with `CollectionStateOf` and `CollectionRowOf`
+## Read the state and the row with `CollectionTypeStateOf` and `CollectionRowOf`
 
-`where`, `orderBy` and `include` record what they establish in two declared properties, not in the type arguments of `Collection`. Inferring the third or fourth type argument gives the row and the state the collection started with. Read them with `CollectionRowOf` and `CollectionStateOf` instead:
+`where`, `orderBy` and `include` record what they establish in two declared properties, not in the type arguments of `Collection`. Inferring the third or fourth type argument gives the row and the state the collection started with. Read them with `CollectionRowOf` and `CollectionTypeStateOf` instead:
 
 ```diff
 - type RowOf<C> = C extends Collection<infer _C, infer _M, infer Row, infer _S> ? Row : never;
@@ -177,10 +177,10 @@ A type of your own that sets a flag to `false` should set it to `boolean`. The w
 To keep a helper of your own, constrain its parameter, because both helpers require one:
 
 ```ts
-import type { CollectionRowOf, CollectionStateOf, HasRow, HasState } from '@internal/sql-orm-client';
+import type { CollectionRowOf, CollectionTypeStateOf, HasRow, HasTypeState } from '@internal/sql-orm-client';
 
 type RowOf<C extends HasRow> = CollectionRowOf<C>;
-type StateOf<C extends HasState> = CollectionStateOf<C>;
+type StateOf<C extends HasTypeState> = CollectionTypeStateOf<C>;
 ```
 
 ## `ReturnType` of a chaining method does not give a collection
@@ -195,9 +195,16 @@ The chaining methods are generic in their receiver, and `ReturnType` of a generi
 
 `ReturnType` of a method of your own class, such as `ReturnType<PostCollection['withTitle']>`, still works.
 
-## `include` takes no explicit type argument
+## `include`, `distinct` and `distinctOn` take no explicit type arguments
 
-`include` infers its receiver from the call. With an explicit type argument the receiver is not inferred: a call such as `posts.include<'user'>('user')` does not compile, and `ReturnType<typeof posts.include<'user'>>` is `never`. Call `include` on a value and take its type:
+These methods infer their receiver from the call. With explicit type arguments the receiver is not inferred: `posts.include<'user'>('user')` does not compile, `posts.distinct<['title']>('title')` and `posts.distinctOn<['title']>('title')` fail with "Expected 2 type arguments, but got 1", and `ReturnType<typeof posts.include<'user'>>` is `never`. Drop the type arguments. They are inferred from the arguments, so `distinct<['title']>('title')` becomes `distinct('title')`:
+
+```diff
+- const titles = posts.distinct<['title']>('title');
++ const titles = posts.distinct('title');
+```
+
+To name the type of an include, call `include` on a value and take its type:
 
 ```diff
 - type WithUser = ReturnType<typeof posts.include<'user'>>;
