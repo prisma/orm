@@ -1,5 +1,6 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecCallContext } from '@internal/framework-components/codec';
+import type { AfterQueryResult } from '@internal/framework-components/runtime';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
@@ -345,19 +346,20 @@ describe('MongoRuntime middleware lifecycle', () => {
   });
 
   it('calls afterQuery with completed: false on error, then rethrows', async () => {
+    const driverError = new Error('driver failure');
     const failingDriver = {
       execute: vi.fn(async function* () {
         yield* []; // satisfy generator contract before throwing
-        throw new Error('driver failure');
+        throw driverError;
       }),
       close: vi.fn(async () => {}),
     } as unknown as MongoDriver;
 
-    let afterResult: { completed: boolean; rowCount: number } | undefined;
+    let afterResult: AfterQueryResult | undefined;
     const middleware: MongoMiddleware = {
       name: 'error-observer',
       async afterQuery(_plan, result) {
-        afterResult = { completed: result.completed, rowCount: result.rowCount };
+        afterResult = result;
       },
     };
 
@@ -374,7 +376,13 @@ describe('MongoRuntime middleware lifecycle', () => {
       }
     }).rejects.toThrow('driver failure');
 
-    expect(afterResult).toEqual({ completed: false, rowCount: 0 });
+    expect(afterResult).toEqual({
+      completed: false,
+      rowCount: 0,
+      source: 'driver',
+      latencyMs: expect.any(Number),
+      error: driverError,
+    });
   });
 
   it('handles error path with middleware that has no afterQuery', async () => {

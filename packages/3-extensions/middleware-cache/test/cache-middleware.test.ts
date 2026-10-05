@@ -202,7 +202,13 @@ describe('createCacheMiddleware — miss path', () => {
     await mw.onRow!({ id: 1 }, exec, ctx);
     await mw.afterQuery!(
       exec,
-      { rowCount: 1, latencyMs: 5, completed: false, source: 'driver' },
+      {
+        rowCount: 1,
+        latencyMs: 5,
+        completed: false,
+        source: 'driver',
+        error: new Error('driver boom'),
+      },
       ctx,
     );
 
@@ -248,7 +254,13 @@ describe('createCacheMiddleware — miss path', () => {
     // Mid-stream failure.
     await mw.afterQuery!(
       exec,
-      { rowCount: 1, latencyMs: 5, completed: false, source: 'driver' },
+      {
+        rowCount: 1,
+        latencyMs: 5,
+        completed: false,
+        source: 'driver',
+        error: new Error('driver boom'),
+      },
       ctx,
     );
 

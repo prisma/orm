@@ -31,9 +31,10 @@ import type {
  *     ctx)`.
  *  4. On any error thrown during steps 1–2: for each middleware in
  *     registration order: `afterQuery(exec, { rowCount, latencyMs,
- *     completed: false, source }, ctx)`. Errors thrown by `afterQuery`
- *     during the error path are swallowed so they do not mask the original
- *     error. The original error is then rethrown.
+ *     completed: false, source, error }, ctx)`, where `error` is the caught
+ *     value. Errors thrown by `afterQuery` during the error path are
+ *     swallowed so they do not mask the original error. The original error
+ *     is then rethrown.
  *
  * `beforeQuery` is **not** fired here — see
  * {@link runBeforeQueryChain} in `before-execute-chain.ts`. Family runtimes
@@ -59,7 +60,6 @@ export function runQueryWithMiddleware<TExec extends ExecutionPlan, Row>(
   const iterator = async function* (): AsyncGenerator<Row, void, unknown> {
     const startedAt = Date.now();
     let rowCount = 0;
-    let completed = false;
     let source: 'driver' | 'middleware' = 'driver';
     // Deferred so a winning interceptor can skip `runDriver()` entirely.
     // For factories that lazily produce async generators this is a no-op,
@@ -109,26 +109,26 @@ export function runQueryWithMiddleware<TExec extends ExecutionPlan, Row>(
         rowCount++;
         yield row;
       }
-
-      completed = true;
     } catch (error) {
-      await notifyQueryCompletion(
-        middleware,
-        exec,
-        ctx,
-        { rowCount, latencyMs: Date.now() - startedAt, completed, source },
-        true,
-      );
+      await notifyQueryFailure(middleware, exec, ctx, {
+        rowCount,
+        latencyMs: Date.now() - startedAt,
+        completed: false,
+        source,
+        error,
+      });
       throw error;
     }
 
-    await notifyQueryCompletion(
-      middleware,
-      exec,
-      ctx,
-      { rowCount, latencyMs: Date.now() - startedAt, completed, source },
-      false,
-    );
+    const result: AfterQueryResult = {
+      rowCount,
+      latencyMs: Date.now() - startedAt,
+      completed: true,
+      source,
+    };
+    for (const mw of middleware) {
+      if (mw.afterQuery) await mw.afterQuery(exec, result, ctx);
+    }
   };
 
   return new AsyncIterableResult(iterator());
@@ -153,9 +153,9 @@ export function runQueryWithMiddleware<TExec extends ExecutionPlan, Row>(
  *     `afterExecute(exec, { stats, latencyMs, completed: true, source }, ctx)`.
  *  4. On any error thrown during steps 1–2: for each middleware in
  *     registration order: `afterExecute(exec, { latencyMs, completed: false,
- *     source }, ctx)`. Errors thrown by `afterExecute` during the error path
- *     are swallowed so they do not mask the original error. The original
- *     error is then rethrown.
+ *     source, error }, ctx)`, where `error` is the caught value. Errors
+ *     thrown by `afterExecute` during the error path are swallowed so they
+ *     do not mask the original error. The original error is then rethrown.
  *
  * `beforeExecute` is **not** fired here — see
  * {@link runBeforeExecuteChain} in `before-execute-chain.ts`. Family runtimes
@@ -201,7 +201,7 @@ export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
     for (const mw of middleware) {
       if (!mw.afterExecute) continue;
       try {
-        await mw.afterExecute(exec, { latencyMs, completed: false, source }, ctx);
+        await mw.afterExecute(exec, { latencyMs, completed: false, source, error }, ctx);
       } catch {
         // Preserve the operation error when completion observers also fail.
       }
@@ -218,23 +218,18 @@ export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
   return stats;
 }
 
-async function notifyQueryCompletion<TExec extends ExecutionPlan>(
+async function notifyQueryFailure<TExec extends ExecutionPlan>(
   middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
   exec: TExec,
   ctx: RuntimeMiddlewareContext,
-  result: AfterQueryResult,
-  swallowErrors: boolean,
+  result: AfterQueryResult & { readonly completed: false },
 ): Promise<void> {
   for (const mw of middleware) {
     if (!mw.afterQuery) continue;
-    if (swallowErrors) {
-      try {
-        await mw.afterQuery(exec, result, ctx);
-      } catch {
-        // Preserve the operation error when completion observers also fail.
-      }
-    } else {
+    try {
       await mw.afterQuery(exec, result, ctx);
+    } catch {
+      // Preserve the operation error when completion observers also fail.
     }
   }
 }

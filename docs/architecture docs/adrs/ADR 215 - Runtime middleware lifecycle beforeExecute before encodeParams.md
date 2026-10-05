@@ -67,7 +67,7 @@ The execute lifecycle is, in order:
 3. The runtime encodes the possibly mutated parameter values.
 4. `interceptExecute` runs in registration order on the encoded execution plan. The first non-`undefined` `{ stats }` result wins. A hit skips the driver and returns the supplied statistics eagerly.
 5. On a miss, `SqlQueryable.execute(request)` returns the driver's actual statement statistics. There is no row stream and `onRow` does not run.
-6. `afterExecute` runs once with `{ stats, latencyMs, completed: true, source }` on success, or `{ latencyMs, completed: false, source }` on failure. Completion errors are swallowed on the error path so they do not mask the original execute, interception, or driver error.
+6. `afterExecute` runs once with `{ stats, latencyMs, completed: true, source }` on success, or `{ latencyMs, completed: false, source, error }` on failure, where `error` is the caught value that is subsequently rethrown to the caller. Completion errors are swallowed on the error path so they do not mask the original execute, interception, or driver error.
 
 `ExecuteInterceptResult` is deliberately statistics-shaped:
 
@@ -85,8 +85,10 @@ The first non-`undefined` interceptor wins independently on each operation. A qu
 
 The completion types are likewise operation-specific:
 
-- `AfterQueryResult` has `rowCount`, `latencyMs`, `completed`, and `source`.
-- `AfterExecuteResult` has `latencyMs`, `completed`, and `source`, plus `stats` only when `completed` is `true`.
+- `AfterQueryResult` has `rowCount`, `latencyMs`, `completed`, and `source`, plus `error` only when `completed` is `false`.
+- `AfterExecuteResult` has `latencyMs`, `completed`, and `source`, plus `stats` only when `completed` is `true` and `error` only when `completed` is `false`.
+
+`error` is typed `unknown` because drivers are not required to throw `Error` instances. It is the same value the caller receives when the operation rethrows, so telemetry middleware can record the concrete failure instead of a generic error status.
 
 This prevents statistics middleware from accidentally treating a row count as an affected-row count. `affectedRows` comes from `SqlQueryable.execute()` or an explicit execute interception result.
 

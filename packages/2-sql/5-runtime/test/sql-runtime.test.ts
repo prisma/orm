@@ -555,6 +555,38 @@ describe('SqlRuntime', () => {
     ]);
   });
 
+  it('passes the driver error to afterExecute when execute fails', async () => {
+    const { stackInstance, context, driver } = createTestSetup();
+    const driverError = new Error('driver failed');
+    driver.__spies.rootStats.mockRejectedValueOnce(driverError);
+    const completions: unknown[] = [];
+    const runtime = createRuntime({
+      stackInstance,
+      context,
+      driver,
+      verifyMarker: false,
+      middleware: [
+        {
+          name: 'observer',
+          async afterExecute(_plan, result) {
+            completions.push(result);
+          },
+        },
+      ],
+    });
+
+    await expect(runtime.execute(createRawExecutionPlan())).rejects.toBe(driverError);
+
+    expect(completions).toEqual([
+      {
+        completed: false,
+        source: 'driver',
+        latencyMs: expect.any(Number),
+        error: driverError,
+      },
+    ]);
+  });
+
   it('accepts a generic middleware (no familyId)', () => {
     const { stackInstance, context, driver } = createTestSetup();
     expect(() =>
