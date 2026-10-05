@@ -71,6 +71,7 @@ import {
   ObjectLiteralExprAst,
   StringLiteralExprAst,
   TaggedLiteralExprAst,
+  PathExprAst,
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
@@ -327,7 +328,7 @@ function bind(options: BindingInputs): BinderResult {
     const outcome = resolveTypeReference(name, baseScope);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
-    bindQualifier(name, baseScope, references);
+    bindQualifier(typeQualifier(name), baseScope, references);
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -370,7 +371,7 @@ function bind(options: BindingInputs): BinderResult {
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
-      if (name !== undefined) bindQualifier(name, stack.current(), references);
+      if (name !== undefined) bindQualifier(typeQualifier(name), stack.current(), references);
       if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
@@ -538,7 +539,13 @@ function tryBindExpression(
         if (trial.matched) return trial;
         for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
         for (const [node, resolution] of trial.references) {
-          if (resolution.kind === 'unresolved') references.set(node, resolution);
+          if (
+            resolution.kind === 'unresolved' ||
+            resolution.kind === 'namespace' ||
+            resolution.kind === 'contributedNamespace'
+          ) {
+            references.set(node, resolution);
+          }
         }
       }
       return { matched: false, references, diagnostics };
@@ -628,6 +635,8 @@ function tryBindExpression(
       const failures: ParseDiagnostic[] = [];
       const resolution = resolveEntity(written, node, { ...ctx, diagnostics: failures });
       references.set(node, resolution);
+      if (written.namespace !== undefined)
+        bindQualifier(entityQualifier(node), ctx.scope, references);
       for (const diagnostic of failures) diagnostics.set(node, diagnostic);
       return {
         matched: resolution.kind !== 'unresolved',
@@ -867,14 +876,28 @@ interface TypeReferenceOutcome {
   readonly name?: string;
 }
 
+interface ResolutionSink {
+  set(node: SyntaxNode, resolution: Resolution): unknown;
+}
+
+function typeQualifier(name: QualifiedNameAst): IdentifierAst | undefined {
+  return name.space() === undefined ? name.namespace() : undefined;
+}
+
+function entityQualifier(node: SyntaxNode): IdentifierAst | undefined {
+  const path = PathExprAst.cast(node);
+  if (path === undefined) return undefined;
+  const [qualifier] = path.segments();
+  return qualifier;
+}
+
 function bindQualifier(
-  name: QualifiedNameAst,
+  qualifier: IdentifierAst | undefined,
   scope: Scope,
-  references: WeakMap<SyntaxNode, Resolution>,
+  references: ResolutionSink,
 ): void {
-  const qualifier = name.namespace();
   const id = qualifier?.name();
-  if (qualifier === undefined || id === undefined || name.space() !== undefined) return;
+  if (qualifier === undefined || id === undefined) return;
   const resolution = scope.lookup(id);
   if (resolution !== undefined && isNamespaceLike(resolution)) {
     references.set(qualifier.syntax, resolution);
