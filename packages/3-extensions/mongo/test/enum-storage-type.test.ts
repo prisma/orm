@@ -81,3 +81,55 @@ describe('a Mongo enum over an unknown codec', () => {
     ]);
   });
 });
+
+describe('a Mongo enum over a codec whose stored form is not the value', () => {
+  it('stores each member in the form its codec stores it, in the domain enum and the value set', () => {
+    const schema = [
+      'enum Level {',
+      '  @@type("mongo/int64@1")',
+      '  Low  = "1"',
+      '  High = "10"',
+      '}',
+      'enum Launch {',
+      '  @@type("mongo/date@1")',
+      '  First = "2024-01-01T00:00:00.000Z"',
+      '}',
+      'model Reading {',
+      '  id     ObjectId @id @map("_id")',
+      '  level  Level',
+      '  launch Launch',
+      '}',
+      '',
+    ].join('\n');
+    const result = interpret(schema);
+
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
+    if (!result.ok) return;
+    const contract = result.value;
+    expect({
+      domain: contract.domain.namespaces['__unbound__']?.enum,
+      valueSets: contract.storage.namespaces['__unbound__']?.entries['valueSet'],
+    }).toEqual({
+      domain: {
+        Level: {
+          codecId: 'mongo/int64@1',
+          members: [
+            { name: 'Low', value: '1' },
+            { name: 'High', value: '10' },
+          ],
+        },
+        Launch: {
+          codecId: 'mongo/date@1',
+          members: [{ name: 'First', value: '2024-01-01T00:00:00.000Z' }],
+        },
+      },
+      valueSets: {
+        Level: expect.objectContaining({ kind: 'valueSet', values: ['1', '10'] }),
+        Launch: expect.objectContaining({
+          kind: 'valueSet',
+          values: ['2024-01-01T00:00:00.000Z'],
+        }),
+      },
+    });
+  });
+});
