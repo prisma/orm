@@ -82,6 +82,8 @@ The runtime remembers a plan on the transaction once the query's encoded plan ex
 
 A transaction that never ends, such as an abandoned manual `connection().transaction()`, never fires the stage for its plans.
 
+The runtime checks once, when it is created, whether any of its middleware declares `afterTransaction`; when none does, it remembers no plans and fires nothing.
+
 Why `wrapTransaction` and not `withTransaction`: the ORM's `withMutationScope` calls `runtime.connection()`, then `connection.transaction()`, and then `commit()` or `rollback()` on the returned wrapper. It never goes through `withTransaction`. A stage fired from `withTransaction` would miss every ORM mutation that opens its own transaction.
 
 Mongo declares the hook and fires it with `committed` right after `afterQuery` or `afterExecute`, since every Mongo query runs outside a transaction.

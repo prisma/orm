@@ -166,8 +166,6 @@ interface TransactionPlan {
   readonly ctx: RuntimeMiddlewareContext;
 }
 
-const firesWhenTheTransactionEnds = async (): Promise<void> => {};
-
 function isExecutionPlan(plan: SqlExecutionPlan | SqlQueryPlan): plan is SqlExecutionPlan {
   return 'sql' in plan;
 }
@@ -212,6 +210,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
   readonly #transactionPlans = new WeakMap<SqlQueryable, TransactionPlan[]>();
+  readonly #declaresAfterTransaction: boolean;
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
 
@@ -245,6 +244,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
 
     super({ middleware: middleware ?? [], ctx: sqlCtx });
+
+    this.#declaresAfterTransaction = this.middleware.some(
+      (mw) => mw.afterTransaction !== undefined,
+    );
 
     this.contract = context.contract;
     this.adapter = adapter;
@@ -434,11 +437,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     exec: SqlExecutionPlan,
     ctx: RuntimeMiddlewareContext,
-  ): () => Promise<void> {
+  ): (() => Promise<void>) | undefined {
+    if (!this.#declaresAfterTransaction) return undefined;
     const transactionPlans = this.#transactionPlans.get(queryable);
     if (transactionPlans !== undefined) {
       transactionPlans.push({ exec, ctx });
-      return firesWhenTheTransactionEnds;
+      return undefined;
     }
     return () => runAfterTransaction(exec, this.middleware, { outcome: 'committed' }, ctx);
   }
@@ -486,12 +490,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
               ? await iterator.next()
               : await iterator.next().finally(onDriverAnswered);
           } catch (error) {
-            await afterQueryRan();
+            await afterQueryRan?.();
             throw error;
           }
           answered = true;
           if (next.done) {
-            await afterQueryRan();
+            await afterQueryRan?.();
             break;
           }
           const decodedRow = await decodeRow(
@@ -983,7 +987,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private wrapTransaction(driverTx: SqlTransaction): RuntimeTransaction {
     this.#heldQueryables.add(driverTx);
     const plans: TransactionPlan[] = [];
-    this.#transactionPlans.set(driverTx, plans);
+    if (this.#declaresAfterTransaction) {
+      this.#transactionPlans.set(driverTx, plans);
+    }
     let ended = false;
     const end = async (outcome: AfterTransactionResult['outcome']): Promise<void> => {
       if (ended) return;

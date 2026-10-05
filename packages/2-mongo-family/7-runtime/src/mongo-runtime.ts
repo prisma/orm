@@ -31,7 +31,14 @@ import {
 
 function noop() {}
 
-async function* thenAfterTransaction<Row>(
+function thenAfterTransaction<Row>(
+  rows: AsyncIterable<Row>,
+  afterTransaction: (() => Promise<void>) | undefined,
+): AsyncIterable<Row> {
+  return afterTransaction === undefined ? rows : rowsThenAfterTransaction(rows, afterTransaction);
+}
+
+async function* rowsThenAfterTransaction<Row>(
   rows: AsyncIterable<Row>,
   afterTransaction: () => Promise<void>,
 ): AsyncGenerator<Row, void, unknown> {
@@ -121,6 +128,7 @@ class MongoRuntimeImpl
   readonly #adapter: MongoAdapter;
   readonly #driver: MongoDriver;
   readonly #codecs: MongoCodecLookup;
+  readonly #declaresAfterTransaction: boolean;
 
   constructor(options: MongoRuntimeOptions) {
     const middleware = options.middleware ? [...options.middleware] : [];
@@ -154,6 +162,10 @@ class MongoRuntimeImpl
     };
 
     super({ middleware, ctx });
+
+    this.#declaresAfterTransaction = this.middleware.some(
+      (mw) => mw.afterTransaction !== undefined,
+    );
 
     const adapterDescriptor = options.context.stack.adapter;
     const adapterInstance = adapterDescriptor.create(options.context.stack);
@@ -261,7 +273,7 @@ class MongoRuntimeImpl
           middlewareCtx,
           () => self.runDriver(exec),
         ),
-        () => self.afterTransaction(exec, middlewareCtx),
+        self.afterTransaction(exec, middlewareCtx),
       );
       for await (const rawRow of stream) {
         checkAborted(codecCtx, 'stream');
@@ -293,11 +305,15 @@ class MongoRuntimeImpl
     checkAborted(codecCtx, 'stream');
     return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
       this.runExecute(exec),
-    ).finally(() => this.afterTransaction(exec, middlewareCtx));
+    ).finally(this.afterTransaction(exec, middlewareCtx));
   }
 
-  private afterTransaction(exec: MongoExecutionPlan, ctx: MongoMiddlewareContext): Promise<void> {
-    return runAfterTransaction(exec, this.middleware, { outcome: 'committed' }, ctx);
+  private afterTransaction(
+    exec: MongoExecutionPlan,
+    ctx: MongoMiddlewareContext,
+  ): (() => Promise<void>) | undefined {
+    if (!this.#declaresAfterTransaction) return undefined;
+    return () => runAfterTransaction(exec, this.middleware, { outcome: 'committed' }, ctx);
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {

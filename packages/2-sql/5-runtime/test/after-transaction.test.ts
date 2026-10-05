@@ -73,7 +73,8 @@ function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver 
 function recorder(
   events: HookEvent[],
   afterTransaction?: SqlMiddleware['afterTransaction'],
-): SqlMiddleware {
+): Required<Pick<SqlMiddleware, 'afterQuery' | 'afterExecute' | 'afterTransaction'>> &
+  SqlMiddleware {
   const record = (name: string, plan: SqlExecutionPlan, planExecutionId: string) => {
     events.push({ name, plan, planExecutionId });
   };
@@ -104,9 +105,18 @@ function createSetup(
     readonly failures?: DriverFailures;
     readonly afterTransaction?: SqlMiddleware['afterTransaction'];
     readonly log?: Log;
+    readonly declaresAfterTransaction?: boolean;
   } = {},
 ) {
   const events: HookEvent[] = [];
+  const { afterTransaction, ...withoutAfterTransaction } = recorder(
+    events,
+    options.afterTransaction,
+  );
+  const middleware: SqlMiddleware =
+    options.declaresAfterTransaction === false
+      ? withoutAfterTransaction
+      : { ...withoutAfterTransaction, afterTransaction };
   const adapter = createStubAdapter();
   const stack = createSqlExecutionStack({
     target: createTestTargetDescriptor(),
@@ -118,10 +128,10 @@ function createSetup(
     context: createTestContext(testContract, adapter),
     driver: createDriver(events, options.failures ?? {}),
     verifyMarker: false,
-    middleware: [recorder(events, options.afterTransaction)],
+    middleware: [middleware],
     ...(options.log ? { log: options.log } : {}),
   });
-  return { runtime, events };
+  return { runtime, events, middleware, afterTransaction };
 }
 
 const meta = {
@@ -420,4 +430,54 @@ describe('afterTransaction on a transaction driven by hand', () => {
     await committing;
     expect(committed).toBe(true);
   });
+});
+
+describe('a runtime whose middleware do not declare afterTransaction', () => {
+  function createSetupThatDeclaresAfterTransactionLate(failures: DriverFailures = {}) {
+    const setup = createSetup({ failures, declaresAfterTransaction: false });
+    setup.middleware.afterTransaction = setup.afterTransaction;
+    return setup;
+  }
+
+  it.each([
+    {
+      scope: 'runtime',
+      queryableOf: async (setup: ReturnType<typeof createSetup>) => setup.runtime,
+    },
+    {
+      scope: 'connection',
+      queryableOf: async (setup: ReturnType<typeof createSetup>) => setup.runtime.connection(),
+    },
+  ])('runs the after-hooks and no stage in $scope scope', async ({ queryableOf }) => {
+    const setup = createSetupThatDeclaresAfterTransactionLate();
+    const queryable = await queryableOf(setup);
+
+    await queryable.query(rawPlan('select 1')).toArray();
+    await queryable.execute(rawPlan('update t set x = 1'));
+
+    expect(afterHookNames(setup.events)).toEqual(['afterQuery', 'afterExecute']);
+  });
+
+  it.each(transactionCases)(
+    'runs the after-hooks and no stage in withTransaction when $title',
+    async (testCase) => {
+      const setup = createSetupThatDeclaresAfterTransactionLate(testCase.failures);
+
+      const run = withTransaction(setup.runtime, async (tx) => {
+        await tx.query(rawPlan('select 1')).toArray();
+        await tx.execute(rawPlan('update t set x = 1'));
+        if (testCase.callbackFails) throw new Error('callback failed');
+      });
+
+      if (testCase.outcome === 'committed') {
+        await run;
+      } else {
+        await expect(run).rejects.toThrow();
+      }
+      expect(names(setup.events).filter((name) => name.startsWith('after'))).toEqual([
+        'afterQuery',
+        'afterExecute',
+      ]);
+    },
+  );
 });

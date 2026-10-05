@@ -81,6 +81,10 @@ An error thrown by an `afterTransaction` hook is passed to `ctx.log.error` and s
 
 The stage fires after the driver's commit or rollback has resolved and before the connection returns to the pool. The hook receives no queryable and must not use the connection.
 
+### Runtimes without an afterTransaction middleware
+
+The runtime checks once, when it is created, whether any of its middleware declares `afterTransaction`. When none does, it remembers no plans on transactions and fires nothing, outside a transaction or when one ends. A user without such a middleware pays one check per query.
+
 ## Prior art
 
 ActiveRecord's `after_commit` is declared on the record being saved, not on the transaction. It runs on each saved record once the outermost transaction commits, and runs immediately when the save happened outside an explicit transaction. Nested `transaction` blocks join the outer one and never fire it at a savepoint. The stage here is the same model applied to queries: the hook belongs to the thing written, and the runtime delivers it when that thing's transaction is final. Rails later added transaction-level callbacks (`transaction.after_commit`, `ActiveRecord.after_all_transactions_commit`) for code that is not tied to a record; the equivalent here is a later, separate addition.
@@ -90,6 +94,7 @@ ActiveRecord's `after_commit` is declared on the record being saved, not on the 
 - Middleware that reacts to writes moves that reaction from `afterExecute` or `afterQuery` to `afterTransaction`, and is then correct inside transactions without any transaction-specific code.
 - A middleware that needs state across a query's hooks keys it as described under [Per-query state in a middleware](#per-query-state-in-a-middleware).
 - The runtime holds, per open transaction, the plans and contexts of the queries run on it. A transaction that never commits or rolls back holds them until its connection is destroyed.
+- A runtime whose middleware do not declare `afterTransaction` holds no plans and runs no stage, so the stage costs nothing to applications that do not use it.
 - Transaction-oriented hooks, if a consumer ever needs them (a span per transaction, a per-transaction audit record, session setup before the first statement), are added as a `transaction` sub-object on the middleware with its own begin and end. They stay apart from the query hooks so that the query model keeps its rule: every query hook is about the query in hand.
 
 ## Alternatives considered

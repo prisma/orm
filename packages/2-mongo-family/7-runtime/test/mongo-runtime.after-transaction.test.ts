@@ -87,7 +87,9 @@ function createDriver(results: Record<string, unknown>[], failure?: Error): Mong
   } as unknown as MongoDriver;
 }
 
-function recorder(events: HookEvent[]): MongoMiddleware {
+function recorder(
+  events: HookEvent[],
+): Required<Pick<MongoMiddleware, 'afterTransaction'>> & MongoMiddleware {
   const record = (
     name: string,
     exec: MongoExecutionPlan,
@@ -196,5 +198,49 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       expectStageRightAfter(events, 'afterExecute');
     });
+  });
+});
+
+describe('MongoRuntime whose middleware do not declare afterTransaction', () => {
+  function createRuntimeThatDeclaresAfterTransactionLate(
+    events: HookEvent[],
+    wireCommand: AnyMongoDmlWireCommand,
+    results: Record<string, unknown>[],
+  ) {
+    const { afterTransaction, ...withoutAfterTransaction } = recorder(events);
+    const middleware: MongoMiddleware = withoutAfterTransaction;
+    const runtime = createMongoRuntime({
+      context: makeContext(wireCommand),
+      driver: createDriver(results),
+      middleware: [middleware],
+    });
+    middleware.afterTransaction = afterTransaction;
+    return runtime;
+  }
+
+  it('runs afterQuery and no stage for a query', async () => {
+    const events: HookEvent[] = [];
+    const runtime = createRuntimeThatDeclaresAfterTransactionLate(
+      events,
+      new AggregateWireCommand('users', []),
+      [{ _id: '1' }, { _id: '2' }],
+    );
+
+    await expect(runtime.query(plan).toArray()).resolves.toEqual([{ _id: '1' }, { _id: '2' }]);
+
+    expect(events.map(({ name }) => name)).toEqual(['afterQuery']);
+  });
+
+  it('runs afterExecute and no stage for an execute', async () => {
+    const events: HookEvent[] = [];
+    const runtime = createRuntimeThatDeclaresAfterTransactionLate(
+      events,
+      new DeleteOneWireCommand('users', { id: 1 }),
+      [{ deletedCount: 1 }],
+    );
+
+    await expect(runtime.execute(plan)).resolves.toEqual({ affectedRows: 1 });
+
+    expect(events.map(({ name }) => name)).toEqual(['afterExecute']);
   });
 });
