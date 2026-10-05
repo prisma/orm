@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { CollectionRowOf } from '../src/collection-types';
+import type { CollectionRowOf, Filtered } from '../src/collection-types';
 import { createChainingOrm } from './collection-chaining-fixture';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { TestContract } from './helpers';
@@ -110,5 +110,14 @@ describe('collection.scope', () => {
   test('does not make a collection of one model unassignable to a collection of any model', () => {
     const takesAnyModel = (collection: Collection<Contract<SqlStorage>, string>) => collection;
     takesAnyModel(vehicles);
+  });
+
+  test('types its result against the plain collection, also when the body keeps the row', () => {
+    const published = db.Post.scope((posts) => posts.where((p) => p.views.gte(100)));
+    expectTypeOf(db.Post.apply(published)).toEqualTypeOf<
+      Filtered<Collection<TestContract, 'Post'>>
+    >();
+    // @ts-expect-error the class's own methods are not carried through a scope for one model
+    db.Post.apply(published).published();
   });
 });

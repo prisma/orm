@@ -30,6 +30,8 @@ export type {
   ColumnHelperForStrict,
   ColumnSpec,
   ColumnTypeDescriptor,
+  ScalarFieldDeclaration,
+  ScalarFieldDeclarationBuilder,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
 export type {

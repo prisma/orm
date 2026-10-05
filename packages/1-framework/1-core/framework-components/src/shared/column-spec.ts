@@ -35,6 +35,25 @@ export type ColumnTypeDescriptor<TCodecId extends string = string> = {
 };
 
 /**
+ * What a scalar field builder of the contract DSL declares about its column: the column type, when the builder names one, and whether the column may be null. A builder such as `field.text().optional()` produces it from `build()`; a reader such as the ORM client's scopes reads only this part.
+ */
+export interface ScalarFieldDeclaration<
+  Descriptor extends ColumnTypeDescriptor = ColumnTypeDescriptor,
+  Nullable extends boolean = boolean,
+> {
+  readonly descriptor?: Descriptor | undefined;
+  readonly nullable: Nullable;
+}
+
+/** A contract DSL field builder, read through the declaration its `build()` returns. */
+export interface ScalarFieldDeclarationBuilder<
+  Descriptor extends ColumnTypeDescriptor = ColumnTypeDescriptor,
+  Nullable extends boolean = boolean,
+> {
+  build(): ScalarFieldDeclaration<Descriptor, Nullable>;
+}
+
+/**
  * Late-resolved pack-entity reference — a field on the type descriptor it is
  * declared on: `entityKind`/`entityName` identify a pack entity whose final
  * placement depends on data not yet known when the descriptor carrying this

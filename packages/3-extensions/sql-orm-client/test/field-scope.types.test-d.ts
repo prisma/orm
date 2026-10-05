@@ -11,6 +11,7 @@ import type { orm } from '../src/orm';
 import type { CollectionWithFields, DeclaredField } from '../src/scopes';
 import type { CodecField } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
+import type { Contract as ScopeNamespaceContract } from './fixtures/scope-namespace/generated/contract';
 import {
   createScopesOrm,
   type SoftDeleteContract,
@@ -43,6 +44,7 @@ const titled = (term: string) =>
 declare const tasks: Collection<PolyContract, 'Task'>;
 declare const flag: boolean;
 declare const polyClient: ReturnType<typeof orm<PolyContract>>;
+declare const scopeNamespaceClient: ReturnType<typeof orm<ScopeNamespaceContract>>;
 
 class LivePostCollection extends Collection<Contract, 'Post'> {
   live() {
@@ -219,5 +221,22 @@ describe('client.scope', () => {
     plain.Post.apply(deletedTitled);
     // @ts-expect-error Comment has deletedAt but no title, and the message names title
     plain.Comment.apply(deletedTitled);
+  });
+
+  test('refuses a codec the contract does not have, at the declaration', () => {
+    client.scope(
+      // @ts-expect-error pg/txt@1 is not a codec of the contract
+      { title: { codecId: 'pg/txt@1', nullable: false } },
+      (rows) => rows.limit(1),
+    );
+  });
+
+  test('a contract with a namespace named scope has no scope method', () => {
+    expectTypeOf(scopeNamespaceClient.scope).toHaveProperty('Audit');
+    // @ts-expect-error scope is the namespace, not the method
+    scopeNamespaceClient.scope(
+      { title: { codecId: 'pg/text@1', nullable: false } },
+      (rows) => rows,
+    );
   });
 });

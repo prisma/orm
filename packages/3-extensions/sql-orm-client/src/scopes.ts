@@ -1,4 +1,8 @@
 import type { Contract } from '@internal/contract/types';
+import type {
+  ColumnTypeDescriptor,
+  ScalarFieldDeclarationBuilder,
+} from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   type Direction,
@@ -30,16 +34,11 @@ export interface DeclaredField<
   readonly nullable: Nullable;
 }
 
-/** A field builder from the contract DSL, such as `field.column(textColumn).optional()`: what the client's `scope` method reads from it. */
-export interface ScopeFieldBuilder<
+/** A field builder from the contract DSL, such as `field.text().optional()`, with the codec and nullability it declares. */
+export type ScopeFieldBuilder<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
-> {
-  build(): {
-    readonly descriptor?: { readonly codecId: CodecId } | undefined;
-    readonly nullable: Nullable;
-  };
-}
+> = ScalarFieldDeclarationBuilder<ColumnTypeDescriptor<CodecId>, Nullable>;
 
 /** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
 export type ScopeFieldDeclarations<CodecId extends string = string> = Readonly<

@@ -15,6 +15,7 @@ import { instantiateAuthoringFieldPreset } from '@internal/framework-components/
 import type {
   CodecLookupWithDescriptors,
   ColumnTypeDescriptor,
+  ScalarFieldDeclarationBuilder,
 } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
@@ -210,7 +211,9 @@ function toColumnDefault(value: unknown): AuthoredColumnDefault {
   return { kind: 'literal', value };
 }
 
-export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState> {
+export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState>
+  implements ScalarFieldDeclarationBuilder
+{
   declare readonly __state: State;
 
   constructor(private readonly state: State) {}
