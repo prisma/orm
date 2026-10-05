@@ -1,6 +1,6 @@
 # Cache invalidation on write — spec
 
-Linear: [TML-3399](https://linear.app/prisma-company/issue/TML-3399) (slice 1, `afterTransaction`), [TML-3400](https://linear.app/prisma-company/issue/TML-3400) (slice 2, `invalidateAnnotation`, blocked by slice 1). Design of the cache middleware itself: [ADR 259](../../docs/architecture%20docs/adrs/ADR%20259%20-%20The%20cache%20middleware%20is%20a%20control%20surface%20and%20the%20store%20owns%20lookup%2C%20lifetime%20and%20version.md).
+Linear: [TML-3399](https://linear.app/prisma-company/issue/TML-3399) (slice 1, `afterTransaction`), [TML-3400](https://linear.app/prisma-company/issue/TML-3400) (slice 2, `invalidateAnnotation`, blocked by slice 1). Design of the cache middleware itself: [ADR 259](../../docs/architecture%20docs/adrs/ADR%20259%20-%20The%20cache%20middleware%20passes%20data%20to%20its%20store%2C%20and%20the%20store%20decides%20how%20to%20cache.md).
 
 ## At a glance
 
@@ -149,7 +149,7 @@ Several annotated writes in one transaction each queue their target; the queue r
 
 ### Docs
 
-The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, its timing, and the known limits. ADR 259's consequence about write-driven invalidation is updated in the same PR.
+The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, its timing, and the known limits. ADR 259's consequence about the runtime hook and its paragraph on invalidation attached to a write are updated in the same PR.
 
 ## Non-goals
 
