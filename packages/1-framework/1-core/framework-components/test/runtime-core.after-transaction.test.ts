@@ -138,6 +138,27 @@ describe('RuntimeCore afterTransaction stage', () => {
     expect(names(events)).toEqual(['afterExecute', 'afterTransaction:unknown']);
   });
 
+  it.each([
+    ['query', (runtime: MockRuntime) => runtime.query(plan).toArray()],
+    ['execute', (runtime: MockRuntime) => runtime.execute(plan)],
+  ])('fires nothing when a before-hook of %s throws', async (_name, run) => {
+    const events: HookEvent[] = [];
+    const failingBeforeHook: RuntimeMiddleware<MockExec> = {
+      name: 'failing-before-hook',
+      async beforeQuery() {
+        throw new Error('before-hook failed');
+      },
+      async beforeExecute() {
+        throw new Error('before-hook failed');
+      },
+    };
+    const runtime = new MockRuntime([failingBeforeHook, recorder(events)], undefined);
+
+    await expect(run(runtime)).rejects.toThrow('before-hook failed');
+
+    expect(names(events)).toEqual([]);
+  });
+
   it('fires nothing when no middleware declared afterTransaction at creation', async () => {
     const events: HookEvent[] = [];
     const { afterTransaction, ...withoutAfterTransaction } = recorder(events);

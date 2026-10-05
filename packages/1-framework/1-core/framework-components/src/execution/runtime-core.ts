@@ -1,3 +1,4 @@
+import { blindCast } from '@internal/utils/casts';
 import type { CodecCallContext } from '../shared/codec-types';
 import { AsyncIterableResult } from './async-iterable-result';
 import { runBeforeExecuteChain, runBeforeQueryChain } from './before-execute-chain';
@@ -150,17 +151,14 @@ export abstract class RuntimeCore<
       checkAborted(codecCtx, 'stream');
       const compiled = await self.runBeforeCompile(plan);
       const exec = await self.lower(compiled, codecCtx);
-      yield* queryWithAfterTransaction(
-        self.afterTransactionHooks(exec, execCtx),
-        async function* (): AsyncGenerator<Row, void, unknown> {
-          await runBeforeQueryChain<TExec>(exec, self.middleware, execCtx);
-          yield* runQueryWithMiddleware<TExec, Row>(
-            exec,
-            self.middleware,
-            execCtx,
-            () => self.runDriver(exec) as AsyncIterable<Row>,
-          );
-        },
+      await runBeforeQueryChain<TExec>(exec, self.middleware, execCtx);
+      yield* queryWithAfterTransaction(self.afterTransactionHooks(exec, execCtx), () =>
+        runQueryWithMiddleware<TExec, Row>(exec, self.middleware, execCtx, () =>
+          blindCast<
+            AsyncIterable<Row>,
+            'the caller types rows through the plan; the runtime treats them as opaque records'
+          >(self.runDriver(exec)),
+        ),
       );
     }
 
@@ -180,9 +178,9 @@ export abstract class RuntimeCore<
     checkAborted(codecCtx, 'stream');
     const compiled = await this.runBeforeCompile(plan);
     const exec = await this.lower(compiled, codecCtx);
-    return executeWithAfterTransaction(this.afterTransactionHooks(exec, execCtx), async () => {
-      await runBeforeExecuteChain<TExec>(exec, this.middleware, execCtx);
-      return runExecuteWithMiddleware(exec, this.middleware, execCtx, () => this.runExecute(exec));
-    });
+    await runBeforeExecuteChain<TExec>(exec, this.middleware, execCtx);
+    return executeWithAfterTransaction(this.afterTransactionHooks(exec, execCtx), () =>
+      runExecuteWithMiddleware(exec, this.middleware, execCtx, () => this.runExecute(exec)),
+    );
   }
 }
