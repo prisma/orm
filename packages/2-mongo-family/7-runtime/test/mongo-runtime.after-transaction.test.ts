@@ -1,6 +1,7 @@
 import type { PlanMeta } from '@internal/contract/types';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import type { AfterTransactionResult } from '@internal/framework-components/runtime';
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
@@ -34,7 +35,33 @@ const plan = {
   meta,
 } as unknown as MongoQueryPlan;
 
-function makeContext(wireCommand: AnyMongoDmlWireCommand): MongoExecutionContext {
+const failingDecodePlan = {
+  ...plan,
+  resultShape: {
+    kind: 'document',
+    fields: { name: { kind: 'leaf', codecId: 'test/failing-decode@1', nullable: false } },
+  },
+} as unknown as MongoQueryPlan;
+
+function codecsWithFailingDecode() {
+  const registry = newMongoCodecRegistry();
+  registry.register(
+    mongoCodec({
+      typeId: 'test/failing-decode@1',
+      decode: (): string => {
+        throw new Error('decode failed');
+      },
+      encode: (value: string) => value,
+      decodeJson: (json) => decodeJsonString('test/failing-decode@1', json),
+    }),
+  );
+  return registry;
+}
+
+function makeContext(
+  wireCommand: AnyMongoDmlWireCommand,
+  onResolveParams: () => void = () => {},
+): MongoExecutionContext {
   const adapter = {
     familyId: 'mongo',
     targetId: 'mongo',
@@ -46,11 +73,14 @@ function makeContext(wireCommand: AnyMongoDmlWireCommand): MongoExecutionContext
         pipeline: [],
       }),
     ),
-    resolveParams: vi.fn(async () => wireCommand),
+    resolveParams: vi.fn(async () => {
+      onResolveParams();
+      return wireCommand;
+    }),
   } as unknown as MongoAdapter;
   return {
     contract: {},
-    codecs: newMongoCodecRegistry(),
+    codecs: codecsWithFailingDecode(),
     stack: {
       target: {
         kind: 'target',
@@ -176,6 +206,24 @@ describe('MongoRuntime afterTransaction stage', () => {
         { name: 'afterTransaction', outcome: 'unknown' },
       ]);
     });
+
+    it('fires unknown once when a row fails to decode', async () => {
+      const events: HookEvent[] = [];
+      const runtime = createMongoRuntime({
+        context: makeContext(new AggregateWireCommand('users', [])),
+        driver: createDriver([{ name: 'alice' }]),
+        middleware: [recorder(events)],
+      });
+
+      await expect(drain(runtime.query(failingDecodePlan))).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+      });
+
+      expect(events.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
+        { name: 'afterTransaction', outcome: 'unknown' },
+      ]);
+    });
+
     it('fires unknown once when the signal aborts between rows', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
@@ -225,6 +273,51 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       expectStageRightAfter(events, 'afterExecute', 'unknown');
     });
+
+    it('fires unknown without afterExecute when the signal aborts after the plan is encoded', async () => {
+      const events: HookEvent[] = [];
+      const controller = new AbortController();
+      const runtime = createMongoRuntime({
+        context: makeContext(new DeleteOneWireCommand('users', { id: 1 }), () =>
+          controller.abort(),
+        ),
+        driver: createDriver([{ deletedCount: 1 }]),
+        middleware: [recorder(events)],
+      });
+
+      await expect(runtime.execute(plan, { signal: controller.signal })).rejects.toMatchObject({
+        code: 'RUNTIME.ABORTED',
+      });
+
+      expect(events.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
+        { name: 'afterTransaction', outcome: 'unknown' },
+      ]);
+    });
+  });
+
+  it.each([
+    ['query', (runtime: ReturnType<typeof createMongoRuntime>) => drain(runtime.query(plan))],
+    ['execute', (runtime: ReturnType<typeof createMongoRuntime>) => runtime.execute(plan)],
+  ])('fires nothing when a before-hook of %s throws', async (_name, run) => {
+    const events: HookEvent[] = [];
+    const failingBeforeHook: MongoMiddleware = {
+      name: 'failing-before-hook',
+      async beforeQuery() {
+        throw new Error('before-hook failed');
+      },
+      async beforeExecute() {
+        throw new Error('before-hook failed');
+      },
+    };
+    const runtime = createMongoRuntime({
+      context: makeContext(new DeleteOneWireCommand('users', { id: 1 })),
+      driver: createDriver([{ deletedCount: 1 }]),
+      middleware: [failingBeforeHook, recorder(events)],
+    });
+
+    await expect(run(runtime)).rejects.toThrow('before-hook failed');
+
+    expect(events).toEqual([]);
   });
 });
 
