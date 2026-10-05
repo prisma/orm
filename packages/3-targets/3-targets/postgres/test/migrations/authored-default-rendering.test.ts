@@ -1,5 +1,6 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { SqlColumnDefaultIR, type SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -89,7 +90,7 @@ describe('a sql`...` default on Postgres renders as authored', () => {
 
       expect({ type: ddl.type, default: ddl.default }).toEqual({
         type: nativeType,
-        default: { kind: 'function', expression },
+        default: { kind: 'function', expression: opaqueSql(expression) },
       });
       expect(setDefault?.default).toEqual(ddl.default);
     },

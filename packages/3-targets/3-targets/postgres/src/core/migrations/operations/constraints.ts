@@ -1,5 +1,6 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
+import { opaqueSql, renderOpaqueSql } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { constraintExistsAst } from '../../../contract-free/checks';
 import { quoteIdentifier } from '../../sql-utils';
@@ -154,7 +155,7 @@ export async function addCheckConstraint(
     execute: [
       step(
         `add check constraint "${constraintName}"`,
-        `ALTER TABLE ${qualified} ADD CONSTRAINT ${quoteIdentifier(constraintName)} CHECK (${expression})`,
+        `ALTER TABLE ${qualified} ADD CONSTRAINT ${quoteIdentifier(constraintName)} CHECK (${renderOpaqueSql(opaqueSql(expression))})`,
       ),
     ],
     postcheck: [step(`verify constraint "${constraintName}" exists`, present.sql, present.params)],

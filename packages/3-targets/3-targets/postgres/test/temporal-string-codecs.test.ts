@@ -208,3 +208,30 @@ describe('representation-explicit temporal string codecs', () => {
     expect(Reflect.get(globalThis, 'Temporal')).toBe(Temporal);
   });
 });
+
+describe('a Date written to a text timestamp codec', () => {
+  const timestamp = pgTimestampStringDescriptor.factory({})(instanceCtx);
+  const timestamptz = pgTimestamptzStringDescriptor.factory({})(instanceCtx);
+
+  it.each([
+    ['2024-01-02T03:04:05.678Z', '2024-01-02T03:04:05.678', '2024-01-02T03:04:05.678Z'],
+    ['-000043-03-15T12:00:00Z', '0044-03-15T12:00:00.000 BC', '0044-03-15T12:00:00.000Z BC'],
+    ['+010000-01-01T00:00:00Z', '10000-01-01T00:00:00.000', '10000-01-01T00:00:00.000Z'],
+  ])('writes %s as its UTC text', async (iso, timestampText, timestamptzText) => {
+    const value = new Date(iso);
+    expect({
+      timestamp: await timestamp.encode(value, callCtx),
+      timestamptz: await timestamptz.encode(value, callCtx),
+    }).toEqual({ timestamp: timestampText, timestamptz: timestamptzText });
+  });
+
+  it.each([
+    ['an invalid Date', new Date(Number.NaN)],
+    ['a Date before 4714-11-24 BC', new Date('-004713-11-23T23:59:59.999Z')],
+  ])('refuses %s, naming the codec', async (_name, value) => {
+    await expect(timestamp.encode(value, callCtx)).rejects.toThrow(PG_TIMESTAMP_STRING_CODEC_ID);
+    await expect(timestamptz.encode(value, callCtx)).rejects.toThrow(
+      PG_TIMESTAMPTZ_STRING_CODEC_ID,
+    );
+  });
+});

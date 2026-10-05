@@ -1,3 +1,4 @@
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
@@ -45,7 +46,10 @@ describe('renderColumnDdl', () => {
     expect(result.name).toBe('id2');
     expect(result.type).toBe('uuid');
     expect(result.notNull).toBeUndefined();
-    expect(result.default).toEqual({ kind: 'function', expression: 'gen_random_uuid()' });
+    expect(result.default).toEqual({
+      kind: 'function',
+      expression: opaqueSql('gen_random_uuid()'),
+    });
     expect(result.codecRef).toEqual({ codecId: 'pg/uuid@1' });
   });
 

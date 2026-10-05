@@ -75,7 +75,7 @@
               "tsZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -86,7 +86,7 @@
               "tsMs": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -97,7 +97,7 @@
               "tsPlus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -108,7 +108,7 @@
               "tsMinus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -119,7 +119,7 @@
               "tsMicro": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -130,7 +130,7 @@
               "tzZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -141,7 +141,7 @@
               "tzPlus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -152,7 +152,7 @@
               "dZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": false,
                 "many": false
@@ -160,7 +160,7 @@
               "dMidnight": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": false,
                 "many": false
@@ -168,7 +168,7 @@
               "dMinus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": false,
                 "many": false
@@ -176,7 +176,7 @@
               "tZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -187,7 +187,7 @@
               "tMs": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -198,7 +198,7 @@
               "tPlus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e1a092e0c7b1877fa542abd990916fa565d8ee511575b6b6b785169144c5e1b6",
+    "storageHash": "8e20f6d9fb0fd0cfbec8c8166a0bc2228952d2f1c7efeefb580d487e5f440902",
     "namespaces": {
       "public": {
         "id": "public",
@@ -271,7 +271,7 @@
                 },
                 "tsZ": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -284,7 +284,7 @@
                 },
                 "tsMs": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -297,7 +297,7 @@
                 },
                 "tsPlus": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -310,7 +310,7 @@
                 },
                 "tsMinus": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -323,7 +323,7 @@
                 },
                 "tsMicro": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -336,7 +336,7 @@
                 },
                 "tzZ": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -349,7 +349,7 @@
                 },
                 "tzPlus": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -362,7 +362,7 @@
                 },
                 "dZ": {
                   "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
                   "default": {
@@ -372,7 +372,7 @@
                 },
                 "dMidnight": {
                   "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
                   "default": {
@@ -382,7 +382,7 @@
                 },
                 "dMinus": {
                   "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
                   "default": {
@@ -392,7 +392,7 @@
                 },
                 "tZ": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -405,7 +405,7 @@
                 },
                 "tMs": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -418,7 +418,7 @@
                 },
                 "tPlus": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {

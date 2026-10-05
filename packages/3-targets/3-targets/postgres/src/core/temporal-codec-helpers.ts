@@ -173,3 +173,27 @@ export const pgTimeTemporalDecode = (wire: string): Temporal.PlainTime =>
 
 export const pgTimeTemporalEncode = (value: Temporal.PlainTime): string =>
   encodeTemporalValue(TIME_TEMPORAL, value);
+
+export const EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS = new Date(
+  '-004713-11-24T00:00:00Z',
+).getTime();
+
+function utcText(value: Date, codecId: string, zone: '' | 'Z'): string {
+  const milliseconds = value.getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds < EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS) {
+    throw new RangeError(
+      `${codecId} writes a Date as UTC text and needs a valid Date on or after 4714-11-24 BC, the earliest timestamp PostgreSQL holds; got ${String(value)}`,
+    );
+  }
+  const year = value.getUTCFullYear();
+  const iso = value.toISOString();
+  const monthOnward = iso.slice(iso.indexOf('-', 1), -1);
+  const yearText = String(year <= 0 ? 1 - year : year).padStart(ORDINARY_YEAR_DIGITS, '0');
+  return `${yearText}${monthOnward}${zone}${year <= 0 ? BC_SUFFIX : ''}`;
+}
+
+export const utcTimestampText = (value: Date, codecId: string): string =>
+  utcText(value, codecId, '');
+
+export const utcTimestamptzText = (value: Date, codecId: string): string =>
+  utcText(value, codecId, 'Z');

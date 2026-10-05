@@ -35,9 +35,16 @@ import {
   DdlColumn,
   FunctionColumnDefault,
   LiteralColumnDefault,
+  opaqueSql,
 } from '@internal/sql-relational-core/ast';
 import { namingOf } from '@internal/sql-schema-ir/naming';
-import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  TsExpression,
+  tsObjectSource,
+  tsQuotedTextSource,
+} from '@internal/ts-render';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
@@ -48,6 +55,7 @@ import {
   tableExistsAst,
 } from '../../contract-free/checks';
 import * as contractFreeDdl from '../../contract-free/ddl';
+import type { CreateIndexElements } from '../ddl/nodes';
 import { postgresError } from '../errors';
 import type { PostgresRlsPolicy, RenderedRlsPolicyLiteral } from '../postgres-rls-policy';
 import {
@@ -79,13 +87,7 @@ import {
   renameConstraintLabel,
 } from './operations/constraints';
 import { createExtension } from './operations/dependencies';
-import {
-  type CreateIndexElements,
-  type CreateIndexExtras,
-  createIndex,
-  dropIndex,
-  renameIndex,
-} from './operations/indexes';
+import { type CreateIndexExtras, createIndex, dropIndex, renameIndex } from './operations/indexes';
 import { createNativeEnumType, dropNativeEnumType } from './operations/native-enum-types';
 import {
   createRlsPolicy,
@@ -147,10 +149,10 @@ export function postgresDefaultToDdlColumnDefault(
       return new LiteralColumnDefault(columnDefault.value);
     case 'function':
       if (columnDefault.expression === 'autoincrement()') return undefined;
-      return new FunctionColumnDefault(columnDefault.expression);
+      return new FunctionColumnDefault(opaqueSql(columnDefault.expression));
     case 'sequence':
       return new FunctionColumnDefault(
-        `nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`,
+        opaqueSql(`nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`),
       );
     default: {
       const exhaustive: never = columnDefault;
@@ -171,7 +173,7 @@ function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${jsonToTsSource(def.expression)})`;
+  return `fn(${tsQuotedTextSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(col: DdlColumn): string {
@@ -203,7 +205,7 @@ function renderDdlConstraintAsTsCall(constraint: DdlTableConstraint): string {
       return `unique(${jsonToTsSource(constraint.columns)}${nameOpt})`;
     }
     case 'check-expression':
-      return `checkExpression(${jsonToTsSource(constraint.name)}, ${jsonToTsSource(constraint.expression)})`;
+      return `checkExpression(${jsonToTsSource(constraint.name)}, ${tsQuotedTextSource(constraint.expression.text)})`;
   }
 }
 
@@ -1198,7 +1200,7 @@ export class AddCheckConstraintCall extends PostgresOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${jsonToTsSource(this.expression)} })`;
+    return `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${tsQuotedTextSource(this.expression)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -1326,7 +1328,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
     if (this.columns !== undefined) {
       opts.push(`columns: ${jsonToTsSource(this.columns)}`);
     } else {
-      opts.push(`expression: ${jsonToTsSource(this.expression ?? '')}`);
+      opts.push(`expression: ${tsQuotedTextSource(this.expression ?? '')}`);
     }
     if (
       this.indexType !== undefined ||
@@ -1337,7 +1339,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
       const extrasParts: string[] = [];
       if (this.indexType !== undefined) extrasParts.push(`type: ${jsonToTsSource(this.indexType)}`);
       if (this.options !== undefined) extrasParts.push(`options: ${jsonToTsSource(this.options)}`);
-      if (this.where !== undefined) extrasParts.push(`where: ${jsonToTsSource(this.where)}`);
+      if (this.where !== undefined) extrasParts.push(`where: ${tsQuotedTextSource(this.where)}`);
       if (this.unique) extrasParts.push('unique: true');
       opts.push(`extras: { ${extrasParts.join(', ')} }`);
     }
@@ -1831,8 +1833,9 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
 
   renderTypeScript(): string {
     const p = this.policy;
-    // Typed as the parameter `createRlsPolicy` accepts, so a drift between
-    // the renderer and the API is a compile error here rather than in the
+    // `input` and `sources` are typed against the parameter `createRlsPolicy`
+    // accepts, so a drift between the renderer and the API, including a field
+    // the renderer does not write, is a compile error here rather than in the
     // user's generated migration.
     const input: RenderedRlsPolicyLiteral = {
       naming: namingOf(p.name, p.prefix),
@@ -1844,7 +1847,22 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
       ...ifDefined('withCheck', p.withCheck),
       permissive: p.permissive,
     };
-    return `this.createRlsPolicy({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)}, policy: ${jsonToTsSource(input)} })`;
+    const sources: { readonly [K in keyof RenderedRlsPolicyLiteral]-?: string | undefined } = {
+      naming: jsonToTsSource(input.naming),
+      tableName: jsonToTsSource(input.tableName),
+      namespaceId: jsonToTsSource(input.namespaceId),
+      operation: jsonToTsSource(input.operation),
+      roles: jsonToTsSource(input.roles),
+      using: input.using === undefined ? undefined : tsQuotedTextSource(input.using),
+      withCheck: input.withCheck === undefined ? undefined : tsQuotedTextSource(input.withCheck),
+      permissive: jsonToTsSource(input.permissive),
+    };
+    const policy = tsObjectSource(
+      Object.entries(sources).flatMap(([key, source]) =>
+        source === undefined ? [] : [[key, source] as const],
+      ),
+    );
+    return `this.createRlsPolicy({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)}, policy: ${policy} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {

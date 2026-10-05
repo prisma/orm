@@ -732,9 +732,6 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
-      temporal-polyfill:
-        specifier: ^1.0.4
-        version: 1.0.4
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.6.2

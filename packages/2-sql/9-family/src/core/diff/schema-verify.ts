@@ -23,7 +23,11 @@ import type {
   VerifierOutcome,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import { dispositionForCategory, issueOutcome } from '@internal/framework-components/control';
+import {
+  dispositionForCategory,
+  issueOutcome,
+  VERIFY_CODE_SCHEMA_FAILURE,
+} from '@internal/framework-components/control';
 import { isStorageTypeInstance, type SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
@@ -297,7 +301,7 @@ export function verifySqlSchemaByDiff(
       : undefined;
   return {
     ok,
-    ...(ok ? {} : { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED' }),
+    ...(ok ? {} : { code: VERIFY_CODE_SCHEMA_FAILURE }),
     summary: ok
       ? 'Database schema satisfies contract'
       : `Database schema does not satisfy contract (${failCount} failure${failCount === 1 ? '' : 's'})`,

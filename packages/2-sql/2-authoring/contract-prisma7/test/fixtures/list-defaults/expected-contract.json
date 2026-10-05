@@ -74,7 +74,7 @@
               "dl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -87,7 +87,7 @@
               "dlEmpty": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -100,7 +100,7 @@
               "tzl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -113,7 +113,7 @@
               "datel": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": true,
                 "many": {
@@ -123,7 +123,7 @@
               "timel": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -149,7 +149,7 @@
               "ts6l": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -177,7 +177,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bc1ef12bc94f57b9982fa65e7188b19638e560f2933a020a118dcc4399b8b549",
+    "storageHash": "a99157bf9e60ec64c7e9137cb8fde15c71c50b9a47c15561671facbecfc0fa4f",
     "namespaces": {
       "public": {
         "id": "public",
@@ -220,7 +220,7 @@
                 },
                 "dl": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false
@@ -236,7 +236,7 @@
                 },
                 "dlEmpty": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false
@@ -252,7 +252,7 @@
                 },
                 "tzl": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false
@@ -268,7 +268,7 @@
                 },
                 "datel": {
                   "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "codecId": "pg/date-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false
@@ -281,7 +281,7 @@
                 },
                 "timel": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false
@@ -313,7 +313,7 @@
                 },
                 "ts6l": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": false

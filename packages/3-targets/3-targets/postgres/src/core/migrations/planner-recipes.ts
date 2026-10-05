@@ -2,7 +2,7 @@ import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
-import { FunctionColumnDefault } from '@internal/sql-relational-core/ast';
+import { FunctionColumnDefault, opaqueSql } from '@internal/sql-relational-core/ast';
 import { col } from '@internal/sql-relational-core/contract-free';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -54,7 +54,7 @@ export async function buildAddNotNullColumnWithTemporaryDefaultOperation(options
   // `FunctionColumnDefault` so the adapter emits it as a `DEFAULT (...)` clause.
   const ddlColumn = col(columnName, buildColumnTypeSql(column, types, storageTypes), {
     notNull: true,
-    default: new FunctionColumnDefault(temporaryDefault),
+    default: new FunctionColumnDefault(opaqueSql(temporaryDefault)),
   });
   const addColumn = await lowerer.lowerToExecuteRequest(
     contractFreeDdl.alterTable({

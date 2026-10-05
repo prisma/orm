@@ -4,6 +4,7 @@ export * from '../ast/ddl-default';
 export * from '../ast/ddl-types';
 export * from '../ast/driver-types';
 export * from '../ast/json-value-projection';
+export * from '../ast/opaque-sql';
 export * from '../ast/sql-codec-helpers';
 export * from '../ast/sql-codecs';
 export * from '../ast/types';

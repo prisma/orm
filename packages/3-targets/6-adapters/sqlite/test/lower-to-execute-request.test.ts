@@ -133,6 +133,19 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
     expect(result.sql).not.toContain('autoincrement');
   });
 
+  it('refuses a function default containing a line comment', async () => {
+    const ast = new SqliteCreateTable({
+      table: 't',
+      columns: [col('n', 'INTEGER', { default: fn('1 -- c') })],
+    });
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: { expression: '1 -- c' },
+      }),
+    );
+  });
+
   it("maps the canonical now() function default to SQLite's datetime('now')", async () => {
     const ast = new SqliteCreateTable({
       table: 't',

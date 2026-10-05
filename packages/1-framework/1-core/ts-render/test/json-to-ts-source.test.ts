@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { jsonToTsSource } from '../src/json-to-ts-source';
+import { jsonToTsSource, tsArraySource, tsObjectSource } from '../src/json-to-ts-source';
 
 describe('jsonToTsSource', () => {
   describe('JSON-compatible values', () => {
@@ -78,5 +78,55 @@ describe('jsonToTsSource', () => {
     it('throws on function', () => {
       expect(() => jsonToTsSource(() => 1)).toThrowError(/unsupported value type "function"/);
     });
+  });
+});
+
+describe('tsObjectSource', () => {
+  it('renders an empty object for no entries', () => {
+    expect(tsObjectSource([])).toBe('{}');
+  });
+
+  it('renders entry sources verbatim on one line and quotes non-identifier keys', () => {
+    expect(
+      tsObjectSource([
+        ['a', '`x`'],
+        ['weird-key', 'y()'],
+      ]),
+    ).toBe('{ a: `x`, "weird-key": y() }');
+  });
+
+  it('renders on multiple lines when the single-line form exceeds 80 chars', () => {
+    const longSource = `"${'x'.repeat(40)}"`;
+    expect(
+      tsObjectSource([
+        ['a', longSource],
+        ['b', longSource],
+      ]),
+    ).toBe(`{\n  a: ${longSource},\n  b: ${longSource},\n}`);
+  });
+
+  it('renders on multiple lines when an entry source holds a line break', () => {
+    expect(tsObjectSource([['a', '[\n  1,\n]']])).toBe('{\n  a: [\n  1,\n],\n}');
+  });
+});
+
+describe('tsArraySource', () => {
+  it('renders an empty array for no items', () => {
+    expect(tsArraySource([])).toBe('[]');
+  });
+
+  it('renders item sources verbatim on one line', () => {
+    expect(tsArraySource(['`x`', 'y()'])).toBe('[`x`, y()]');
+  });
+
+  it('renders on multiple lines when the single-line form exceeds 80 chars', () => {
+    const longSource = `"${'x'.repeat(40)}"`;
+    expect(tsArraySource([longSource, longSource])).toBe(
+      `[\n  ${longSource},\n  ${longSource},\n]`,
+    );
+  });
+
+  it('renders on multiple lines when an item source holds a line break', () => {
+    expect(tsArraySource(['[\n  1,\n]'])).toBe('[\n  [\n  1,\n],\n]');
   });
 });

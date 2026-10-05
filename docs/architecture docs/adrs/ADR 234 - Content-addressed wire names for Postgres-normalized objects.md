@@ -149,7 +149,7 @@ The same problem class — Postgres re-prints stored bodies — applies to other
 - **Views.** `pg_views.definition` is the printer's output, not the user's text.
 - **Function bodies.** `pg_proc.prosrc` is verbatim, but function bodies typically differ in whitespace and comment placement after a deploy-tool round-trip.
 
-The naming format (`<prefix>_<8 hex SHA-256>`), the normalizer (internal whitespace collapse + trim of the authored input), and the lowering-time prefix bound are object-kind-agnostic and stay constant across applications. Each object kind only needs to decide:
+The naming format (`<prefix>_<8 hex SHA-256>`), the normalizer (internal whitespace collapse + trim of the authored input, see "Normalizer stability"), and the lowering-time prefix bound are object-kind-agnostic and stay constant across applications. Each object kind only needs to decide:
 
 - The per-kind hash input tuple (analogous to the RLS list above).
 - Whether the rename signal (matching suffix, different prefix) needs a kind-specific planner action (e.g. `ALTER POLICY ... RENAME TO`).
@@ -159,11 +159,13 @@ Whether to apply content-addressing to a given object kind is a separate decisio
 
 ## Normalizer stability
 
-The normalizer is a **stability commitment** with the same status as the contract storage hash (ADR 004). Changing it changes the suffix of every existing wire name.
+The normalizer is a **stability commitment** with the same status as the contract storage hash (ADR 004). Changing it changes the suffix of every existing wire name whose normalized body changes, so a normalizer change must say which bodies it affects.
 
 This works without an explicit version marker because the contract-hash machinery already signals the change. A normalizer update re-emits different `contract.json`; the storage hash changes; `VERIFY_CODE_HASH_MISMATCH` fires; the user re-emits and re-applies migrations. A `_v1_` marker in the name would carry the same information twice.
 
-The normalizer is also **deliberately minimal** (trim + internal-whitespace collapse of the authored input, nothing else). The wire name is only ever compared against other wire names — the hash is never recomputed from an introspected policy body — so there is no need to match Postgres's reprinted form. Minimal normalization also protects the no-collision property: aggressive rewriting (lowercasing, paren-stripping, cast-alias folding) risks collapsing two distinct predicates onto one hash.
+The normalizer is also **deliberately minimal** (trim + internal-whitespace collapse of the authored input, keeping every line break in a body that contains a line comment). The wire name is only ever compared against other wire names — the hash is never recomputed from an introspected policy body — so there is no need to match Postgres's reprinted form. Minimal normalization also protects the no-collision property: aggressive rewriting (lowercasing, paren-stripping, cast-alias folding) risks collapsing two distinct predicates onto one hash.
+
+A body that contains `--` keeps its line breaks. A line break ends a SQL line comment, so `a --c` followed by a line break and `b` compares `b`, while `a --c b` is all comment after `a`; collapsing the line break into a space would give those two opaque SQL bodies (in the sense of [ADR 244](<./ADR 244 - Check constraints are opaque wire-named expressions.md>)) one hash. The normalizer therefore splits such a body into lines, collapses and trims each line, drops blank lines and joins the rest with `\n`. Every body without `--`, and every one-line body, normalizes by trim and whitespace collapse alone. The normalizer gives the same output on its own output, which matters because policy authoring normalizes a body before the hash function normalizes it again. (**Amended:** the line-comment rule was added after the first release of the normalizer. No committed contract had a body containing `--`, so no committed wire name changed; a user body with both `--` and a line break gets a new wire name once, and the next `migration plan` drops and recreates the object.)
 
 The escape hatch we deliberately do *not* build is an intentionally hash-invariant normalizer change — e.g. "the new normalizer treats `TRUE` and `1 = 1` as equivalent, but existing wire names should keep their suffixes." If that need ever arises, the moment to introduce a version marker is then; paying for it up front buys nothing.
 

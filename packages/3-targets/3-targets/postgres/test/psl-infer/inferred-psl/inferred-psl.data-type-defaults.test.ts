@@ -141,13 +141,16 @@ describe('printPsl writes each default as the literal the column data type takes
   );
 
   it.each([
-    ['infinity', "'infinity'::timestamp without time zone"],
-    ['-infinity', "'-infinity'::timestamp without time zone"],
+    ['infinity', 'timestamp', "'infinity'::timestamp without time zone"],
+    ['-infinity', 'timestamp', "'-infinity'::timestamp without time zone"],
+    ['infinity', 'timestamptz', "'infinity'::timestamp with time zone"],
+    ['-infinity', 'date', "'-infinity'::date"],
   ])(
-    'falls back to the raw expression for the temporal sentinel %s, which its codec refuses',
-    (_name, rawDefault) => {
-      const printed = printedDefaults([introspected('stamp', 'timestamp', rawDefault)])['stamp'];
-      expect(printed).toBe(`@default(sql${BACKTICK}${rawDefault}${BACKTICK})`);
+    'prints the %s sentinel on a %s column as a literal, which the text codec reads back',
+    (sentinel, nativeType, rawDefault) => {
+      expect(printedDefaults([introspected('stamp', nativeType, rawDefault)])).toEqual({
+        stamp: `@default("${sentinel}")`,
+      });
     },
   );
 

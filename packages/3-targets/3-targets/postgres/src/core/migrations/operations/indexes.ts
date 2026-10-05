@@ -6,6 +6,7 @@ import {
   createIndex as createIndexDdl,
   dropIndex as dropIndexDdl,
 } from '../../../contract-free/ddl';
+import type { CreateIndexElements } from '../../ddl/nodes';
 import { type Op, step, targetDetails } from './shared';
 
 type CheckStep = { sql: string; params?: readonly unknown[] };
@@ -37,15 +38,6 @@ export interface CreateIndexExtras {
   readonly where?: string;
   readonly unique?: boolean;
 }
-
-/**
- * The element list between the parens of CREATE INDEX: either a column
- * tuple (each identifier quoted) or one opaque expression string covering
- * the entire list, inserted verbatim.
- */
-export type CreateIndexElements =
-  | { readonly columns: readonly string[] }
-  | { readonly expression: string };
 
 export async function createIndex(
   schemaName: string,

@@ -25,8 +25,7 @@
     "@prisma/client": "7.10.0",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
     "dotenv": "^17.4.2",
-    "pg": "catalog:",
-    "temporal-polyfill": "^1.0.4"
+    "pg": "catalog:"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.6.2",

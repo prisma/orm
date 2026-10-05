@@ -284,7 +284,7 @@ describe('RLS planner diff-wiring', () => {
       | undefined;
     expect(createPolicyNode).toBeDefined();
     expect(createPolicyNode?.name).toContain('read_own_profiles_a1b2c3d4');
-    expect(createPolicyNode?.using).toContain('auth.uid()');
+    expect(createPolicyNode?.using?.text).toContain('auth.uid()');
   });
 
   it('does not emit RLS ops when the policy already exists in the introspected schema', async () => {
