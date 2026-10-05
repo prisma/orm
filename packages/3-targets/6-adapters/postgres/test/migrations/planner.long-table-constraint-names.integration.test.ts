@@ -192,4 +192,18 @@ describe('constraints of a table whose name is over 58 bytes', { concurrent: fal
       expect(await constraintKinds()).toEqual(left);
     },
   );
+
+  it('drops a primary key the planner added to the existing table', {
+    timeout: testTimeout,
+  }, async () => {
+    const withoutKey = buildContract({ ...everything, primaryKey: false });
+    const withKey = buildContract(everything);
+    await planAndApply(null, withoutKey, INIT_ADDITIVE_POLICY);
+    await planAndApply(withoutKey, withKey, anyClass);
+    expect(await constraintKinds()).toEqual(['f', 'p', 'u']);
+
+    await planAndApply(withKey, withoutKey, anyClass);
+
+    expect(await constraintKinds()).toEqual(['f', 'u']);
+  });
 });
