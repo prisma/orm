@@ -51,7 +51,9 @@ function printedVector(text: string): readonly number[] | undefined {
 
 const vectorCanonicalForm: ToCanonicalForm = (value) => {
   const elements = typeof value === 'string' ? printedVector(value) : value;
-  if (Array.isArray(elements) && elements.every(isFiniteNumber)) return elements;
+  if (Array.isArray(elements) && elements.every(isFiniteNumber)) {
+    return elements.map((element) => (Object.is(element, -0) ? 0 : element));
+  }
   throw structuredError(
     'CONTRACT.CAST_REFUSED',
     `A vector is an array of finite numbers, or the text PostgreSQL prints for one, as in "[1,2,3]". ${JSON.stringify(value)} is neither.`,

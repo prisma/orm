@@ -51,9 +51,11 @@ describe('the canonical form of pgvector/vector', () => {
     expect(pgvectorVector.toCanonicalForm?.(value)).toEqual(canonical);
   });
 
-  it('leaves an array of numbers as it is', () => {
-    const value = [1, 2, 3];
-    expect(pgvectorVector.toCanonicalForm?.(value)).toBe(value);
+  it.each([
+    ['in an array', [-0, 1, 2]],
+    ['in the text PostgreSQL prints', '[-0,1,2]'],
+  ])('reads negative zero %s as zero, as JSON stores it', (_name, value) => {
+    expect(pgvectorVector.toCanonicalForm?.(value)).toEqual([0, 1, 2]);
   });
 
   it.each([
@@ -97,7 +99,8 @@ describe('the canonical form of pgvector/vector', () => {
         [1, 2, 3],
         [4, 5, 6],
       ]).isEqualTo(actual(['[1,2,3]', '[4,5,6]'])),
+      negativeZero: expected([[0, 1, 2]]).isEqualTo(actual(['[-0,1,2]'])),
       different: expected([[1, 2, 3]]).isEqualTo(actual(['[1,2,4]'])),
-    }).toEqual({ list: true, different: false });
+    }).toEqual({ list: true, negativeZero: true, different: false });
   });
 });
