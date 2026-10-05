@@ -23,13 +23,13 @@
   "dependencies": {
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.14",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",
-    "next": "^16.3.0",
+    "next": "^16.3.7",
     "pg": "catalog:",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
@@ -39,8 +39,8 @@
     "@types/leaflet": "^1.9.22",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

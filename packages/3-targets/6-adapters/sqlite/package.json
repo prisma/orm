@@ -32,7 +32,7 @@
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.14",
     "@internal/target-sqlite": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.5"
   },
   "devDependencies": {
     "@internal/driver-sqlite": "workspace:8.0.0-rc.14",

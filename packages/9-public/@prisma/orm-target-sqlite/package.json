@@ -18,7 +18,7 @@
     "@prisma/orm-framework": "workspace:8.0.0-rc.14",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
     "@standard-schema/spec": "1.1.0",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "pathe": "^2.0.3"
   },
   "devDependencies": {

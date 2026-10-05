@@ -26,7 +26,7 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.14",
     "@internal/sql-runtime": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.5"
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.14",

@@ -24,7 +24,7 @@
     "@internal/sql-contract": "workspace:8.0.0-rc.14",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "pathe": "^2.0.3",
     "ts-toolbelt": "^9.6.0"
   },

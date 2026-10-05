@@ -25,9 +25,9 @@
     "@internal/utils": "workspace:8.0.0-rc.14",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "pg": "catalog:",
-    "pg-cursor": "^2.21.0"
+    "pg-cursor": "^2.22.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.4",

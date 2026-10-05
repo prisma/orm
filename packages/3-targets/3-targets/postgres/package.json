@@ -32,7 +32,7 @@
     "@internal/ts-render": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
     "@standard-schema/spec": "^1.1.0",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "pathe": "^2.0.3",
     "postgres-array": "2.0.0"
   },
@@ -42,13 +42,13 @@
     "@repo/test-utils": "workspace:8.0.0-rc.14",
     "@repo/tsconfig": "workspace:8.0.0-rc.14",
     "@repo/tsdown": "workspace:8.0.0-rc.14",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.5",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

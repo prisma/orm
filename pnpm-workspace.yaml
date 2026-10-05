@@ -19,24 +19,24 @@ catalog:
   '@types/node': 26.1.2
   '@types/pg': 8.20.4
   ajv: ^8.20.0
-  arktype: ^2.2.2
+  arktype: ^2.2.5
   # bson and mongodb must share a major: the Mongo target builds the bson values the
   # driver serialises, and the driver rejects values from another bson major.
   # Use the bson range the mongodb release declares.
-  bson: ^7.2.0
+  bson: ^7.3.3
   gray-matter: ^4.0.3
   mongodb: ^7.4.0
-  mongodb-connection-string-url: ^7.0.1
+  mongodb-connection-string-url: ^7.0.2
   mongodb-memory-server: 11.2.0
   pg: 8.22.0
   tinyglobby: ^0.2.17
   tsdown: 0.22.14
-  tsx: ^4.23.5
+  tsx: ^4.23.15
   typescript: 5.9.3
   vite: 8.1.4
-  vitest: 5.0.0-rc.2
-  vscode-languageserver: 10.1.0
-  vscode-languageserver-textdocument: 1.0.12
+  vitest: 4.1.11
+  vscode-languageserver: 10.1.2
+  vscode-languageserver-textdocument: 1.0.15
 
 cleanupUnusedCatalogs: true
 

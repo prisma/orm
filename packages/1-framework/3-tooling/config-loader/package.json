@@ -20,7 +20,7 @@
     "@internal/emitter": "workspace:8.0.0-rc.14",
     "@internal/errors": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "c12": "^3.3.4",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:"

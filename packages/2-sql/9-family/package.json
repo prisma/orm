@@ -29,7 +29,7 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.14",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.14",
     "@internal/utils": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "pluralize": "^8.0.0"
   },
   "devDependencies": {

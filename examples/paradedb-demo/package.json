@@ -20,7 +20,7 @@
   "dependencies": {
     "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.14",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.5",
     "dotenv": "^17.4.2",
     "pg": "catalog:"
   },
