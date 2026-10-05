@@ -21,6 +21,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 const parseArgument = vi.fn(str().parse);
 const text = { ...str(), parse: parseArgument };
@@ -132,6 +133,7 @@ function help(markedSource: string, labelOffsets = true) {
     position: sourceFile.positionAt(offset),
     clientSupportsLabelOffsets: labelOffsets,
     candidates: {
+      binder: testBinder({ sources, symbolTable, authoringContributions, pslBlockDescriptors }),
       pslBlockDescriptors,
       symbolTable,
       authoringContributions,

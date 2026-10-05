@@ -27,7 +27,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "updatedAt": {
                 "type": {
@@ -37,7 +38,8 @@
                     "precision": 3
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "updatedAtTz": {
                 "type": {
@@ -47,7 +49,8 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -63,6 +66,7 @@
     }
   },
   "execution": {
+    "executionHash": "7ea47c826991cbe057b6cff26e955215ef09285af0c134b7f255f0f697291abb",
     "mutations": {
       "defaults": [
         {
@@ -96,8 +100,7 @@
           }
         }
       ]
-    },
-    "executionHash": "7ea47c826991cbe057b6cff26e955215ef09285af0c134b7f255f0f697291abb"
+    }
   },
   "extensions": {},
   "capabilities": {},
@@ -116,12 +119,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "updatedAt": {
                   "nativeType": "timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 3
                   }
@@ -130,6 +135,7 @@
                   "nativeType": "timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }

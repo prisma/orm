@@ -33,8 +33,14 @@ const publicUser: ModelNode = {
   tableName: 'users',
   namespaceId: 'public',
   fields: [
-    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false },
-    { fieldName: 'email', columnName: 'email', descriptor: textDescriptor, nullable: false },
+    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false, many: false },
+    {
+      fieldName: 'email',
+      columnName: 'email',
+      descriptor: textDescriptor,
+      nullable: false,
+      many: false,
+    },
   ],
   id: { columns: ['id'] },
 };
@@ -44,8 +50,14 @@ const authUser: ModelNode = {
   tableName: 'users',
   namespaceId: 'auth',
   fields: [
-    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false },
-    { fieldName: 'token', columnName: 'token', descriptor: textDescriptor, nullable: false },
+    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false, many: false },
+    {
+      fieldName: 'token',
+      columnName: 'token',
+      descriptor: textDescriptor,
+      nullable: false,
+      many: false,
+    },
   ],
   id: { columns: ['id'] },
 };
@@ -55,8 +67,14 @@ const profile: ModelNode = {
   tableName: 'profile',
   namespaceId: 'public',
   fields: [
-    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false },
-    { fieldName: 'userId', columnName: 'userId', descriptor: idDescriptor, nullable: false },
+    { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false, many: false },
+    {
+      fieldName: 'userId',
+      columnName: 'userId',
+      descriptor: idDescriptor,
+      nullable: false,
+      many: false,
+    },
   ],
   id: { columns: ['id'] },
   foreignKeys: [

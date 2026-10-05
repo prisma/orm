@@ -32,7 +32,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int2 to smallint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
+          { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
           types,
         ),
       ).toBe('smallint');
@@ -41,7 +41,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int4 to integer', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
           types,
         ),
       ).toBe('integer');
@@ -50,7 +50,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int8 to bigint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+          { many: false, nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
           types,
         ),
       ).toBe('bigint');
@@ -59,7 +59,7 @@ describe('buildExpectedFormatType', () => {
     it('maps float4 to real', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'float4', codecId: 'pg/float4@1', nullable: false },
+          { many: false, nativeType: 'float4', codecId: 'pg/float4@1', nullable: false },
           types,
         ),
       ).toBe('real');
@@ -68,7 +68,7 @@ describe('buildExpectedFormatType', () => {
     it('maps float8 to double precision', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'float8', codecId: 'pg/float8@1', nullable: false },
+          { many: false, nativeType: 'float8', codecId: 'pg/float8@1', nullable: false },
           types,
         ),
       ).toBe('double precision');
@@ -77,7 +77,7 @@ describe('buildExpectedFormatType', () => {
     it('maps bool to boolean', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'bool', codecId: 'pg/bool@1', nullable: false },
+          { many: false, nativeType: 'bool', codecId: 'pg/bool@1', nullable: false },
           types,
         ),
       ).toBe('boolean');
@@ -88,7 +88,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for text', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           types,
         ),
       ).toBe('text');
@@ -97,7 +97,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for uuid', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           types,
         ),
       ).toBe('uuid');
@@ -109,6 +109,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'numeric',
             codecId: 'pg/numeric@1',
             nullable: false,
@@ -123,6 +124,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: 'pg/int4@1',
             nullable: false,

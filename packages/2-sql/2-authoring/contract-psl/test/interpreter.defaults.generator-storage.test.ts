@@ -5,13 +5,8 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
 import { fixtureTypeLookups } from './fixture-codec-descriptors';
-import {
-  postgresScalarAuthoringTypes,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { interpretSqlContract, postgresScalarAuthoringTypes, postgresTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { builtinControlMutationDefaults } from './interpreter-defaults-support';
 
@@ -39,9 +34,8 @@ describe('generator defaults never mutate storage — the type position is the o
   } satisfies AuthoringContributions;
 
   const interpret = (schema: string) =>
-    interpretPslDocumentToSqlContractInternal({
+    interpretSqlContract(schema, {
       ...fixtureTypeLookups,
-      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
       target: postgresTarget,
       scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
       authoringContributions,
@@ -61,6 +55,7 @@ id Uuid @id @default(uuid())
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['F']?.columns['id']).toEqual({
+      many: false,
       codecId: 'pg/uuid@1',
       nativeType: 'uuid',
       nullable: false,
@@ -87,6 +82,7 @@ id TUuid @id @default(uuid())
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['E']?.columns['id']).toEqual({
+      many: false,
       codecId: 'pg/uuid@1',
       nativeType: 'uuid',
       nullable: false,
@@ -104,6 +100,7 @@ id Char(30) @id @default(cuid(2))
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['M']?.columns['id']).toEqual({
+      many: false,
       codecId: 'sql/char@1',
       nativeType: 'character',
       nullable: false,
@@ -127,6 +124,7 @@ id String @id @default(uuid())
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['L']?.columns['id']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,
@@ -149,6 +147,7 @@ id String() @id @default(uuid())
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['P']?.columns['id']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,
@@ -168,16 +167,19 @@ ref String @default(cuid(2))
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     const columns = storage.namespaces['public']?.entries.table?.['N']?.columns;
     expect(columns?.['id']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,
     });
     expect(columns?.['sized']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,
     });
     expect(columns?.['ref']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,
@@ -206,6 +208,7 @@ id TId @id @default(uuid())
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['T']?.columns['id']).toEqual({
+      many: false,
       codecId: 'pg/text@1',
       nativeType: 'text',
       nullable: false,

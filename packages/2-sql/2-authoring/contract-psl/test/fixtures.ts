@@ -1,6 +1,7 @@
 import type {
   ContractSourceContext,
   ContractSourceDiagnostic,
+  ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
@@ -12,6 +13,7 @@ import {
   type AuthoringEntityContext,
   type AuthoringEntityTypeNamespace,
   type AuthoringFieldPresetDescriptor,
+  type AuthoringTypeConstructorDescriptor,
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
   type ParsedPslExtensionBlock,
@@ -35,11 +37,19 @@ import {
   optional,
   str,
 } from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
+import type { Result } from '@internal/utils/result';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
+import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
+import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
+import { sqlContextInput } from '../src/test';
 import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
@@ -140,6 +150,7 @@ export function testRenderCheckExpressions(input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly memberValues: readonly (string | number)[] | undefined;
 }): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
@@ -161,11 +172,11 @@ export function testRenderCheckExpressions(input: {
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
         : `${column} IN (${members})`,
     });
   }
-  if (input.many) {
+  if (input.many && !input.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -328,7 +339,7 @@ export const pgvectorAuthoringContributions = {
   field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
-  attributeSpecs: { model: {}, field: {} },
+  attributeSpecs: sqlAttributeSpecs,
   type: {
     ...postgresScalarAuthoringTypes,
     pgvector: {
@@ -398,6 +409,84 @@ export function symbolTableInputFromParseArgs(args: {
   });
 }
 
+function contextForInterpretOptions(
+  options: Pick<
+    InterpretPslDocumentToSqlContractInput,
+    | 'authoringContributions'
+    | 'controlMutationDefaults'
+    | 'codecLookup'
+    | 'dataTypeLookup'
+    | 'composedExtensions'
+    | 'composedExtensionContracts'
+    | 'capabilities'
+    | 'scalarColumnDescriptors'
+  >,
+): ContractSourceContext {
+  const authoring = options.authoringContributions;
+  const scalarsFromColumnDescriptors: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, descriptor] of options.scalarColumnDescriptors ?? []) {
+    scalarsFromColumnDescriptors[name] = {
+      kind: 'typeConstructor',
+      output: { codecId: descriptor.codecId },
+    };
+  }
+  return {
+    composedExtensions: options.composedExtensions ?? [],
+    composedExtensionContracts: options.composedExtensionContracts,
+    authoringContributions: {
+      type: { ...scalarsFromColumnDescriptors, ...authoring?.type },
+      field: authoring?.field ?? {},
+      entityTypes: authoring?.entityTypes ?? {},
+      pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
+      modelAttributes: authoring?.modelAttributes ?? {},
+      attributeSpecs: authoring?.attributeSpecs ?? sqlAttributeSpecs,
+      dataTypes: authoring?.dataTypes ?? {},
+      ...(authoring?.valueObjectStorageType === undefined
+        ? {}
+        : { valueObjectStorageType: authoring.valueObjectStorageType }),
+    },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+    codecLookup: options.codecLookup,
+    dataTypeLookup: options.dataTypeLookup,
+    controlMutationDefaults: options.controlMutationDefaults ?? {
+      defaultFunctionRegistry: new Map(),
+      generatorDescriptors: [],
+    },
+    resolvedInputs: [],
+    capabilities: options.capabilities,
+  };
+}
+
+export function interpretSqlContract(
+  schema: string,
+  options: Omit<
+    InterpretPslDocumentToSqlContractInput,
+    'documents' | 'sources' | 'symbolTable' | 'binder'
+  >,
+  sourceId?: string,
+): Result<Contract, ContractSourceDiagnostics> {
+  const bound = bindPslSchema(schema, {
+    sourceId: sourceId ?? 'schema.prisma',
+    context: contextForInterpretOptions(options),
+  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: options.target,
+      createNamespace: options.createNamespace,
+      ...(options.composedExtensionPackRefs?.length
+        ? { composedExtensionPackRefs: options.composedExtensionPackRefs }
+        : {}),
+      enumInferenceCodecs: options.enumInferenceCodecs ?? postgresEnumInferenceCodecs,
+    }),
+    bound.seedDiagnostics,
+  );
+}
+
 export const sqliteScalarAuthoringTypes: AuthoringTypeNamespace = {
   String: { kind: 'typeConstructor', output: { codecId: 'sqlite/text@1' } },
   Boolean: {
@@ -438,9 +527,10 @@ export function createPostgresTestContext(
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
-      attributeSpecs: { model: {}, field: {} },
+      attributeSpecs: sqlAttributeSpecs,
       valueObjectStorageType: 'Jsonb',
     },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
     ...fixtureTypeLookups,
     resolvedInputs: [],

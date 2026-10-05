@@ -14,7 +14,7 @@ type TestTable = {
 };
 
 function scalar(codecId: string, nullable = false) {
-  return { nullable, type: { kind: 'scalar' as const, codecId } };
+  return { nullable, many: false, type: { kind: 'scalar' as const, codecId } };
 }
 
 const int = (nullable = false) => scalar('pg/int4@1', nullable);

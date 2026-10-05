@@ -55,7 +55,7 @@ function columnTypeLike(
     // `column.many` is unset on contract-derived columns (array-ness rides
     // on the `nativeType` `[]` suffix there instead) — `codecRef.many`
     // carries it. Hand-built/introspected columns set `column.many` directly.
-    ...ifDefined('many', identity.many ?? identity.codecRef.many),
+    many: (identity.many ?? identity.codecRef.many) ? { elementNullable: false } : false,
     ...ifDefined(
       'typeParams',
       identity.codecRef.typeParams !== undefined
@@ -104,7 +104,7 @@ export function renderColumnDdl(
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, types);
   const ddlDefault = postgresDefaultToDdlColumnDefault(
-    inCanonicalForm(name, like.default, column.dataType, like.many === true),
+    inCanonicalForm(name, like.default, column.dataType, like.many !== false),
   );
   return contractFree.col(name, typeSql, {
     ...(!column.nullable ? { notNull: true } : {}),
@@ -154,7 +154,7 @@ export function buildSetDefaultColumn(
   if (authored === undefined) return undefined;
   const typeLike = columnTypeLike('column default', defaultNode);
   const ddlDefault = postgresDefaultToDdlColumnDefault(
-    inCanonicalForm(columnName, authored, defaultNode.dataType, typeLike.many === true),
+    inCanonicalForm(columnName, authored, defaultNode.dataType, typeLike.many !== false),
   );
   if (ddlDefault === undefined) return undefined;
   return contractFree.col(columnName, buildColumnTypeSql(typeLike, types, {}, false), {

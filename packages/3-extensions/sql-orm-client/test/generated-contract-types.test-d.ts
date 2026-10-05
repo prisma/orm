@@ -77,11 +77,36 @@ type GeneratedLikeStorage = {
         table: {
           user: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              email: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              active: { nativeType: 'bool'; codecId: 'pg/bool@1'; nullable: false };
-              metadata: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+              id: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              name: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              email: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              active: {
+                readonly many: false;
+                nativeType: 'bool';
+                codecId: 'pg/bool@1';
+                nullable: false;
+              };
+              metadata: {
+                readonly many: false;
+                nativeType: 'jsonb';
+                codecId: 'pg/jsonb@1';
+                nullable: false;
+              };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -90,9 +115,24 @@ type GeneratedLikeStorage = {
           };
           post: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              userId: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              title: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
+              id: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              userId: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              title: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -119,22 +159,27 @@ type GeneratedLikeModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       name: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       email: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       active: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
         readonly nullable: false;
       };
       metadata: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
         readonly nullable: false;
       };
@@ -161,14 +206,17 @@ type GeneratedLikeModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       userId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       title: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
@@ -489,10 +537,30 @@ type VOContractBase = Omit<
           table: {
             users: {
               columns: {
-                id: { nativeType: 'int4'; codecId: 'pg/int4@1'; nullable: false };
-                name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-                home_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: true };
-                work_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+                id: {
+                  readonly many: false;
+                  nativeType: 'int4';
+                  codecId: 'pg/int4@1';
+                  nullable: false;
+                };
+                name: {
+                  readonly many: false;
+                  nativeType: 'text';
+                  codecId: 'pg/text@1';
+                  nullable: false;
+                };
+                home_address: {
+                  readonly many: false;
+                  nativeType: 'jsonb';
+                  codecId: 'pg/jsonb@1';
+                  nullable: true;
+                };
+                work_address: {
+                  readonly many: false;
+                  nativeType: 'jsonb';
+                  codecId: 'pg/jsonb@1';
+                  nullable: false;
+                };
               };
               primaryKey: { columns: ['id'] };
               uniques: [];
@@ -526,18 +594,22 @@ type VOContractBase = Omit<
             };
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
                 readonly nullable: false;
               };
               readonly name: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly nullable: false;
               };
               readonly homeAddress: {
+                readonly many: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
                 readonly nullable: true;
               };
               readonly workAddress: {
+                readonly many: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
                 readonly nullable: false;
               };
@@ -549,14 +621,17 @@ type VOContractBase = Omit<
           readonly Address: {
             readonly fields: {
               readonly street: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly nullable: false;
               };
               readonly city: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly nullable: false;
               };
               readonly zip: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly nullable: false;
               };

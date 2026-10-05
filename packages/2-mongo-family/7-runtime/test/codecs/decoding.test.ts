@@ -142,6 +142,33 @@ describe('decodeMongoRow', () => {
     expect(out).toEqual({ tags: ['a', 'b'] });
   });
 
+  it('bypasses the element codec for null array elements', async () => {
+    const decodeSpy = vi.fn(async (wire: string) => wire.toUpperCase());
+    const registry = registryWithDefaults();
+    registry.register(
+      mongoCodec({
+        typeId: 'test/nullable-array@1',
+        encode: (value: string) => value,
+        decode: decodeSpy,
+        decodeJson: (json) => decodeJsonString('test/nullable-array@1', json).toUpperCase(),
+      }),
+    );
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: {
+        tags: {
+          kind: 'array',
+          nullable: false,
+          element: { kind: 'leaf', codecId: 'test/nullable-array@1', nullable: true },
+        },
+      },
+    };
+    expect(await decodeMongoRow({ tags: ['a', null, 'b'] }, shape, registry, 'c')).toEqual({
+      tags: ['A', null, 'B'],
+    });
+    expect(decodeSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('recurses into document fields with dot-joined paths on failure context', async () => {
     const registry = registryWithDefaults();
     const inner: MongoFieldShape = {

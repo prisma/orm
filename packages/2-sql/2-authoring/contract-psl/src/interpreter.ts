@@ -47,6 +47,7 @@ import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
   type CompositeTypeSymbol,
+  contributedTypeOf,
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
@@ -119,13 +120,12 @@ import {
 } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
+  bareTypeConstructorOf,
   getAuthoringEntity,
-  replacesUnresolvedTypeVoice,
   resolveFieldTypeDescriptor,
 } from './psl-column-resolution';
 import {
   collectResolvedFields,
-  describeUnsupportedSqlAttribute,
   type ModelNamespaceEntry,
   modelCoordinateKey,
   type ResolvedField,
@@ -142,7 +142,6 @@ import {
   validateBackrelationFieldAttributes,
 } from './psl-relation-resolution';
 import {
-  createSqlBinder,
   interpretFieldAttribute,
   interpretModelAttribute,
   modelAttributeSpecsFrom,
@@ -155,6 +154,7 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly target: TargetPackRef<'sql', string>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions?: readonly string[];
@@ -524,11 +524,11 @@ interface ProcessEnumDeclarationsInput {
 }
 
 function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
-  readonly enumHandles: Record<string, EnumTypeHandle>;
-  readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
+  readonly enumHandles: Map<BlockSymbol, EnumTypeHandle>;
+  readonly enumTypeDescriptors: Map<BlockSymbol, ColumnDescriptor>;
 } {
-  const enumHandles: Record<string, EnumTypeHandle> = {};
-  const enumTypeDescriptors = new Map<string, ColumnDescriptor>();
+  const enumHandles = new Map<BlockSymbol, EnumTypeHandle>();
+  const enumTypeDescriptors = new Map<BlockSymbol, ColumnDescriptor>();
 
   if (input.enumBlocks.length === 0) {
     return { enumHandles, enumTypeDescriptors };
@@ -562,8 +562,8 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
 
     if (handle === undefined || handle === null) continue;
 
-    enumHandles[envelope.name] = handle;
-    enumTypeDescriptors.set(envelope.name, { codecId: handle.codecId });
+    enumHandles.set(symbol, handle);
+    enumTypeDescriptors.set(symbol, { codecId: handle.codecId });
   }
 
   return { enumHandles, enumTypeDescriptors };
@@ -575,9 +575,8 @@ interface BuildModelNodeInput {
   readonly namespaceId: string | undefined;
   /** The value objects the composite types declare, by name. */
   readonly valueObjectTypes: ValueObjectTypes;
-  readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
-  readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
-  readonly composedExtensions: Set<string>;
+  readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+  readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** Extension contracts keyed by space ID for cross-space FK table-name resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly familyId: string;
@@ -591,7 +590,7 @@ interface BuildModelNodeInput {
   readonly binder: Binder;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly enumHandles?: ReadonlyMap<string, EnumTypeHandle>;
+  readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
   readonly capabilities: CapabilityMatrix;
   /**
    * Extension entities already lowered per namespace (the exact shape
@@ -692,9 +691,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     enumTypeDescriptors: input.enumTypeDescriptors,
     namedTypeDescriptors: input.namedTypeDescriptors,
     valueObjectTypes: input.valueObjectTypes,
-    composedExtensions: input.composedExtensions,
     authoringContributions: input.authoringContributions,
-    familyId: input.familyId,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypeSupport: input.dataTypeSupport,
@@ -703,7 +700,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     sources: input.sources,
     binder: input.binder,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
-    ...ifDefined('enumHandles', input.enumHandles),
+    enumHandles: input.enumHandles,
     capabilities: input.capabilities,
     ...ifDefined('namespaceId', modelNamespaceId),
     ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntitiesForModel),
@@ -753,11 +750,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       field,
       sources: input.sources,
       binder: input.binder,
-      composedExtensions: input.composedExtensions,
-      authoringContributions: input.authoringContributions,
       diagnostics,
-      familyId: input.familyId,
-      targetId: input.targetId,
     });
     let relationName: string | undefined;
     if (relationAttribute) {
@@ -1471,6 +1464,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           descriptor: resolvedField.descriptor,
           nullable: resolvedField.nullable,
           ...ifDefined('many', resolvedField.many),
+          ...ifDefined(
+            'elementNullable',
+            resolvedField.many ? resolvedField.elementNullable === true : undefined,
+          ),
           ...ifDefined('default', resolvedField.defaultValue),
           ...ifDefined('executionDefaults', resolvedField.executionDefaults),
         };
@@ -1480,7 +1477,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         return {
           ...common,
           ...ifDefined('noCheck', resolvedField.noCheck),
-          ...ifDefined('enumTypeHandle', input.enumHandles?.get(resolvedField.field.typeName)),
+          ...ifDefined('enumTypeHandle', resolvedField.enumTypeHandle),
         };
       }),
       ...ifDefined('id', primaryKey),
@@ -1500,16 +1497,11 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 
 interface BuildValueObjectNodesInput {
   readonly compositeTypes: readonly CompositeTypeSymbol[];
-  readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly enumHandles: ReadonlyMap<string, EnumTypeHandle>;
-  readonly namedTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
+  readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+  readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
+  readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** The named types; a member typed by one takes its parameters inline. */
   readonly namedTypes: Record<string, StorageTypeInstance>;
-  readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly composedExtensions: ReadonlySet<string>;
-  readonly familyId: string;
-  readonly targetId: string;
-  readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
   /** Composite types are placed in the default namespace, so their members resolve against it. */
@@ -1545,6 +1537,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         fieldName: field.name,
         nullable: field.optional,
         ...ifDefined('many', field.list ? (true as const) : undefined),
+        ...ifDefined('elementNullable', field.list ? field.elementOptional : undefined),
       };
       const fieldTypeReference = typeReferenceNode(field);
       const fieldTypeResolution =
@@ -1555,13 +1548,9 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
       }
       const resolved = resolveFieldTypeDescriptor({
         field,
+        resolution: fieldTypeResolution,
         enumTypeDescriptors: input.enumTypeDescriptors,
         namedTypeDescriptors: input.namedTypeDescriptors,
-        scalarColumnDescriptors: input.scalarColumnDescriptors,
-        authoringContributions: input.authoringContributions,
-        composedExtensions: input.composedExtensions,
-        familyId: input.familyId,
-        targetId: input.targetId,
         diagnostics,
         sources,
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
@@ -1570,13 +1559,6 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         codecLookup: input.codecLookup,
       });
       if (!resolved.ok) {
-        if (!resolved.alreadyReported && fieldTypeResolution?.kind !== 'unresolved') {
-          diagnostics.push({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: `Field "${compositeType.name}.${field.name}" type "${field.typeName}" is not supported`,
-            ...diagnosticSource(sources, field.node.syntax).at(field.span),
-          });
-        }
         continue;
       }
       const { descriptor } = resolved;
@@ -1594,7 +1576,12 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
           codecId: descriptor.codecId,
           ...ifDefined('typeParams', resolvedTypeParams(descriptor, input.namedTypes)),
         },
-        ...ifDefined('enumTypeHandle', enumHandles.get(field.typeName)),
+        ...ifDefined(
+          'enumTypeHandle',
+          fieldTypeResolution?.kind === 'block'
+            ? enumHandles.get(fieldTypeResolution.symbol)
+            : undefined,
+        ),
       });
     }
     return { name: compositeType.name, fields };
@@ -1622,11 +1609,29 @@ type BaseDeclaration = {
   readonly span: ContractSourceDiagnosticSpan;
 };
 
+function isStringTyped(
+  field: FieldSymbol,
+  stringCodecId: string | undefined,
+  binder: Binder,
+): boolean {
+  const node = typeReferenceNode(field);
+  const scalar = contributedTypeOf(
+    node === undefined ? undefined : binder.symbolForNode(node),
+    binder,
+  );
+  return (
+    stringCodecId !== undefined &&
+    scalar?.descriptor.kind === 'typeConstructor' &&
+    scalar.descriptor.output.codecId === stringCodecId
+  );
+}
+
 function collectPolymorphismDeclarations(
   identities: ReadonlyMap<ModelSymbol, ModelIdentity>,
   symbols: SymbolTable,
   sources: PslSources,
   binder: Binder,
+  stringCodecId: string | undefined,
   diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
@@ -1651,7 +1656,7 @@ function collectPolymorphismDeclarations(
       if (parsed !== undefined) {
         const span = nodePslSpan(discriminatorNode.syntax, sources);
         const discField = model.fields[parsed.field];
-        if (discField && discField.typeName !== 'String') {
+        if (discField && !isStringTyped(discField, stringCodecId, binder)) {
           diagnostics.push({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
             message: `Discriminator field "${parsed.field}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
@@ -1859,6 +1864,7 @@ function materializeMtiVariantStorageLinks(
         columnName: pkColumn,
         descriptor: baseField.descriptor,
         nullable: false,
+        many: false,
       });
     }
     if (linkFields.length === 0) return node;
@@ -2024,23 +2030,6 @@ function relationTargetKindLabel(resolution: Resolution): string | undefined {
   }
 }
 
-function replacedBySqlTypeVoice(
-  diagnostic: PslDiagnostic,
-  composedExtensions: ReadonlySet<string>,
-  context: {
-    readonly familyId?: string;
-    readonly targetId?: string;
-    readonly authoringContributions?: AuthoringContributions | undefined;
-  },
-): boolean {
-  const data = diagnostic.data;
-  if (data?.['reference'] !== 'type') return false;
-  if (data['constructorCall'] !== true) return false;
-  const name = data['name'];
-  if (typeof name !== 'string') return false;
-  return replacesUnresolvedTypeVoice(name, composedExtensions, context);
-}
-
 export function interpretPslDocumentToSqlContract(
   input: InterpretPslDocumentToSqlContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
@@ -2056,39 +2045,10 @@ export function interpretPslDocumentToSqlContract(
   assertDefined(anchorDocument, 'interpretPslDocumentToSqlContract requires at least one document');
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
-  const composedExtensionNames = new Set(input.composedExtensions ?? []);
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
-    symbolTable: input.symbolTable,
-    sources: input.sources,
-    pslBlockDescriptors: composedPslBlockDescriptors,
-    authoringContributions: input.authoringContributions,
-    controlMutationDefaults: {
-      defaultFunctionRegistry: input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
-      dataTypeEntries: input.authoringContributions?.dataTypes ?? {},
-    },
-    scalarColumnDescriptors: input.scalarColumnDescriptors,
-    contributedModelAttributeSpecs: contributedModelSpecs,
-    describeUnsupportedAttribute: describeUnsupportedSqlAttribute({
-      composedExtensions: composedExtensionNames,
-      authoringContributions: input.authoringContributions,
-      sources: input.sources,
-      familyId: input.target.familyId,
-      targetId: input.target.targetId,
-    }),
-  });
-  diagnostics.push(
-    ...binderDiagnostics.filter(
-      (diagnostic) =>
-        !replacedBySqlTypeVoice(diagnostic, composedExtensionNames, {
-          familyId: 'sql',
-          targetId: input.target.targetId,
-          authoringContributions: input.authoringContributions,
-        }),
-    ),
-  );
+  const { binder } = input;
 
   const { topLevel } = input.symbolTable;
   const namespaceSymbols = Object.values(topLevel.namespaces);
@@ -2264,11 +2224,11 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
   });
 
-  const allEnumTypeDescriptors = new Map(enumResult.enumTypeDescriptors);
-
-  const validEnumHandles: Record<string, EnumTypeHandle> = { ...enumResult.enumHandles };
-
-  const enumHandlesByName = new Map(Object.entries(validEnumHandles));
+  const allEnumTypeDescriptors = enumResult.enumTypeDescriptors;
+  const enumHandles = enumResult.enumHandles;
+  const validEnumHandles: Record<string, EnumTypeHandle> = Object.fromEntries(
+    Array.from(enumHandles, ([symbol, handle]) => [symbol.name, handle]),
+  );
 
   // Generic extension-block lowering pass: per lexical scope (each named
   // namespace, plus the document top level), lower all parsed extension
@@ -2412,10 +2372,15 @@ export function interpretPslDocumentToSqlContract(
   // Resolve scalar-refinement bindings ahead of alias/constructor bindings,
   // preserving the emission order the retired scalar/alias symbol-table split
   // induced — emitted artifacts stay byte-identical across that refactor.
-  const isScalarRefinement = (symbol: NamedTypeSymbol): boolean =>
-    !symbol.isConstructor &&
-    symbol.baseType !== undefined &&
-    input.scalarColumnDescriptors.has(symbol.baseType);
+  const isScalarRefinement = (symbol: NamedTypeSymbol): boolean => {
+    const reference = typeReferenceNode(symbol);
+    return (
+      !symbol.isConstructor &&
+      symbol.baseType !== undefined &&
+      reference !== undefined &&
+      bareTypeConstructorOf(binder.symbolForNode(reference)) !== undefined
+    );
+  };
   const allNamedTypes = Object.values(topLevel.namedTypes);
   const namedTypeSymbols: readonly NamedTypeSymbol[] = [
     ...allNamedTypes.filter(isScalarRefinement),
@@ -2425,12 +2390,8 @@ export function interpretPslDocumentToSqlContract(
   const namedTypeResult = resolveNamedTypeDeclarations({
     declarations: namedTypeSymbols,
     source,
+    binder,
     enumTypeDescriptors: allEnumTypeDescriptors,
-    scalarColumnDescriptors: input.scalarColumnDescriptors,
-    composedExtensions,
-    familyId: input.target.familyId,
-    targetId: input.target.targetId,
-    authoringContributions: input.authoringContributions,
     codecLookup: input.codecLookup,
     dataTypeLookup: input.dataTypeLookup,
     diagnostics,
@@ -2454,14 +2415,9 @@ export function interpretPslDocumentToSqlContract(
   const valueObjects = buildValueObjectNodes({
     compositeTypes,
     enumTypeDescriptors: allEnumTypeDescriptors,
-    enumHandles: enumHandlesByName,
+    enumHandles,
     namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
     namedTypes: namedTypeResult.storageTypes,
-    scalarColumnDescriptors: input.scalarColumnDescriptors,
-    composedExtensions,
-    familyId: input.target.familyId,
-    targetId: input.target.targetId,
-    authoringContributions: input.authoringContributions,
     diagnostics,
     sources: input.sources,
     defaultNamespaceId,
@@ -2487,7 +2443,6 @@ export function interpretPslDocumentToSqlContract(
       valueObjectTypes,
       enumTypeDescriptors: allEnumTypeDescriptors,
       namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
-      composedExtensions,
       composedExtensionContracts,
       familyId: input.target.familyId,
       targetId: input.target.targetId,
@@ -2500,7 +2455,7 @@ export function interpretPslDocumentToSqlContract(
       binder,
       symbolTable: input.symbolTable,
       diagnostics,
-      ...(enumHandlesByName.size > 0 ? { enumHandles: enumHandlesByName } : {}),
+      enumHandles,
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       codecLookup: input.codecLookup,
@@ -2596,6 +2551,7 @@ export function interpretPslDocumentToSqlContract(
     input.symbolTable,
     input.sources,
     binder,
+    input.scalarColumnDescriptors.get('String')?.codecId,
     diagnostics,
   );
 

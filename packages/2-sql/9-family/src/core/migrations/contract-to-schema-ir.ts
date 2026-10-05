@@ -91,7 +91,8 @@ function convertColumn(
   // form: it is the side both this and the introspected column already
   // agree on as the comparable "expanded" type.
   const nativeType = baseNativeType;
-  const resolvedNativeType = column.many ? `${baseNativeType}[]` : baseNativeType;
+  const many = column.many !== undefined && column.many !== false;
+  const resolvedNativeType = many ? `${baseNativeType}[]` : baseNativeType;
   const rawColumnDefault = column.default ?? undefined;
   const resolvedColumnDefault =
     rawColumnDefault !== undefined && resolveDefault
@@ -101,7 +102,7 @@ function convertColumn(
     name,
     nativeType,
     nullable: column.nullable,
-    ...ifDefined('many', column.many),
+    ...ifDefined('many', many ? true : undefined),
     ...ifDefined(
       'default',
       column.default != null && renderDefault
@@ -122,7 +123,7 @@ function convertColumn(
     // carries `CodecRef` (TML-2456) — the migration planner's op-builders
     // resolve DDL rendering from this at plan time (Decision 5), instead of
     // reading a derivation-precomputed render payload.
-    codecRef: buildColumnCodecRef(resolved, column.many),
+    codecRef: buildColumnCodecRef(resolved, many ? true : undefined),
     codecBaseNativeType: resolved.nativeType,
     dataType,
   };

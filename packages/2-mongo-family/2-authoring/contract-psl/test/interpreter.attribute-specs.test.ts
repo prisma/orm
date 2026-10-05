@@ -1,10 +1,8 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { interpretMongoContract } from './interpreter-test-helpers';
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -13,15 +11,7 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 ]);
 
 function interpret(schema: string) {
-  const { document, sources } = parse(schema, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  return interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
+  return interpretMongoContract(schema, {
     scalarTypeCodecIds,
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     dataTypeLookup: createDataTypeLookup([]),

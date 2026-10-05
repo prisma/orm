@@ -26,6 +26,7 @@ export default defineConfig({
     'map-names': 'src/exports/map-names.ts',
     provider: 'src/exports/provider.ts',
     resolution: 'src/exports/resolution.ts',
+    test: 'src/exports/test.ts',
   },
   exports: {
     enabled: 'local-only',

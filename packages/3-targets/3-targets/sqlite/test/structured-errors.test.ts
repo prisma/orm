@@ -90,7 +90,13 @@ describe('structured error codes', () => {
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {
     const error = capture(() =>
       buildColumnTypeSql(
-        { nativeType: 'unused', nullable: true, codecId: 'sqlite/text@1', typeRef: 'missing' },
+        {
+          many: false,
+          nativeType: 'unused',
+          nullable: true,
+          codecId: 'sqlite/text@1',
+          typeRef: 'missing',
+        },
         sqliteTestTypes,
         {},
       ),

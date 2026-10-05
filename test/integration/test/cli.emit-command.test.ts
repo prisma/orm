@@ -587,12 +587,14 @@ model Post {
       if (sourceResult.ok) {
         throw new Error('Expected source provider to fail for unsupported field type');
       }
-      expect(sourceResult.failure.summary).toBe('PSL to SQL contract interpretation failed');
+      expect(sourceResult.failure.summary).toBe('Schema has 1 error');
+      expect(sourceResult.failure.diagnostics).toHaveLength(1);
+
       expect(sourceResult.failure.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "Unsupported"',
           sourceId: join(testSetup.testDir, 'schema.prisma'),
+          message: 'Cannot find type "Unsupported"',
           span: expect.objectContaining({
             start: expect.objectContaining({ line: 4 }),
           }),
@@ -609,7 +611,7 @@ model Post {
         ok: false,
         error: {
           code: 'CONTRACT.SOURCE_LOAD_FAILED',
-          why: 'PSL to SQL contract interpretation failed',
+          why: 'Schema has 1 error',
         },
       });
 
@@ -702,10 +704,12 @@ model Post {
                     _id: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
+                      many: false,
                     },
                     name: {
                       type: { kind: 'scalar', codecId: 'mongo/string@1' },
                       nullable: false,
+                      many: false,
                     },
                   }),
                 }),

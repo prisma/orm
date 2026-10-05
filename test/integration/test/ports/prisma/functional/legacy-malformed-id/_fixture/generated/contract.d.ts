@@ -116,7 +116,7 @@ type ContractBase = Omit<
               readonly ids: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly name: {
                 readonly nullable: true;

@@ -242,6 +242,7 @@ function encodeColumnDefault(
   resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
   many = false,
+  elementNullable = false,
 ): ColumnDefault {
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
@@ -273,9 +274,13 @@ function encodeColumnDefault(
     const codec = codecForDefault(codecLookup, resolveCodec, site);
     return {
       kind: 'literal',
-      value: defaultInput.value.map((element, index) =>
-        encodeDefaultValue(element, codec, site, index + 1),
-      ),
+      value: defaultInput.value.map((element, index) => {
+        if (element !== null) return encodeDefaultValue(element, codec, site, index + 1);
+        if (elementNullable) return null;
+        throw new InternalError(
+          'Literal default on a strict list column cannot contain null elements.',
+        );
+      }),
     };
   }
   return {
@@ -454,6 +459,7 @@ type CheckExpressionRenderer = (input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly memberValues: readonly (string | number)[] | undefined;
 }) => ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
@@ -628,10 +634,11 @@ function resolveNoCheckKinds(input: {
   readonly fieldName: string;
   readonly kinds: readonly CheckKind[];
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly isDomainEnum: boolean;
 }): readonly CheckKind[] {
   const derivable: CheckKind[] = [];
-  if (input.many) derivable.push('elementNotNull');
+  if (input.many && !input.elementNullable) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
   const subject = `Field "${input.modelName}.${input.fieldName}"`;
   const meta = { modelName: input.modelName, fieldName: input.fieldName };
@@ -661,7 +668,7 @@ function resolveNoCheckKinds(input: {
       const explanation =
         kind === 'membership'
           ? 'membership checks are derived only from enumType() value sets'
-          : 'element-non-null checks are derived only for list columns';
+          : 'element-non-null checks are derived only for lists whose elements are semantically non-null';
       throw contractError(
         'CONTRACT.CHECK_OPTOUT_INVALID',
         `${subject}: noCheck("${kind}") does not apply — ${explanation}.`,
@@ -957,6 +964,7 @@ function buildStorageColumn(
           (lookup) => columnCodec(codecId, typeParams, lookup),
           { modelName, fieldName: field.fieldName, codecId },
           isListColumn,
+          field.elementNullable === true,
         )
       : undefined;
 
@@ -970,7 +978,7 @@ function buildStorageColumn(
     nativeType: unquotedSqlBaseName(dataType, dataTypeParams(dataType, typeParams)),
     codecId,
     nullable: field.nullable,
-    ...ifDefined('many', isListColumn ? (true as const) : undefined),
+    many: isListColumn ? { elementNullable: field.elementNullable === true } : false,
     ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
     ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),
@@ -1008,7 +1016,7 @@ function buildDomainField(
     return {
       type: { kind: 'valueObject', name: field.valueObjectName },
       nullable: field.nullable,
-      ...ifDefined('many', field.many ? (true as const) : undefined),
+      many: field.many ? { elementNullable: field.elementNullable === true } : false,
     };
   }
 
@@ -1019,7 +1027,7 @@ function buildDomainField(
       ...ifDefined('typeParams', resolvedTypeParams(field.descriptor, storageTypes)),
     },
     nullable: field.nullable,
-    ...ifDefined('many', field.many ? (true as const) : undefined),
+    many: field.many ? { elementNullable: field.elementNullable === true } : false,
     ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
   };
 }
@@ -1341,6 +1349,7 @@ export function buildSqlContractFromDefinition(
                 fieldName: field.fieldName,
                 kinds: authoredNoCheck,
                 many: resolvedField.many === true,
+                elementNullable: resolvedField.elementNullable === true,
                 isDomainEnum: enumHandle !== undefined,
               }),
             }
@@ -1354,6 +1363,7 @@ export function buildSqlContractFromDefinition(
         definition.storageTypes ?? {},
         lookups,
       );
+      const columnMany = column.many ?? false;
       columns[field.columnName] = column;
       fieldToColumn[field.fieldName] = field.columnName;
 
@@ -1372,7 +1382,8 @@ export function buildSqlContractFromDefinition(
             renderCheckExpressions({
               tableName,
               columnName: field.columnName,
-              many: column.many === true,
+              many: columnMany !== false,
+              elementNullable: columnMany !== false && columnMany.elementNullable,
               memberValues:
                 enumHandle !== undefined ? checkMemberValues(enumHandle, codecLookup) : undefined,
             }).filter((candidate) => !(waivedKinds?.includes(candidate.kind) ?? false)),

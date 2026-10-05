@@ -65,6 +65,7 @@ describe('createFieldProxy', () => {
     const table: StorageTable = {
       columns: {
         embedding: {
+          many: false,
           codecId: 'pgvector/vector@1',
           nativeType: 'vector',
           nullable: false,

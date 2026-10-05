@@ -10,6 +10,14 @@ import type { TContract } from './fixtures/test-contract';
 import { testContractJson } from './fixtures/test-contract';
 
 describe('contractModelToMongoResultShape', () => {
+  it('treats omitted cardinality as scalar', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        nullable: false,
+      }),
+    ).toEqual({ kind: 'leaf', codecId: 'mongo/string@1', nullable: false });
+  });
   // Hand-authored fixture JSON; cast at the test-fixture seam (allowed by
   // `.cursor/rules/as-contract-cast-smell.mdc`). Production code crosses
   // the family `deserializeContract` seam instead.
@@ -60,9 +68,9 @@ describe('contractModelToMongoResultShape', () => {
     });
   });
 
-  it('maps a list of value objects to an array of documents', () => {
+  it.each([false, true])('maps value-object lists with elementNullable=%s', (elementNullable) => {
     const shape = contractFieldToMongoFieldShape(
-      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: true },
+      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: { elementNullable } },
       {
         Point: {
           fields: { x: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false } },
@@ -74,7 +82,7 @@ describe('contractModelToMongoResultShape', () => {
       nullable: false,
       element: {
         kind: 'document',
-        nullable: false,
+        nullable: elementNullable,
         fields: { x: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false } },
       },
     });
@@ -126,9 +134,38 @@ describe('contractModelToMongoResultShape', () => {
 });
 
 describe('contractFieldToMongoFieldShape', () => {
+  it('maps a required list with nullable elements exactly', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        nullable: false,
+        many: { elementNullable: true },
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      }),
+    ).toEqual({
+      kind: 'array',
+      nullable: false,
+      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+    });
+  });
+
+  it('maps a nullable list with required elements exactly', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        nullable: true,
+        many: { elementNullable: false },
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      }),
+    ).toEqual({
+      kind: 'array',
+      nullable: true,
+      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+    });
+  });
+
   it('union field maps to unknown', () => {
     const f = contractFieldToMongoFieldShape({
       nullable: false,
+      many: false,
       type: {
         kind: 'union',
         members: [{ kind: 'scalar', codecId: 'mongo/string@1' }],

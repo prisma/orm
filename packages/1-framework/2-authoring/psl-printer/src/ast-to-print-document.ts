@@ -270,6 +270,7 @@ function fieldToPrinterField(field: PslField): PrinterField {
     typeName,
     optional: field.optional,
     list: field.list,
+    elementOptional: field.elementOptional ?? false,
     attributes: attrStrings,
     mapName,
     isId,

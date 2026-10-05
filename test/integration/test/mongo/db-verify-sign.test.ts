@@ -21,8 +21,16 @@ const baseContract: MongoContract = {
     models: {
       User: {
         fields: {
-          _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-          email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+          _id: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          },
+          email: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          },
         },
         relations: {},
         storage: { collection: 'users' },

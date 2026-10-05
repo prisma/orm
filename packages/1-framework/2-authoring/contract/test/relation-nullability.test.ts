@@ -100,7 +100,11 @@ describe('resolveToOneRelationNullable', () => {
 });
 
 describe('withDerivedToOneRelationNullability', () => {
-  const field = { nullable: false, type: { kind: 'scalar' as const, codecId: 'pg/int4@1' } };
+  const field = {
+    many: false as const,
+    nullable: false,
+    type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+  };
 
   function domainWith(relations: ContractModelBase['relations']): ApplicationDomain {
     return {

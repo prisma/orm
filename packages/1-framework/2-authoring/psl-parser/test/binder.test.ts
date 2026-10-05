@@ -15,11 +15,12 @@ import type {
 } from '../src/attribute-spec/spec-context';
 import {
   createBinder,
+  type DescribeUnresolvedType,
   type DescribeUnsupportedAttribute,
   typeReferenceNode,
+  type UnresolvedTypeReference,
   type UnsupportedAttribute,
 } from '../src/binder';
-import { contributedTypeScope } from '../src/contributed-type-scope';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import {
@@ -31,6 +32,7 @@ import {
 } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
+import { binderContext } from './support';
 
 const scalar: AuthoringTypeConstructorDescriptor = {
   kind: 'typeConstructor',
@@ -85,11 +87,6 @@ const FIELD_SPECS = {
 
 const ATTRIBUTE_SPECS = { model: MODEL_SPECS, field: FIELD_SPECS };
 
-const NO_CONTROL_DEFAULTS = {
-  defaultFunctionRegistry: new Map(),
-  dataTypeEntries: {},
-};
-
 function attributeNodes(
   owner: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
   attributeName: string,
@@ -132,22 +129,168 @@ function build(...texts: string[]) {
     documents,
     sources,
   });
-  return { sources, symbolTable };
+  return { sources, symbolTable, documents };
 }
 
 function bind(...texts: string[]) {
-  const { sources, symbolTable } = build(...texts);
+  const { sources, symbolTable, documents } = build(...texts);
   return {
     symbolTable,
+    documents,
     ...createBinder({
       sources,
       symbolTable,
-      typeConstructors: TYPE_CONSTRUCTORS,
-      attributeSpecs: ATTRIBUTE_SPECS,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+      }),
     }),
   };
 }
+
+describe('named-type base references', () => {
+  it('binds definition-site bases without adding diagnostics or following aliases', () => {
+    const { binder, symbolTable, diagnostics } = bind(`model String { id Int }
+namespace app { model Item { id Int } }
+types {
+  Shadowed = String
+  Scalar = Int
+  Constructed = pgvector.Vector(3)
+  PlainQualified = pgvector.Vector
+  Missing = Unknown
+  QualifiedMiss = app.String
+  Indirect = Scalar
+}`);
+    const expected = {
+      Shadowed: 'model',
+      Scalar: 'contributedType',
+      Constructed: 'contributedType',
+      PlainQualified: 'contributedType',
+      Missing: 'unresolved',
+      QualifiedMiss: 'unresolved',
+      Indirect: 'unresolved',
+    };
+    expect(
+      Object.fromEntries(
+        Object.values(symbolTable.topLevel.namedTypes).map((symbol) => [
+          symbol.name,
+          binder.symbolForNode(symbol.node.typeAnnotation()!.name()!.syntax)?.kind,
+        ]),
+      ),
+    ).toEqual(expected);
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('a named type named like its base', () => {
+  it('binds the base to the contributed type it shadows', () => {
+    const { binder, symbolTable, diagnostics } = bind('types {\n  Uuid = Uuid\n  Loop = Loop\n}');
+    const resolutionOf = (name: string) =>
+      binder.symbolForNode(
+        symbolTable.topLevel.namedTypes[name]!.node.typeAnnotation()!.name()!.syntax,
+      );
+
+    expect(resolutionOf('Uuid')).toEqual({
+      kind: 'contributedType',
+      symbol: {
+        kind: 'contributedType',
+        name: 'Uuid',
+        path: ['Uuid'],
+        descriptor: TYPE_CONSTRUCTORS['Uuid'],
+      },
+    });
+    expect(resolutionOf('Loop')).toEqual({ kind: 'unresolved', name: 'Loop' });
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('binds a base named like another named type without that named type in scope', () => {
+    const { binder, symbolTable, diagnostics } = bind(
+      'types {\n  Ref = Uuid\n  Uuid = String\n  Alias = Other\n  Other = Int\n}',
+    );
+    const resolutionOf = (name: string) =>
+      binder.symbolForNode(
+        symbolTable.topLevel.namedTypes[name]!.node.typeAnnotation()!.name()!.syntax,
+      );
+
+    expect(resolutionOf('Ref')).toEqual({
+      kind: 'contributedType',
+      symbol: {
+        kind: 'contributedType',
+        name: 'Uuid',
+        path: ['Uuid'],
+        descriptor: TYPE_CONSTRUCTORS['Uuid'],
+      },
+    });
+    expect(resolutionOf('Alias')).toEqual({ kind: 'unresolved', name: 'Other' });
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('lexical scope retrieval', () => {
+  it('retains one namespace scope across reopened declarations and files', () => {
+    const { binder, symbolTable, documents, diagnostics } = bind(
+      'model Root {\n id Int\n}\nmodel Item {}\nnamespace app {}\nnamespace app {\n model Item {\n id Int\n}\n}\nnamespace app {\n model Cart {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}',
+      'namespace app {\n model Order {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}\nnamespace other {\n model Hidden {\n id Int\n}\n}',
+    );
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const item = app.models['Item']!;
+    const scope = binder.scopeAt(item.node.syntax);
+    expect(diagnostics).toEqual([]);
+    for (const name of ['Cart', 'Order']) {
+      const entity = app.models[name]!;
+      const field = entity.fields['item']!;
+      expect(binder.symbolForNode(typeReferenceNode(field)!)).toEqual(scope.lookup('Item'));
+      expect(binder.symbolForNode(attributeNodes(entity, 'base')[0]!)).toEqual(
+        scope.lookup('Item'),
+      );
+      expect(binder.symbolForNode(attributeNodes(field, 'relation', 'references')[0]!)).toEqual({
+        kind: 'field',
+        symbol: item.fields['id'],
+      });
+    }
+    expect(scope.lookup('Item')?.symbol).toBe(item);
+    expect(scope.lookup('Hidden')).toBeUndefined();
+    for (const declaration of app.declarations) {
+      expect(binder.scopeAt(declaration.node.syntax)).toBe(scope);
+    }
+    for (const entity of Object.values(app.models)) {
+      expect(binder.scopeAt(entity.node.syntax)).toBe(scope);
+      for (const field of entity.node.fields()) {
+        expect(binder.scopeAt(field.syntax)).toBe(scope);
+        expect(binder.scopeAt(field.typeAnnotation()!.name()!.syntax)).toBe(scope);
+      }
+    }
+    const docScope = binder.scopeAt(documents[0]!.syntax);
+    expect(binder.scopeAt(documents[1]!.syntax)).toBe(docScope);
+    expect(binder.scopeAt(symbolTable.topLevel.models['Root']!.node.syntax)).toBe(docScope);
+    expect(scope).not.toBe(docScope);
+    expect(
+      binder.scopeAt(symbolTable.topLevel.namespaces['other']!.models['Hidden']!.node.syntax),
+    ).not.toBe(scope);
+    expect(binder.scopeAt(item.node.syntax)).toBe(scope);
+  });
+
+  it('finds scopes for recovered typeless fields and documents without symbols', () => {
+    const { binder, documents, symbolTable } = bind('model User {\n unfinished\n}', '');
+    const document = documents[0]!;
+    const model = symbolTable.topLevel.models['User']!.node;
+    const field = model.fields()[Symbol.iterator]().next().value;
+    if (field === undefined) throw new Error('missing recovered field');
+    expect(field.typeAnnotation()).toBeUndefined();
+    expect(binder.scopeAt(field.syntax)).toBe(binder.scopeAt(document.syntax));
+    expect(binder.scopeAt(documents[1]!.syntax)).toBe(binder.scopeAt(document.syntax));
+  });
+
+  it('retains distinct scopes for snapshots with identical filenames, text and ranges', () => {
+    const text = 'model User {\n id Int\n}';
+    const first = bind(text);
+    const foreign = bind(text);
+    const field = fieldOf(foreign.symbolTable, 'User', 'id');
+    expect(foreign.binder.scopeAt(field.node.syntax)).not.toBe(
+      first.binder.scopeAt(first.documents[0]!.syntax),
+    );
+  });
+});
 
 function bindWithUnsupportedDescriber(
   describeUnsupportedAttribute: DescribeUnsupportedAttribute,
@@ -159,10 +302,30 @@ function bindWithUnsupportedDescriber(
     ...createBinder({
       sources,
       symbolTable,
-      typeConstructors: TYPE_CONSTRUCTORS,
-      attributeSpecs: ATTRIBUTE_SPECS,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
-      describeUnsupportedAttribute,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+        describeUnsupportedAttribute,
+      }),
+    }),
+  };
+}
+
+function bindWithUnresolvedTypeDescriber(
+  describeUnresolvedType: DescribeUnresolvedType,
+  ...texts: string[]
+) {
+  const { sources, symbolTable } = build(...texts);
+  return {
+    symbolTable,
+    ...createBinder({
+      sources,
+      symbolTable,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+        describeUnresolvedType,
+      }),
     }),
   };
 }
@@ -220,6 +383,81 @@ describe('createBinder — declarations', () => {
 
     const typeNode = typeNodeOf(symbolTable, 'User', 'id');
     expect(binder.symbolForNode(typeNode)).toBe(binder.symbolForNode(typeNode));
+  });
+});
+
+describe('createBinder — declaration-name resolutions', () => {
+  it('resolves a model, composite type, field, named type, and block name to the declared symbol', () => {
+    const { symbolTable, binder } = bind(
+      [
+        'types { Email = String }',
+        'type Address {',
+        '  street String',
+        '}',
+        'enum Role {',
+        '  Admin',
+        '}',
+        'model User {',
+        '  id Int',
+        '  address Address',
+        '  email Email',
+        '  role Role',
+        '}',
+      ].join('\n'),
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const address = symbolTable.topLevel.compositeTypes['Address']!;
+    const email = symbolTable.topLevel.namedTypes['Email']!;
+    const role = symbolTable.topLevel.blocks['Role']!;
+
+    expect(binder.symbolForNode(user.node.name()!.syntax)).toEqual({
+      kind: 'model',
+      symbol: user,
+    });
+    expect(binder.symbolForNode(address.node.name()!.syntax)).toEqual({
+      kind: 'compositeType',
+      symbol: address,
+    });
+    expect(binder.symbolForNode(user.fields['id']!.node.name()!.syntax)).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+    expect(binder.symbolForNode(email.node.name()!.syntax)).toEqual({
+      kind: 'namedType',
+      symbol: email,
+    });
+    expect(binder.symbolForNode(role.node.name()!.syntax)).toEqual({
+      kind: 'block',
+      symbol: role,
+    });
+  });
+
+  it('resolves a namespaced model name with its namespace', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  model Item {\n    id Int\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const item = app.models['Item']!;
+    expect(binder.symbolForNode(item.node.name()!.syntax)).toEqual({
+      kind: 'model',
+      symbol: item,
+      namespace: app,
+    });
+  });
+
+  it('resolves a namespaced block name with its namespace', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  enum Role {\n    Admin\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const role = app.blocks['Role']!;
+    expect(binder.symbolForNode(role.node.name()!.syntax)).toEqual({
+      kind: 'block',
+      symbol: role,
+      namespace: app,
+    });
+  });
+
+  it('does not resolve a namespace declaration name', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  model Item {\n    id Int\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    expect(binder.symbolForNode(app.declarations[0].node.name()!.syntax)).toBeUndefined();
   });
 });
 
@@ -512,31 +750,6 @@ describe('createBinder — multiple documents', () => {
   });
 });
 
-describe('contributedTypes scope', () => {
-  it('returns the same scope object for the same registry', () => {
-    expect(contributedTypeScope(TYPE_CONSTRUCTORS)).toBe(contributedTypeScope(TYPE_CONSTRUCTORS));
-    expect(contributedTypeScope({ ...TYPE_CONSTRUCTORS })).not.toBe(
-      contributedTypeScope(TYPE_CONSTRUCTORS),
-    );
-  });
-
-  it('shares contributedTypes symbols across two binders built over different documents', () => {
-    const first = bind('model User {\n  name String\n}');
-    const second = bind('model Other {\n  title String\n}');
-
-    const firstSymbol = first.binder.symbolForNode(typeNodeOf(first.symbolTable, 'User', 'name'));
-    const secondSymbol = second.binder.symbolForNode(
-      typeNodeOf(second.symbolTable, 'Other', 'title'),
-    );
-
-    expect(firstSymbol?.kind).toBe('contributedType');
-    expect(firstSymbol).not.toBe(secondSymbol);
-    if (firstSymbol?.kind === 'contributedType' && secondSymbol?.kind === 'contributedType') {
-      expect(firstSymbol.symbol).toBe(secondSymbol.symbol);
-    }
-  });
-});
-
 const RELATION_SCHEMA = [
   'model User {',
   '  id Int @id',
@@ -686,6 +899,60 @@ describe('createBinder — describeUnsupportedAttribute', () => {
 
     expect(binder.symbolForNode(attributeNameNode(user.fields['id']!, 'bogus'))).toBeUndefined();
     expect(binder.symbolForNode(attributeNameNode(user, 'nope'))).toBeUndefined();
+  });
+});
+
+describe('createBinder — describeUnresolvedType', () => {
+  function record(): {
+    readonly seen: UnresolvedTypeReference[];
+    readonly describe: DescribeUnresolvedType;
+  } {
+    const seen: UnresolvedTypeReference[] = [];
+    return {
+      seen,
+      describe: (unresolved) => {
+        seen.push(unresolved);
+        return undefined;
+      },
+    };
+  }
+
+  it('calls back with the field, owner, and written name of an unresolved type reference', () => {
+    const { seen, describe } = record();
+    bindWithUnresolvedTypeDescriber(describe, 'model Cart {\n  pet Dog\n}');
+
+    expect(
+      seen.map(({ field, owner, written }) => ({ field: field.name, owner: owner.name, written })),
+    ).toEqual([{ field: 'pet', owner: 'Cart', written: 'Dog' }]);
+  });
+
+  it('uses the contributed message in place of the default', () => {
+    const { diagnostics } = bindWithUnresolvedTypeDescriber(
+      ({ written }) => `custom: cannot find "${written}"`,
+      'model Cart {\n  pet Dog\n}',
+    );
+
+    expect(diagnostics.map(({ message }) => message)).toEqual(['custom: cannot find "Dog"']);
+  });
+
+  it('falls back to the default message when the callback returns undefined', () => {
+    const { diagnostics } = bindWithUnresolvedTypeDescriber(
+      () => undefined,
+      'model Cart {\n  pet Dog\n}',
+    );
+
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find type "Dog"']);
+  });
+
+  it('keeps the default message when no callback is supplied', () => {
+    const { diagnostics } = bind('model Cart {\n  pet Dog\n}');
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find type "Dog"']);
+  });
+
+  it('does not call back for a resolved type reference', () => {
+    const { seen, describe } = record();
+    bindWithUnresolvedTypeDescriber(describe, 'model Cart {\n  id Int\n}');
+    expect(seen).toEqual([]);
   });
 });
 
@@ -1097,9 +1364,10 @@ describe('attribute-spec registry shape', () => {
     const { binder, diagnostics } = createBinder({
       sources,
       symbolTable,
-      typeConstructors: TYPE_CONSTRUCTORS,
-      attributeSpecs: registry,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: registry,
+      }),
     });
     const user = symbolTable.topLevel.models['User']!;
     const post = symbolTable.topLevel.models['Post']!;
@@ -1263,9 +1531,10 @@ describe('the binder calls the real spec factories', () => {
     const { binder, diagnostics } = createBinder({
       sources,
       symbolTable,
-      typeConstructors: TYPE_CONSTRUCTORS,
-      attributeSpecs: registry,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: registry,
+      }),
     });
     const user = symbolTable.topLevel.models['User']!;
 

@@ -72,14 +72,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bigSequence": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "createdAt": {
                 "type": {
@@ -89,7 +91,8 @@
                     "precision": 3
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "createdAtTz": {
                 "type": {
@@ -99,42 +102,48 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "generated": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/uuid@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "stringLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "intLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bigIntLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "floatLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "decimalLiteral": {
                 "type": {
@@ -145,14 +154,16 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "booleanLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "dateTimeLiteral": {
                 "type": {
@@ -162,21 +173,24 @@
                     "precision": 3
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "jsonLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bytesLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "stringList": {
                 "type": {
@@ -184,7 +198,9 @@
                   "codecId": "pg/text@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "intList": {
                 "type": {
@@ -192,7 +208,9 @@
                   "codecId": "pg/int4@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "enumMember": {
                 "type": {
@@ -202,7 +220,8 @@
                     "typeName": "user_role"
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "enumList": {
                 "type": {
@@ -213,7 +232,9 @@
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {}
@@ -233,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bf36708c84339e57f8a36b9cef40a9b10fe0f83299fa25016bc67330c5d72255",
+    "storageHash": "88b3b9f314b614fd9d12b7776b80db774f9b9778f13b5113623f4b586b888647",
     "namespaces": {
       "public": {
         "id": "public",
@@ -246,6 +267,7 @@
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "function",
                     "expression": "autoincrement()"
@@ -255,6 +277,7 @@
                   "nativeType": "int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "function",
                     "expression": "autoincrement()"
@@ -264,6 +287,7 @@
                   "nativeType": "timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 3
                   },
@@ -276,6 +300,7 @@
                   "nativeType": "timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   },
@@ -288,6 +313,7 @@
                   "nativeType": "uuid",
                   "codecId": "pg/uuid@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "function",
                     "expression": "gen_random_uuid()"
@@ -297,6 +323,7 @@
                   "nativeType": "text",
                   "codecId": "pg/text@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": "hello"
@@ -306,6 +333,7 @@
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": 42
@@ -315,6 +343,7 @@
                   "nativeType": "int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": "9007199254740993"
@@ -324,6 +353,7 @@
                   "nativeType": "float8",
                   "codecId": "pg/float8@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": 1.5
@@ -333,6 +363,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -346,6 +377,7 @@
                   "nativeType": "bool",
                   "codecId": "pg/bool@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": true
@@ -355,6 +387,7 @@
                   "nativeType": "timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 3
                   },
@@ -367,6 +400,7 @@
                   "nativeType": "jsonb",
                   "codecId": "pg/jsonb@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": {
@@ -378,6 +412,7 @@
                   "nativeType": "bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "function",
                     "expression": "'\\x68656c6c6f'"
@@ -387,7 +422,9 @@
                   "nativeType": "text",
                   "codecId": "pg/text@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "literal",
@@ -398,7 +435,9 @@
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "literal",
@@ -409,6 +448,7 @@
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "typeName": "user_role"
                   },
@@ -427,7 +467,9 @@
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "typeName": "user_role"

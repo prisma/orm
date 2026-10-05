@@ -41,14 +41,9 @@ import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
 import { fixtureTypeLookups } from './fixture-codec-descriptors';
-import {
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 const NATIVE_ENUM_DISCRIMINATOR = 'test-native-enum';
 const PLAIN_REF_DISCRIMINATOR = 'test-plain-ref';
@@ -221,13 +216,8 @@ const baseInput = {
 } as const;
 
 function interpretWith(schema: string) {
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
+  return interpretSqlContract(schema, {
     ...baseInput,
-    ...document,
     authoringContributions,
   });
 }
@@ -283,6 +273,31 @@ namespace docs {
         },
       },
     });
+  });
+
+  it('refuses a field typed by a non-enum block', () => {
+    const result = interpretWith(`
+namespace docs {
+  native_enum AalLevel {
+    aal1
+  }
+
+  model AuthSession {
+    id Int @id
+    aal AalLevel
+  }
+}
+`);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "AuthSession.aal" is typed by the native_enum "AalLevel", which is not a column type.',
+      },
+    ]);
   });
 
   it('does not set a typeRef on an entity-ref-resolved column', () => {
@@ -500,13 +515,21 @@ model AuthSession {
     const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
+      resolution: {
+        kind: 'contributedType',
+        symbol: {
+          kind: 'contributedType',
+          name: 'enum',
+          path: ['pg', 'enum'],
+          descriptor: {
+            kind: 'typeConstructor',
+            entityRefArg: { index: 0, entityKind: NATIVE_ENUM_DISCRIMINATOR },
+            output: { codecId: nativeEnumCodec.codecId },
+          },
+        },
+      },
       enumTypeDescriptors: new Map(),
       namedTypeDescriptors: new Map(),
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions,
-      composedExtensions: new Set(),
-      familyId: 'sql',
-      targetId: 'postgres',
       diagnostics,
       sources,
       entityLabel: 'Field "AuthSession.aal"',

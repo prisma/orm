@@ -18,14 +18,16 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "address": {
                 "type": {
                   "kind": "valueObject",
                   "name": "Address"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "history": {
                 "type": {
@@ -33,14 +35,17 @@
                   "name": "Address"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "backup": {
                 "type": {
                   "kind": "valueObject",
                   "name": "Address"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               }
             },
             "relations": {},
@@ -57,28 +62,32 @@
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "zip": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               },
               "ownerId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "geo": {
                 "type": {
                   "kind": "valueObject",
                   "name": "Geo"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             }
           },
@@ -89,14 +98,16 @@
                   "kind": "scalar",
                   "codecId": "mongo/double@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "lng": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/double@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             }
           }

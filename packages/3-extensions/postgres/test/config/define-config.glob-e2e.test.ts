@@ -51,6 +51,7 @@ describe('defineConfig with a glob contract path', () => {
       composedExtensions: [...stack.extensionIds],
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,
+      pslDiagnostics: stack.family.pslDiagnostics,
       codecLookup: stack.codecLookup,
       dataTypeLookup: stack.dataTypeLookup,
       controlMutationDefaults: stack.controlMutationDefaults,

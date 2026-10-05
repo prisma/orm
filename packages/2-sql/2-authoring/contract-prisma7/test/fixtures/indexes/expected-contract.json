@@ -36,42 +36,48 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "slug": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "code": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "category": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "hashed": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -103,32 +109,38 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "slug": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "code": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "title": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "category_name": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "hashed": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],

@@ -1,9 +1,15 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import paradedbPack from '@internal/extension-paradedb/pack';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 // postgresPack is used directly in interpretPslDocumentToSqlContract (not in defineContract).
@@ -16,26 +22,52 @@ const scalarColumnDescriptors = new Map<string, { codecId: string }>([
   ['String', { codecId: 'pg/text@1' }],
 ]);
 
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...scalarColumnDescriptors].map(([name, output]) => [
+      name,
+      { kind: 'typeConstructor' as const, output },
+    ]),
+  );
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+
 function interpret(schema: string) {
-  const { document, sources } = parse(schema, 'index-type-options.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(schema, {
+    sourceId: 'index-type-options.prisma',
+    context: {
+      composedExtensions: [paradedbPack.id],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        field: {},
+        type: scalarTypeConstructors,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: sqlAttributeSpecs,
+        dataTypes: {},
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: createPostgresBuiltinCodecLookup(),
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
+    },
   });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
-    codecLookup: createPostgresBuiltinCodecLookup(),
-    symbolTable,
-    sources,
-    target: postgresPack,
-    scalarColumnDescriptors,
-    composedExtensionContracts: new Map(),
-    composedExtensions: [paradedbPack.id],
-    composedExtensionPackRefs: [paradedbPack],
-    createNamespace: postgresCreateNamespace,
-    capabilities: { sql: { scalarList: true } },
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresPack,
+      composedExtensionPackRefs: [paradedbPack],
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 describe('PSL @@index type and options — integration with real paradedb pack', () => {

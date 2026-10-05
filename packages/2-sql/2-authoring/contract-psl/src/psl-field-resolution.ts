@@ -3,7 +3,6 @@ import type {
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
@@ -12,9 +11,11 @@ import type {
 } from '@internal/framework-components/control';
 import type {
   Binder,
+  BlockSymbol,
   DescribeUnsupportedAttribute,
   FieldSymbol,
   ModelSymbol,
+  NamedTypeSymbol,
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
@@ -23,7 +24,6 @@ import {
   type PslDiagnosticCollector,
   typeReferenceNode,
 } from '@internal/psl-parser';
-import { uncomposedNamespaceDiagnostic } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import {
   type AuthoredColumnDefault,
@@ -41,7 +41,11 @@ import {
   storageName,
 } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
-import { lowerDefaultForField, resolveFieldTypeDescriptor } from './psl-column-resolution';
+import {
+  lowerDefaultForField,
+  rejectStrictListNullDefault,
+  resolveFieldTypeDescriptor,
+} from './psl-column-resolution';
 import {
   fieldSpecContext,
   interpretFieldAttribute,
@@ -76,6 +80,7 @@ function lowerEnumDefaultForField(input: {
       symbols: input.symbolTable,
       model,
       field,
+      binder: input.binder,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
         dataTypeEntries: input.dataTypeSupport.entries,
@@ -94,6 +99,23 @@ function lowerEnumDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const member = interpreted.value;
+  if (Array.isArray(member)) {
+    if (member.includes(null) && rejectStrictListNullDefault({ ...input, node })) return {};
+    const values = member.map((entry) =>
+      entry === null
+        ? null
+        : enumHandle.enumMembers.find((candidate) => candidate.name === entry)?.value,
+    );
+    return {
+      defaultValue: {
+        kind: 'literal',
+        value: blindCast<
+          ColumnDefaultLiteralInputValue,
+          'enum member values are codec-validated JsonValue-compatible scalars'
+        >(values),
+      },
+    };
+  }
   invariant(
     typeof member === 'string',
     'the enum @default grammar admits only member identifiers, so the parsed value is a string',
@@ -128,7 +150,9 @@ export type ResolvedField = {
   // Spelled literally because this package does not depend on
   // @internal/sql-schema-ir; the canonical alias is `CheckKind` there.
   readonly noCheck?: readonly ('membership' | 'elementNotNull')[];
+  readonly elementNullable?: true;
   readonly valueObjectTypeName?: string;
+  readonly enumTypeHandle?: EnumTypeHandle;
 };
 
 /**
@@ -153,13 +177,11 @@ export interface CollectResolvedFieldsInput {
   readonly model: ModelSymbol;
   readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   readonly symbolTable: SymbolTable;
-  readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
-  readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
+  readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+  readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** The value objects the composite types declare, by name. */
   readonly valueObjectTypes: ValueObjectTypes;
-  readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
-  readonly familyId: string;
   readonly targetId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
@@ -168,7 +190,7 @@ export interface CollectResolvedFieldsInput {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly enumHandles?: ReadonlyMap<string, EnumTypeHandle>;
+  readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
   readonly capabilities: CapabilityMatrix;
   /** The model's resolved namespace id — forwarded to `resolveFieldTypeDescriptor` for entity-ref value-set scoping. */
   readonly namespaceId?: string;
@@ -216,36 +238,12 @@ const REMOVED_ATTRIBUTE_RULES: ReadonlyMap<string, RemovedAttributeRule> = new M
   }
 }
 
-export function describeUnsupportedSqlAttribute(input: {
-  readonly composedExtensions: ReadonlySet<string>;
-  readonly authoringContributions: AuthoringContributions | undefined;
-  readonly sources: PslSources;
-  readonly familyId: string | undefined;
-  readonly targetId: string | undefined;
-}): DescribeUnsupportedAttribute {
-  const namespaceContext = {
-    ...ifDefined('familyId', input.familyId),
-    ...ifDefined('targetId', input.targetId),
-    authoringContributions: input.authoringContributions,
-  };
+export function describeUnsupportedSqlAttribute(sources: PslSources): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
     if (owner.kind === 'compositeType') return undefined;
     if (level === 'model') {
-      const source = diagnosticSource(input.sources, owner.node.syntax);
-      const uncomposedNamespace = checkUncomposedNamespace(
-        attribute.name,
-        input.composedExtensions,
-        namespaceContext,
-      );
-      if (uncomposedNamespace) {
-        return uncomposedNamespaceDiagnostic({
-          subjectLabel: `Attribute "@@${attribute.name}"`,
-          namespace: uncomposedNamespace,
-          source,
-          span: attribute.span,
-        });
-      }
+      const source = diagnosticSource(sources, owner.node.syntax);
       return {
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
         message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
@@ -254,7 +252,7 @@ export function describeUnsupportedSqlAttribute(input: {
     }
 
     if (field === undefined) return undefined;
-    const source = diagnosticSource(input.sources, field.node.syntax);
+    const source = diagnosticSource(sources, field.node.syntax);
 
     if (attribute.name.startsWith('db.')) {
       return {
@@ -262,20 +260,6 @@ export function describeUnsupportedSqlAttribute(input: {
         message: formatDbAttributeMigrationMessage(attribute),
         ...source.at(attribute.span),
       };
-    }
-
-    const uncomposedNamespace = checkUncomposedNamespace(
-      attribute.name,
-      input.composedExtensions,
-      namespaceContext,
-    );
-    if (uncomposedNamespace) {
-      return uncomposedNamespaceDiagnostic({
-        subjectLabel: `Attribute "@${attribute.name}"`,
-        namespace: uncomposedNamespace,
-        source,
-        span: attribute.span,
-      });
     }
 
     const baseMessage = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
@@ -357,6 +341,7 @@ function lowerNoCheckForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly isListColumn: boolean;
+  readonly elementNullable: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
 }): readonly NoCheckKind[] | undefined {
@@ -377,7 +362,7 @@ function lowerNoCheckForField(input: {
   const span = getAttribute(input.field.attributes, 'noCheck')?.span ?? input.field.span;
   const subject = `Field "${input.model.name}.${input.field.name}"`;
   const derivable: NoCheckKind[] = [];
-  if (input.isListColumn) derivable.push('elementNotNull');
+  if (input.isListColumn && !input.elementNullable) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
 
   const authored = [interpreted.first, interpreted.second].filter(
@@ -399,7 +384,7 @@ function lowerNoCheckForField(input: {
       const explanation =
         kind === 'membership'
           ? 'membership checks are derived only from enum value sets'
-          : 'element-non-null checks are derived only for list columns';
+          : 'element-non-null checks are derived only for lists whose elements are semantically non-null';
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${subject} @noCheck(${kind}) does not apply — ${explanation}`,
@@ -418,10 +403,8 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     enumTypeDescriptors,
     namedTypeDescriptors,
     valueObjectTypes,
-    composedExtensions,
     authoringContributions,
     binder,
-    familyId,
     targetId,
     defaultFunctionRegistry,
     dataTypeSupport,
@@ -496,14 +479,9 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     let presetContributions: FieldPresetContributions | undefined;
     const resolveInput = {
       field,
-      binder,
+      resolution: fieldTypeResolution,
       enumTypeDescriptors,
       namedTypeDescriptors,
-      scalarColumnDescriptors,
-      authoringContributions,
-      composedExtensions,
-      familyId,
-      targetId,
       diagnostics,
       sources,
       entityLabel: `Field "${model.name}.${field.name}"`,
@@ -538,13 +516,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       }
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
-        if (!resolved.alreadyReported && fieldTypeResolution?.kind !== 'unresolved') {
-          diagnostics.push({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: `Field "${model.name}.${field.name}" type "${field.typeName}" is not supported in SQL PSL provider v1`,
-            ...source.at(field.span),
-          });
-        }
         continue;
       }
       // Field presets are complete declarations — they carry their own codec
@@ -561,13 +532,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     } else {
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
-        if (!resolved.alreadyReported && fieldTypeResolution?.kind !== 'unresolved') {
-          diagnostics.push({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: `Field "${model.name}.${field.name}" type "${field.typeName}" is not supported in SQL PSL provider v1`,
-            ...source.at(field.span),
-          });
-        }
         continue;
       }
       descriptor = resolved.descriptor;
@@ -600,7 +564,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       });
       continue;
     }
-    const enumHandle = enumHandles?.get(field.typeName);
+    const enumHandle =
+      fieldTypeResolution?.kind === 'block'
+        ? enumHandles.get(fieldTypeResolution.symbol)
+        : undefined;
     const loweredDefault: LoweredFieldDefault = defaultAttribute
       ? enumHandle
         ? lowerEnumDefaultForField({
@@ -726,6 +693,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           sources: input.sources,
           binder: input.binder,
           isListColumn,
+          elementNullable: field.elementOptional,
           isDomainEnum: enumHandle !== undefined,
           diagnostics,
         })
@@ -743,7 +711,9 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       ...ifDefined('uniqueName', uniqueName),
       ...ifDefined('many', isListField ? (true as const) : undefined),
       ...ifDefined('noCheck', noCheckKinds),
+      ...ifDefined('elementNullable', field.elementOptional ? (true as const) : undefined),
       ...ifDefined('valueObjectTypeName', valueObjectName),
+      ...ifDefined('enumTypeHandle', enumHandle),
     });
   }
 

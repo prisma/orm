@@ -24,11 +24,11 @@ const types: SqlTypeLookups = {
 };
 
 function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
-  return { codecId: 'pg/text@1', nullable: true, ...overrides };
+  return { many: false, codecId: 'pg/text@1', nullable: true, ...overrides };
 }
 
 function listColumn(nativeType: string): DefaultColumn {
-  return { nativeType, dataTypeId: 'pg/text', many: true };
+  return { nativeType, dataTypeId: 'pg/text', many: { elementNullable: false } };
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ describe('buildColumnTypeSql', () => {
       nativeType: 'order_status',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'order_status' },
-      many: true,
+      many: { elementNullable: false },
     });
     expect(buildColumnTypeSql(column, types)).toBe('"order_status"[]');
   });
@@ -212,7 +212,7 @@ describe('renderDefaultLiteral', () => {
   it('renders JSON object for jsonb column', () => {
     const result = renderDefaultLiteral(
       { key: 'val' },
-      { nativeType: 'jsonb', dataTypeId: 'pg/jsonb' },
+      { nativeType: 'jsonb', dataTypeId: 'pg/jsonb', many: false },
     );
     expect(result).toBe(`'{"key":"val"}'::jsonb`);
   });

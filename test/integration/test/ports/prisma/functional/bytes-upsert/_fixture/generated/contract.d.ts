@@ -303,11 +303,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

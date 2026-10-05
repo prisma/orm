@@ -119,6 +119,7 @@ function buildAppContractPojo(opts: { readonly withEmbedding: boolean }): Contra
     codecId: VECTOR_CODEC_ID,
     nativeType: PGVECTOR_NATIVE_TYPE,
     nullable: false,
+    many: false as const,
     typeParams: { length: VECTOR_LENGTH },
   };
 
@@ -136,7 +137,7 @@ function buildAppContractPojo(opts: { readonly withEmbedding: boolean }): Contra
             table: {
               [APP_TABLE]: {
                 columns: {
-                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
                   ...(opts.withEmbedding ? { [APP_FIELD]: embeddingColumn } : {}),
                 },
                 primaryKey: { columns: ['id'] },

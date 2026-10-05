@@ -53,7 +53,7 @@ export function derivedChecks(input: {
     for (const candidate of postgresRenderCheckExpressions({
       tableName: input.tableName,
       columnName,
-      many: column.many === true,
+      many: column.many,
       memberValues: memberValues?.length === enumValues?.length ? memberValues : undefined,
     })) {
       if (waived.has(candidate.kind)) continue;

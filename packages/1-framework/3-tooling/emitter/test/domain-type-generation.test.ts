@@ -154,9 +154,9 @@ describe('generateModelFieldsType', () => {
     expect(generateModelFieldsType({})).toBe('Record<string, never>');
   });
 
-  it('generates field with type descriptor and nullable', () => {
+  it.each([{}, { many: false as const }])('omits scalar cardinality for %j', (cardinality) => {
     const result = generateModelFieldsType({
-      name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false },
+      name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false, ...cardinality },
     });
     expect(result).toBe(
       '{ readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/text@1" } } }',
@@ -165,8 +165,8 @@ describe('generateModelFieldsType', () => {
 
   it('generates multiple fields', () => {
     const result = generateModelFieldsType({
-      id: { type: { kind: 'scalar', codecId: 'sql/int4@1' }, nullable: false },
-      email: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: true },
+      id: { type: { kind: 'scalar', codecId: 'sql/int4@1' }, nullable: false, many: false },
+      email: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: true, many: false },
     });
     expect(result).toContain(
       'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/int4@1" } }',
@@ -178,7 +178,11 @@ describe('generateModelFieldsType', () => {
 
   it('quotes keys with special characters', () => {
     const result = generateModelFieldsType({
-      'field-name': { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false },
+      'field-name': {
+        type: { kind: 'scalar', codecId: 'sql/text@1' },
+        nullable: false,
+        many: false,
+      },
     });
     expect(result).toContain('readonly "field-name":');
   });
@@ -203,7 +207,9 @@ describe('generateModelsType', () => {
   it('generates model with fields, relations, and storage', () => {
     const models: Record<string, ContractModel> = {
       User: makeModel({
-        fields: { name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false } },
+        fields: {
+          name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false, many: false },
+        },
         relations: { posts: { to: crossRef('Post'), cardinality: '1:N' } },
       }),
     };
@@ -645,6 +651,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe('CodecTypes["mongo/string@1"]["output"]');
   });
@@ -653,17 +660,27 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Address' },
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe('AddressOutput');
   });
 
-  it('wraps in ReadonlyArray for many: true', () => {
+  it('wraps in ReadonlyArray for a list descriptor', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Address' },
-      many: true,
+      many: { elementNullable: false },
     };
     expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput>');
+  });
+
+  it('adds null to nullable list elements on output', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: { elementNullable: true },
+    };
+    expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput | null>');
   });
 
   it('wraps in Readonly<Record> for dict: true', () => {
@@ -671,6 +688,7 @@ describe('generateFieldResolvedType', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
       dict: true,
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe(
       'Readonly<Record<string, CodecTypes["mongo/string@1"]["output"]>>',
@@ -681,6 +699,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: true,
       type: { kind: 'valueObject', name: 'Address' },
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe('AddressOutput | null');
   });
@@ -689,9 +708,18 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: true,
       type: { kind: 'valueObject', name: 'Address' },
-      many: true,
+      many: { elementNullable: false },
     };
     expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput> | null');
+  });
+
+  it('combines nullable elements and a nullable list on output', () => {
+    const field: ContractField = {
+      nullable: true,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: { elementNullable: true },
+    };
+    expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput | null> | null');
   });
 
   it('handles union types with output side', () => {
@@ -704,9 +732,21 @@ describe('generateFieldResolvedType', () => {
           { kind: 'valueObject', name: 'Address' },
         ],
       },
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe(
       'CodecTypes["mongo/string@1"]["output"] | AddressOutput',
+    );
+  });
+
+  it('generates nullable list elements on input', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      many: { elementNullable: true },
+    };
+    expect(generateFieldResolvedType(field, undefined, 'input')).toBe(
+      'ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null>',
     );
   });
 
@@ -714,6 +754,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      many: false,
     };
     expect(generateFieldResolvedType(field, undefined, 'input')).toBe(
       'CodecTypes["mongo/string@1"]["input"]',
@@ -724,6 +765,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Price' },
+      many: false,
     };
     expect(generateFieldResolvedType(field, undefined, 'input')).toBe('PriceInput');
   });
@@ -738,6 +780,7 @@ describe('generateFieldResolvedType', () => {
           { kind: 'valueObject', name: 'Address' },
         ],
       },
+      many: false,
     };
     expect(generateFieldResolvedType(field, undefined, 'input')).toBe(
       'CodecTypes["mongo/string@1"]["input"] | AddressInput',
@@ -748,9 +791,9 @@ describe('generateFieldResolvedType', () => {
 describe('generateValueObjectType', () => {
   const addressVo: ContractValueObject = {
     fields: {
-      street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-      city: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-      zip: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+      street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' }, many: false },
+      city: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' }, many: false },
+      zip: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' }, many: false },
     },
   };
   const valueObjects: Record<string, ContractValueObject> = { Address: addressVo };
@@ -765,8 +808,8 @@ describe('generateValueObjectType', () => {
   it('handles value object field referencing another value object (output)', () => {
     const companyVo: ContractValueObject = {
       fields: {
-        name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+        name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' }, many: false },
+        address: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
       },
     };
     const vos = { ...valueObjects, Company: companyVo };
@@ -777,8 +820,8 @@ describe('generateValueObjectType', () => {
   it('handles value object field referencing another value object (input)', () => {
     const companyVo: ContractValueObject = {
       fields: {
-        name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-        address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+        name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' }, many: false },
+        address: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
       },
     };
     const vos = { ...valueObjects, Company: companyVo };
@@ -789,11 +832,15 @@ describe('generateValueObjectType', () => {
   it('handles self-referencing value object (no infinite recursion)', () => {
     const navItemVo: ContractValueObject = {
       fields: {
-        label: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        label: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          many: false,
+        },
         children: {
           nullable: false,
           type: { kind: 'valueObject', name: 'NavItem' },
-          many: true,
+          many: { elementNullable: false },
         },
       },
     };
@@ -817,7 +864,7 @@ describe('generateValueObjectType', () => {
         },
         codes: {
           nullable: false,
-          many: true,
+          many: { elementNullable: false },
           type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
         },
       },
@@ -839,10 +886,11 @@ describe('generateValueObjectType', () => {
 });
 
 describe('generateContractFieldDescriptor', () => {
-  it('generates scalar field descriptor', () => {
+  it('omits explicit scalar cardinality from field descriptors', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
+      many: false,
     };
     const result = generateContractFieldDescriptor('name', field);
     expect(result).toBe(
@@ -854,6 +902,7 @@ describe('generateContractFieldDescriptor', () => {
     const field: ContractField = {
       nullable: true,
       type: { kind: 'valueObject', name: 'Address' },
+      many: false,
     };
     const result = generateContractFieldDescriptor('homeAddress', field);
     expect(result).toBe(
@@ -861,14 +910,25 @@ describe('generateContractFieldDescriptor', () => {
     );
   });
 
-  it('includes many modifier', () => {
+  it('includes the non-nullable list descriptor', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Address' },
-      many: true,
+      many: { elementNullable: false },
     };
     const result = generateContractFieldDescriptor('addresses', field);
-    expect(result).toContain('; readonly many: true');
+    expect(result).toContain('; readonly many: { readonly elementNullable: false }');
+  });
+
+  it('includes element nullability inside the list descriptor', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: { elementNullable: true },
+    };
+    expect(generateContractFieldDescriptor('addresses', field)).toBe(
+      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: true } }',
+    );
   });
 
   it('includes dict modifier', () => {
@@ -876,6 +936,7 @@ describe('generateContractFieldDescriptor', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
       dict: true,
+      many: false,
     };
     const result = generateContractFieldDescriptor('labels', field);
     expect(result).toContain('; readonly dict: true');
@@ -885,6 +946,7 @@ describe('generateContractFieldDescriptor', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 1536 } },
+      many: false,
     };
     const result = generateContractFieldDescriptor('embedding', field);
     expect(result).toContain('readonly typeParams: { readonly length: 1536 }');
@@ -904,7 +966,11 @@ describe('generateValueObjectsDescriptorType', () => {
     const valueObjects: Record<string, ContractValueObject> = {
       Address: {
         fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+          street: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            many: false,
+          },
         },
       },
     };
@@ -928,7 +994,11 @@ describe('generateValueObjectTypeAliases', () => {
     const valueObjects: Record<string, ContractValueObject> = {
       Address: {
         fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+          street: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            many: false,
+          },
         },
       },
     };
@@ -944,13 +1014,25 @@ describe('generateValueObjectTypeAliases', () => {
     const valueObjects: Record<string, ContractValueObject> = {
       Address: {
         fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+          street: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            many: false,
+          },
         },
       },
       GeoPoint: {
         fields: {
-          lat: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/double@1' } },
-          lng: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/double@1' } },
+          lat: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/double@1' },
+            many: false,
+          },
+          lng: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/double@1' },
+            many: false,
+          },
         },
       },
     };
@@ -993,6 +1075,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/char@1', typeParams: { length: 36 } },
+      many: false,
     };
     expect(generateFieldResolvedType(field, lookup)).toBe('Char<36>');
   });
@@ -1001,6 +1084,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/int4@1' },
+      many: false,
     };
     expect(generateFieldResolvedType(field)).toBe('CodecTypes["pg/int4@1"]["output"]');
   });
@@ -1015,6 +1099,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'test@1', typeParams: { x: 1 } },
+      many: false,
     };
     expect(generateFieldResolvedType(field, lookup)).toBe('CodecTypes["test@1"]["output"]');
   });
@@ -1026,6 +1111,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/int4@1', typeParams: { x: 1 } },
+      many: false,
     };
     expect(generateFieldResolvedType(field, lookup)).toBe('CodecTypes["pg/int4@1"]["output"]');
   });
@@ -1040,6 +1126,7 @@ describe('generateFieldResolvedType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/char@1', typeParams: {} },
+      many: false,
     };
     expect(generateFieldResolvedType(field, lookup)).toBe('CodecTypes["pg/char@1"]["output"]');
   });
@@ -1059,10 +1146,12 @@ describe('generateFieldOutputTypesMap', () => {
           id: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/char@1', typeParams: { length: 36 } },
+            many: false,
           },
           name: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
+            many: false,
           },
         },
         relations: {},
@@ -1086,6 +1175,7 @@ describe('generateFieldOutputTypesMap', () => {
           price: {
             nullable: false,
             type: { kind: 'valueObject', name: 'Price' },
+            many: false,
           },
         },
         relations: {},
@@ -1105,6 +1195,7 @@ describe('generateFieldInputTypesMap', () => {
           name: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            many: false,
           },
         },
         relations: {},
@@ -1122,6 +1213,7 @@ describe('generateFieldInputTypesMap', () => {
           price: {
             nullable: false,
             type: { kind: 'valueObject', name: 'Price' },
+            many: false,
           },
         },
         relations: {},
@@ -1143,7 +1235,11 @@ describe('generateBothFieldTypesMaps', () => {
     const models: Record<string, ContractModel> = {
       User: {
         fields: {
-          _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+          _id: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            many: false,
+          },
         },
         relations: {},
         storage: {},
@@ -1166,6 +1262,7 @@ describe('resolveFieldType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      many: false,
     };
     const result = resolveFieldType(field);
     expect(result.output).toBe('CodecTypes["mongo/string@1"]["output"]');
@@ -1176,6 +1273,7 @@ describe('resolveFieldType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Price' },
+      many: false,
     };
     const result = resolveFieldType(field);
     expect(result.output).toBe('PriceOutput');
@@ -1192,6 +1290,7 @@ describe('resolveFieldType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/char@1', typeParams: { length: 36 } },
+      many: false,
     };
     const result = resolveFieldType(field, lookup);
     expect(result.output).toBe('Char<36>');
@@ -1208,6 +1307,7 @@ describe('resolveFieldType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/enum@1', typeParams: { values: ['a', 'b'] } },
+      many: false,
     };
     const result = resolveFieldType(field, lookup);
     expect(result.output).toBe(union);
@@ -1222,6 +1322,7 @@ describe('resolveFieldType', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/enum@1', typeParams: { values: ['a', 'b'] } },
+      many: false,
     };
     const result = resolveFieldType(field, lookup);
     expect(result.output).toBe('"a" | "b"');
@@ -1243,10 +1344,12 @@ describe('generateBothFieldTypesMaps with resolveFieldValueSet', () => {
               namespaceId: 'public',
               entityName: 'Priority',
             },
+            many: false,
           },
           title: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
+            many: false,
           },
         },
         relations: {},
@@ -1270,6 +1373,7 @@ describe('generateBothFieldTypesMaps with resolveFieldValueSet', () => {
           title: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
+            many: false,
           },
         },
         relations: {},
@@ -1294,6 +1398,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/int4@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [1, 10],
@@ -1308,6 +1413,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/bool@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [true, false],
@@ -1321,6 +1427,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: true,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: ['low'],
@@ -1335,6 +1442,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), undefined);
     expect(result.output).toBe('CodecTypes["pg/text@1"]["output"]');
@@ -1345,6 +1453,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [],
@@ -1358,6 +1467,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/jsonb@1' },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [{ nested: 1 }],
@@ -1377,6 +1487,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
         ],
       },
       valueSet: priorityRef,
+      many: false,
     };
     const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: ['low', 'high'],
@@ -1440,7 +1551,9 @@ describe('generateFieldTypesMapsByNamespace edge cases', () => {
     >({
       Skipped: undefined,
       Real: {
-        fields: { name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+        fields: {
+          name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: false },
+        },
         relations: {},
         storage: {},
       },

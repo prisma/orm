@@ -16,12 +16,25 @@ import type { EmitOptions, EmitResult, EmitStackInput } from '../src/exports';
 import { emit as emitImpl } from '../src/exports';
 
 const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObject;
-const identityDeserialize = (json: Record<string, unknown>): Contract =>
-  json as unknown as Contract;
+const identityDeserialize = (json: Record<string, unknown>): Contract => {
+  const contract = structuredClone(json) as unknown as Contract;
+  for (const namespace of Object.values(contract.domain.namespaces)) {
+    for (const entity of [
+      ...Object.values(namespace.models),
+      ...Object.values(namespace.valueObjects ?? {}),
+    ]) {
+      for (const [name, field] of Object.entries(entity.fields)) {
+        entity.fields[name] = { ...field, many: field.many ?? false };
+      }
+    }
+  }
+  return contract;
+};
 
 const sqlPreserveEmptyPatterns = [
   ['storage', 'namespaces', '*', 'entries', 'table'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*'],
+  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'many'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', 'foreignKeys', ['constraint', 'index']],
 ] as const satisfies readonly PathPattern[];

@@ -333,11 +333,11 @@ model Post {
       await writeFile(
         schemaPath,
         `// use prisma-8
-model User {
-  id Int @id
-  things Unknown[]
-}
-`,
+    model User {
+      id Int @id
+      things Unknown[]
+    }
+    `,
         'utf-8',
       );
 
@@ -350,22 +350,20 @@ model User {
       expect(result.ok).toBe(false);
       if (result.ok) return;
 
-      expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(
-        result.failure.diagnostics.map(({ code, message, sourceId, span }) => ({
-          code,
-          message,
-          sourceId,
-          line: span?.start.line,
-        })),
-      ).toEqual([
-        {
-          code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "Unknown"',
-          sourceId: schemaPath,
-          line: 4,
-        },
-      ]);
+      expect(result.failure.summary).toBe('Schema has 1 error');
+      expect(result.failure.diagnostics).toHaveLength(1);
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            sourceId: schemaPath,
+            message: expect.stringContaining('Unknown'),
+            span: expect.objectContaining({
+              start: expect.objectContaining({ line: 4 }),
+            }),
+          }),
+        ]),
+      );
     });
 
     it('returns diagnostics when navigation list fields declare unsupported attributes', async () => {
@@ -521,7 +519,7 @@ model Other {
   });
 
   describe('given namespaced extension constructors in schema', () => {
-    it('returns diagnostics when extension namespace is unrecognized', async () => {
+    it('reports an unresolved namespace-qualified type constructor', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
       const schemaPath = join(tempDir, 'schema.prisma');
@@ -545,12 +543,14 @@ model Document {
       expect(result.ok).toBe(false);
       if (result.ok) return;
 
-      expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+      expect(result.failure.summary).toBe('Schema has 1 error');
+      expect(result.failure.diagnostics).toHaveLength(1);
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+            code: 'PSL_UNRESOLVED_REFERENCE',
             sourceId: schemaPath,
+            message: 'Cannot find type "pgvector.Vector"',
             span: expect.objectContaining({
               start: expect.objectContaining({ line: 4 }),
             }),
@@ -838,11 +838,13 @@ model User {
             modelAttributes: {},
             attributeSpecs: { model: {}, field: {} },
           },
+          pslDiagnostics: undefined,
           resolvedInputs: [schemaPath],
         }),
       );
       expect(result.ok).toBe(false);
       if (result.ok) return;
+      expect(result.failure.diagnostics).toHaveLength(1);
       expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
         { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Bytes"' },
       ]);

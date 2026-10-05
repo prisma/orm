@@ -68,8 +68,12 @@ describe('value-object members and value-object fields in the domain', () => {
     const { id: _id, ...fields } =
       contract.domain.namespaces['public']?.models['User']?.fields ?? {};
     expect(fields).toEqual({
-      home: { type: { kind: 'valueObject', name: 'Address' }, nullable: true },
-      addresses: { type: { kind: 'valueObject', name: 'Address' }, nullable: false, many: true },
+      home: { type: { kind: 'valueObject', name: 'Address' }, nullable: true, many: false },
+      addresses: {
+        type: { kind: 'valueObject', name: 'Address' },
+        nullable: false,
+        many: { elementNullable: false },
+      },
     });
   });
 
@@ -82,6 +86,7 @@ describe('value-object members and value-object fields in the domain', () => {
         descriptor: numeric,
         nullable: false,
         many: true,
+        elementNullable: true,
       },
       {
         fieldName: 'country',
@@ -126,7 +131,13 @@ describe('value-object members and value-object fields in the domain', () => {
             name: 'Shipping',
             fields: [
               ...scalarFields,
-              { fieldName: 'stops', valueObjectName: 'Stop', nullable: false, many: true },
+              {
+                fieldName: 'stops',
+                valueObjectName: 'Stop',
+                nullable: false,
+                many: true,
+                elementNullable: true,
+              },
             ],
           },
           {
@@ -148,21 +159,27 @@ describe('value-object members and value-object fields in the domain', () => {
     const { stops, ...memberFields } = namespace?.valueObjects?.['Shipping']?.fields ?? {};
     expect({ memberFields, stops }).toEqual({
       memberFields: modelFields,
-      stops: { type: { kind: 'valueObject', name: 'Stop' }, nullable: false, many: true },
+      stops: {
+        type: { kind: 'valueObject', name: 'Stop' },
+        nullable: false,
+        many: { elementNullable: true },
+      },
     });
     expect(memberFields).toEqual({
       amount: {
         type: { kind: 'scalar', codecId: 'pg/numeric@1', typeParams: { precision: 65, scale: 30 } },
         nullable: false,
+        many: false,
       },
       history: {
         type: { kind: 'scalar', codecId: 'pg/numeric@1', typeParams: { precision: 65, scale: 30 } },
         nullable: false,
-        many: true,
+        many: { elementNullable: true },
       },
       country: {
         type: { kind: 'scalar', codecId: 'pg/text@1' },
         nullable: false,
+        many: false,
         valueSet: {
           plane: 'domain',
           entityKind: 'enum',
@@ -173,7 +190,7 @@ describe('value-object members and value-object fields in the domain', () => {
       countries: {
         type: { kind: 'scalar', codecId: 'pg/text@1' },
         nullable: true,
-        many: true,
+        many: { elementNullable: false },
         valueSet: {
           plane: 'domain',
           entityKind: 'enum',
@@ -218,12 +235,18 @@ describe('value-object members and value-object fields in the domain', () => {
 
     expect(valueObjectsOf(contract)).toEqual({
       GeoLocation: {
-        fields: { lat: { type: { kind: 'scalar', codecId: 'pg/float8@1' }, nullable: false } },
+        fields: {
+          lat: { type: { kind: 'scalar', codecId: 'pg/float8@1' }, nullable: false, many: false },
+        },
       },
       CompanyAddress: {
         fields: {
-          street: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-          location: { type: { kind: 'valueObject', name: 'GeoLocation' }, nullable: true },
+          street: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many: false },
+          location: {
+            type: { kind: 'valueObject', name: 'GeoLocation' },
+            nullable: true,
+            many: false,
+          },
         },
       },
     });

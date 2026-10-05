@@ -21,7 +21,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int2 to smallint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
+          { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
           types,
         ),
       ).toBe('smallint');
@@ -30,7 +30,12 @@ describe('buildExpectedFormatType', () => {
     it('maps timestamptz to timestamp with time zone', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'timestamptz', codecId: 'pg/timestamptz-temporal@1', nullable: false },
+          {
+            many: false,
+            nativeType: 'timestamptz',
+            codecId: 'pg/timestamptz-temporal@1',
+            nullable: false,
+          },
           types,
         ),
       ).toBe('timestamp with time zone');
@@ -40,10 +45,13 @@ describe('buildExpectedFormatType', () => {
   it('names a fixed-length type without a length as format_type does, with a length of 1', () => {
     expect([
       buildExpectedFormatType(
-        { nativeType: 'character', codecId: 'sql/char@1', nullable: false },
+        { many: false, nativeType: 'character', codecId: 'sql/char@1', nullable: false },
         types,
       ),
-      buildExpectedFormatType({ nativeType: 'bit', codecId: 'pg/bit@1', nullable: false }, types),
+      buildExpectedFormatType(
+        { many: false, nativeType: 'bit', codecId: 'pg/bit@1', nullable: false },
+        types,
+      ),
     ]).toEqual(['character(1)', 'bit(1)']);
   });
 
@@ -54,7 +62,9 @@ describe('buildExpectedFormatType', () => {
         { nativeType: 'varchar', codecId: 'sql/varchar@1' },
         { nativeType: 'int', codecId: 'sql/int@1' },
         { nativeType: 'float', codecId: 'sql/float@1' },
-      ].map((column) => buildExpectedFormatType({ ...column, nullable: false }, types)),
+      ].map((column) =>
+        buildExpectedFormatType({ ...column, many: false, nullable: false }, types),
+      ),
     ).toEqual(['character(1)', 'character varying', 'integer', 'double precision']);
   });
 
@@ -67,7 +77,10 @@ describe('buildExpectedFormatType', () => {
         { codecId: 'pg/timetz@1', typeParams: { precision: 2 } },
         { codecId: 'pg/numeric@1', typeParams: { precision: 10 } },
       ].map((column) =>
-        buildExpectedFormatType({ ...column, nativeType: 'unused', nullable: false }, types),
+        buildExpectedFormatType(
+          { ...column, many: false, nativeType: 'unused', nullable: false },
+          types,
+        ),
       ),
     ).toEqual([
       'timestamp(3) with time zone',
@@ -82,7 +95,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for text', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           types,
         ),
       ).toBe('text');
@@ -94,6 +107,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'numeric',
             codecId: 'pg/numeric@1',
             nullable: false,
@@ -108,6 +122,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: 'pg/int4@1',
             nullable: false,
@@ -122,6 +137,7 @@ describe('buildExpectedFormatType', () => {
       expect(() =>
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: '',
             nullable: false,
@@ -137,7 +153,13 @@ describe('buildExpectedFormatType', () => {
     it('resolves nativeType/codecId from the referenced storage type, then applies the display map', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'unused', codecId: 'unused', nullable: false, typeRef: 'MyStatus' },
+          {
+            many: false,
+            nativeType: 'unused',
+            codecId: 'unused',
+            nullable: false,
+            typeRef: 'MyStatus',
+          },
           types,
           { MyStatus: toStorageTypeInstance({ codecId: 'pg/int4@1', nativeType: 'int4' }) },
         ),

@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,7 @@ import {
 } from 'vscode-languageserver/node';
 import { resolveSchemaInputs } from '../src/schema-inputs';
 import { createServer } from '../src/server';
+import { testTypeConstructors } from './helpers/binder';
 
 vi.mock('@internal/config-loader', async (original) => ({
   ...(await original<typeof import('@internal/config-loader')>()),
@@ -37,7 +39,13 @@ vi.mock('../src/config-resolution', async (original) => ({
     return {
       schemaInputConfig,
       inputs: await resolveSchemaInputs(schemaInputConfig, readText),
-      controlStack: { scalarTypes: ['Int'], pslBlockDescriptors: {} },
+      controlStack: {
+        scalarTypes: ['Int'],
+        pslBlockDescriptors: {},
+        authoringContributions: assembleAuthoringContributions([
+          { id: 'scalars', authoring: { type: testTypeConstructors(['Int']) } },
+        ]),
+      },
     };
   },
 }));

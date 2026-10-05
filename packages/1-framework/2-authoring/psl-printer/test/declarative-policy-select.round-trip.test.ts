@@ -59,13 +59,17 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        type: {
+          Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+          String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+        },
+        pslBlockDescriptors: assembled.pslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
     },
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,

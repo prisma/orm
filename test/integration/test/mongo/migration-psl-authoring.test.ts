@@ -2,16 +2,22 @@ import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import type { JsonValue } from '@internal/contract/types';
 import mongoControlDriver from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import {
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
-import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
+import {
+  describeUnsupportedMongoAttribute,
+  interpretPslDocumentToMongoContract,
+  mongoAttributeSpecs,
+} from '@internal/mongo-contract-psl';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
@@ -65,23 +71,45 @@ function pslToContract(schema: string): MongoContract {
     ['ObjectId', 'mongo/objectId@1'],
     ['Double', 'mongo/double@1'],
   ]);
-  const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const result = interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...scalarTypeCodecIds].map(([name, codecId]) => [
+        name,
+        { kind: 'typeConstructor' as const, output: { codecId } },
+      ]),
+    );
+  const bound = bindPslSchema(schema, {
+    sourceId: 'mongo-migration-schema.prisma',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        field: {},
+        type: scalarTypeConstructors,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: {},
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: mongoCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: mongoDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: {},
     },
-    codecLookup: mongoCodecLookup,
-    dataTypeLookup: mongoDataTypeLookup,
   });
+  const result = withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+    }),
+    bound.seedDiagnostics,
+  );
   if (!result.ok) {
     throw new Error(`PSL interpretation failed: ${JSON.stringify(result)}`);
   }

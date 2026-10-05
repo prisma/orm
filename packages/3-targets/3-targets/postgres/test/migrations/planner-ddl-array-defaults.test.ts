@@ -8,7 +8,7 @@ import {
 import { postgresTypeLookups } from '../postgres-type-lookups';
 
 function arrayColumn(nativeType: string): DefaultColumn {
-  return { nativeType, dataTypeId: 'pg/text', many: true };
+  return { nativeType, dataTypeId: 'pg/text', many: { elementNullable: false } };
 }
 
 describe('renderDefaultLiteral array columns', () => {
@@ -65,14 +65,14 @@ describe('renderDefaultLiteral array columns', () => {
         nativeType: typeName,
         codecId: 'pg/enum@1',
         nullable: true,
-        many: true,
+        many: { elementNullable: false },
         typeParams: { typeName },
       } as StorageColumn;
       const columnTypeSql = buildColumnTypeSql(enumList, postgresTypeLookups, {}, false);
 
       expect(
         renderDefaultLiteral(['asc'], {
-          many: true,
+          many: { elementNullable: false },
           nativeType: columnTypeSql,
           dataTypeId: 'pg/enum',
         }),

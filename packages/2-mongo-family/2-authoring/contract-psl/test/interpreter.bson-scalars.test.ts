@@ -1,9 +1,7 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
+import { interpretMongoContract } from './interpreter-test-helpers';
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
@@ -24,20 +22,16 @@ const SCHEMA = `model Post {
 `;
 
 function interpretPost() {
-  const { document, sources } = parse(SCHEMA, 'bson-scalars.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const result = interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds,
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup: mongoCodecLookup,
-    dataTypeLookup: mongoDataTypeLookup,
-  });
+  const result = interpretMongoContract(
+    SCHEMA,
+    {
+      scalarTypeCodecIds,
+      controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+      codecLookup: mongoCodecLookup,
+      dataTypeLookup: mongoDataTypeLookup,
+    },
+    'bson-scalars.prisma',
+  );
   if (!result.ok) throw new Error(JSON.stringify(result.failure));
   return result.value;
 }
@@ -46,12 +40,20 @@ describe('BSON scalar field types', () => {
   it('emits the codec id of each type', () => {
     const contract = interpretPost();
     expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
-      _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-      views: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
-      price: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/decimal128@1' } },
-      thumbnail: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/binary@1' } },
-      meta: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
-      notes: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+      _id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+      views: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
+      price: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+      },
+      thumbnail: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+      },
+      meta: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+      notes: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
     });
   });
 });

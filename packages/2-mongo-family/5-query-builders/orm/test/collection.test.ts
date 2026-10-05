@@ -30,6 +30,56 @@ import {
 
 const contract = ormContractJson as unknown as Contract;
 
+function contractWithNullableList(fieldName: string): Contract {
+  const json = structuredClone(ormContractJson) as unknown as {
+    domain: {
+      namespaces: Record<
+        string,
+        { models: Record<string, { fields: Record<string, Record<string, unknown>> }> }
+      >;
+    };
+  };
+  const field = json.domain.namespaces['__unbound__']!.models['User']!.fields[fieldName]!;
+  field['nullable'] = false;
+  field['many'] = { elementNullable: true };
+  return json as unknown as Contract;
+}
+
+const nullableValueObjectListContract = contractWithNullableList('homeAddress');
+const nullableScalarListContract = contractWithNullableList('tags');
+const nullableValueObjectList = [
+  { city: 'NYC', country: 'US' },
+  null,
+  { city: 'Paris', country: 'FR' },
+] as const;
+const wrappedNullableValueObjectList = [
+  {
+    city: new MongoParamRef('NYC', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('US', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.country',
+      collection: 'users',
+    }),
+  },
+  null,
+  {
+    city: new MongoParamRef('Paris', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('FR', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.country',
+      collection: 'users',
+    }),
+  },
+];
+
 const defaultUserData = {
   name: 'Alice',
   email: 'a@b.c',
@@ -213,6 +263,46 @@ describe('MongoCollection object-based where()', () => {
       expect(ref).toBeInstanceOf(MongoParamRef);
       expect(ref.codecId).toBe('mongo/objectId@1');
       expect(ref.value).toBe('abc123');
+    }
+  });
+
+  it('preserves exact scalar-list equality while wrapping each non-null operand element', () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'User', executor).where({
+      tags: ['admin', null as never, 'editor'],
+    });
+    col.all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter).toEqual(
+      MongoFieldFilter.eq('tags', [
+        new MongoParamRef('admin', {
+          codecId: 'mongo/string@1',
+          name: 'tags.0',
+          collection: 'users',
+        }),
+        null,
+        new MongoParamRef('editor', {
+          codecId: 'mongo/string@1',
+          name: 'tags.2',
+          collection: 'users',
+        }),
+      ]),
+    );
+  });
+
+  it('preserves operator-owned $in refs and array shape without collection rewrapping', () => {
+    const executor = createMockExecutor();
+    const admin = new MongoParamRef('admin', { codecId: 'mongo/string@1' });
+    const editor = new MongoParamRef('editor', { codecId: 'mongo/string@1' });
+    const operands = [admin, null, editor];
+    const filter = MongoFieldFilter.in('tags', operands);
+    createMongoCollection(contract, 'User', executor).where(filter).all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter).toBe(filter);
+    expect(match.filter).toMatchObject({ value: operands });
+    if (match.filter.kind === 'field') {
+      expect(match.filter.value).toBe(operands);
+      expect(match.filter.value).toEqual([admin, null, editor]);
     }
   });
 
@@ -588,6 +678,43 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('wraps scalar-list elements independently and leaves null unencoded', async () => {
+      const executor = createMockExecutor([{ insertedId: 'id' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
+      await col.create({ ...defaultUserData, tags: ['a', null as never, 'b'] });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('insertOne');
+      if (command.kind === 'insertOne') {
+        expect(command.document['tags']).toEqual([
+          new MongoParamRef('a', {
+            codecId: 'mongo/string@1',
+            name: 'tags.0',
+            collection: 'users',
+          }),
+          null,
+          new MongoParamRef('b', {
+            codecId: 'mongo/string@1',
+            name: 'tags.2',
+            collection: 'users',
+          }),
+        ]);
+      }
+    });
+
+    it('preserves nullable value-object list elements and wraps nested scalar leaves', async () => {
+      const executor = createMockExecutor([{ insertedId: 'id' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor);
+      await col.create({
+        ...defaultUserData,
+        homeAddress: nullableValueObjectList as never,
+      });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('insertOne');
+      if (command.kind === 'insertOne') {
+        expect(command.document['homeAddress']).toEqual(wrappedNullableValueObjectList);
+      }
+    });
+
     it('attaches objectId codecId for ObjectId-typed fields', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
       const col = createMongoCollection(contract, 'Task', executor);
@@ -735,6 +862,21 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('preserves nullable value-object list elements in object updates', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor);
+      await col.where(MongoFieldFilter.eq('_id', 'id-1')).update({
+        homeAddress: nullableValueObjectList as never,
+      });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: { homeAddress: wrappedNullableValueObjectList },
+        });
+      }
+    });
+
     it('attaches the model result shape so the returned document decodes like a read', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated', email: 'a@b.c' }]);
       const col = createMongoCollection(contract, 'User', executor);
@@ -779,6 +921,60 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('wraps callback scalar-list replacement elements independently', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.tags.set(['admin', null as never, 'editor'])]);
+      const command = executor.lastCommand!;
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: {
+            tags: [
+              new MongoParamRef('admin', {
+                codecId: 'mongo/string@1',
+                name: 'tags.0',
+                collection: 'users',
+              }),
+              null,
+              new MongoParamRef('editor', {
+                codecId: 'mongo/string@1',
+                name: 'tags.2',
+                collection: 'users',
+              }),
+            ],
+          },
+        });
+      }
+    });
+
+    it('preserves nullable value-object list elements in callback $set', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.homeAddress.set(nullableValueObjectList as never)]);
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: { homeAddress: wrappedNullableValueObjectList },
+        });
+      }
+    });
+
+    it('preserves null in top-level nullable value-object callback $set', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(contract, 'User', executor);
+      await col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u.homeAddress.set(null)]);
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({ $set: { homeAddress: null } });
+      }
+    });
+
     it('produces $push operations from callback', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
       const col = createMongoCollection(contract, 'User', executor);
@@ -787,7 +983,25 @@ describe('MongoCollection write methods', () => {
       if (command.kind === 'findOneAndUpdate') {
         const update = command.update as Record<string, Record<string, MongoParamRef>>;
         expect(update['$push']).toBeDefined();
-        expect(update['$push']!['tags']).toBeInstanceOf(MongoParamRef);
+        expect(update['$push']!['tags']).toEqual(
+          new MongoParamRef('admin', {
+            codecId: 'mongo/string@1',
+            name: 'tags',
+            collection: 'users',
+          }),
+        );
+      }
+    });
+
+    it('leaves null callback $push elements unwrapped', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.tags.push(null as never)]);
+      const command = executor.lastCommand!;
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({ $push: { tags: null } });
       }
     });
 

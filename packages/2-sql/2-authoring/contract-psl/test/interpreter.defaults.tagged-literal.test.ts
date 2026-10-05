@@ -6,14 +6,13 @@ import {
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
 import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 
@@ -39,17 +38,12 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     },
   };
   const interpret = (fieldLine: string, entries = fixtureDataTypeSupport.entries) => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Lit {\n  id Int @id\n  ${fieldLine}\n}\n`,
-      sourceId: 'schema.prisma',
-    });
-    return interpretPslDocumentToSqlContractInternal({
+    return interpretSqlContract(`model Lit {\n  id Int @id\n  ${fieldLine}\n}\n`, {
       target: postgresTarget,
       scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: { dataTypes: entries },
       ...fixtureTypeLookups,
@@ -144,7 +138,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | sql`...` | json`...` | list of (string | number | boolean | sql`...` | json`...`)',
+          'Expected one of: string | number | boolean | null | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | sql`...` | json`...` | list of (string | number | boolean | null | sql`...` | json`...`)',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },

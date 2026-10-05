@@ -311,6 +311,7 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly status: {
                   readonly nativeType: 'SuggestionStatus';
@@ -321,11 +322,13 @@ type ContractBase = Omit<
                     readonly value: DefaultLiteralValue<'pg/enum@1', 'pending'>;
                   };
                   readonly typeParams: { readonly typeName: 'SuggestionStatus' };
+                  readonly many: false;
                 };
                 readonly suggested_content: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

@@ -65,18 +65,20 @@ function buildWithDefault(
           tableName: 'event',
           fields: [
             {
+              many: false,
               fieldName: 'id',
               columnName: 'id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
             },
             {
+              many: false,
               fieldName: 'count',
               columnName: 'count',
               descriptor: { codecId: field.codecId, nativeType: 'int8' },
               nullable: false,
               default: { kind: 'literal', value: field.value },
-              ...(field.many === true ? { many: true } : {}),
+              ...(field.many === true ? { many: true, elementNullable: false } : {}),
             },
           ],
           id: { columns: ['id'] },
@@ -172,6 +174,7 @@ describe('a literal default the codec refuses', () => {
               tableName: 'invoice',
               fields: [
                 {
+                  many: false,
                   fieldName: 'id',
                   columnName: 'id',
                   descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
@@ -194,6 +197,7 @@ describe('a literal default the codec refuses', () => {
               name: 'Money',
               fields: [
                 {
+                  many: false,
                   fieldName: 'amount',
                   descriptor: { codecId: 'pg/int8@1' },
                   nullable: false,

@@ -37,8 +37,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -124,7 +128,7 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
             },
             relations: {},
           },
@@ -181,8 +185,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -275,8 +283,13 @@ describe('emitter integration', () => {
                   namespaceId: '__unbound__',
                   entityName: 'Priority',
                 },
+                many: false,
               },
-              title: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              title: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -511,7 +524,7 @@ describe('declarations follow the canonical JSON', () => {
     for (const name of order) {
       models[name] = {
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
         },
         relations: {},
         storage: { namespaceId: '__unbound__', table: name.toLowerCase(), namespace: 'public' },

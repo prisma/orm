@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
 } from './fixtures';
@@ -16,11 +15,7 @@ import {
 const pslBlockDescriptors = { enum: testEnumPslBlockDescriptor };
 
 function interpretPostgres(schema: string) {
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     authoringContributions: {
@@ -34,7 +29,6 @@ function interpretPostgres(schema: string) {
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
-    ...document,
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
 }
@@ -65,6 +59,7 @@ model User {
     const namespace = result.value.domain.namespaces['public'];
     const modelField = namespace?.models['User']?.fields['country'];
     expect(modelField).toEqual({
+      many: false,
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: {
@@ -76,7 +71,7 @@ model User {
     });
     expect(namespace?.valueObjects?.['Address']?.fields).toEqual({
       country: modelField,
-      countries: { ...modelField, many: true },
+      countries: { ...modelField, many: { elementNullable: false } },
     });
   });
 
@@ -107,8 +102,9 @@ model User {
     const short = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
+      many: false,
     };
-    const email = { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } };
+    const email = { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: false };
     expect({
       code: fields?.['code'],
       inline: fields?.['inline'],
@@ -116,7 +112,7 @@ model User {
     }).toEqual({ code: short, inline: short, email });
     expect(namespace?.valueObjects?.['Label']?.fields).toEqual({
       code: short,
-      codes: { ...short, many: true },
+      codes: { ...short, many: { elementNullable: false } },
       email,
     });
   });
@@ -144,15 +140,15 @@ model Order {
     expect(result.value.domain.namespaces['public']?.valueObjects).toEqual({
       Address: {
         fields: {
-          street: { nullable: false, type: text },
-          zip: { nullable: true, type: text },
-          tags: { nullable: false, type: text, many: true },
+          street: { nullable: false, type: text, many: false },
+          zip: { nullable: true, type: text, many: false },
+          tags: { nullable: false, type: text, many: { elementNullable: false } },
         },
       },
       ShippingInfo: {
         fields: {
-          address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
-          notes: { nullable: false, type: text },
+          address: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
+          notes: { nullable: false, type: text, many: false },
         },
       },
     });

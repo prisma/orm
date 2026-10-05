@@ -25,6 +25,7 @@ const minimalModelArgs = {
         nativeType: 'int4',
       },
       nullable: false,
+      many: false,
     },
   ],
   id: {
