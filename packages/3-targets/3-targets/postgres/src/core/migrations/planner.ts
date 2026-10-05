@@ -71,6 +71,7 @@ import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
+import { statedConstraintRenames } from './stated-constraint-renames';
 import { emissionSchemaForNamespace } from './table-rename-calls';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
@@ -369,7 +370,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     }
 
     const indexRenamePartition = partitionPostgresCallsByControlPolicy(
-      [...indexRenames.calls, ...checkRenames.calls],
+      [...indexRenames.calls, ...checkRenames.calls, ...statedConstraintRenames(options)],
       options.contract,
     );
 
