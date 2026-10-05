@@ -243,7 +243,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       planExecutionId: '',
     };
 
-    super({ middleware: middleware ?? [], ctx: sqlCtx });
+    super({ middleware: [...(middleware ?? [])], ctx: sqlCtx });
 
     this.contract = context.contract;
     this.adapter = adapter;

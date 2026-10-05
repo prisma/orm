@@ -228,4 +228,22 @@ describe('a runtime whose middleware do not declare afterTransaction', () => {
       ]);
     },
   );
+
+  it("ignores middleware added to the caller's array after creation", async () => {
+    const setup = createSetup({ declaresAfterTransaction: false });
+    setup.middlewareList.push({
+      name: 'late',
+      familyId: 'sql',
+      async afterQuery() {
+        setup.events.push({ name: 'late:afterQuery' });
+      },
+      async afterTransaction() {
+        setup.events.push({ name: 'late:afterTransaction' });
+      },
+    });
+
+    await setup.runtime.query(rawPlan('select 1')).toArray();
+
+    expect(afterHookNames(setup.events)).toEqual(['afterQuery']);
+  });
 });
