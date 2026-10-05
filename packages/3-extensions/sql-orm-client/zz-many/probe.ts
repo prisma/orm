@@ -1,0 +1,20 @@
+import { timestamptzTemporalColumn } from '@internal/adapter-postgres/column-types';
+import { field } from '@internal/sql-contract-ts/contract-builder';
+import type { Contract } from '../../../../test/integration/test/sql-orm-client/fixtures/zz-many-models/generated/contract';
+import type { orm } from '../src/orm';
+
+declare const client: ReturnType<typeof orm<Contract>>;
+const p = client.public;
+void field;
+void timestamptzTemporalColumn;
+void p;
+void p.M000.where((r) => r.deletedAt.isNull());
+void p.M020.where((r) => r.deletedAt.isNull());
+void p.M040.where((r) => r.deletedAt.isNull());
+void p.M060.where((r) => r.deletedAt.isNull());
+void p.M080.where((r) => r.deletedAt.isNull());
+void p.M100.where((r) => r.deletedAt.isNull());
+void p.M120.where((r) => r.deletedAt.isNull());
+void p.M140.where((r) => r.deletedAt.isNull());
+void p.M160.where((r) => r.deletedAt.isNull());
+void p.M180.where((r) => r.deletedAt.isNull());

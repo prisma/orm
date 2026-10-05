@@ -25,7 +25,7 @@ import type {
   OrderableFieldNames,
 } from './types';
 
-/** A field declared by its column type and nullability, for a scope written without a field builder. */
+/** A field declared by its codec and nullability, for a scope written without a field builder. */
 export interface DeclaredField<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
@@ -52,14 +52,14 @@ type DeclarationField<Declaration> =
       ? DeclaredField<Id, Nullable>
       : never;
 
-/** The declared fields with each builder read as its column type and nullability. */
+/** The declared fields with each builder read as its codec and nullability. */
 export type DeclaredFields<Declarations extends ScopeFieldDeclarations> = {
   readonly [K in keyof Declarations]: DeclarationField<Declarations[K]>;
 } extends infer Fields
   ? { readonly [K in keyof Fields]: Fields[K] }
   : never;
 
-/** The model accessor of a scope for any model: only the declared fields, typed by column type. */
+/** The model accessor of a scope for any model: only the declared fields, typed by codec. */
 export type ScopeModelAccessor<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, DeclaredField>>,
@@ -124,7 +124,7 @@ type ModelScopeTarget<
   ] extends [never]
     ? unknown
     : {
-        readonly 'the model has no field with the column type and nullability the scope declares': MismatchedField<
+        readonly 'the model has no field with the codec and nullability the scope declares': MismatchedField<
           TContract,
           ModelName,
           NsId,
@@ -138,7 +138,7 @@ type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
     ? Filtered<C>
     : C;
 
-/** A collection of any model, in any namespace, that has the declared fields with the same column type and nullability. For a model that lacks one, the type names the field, so the refusal names it too. */
+/** A collection of any model, in any namespace, that has the declared fields with the same codec and nullability. For a model that lacks one, the type names the field, so the refusal names it too. */
 export type CollectionWithFields<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, DeclaredField>>,
@@ -200,7 +200,7 @@ function declaredFieldSpec(name: string, declaration: unknown): DeclaredField {
         'ORM.ARGUMENT_INVALID',
         `Cannot define the scope: the field builder for ${name} names no column type`,
         {
-          why: 'A scope for any model matches each declared field by its column type and nullability, and this builder refers to a named type instead of a column type.',
+          why: 'A scope for any model matches each declared field by its codec and nullability, and this builder refers to a named type instead of a column type.',
           fix: 'Declare the field with a builder that has a column type, such as field.text() or field.column(textColumn), or with { codecId, nullable }.',
           meta: { field: name },
         },
@@ -350,7 +350,7 @@ function assertScopeFields(
   const label = modelLabel(collection);
   const model = modelOf(contract, namespaceId, modelName);
   for (const [name, spec] of fields) {
-    const declared = `The scope was declared for models that have a field ${name} of column type ${spec.codecId} that ${nullability(spec.nullable)}.`;
+    const declared = `The scope was declared for models that have a field ${name} with codec ${spec.codecId} that ${nullability(spec.nullable)}.`;
     const meta = {
       model: modelName,
       namespace: namespaceId,
@@ -379,13 +379,13 @@ function assertScopeFields(
       const actual =
         column === undefined
           ? `${label}.${name} has no column.`
-          : `${label}.${name} has column type ${column.codecId} and ${nullability(column.nullable)}.`;
+          : `${label}.${name} has codec ${column.codecId} and ${nullability(column.nullable)}.`;
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a scope to ${label}: its field ${name} does not match the declaration`,
         {
           why: `${declared} ${actual}`,
-          fix: `Apply the scope to a model whose ${name} field has that column type and nullability, or change the declaration in the scope.`,
+          fix: `Apply the scope to a model whose ${name} field has that codec and nullability, or change the declaration in the scope.`,
           meta,
         },
       );

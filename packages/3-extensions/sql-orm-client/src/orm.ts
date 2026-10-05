@@ -100,11 +100,11 @@ type NamespacedClientMap<
 /** The members of the client beside its namespaces. */
 export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
   /**
-   * Define a scope for any model that has the declared fields. Declare each field with a field builder from the contract DSL or with `{ codecId, nullable }`. The body sees only the declared fields and may call `where`, `orderBy`, `limit` and `offset`. The scope accepts a collection of any model whose fields include the declared ones with the same column type and nullability, and returns that collection with the filter and order the body applied.
+   * Define a scope for any model that has the declared fields. Declare each field with a field builder from the contract DSL or with `{ codecId, nullable }`. The body sees only the declared fields and may call `where`, `orderBy`, `limit` and `offset`. The scope accepts a collection of any model whose fields include the declared ones with the same codec and nullability, and returns that collection with the filter and order the body applied.
    *
    * ```ts
    * const notDeleted = db.orm.scope(
-   *   { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+   *   { deletedAt: field.temporal.timestamptz().optional() },
    *   (rows) => rows.where((r) => r.deletedAt.isNull()),
    * );
    * db.orm.public.Post.apply(notDeleted).deleteAll();

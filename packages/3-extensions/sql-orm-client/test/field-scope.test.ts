@@ -82,7 +82,7 @@ describe('client.scope', () => {
       expect.objectContaining({
         code: 'ORM.FIELD_UNKNOWN',
         message: 'Cannot apply a scope to Tag: it has no field deletedAt',
-        why: 'The scope was declared for models that have a field deletedAt of column type pg/timestamptz-temporal@1 that may be null.',
+        why: 'The scope was declared for models that have a field deletedAt with codec pg/timestamptz-temporal@1 that may be null.',
         meta: {
           model: 'Tag',
           namespace: 'public',
@@ -104,8 +104,8 @@ describe('client.scope', () => {
     expect(() => untyped(titleAsTimestamp)(plain.Post)).toThrow(
       expect.objectContaining({
         code: 'ORM.FIELD_UNKNOWN',
-        why: 'The scope was declared for models that have a field title of column type pg/timestamptz-temporal@1 that is never null. Post.title has column type pg/text@1 and is never null.',
-        fix: 'Apply the scope to a model whose title field has that column type and nullability, or change the declaration in the scope.',
+        why: 'The scope was declared for models that have a field title with codec pg/timestamptz-temporal@1 that is never null. Post.title has codec pg/text@1 and is never null.',
+        fix: 'Apply the scope to a model whose title field has that codec and nullability, or change the declaration in the scope.',
       }),
     );
     const titleNullable = client.scope({ title: field.column(textColumn).optional() }, (rows) =>

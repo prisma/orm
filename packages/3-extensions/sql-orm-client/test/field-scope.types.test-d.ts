@@ -201,7 +201,7 @@ describe('client.scope', () => {
       readonly deletedAt: DeclaredField<'pg/timestamptz-temporal@1', true>;
       readonly title: DeclaredField<'pg/text@1', false>;
     };
-    type Refusal = 'the model has no field with the column type and nullability the scope declares';
+    type Refusal = 'the model has no field with the codec and nullability the scope declares';
     type ForModel<Model> = Extract<
       CollectionWithFields<Contract, Fields>,
       { readonly modelName: Model }
@@ -209,7 +209,7 @@ describe('client.scope', () => {
     expectTypeOf<ForModel<'Comment'>[Refusal]>().toEqualTypeOf<'title'>();
     expectTypeOf<ForModel<'Tag'>[Refusal]>().toEqualTypeOf<'deletedAt' | 'title'>();
     expectTypeOf<ForModel<'Post'>>().not.toHaveProperty(
-      'the model has no field with the column type and nullability the scope declares',
+      'the model has no field with the codec and nullability the scope declares',
     );
     const deletedTitled = client.scope(
       {

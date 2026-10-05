@@ -356,7 +356,7 @@ function deleteMatching(posts: Filtered<PostCollection>) {
 await deleteMatching(Post.byAuthor(userId)).toArray();
 ```
 
-## Workflow — Shared query fragments
+## Workflow — Scopes
 
 A piece of a query used in several places is a function. Do not build a filter object and spread it into each query; write a function and pass it to `.where(...)`, `.orderBy(...)` or `.apply(...)`. A function from a collection to a collection is a **scope**, and `.apply(...)` runs it.
 
@@ -374,7 +374,7 @@ await db.orm.public.User.apply(createdSince(since)).all();
 await db.orm.public.Post.apply(createdSince(since)).deleteAll();
 ```
 
-Pick the builder whose codec matches the field's codec in `contract.d.ts`: a PSL `DateTime` is `field.temporal.timestamptz()` (`pg/timestamptz-temporal@1`), a `String` is `field.text()` (`pg/text@1`), a `Uuid` is `field.uuidNative()` (`pg/uuid@1`). `field.column(columnType)` is the explicit form. A package that offers a scope and does not import the facade writes `{ codecId: 'pg/text@1', nullable: false }`. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a scope that filters. A model without the field, or with the field under another column type or nullability, is a compile error, and a run-time `ORM.FIELD_UNKNOWN`. Only the codec and nullability are compared: `field.uuidString()` (`char(36)`) also matches a `char(10)` field.
+Pick the builder whose codec matches the field's codec in `contract.d.ts`: a PSL `DateTime` is `field.temporal.timestamptz()` (`pg/timestamptz-temporal@1`), a `String` is `field.text()` (`pg/text@1`), a `Uuid` is `field.uuidNative()` (`pg/uuid@1`). `field.column(columnType)` is the explicit form. A package that offers a scope and does not import the facade writes `{ codecId: 'pg/text@1', nullable: false }`, with a codec of the contract. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a scope that filters. Writes that change every matching row (`update`, `updateAll`, `deleteAll` and their `AndCount` forms) throw `ORM.ARGUMENT_INVALID` when the chain has a `limit` or `offset`, so do not put a limit in a scope that will be followed by a write. A model without the field, or with the field under another codec or nullability, is a compile error, and a run-time `ORM.FIELD_UNKNOWN`. A custom collection class carries no namespace in its type, so in a contract with the same model name in several namespaces it is checked only at run time. Only the codec and nullability are compared: `field.uuidString()` (`char(36)`) also matches a `char(10)` field.
 
 For a filter used inside a larger `where`, a plain function of the row works too. Type the field with `CodecField<Contract, CodecId, Nullable>`, the type of any field with that codec:
 
@@ -403,7 +403,7 @@ await db.orm.public.Post.where({ userId }).apply(postSummary).limit(20).all();
 await db.orm.public.User.include('posts', (posts) => posts.apply(postSummary)).all();
 ```
 
-The body receives the plain collection of the model, without a custom class's methods. Apply the scope before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. After it, `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads.
+The body receives the plain collection of the model, without a custom class's methods. Apply the scope before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. Its result is always typed as the plain collection, even when the body keeps the row, so a custom class's methods are gone after it, and `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads. For a filter on one model, use a class method or `db.orm.scope`. A scope for one model refuses a collection of another model or namespace at run time with `ORM.ARGUMENT_INVALID`.
 
 **A field to order by, from a request.** Pass the request's string to `orderByField` with the fields the endpoint allows. Do not index the field proxy with the raw string:
 
@@ -416,7 +416,7 @@ await db.orm.public.Post
   .all();
 ```
 
-`direction` is `'asc'` or `'desc'` (the type `Direction` from `@prisma/orm-postgres/relational-core/ast`). A name outside the list, a relation, or a field that cannot be ordered throws `ORM.ARGUMENT_INVALID` before the query runs; answer it as a bad request. Only the model's own fields can be named, not the fields of one variant.
+Pass the request's direction string as it is; `undefined` means `'asc'`. The allowed list is required: without it a request could order by a secret field and learn its values from the order of the results. A name outside the list, a relation, a field that cannot be ordered, or a direction other than `'asc'` or `'desc'` throws `ORM.ARGUMENT_INVALID` before the query runs; answer it as a bad request. Only the model's own fields can be named, not the fields of one variant.
 
 ## Workflow — Aggregates
 
