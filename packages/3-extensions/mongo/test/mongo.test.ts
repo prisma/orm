@@ -531,8 +531,17 @@ describe('mongo() facade', () => {
       },
     } as unknown as AnyMongoContract;
 
+    const stringCodec = {
+      decodeJson: (json: unknown) => json,
+      encodeJson: (value: unknown) => value,
+    };
+
     beforeEach(() => {
       mocks.deserializeContract.mockReturnValue(contractWithEnum);
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        codecs: { get: (id: string) => (id === 'mongo/string@1' ? stringCodec : undefined) },
+      });
     });
 
     function roleAccessor() {
