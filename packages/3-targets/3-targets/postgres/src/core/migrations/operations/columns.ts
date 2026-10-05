@@ -322,7 +322,7 @@ async function setAutoincrementDefault(
     precheck: [
       step(`ensure column "${columnName}" exists`, present.sql, present.params),
       step(
-        `ensure no relation other than the sequence "${columnName}" owns is named ${qualifiedSequence} (rename that relation, or write this migration with migration new)`,
+        `ensure no relation other than the sequence column "${columnName}" owns is named ${qualifiedSequence} (rename that relation, or write this migration with migration new)`,
         nameAvailable.sql,
         nameAvailable.params,
       ),
@@ -342,7 +342,7 @@ async function setAutoincrementDefault(
       ),
       step(
         `start sequence "${sequenceName}" past the largest "${columnName}"`,
-        `SELECT setval(${sequenceRegclass}, COALESCE(MAX(${qualifiedColumn}), 0) + 1, false) FROM ${qualifiedTable}`,
+        `SELECT setval(${sequenceRegclass}, GREATEST(COALESCE(MAX(${qualifiedColumn}), 0), 0) + 1, false) FROM ${qualifiedTable}`,
       ),
     ],
     postcheck: [

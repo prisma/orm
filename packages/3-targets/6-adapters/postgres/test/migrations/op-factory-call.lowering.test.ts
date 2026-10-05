@@ -353,13 +353,13 @@ describe('SetDefaultCall', () => {
         },
         {
           description: 'start sequence "Post_serial_seq" past the largest "serial"',
-          sql: `SELECT setval('"public"."Post_serial_seq"'::regclass, COALESCE(MAX("serial"), 0) + 1, false) FROM "public"."Post"`,
+          sql: `SELECT setval('"public"."Post_serial_seq"'::regclass, GREATEST(COALESCE(MAX("serial"), 0), 0) + 1, false) FROM "public"."Post"`,
         },
       ],
     });
     expect(op.precheck.map((check) => check.description)).toEqual([
       'ensure column "serial" exists',
-      'ensure no relation other than the sequence "serial" owns is named "public"."Post_serial_seq" (rename that relation, or write this migration with migration new)',
+      'ensure no relation other than the sequence column "serial" owns is named "public"."Post_serial_seq" (rename that relation, or write this migration with migration new)',
     ]);
     expect(op.postcheck.map((check) => check.description)).toEqual([
       'verify column "serial" takes its default from an attached sequence',

@@ -242,11 +242,22 @@ describe('autoincrement() on an existing integer column', { concurrent: false },
       await driver!.query(create);
 
       await expect(apply(migrationPlan, withAutoincrement, anyClass)).rejects.toThrow(
-        'Operation setDefault.orders.number failed during precheck: ensure no relation other than the sequence "number" owns is named "public"."orders_number_seq" (rename that relation, or write this migration with migration new)',
+        'Operation setDefault.orders.number failed during precheck: ensure no relation other than the sequence column "number" owns is named "public"."orders_number_seq" (rename that relation, or write this migration with migration new)',
       );
       expect(await numberColumn()).toEqual({ column_default: null, serial_sequence: null });
     },
   );
+
+  it('starts the sequence at 1 when every existing value is negative', {
+    timeout: testTimeout,
+  }, async () => {
+    await planAndApply(buildContract('int4', undefined), emptySchema, INIT_ADDITIVE_POLICY);
+    await driver!.query('INSERT INTO public.orders (id, number) VALUES (1, -5), (2, -3)');
+
+    await migrateTo(buildContract('int4', AUTOINCREMENT));
+
+    expect(await insertWithoutNumber(3)).toBe(1);
+  });
 
   it('replaces a literal default with a sequence', { timeout: testTimeout }, async () => {
     const withLiteral = buildContract('int4', { kind: 'literal', value: 0 });

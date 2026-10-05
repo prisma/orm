@@ -275,7 +275,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'CREATE SEQUENCE IF NOT EXISTS "public"."Post_viewCount_seq" AS integer',
             `ALTER TABLE "public"."Post" ALTER COLUMN "viewCount" SET DEFAULT nextval('"public"."Post_viewCount_seq"'::regclass)`,
             'ALTER SEQUENCE "public"."Post_viewCount_seq" OWNED BY "public"."Post"."viewCount"',
-            `SELECT setval('"public"."Post_viewCount_seq"'::regclass, COALESCE(MAX("viewCount"), 0) + 1, false) FROM "public"."Post"`,
+            `SELECT setval('"public"."Post_viewCount_seq"'::regclass, GREATEST(COALESCE(MAX("viewCount"), 0), 0) + 1, false) FROM "public"."Post"`,
           ]);
           expect(renderedSql(sequenced).match(/RENAME CONSTRAINT/g)).toHaveLength(1);
           expect(renderedSql(sequenced)).toContain(
