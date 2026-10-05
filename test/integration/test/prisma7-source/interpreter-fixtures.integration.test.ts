@@ -112,25 +112,11 @@ interface SerializedStorage {
   };
 }
 
-const IDENTIFIER_MAX_BYTES = 63;
-
-/** The name Postgres keeps for an identifier: cut to 63 bytes on a character boundary. */
-function truncatedIdentifier(name: string): string {
-  let kept = '';
-  let bytes = 0;
-  for (const character of name) {
-    bytes += Buffer.byteLength(character);
-    if (bytes > IDENTIFIER_MAX_BYTES) break;
-    kept += character;
-  }
-  return kept;
-}
-
 function constraintKey(schema: string, table: string, kind: 'p' | 'f', columns: readonly string[]) {
   return `${schema}.${table} ${kind === 'p' ? 'primary key' : 'foreign key'} (${columns.join(', ')})`;
 }
 
-/** The name the planner gives each primary key and foreign key of the contract, as Postgres keeps it. */
+/** The name the planner gives each primary key and foreign key of the contract: the stated one, or the one it derives, as Postgres stores it. */
 function plannedConstraintNames(serialized: unknown): Record<string, string> {
   const { defaultConstraintNames } = prisma7PostgresBinding;
   const names: Record<string, string> = {};
@@ -139,14 +125,12 @@ function plannedConstraintNames(serialized: unknown): Record<string, string> {
   )) {
     for (const [table, entry] of Object.entries(namespace.entries.table ?? {})) {
       if (entry.primaryKey !== undefined) {
-        names[constraintKey(schema, table, 'p', entry.primaryKey.columns)] = truncatedIdentifier(
-          entry.primaryKey.name ?? defaultConstraintNames.primaryKey(table),
-        );
+        names[constraintKey(schema, table, 'p', entry.primaryKey.columns)] =
+          entry.primaryKey.name ?? defaultConstraintNames.primaryKey(table);
       }
       for (const foreignKey of entry.foreignKeys ?? []) {
-        names[constraintKey(schema, table, 'f', foreignKey.source.columns)] = truncatedIdentifier(
-          foreignKey.name ?? defaultConstraintNames.foreignKey(table, foreignKey.source.columns),
-        );
+        names[constraintKey(schema, table, 'f', foreignKey.source.columns)] =
+          foreignKey.name ?? defaultConstraintNames.foreignKey(table, foreignKey.source.columns);
       }
     }
   }

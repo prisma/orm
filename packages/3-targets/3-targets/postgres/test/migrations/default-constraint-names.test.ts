@@ -29,10 +29,19 @@ describe('defaultPrimaryKeyName', () => {
 });
 
 describe('defaultForeignKeyName and defaultUniqueName', () => {
-  it('keep the whole name, which the planner always writes into the DDL', () => {
+  it('keep a name that fits 63 bytes whole', () => {
+    expect(defaultForeignKeyName('Post', ['authorId'])).toBe('Post_authorId_fkey');
+    expect(defaultUniqueName('Post', ['slug'])).toBe('Post_slug_key');
+  });
+
+  it('cut a longer name at 63 bytes, as Postgres stores a name it is given', () => {
     const table = 'a'.repeat(60);
 
-    expect(defaultForeignKeyName(table, ['ownerId'])).toBe(`${table}_ownerId_fkey`);
-    expect(defaultUniqueName(table, ['code'])).toBe(`${table}_code_key`);
+    expect(defaultForeignKeyName(table, ['ownerId'])).toBe(`${table}_ow`);
+    expect(defaultUniqueName(table, ['code'])).toBe(`${table}_co`);
+  });
+
+  it('cut a multibyte name on a character boundary', () => {
+    expect(defaultForeignKeyName('a'.repeat(61), ['ü'])).toBe(`${'a'.repeat(61)}_`);
   });
 });
