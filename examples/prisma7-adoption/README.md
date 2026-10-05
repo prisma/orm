@@ -69,20 +69,20 @@ From then on, you edit `prisma/schema.prisma` as before, and Prisma 8 plans and 
 
 ```bash
 # edit prisma/schema.prisma in the Prisma 7 dialect
-prisma contract emit
-prisma migration plan --name add-comments
-prisma db migrate --advance-ref db
-prisma db verify --strict        # exits 4: unclaimed _prisma_migrations, nothing else
-prisma db verify                 # zero findings
-prisma7 migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma7.config.ts
-                                 # -- This is an empty migration.
-prisma7 generate --config prisma7.config.ts
+pnpm exec prisma contract emit
+pnpm exec prisma migration plan --name add-comments
+pnpm exec prisma db migrate --advance-ref db
+pnpm exec prisma db verify --strict       # exits 4: unclaimed _prisma_migrations, nothing else
+pnpm exec prisma db verify                # zero findings
+pnpm exec prisma7 migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma7.config.ts
+                                          # -- This is an empty migration.
+pnpm exec prisma7 generate --config prisma7.config.ts
 ```
 
 The test runs that loop twice. Each edited schema is a file in `test/handover/`:
 
 - `edit-1.prisma` makes additive changes. It adds `User.bio String?`, `Post.likes Int @default(0)`, `@@index([authorId])` on `Post`, and a `Comment` model with a required relation to `Post`. The plan creates the `Comment` table, adds both columns, creates the index `Post_authorId_idx`, and adds the foreign key `Comment_postId_fkey` with `ON DELETE RESTRICT ON UPDATE CASCADE`. Those are the names and referential actions Prisma 7 would have written. After `prisma7 generate`, the Prisma 7 client writes and reads the new columns and the new model (`test/handover/v7-after-edit-1.ts`), and the Prisma 8 ORM reads them (`test/handover/v8-after-edit-1.ts`).
-- `edit-2.prisma` makes destructive changes. It drops `User.bio` and makes `Post.likes` optional with no default. The plan drops the column, drops the default, and drops `NOT NULL`. After `prisma7 generate`, the Prisma 7 client reads the surviving columns (`test/handover/v7-after-edit-2.ts`).
+- `edit-2.prisma` makes destructive changes. It drops `User.bio` and makes `Post.likes` optional with no default. The plan drops the column, drops the default, and drops `NOT NULL`. After `prisma7 generate`, the Prisma 7 client reads the surviving columns and clears one post's `likes` to null (`test/handover/v7-after-edit-2.ts`), and the Prisma 8 ORM reads that null back (`test/handover/v8-after-edit-2.ts`).
 
 What each step does:
 
@@ -93,7 +93,7 @@ What each step does:
 - **A destructive plan is not confirmed at a prompt.** `migration plan` writes the package to `migrations/app/<timestamp>_<name>/`, marks the destructive operations in its output, and prints the SQL. Review that package before running `db migrate`; nothing else asks. The only prompt comes when the first plan's baseline itself would destroy data, and a baseline that only creates the existing schema never does.
 - **Never run `prisma7 migrate` again.** Once Prisma 8 has applied a migration, `prisma/migrations/` no longer describes the database. `prisma7 migrate dev` would report drift and offer to reset the database, and a new migration applied with `prisma7 migrate deploy` would change the schema without moving Prisma 8's marker. From here on, Prisma 7 runs only `prisma7 generate`.
 
-When the last route has moved to Prisma 8, `prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`. Point `contract` in `prisma.config.ts` at the written file, then run `prisma contract emit` again to confirm the contract is unchanged. Then remove Prisma 7 as the [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 5 describes.
+When the last route has moved to Prisma 8, `pnpm exec prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`. Point `contract` in `prisma.config.ts` at the written file, then run `pnpm exec prisma contract emit` again to confirm the contract is unchanged. Then remove Prisma 7 as the [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 5 describes.
 
 ## What a Prisma 7 user meets along the way
 
