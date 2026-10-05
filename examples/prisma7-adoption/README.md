@@ -79,10 +79,11 @@ pnpm exec prisma7 migrate diff --from-config-datasource --to-schema prisma/schem
 pnpm exec prisma7 generate --config prisma7.config.ts
 ```
 
-The test runs that loop twice. Each edited schema is a file in `test/handover/`:
+The test runs that loop three times. Each edited schema is a file in `test/handover/`:
 
 - `edit-1.prisma` makes additive changes. It adds `User.bio String?`, `Post.likes Int @default(0)`, `@@index([authorId])` on `Post`, and a `Comment` model with a required relation to `Post`. The plan creates the `Comment` table, adds both columns, creates the index `Post_authorId_idx`, and adds the foreign key `Comment_postId_fkey` with `ON DELETE RESTRICT ON UPDATE CASCADE`. Those are the names and referential actions Prisma 7 would have written. After `prisma7 generate`, the Prisma 7 client writes and reads the new columns and the new model (`test/handover/v7-after-edit-1.ts`), and the Prisma 8 ORM reads them (`test/handover/v8-after-edit-1.ts`).
 - `edit-2.prisma` makes destructive changes. It drops `User.bio` and makes `Post.likes` optional with no default. The plan drops the column, drops the default, and drops `NOT NULL`. After `prisma7 generate`, the Prisma 7 client reads the surviving columns and clears one post's `likes` to null (`test/handover/v7-after-edit-2.ts`), and the Prisma 8 ORM reads that null back (`test/handover/v8-after-edit-2.ts`).
+- `edit-3.prisma` gives the existing `Post.viewCount` column, which already has rows, `@default(autoincrement())`, and names the `Post.author` foreign key with `map: "Post_author_fk"`. The plan creates the sequence `Post_viewCount_seq`, sets the column's default to it, makes the column own it, and starts it one past the largest `viewCount`; it also renames `Post_authorId_fkey` to `Post_author_fk`. After `prisma7 generate`, a post the Prisma 7 client creates without a `viewCount` gets the next number (`test/handover/v7-after-edit-3.ts`).
 
 What each step does:
 
@@ -103,6 +104,7 @@ When the last route has moved to Prisma 8, `pnpm exec prisma contract print --ou
 - This repository's CI fetches that engine in its own step before the example tests run, so the test itself downloads nothing.
 - The guide's `prisma7.config.ts` sets `datasource.url` to `process.env["DATABASE_URL"]`, which is `string | undefined`; under `exactOptionalPropertyTypes` that does not type-check, so this example adds the `datasource` block only when the variable is set. `prisma7 generate` runs without a database either way.
 - Prisma 7 rejects `url` inside the `datasource` block; the URL lives only in `prisma7.config.ts` (Prisma 7) and `prisma.config.ts` (Prisma 8), both reading the same `DATABASE_URL` from `.env`.
+- Where Prisma 7 named a primary key or foreign key differently from Prisma 8, the contract states Prisma 7's name: a `map` on `@id`, `@@id` or `@relation`, a junction's primary key such as `_PostToTag_AB_pkey`, and a foreign key name Prisma 7 cut to 63 bytes. `db verify` does not compare these names, but migrations drop and rename constraints by them.
 - Prisma 8 reads a `DateTime` column as the text PostgreSQL prints, such as `2026-09-14 10:00:00.123` (UTC, as Prisma 7 wrote it), not as a JavaScript `Date`. `@db.Timestamptz`, `@db.Date` and `@db.Time` columns read as text too, so the application needs no `Temporal`.
 - `pnpm sign` creates `migrations/` (a snapshot of the signed contract and the `db` ref). It is Prisma 8's record of what was signed and is committed here; in phase 4 the first `migration plan` builds the baseline from it.
 - The Prisma 8 CLI prints JSON when stdout is not a terminal (a pipe, a file, or an agent) and prose in a terminal.
