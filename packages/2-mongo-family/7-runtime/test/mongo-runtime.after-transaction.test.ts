@@ -118,10 +118,14 @@ async function drain(rows: AsyncIterable<unknown>): Promise<void> {
   }
 }
 
-function expectStageRightAfter(events: HookEvent[], afterHook: string): void {
+function expectStageRightAfter(
+  events: HookEvent[],
+  afterHook: string,
+  outcome: AfterTransactionResult['outcome'],
+): void {
   expect(events.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
     { name: afterHook, outcome: undefined },
-    { name: 'afterTransaction', outcome: 'committed' },
+    { name: 'afterTransaction', outcome },
   ]);
   expect(events[1]?.plan).toBe(events[0]?.plan);
   expect(events[1]?.planExecutionId).toBe(events[0]?.planExecutionId);
@@ -139,10 +143,10 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       await drain(runtime.query(plan));
 
-      expectStageRightAfter(events, 'afterQuery');
+      expectStageRightAfter(events, 'afterQuery', 'committed');
     });
 
-    it('fires committed once right after afterQuery when the driver throws', async () => {
+    it('fires unknown once right after afterQuery when the driver throws', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
         context: makeContext(new AggregateWireCommand('users', [])),
@@ -152,10 +156,10 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       await expect(drain(runtime.query(plan))).rejects.toThrow('driver failure');
 
-      expectStageRightAfter(events, 'afterQuery');
+      expectStageRightAfter(events, 'afterQuery', 'unknown');
     });
 
-    it('fires nothing when the caller stops reading the rows early', async () => {
+    it('fires unknown once when the caller stops reading the rows early', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
         context: makeContext(new AggregateWireCommand('users', [])),
@@ -168,7 +172,30 @@ describe('MongoRuntime afterTransaction stage', () => {
         break;
       }
 
-      expect(events).toEqual([]);
+      expect(events.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
+        { name: 'afterTransaction', outcome: 'unknown' },
+      ]);
+    });
+    it('fires unknown once when the signal aborts between rows', async () => {
+      const events: HookEvent[] = [];
+      const runtime = createMongoRuntime({
+        context: makeContext(new AggregateWireCommand('users', [])),
+        driver: createDriver([{ _id: '1' }, { _id: '2' }]),
+        middleware: [recorder(events)],
+      });
+      const controller = new AbortController();
+
+      await expect(
+        (async () => {
+          for await (const _row of runtime.query(plan, { signal: controller.signal })) {
+            controller.abort();
+          }
+        })(),
+      ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
+
+      expect(events.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
+        { name: 'afterTransaction', outcome: 'unknown' },
+      ]);
     });
   });
 
@@ -183,10 +210,10 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       await expect(runtime.execute(plan)).resolves.toEqual({ affectedRows: 1 });
 
-      expectStageRightAfter(events, 'afterExecute');
+      expectStageRightAfter(events, 'afterExecute', 'committed');
     });
 
-    it('fires committed once right after afterExecute when the driver throws', async () => {
+    it('fires unknown once right after afterExecute when the driver throws', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
         context: makeContext(new DeleteOneWireCommand('users', { id: 1 })),
@@ -196,7 +223,7 @@ describe('MongoRuntime afterTransaction stage', () => {
 
       await expect(runtime.execute(plan)).rejects.toThrow('driver failure');
 
-      expectStageRightAfter(events, 'afterExecute');
+      expectStageRightAfter(events, 'afterExecute', 'unknown');
     });
   });
 });
