@@ -85,6 +85,7 @@ describe('client.scope', () => {
         why: 'The scope was declared for models that have a field deletedAt of column type pg/timestamptz-temporal@1 that may be null.',
         meta: {
           model: 'Tag',
+          namespace: 'public',
           field: 'deletedAt',
           codecId: 'pg/timestamptz-temporal@1',
           nullable: true,

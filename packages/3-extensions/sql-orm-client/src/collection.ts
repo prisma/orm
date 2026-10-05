@@ -122,7 +122,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import { assertScopeBody } from './scopes';
+import { assertModelScopeReceiver, assertScopeBody } from './scopes';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -269,6 +269,7 @@ interface MtiCreateContext {
 /** What `scope` reads from the collection it is called on: its contract and its model. */
 interface ScopeSource {
   readonly modelName: string;
+  readonly namespaceId: string;
   readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
 }
 
@@ -475,13 +476,16 @@ export class CollectionBase<
     body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
   ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertScopeBody(body);
-    return (collection) =>
-      body(
+    const source = { modelName: this.modelName, namespaceId: this.namespaceId };
+    return (collection) => {
+      assertModelScopeReceiver(source, collection);
+      return body(
         blindCast<
           ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
           'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
         >(collection),
       );
+    };
   }
 
   /**
@@ -2361,6 +2365,7 @@ export class CollectionBase<
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
+    this.#assertNoLimitOrOffset('update');
     assertReturningCapability(this.contract, 'update()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
 
@@ -2451,6 +2456,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<unknown> {
+    this.#assertNoLimitOrOffset('updateAll');
     return this.#updateAllWithAnnotations(
       data,
       this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
@@ -2527,6 +2533,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    this.#assertNoLimitOrOffset('updateAndCount');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2618,8 +2625,25 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<CollectionRowOf<this & Self>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
+    this.#assertNoLimitOrOffset('deleteAll');
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
+    );
+  }
+
+  #assertNoLimitOrOffset(method: string): void {
+    const { limit, offset } = this.state;
+    if (limit === undefined && offset === undefined) {
+      return;
+    }
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `Cannot ${method} ${this.modelName}: the collection has a limit or an offset`,
+      {
+        why: `${method} changes every row that matches the filter. The statement it runs cannot apply a limit or an offset, so they would be ignored and more rows would change than the chain asks for. A scope applied with apply can add them without showing them at the call site.`,
+        fix: `Remove limit() and offset() before ${method}, or read the rows first and change them by their ids.`,
+        meta: { model: this.modelName, method, limit, offset },
+      },
     );
   }
 
@@ -2729,6 +2753,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number>;
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
+    this.#assertNoLimitOrOffset('deleteAndCount');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
     const compiled = mergeAnnotations(

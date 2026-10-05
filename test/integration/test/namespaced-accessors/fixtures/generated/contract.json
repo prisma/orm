@@ -4,12 +4,20 @@
   "target": "postgres",
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
+    "auth.notes": {
+      "model": "Note",
+      "namespace": "auth"
+    },
     "auth.users": {
       "model": "User",
       "namespace": "auth"
     },
     "profile": {
       "model": "Profile",
+      "namespace": "public"
+    },
+    "public.notes": {
+      "model": "Note",
       "namespace": "public"
     },
     "public.users": {
@@ -21,6 +29,37 @@
     "namespaces": {
       "auth": {
         "models": {
+          "Note": {
+            "fields": {
+              "body": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "body": {
+                  "column": "body"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "auth",
+              "table": "notes"
+            }
+          },
           "User": {
             "fields": {
               "id": {
@@ -56,6 +95,37 @@
       },
       "public": {
         "models": {
+          "Note": {
+            "fields": {
+              "body": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "body": {
+                  "column": "body"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "notes"
+            }
+          },
           "Profile": {
             "fields": {
               "id": {
@@ -144,6 +214,28 @@
       "auth": {
         "entries": {
           "table": {
+            "notes": {
+              "columns": {
+                "body": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "users": {
               "columns": {
                 "id": {
@@ -174,6 +266,28 @@
       "public": {
         "entries": {
           "table": {
+            "notes": {
+              "columns": {
+                "body": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "profile": {
               "columns": {
                 "id": {
@@ -250,7 +364,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a03ff0d0a7fe9bf4376afc72c5b7bbca8fbfc9ec5383cf1778d309d5f10106b2"
+    "storageHash": "c294faf6ef0f09f8e339c03fccc040841c3e1b60288cf097f69d2a261e317c89"
   },
   "capabilities": {
     "postgres": {

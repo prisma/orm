@@ -1,4 +1,4 @@
-import type { Direction, OrderByItem } from '@internal/sql-relational-core/ast';
+import type { OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Ordered } from '../src/collection-types';
@@ -7,7 +7,7 @@ import type { Orderable, OrderableFieldNames } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';
 
-declare const input: { orderBy: string; direction: Direction };
+declare const input: { orderBy: string; direction: string | undefined };
 
 const { db, plain } = createChainingOrm();
 
@@ -33,17 +33,23 @@ describe('orderByField', () => {
     >();
   });
 
-  test('allows every orderable field when no list is given', () => {
-    expectTypeOf(orderByField(db.Post, input.orderBy)).parameter(0).toEqualTypeOf<{
-      readonly id: Orderable;
-      readonly title: Orderable;
-      readonly userId: Orderable;
-      readonly views: Orderable;
-    }>();
+  test('requires a non-empty allowed list', () => {
+    // @ts-expect-error the allowed list is required
+    orderByField(db.Post, input.orderBy, input.direction);
+    // @ts-expect-error the allowed list names at least one field
+    orderByField(db.Post, input.orderBy, input.direction, []);
+  });
+
+  test('takes the direction from a request as a string', () => {
+    expectTypeOf(orderByField(db.Post, input.orderBy, input.direction, ['title'])).toEqualTypeOf<
+      (row: { readonly title: Orderable }) => OrderByItem
+    >();
   });
 
   test('records the order, so cursor is allowed', () => {
-    const posts = db.Post.orderBy(orderByField(db.Post, input.orderBy, input.direction));
+    const posts = db.Post.orderBy(
+      orderByField(db.Post, input.orderBy, input.direction, ['title', 'views']),
+    );
     expectTypeOf(posts).toEqualTypeOf<Ordered<PostCollection>>();
     expectTypeOf(posts.cursor({ id: 1 })).toEqualTypeOf<Ordered<PostCollection>>();
   });
@@ -58,9 +64,11 @@ describe('orderByField', () => {
 
   test('fits a chained collection, an include refinement and this', () => {
     expectTypeOf(
-      db.Post.where({ title: 'x' }).orderBy(orderByField(db.Post, input.orderBy)),
+      db.Post.where({ title: 'x' }).orderBy(orderByField(db.Post, input.orderBy, 'asc', ['title'])),
     ).not.toBeAny();
-    db.User.include('posts', (posts) => posts.orderBy(orderByField(posts, input.orderBy)));
+    db.User.include('posts', (posts) =>
+      posts.orderBy(orderByField(posts, input.orderBy, 'asc', ['title'])),
+    );
     expectTypeOf<ReturnType<OrderedPostCollection['ordered']>>().toEqualTypeOf<
       Ordered<OrderedPostCollection>
     >();
@@ -79,10 +87,5 @@ describe('orderByField', () => {
     orderByField(db.Post, input.orderBy, 'asc', ['embedding']);
     // @ts-expect-error author is a relation
     orderByField(db.Post, input.orderBy, 'asc', ['author']);
-  });
-
-  test('refuses a direction other than asc and desc', () => {
-    // @ts-expect-error a direction is asc or desc
-    orderByField(db.Post, input.orderBy, 'up');
   });
 });

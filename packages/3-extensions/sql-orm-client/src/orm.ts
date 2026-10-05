@@ -1,5 +1,5 @@
 import { type Contract, domainModelsAtDefaultNamespace } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
   SqlAggregateDescriptorRegistry,
@@ -110,7 +110,10 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
    * db.orm.public.Post.apply(notDeleted).deleteAll();
    * ```
    */
-  scope<const Declarations extends ScopeFieldDeclarations, Facts extends ScopeFacts>(
+  scope<
+    const Declarations extends ScopeFieldDeclarations<keyof ExtractCodecTypes<TContract> & string>,
+    Facts extends ScopeFacts,
+  >(
     fields: Declarations,
     body: (
       rows: ScopeCollection<

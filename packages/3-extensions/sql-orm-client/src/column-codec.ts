@@ -1,23 +1,15 @@
 import type { Contract } from '@internal/contract/types';
-import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { storageTableForContract } from './storage-resolution';
+import { resolveTableForContract } from './storage-resolution';
 
 export function resolveColumn(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
   columnName: string,
-): { readonly codecId: string; readonly nullable: boolean } | undefined {
-  let table: StorageTable;
-  try {
-    table = storageTableForContract(contract, namespaceId, tableName);
-  } catch {
-    return undefined;
-  }
-  const column = table.columns[columnName];
-  if (!column) return undefined;
-  return { codecId: column.codecId, nullable: column.nullable };
+): StorageColumn | undefined {
+  return resolveTableForContract(contract, namespaceId, tableName)?.table.columns[columnName];
 }
 
 export function codecTraits(context: ExecutionContext, codecId: string): readonly string[] {

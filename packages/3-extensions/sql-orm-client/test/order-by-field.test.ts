@@ -1,13 +1,14 @@
-import type { Direction } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { orderByField } from '../src/scopes';
 import { createChainingOrm } from './collection-chaining-fixture';
+
+const POST_FIELDS = ['id', 'title', 'userId', 'views'] as const;
 
 describe('orderByField', () => {
   it('orders like the same field written in orderBy', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.orderBy((p) => p.title.desc()).all();
-    await db.Post.orderBy(orderByField(db.Post, 'title', 'desc')).all();
+    await db.Post.orderBy(orderByField(db.Post, 'title', 'desc', POST_FIELDS)).all();
     await db.Post.orderBy((p) => p.title.asc()).all();
     const [direct, ordered, ascending] = runtime.executions;
     expect(ordered?.plan.ast).toBeDefined();
@@ -18,7 +19,7 @@ describe('orderByField', () => {
   it('orders ascending by default and through the field to column mapping', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.orderBy((p) => p.userId.asc()).all();
-    await db.Post.orderBy(orderByField(db.Post, 'userId')).all();
+    await db.Post.orderBy(orderByField(db.Post, 'userId', undefined, POST_FIELDS)).all();
     const [direct, ordered] = runtime.executions;
     expect(ordered?.plan.ast).toBeDefined();
     expect(ordered?.plan.ast).toEqual(direct?.plan.ast);
@@ -36,7 +37,9 @@ describe('orderByField', () => {
   it('works inside an include refinement', async () => {
     const { db, runtime } = createChainingOrm();
     await db.User.include('posts', (posts) => posts.orderBy((p) => p.title.asc())).all();
-    await db.User.include('posts', (posts) => posts.orderBy(orderByField(posts, 'title'))).all();
+    await db.User.include('posts', (posts) =>
+      posts.orderBy(orderByField(posts, 'title', undefined, POST_FIELDS)),
+    ).all();
     const [direct, ordered] = runtime.executions;
     expect(ordered?.plan.ast).toBeDefined();
     expect(ordered?.plan.ast).toEqual(direct?.plan.ast);
@@ -45,7 +48,7 @@ describe('orderByField', () => {
   describe('throws ORM.ARGUMENT_INVALID before the query runs', () => {
     it('for a name that is not a field', () => {
       const { db, runtime } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'nope')).toThrow(
+      expect(() => orderByField(db.Post, 'nope', undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order Post by "nope"',
@@ -59,7 +62,7 @@ describe('orderByField', () => {
 
     it('for a name that only the object prototype has', () => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'constructor')).toThrow(
+      expect(() => orderByField(db.Post, 'constructor', undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           why: 'Post has no field "constructor".',
@@ -69,7 +72,7 @@ describe('orderByField', () => {
 
     it('for a relation', () => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'author')).toThrow(
+      expect(() => orderByField(db.Post, 'author', undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           why: '"author" is a relation of Post, not a field.',
@@ -79,7 +82,7 @@ describe('orderByField', () => {
 
     it('for a field whose codec has no order trait', () => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'embedding')).toThrow(
+      expect(() => orderByField(db.Post, 'embedding', undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           why: 'The codec pg/vector@1 of Post.embedding cannot be ordered.',
@@ -101,8 +104,8 @@ describe('orderByField', () => {
 
     it('for a direction other than asc and desc', () => {
       const { db } = createChainingOrm();
-      const direction = 'up' as Direction;
-      expect(() => orderByField(db.Post, 'title', direction)).toThrow(
+      const direction = 'up';
+      expect(() => orderByField(db.Post, 'title', direction, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order Post in direction "up"',
@@ -118,7 +121,7 @@ describe('orderByField', () => {
     it('escapes quotes and line breaks', () => {
       const { db } = createChainingOrm();
       const name = 'x"\nInjected line';
-      expect(() => orderByField(db.Post, name)).toThrow(
+      expect(() => orderByField(db.Post, name, undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           message: 'Cannot order Post by "x\\"\\nInjected line"',
           why: 'Post has no field "x\\"\\nInjected line".',
@@ -131,7 +134,7 @@ describe('orderByField', () => {
       const { db } = createChainingOrm();
       const name = 'a'.repeat(100);
       const shown = `"${'a'.repeat(64)}…"`;
-      expect(() => orderByField(db.Post, name)).toThrow(
+      expect(() => orderByField(db.Post, name, undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           message: `Cannot order Post by ${shown}`,
           why: `Post has no field ${shown}.`,
@@ -143,8 +146,8 @@ describe('orderByField', () => {
 
     it('cuts a long direction the same way', () => {
       const { db } = createChainingOrm();
-      const direction = 'd'.repeat(70) as Direction;
-      expect(() => orderByField(db.Post, 'title', direction)).toThrow(
+      const direction = 'd'.repeat(70);
+      expect(() => orderByField(db.Post, 'title', direction, POST_FIELDS)).toThrow(
         expect.objectContaining({
           message: `Cannot order Post in direction "${'d'.repeat(64)}…"`,
           fix: 'Pass "asc" or "desc". The direction above is cut to its first 64 characters.',
@@ -156,7 +159,7 @@ describe('orderByField', () => {
     it('cuts by characters, so a character at the limit stays whole', () => {
       const { db } = createChainingOrm();
       const name = `${'a'.repeat(63)}😀${'b'.repeat(5)}`;
-      expect(() => orderByField(db.Post, name)).toThrow(
+      expect(() => orderByField(db.Post, name, undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           message: `Cannot order Post by "${'a'.repeat(63)}😀…"`,
           meta: { model: 'Post', field: name },
@@ -167,7 +170,7 @@ describe('orderByField', () => {
     it('does not cut a name of exactly 64 characters', () => {
       const { db } = createChainingOrm();
       const name = `${'a'.repeat(63)}😀`;
-      expect(() => orderByField(db.Post, name)).toThrow(
+      expect(() => orderByField(db.Post, name, undefined, POST_FIELDS)).toThrow(
         expect.objectContaining({
           message: `Cannot order Post by "${name}"`,
           fix: 'Order by one of: id, title, userId, views.',
@@ -187,7 +190,9 @@ describe('orderByField', () => {
 
     it.each(received)('for a name that is %s', (description, value) => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, value as unknown as string)).toThrow(
+      expect(() =>
+        orderByField(db.Post, value as unknown as string, undefined, POST_FIELDS),
+      ).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order Post: the field name is not a string',
@@ -200,7 +205,7 @@ describe('orderByField', () => {
 
     it.each(received.slice(1))('for a direction that is %s', (description, value) => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'title', value as unknown as Direction)).toThrow(
+      expect(() => orderByField(db.Post, 'title', value as unknown as string, POST_FIELDS)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order Post: the direction is not a string',
@@ -214,22 +219,65 @@ describe('orderByField', () => {
     it('orders ascending for an undefined direction, the default', async () => {
       const { db, runtime } = createChainingOrm();
       await db.Post.orderBy((p) => p.title.asc()).all();
-      await db.Post.orderBy(orderByField(db.Post, 'title', undefined)).all();
+      await db.Post.orderBy(orderByField(db.Post, 'title', undefined, POST_FIELDS)).all();
       const [direct, ordered] = runtime.executions;
       expect(ordered?.plan.ast).toBeDefined();
       expect(ordered?.plan.ast).toEqual(direct?.plan.ast);
     });
   });
 
-  describe('with an empty allowed list', () => {
-    it('refuses every name and says the list names no field', () => {
+  describe('refuses input from a JavaScript caller', () => {
+    it('refuses an empty allowed list for every name', () => {
       const { db } = createChainingOrm();
-      expect(() => orderByField(db.Post, 'title', 'asc', [])).toThrow(
+      expect(() =>
+        orderByField(db.Post, 'title', 'asc', [] as unknown as readonly ['title']),
+      ).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order Post by "title"',
           why: '"title" is not one of the fields allowed for ordering.',
           fix: 'Pass an allowed list that names at least one field of Post that can be ordered.',
+        }),
+      );
+    });
+
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['a string', 'title'],
+      ['a number', 3],
+      ['an array with a number', ['title', 3]],
+    ])('refuses %s as the allowed list', (_description, allowed) => {
+      const { db } = createChainingOrm();
+      expect(() =>
+        orderByField(db.Post, 'title', 'asc', allowed as unknown as readonly ['title']),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: 'Cannot order Post: the allowed fields are not a list of names',
+          meta: { model: 'Post', argument: 'allowed' },
+        }),
+      );
+    });
+
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['a number', 3],
+      ['an object', { modelName: 'Post' }],
+    ])('refuses %s as the collection', (description, collection) => {
+      expect(() =>
+        orderByField(
+          collection as unknown as ReturnType<typeof createChainingOrm>['db']['Post'],
+          'title',
+          'asc',
+          ['title'],
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: 'Cannot order: orderByField was not given a collection',
+          why: `orderByField takes the collection it orders, such as db.orm.public.Post; received ${description}.`,
         }),
       );
     });

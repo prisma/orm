@@ -42,7 +42,9 @@ export interface ScopeFieldBuilder<
 }
 
 /** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
-export type ScopeFieldDeclarations = Readonly<Record<string, ScopeFieldBuilder | DeclaredField>>;
+export type ScopeFieldDeclarations<CodecId extends string = string> = Readonly<
+  Record<string, ScopeFieldBuilder<CodecId> | DeclaredField<CodecId>>
+>;
 
 type DeclarationField<Declaration> =
   Declaration extends ScopeFieldBuilder<infer Id, infer Nullable>
@@ -252,20 +254,115 @@ export function assertScopeBody(body: unknown): void {
   }
 }
 
+function isModelCollection(value: unknown): value is RuntimeModelCollection {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'ctx' in value &&
+    typeof value.ctx === 'object' &&
+    value.ctx !== null &&
+    'modelName' in value &&
+    typeof value.modelName === 'string' &&
+    'namespaceId' in value &&
+    typeof value.namespaceId === 'string'
+  );
+}
+
+/** Throws `ORM.ARGUMENT_INVALID` unless `value`, what a scope is applied to, is a collection. */
+export function assertScopeReceiver(value: unknown): asserts value is RuntimeModelCollection {
+  if (!isModelCollection(value)) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      'Cannot apply the scope: it was not given a collection',
+      {
+        why: `A scope is applied to a collection, such as db.orm.public.Post; received ${describeReceived(value)}.`,
+        fix: 'Run the scope with apply on a collection: collection.apply(scope).',
+        meta: { argument: 'collection' },
+      },
+    );
+  }
+}
+
+/** Throws `ORM.ARGUMENT_INVALID` unless `value` is a collection of the model and namespace a scope for one model was made from. */
+export function assertModelScopeReceiver(
+  source: { readonly modelName: string; readonly namespaceId: string },
+  value: unknown,
+): void {
+  assertScopeReceiver(value);
+  if (value.modelName !== source.modelName || value.namespaceId !== source.namespaceId) {
+    const made = `${source.namespaceId}.${source.modelName}`;
+    const given = `${value.namespaceId}.${value.modelName}`;
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `Cannot apply a scope for ${made} to a collection of ${given}`,
+      {
+        why: `The scope was made with ${made}.scope(...), and its body was written for that model.`,
+        fix: `Apply the scope to a collection of ${made}, or make a scope from ${given}.`,
+        meta: {
+          model: source.modelName,
+          namespace: source.namespaceId,
+          receivedModel: value.modelName,
+          receivedNamespace: value.namespaceId,
+        },
+      },
+    );
+  }
+}
+
+/** The model as error messages name it: with its namespace when the contract has more than one. */
+export function modelLabel(collection: RuntimeModelCollection): string {
+  const namespaces = Object.keys(collection.ctx.context.contract.domain.namespaces);
+  return namespaces.length > 1
+    ? `${collection.namespaceId}.${collection.modelName}`
+    : collection.modelName;
+}
+
+/** Throws `ORM.ARGUMENT_INVALID` unless `result`, what a scope's body returned, is a collection of the receiver's model, namespace and class. */
+export function assertScopeResult(receiver: RuntimeModelCollection, result: unknown): void {
+  const sameCollection =
+    isModelCollection(result) &&
+    result.modelName === receiver.modelName &&
+    result.namespaceId === receiver.namespaceId &&
+    result instanceof receiver.constructor;
+  if (!sameCollection) {
+    const label = modelLabel(receiver);
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `Cannot apply the scope to ${label}: its body did not return a collection of ${label}`,
+      {
+        why: `The body of a scope for any model returns the collection it received, after where, orderBy, limit or offset; it returned ${isModelCollection(result) ? `a collection of ${modelLabel(result)}` : describeReceived(result)}.`,
+        fix: 'Return the collection the body receives, or one made from it by calling its methods.',
+        meta: {
+          model: receiver.modelName,
+          namespace: receiver.namespaceId,
+          returned: isModelCollection(result) ? result.modelName : describeReceived(result),
+        },
+      },
+    );
+  }
+}
+
 function assertScopeFields(
   collection: RuntimeModelCollection,
   fields: ReadonlyArray<readonly [string, DeclaredField]>,
 ): void {
   const { contract } = collection.ctx.context;
   const { modelName, namespaceId } = collection;
+  const label = modelLabel(collection);
   const model = modelOf(contract, namespaceId, modelName);
   for (const [name, spec] of fields) {
     const declared = `The scope was declared for models that have a field ${name} of column type ${spec.codecId} that ${nullability(spec.nullable)}.`;
-    const meta = { model: modelName, field: name, codecId: spec.codecId, nullable: spec.nullable };
+    const meta = {
+      model: modelName,
+      namespace: namespaceId,
+      field: name,
+      codecId: spec.codecId,
+      nullable: spec.nullable,
+    };
     if (!Object.hasOwn(model?.fields ?? {}, name)) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
-        `Cannot apply a scope to ${modelName}: it has no field ${name}`,
+        `Cannot apply a scope to ${label}: it has no field ${name}`,
         {
           why: declared,
           fix: `Apply the scope to a model that has a field ${name}, or remove ${name} from the declaration in the scope.`,
@@ -282,11 +379,11 @@ function assertScopeFields(
     if (column?.codecId !== spec.codecId || column.nullable !== spec.nullable) {
       const actual =
         column === undefined
-          ? `${modelName}.${name} has no column.`
-          : `${modelName}.${name} has column type ${column.codecId} and ${nullability(column.nullable)}.`;
+          ? `${label}.${name} has no column.`
+          : `${label}.${name} has column type ${column.codecId} and ${nullability(column.nullable)}.`;
       throw ormError(
         'ORM.FIELD_UNKNOWN',
-        `Cannot apply a scope to ${modelName}: its field ${name} does not match the declaration`,
+        `Cannot apply a scope to ${label}: its field ${name} does not match the declaration`,
         {
           why: `${declared} ${actual}`,
           fix: `Apply the scope to a model whose ${name} field has that column type and nullability, or change the declaration in the scope.`,
@@ -313,28 +410,24 @@ export function defineFieldScope<
   const fields = declaredFieldSpecs(declarations);
   assertScopeBody(body);
   return (collection) => {
-    assertScopeFields(
+    const receiver: unknown = collection;
+    assertScopeReceiver(receiver);
+    assertScopeFields(receiver, fields);
+    const result: unknown = body(
       blindCast<
-        RuntimeModelCollection,
-        'every collection carries its context, model, namespace and table'
+        ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
+        'a collection offers where, orderBy, limit and offset with these run-time shapes'
       >(collection),
-      fields,
     );
+    assertScopeResult(receiver, result);
     return blindCast<
       WithFacts<typeof collection, Facts>,
-      'where, orderBy, limit and offset return a collection of the same class with the facts the body established'
-    >(
-      body(
-        blindCast<
-          ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
-          'a collection offers where, orderBy, limit and offset with these run-time shapes'
-        >(collection),
-      ),
-    );
+      "checked above: a collection of the receiver's model, namespace and class, with the facts the body established"
+    >(result);
   };
 }
 
-interface ModelCollection<
+export interface ModelCollection<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
@@ -345,7 +438,7 @@ interface ModelCollection<
   readonly tableName: string;
 }
 
-type RuntimeModelCollection = ModelCollection<Contract<SqlStorage>, string, string>;
+export type RuntimeModelCollection = ModelCollection<Contract<SqlStorage>, string, string>;
 
 const SHOWN_LENGTH = 64;
 
@@ -415,7 +508,7 @@ function whyNotOrderable(collection: RuntimeModelCollection, name: string): stri
 }
 
 /**
- * An `orderBy` selector for a field named by a string, such as an order parameter of a request. A name that is not an orderable field of the collection's model or not in `allowed`, and a direction other than `asc` or `desc`, throw `ORM.ARGUMENT_INVALID`.
+ * An `orderBy` selector for a field named by a string, such as an order parameter of a request. `allowed` lists the fields a request may order by. A name that is not in `allowed` or not an orderable field of the collection's model, and a direction other than `asc` or `desc`, throw `ORM.ARGUMENT_INVALID`. An undefined direction is `asc`.
  *
  * ```ts
  * db.Post.orderBy(orderByField(db.Post, input.orderBy, input.direction, ['title', 'createdAt']));
@@ -424,21 +517,41 @@ function whyNotOrderable(collection: RuntimeModelCollection, name: string): stri
 export function orderByField<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  const Allowed extends OrderableFieldNames<TContract, ModelName, NsId>,
   NsId extends string = never,
-  const Allowed extends OrderableFieldNames<TContract, ModelName, NsId> = OrderableFieldNames<
-    TContract,
-    ModelName,
-    NsId
-  >,
 >(
   collection: ModelCollection<TContract, ModelName, NsId>,
   name: string,
-  direction: Direction = 'asc',
-  allowed?: readonly Allowed[],
+  direction: string | undefined,
+  allowed: readonly [Allowed, ...Allowed[]],
 ): (row: { readonly [K in Allowed]: Orderable }) => OrderByItem {
+  const receiver: unknown = collection;
+  if (!isModelCollection(receiver)) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      'Cannot order: orderByField was not given a collection',
+      {
+        why: `orderByField takes the collection it orders, such as db.orm.public.Post; received ${describeReceived(receiver)}.`,
+        fix: 'Pass the collection the selector is for as the first argument.',
+        meta: { argument: 'collection' },
+      },
+    );
+  }
   const { modelName } = collection;
   const requestedName: unknown = name;
-  const requestedDirection: unknown = direction;
+  const requestedDirection: unknown = direction === undefined ? 'asc' : direction;
+  const allowedList: unknown = allowed;
+  if (!Array.isArray(allowedList) || allowedList.some((field) => typeof field !== 'string')) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `Cannot order ${modelName}: the allowed fields are not a list of names`,
+      {
+        why: `orderByField takes the list of fields a request may order by; received ${describeReceived(allowedList)}.`,
+        fix: `Pass an array of field names of ${modelName}, such as ['title', 'createdAt'].`,
+        meta: { model: modelName, argument: 'allowed' },
+      },
+    );
+  }
   if (typeof requestedDirection !== 'string') {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
@@ -463,7 +576,7 @@ export function orderByField<
     );
   }
   const orderable = orderableFieldNames(collection);
-  const allowedNames: readonly string[] = allowed ?? orderable;
+  const allowedNames: readonly string[] = allowedList;
   const names = allowedNames.filter((field) => orderable.includes(field));
   const orderByOneOf =
     names.length === 0
@@ -491,5 +604,6 @@ export function orderByField<
   const field = blindCast<Allowed, 'checked against the orderable fields and the allowed list'>(
     requestedName,
   );
-  return (row) => row[field][requestedDirection]();
+  const order: Direction = requestedDirection;
+  return (row) => row[field][order]();
 }

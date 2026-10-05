@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a03ff0d0a7fe9bf4376afc72c5b7bbca8fbfc9ec5383cf1778d309d5f10106b2'>;
+  StorageHashBase<'c294faf6ef0f09f8e339c03fccc040841c3e1b60288cf097f69d2a261e317c89'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -233,12 +233,20 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 
 export type FieldOutputTypes = {
   readonly auth: {
+    readonly Note: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+    };
     readonly User: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly token: CodecTypes['pg/text@1']['output'];
     };
   };
   readonly public: {
+    readonly Note: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+    };
     readonly Profile: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly userId: CodecTypes['pg/int4@1']['output'];
@@ -251,12 +259,20 @@ export type FieldOutputTypes = {
 };
 export type FieldInputTypes = {
   readonly auth: {
+    readonly Note: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+    };
     readonly User: {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly token: CodecTypes['pg/text@1']['input'];
     };
   };
   readonly public: {
+    readonly Note: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+    };
     readonly Profile: {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly userId: CodecTypes['pg/int4@1']['input'];
@@ -269,12 +285,20 @@ export type FieldInputTypes = {
 };
 export type StorageColumnTypes = {
   readonly auth: {
+    readonly notes: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+    };
     readonly users: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly token: CodecTypes['pg/text@1']['output'];
     };
   };
   readonly public: {
+    readonly notes: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+    };
     readonly profile: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly user_id: CodecTypes['pg/int4@1']['output'];
@@ -287,12 +311,20 @@ export type StorageColumnTypes = {
 };
 export type StorageColumnInputTypes = {
   readonly auth: {
+    readonly notes: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+    };
     readonly users: {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly token: CodecTypes['pg/text@1']['input'];
     };
   };
   readonly public: {
+    readonly notes: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+    };
     readonly profile: {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly user_id: CodecTypes['pg/int4@1']['input'];
@@ -305,9 +337,19 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type auth_Note = {
+    body: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
   export type auth_User = {
     id: CodecTypes['pg/int4@1']['output'];
     token: CodecTypes['pg/text@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
+  export type public_Note = {
+    body: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
     readonly [RelationKeys]?: never;
   };
   export type public_Profile = {
@@ -325,9 +367,11 @@ export namespace Models {
 
 export declare const models: {
   auth: {
+    Note: Models.auth_Note;
     User: Models.auth_User;
   };
   public: {
+    Note: Models.public_Note;
     Profile: Models.public_Profile;
     User: Models.public_User;
   };
@@ -351,6 +395,24 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly notes: {
+              columns: {
+                readonly body: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly users: {
               columns: {
                 readonly id: {
@@ -377,6 +439,24 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly notes: {
+              columns: {
+                readonly body: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly profile: {
               columns: {
                 readonly id: {
@@ -444,14 +524,37 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly 'auth.notes': { readonly namespace: 'auth' & NamespaceId; readonly model: 'Note' };
     readonly 'auth.users': { readonly namespace: 'auth' & NamespaceId; readonly model: 'User' };
     readonly profile: { readonly namespace: 'public' & NamespaceId; readonly model: 'Profile' };
+    readonly 'public.notes': { readonly namespace: 'public' & NamespaceId; readonly model: 'Note' };
     readonly 'public.users': { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {
       readonly auth: {
         readonly models: {
+          readonly Note: {
+            readonly fields: {
+              readonly body: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'notes';
+              readonly namespaceId: 'auth';
+              readonly fields: {
+                readonly body: { readonly column: 'body' };
+                readonly id: { readonly column: 'id' };
+              };
+            };
+          };
           readonly User: {
             readonly fields: {
               readonly id: {
@@ -477,6 +580,27 @@ type ContractBase = Omit<
       };
       readonly public: {
         readonly models: {
+          readonly Note: {
+            readonly fields: {
+              readonly body: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'notes';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly body: { readonly column: 'body' };
+                readonly id: { readonly column: 'id' };
+              };
+            };
+          };
           readonly Profile: {
             readonly fields: {
               readonly id: {
