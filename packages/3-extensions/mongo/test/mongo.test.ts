@@ -549,6 +549,22 @@ describe('mongo() facade', () => {
       return db.enums['Role']!;
     }
 
+    it('refuses to build a client whose runtime has no codec for an enum', () => {
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        codecs: { get: () => undefined },
+      });
+      expect(() =>
+        mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          message:
+            "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
+        }),
+      );
+    });
+
     it('exposes the enum accessor at db.enums.Role', () => {
       expect(roleAccessor().values).toEqual(['user', 'admin']);
     });

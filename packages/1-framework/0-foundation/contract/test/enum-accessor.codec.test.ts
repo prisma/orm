@@ -2,7 +2,6 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import type { ContractEnum } from '../src/domain-types';
 import {
-  buildEnumsMapForNamespace,
   buildNamespacedEnums,
   createEnumAccessor,
   type EnumMemberCodec,
@@ -159,13 +158,15 @@ describe('buildNamespacedEnums() with codecs', () => {
       public: { models: {}, enum: { Level: levelEnum, Launch: launchEnum } },
     },
   };
-  const codecs: Record<string, EnumMemberCodec> = {
-    'test/bigint@1': bigintTextCodec,
-    'test/date@1': dateCodec,
-  };
+  const codecs = new Map<string, EnumMemberCodec>([
+    ['test/bigint@1', bigintTextCodec],
+    ['test/date@1', dateCodec],
+  ]);
+  const codecFor = (codecId: string) =>
+    codecs.get(codecId) ?? expect.unreachable(`no codec ${codecId}`);
 
   it('reads each enum through the codec its codecId names', () => {
-    const enums = buildNamespacedEnums(domain, (codecId) => codecs[codecId]);
+    const enums = buildNamespacedEnums(domain, codecFor);
     expect({
       level: enums['public']?.['Level']?.members,
       launch: enums['public']?.['Launch']?.values,
@@ -173,10 +174,5 @@ describe('buildNamespacedEnums() with codecs', () => {
       level: { Low: 1n, High: 10n },
       launch: [new Date(launch), new Date(sunset)],
     });
-  });
-
-  it('keeps the stored forms of an enum whose codec the lookup does not have', () => {
-    const enums = buildEnumsMapForNamespace(domain, 'public', () => undefined);
-    expect(enums['Level']?.members).toEqual({ Low: '1', High: '10' });
   });
 });

@@ -13,8 +13,8 @@ export interface EnumMemberCodec {
   encodeJson(value: unknown): JsonValue;
 }
 
-/** The codec an enum's `codecId` names, or `undefined` when the runtime has none for it. */
-export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec | undefined;
+/** The codec an enum's `codecId` names. */
+export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec;
 
 /**
  * Runtime view of a domain enum, built at the client from the contract's `ContractEnum` JSON and read through the enum's codec.

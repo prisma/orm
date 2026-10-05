@@ -1,7 +1,12 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { buildNamespacedEnums, type NamespacedEnums } from '@internal/contract/enum-accessor';
+import {
+  buildNamespacedEnums,
+  type EnumMemberCodec,
+  type NamespacedEnums,
+} from '@internal/contract/enum-accessor';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { runtimeError } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -23,12 +28,24 @@ import { blindCast } from '@internal/utils/casts';
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   NamespacedEnums<TContract>[typeof UNBOUND_NAMESPACE_ID];
 
+function enumCodec(codecs: MongoCodecLookup, codecId: string): EnumMemberCodec {
+  const codec = codecs.get(codecId);
+  if (codec === undefined) {
+    throw runtimeError(
+      'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+      `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
+      { codecId },
+    );
+  }
+  return codec;
+}
+
 function extractUnboundEnums<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(contract: TContract, codecs: MongoCodecLookup): UnboundEnums<TContract> {
-  const enums = buildNamespacedEnums<TContract>(contract.domain, (codecId) => codecs.get(codecId))[
-    UNBOUND_NAMESPACE_ID
-  ];
+  const enums = buildNamespacedEnums<TContract>(contract.domain, (codecId) =>
+    enumCodec(codecs, codecId),
+  )[UNBOUND_NAMESPACE_ID];
   assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
   return enums;
 }

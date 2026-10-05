@@ -6,10 +6,14 @@ import {
   buildNamespacedEnums,
   createEnumAccessor,
 } from '../src/enum-accessor';
+import type { JsonValue } from '../src/types';
 
 type ContractWithDomain<TDomain> = Contract & { readonly domain: TDomain };
 
-const storedForms = () => undefined;
+const storedForms = () => ({
+  decodeJson: (json: JsonValue) => json,
+  encodeJson: (value: unknown) => value as JsonValue,
+});
 
 const roleEnum = {
   codecId: 'pg/text@1',
