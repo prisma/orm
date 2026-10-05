@@ -9,7 +9,7 @@ Linear: [TML-3399](https://linear.app/prisma-company/issue/TML-3399) (slice 1, `
 await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' });
 await cache.invalidate({ keys: ['user-1'] });
 
-// After this project: the invalidation rides on the write and runs once its transaction has committed.
+// After this project: the write carries its invalidation, which runs once the write's transaction has committed.
 await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (m) =>
   m.annotate(invalidateAnnotation({ keys: ['user-1'] })),
 );
@@ -17,11 +17,13 @@ await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (m) =>
 
 ## Purpose
 
-This is the second half of the cache work. The first half shipped the cache middleware's primitives, including `cache.invalidate({ keys, meta })`, which the application calls after a write has returned. This project lets a write carry its own invalidation. That needs a point in the runtime where the write's transaction is known to have committed, which the runtime does not have yet. Slice 1 adds it; slice 2 builds the write annotation on it.
+This is the second half of the cache work. The first half shipped the cache middleware's primitives, including `cache.invalidate({ keys, meta })`, which the application calls after a write has returned. This project lets a write carry its own invalidation.
 
-The write annotation belongs in `@internal/middleware-cache` even though ADR 259 keeps policy out of core. It decides nothing about what to invalidate: the annotation names its target, which reaches the same `invalidate` call as the manual form. What it adds is the deferral until the commit, and that then has one owner, the middleware that already holds the store, instead of every extension re-implementing it.
+That needs a point in a query's lifecycle where the query's effects are final, which the runtime does not have yet. Slice 1 adds it as a new middleware stage, `afterTransaction`. Slice 2 builds the write annotation on it.
 
-## Why the write annotation waits for a post-commit hook
+The write annotation belongs in `@internal/middleware-cache` even though ADR 259 keeps policy out of core. It decides nothing about what to invalidate. The annotation names its own target, which reaches the same `invalidate` call as the manual form. What the package adds is the timing: the middleware already holds the store, so it is the one place that calls `invalidate` once the write is final, instead of every extension doing it again.
+
+## Why the write annotation waits for slice 1
 
 ORM writes that return rows fire `afterQuery`; count-style writes fire `afterExecute`. Both fire per statement, before any enclosing transaction commits. If the cache invalidated there:
 
@@ -29,77 +31,90 @@ ORM writes that return rows fire `afterQuery`; count-style writes fire `afterExe
 2. The transaction has not committed. A concurrent request reads user 1, misses, reads the old committed row, and stores it.
 3. The transaction commits. The cache holds the old row until it expires.
 
-This is the default path, not an edge case: the ORM's single-row `update()` and `delete()`, nested creates and updates, a `create()` on a multi-table-inheritance variant, and a `delete()` with includes run in a transaction of their own (`withMutationScope` in [`mutation-executor.ts`](../../packages/3-extensions/sql-orm-client/src/mutation-executor.ts)). The correct moment to invalidate is after the commit.
+This is the default path, not an edge case. These ORM mutations run in a transaction of their own (`withMutationScope` in [`mutation-executor.ts`](../../packages/3-extensions/sql-orm-client/src/mutation-executor.ts)): single-row `update()` and `delete()`, nested creates and updates, a `create()` on a multi-table-inheritance variant, and a `delete()` with includes. A plain `create()` does not, and neither does `upsert`. The correct moment to invalidate is after the commit.
 
-## Slice 1: the `afterTransaction` middleware hook (TML-3399)
+## Slice 1: the `afterTransaction` stage (TML-3399)
 
 ### Surface
 
-In [`runtime-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/runtime-middleware.ts):
+The query lifecycle gains one more stage: the point where the query's effects are final. In [`runtime-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/runtime-middleware.ts):
 
 ```ts
 export interface AfterTransactionResult {
   readonly outcome: 'committed' | 'rolled-back' | 'unknown';
 }
 
-export interface TransactionMiddlewareContext {
-  readonly contract: unknown;
-  readonly mode: 'strict' | 'permissive';
-  readonly now: () => number;
-  readonly log: RuntimeLog;
-  readonly scope: 'transaction';
-  readonly transactionId: string;
-}
-
 export interface RuntimeMiddleware<TPlan, TMutator> {
   // ...existing hooks
-  afterTransaction?(result: AfterTransactionResult, ctx: TransactionMiddlewareContext): Promise<void>;
-}
-
-export interface RuntimeMiddlewareContext {
-  // ...existing fields
-  readonly transactionId?: string;
+  afterTransaction?(
+    plan: TPlan,
+    result: AfterTransactionResult,
+    ctx: RuntimeMiddlewareContext,
+  ): Promise<void>;
 }
 ```
 
-- `TransactionMiddlewareContext` has no `contentHash`, `planExecutionId` or `signal`: the hook belongs to a transaction, not to one operation.
-- `transactionId` is minted once per transaction with `crypto.randomUUID()` in the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](../../packages/2-sql/5-runtime/src/sql-runtime.ts)). Every operation run on that transaction carries it on its `RuntimeMiddlewareContext`, and the same value reaches `afterTransaction`. It is absent outside a transaction.
+Read it as "the transaction enclosing this query has ended, with this outcome". The hook receives the same plan and the same context, with the same `planExecutionId`, as the query's other hooks. It is declared on the cross-family `RuntimeMiddleware`, so SQL and Mongo middleware both accept it.
 
-### Firing
+### When it fires
 
-A `runAfterTransaction` helper in [`run-with-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/run-with-middleware.ts) calls each middleware's `afterTransaction` in registration order. An error from a hook is logged through `ctx.log.error` and swallowed: the commit has already happened, so failing the caller would report a failure for work that succeeded. Later hooks still run.
+Outside a transaction (`ctx.scope` is `'runtime'` or `'connection'`), the runtime fires it right after `afterQuery` or `afterExecute`, with `committed`. It fires whether or not the query completed. A statement run on its own has committed, or failed without effect, by the time it returns.
 
-The hook fires inside `wrapTransaction`, on the wrapper's own `commit()` and `rollback()`:
+Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](../../packages/2-sql/5-runtime/src/sql-runtime.ts)) remembers every plan executed on the transaction, with its context. When the transaction ends, it fires the stage once for each plan, in execution order:
 
 | What happened | Outcome |
 |---|---|
 | `commit()` resolves | `committed` |
-| `rollback()` resolves | `rolled-back` |
+| `rollback()` resolves, no commit attempted | `rolled-back` |
+| `rollback()` rejects, no commit attempted | `rolled-back` |
 | `commit()` rejects | `unknown` |
 
-The wrapper's `commit()` and `rollback()` await `runAfterTransaction` before resolving, so a write that has returned has already run its `afterTransaction` hooks.
+- `unknown` fires for every rejected `commit()`, whether or not the `rollback()` that follows succeeds. A `COMMIT` that errors may already have landed, for example when it fails on the response path. A cleanup `ROLLBACK` that succeeds proves nothing about it.
+- A rejected `rollback()` with no commit attempted fires `rolled-back`, because no `COMMIT` was sent, so none of the transaction's writes can have landed.
+- A `rollback()` after a rejected `commit()` fires nothing more. Both `withTransaction` and the ORM's `runInTransaction` call `rollback()` after a rejected `commit()`.
+- The stage fires exactly once per plan per transaction.
+- `commit()` and `rollback()` resolve only after the hooks have run. A write that has returned has already had its stage run.
+- The stage fires after `commit()` or `rollback()` resolves and before the connection is released. The hook must not use the connection.
 
-It fires exactly once per transaction. `unknown` is fired for every rejected `commit()`, whether or not the cleanup rollback that follows succeeds: a successful rollback cannot prove the commit did not land, because a commit can apply and still fail on the response path. After `commit()` rejects, both `withTransaction` and the ORM's `runInTransaction` call `rollback()` to clean up; that rollback must not fire the hook a second time. A `rollback()` that rejects with no commit attempted fires `rolled-back`: no COMMIT was sent, so none of the transaction's writes can have landed.
+A transaction that never ends, such as an abandoned manual `connection().transaction()`, never fires the stage for its plans.
 
-Why `wrapTransaction` and not `withTransaction`: the ORM's `withMutationScope` calls `runtime.connection()`, then `connection.transaction()`, and then `commit()` or `rollback()` on the returned wrapper. It never goes through `withTransaction`. A hook fired from `withTransaction` would miss every ORM operation that runs through `withMutationScope`: single-row `update()` and `delete()`, nested creates and updates, a `create()` on a multi-table-inheritance variant, and a `delete()` with includes.
+Why `wrapTransaction` and not `withTransaction`: the ORM's `withMutationScope` calls `runtime.connection()`, then `connection.transaction()`, and then `commit()` or `rollback()` on the returned wrapper. It never goes through `withTransaction`. A stage fired from `withTransaction` would miss every ORM mutation that opens its own transaction.
 
-The hook fires before the connection is released. It must not use the connection, and it receives no queryable.
+Mongo declares the hook and fires it with `committed` right after `afterQuery` or `afterExecute`, since every Mongo query runs outside a transaction.
+
+### Hook errors
+
+A runner in [`run-with-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/run-with-middleware.ts) calls each middleware's `afterTransaction` in registration order. An error from a hook is logged through `ctx.log.error` and swallowed, and later hooks still run. The commit has already happened, so failing the caller would report a failure for work that succeeded. ActiveRecord raises in this position; not raising is a conscious difference.
+
+### Prior art
+
+ActiveRecord's `after_commit` is declared on the record being saved. It runs once the outermost transaction commits, and runs immediately when the save was outside an explicit transaction. `afterTransaction` follows the same shape: it belongs to the query, not to the transaction.
 
 ### Not in this slice
 
-- No `beforeTransaction`. No consumer needs it.
-- Mongo: the Mongo runtime has no transaction surface yet. Mongo middleware can declare `afterTransaction`, but it never fires.
+- No `beforeTransaction`, and no hook that belongs to a transaction rather than to a query.
+- No transaction id, and no way to store data on a transaction or on a context.
+
+Hooks for transactions are a later, separate decision. When one is needed, it goes in a `transaction` object on the middleware with its own begin and end hooks, kept apart from the query hooks. That way a middleware author never has to match a transaction's events to its queries.
 
 ### Tests
 
-- Framework: `runAfterTransaction` calls hooks in registration order; a throwing hook is logged through `ctx.log.error`, swallowed, and does not stop later hooks; type tests that `afterTransaction` is optional and that `TransactionMiddlewareContext` has no `contentHash`, `planExecutionId` or `signal`.
-- SQL runtime: `committed` on a resolved commit, `rolled-back` on a resolved rollback, `unknown` on a rejected commit whether the cleanup rollback then succeeds or fails; `commit()` resolves only after the hooks have run; exactly one call when a rejected commit is followed by `withTransaction`'s rollback; the same through `connection().transaction()` driven by hand, as the ORM does; every operation on one transaction sees the same `transactionId`, which matches the one `afterTransaction` receives; two transactions see different ids; operations outside a transaction have no `transactionId`.
-- ORM integration: a single-row `update()` fires `afterTransaction` with `committed` once.
+- Runner: calls hooks in registration order; a throwing hook is logged through `ctx.log.error`, swallowed, and does not stop later hooks.
+- SQL runtime lifecycle:
+  - a query in runtime scope, and one in connection scope, fires `committed` right after its after-hook, including when the query fails;
+  - every `withTransaction` branch fires once per plan with the right outcome: resolved commit gives `committed`; callback error then resolved or rejected rollback gives `rolled-back`; rejected commit gives `unknown`, whether the cleanup rollback then succeeds or fails, with no second call;
+  - the same outcomes through `connection().transaction()` driven by hand, as the ORM does;
+  - several plans on one transaction fire in execution order, each with the same `planExecutionId` its other hooks saw;
+  - a throwing hook does not fail `commit()`;
+  - `commit()` resolves only after the hooks have run.
+- Postgres integration: an ORM single-row `update()` fires `afterTransaction` with `committed` once.
+- Type test: a middleware with `afterTransaction` is assignable to `SqlMiddleware[]` and to `MongoMiddleware[]`.
 
 ### Docs
 
-- The runtime subsystem doc ([`4. Runtime & Middleware Framework.md`](../../docs/architecture%20docs/subsystems/4.%20Runtime%20&%20Middleware%20Framework.md)) describes the hook, its outcomes, and that it fires from the transaction wrapper.
-- An ADR of its own lands with this slice: the post-commit hook, its outcomes (including `unknown` for every rejected commit), the firing point, that `commit()` and `rollback()` wait for the hooks, and the exactly-once rule.
+- An ADR of its own: the stage, its outcomes (including `unknown` for every rejected commit), where it fires inside and outside a transaction, the exactly-once rule, that `commit()` and `rollback()` wait for the hooks, and why transaction hooks are left for later.
+- The runtime subsystem doc ([`4. Runtime & Middleware Framework.md`](../../docs/architecture%20docs/subsystems/4.%20Runtime%20&%20Middleware%20Framework.md)) adds the stage to the query lifecycle.
+- The runtime skill reference ([`runtime.md`](../../skills/prisma-8/references/runtime.md)) lists the hook.
 
 ## Slice 2: `invalidateAnnotation` on writes (TML-3400)
 
@@ -115,58 +130,46 @@ export interface InvalidateAnnotationOptions<TMeta = unknown> {
 // invalidateAnnotation<TMeta>({ keys, meta }), defined with applicableTo: ['write']
 ```
 
-The payload has the same shape as `cache.invalidate`'s target, typed by `TMeta` the same way `cacheAnnotation<TMeta>` is. A read terminal refuses it at compile time and at run time.
+The payload has the same shape as `cache.invalidate`'s target, typed by `TMeta` the way `cacheAnnotation<TMeta>` is. A read terminal refuses it at compile time and at run time.
 
 ### Behaviour
 
-The cache middleware reads the annotation in two hooks:
+The cache middleware does nothing for writes in `afterQuery` or `afterExecute`. It implements `afterTransaction`. When the stage fires for a plan that carries the annotation, it calls `invalidate` with the annotation's `keys` and `meta`, unless the outcome is `rolled-back`. `unknown` invalidates, because the write may have committed and an unneeded invalidation costs only a miss. Plans without the annotation are ignored.
 
-- `afterQuery`, for writes that return rows: ORM `create`, `update`, `delete`, `updateAll`, `deleteAll`, `upsert`, and SQL `.returning()`.
-- `afterExecute`, for count terminals and plain `execute`.
+The middleware keeps no state per transaction. The runtime decides when the stage fires, so the same code serves every scope. Several annotated writes in one transaction each invalidate when the transaction ends.
 
-It invalidates whether or not `result.completed` is true, because a write can apply and still report failure. On the runtime's failure path hook errors are swallowed, so the middleware logs them itself. On the success path a store error propagates to the caller, and the README says that the write has already been applied when this happens.
-
-Timing depends on scope:
-
-- **Runtime scope:** invalidate immediately. The statement ran on its own, so it has committed.
-- **Connection scope:** invalidate immediately, as in runtime scope. A pinned connection without a transaction is autocommit.
-- **Transaction scope:** queue the invalidation under `ctx.transactionId`. On `afterTransaction`, run the queue on `committed` or `unknown` and drop it on `rolled-back`. `unknown` invalidates because the write may have committed, and an unneeded invalidation costs only a miss.
-
-How the queue works, step by step:
-
-1. The middleware keeps a `Map` from transaction id to the targets (`keys` and `meta`) waiting for that transaction.
-2. When `afterQuery` or `afterExecute` sees an annotated write whose `ctx.scope` is `'transaction'`, it reads `ctx.transactionId` and appends the annotation's target to that id's list, creating the list on the first write. This is why no `beforeTransaction` hook is needed: nothing has to happen before the first annotated write, and a transaction with no annotated writes creates no state.
-3. `afterTransaction` receives the same id on its context. It takes that id's list out of the map, runs `invalidate` for it on `committed` or `unknown`, and discards it on `rolled-back`.
-
-Only annotated writes are remembered. Reads inside a transaction never use the cache, and an unannotated write names nothing to invalidate.
-
-Several annotated writes in one transaction each queue their target; the queue runs once on the outcome.
+A store error from `invalidate` propagates out of the hook. The runner logs it and swallows it, as for any hook error.
 
 ### Known limits to document
 
 - Nested-relation writes discard annotations: the ORM runs them as a graph of internal statements, and the annotation reaches none of them.
 - The Mongo ORM cannot annotate writes.
-- An abandoned row stream fires no after-hook. A write whose returned rows the caller never drains does not invalidate.
-- A transaction that ends with neither `commit()` nor `rollback()`, such as an abandoned manual `connection().transaction()`, leaves its queued invalidations unrun, and the queue entry is held until the connection is destroyed. This is bounded by abandoned transactions; `withTransaction` and the ORM always end theirs.
+- An abandoned row stream fires no after-hook. Outside a transaction it therefore fires no `afterTransaction` either, and a write whose returned rows the caller never drains does not invalidate.
 
 ### Tests
 
 - Type tests: `invalidateAnnotation` is accepted on every write terminal and refused on reads; `TMeta` checks `meta`.
-- Middleware: runtime-scope write invalidates once with the annotation's `keys` and `meta`; connection-scope write invalidates immediately; `completed: false` still invalidates and logs a store error instead of throwing; a store error on the success path propagates; transaction-scope write does not invalidate before `afterTransaction`; `committed` and `unknown` run the queue; `rolled-back` drops it; two transactions with different ids keep separate queues.
-- Integration: an ORM single-row `update()` with the annotation invalidates after the commit, and a read after it sees the new row with one driver call; a write in a rolled-back transaction leaves the entry.
+- Middleware:
+  - `committed` invalidates once with the annotation's `keys` and `meta`;
+  - `unknown` invalidates;
+  - `rolled-back` does nothing;
+  - a plan without the annotation does nothing;
+  - a store error propagates to the runner, which logs it.
+- [`cache-query-only.test.ts`](../../packages/3-extensions/middleware-cache/test/cache-query-only.test.ts) changes to check that the middleware's only hook for writes is `afterTransaction`.
+- Postgres integration: an ORM `update()` with the annotation, then a read, sees the new row with one driver call.
 
 ### Docs
 
-The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, its timing, and the known limits. ADR 259's consequence about the runtime hook and its paragraph on invalidation attached to a write are updated in the same PR.
+The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, when it runs, and the known limits. ADR 259's consequence about the runtime hook, and its paragraph on invalidation that comes with a write, are updated in the same PR.
 
 ## Non-goals
 
 - Table detection from the plan. An extension that wants table-based invalidation still ships its own middleware.
 - Serve-stale strategies.
-- A `beforeTransaction` hook.
+- Hooks for transactions, including `beforeTransaction`.
 
 ## Definition of done
 
-- `afterTransaction` fires exactly once per SQL transaction with the right outcome, including for ORM writes, and `transactionId` correlates operations to their transaction.
-- An annotated write invalidates after its transaction commits, never before, and never after a rollback.
-- The ADR for the hook is merged, ADR 259 and the package README describe write-side invalidation, and this folder is deleted at close-out.
+- `afterTransaction` fires exactly once per query with the right outcome: right after the query outside a transaction, and when the transaction ends inside one, including for ORM writes.
+- An annotated write invalidates after its transaction commits or ends with an unknown outcome, never before, and never after a rollback.
+- The ADR for the stage is merged, the runtime subsystem doc, the runtime skill reference, ADR 259 and the package README describe the shipped behaviour, and this folder is deleted at close-out.
