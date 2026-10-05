@@ -756,14 +756,17 @@ type MaybeValueObjectsSection<ValueObjects extends Record<string, AnyValueObject
         readonly valueObjects: ContractValueObjectsFromRecord<ValueObjects>;
       };
 
-// Project EnumTypeHandle to the namespace enum-entry shape.
-// Uses enumMembers (which carries Values[number] literals) rather than
-// ContractEnum.members (which uses JsonValue and erases literals).
+// Project EnumTypeHandle to the namespace enum-entry shape. A member is stored in its codec's
+// JSON form, which is the authored literal only when that literal is JSON (a bigint or a Date
+// member is stored as text), so a member whose value is not JSON is typed as `JsonValue`.
 type EnumHandleToEntry<Handle> =
   Handle extends EnumTypeHandle<string, infer Values, infer _Names, infer _MembersMap>
     ? {
         readonly codecId: string;
-        readonly members: readonly { readonly name: string; readonly value: Values[number] }[];
+        readonly members: readonly {
+          readonly name: string;
+          readonly value: Values[number] extends JsonValue ? Values[number] : JsonValue;
+        }[];
       }
     : never;
 

@@ -1,5 +1,5 @@
 import 'temporal-polyfill/full/global';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract, enumType, member } from '../src/exports/contract-builder';
 import postgresStatic from '../src/static/postgres-static';
 
@@ -173,5 +173,18 @@ describe('db.enums finds values equal to a member', () => {
       instant: 'Launch',
       instantOther: false,
     });
+  });
+});
+
+describe('db.enums member types', () => {
+  it('types each member as the value it holds', () => {
+    expectTypeOf(levels.TextLevel.members.Low).toEqualTypeOf<'low'>();
+    expectTypeOf(levels.Int4Level.members.Low).toEqualTypeOf<1>();
+    expectTypeOf(levels.Int8Level.members.Low).toEqualTypeOf<1n>();
+    expectTypeOf(levels.UuidLevel.members.First).toEqualTypeOf<typeof uuidA>();
+    expectTypeOf(levels.DateLevel.members.Launch).toEqualTypeOf<Date>();
+    expectTypeOf(levels.DayLevel.members.Launch).toEqualTypeOf<Temporal.PlainDate>();
+    expectTypeOf(levels.InstantLevel.members.Launch).toEqualTypeOf<Temporal.Instant>();
+    expectTypeOf(levels.Float8Level.members.Half).toEqualTypeOf<1.5>();
   });
 });
