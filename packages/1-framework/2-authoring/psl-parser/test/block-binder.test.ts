@@ -1,4 +1,3 @@
-import { notOk, ok } from '@internal/utils/result';
 import { expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { bool } from '../src/attribute-spec/combinators/bool';
@@ -24,32 +23,9 @@ import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ArrayLiteralAst, FunctionCallAst } from '../src/syntax/ast/expressions';
-import { binderContext } from './support';
+import { binderContext, nullLiteral, rejectingNothing } from './support';
 
 const reference = entityRef({ kind: 'model' });
-
-/** Mirrors the SQL family's local `nullLiteral()`: kind `null`, matching only the identifier `null`. */
-function nullLiteral(): ArgType<null, AttributeCtx> {
-  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
-  return {
-    kind: 'null',
-    label: 'null',
-    parse: (arg, ctx) => {
-      const result = nullIdentifier.parse(arg, ctx);
-      return result.ok ? ok(null) : result;
-    },
-  };
-}
-
-/** Mirrors the SQL family's `noEnumMember()`: a `rejecting` leaf that matches nothing. */
-function rejectingNothing(): ArgType<never, AttributeCtx> {
-  return {
-    kind: 'rejecting',
-    label: 'nothing',
-    message: 'Rejects every value',
-    parse: () => notOk([]),
-  };
-}
 
 function bind(
   source: string,

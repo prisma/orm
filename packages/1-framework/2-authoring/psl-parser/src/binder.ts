@@ -468,8 +468,6 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
         ? spec.parameters[key]
         : undefined;
     const rule = spec.mode === 'struct' ? parameter?.type : spec.value.type;
-    const value = entry.value();
-    if (rule === undefined || value === undefined) continue;
     if (parameter !== undefined) {
       const keyNode = entry.key()?.syntax;
       if (keyNode !== undefined) {
@@ -479,6 +477,8 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
         });
       }
     }
+    const value = entry.value();
+    if (rule === undefined || value === undefined) continue;
     bindExpression(rule, value, ctx);
   }
 
@@ -584,8 +584,7 @@ function tryBindExpression(
           key,
           key === undefined ? positional++ : positional,
         );
-        const value = arg.value();
-        if (parameter === undefined || value === undefined) {
+        if (parameter === undefined) {
           matched = false;
           continue;
         }
@@ -597,6 +596,11 @@ function tryBindExpression(
               symbol: { kind: 'parameter', name: key, param: parameter },
             });
           }
+        }
+        const value = arg.value();
+        if (value === undefined) {
+          matched = false;
+          continue;
         }
         const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
         matched = trial.matched && matched;
@@ -759,7 +763,7 @@ function bindArguments(
       arg.name,
       arg.name === undefined ? positional++ : positional,
     );
-    if (parameter === undefined || arg.expression === undefined) return;
+    if (parameter === undefined) return;
     if (arg.name !== undefined) {
       const keyNode = rawArgs[index]?.name()?.syntax;
       if (keyNode !== undefined) {
@@ -769,6 +773,7 @@ function bindArguments(
         });
       }
     }
+    if (arg.expression === undefined) return;
     bindExpression(parameter.type, arg.expression, ctx, modelContext);
   });
 }

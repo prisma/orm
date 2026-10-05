@@ -1,4 +1,3 @@
-import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { bool } from '../src/attribute-spec/combinators/bool';
@@ -9,26 +8,12 @@ import { numLiteral } from '../src/attribute-spec/combinators/num-literal';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
-import type { ArgType, AttributeCtx } from '../src/attribute-spec/types';
 import { createBinder } from '../src/binder';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FunctionCallAst } from '../src/syntax/ast/expressions';
-import { binderContext } from './support';
-
-/** Mirrors the SQL family's local `nullLiteral()`: kind `null`, matching only the identifier `null`. */
-function nullLiteral(): ArgType<null, AttributeCtx> {
-  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
-  return {
-    kind: 'null',
-    label: 'null',
-    parse: (arg, ctx) => {
-      const result = nullIdentifier.parse(arg, ctx);
-      return result.ok ? ok(null) : result;
-    },
-  };
-}
+import { binderContext, nullLiteral } from './support';
 
 const scalarTypes = {
   Int: {
@@ -70,6 +55,29 @@ describe('createBinder — attribute-argument parameters', () => {
       symbol: { kind: 'parameter', name: 'references', param: referencesParam },
     });
   });
+
+  it('resolves a named attribute-argument key even when its value is missing', () => {
+    const referencesParam = { type: str(), documentation: 'Referenced fields.' };
+    const relationSpec = fieldAttribute('relation', {
+      documentation: 'Declares a relation.',
+      named: { references: referencesParam },
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  id Int\n  author User @relation(references: )\n}',
+      binderContext({
+        contributedTypes: scalarTypes,
+        attributeSpecs: { field: { relation: () => relationSpec }, model: {} },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const keyNode = [...attribute.argList()!.args()][0]!.name()!.syntax;
+    expect(binder.symbolForNode(keyNode)).toEqual({
+      kind: 'parameter',
+      symbol: { kind: 'parameter', name: 'references', param: referencesParam },
+    });
+  });
 });
 
 describe('createBinder — function calls', () => {
@@ -85,6 +93,38 @@ describe('createBinder — function calls', () => {
     });
     const { symbolTable, binder, diagnostics } = bind(
       'model User {\n  mode String @default(choose(mode: "x"))\n}',
+      binderContext({
+        contributedTypes: scalarTypes,
+        attributeSpecs: { field: { default: () => defaultSpec }, model: {} },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['mode']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const callArg = [...attribute.argList()!.args()][0]!;
+    const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
+    const nameNode = call.name()!.syntax;
+    const modeKeyNode = [...call.args()][0]!.name()!.syntax;
+    const functionSymbol = { kind: 'function', name: 'choose', signature: chooseFunc.signature };
+    expect(binder.symbolForNode(nameNode)).toEqual({ kind: 'function', symbol: functionSymbol });
+    expect(binder.symbolForNode(modeKeyNode)).toEqual({
+      kind: 'parameter',
+      symbol: { kind: 'parameter', name: 'mode', param: modeParam },
+    });
+  });
+
+  it('resolves a function-call argument key even when its value is missing', () => {
+    const modeParam = { type: str(), documentation: 'The mode.' };
+    const chooseFunc = funcCall('choose', {
+      documentation: 'Chooses a mode.',
+      named: { mode: modeParam },
+    });
+    const defaultSpec = fieldAttribute('default', {
+      documentation: 'Sets a default.',
+      positional: [{ key: 'value', type: chooseFunc, documentation: 'The default value.' }],
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  mode String @default(choose(mode: ))\n}',
       binderContext({
         contributedTypes: scalarTypes,
         attributeSpecs: { field: { default: () => defaultSpec }, model: {} },
@@ -303,6 +343,31 @@ describe('createBinder — block parameters and attributes', () => {
     const usingParam = { type: str(), documentation: 'The policy filter.' };
     const { symbolTable, binder, diagnostics } = bind(
       'policy ReadOwn {\n  using = "x"\n}',
+      binderContext({
+        pslBlockDescriptors: {
+          policy: {
+            kind: 'pslBlock',
+            keyword: 'policy',
+            discriminator: 'policy',
+            name: { required: true },
+            spec: () => structBlock({ parameters: { using: usingParam } }),
+          },
+        },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    const block = symbolTable.topLevel.blocks['ReadOwn']!;
+    const entry = [...block.node.entries()][0]!;
+    expect(binder.symbolForNode(entry.key()!.syntax)).toEqual({
+      kind: 'parameter',
+      symbol: { kind: 'parameter', name: 'using', param: usingParam },
+    });
+  });
+
+  it('resolves a struct-block entry key even when its value is missing', () => {
+    const usingParam = { type: str(), documentation: 'The policy filter.' };
+    const { symbolTable, binder, diagnostics } = bind(
+      'policy ReadOwn {\n  using =\n}',
       binderContext({
         pslBlockDescriptors: {
           policy: {

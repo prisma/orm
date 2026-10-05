@@ -39,6 +39,12 @@ const relationSpec = fieldAttribute('relation', {
     name: { type: optional(str()), documentation: 'An explicit relation name.' },
   },
 });
+const incompleteKeySpec = fieldAttribute('incompleteKey', {
+  documentation: '',
+  named: {
+    references: { type: optional(str()), documentation: 'Referenced fields.' },
+  },
+});
 const onDeleteSpec = fieldAttribute('onDeleteExample', {
   documentation: '',
   named: {
@@ -69,7 +75,6 @@ const defaultSpec = fieldAttribute('default', {
     { key: 'value', type: oneOf(autoincrementFunc, dbgeneratedFunc), documentation: '' },
   ],
 });
-/** Mirrors the SQL family's local `nullLiteral()`: kind `null`, matching only the identifier `null`. */
 function nullLiteral(): ArgType<null, AttributeCtx> {
   const nullIdentifier = identifier('null', { documentation: 'A null value.' });
   return {
@@ -84,7 +89,6 @@ function nullLiteral(): ArgType<null, AttributeCtx> {
 const autoincrementRealOrderFunc = funcCall('autoincrement', {
   documentation: 'Generates sequential integers.',
 });
-/** The real postgres `@default` arm order: scalar leaves before the function alternatives. */
 const defaultRealOrderSpec = fieldAttribute('default', {
   documentation: '',
   positional: [
@@ -107,6 +111,7 @@ const authoringContributions = assembleAuthoringContributions([
         field: {
           relatesTo: () => relatesTo,
           relation: () => relationSpec,
+          incompleteKey: () => incompleteKeySpec,
           onDeleteExample: () => onDeleteSpec,
           default: () => defaultSpec,
           defaultRealOrder: () => defaultRealOrderSpec,
@@ -492,6 +497,17 @@ describe('providePslHover', () => {
         value: '```prisma\nname?: string\n```\n\nAn explicit relation name.',
       },
       range: { start: { line: 1, character: 24 }, end: { line: 1, character: 28 } },
+    });
+  });
+
+  it('shows a named attribute-argument key while its value is missing', () => {
+    const result = hover('model User {\n  author User @incompleteKey(referen|ces: )\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nreferences?: string\n```\n\nReferenced fields.',
+      },
+      range: { start: { line: 1, character: 29 }, end: { line: 1, character: 39 } },
     });
   });
 

@@ -1,4 +1,4 @@
-import type { PositionalParam } from '@internal/psl-parser';
+import type { Param, PositionalParam } from '@internal/psl-parser';
 import {
   MarkupKind,
   type ParameterInformation,
@@ -129,9 +129,9 @@ export interface SignatureLabel {
   readonly parts: readonly SignatureLabelPart[];
 }
 
-export function namedParameterText(param: PositionalParam<unknown, never>): string {
-  const optional = 'optional' in param.type && param.type.optional === true;
-  return `${param.key}${optional ? '?' : ''}: ${param.type.label}`;
+export function namedParameterText(key: string, type: Param<unknown, never>['type']): string {
+  const optional = 'optional' in type && type.optional === true;
+  return `${key}${optional ? '?' : ''}: ${type.label}`;
 }
 
 export function renderSignatureLabel(
@@ -146,7 +146,9 @@ export function renderSignatureLabel(
     const optional = 'optional' in param.type && param.type.optional === true;
     const typeLabel =
       optional && param.type.label.includes(' | ') ? `(${param.type.label})` : param.type.label;
-    const text = positional ? `${typeLabel}${optional ? '?' : ''}` : namedParameterText(param);
+    const text = positional
+      ? `${typeLabel}${optional ? '?' : ''}`
+      : namedParameterText(param.key, param.type);
     const start = label.length;
     label += text;
     return { param, text, start, end: label.length, positional };

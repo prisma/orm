@@ -14,7 +14,6 @@ import type {
   ModelSymbol,
   NamedTypeSymbol,
   ParameterSymbol,
-  PositionalParam,
   Resolution,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
@@ -142,8 +141,7 @@ function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
 }
 
 function renderParameterContent(symbol: ParameterSymbol): string {
-  const part: PositionalParam<unknown, never> = { key: symbol.name, ...symbol.param };
-  const fence = ['```prisma', namedParameterText(part), '```'].join('\n');
+  const fence = ['```prisma', namedParameterText(symbol.name, symbol.param.type), '```'].join('\n');
   return withDocumentation(fence, symbol.param.documentation);
 }
 
