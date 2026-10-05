@@ -41,7 +41,6 @@ function isFiniteNumber(element: JsonValue): element is number {
   return typeof element === 'number' && Number.isFinite(element);
 }
 
-/** The numbers of a vector as PostgreSQL prints it, `[1,2,3]`, or `undefined` for other text. */
 function printedVector(text: string): readonly number[] | undefined {
   const body = PRINTED_VECTOR.exec(text)?.[1]?.trim();
   if (body === undefined) return undefined;
