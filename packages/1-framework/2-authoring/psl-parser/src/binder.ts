@@ -627,12 +627,7 @@ function tryBindExpression(
       const written = writtenEntityReference(node);
       if (written === undefined) return { matched: false, references, diagnostics };
       const failures: ParseDiagnostic[] = [];
-      const resolution = resolveEntity(
-        written,
-        node,
-        { ...ctx, diagnostics: failures },
-        references,
-      );
+      const resolution = resolveEntity(written, node, { ...ctx, diagnostics: failures });
       references.set(node, resolution);
       for (const diagnostic of failures) diagnostics.set(node, diagnostic);
       return {
@@ -836,7 +831,6 @@ function resolveEntity(
   written: WrittenEntityReference,
   node: SyntaxNode,
   ctx: ReferenceContext,
-  references: ResolutionSink,
 ): Resolution {
   const found =
     written.namespace === undefined
@@ -844,7 +838,7 @@ function resolveEntity(
       : qualifiedMember(
           written.namespace,
           written.name,
-          bindQualifier(entityQualifier(node), ctx.scope, references),
+          bindQualifier(entityQualifier(node), ctx.scope, ctx.references),
         );
   if (found === undefined) {
     const name = describeWrittenEntityReference(written);

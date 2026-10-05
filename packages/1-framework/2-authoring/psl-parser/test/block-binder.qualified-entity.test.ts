@@ -228,10 +228,31 @@ describe('qualifiers of qualified entity references', () => {
     ]);
   });
 
-  it('leaves the qualifier unbound when no alternative of a oneOf matches', () => {
+  it('binds the qualifier when no alternative of a oneOf matches', () => {
     const result = bind('policy P {\n roles = [auth.ghost]\n}', list(oneOf(roleRef, modelRef)));
     const [element] = ArrayLiteralAst.cast(entryValue(result, 'P').syntax)!.elements();
-    expect(result.binder.symbolForNode(qualifierOf(element!))).toBeUndefined();
+    expect(result.binder.symbolForNode(qualifierOf(element!))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.binder.symbolForNode(element!.syntax)).toEqual({
+      kind: 'unresolved',
+      name: 'auth.ghost',
+    });
+  });
+
+  it('binds the qualifier once when the second alternative of a oneOf matches', () => {
+    const result = bind('policy P {\n roles = [auth.auditor]\n}', list(oneOf(modelRef, roleRef)));
+    const [element] = ArrayLiteralAst.cast(entryValue(result, 'P').syntax)!.elements();
+    expect(result.binder.symbolForNode(qualifierOf(element!))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.binder.symbolForNode(element!.syntax)).toEqual({
+      kind: 'block',
+      symbol: result.auth.blocks['auditor'],
+      namespace: result.auth,
+    });
   });
 
   it.each(['Top.Account', 'nope.Account'])(
