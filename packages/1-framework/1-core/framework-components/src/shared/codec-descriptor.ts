@@ -51,6 +51,8 @@ export interface CodecDescriptorTemplate<P = void> {
    * per permitted value; the caller joins the results with `|`.
    */
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
+  /** Why an enum cannot use this codec, as a sentence an enum's refusal quotes; absent when one can. A codec sets it when no value a query reads back equals a member as the contract stores it. */
+  readonly enumRefusal?: string;
   /** The curried higher-order codec. For non-parameterized codecs, the factory is constant — every call returns the same shared codec instance. For parameterized codecs, the factory is called once per `storage.types` instance (or once per inline-`typeParams` column), with `ctx` carrying the column set the resulting codec serves. */
   readonly factory: (params: P) => (ctx: CodecInstanceContext) => Codec;
 }
@@ -110,6 +112,9 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
 
   /** Optional emit-path renderer for a single stored value. See {@link CodecDescriptor.renderValueLiteral}. */
   renderValueLiteral?(value: JsonValue, side: 'output' | 'input'): string | undefined;
+
+  /** See {@link CodecDescriptorTemplate.enumRefusal}. */
+  declare readonly enumRefusal?: string;
 
   /**
    * Materialize a curried codec factory for the given params. Concrete subclasses override with a typed return type (e.g. `factory<N>(params: { length: N }): (ctx) => VectorCodec<N>`); per-codec helpers read the typed return at the *direct* call site, which is what preserves method-level generics. Type extraction (e.g. `ReturnType<D['factory']>`) widens method generics to their constraint — that's why the column-helper surface is per-codec, not polymorphic.

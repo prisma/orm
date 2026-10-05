@@ -1,5 +1,6 @@
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
+  type AnyCodecDescriptor,
   type Codec,
   type CodecLookupWithDescriptors,
   emptyCodecLookup,
@@ -182,6 +183,37 @@ describe('enum lowering encodes member values through the codec', () => {
           reason: 'codec-refused-member',
         }),
         cause: decodeFailure,
+      }),
+    );
+  });
+
+  it("refuses an enum whose codec descriptor says an enum cannot use it, quoting the descriptor's reason", () => {
+    const Stamp = enumType(
+      'Stamp',
+      { codecId: 'test/printed-text@1', nativeType: 'timestamp' },
+      member('Start', '2024-01-02T03:04:05'),
+    );
+    const codec = stubCodec('test/printed-text@1', (v) => v as JsonValue);
+    const codecLookup: CodecLookupWithDescriptors = {
+      ...emptyCodecLookup,
+      get: (id) => (id === codec.id ? codec : undefined),
+      descriptorFor: (id) =>
+        id === codec.id
+          ? ({
+              codecId: id,
+              paramsSchema: undefined,
+              factory: () => () => codec,
+              enumRefusal: 'A query reads its values as text the contract does not store.',
+            } as unknown as AnyCodecDescriptor)
+          : undefined,
+    };
+
+    expect(() => buildSqlContractFromDefinition(definitionWith(Stamp), codecLookup)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Stamp"): an enum cannot use the codec test/printed-text@1. A query reads its values as text the contract does not store.',
+        meta: { enumName: 'Stamp', codecId: 'test/printed-text@1', reason: 'codec-not-for-enums' },
       }),
     );
   });

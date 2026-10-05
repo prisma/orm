@@ -111,6 +111,10 @@ export class PgTimestampStringCodec extends CodecImpl<
   }
 }
 
+/** Why an enum cannot use a string timestamp codec, given how PostgreSQL prints a value and how the contract stores it. */
+const stringTimestampEnumRefusal = (printed: string, stored: string, printing: string): string =>
+  `A query reads each value as the text PostgreSQL prints${printing}, such as "${printed}", while the contract stores it in ISO 8601, such as "${stored}", so no value read back equals a member.`;
+
 export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
   protected override nativeType(): string {
     return PG_TIMESTAMP_NATIVE_TYPE;
@@ -122,6 +126,11 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
+  override readonly enumRefusal = stringTimestampEnumRefusal(
+    '2024-01-02 03:04:05',
+    '2024-01-02T03:04:05',
+    '',
+  );
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
@@ -181,6 +190,11 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
+  override readonly enumRefusal = stringTimestampEnumRefusal(
+    '2024-01-02 03:04:05+00',
+    '2024-01-02T03:04:05Z',
+    " in the session's time zone",
+  );
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
