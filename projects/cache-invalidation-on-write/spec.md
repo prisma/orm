@@ -132,6 +132,14 @@ Timing depends on scope:
 - **Connection scope:** invalidate immediately, as in runtime scope. A pinned connection without a transaction is autocommit.
 - **Transaction scope:** queue the invalidation under `ctx.transactionId`. On `afterTransaction`, run the queue on `committed` or `unknown` and drop it on `rolled-back`. `unknown` invalidates because the write may have committed, and an unneeded invalidation costs only a miss.
 
+How the queue works, step by step:
+
+1. The middleware keeps a `Map` from transaction id to the targets (`keys` and `meta`) waiting for that transaction.
+2. When `afterQuery` or `afterExecute` sees an annotated write whose `ctx.scope` is `'transaction'`, it reads `ctx.transactionId` and appends the annotation's target to that id's list, creating the list on the first write. This is why no `beforeTransaction` hook is needed: nothing has to happen before the first annotated write, and a transaction with no annotated writes creates no state.
+3. `afterTransaction` receives the same id on its context. It takes that id's list out of the map, runs `invalidate` for it on `committed` or `unknown`, and discards it on `rolled-back`.
+
+Only annotated writes are remembered. Reads inside a transaction never use the cache, and an unannotated write names nothing to invalidate.
+
 Several annotated writes in one transaction each queue their target; the queue runs once on the outcome.
 
 ### Known limits to document
