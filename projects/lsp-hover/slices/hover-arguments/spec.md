@@ -20,9 +20,9 @@ policy ReadOwn {
 
 | Cursor on | Resolution (new) | Hover |
 |---|---|---|
-| `references` in `references: [id]` | `parameter` (owner: the `@relation` attribute) | ` ```prisma references: <ArgType.label>``` ` + `Param.documentation` |
-| a named arg key inside a function call | `parameter` (owner: the function) | same shape |
-| a struct-block entry key (`using` in `policy`) | `parameter` (owner: the block) | same shape |
+| `references` in `references: [id]` | `parameter` | ` ```prisma references: <ArgType.label>``` ` + `Param.documentation` |
+| a named arg key inside a function call | `parameter` | same shape |
+| a struct-block entry key (`using` in `policy`) | `parameter` | same shape |
 | `autoincrement` | `function` | ` ```prisma autoincrement()``` `, the signature label, + `FuncCallSig.documentation` |
 | `Cascade` | `constant` | ` ```prisma Cascade``` ` + `FixedIdentifierArgType.documentation` |
 | a block attribute name | `attribute` with `level: 'block'` | signature label (`@@name(…)`) + `spec.documentation` |
@@ -32,7 +32,7 @@ policy ReadOwn {
 **Binder** (`packages/1-framework/2-authoring/psl-parser/src/binder.ts`).
 
 New `Resolution` members, each recorded in `references` (the map `symbolForNode` reads):
-- `{ kind: 'parameter'; symbol: ParameterSymbol }`, where `ParameterSymbol { kind: 'parameter'; name; param: Param<unknown, never>; owner: AttributeSymbol | FunctionSymbol | BlockSymbol }`. It is keyed on the key's identifier node.
+- `{ kind: 'parameter'; symbol: ParameterSymbol }`, where `ParameterSymbol { kind: 'parameter'; name; param: Param<unknown, never> }`. It is keyed on the key's identifier node.
 - `{ kind: 'function'; symbol: FunctionSymbol }`, where `FunctionSymbol { kind: 'function'; name; signature: FuncCallSig }`. It is keyed on the function-call name node.
 - `{ kind: 'constant'; symbol: ConstantSymbol }`, where `ConstantSymbol { kind: 'constant'; name; documentation }`. It is keyed on the identifier expression node of a value matched by a fixed `identifier` arg type.
 

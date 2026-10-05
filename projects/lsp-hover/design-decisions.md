@@ -71,3 +71,14 @@
 **Rejected:**
 - Reordering SQL's `scalarDefaultArms` so function calls come first. It fixes one spec and keeps the confusing rule.
 - Dropping function-name hover in `@default`.
+
+## 6. `ParameterSymbol` has no `owner` (2026-10-05, operator decision)
+
+**Trigger:** the operator asked what reads `ParameterSymbol.owner`. Nothing in production code did.
+
+**Decision:**
+- `ParameterSymbol` is `{ kind, name, param }`.
+- The `owner` argument is removed from `bindArguments`.
+- It can come back when a feature actually reads it.
+
+**Affected artefacts:** `spec.md` decision 3; `slices/hover-arguments/spec.md` § At a glance and § Chosen design.
