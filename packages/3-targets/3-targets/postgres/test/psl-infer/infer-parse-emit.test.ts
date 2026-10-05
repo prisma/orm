@@ -257,10 +257,21 @@ describe('Postgres PSL inference round trip', () => {
                 codecId: 'pg/timestamp-string@1',
                 nativeType: 'timestamp',
                 nullable: false,
+                many: false,
                 typeParams: { precision: 3 },
               },
-              due_on: { codecId: 'pg/date-string@1', nativeType: 'date', nullable: false },
-              opens_at: { codecId: 'pg/time-string@1', nativeType: 'time', nullable: false },
+              due_on: {
+                codecId: 'pg/date-string@1',
+                nativeType: 'date',
+                nullable: false,
+                many: false,
+              },
+              opens_at: {
+                codecId: 'pg/time-string@1',
+                nativeType: 'time',
+                nullable: false,
+                many: false,
+              },
               label: {
                 codecId: 'pg/text@1',
                 nativeType: 'varchar',
