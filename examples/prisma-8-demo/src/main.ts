@@ -328,7 +328,13 @@ async function main() {
         );
         process.exit(1);
       }
-      const direction = directionStr === 'asc' ? 'asc' : 'desc';
+      if (directionStr !== undefined && directionStr !== 'asc' && directionStr !== 'desc') {
+        console.error(
+          `Direction must be "asc" or "desc", received ${JSON.stringify(directionStr)}`,
+        );
+        process.exit(1);
+      }
+      const direction = directionStr ?? 'desc';
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
       const posts = await ormClientGetRecentPosts(
         Temporal.Instant.from(sinceStr),
