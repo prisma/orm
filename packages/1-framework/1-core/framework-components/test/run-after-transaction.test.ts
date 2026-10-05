@@ -1,7 +1,11 @@
 import type { PlanMeta } from '@internal/contract/types';
 import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionPlan } from '../src/execution/query-plan';
-import { runAfterTransaction } from '../src/execution/run-with-middleware';
+import {
+  executeWithAfterTransaction,
+  queryWithAfterTransaction,
+  runAfterTransaction,
+} from '../src/execution/run-with-middleware';
 import type {
   AfterTransactionResult,
   RuntimeMiddleware,
@@ -114,5 +118,120 @@ describe('runAfterTransaction', () => {
     await run;
 
     expect(events).toEqual(['released', 'deferred resolved', 'after ran', 'runner resolved']);
+  });
+});
+
+describe('queryWithAfterTransaction', () => {
+  function recordStage(events: string[]) {
+    return async (result: AfterTransactionResult) => {
+      events.push(`afterTransaction:${result.outcome}`);
+    };
+  }
+
+  async function* rows(events: string[], failure?: Error): AsyncGenerator<number> {
+    events.push('row 1');
+    yield 1;
+    if (failure) throw failure;
+    events.push('row 2');
+    yield 2;
+    events.push('rows done');
+  }
+
+  async function collect<Row>(iterable: AsyncIterable<Row>): Promise<Row[]> {
+    const read: Row[] = [];
+    for await (const row of iterable) read.push(row);
+    return read;
+  }
+
+  async function* delegate<Row>(iterable: AsyncIterable<Row>): AsyncGenerator<Row> {
+    yield* iterable;
+  }
+
+  it('fires committed once after the last row', async () => {
+    const events: string[] = [];
+
+    const read = await collect(
+      delegate(queryWithAfterTransaction(recordStage(events), () => rows(events))),
+    );
+
+    expect({ read, events }).toEqual({
+      read: [1, 2],
+      events: ['row 1', 'row 2', 'rows done', 'afterTransaction:committed'],
+    });
+  });
+
+  it('fires unknown once and rethrows when the rows throw', async () => {
+    const events: string[] = [];
+    const failure = new Error('rows failed');
+
+    await expect(
+      collect(
+        delegate(queryWithAfterTransaction(recordStage(events), () => rows(events, failure))),
+      ),
+    ).rejects.toBe(failure);
+
+    expect(events).toEqual(['row 1', 'afterTransaction:unknown']);
+  });
+
+  it('fires unknown once when the caller stops reading', async () => {
+    const events: string[] = [];
+
+    for await (const _row of delegate(
+      queryWithAfterTransaction(recordStage(events), () => rows(events)),
+    )) {
+      break;
+    }
+
+    expect(events).toEqual(['row 1', 'afterTransaction:unknown']);
+  });
+
+  it('returns the rows unchanged when there is nothing to fire', () => {
+    const events: string[] = [];
+    const source = rows(events);
+
+    expect(queryWithAfterTransaction(undefined, () => source)).toBe(source);
+  });
+});
+
+describe('executeWithAfterTransaction', () => {
+  it('fires committed once after the operation resolves', async () => {
+    const events: string[] = [];
+
+    const result = await executeWithAfterTransaction(
+      async (stage) => {
+        events.push(`afterTransaction:${stage.outcome}`);
+      },
+      async () => {
+        events.push('executed');
+        return 3;
+      },
+    );
+
+    expect({ result, events }).toEqual({
+      result: 3,
+      events: ['executed', 'afterTransaction:committed'],
+    });
+  });
+
+  it('fires unknown once and rethrows when the operation rejects', async () => {
+    const events: string[] = [];
+    const failure = new Error('execute failed');
+
+    await expect(
+      executeWithAfterTransaction(
+        async (stage) => {
+          events.push(`afterTransaction:${stage.outcome}`);
+        },
+        async () => {
+          throw failure;
+        },
+      ),
+    ).rejects.toBe(failure);
+
+    expect(events).toEqual(['afterTransaction:unknown']);
+  });
+
+  it('runs the operation alone when there is nothing to fire', async () => {
+    await expect(executeWithAfterTransaction(undefined, async () => 3)).resolves.toBe(3);
   });
 });

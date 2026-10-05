@@ -28,6 +28,8 @@ export {
 export type { ExecutionPlan, QueryPlan, ResultType } from '../execution/query-plan';
 export { checkAborted, raceAgainstAbort } from '../execution/race-against-abort';
 export {
+  executeWithAfterTransaction,
+  queryWithAfterTransaction,
   runAfterTransaction,
   runExecuteWithMiddleware,
   runQueryWithMiddleware,

@@ -300,11 +300,13 @@ export interface RuntimeMiddleware<
     ctx: RuntimeMiddlewareContext,
   ): Promise<void>;
   /**
-   * Fires once per query when the transaction enclosing the query has ended,
-   * with its outcome. Outside a transaction it fires right after `afterQuery`
-   * or `afterExecute` with `committed`. Receives the same plan and context as
-   * the query's other hooks. The runner logs and swallows thrown errors. The
-   * hook must not use the connection.
+   * The query's last hook. Fires exactly once for every query whose encoded
+   * plan exists, when the transaction enclosing the query has ended, with its
+   * outcome. Outside a transaction it fires when the query ends: `committed`
+   * when it completed, `unknown` when it failed or the caller stopped reading
+   * its rows. Receives the same plan and context as `afterQuery` or
+   * `afterExecute`. The runner logs and swallows thrown errors. The hook must
+   * not use the connection.
    */
   afterTransaction?(
     plan: TPlan,

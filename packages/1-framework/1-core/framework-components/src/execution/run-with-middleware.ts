@@ -240,6 +240,49 @@ export async function runAfterTransaction<TExec extends ExecutionPlan>(
   }
 }
 
+/**
+ * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading. Delegate to the result with `yield*` from a running generator, so the call also happens when the caller stops before reading a row. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
+ */
+export function queryWithAfterTransaction<Row>(
+  fireAfterTransaction: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+  rows: () => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return fireAfterTransaction === undefined
+    ? rows()
+    : rowsThenAfterTransaction(fireAfterTransaction, rows);
+}
+
+async function* rowsThenAfterTransaction<Row>(
+  fireAfterTransaction: (result: AfterTransactionResult) => Promise<void>,
+  rows: () => AsyncIterable<Row>,
+): AsyncGenerator<Row, void, unknown> {
+  let completed = false;
+  try {
+    yield* rows();
+    completed = true;
+  } finally {
+    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' });
+  }
+}
+
+/**
+ * Runs `execute()` and then calls `fireAfterTransaction` exactly once: with `committed` when it resolves, and with `unknown` when it rejects.
+ */
+export async function executeWithAfterTransaction<T>(
+  fireAfterTransaction: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+  execute: () => Promise<T>,
+): Promise<T> {
+  if (fireAfterTransaction === undefined) return execute();
+  let completed = false;
+  try {
+    const result = await execute();
+    completed = true;
+    return result;
+  } finally {
+    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' });
+  }
+}
+
 async function notifyQueryCompletion<TExec extends ExecutionPlan>(
   middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
   exec: TExec,
