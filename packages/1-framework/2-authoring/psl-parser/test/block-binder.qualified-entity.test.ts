@@ -231,10 +231,7 @@ describe('qualifiers of qualified entity references', () => {
   it('binds the qualifier when no alternative of a oneOf matches', () => {
     const result = bind('policy P {\n roles = [auth.ghost]\n}', list(oneOf(roleRef, modelRef)));
     const [element] = ArrayLiteralAst.cast(entryValue(result, 'P').syntax)!.elements();
-    expect(result.binder.symbolForNode(qualifierOf(element!))).toEqual({
-      kind: 'namespace',
-      symbol: result.auth,
-    });
+    expect(result.binder.symbolForNode(qualifierOf(element!))).toBeUndefined();
   });
 
   it.each(['Top.Account', 'nope.Account'])(

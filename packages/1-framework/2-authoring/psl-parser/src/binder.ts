@@ -537,11 +537,7 @@ function tryBindExpression(
         if (trial.matched) return trial;
         for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
         for (const [node, resolution] of trial.references) {
-          if (
-            resolution.kind === 'unresolved' ||
-            resolution.kind === 'namespace' ||
-            resolution.kind === 'contributedNamespace'
-          ) {
+          if (resolution.kind === 'unresolved') {
             references.set(node, resolution);
           }
         }

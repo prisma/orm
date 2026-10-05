@@ -15,7 +15,6 @@ import type {
   NamedTypeSymbol,
   ParameterSymbol,
   NamespaceSymbol,
-  Resolution,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
 import {
@@ -87,10 +86,7 @@ function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined
 }
 
 function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | undefined {
-  return narrowHoverResult(resolvedNodeAt(token, binder)?.resolution);
-}
-
-function narrowHoverResult(resolution: Resolution | undefined): HoverResult | undefined {
+  const resolution = resolvedNodeAt(token, binder)?.resolution;
   switch (resolution?.kind) {
     case 'model':
     case 'compositeType':
