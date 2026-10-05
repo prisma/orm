@@ -214,19 +214,22 @@ const canonicalFromText =
   (value) =>
     typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
 
-/** A type whose values are written as text: its canonical form, and a cast from text that gives it. */
-function typeWrittenAsText(id: string, canonical: (text: string) => string): DataType {
+/** A type whose canonical form reads text: that canonical form, and the same function as its cast from text. */
+function typeCanonicalFromText(id: string, canonical: (text: string) => string): DataType {
   const toCanonicalForm = canonicalFromText(canonical);
   return dataType(id, { toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
 }
 
-export const pgTimetz: DataType = typeWrittenAsText('pg/timetz', pgTimetzCanonical);
-export const pgInterval: DataType = typeWrittenAsText('pg/interval', pgIntervalCanonical);
-export const pgDate: DataType = typeWrittenAsText('pg/date', pgDateCanonical);
-export const pgTime: DataType = typeWrittenAsText('pg/time', pgTimeCanonical);
-export const pgTimestamp: DataType = typeWrittenAsText('pg/timestamp', pgTimestampCanonical);
-export const pgTimestamptz: DataType = typeWrittenAsText('pg/timestamptz', pgTimestamptzCanonical);
-export const pgBytea: DataType = typeWrittenAsText('pg/bytea', pgByteaCanonical);
+export const pgTimetz: DataType = typeCanonicalFromText('pg/timetz', pgTimetzCanonical);
+export const pgInterval: DataType = typeCanonicalFromText('pg/interval', pgIntervalCanonical);
+export const pgDate: DataType = typeCanonicalFromText('pg/date', pgDateCanonical);
+export const pgTime: DataType = typeCanonicalFromText('pg/time', pgTimeCanonical);
+export const pgTimestamp: DataType = typeCanonicalFromText('pg/timestamp', pgTimestampCanonical);
+export const pgTimestamptz: DataType = typeCanonicalFromText(
+  'pg/timestamptz',
+  pgTimestamptzCanonical,
+);
+export const pgBytea: DataType = typeCanonicalFromText('pg/bytea', pgByteaCanonical);
 
 /** Every data type this target registers. */
 export const postgresDataTypes: readonly DataType[] = [

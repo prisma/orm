@@ -1639,10 +1639,6 @@ interface OutputSettings {
   readonly byteaOutput: string;
 }
 
-/**
- * Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals,
- * hex bytea.
- */
 const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
   timeZone: 'UTC',
   dateStyle: 'ISO, MDY',
