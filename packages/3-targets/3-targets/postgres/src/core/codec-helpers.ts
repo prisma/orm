@@ -505,6 +505,34 @@ export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 
+function byteaRefused(message: string): never {
+  throw structuredError('CONTRACT.CAST_REFUSED', message, {
+    why: 'pg/bytea stores its bytes as base64 (ADR 254), and reads base64 and the hex text PostgreSQL prints.',
+    fix: 'Write base64, as in "aGVsbG8=", or PostgreSQL hex, as in "\\x68656c6c6f".',
+  });
+}
+
+/**
+ * The canonical form of `pg/bytea` (ADR 254), the base64 its codec writes, from base64 or the hex
+ * text PostgreSQL prints under `bytea_output = 'hex'`.
+ */
+export function pgByteaCanonical(text: string): string {
+  if (text.startsWith('\\x')) {
+    if (!BYTEA_TEXT.test(text)) {
+      byteaRefused(
+        `"${text}" is not PostgreSQL hex: after \\x it takes two hexadecimal digits for each byte, as in "\\x68656c6c6f".`,
+      );
+    }
+    return Buffer.from(text.slice(2), 'hex').toString('base64');
+  }
+  if (!BASE64_TEXT.test(text)) {
+    byteaRefused(
+      `pg/bytea cannot read "${text}". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, as in "\\x68656c6c6f".`,
+    );
+  }
+  return Buffer.from(text, 'base64').toString('base64');
+}
+
 /**
  * Scalar pg bytea values arrive as Uint8Array/Buffer; target-parsed bytea list elements arrive as PostgreSQL hex text.
  */

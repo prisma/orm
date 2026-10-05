@@ -171,6 +171,22 @@ describe('printPsl writes each default as the literal the column data type takes
     });
   });
 
+  it('prints a bytea default, which PostgreSQL prints in hex, as base64 literals', () => {
+    expect(
+      printedDefaults([
+        introspected('blob', 'bytea', "'\\x68656c6c6f'::bytea"),
+        introspected('empty', 'bytea', "'\\x'::bytea"),
+        introspected('blobs', 'bytea', "ARRAY['\\x68656c6c6f'::bytea, '\\x0001'::bytea]", {
+          many: true,
+        }),
+      ]),
+    ).toEqual({
+      blob: '@default("aGVsbG8=")',
+      empty: '@default("")',
+      blobs: '@default(["aGVsbG8=", "AAE="])',
+    });
+  });
+
   it.each([
     ['a database function', 'uuid', 'gen_random_uuid()'],
     ['an expression', 'timestamptz', "(now() + '00:03:00'::interval)"],
