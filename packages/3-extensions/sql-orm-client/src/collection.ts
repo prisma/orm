@@ -84,7 +84,6 @@ import type {
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   StateType,
-  Step,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
 import { GroupedCollection } from './grouped-collection';
@@ -430,10 +429,10 @@ export class CollectionBase<
   }
 
   /**
-   * Call `step` with this collection and return its result.
+   * Call `fn` with this collection and return its result.
    */
-  apply<Self, Out>(this: Self, step: Step<Self, Out>): Out {
-    return step(this);
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+    return fn(this);
   }
 
   /**

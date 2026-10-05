@@ -35,7 +35,7 @@ await posts.deleteAll();                                     // error: the colle
 - What the chain has established so far, a filter, an order, extra fields on each row, is added to the type as a fact. It is never taken away, and it never replaces the class.
 - When the code may or may not have applied a filter, the type says the filter is not known, and the methods that need one are refused.
 
-## Scope
+## What this decision covers
 
 This decision changes the SQL ORM client's `Collection`. The MongoDB ORM client, which ADR 175 says shares the collection interface, is unchanged: its chaining methods still return `MongoCollection<...>`. Aligning it is a later decision.
 
@@ -43,13 +43,13 @@ This decision changes the SQL ORM client's `Collection`. The MongoDB ORM client,
 
 A collection's type is its class plus what the chain has established. Every method either keeps that class and adds a fact, or produces a different row and returns the base `Collection` type.
 
-**A method is a step with the receiver bound.** A step is a function from a collection to a collection. The built-in methods, the methods of a custom class, and a step an application or a package writes all have the same type: a function from a receiver type to that type plus a fact. The facts have names, and the names are the vocabulary all three share. These are the declarations:
+**A chaining method has the shape of a scope.** A scope is a function from a collection to a collection, as in Rails. The built-in methods, the methods of a custom class, and a scope an application or a package writes all have the same type: a function from a receiver type `Self` to `Self` plus a fact. The facts have names, and the names are the vocabulary all three share. These are the declarations:
 
 ```ts
 export type Filtered<C> = C & HasWhere;
 export type Ordered<C> = C & HasOrderBy;
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
-export type Step<In, Out> = (collection: In) => Out;
+export type Scope<In, Out> = (collection: In) => Out;
 ```
 
 Users write `Filtered<C>` and `Ordered<C>`. `HasWhere` and `HasOrderBy` are the interfaces they are defined with, and the names TypeScript prints when it explains why a type does not match.
@@ -60,11 +60,11 @@ Users write `Filtered<C>` and `Ordered<C>`. `HasWhere` and `HasOrderBy` are the 
 | `orderBy` | `Ordered<Self>` | yes | an order has been applied |
 | `limit`, `offset`, `distinct`, `distinctOn`, `cursor` | `Self` | yes | nothing |
 | `include` | `Including<Self, { [K in Rel]: ... }>` | yes | each row has the included relation |
-| `apply(step)` | whatever `step(this)` returns | as the step | as the step |
+| `apply(fn)` | whatever `fn(this)` returns | as the function | as the function |
 | `select` | `Collection<Contract, Model, NarrowedRow, State>` | no | a different row |
 | `variant` | `Collection<Contract, Model, VariantRow, VariantState>` | no | a different row and a different type argument |
 
-`apply` is the principle made explicit: it calls a step with the receiver. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a step is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.apply(step)` has the same type as `db.Post.withTitle(term)`.
+`apply` is the principle made explicit: it calls a function with the receiver and returns the result. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a scope is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.apply((posts) => posts.where(...))` has the same type as `db.Post.withTitle(term)`. A class method is a named scope. `apply` accepts any function, including one that ends in a terminal such as `first()`; when the function returns a collection, it is a scope.
 
 The facts live in two declared properties on the class, the **type state** and the **row**:
 
@@ -140,7 +140,7 @@ class CollectionBase<TContract, ModelName, Row, State> {
     this: Self,
     relationName: RelName,
   ): Including<Self, { [K in RelName]: IncludeRelationValue<...> }>;
-  apply<Self, Out>(this: Self, step: Step<Self, Out>): Out;
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
 
   select<Fields extends ..., S extends CollectionTypeState = State, R = Row>(
     this: HasState<S> & HasRow<R>,
@@ -185,12 +185,12 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 
 - **Class methods chain**, before and after the built-in methods, and after `include`.
 - **Inside a class body, a class method called on the result of another call loses that call's facts.** In `latest() { return this.withTitle('orm').newestFirst(); }`, `newestFirst()` returns `Ordered<this>`, and `Filtered` is lost; `this.include('user').withTitle('orm')` loses `user`. TypeScript resolves a method's polymorphic `this` on an intersection that contains the class's own `this` as the class's `this` alone. The `prepared` getter has the same limit: inside a class body, `this.include('user').prepared` describes the class's row without `user`. Built-in methods are not affected, because they infer their receiver; chaining class methods from outside the class is not affected either. Inside a class body, chain the built-in methods after a class method, or call one class method per expression.
-- **A built-in method, a class method and a step are one typed thing.** A query shared between places is written once as a step and run with `apply`, or wrapped in a class method; both give the same type. A package can supply steps without any knowledge of the application's classes.
+- **A built-in method, a class method and a scope are one typed thing.** A query shared between places is written once as a scope and run with `apply`, or wrapped in a class method; both give the same type. A package can supply scopes without any knowledge of the application's classes.
 - **Conditional queries are sound.** A ternary, an `if`, a loop or a reassigned `let` never unlocks a write or `cursor` on a collection that may lack the filter or order.
 - **After `select` or `variant`, class methods are gone.** After `select` the rows are no longer the model's; after `variant` the type argument is a different one.
 - **A conditional between two differently flagged collections keeps a union.** `flag ? db.Post.withTitle('orm') : db.Post.newestFirst()` is `Filtered<PostCollection> | Ordered<PostCollection>`. Reads, `select`, `include` and class methods work on it; writes and `cursor` are refused, and `select` on it drops included relations from the type. A write on it fails with "The 'this' context of type 'Ordered<PostCollection> | Filtered<PostCollection>' is not assignable to method's 'this' of type 'HasWhere'", because one branch has no filter; filter both branches, or annotate the result as `PostCollection`, which reduces the union and states that the filter is not known.
 - **Chains print with the fact names.** A chain on the base type prints as `Ordered<Filtered<Collection<Contract, "Post", ...>>>`, and one on a custom class as `Ordered<Filtered<PostCollection>>`.
-- **These names are part of the public surface**, because step authors write them and declaration output needs them for any library that exports a collection class: `Step`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasState`, `StateType`, `RowType`, `CollectionStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
+- **These names are part of the public surface**, because scope authors write them and declaration output needs them for any library that exports a collection class: `Scope`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasState`, `StateType`, `RowType`, `CollectionStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
 - **Declarations name the family package.** The declaration of an exported collection class, or of an exported chain, imports these names from `@prisma/orm-family-sql/orm-client`, the package the facade re-exports, not from the facade the application depends on. Under pnpm that package does not resolve from the application, and with `skipLibCheck` the consumer of the declaration silently gets `any`. This predates the decision: the same specifier appears for exported chains without it. It is a separate fix in how the facades publish their types.
 - **The state and the row are read with `CollectionStateOf<C>` and `CollectionRowOf<C>`**, not by extracting a type argument of `Collection`. The type arguments hold what the collection started with; the facts are in the intersection.
 - **`ReturnType` of a chaining method does not give a collection**, because `ReturnType` of a generic method uses the type parameter's constraint: `ReturnType<C['where']>` is `HasWhere`, and `ReturnType<C['limit']>` is `unknown`. Write `Filtered<C>` or `Ordered<C>`, or `C` for the methods that add nothing.
@@ -211,7 +211,7 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 
 - **The type state as a type argument, with every method returning `Collection<TContract, Model, Row, NewState>`.** A method can return the new state or the receiver's class, not both, so the class is lost after one call. And because the state then appears only in method parameter types, which TypeScript compares in both directions, a filtered and an unfiltered collection are assignable to each other; a conditional between them keeps whichever member TypeScript met first, and `deleteAll` can compile on a collection that may have no filter.
 - **A flag that has not been established is `false`.** The filtered and unfiltered types become unrelated. Every conditional keeps a union, reassigning a `let` fails, and a filtered collection is refused where the class is expected.
-- **A `when(value, step)` method** whose result keeps the caller's type, as the way to write a conditional without a union. It moves control flow into the query API, and each construct an application might use would need its own method. Subtyping covers every construct with one rule.
+- **A `when(value, fn)` method** whose result keeps the caller's type, as the way to write a conditional without a union. It moves control flow into the query API, and each construct an application might use would need its own method. Subtyping covers every construct with one rule.
 - **`where(undefined)` as a no-op** for conditional filters. It adds an overload to every `where` and `orderBy`, costs about 7.5% more type checking in the client package when unused, and covers only those two methods.
 - **Reading the state as `CollectionStateOf<this>` in the row-changing signatures.** Correct, and about four percent more type checking on the demo application, because each such signature is rebuilt per receiver type. Inferring the state from a `this` parameter gives the same result at no cost.
 - **`include` returns the base `Collection` type.** The class is lost after every include, although the rows are still the model's. The row property makes widening monotonic, so the class can survive by the same rule as the flags.

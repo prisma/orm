@@ -80,7 +80,7 @@ db.Post.include('user').withTitle('orm');
 
 Inside a class body, a class method called on the result of another call loses what that call established, and so does `.prepared` after `.include(...)`: in `latest() { return this.withTitle('orm').newestFirst(); }` the result is known to be ordered but not filtered (TML-3434). Inside the class, follow a class method with built-in methods (`this.withTitle('orm').orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
-`apply(step)` calls `step` with the collection and returns its result. A step has the type `Step<In, Out>`: `db.Post.apply((posts) => posts.withTitle('orm'))` has the same type as `db.Post.withTitle('orm')`.
+`apply(fn)` calls `fn` with the collection and returns its result. A function from a collection to a collection is a scope, of type `Scope<In, Out>`: `db.Post.apply((posts) => posts.withTitle('orm'))` has the same type as `db.Post.withTitle('orm')`.
 
 The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not been established is `boolean`; a method that establishes it sets it to `true`. `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` need `hasWhere: true`; `cursor` and `distinctOn` need `hasOrderBy: true`. Because `true` is a subtype of `boolean`, a filtered collection is a subtype of an unfiltered one: `search ? db.Post.withTitle(search) : db.Post` is a `PostCollection` that may have no filter, and `deleteAll()` on it does not compile. Read a collection's state and row with `CollectionStateOf<C>` and `CollectionRowOf<C>`. See [ADR 258](../../../docs/architecture%20docs/adrs/ADR%20258%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md).
 

@@ -10,8 +10,8 @@ export type {
   Including,
   Ordered,
   RowType,
+  Scope,
   StateType,
-  Step,
 } from '../collection-types';
 export { all, and, not, or } from '../filters';
 export { GroupedCollection } from '../grouped-collection';
