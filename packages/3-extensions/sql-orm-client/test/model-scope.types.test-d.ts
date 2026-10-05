@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { CollectionRowOf } from '../src/collection-types';
@@ -25,6 +27,7 @@ class SummaryPostCollection extends Collection<TestContract, 'Post'> {
 }
 
 declare const tasks: Collection<PolyContract, 'Task'>;
+declare const vehicles: Collection<Contract<SqlStorage>, 'Vehicle', Record<string, unknown>>;
 const taskTitles = tasks.scope((t) => t.select('id', 'title'));
 
 describe('collection.scope', () => {
@@ -102,5 +105,10 @@ describe('collection.scope', () => {
     expectTypeOf(tasks.apply(taskTitles)).toEqualTypeOf<ReturnType<typeof taskTitles>>();
     // @ts-expect-error the collection is narrowed to the Bug variant
     tasks.variant('Bug').apply(taskTitles);
+  });
+
+  test('does not make a collection of one model unassignable to a collection of any model', () => {
+    const takesAnyModel = (collection: Collection<Contract<SqlStorage>, string>) => collection;
+    takesAnyModel(vehicles);
   });
 });

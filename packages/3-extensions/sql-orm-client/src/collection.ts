@@ -264,6 +264,16 @@ interface MtiCreateContext {
   pkColumns: readonly string[];
 }
 
+/** What `scope` reads from the collection it is called on: its contract and its model. */
+interface ScopeSource {
+  readonly modelName: string;
+  readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
+}
+
+type ContractOf<C extends ScopeSource> = C['ctx']['context']['contract'];
+
+type ModelNameOf<C extends ScopeSource> = C['modelName'];
+
 export class CollectionBase<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -445,13 +455,14 @@ export class CollectionBase<
    * db.User.include('posts', (posts) => posts.apply(summary));
    * ```
    */
-  scope<Result>(
-    body: (collection: Collection<TContract, ModelName>) => Result,
-  ): Scope<ModelScopeReceiver<TContract, ModelName>, Result> {
+  scope<Self extends ScopeSource, Result>(
+    this: Self,
+    body: (collection: Collection<ContractOf<Self>, ModelNameOf<Self>>) => Result,
+  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>>, Result> {
     return (collection) =>
       body(
         blindCast<
-          Collection<TContract, ModelName>,
+          Collection<ContractOf<Self>, ModelNameOf<Self>>,
           'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
         >(collection),
       );
