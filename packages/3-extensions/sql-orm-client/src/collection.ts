@@ -107,7 +107,6 @@ import {
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
-import { assertScopeBody } from './query-fragments';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -123,6 +122,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { assertScopeBody } from './scopes';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,

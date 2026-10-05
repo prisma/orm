@@ -18,11 +18,11 @@ import type {
   FieldNullable,
   FieldsOf,
   Orderable,
-  OrderableFieldName,
+  OrderableFieldNames,
 } from './types';
 
 /** A field declared by its column type and nullability, for a scope written without a field builder. */
-export interface ScopeFieldSpec<
+export interface DeclaredField<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
 > {
@@ -41,27 +41,27 @@ export interface ScopeFieldBuilder<
   };
 }
 
-/** The fields a scope for any model needs, each declared with a field builder or a {@link ScopeFieldSpec}. */
-export type ScopeFieldDeclarations = Readonly<Record<string, ScopeFieldBuilder | ScopeFieldSpec>>;
+/** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
+export type ScopeFieldDeclarations = Readonly<Record<string, ScopeFieldBuilder | DeclaredField>>;
 
-type DeclaredField<Declaration> =
+type DeclarationField<Declaration> =
   Declaration extends ScopeFieldBuilder<infer Id, infer Nullable>
-    ? ScopeFieldSpec<Id, Nullable>
-    : Declaration extends ScopeFieldSpec<infer Id, infer Nullable>
-      ? ScopeFieldSpec<Id, Nullable>
+    ? DeclaredField<Id, Nullable>
+    : Declaration extends DeclaredField<infer Id, infer Nullable>
+      ? DeclaredField<Id, Nullable>
       : never;
 
 /** The declared fields with each builder read as its column type and nullability. */
 export type DeclaredFields<Declarations extends ScopeFieldDeclarations> = {
-  readonly [K in keyof Declarations]: DeclaredField<Declarations[K]>;
+  readonly [K in keyof Declarations]: DeclarationField<Declarations[K]>;
 } extends infer Fields
   ? { readonly [K in keyof Fields]: Fields[K] }
   : never;
 
 /** The model accessor of a scope for any model: only the declared fields, typed by column type. */
-export type ScopeRow<
+export type ScopeModelAccessor<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Fields extends Readonly<Record<string, DeclaredField>>,
 > = {
   readonly [K in keyof Fields]: Fields[K]['codecId'] extends keyof ExtractCodecTypes<TContract> &
     string
@@ -80,23 +80,23 @@ export interface ScopeFacts {
 type OrderSelector<Row> = (row: Row) => OrderByItem;
 
 /** The collection the body of a scope for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
-export interface ScopeQuery<Row, Facts extends ScopeFacts> {
+export interface ScopeCollection<Row, Facts extends ScopeFacts> {
   readonly [ScopeFactsType]: Facts;
   where(
     fn: (row: Row) => WhereArg,
-  ): ScopeQuery<Row, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>;
+  ): ScopeCollection<Row, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>;
   orderBy(
     selection: OrderSelector<Row> | ReadonlyArray<OrderSelector<Row>>,
-  ): ScopeQuery<Row, { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }>;
-  limit(n: number): ScopeQuery<Row, Facts>;
-  offset(n: number): ScopeQuery<Row, Facts>;
+  ): ScopeCollection<Row, { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }>;
+  limit(n: number): ScopeCollection<Row, Facts>;
+  offset(n: number): ScopeCollection<Row, Facts>;
 }
 
 type MismatchedField<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
-  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Fields extends Readonly<Record<string, DeclaredField>>,
 > = {
   [K in keyof Fields & string]: K extends keyof FieldsOf<TContract, ModelName, NsId>
     ? [
@@ -115,7 +115,7 @@ type MismatchedField<
 
 type ModelScopeTarget<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Fields extends Readonly<Record<string, DeclaredField>>,
   ModelName extends string,
   NsId extends string,
 > = HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName } & ([
@@ -140,7 +140,7 @@ type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
 /** A collection of any model, in any namespace, that has the declared fields with the same column type and nullability. For a model that lacks one, the type names the field, so the refusal names it too. */
 export type CollectionWithFields<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Fields extends Readonly<Record<string, DeclaredField>>,
 > = {
   [NsId in keyof TContract['domain']['namespaces'] & string]: {
     [ModelName in keyof TContract['domain']['namespaces'][NsId]['models'] &
@@ -153,7 +153,7 @@ export type CollectionWithFields<
  */
 export type FieldScope<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Fields extends Readonly<Record<string, DeclaredField>>,
   Facts extends ScopeFacts,
 > = <C extends CollectionWithFields<TContract, Fields>>(collection: C) => WithFacts<C, Facts>;
 
@@ -165,7 +165,7 @@ function isFieldBuilder(value: object): value is ScopeFieldBuilder {
   return 'build' in value && typeof value.build === 'function';
 }
 
-function isFieldSpec(value: object): value is ScopeFieldSpec {
+function isFieldSpec(value: object): value is DeclaredField {
   return (
     'codecId' in value &&
     typeof value.codecId === 'string' &&
@@ -177,7 +177,7 @@ function isFieldSpec(value: object): value is ScopeFieldSpec {
 const FIELD_DECLARATION_FIX =
   'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }.';
 
-function declaredFieldSpec(name: string, declaration: unknown): ScopeFieldSpec {
+function declaredFieldSpec(name: string, declaration: unknown): DeclaredField {
   if (typeof declaration === 'object' && declaration !== null && isFieldBuilder(declaration)) {
     const built: unknown = declaration.build();
     const descriptor =
@@ -223,7 +223,7 @@ function declaredFieldSpec(name: string, declaration: unknown): ScopeFieldSpec {
 
 function declaredFieldSpecs(
   declarations: unknown,
-): ReadonlyArray<readonly [string, ScopeFieldSpec]> {
+): ReadonlyArray<readonly [string, DeclaredField]> {
   if (typeof declarations !== 'object' || declarations === null || Array.isArray(declarations)) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
@@ -254,7 +254,7 @@ export function assertScopeBody(body: unknown): void {
 
 function assertScopeFields(
   collection: RuntimeModelCollection,
-  fields: ReadonlyArray<readonly [string, ScopeFieldSpec]>,
+  fields: ReadonlyArray<readonly [string, DeclaredField]>,
 ): void {
   const { contract } = collection.ctx.context;
   const { modelName, namespaceId } = collection;
@@ -307,8 +307,8 @@ export function defineFieldScope<
 >(
   declarations: Declarations,
   body: (
-    rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
-  ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
+    rows: ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
+  ) => ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, Facts>,
 ): FieldScope<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
   assertScopeBody(body);
@@ -326,7 +326,7 @@ export function defineFieldScope<
     >(
       body(
         blindCast<
-          ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
+          ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
           'a collection offers where, orderBy, limit and offset with these run-time shapes'
         >(collection),
       ),
@@ -425,7 +425,7 @@ export function orderByField<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-  const Allowed extends OrderableFieldName<TContract, ModelName, NsId> = OrderableFieldName<
+  const Allowed extends OrderableFieldNames<TContract, ModelName, NsId> = OrderableFieldNames<
     TContract,
     ModelName,
     NsId

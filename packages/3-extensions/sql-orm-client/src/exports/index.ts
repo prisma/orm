@@ -26,11 +26,11 @@ export {
   prepareQuery,
 } from '../prepared-row-query';
 export {
+  type DeclaredField,
   type FieldScope,
   orderByField,
   type ScopeFacts,
-  type ScopeFieldSpec,
-} from '../query-fragments';
+} from '../scopes';
 export type {
   AggregateBuilder,
   AggregateIncludeReducers,
@@ -51,7 +51,7 @@ export type {
   ModelAccessor,
   NumericFieldNames,
   Orderable,
-  OrderableFieldName,
+  OrderableFieldNames,
   OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,

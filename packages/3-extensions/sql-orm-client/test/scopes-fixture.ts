@@ -16,7 +16,7 @@ export class SoftPostCollection extends Collection<Contract, 'Post'> {
   }
 }
 
-export function createFragmentsOrm() {
+export function createScopesOrm() {
   const runtime = createMockRuntime();
   const db = orm({ runtime, context, collections: { Post: SoftPostCollection } });
   const plain = orm({ runtime, context });

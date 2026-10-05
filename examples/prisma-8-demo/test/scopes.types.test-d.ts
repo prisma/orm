@@ -10,9 +10,9 @@ import {
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import { createOrmClient } from '../src/orm-client/client';
-import { createdSince, ownedBy, postSummary } from '../src/orm-client/fragments';
 import type { ormClientGetRecentPosts } from '../src/orm-client/get-recent-posts';
 import type { ormClientGetRecentUsers } from '../src/orm-client/get-recent-users';
+import { createdSince, ownedBy, postSummary } from '../src/orm-client/scopes';
 import type { Contract } from '../src/prisma/contract.d';
 import { db as dbFacade } from '../src/prisma/db';
 

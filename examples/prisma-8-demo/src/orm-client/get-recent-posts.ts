@@ -2,7 +2,7 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { orderByField } from '@prisma/orm-postgres/orm-client';
 import type { Direction } from '@prisma/orm-postgres/relational-core/ast';
 import { createOrmClient } from './client';
-import { createdSince, postSummary } from './fragments';
+import { createdSince, postSummary } from './scopes';
 
 /**
  * Posts created since a point in time, ordered by a field named in the request. `orderByField` throws

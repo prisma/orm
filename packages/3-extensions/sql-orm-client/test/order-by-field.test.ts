@@ -1,6 +1,6 @@
 import type { Direction } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { orderByField } from '../src/query-fragments';
+import { orderByField } from '../src/scopes';
 import { createChainingOrm } from './collection-chaining-fixture';
 
 describe('orderByField', () => {

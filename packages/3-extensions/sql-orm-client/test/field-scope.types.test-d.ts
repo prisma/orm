@@ -8,19 +8,19 @@ import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
 import type { orm } from '../src/orm';
-import type { CollectionWithFields, ScopeFieldSpec } from '../src/query-fragments';
+import type { CollectionWithFields, DeclaredField } from '../src/scopes';
 import type { CodecField } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import {
-  createFragmentsOrm,
+  createScopesOrm,
   type SoftDeleteContract,
   type SoftPostCollection,
-} from './fragments-fixture';
+} from './scopes-fixture';
 
 type Contract = SoftDeleteContract;
 type DeletedAt = CodecField<Contract, 'pg/timestamptz-temporal@1', true>;
 
-const { client, db, plain } = createFragmentsOrm();
+const { client, db, plain } = createScopesOrm();
 
 const notDeleted = client.scope(
   { deletedAt: field.column(timestamptzTemporalColumn).optional() },
@@ -196,8 +196,8 @@ describe('client.scope', () => {
 
   test('the refusal names the field the model lacks', () => {
     type Fields = {
-      readonly deletedAt: ScopeFieldSpec<'pg/timestamptz-temporal@1', true>;
-      readonly title: ScopeFieldSpec<'pg/text@1', false>;
+      readonly deletedAt: DeclaredField<'pg/timestamptz-temporal@1', true>;
+      readonly title: DeclaredField<'pg/text@1', false>;
     };
     type Refusal = 'the model has no field with the column type and nullability the scope declares';
     type ForModel<Model> = Extract<

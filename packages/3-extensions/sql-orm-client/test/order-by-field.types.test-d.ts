@@ -2,8 +2,8 @@ import type { Direction, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Ordered } from '../src/collection-types';
-import { orderByField } from '../src/query-fragments';
-import type { Orderable, OrderableFieldName } from '../src/types';
+import { orderByField } from '../src/scopes';
+import type { Orderable, OrderableFieldNames } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';
 
@@ -17,9 +17,9 @@ class OrderedPostCollection extends Collection<TestContract, 'Post'> {
   }
 }
 
-describe('OrderableFieldName', () => {
+describe('OrderableFieldNames', () => {
   test('names the fields whose codec can be ordered', () => {
-    expectTypeOf<OrderableFieldName<TestContract, 'Post'>>().toEqualTypeOf<
+    expectTypeOf<OrderableFieldNames<TestContract, 'Post'>>().toEqualTypeOf<
       'id' | 'title' | 'userId' | 'views'
     >();
   });

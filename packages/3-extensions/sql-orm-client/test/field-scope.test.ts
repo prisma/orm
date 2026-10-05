@@ -2,10 +2,10 @@ import { textColumn, timestamptzTemporalColumn } from '@internal/adapter-postgre
 import { field } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
-import { createFragmentsOrm } from './fragments-fixture';
+import { createScopesOrm } from './scopes-fixture';
 
 function scopes() {
-  const fixture = createFragmentsOrm();
+  const fixture = createScopesOrm();
   const notDeleted = fixture.client.scope(
     { deletedAt: field.column(timestamptzTemporalColumn).optional() },
     (rows) => rows.where((r) => r.deletedAt.isNull()),

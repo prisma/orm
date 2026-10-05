@@ -12,11 +12,11 @@ import {
   type DeclaredFields,
   defineFieldScope,
   type FieldScope,
+  type ScopeCollection,
   type ScopeFacts,
   type ScopeFieldDeclarations,
-  type ScopeQuery,
-  type ScopeRow,
-} from './query-fragments';
+  type ScopeModelAccessor,
+} from './scopes';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
   CollectionContext,
@@ -113,8 +113,11 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
   scope<const Declarations extends ScopeFieldDeclarations, Facts extends ScopeFacts>(
     fields: Declarations,
     body: (
-      rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
-    ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
+      rows: ScopeCollection<
+        ScopeModelAccessor<TContract, DeclaredFields<Declarations>>,
+        ScopeFacts
+      >,
+    ) => ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, Facts>,
   ): FieldScope<TContract, DeclaredFields<Declarations>, Facts>;
 }
 

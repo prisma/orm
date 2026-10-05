@@ -528,7 +528,7 @@ type OrderableFields<
 };
 
 /** The fields of a model whose codec has the `order` trait. */
-export type OrderableFieldName<
+export type OrderableFieldNames<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,

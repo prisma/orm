@@ -1,6 +1,6 @@
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { createOrmClient } from './client';
-import { createdSince, postSummary } from './fragments';
+import { createdSince, postSummary } from './scopes';
 
 /**
  * Users created since a point in time, each with the summaries of their posts from the same period.
