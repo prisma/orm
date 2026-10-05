@@ -1,14 +1,16 @@
 /**
  * Prisma 8 takes over migrations from the Prisma 7 schema. On a database
- * Prisma 7 built, Prisma 8 signs, then plans and applies two edits made to
- * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one and a
- * destructive one. After each, `db verify --strict` reports only Prisma 7's
- * ledger table as unclaimed, Prisma 7 sees no drift, and both clients read
- * the new shape. Finally the migrations replay onto an empty database, which
- * then verifies strictly with nothing unclaimed.
+ * Prisma 7 built, Prisma 8 signs, then plans and applies three edits made to
+ * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one, a
+ * destructive one, and one that gives an existing column an autoincrement
+ * default and names a foreign key with `map`. After each, `db verify --strict`
+ * reports only Prisma 7's ledger table as unclaimed, Prisma 7 sees no drift,
+ * and the clients read the new shape. Finally the migrations replay onto an
+ * empty database, which verifies strictly with nothing unclaimed and has the
+ * same primary key and foreign key names as the database Prisma 7 built.
  */
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { timeouts, withDevDatabase } from '@repo/test-utils';
+import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
@@ -52,9 +54,31 @@ function storageHash(dir: string): string {
   return JSON.parse(readContract(dir)).storage.storageHash;
 }
 
+/** Every primary key and foreign key in the public schema, by table, kind and name, leaving out Prisma 7's ledger. */
+function constraintNames(connectionString: string): Promise<readonly string[]> {
+  return withClient(connectionString, async (client) => {
+    const result = await client.query<{ table: string; kind: string; name: string }>(
+      `SELECT t.relname AS table, c.contype AS kind, c.conname AS name
+       FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE n.nspname = 'public' AND c.contype IN ('p', 'f') AND t.relname <> '_prisma_migrations'
+       ORDER BY t.relname, c.contype, c.conname`,
+    );
+    return result.rows.map(
+      (row) => `${row.table} ${row.kind === 'p' ? 'primary key' : 'foreign key'} ${row.name}`,
+    );
+  });
+}
+
 function dbRefHash(dir: string): string {
   return JSON.parse(readFileSync(join(dir, 'migrations/app/refs/db.json'), 'utf-8')).hash;
 }
+
+const SEQUENCE_PLAN_OPERATIONS = [
+  ['setDefault.Post.viewCount', 'widening'],
+  ['foreignKey.public.Post.Post_authorId_fkey.rename', 'widening'],
+];
 
 describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
   it(
@@ -150,6 +174,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             ['foreignKey._PostToTag._PostToTag_A_fkey', 'additive'],
             ['foreignKey._PostToTag._PostToTag_B_fkey', 'additive'],
           ]);
+          expect(renderedSql(baseline)).toContain('CONSTRAINT "_PostToTag_AB_pkey" PRIMARY KEY');
           const bundleNames = [additivePlan['baselineDir'], additivePlan['dir']].map((bundleDir) =>
             basename(String(bundleDir)),
           );
@@ -224,6 +249,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           );
           expect(v7Destructive).toContain('comment: Commented through Prisma 7 via Prisma 7');
           expect(v7Destructive).toContain('likes cleared to null via Prisma 7');
+          expect(v7Destructive).toContain('viewCount set to 41 via Prisma 7');
           expect(v7Destructive).toContain(
             'bob@example.com columns: createdAt, email, id, name, role, updatedAt',
           );
@@ -233,15 +259,51 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           );
           expect(v8Destructive).toContain('Draft: what changes at cutover: likes 0 via Prisma 8');
 
+          editSchema('edit-3.prisma');
+          await v8('contract', 'emit');
+          const sequenceHash = storageHash(dir);
+          const sequencePlan = await v8('migration', 'plan', '--name', 'number-posts');
+          expect(sequencePlan).toMatchObject({ from: destructiveHash, to: sequenceHash });
+          const sequenced = readBundle(dir, String(sequencePlan['dir']));
+          expect(sequenced).toMatchObject({ from: destructiveHash, to: sequenceHash });
+          expect(operationClasses(sequenced)).toEqual(SEQUENCE_PLAN_OPERATIONS);
+          expect(
+            sequenced.operations
+              .find((operation) => operation.id === 'setDefault.Post.viewCount')
+              ?.execute.map((step) => step.sql),
+          ).toEqual([
+            'CREATE SEQUENCE IF NOT EXISTS "public"."Post_viewCount_seq" AS integer',
+            `ALTER TABLE "public"."Post" ALTER COLUMN "viewCount" SET DEFAULT nextval('"public"."Post_viewCount_seq"'::regclass)`,
+            'ALTER SEQUENCE "public"."Post_viewCount_seq" OWNED BY "public"."Post"."viewCount"',
+            `SELECT setval('"public"."Post_viewCount_seq"'::regclass, COALESCE(MAX("viewCount"), 0) + 1, false) FROM "public"."Post"`,
+          ]);
+          expect(renderedSql(sequenced).match(/RENAME CONSTRAINT/g)).toHaveLength(1);
+          expect(renderedSql(sequenced)).toContain(
+            'ALTER TABLE "public"."Post" RENAME CONSTRAINT "Post_authorId_fkey" TO "Post_author_fk"',
+          );
+          await migrate();
+          await verifyOnlyLedgerUnclaimed();
+          expect(await constraintNames(connectionString)).toContain(
+            'Post foreign key Post_author_fk',
+          );
+          await v7('generate');
+          await typecheck('tsconfig.edit-3.json');
+          const v7Sequenced = await tsx('test/handover/v7-after-edit-3.ts');
+          expect(v7Sequenced).toContain('largest viewCount before: 41');
+          expect(v7Sequenced).toContain('Numbered by the sequence: viewCount 42 via Prisma 7');
+
           await withDevDatabase(async ({ connectionString: freshUrl }) => {
             const replayed = resultEnvelope(
               await run(dir, freshUrl, 'prisma', ['db', 'migrate']),
             ).result;
             expect(replayed).toMatchObject({
               ok: true,
-              migrationsApplied: 3,
-              markerHash: destructiveHash,
+              migrationsApplied: 4,
+              markerHash: sequenceHash,
             });
+            expect(await constraintNames(freshUrl)).toEqual(
+              await constraintNames(connectionString),
+            );
             const strict = await runAllowingFailure(dir, freshUrl, 'prisma', [
               'db',
               'verify',
@@ -251,12 +313,12 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             expect(strict.status, strict.output).toBe(0);
             expect(resultEnvelope(strict.output).result).toMatchObject({ ok: true, unclaimed: [] });
           });
-          expect(dbRefHash(dir)).toBe(destructiveHash);
+          expect(dbRefHash(dir)).toBe(sequenceHash);
         });
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    timeouts.spinUpPpgDev * 7 + timeouts.typeScriptCompilation * 2,
+    timeouts.spinUpPpgDev * 8 + timeouts.typeScriptCompilation * 3,
   );
 });
