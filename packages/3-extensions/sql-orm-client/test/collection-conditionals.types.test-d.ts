@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, test } from 'vitest';
+import type { Filtered, Ordered } from '../src/collection-types';
 import { orm } from '../src/orm';
 import { createChainingOrm, PostCollection } from './collection-chaining-fixture';
 import { createMockRuntime, getTestContext } from './helpers';
@@ -53,6 +54,26 @@ const classDb = orm({
   context: getTestContext(),
   collections: { Post: ConditionalPostCollection },
 }).public;
+
+declare const filtered: Filtered<PostCollection>;
+declare const unfiltered: PostCollection;
+
+describe('a collection with a fact is a subtype of the same collection without it', () => {
+  test('Filtered<C> is assignable to C, and C is not assignable to Filtered<C>', () => {
+    expectTypeOf<Filtered<PostCollection>>().toExtend<PostCollection>();
+    expectTypeOf<PostCollection>().not.toExtend<Filtered<PostCollection>>();
+  });
+
+  test('Ordered<C> is assignable to C, and C is not assignable to Ordered<C>', () => {
+    expectTypeOf<Ordered<PostCollection>>().toExtend<PostCollection>();
+    expectTypeOf<PostCollection>().not.toExtend<Ordered<PostCollection>>();
+  });
+
+  test('a ternary between C and Filtered<C> has type C', () => {
+    expectTypeOf(flag ? filtered : unfiltered).toEqualTypeOf<PostCollection>();
+    expectTypeOf(flag ? unfiltered : filtered).toEqualTypeOf<PostCollection>();
+  });
+});
 
 describe('on a plain collection, every conditional form reduces to the root', () => {
   test('ternary, filtered branch first', () => {

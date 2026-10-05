@@ -2321,7 +2321,7 @@ export class CollectionBase<
     this: Self,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<CollectionRowOf<this & Self> | null>;
+  ): Promise<CollectionRowOf<Self & HasRow> | null>;
   async update(
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2411,7 +2411,7 @@ export class CollectionBase<
     this: Self,
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<CollectionRowOf<this & Self>>;
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow>>;
   updateAll(
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2539,7 +2539,7 @@ export class CollectionBase<
   async delete<Self extends HasWhere>(
     this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<CollectionRowOf<this & Self> | null>;
+  ): Promise<CollectionRowOf<Self & HasRow> | null>;
   async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
@@ -2581,7 +2581,7 @@ export class CollectionBase<
   deleteAll<Self extends HasWhere>(
     this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<CollectionRowOf<this & Self>>;
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
