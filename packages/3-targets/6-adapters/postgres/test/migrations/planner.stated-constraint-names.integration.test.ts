@@ -132,10 +132,11 @@ describe('a contract that starts stating constraint names', { concurrent: false 
     from: Contract<SqlStorage> | null,
     contract: Contract<SqlStorage>,
     policy: MigrationOperationPolicy,
+    schema: SqlSchemaIRNode = contractSchema(from),
   ): Promise<void> {
     const planResult = postgresTargetDescriptor.createPlanner(controlAdapter).plan({
       contract,
-      schema: contractSchema(from),
+      schema,
       policy,
       fromContract: from,
       frameworkComponents,
@@ -194,6 +195,21 @@ describe('a contract that starts stating constraint names', { concurrent: false 
     `);
 
     await planAndApply(unnamed, named, anyClass);
+
+    expect(await postConstraintNames()).toEqual(['post_primary', 'post_written_by']);
+  });
+
+  it('renames from the names a database created without migrations has, as db update sees them', {
+    timeout: testTimeout,
+  }, async () => {
+    await planAndApply(null, unnamed, INIT_ADDITIVE_POLICY);
+
+    await planAndApply(
+      null,
+      named,
+      anyClass,
+      await familyInstance.introspect({ driver: driver!, contract: named }),
+    );
 
     expect(await postConstraintNames()).toEqual(['post_primary', 'post_written_by']);
   });

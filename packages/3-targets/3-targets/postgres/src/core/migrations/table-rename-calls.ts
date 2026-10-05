@@ -11,13 +11,13 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { assertDefined } from '@internal/utils/assertions';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
+import { constraintNameRenames } from './constraint-name-renames';
 import { buildPostgresPlanDiff } from './diff-database-schema';
 import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import { type PostgresOpFactoryCall, RenameTableCall } from './op-factory-call';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
 import { renameRlsReferences } from './rename-rls-references';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
-import { constraintRenamesForTableRename } from './table-rename-constraint-renames';
 
 const RENAME_POLICY: MigrationOperationPolicy = { allowedOperationClasses: ['widening'] };
 
@@ -44,7 +44,7 @@ function renamedTableNode(
 }
 
 /**
- * The calls a migration's `renameTable` emits: the table rename, then a rename of each primary key, unique constraint and foreign key the start contract left unnamed, and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; an unchanged constraint takes the end contract's explicit name if it has one, and a primary key or foreign key both contracts name is renamed when the names differ. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+ * The calls a migration's `renameTable` emits: the table rename, then a rename of each primary key, unique constraint and foreign key the start contract left unnamed, and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; a constraint takes the end contract's stated name, or the name derived from the new table name. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
  */
 export function postgresTableRenameCalls(input: {
   readonly startContract: Contract<SqlStorage> | null;
@@ -79,7 +79,7 @@ export function postgresTableRenameCalls(input: {
   const pairing = { contract, policy: RENAME_POLICY };
   return [
     new RenameTableCall(schemaName, rename.from, rename.to),
-    ...constraintRenamesForTableRename({
+    ...constraintNameRenames({
       schemaName,
       from: rename.from,
       to: rename.to,

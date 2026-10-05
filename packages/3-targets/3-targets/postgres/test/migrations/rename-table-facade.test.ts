@@ -1,5 +1,5 @@
 /**
- * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. A primary key or foreign key both contracts name is renamed when the end contract states a different name; other explicitly named objects keep their names. A table missing from either contract is refused.
+ * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each primary key, unique constraint and foreign key whose name changes (stated, or derived from the table name), and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. A table missing from either contract is refused.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
@@ -273,6 +273,34 @@ describe('PostgresMigration.renameTable', () => {
       'Rename table "userProfile" to "UserProfile"',
       'Rename primary key "userProfile_primary" to "UserProfile_primary" on "UserProfile"',
       'Rename foreign key "userProfile_account_link" to "UserProfile_account_link" on "UserProfile"',
+    ]);
+  });
+
+  it('renames a named foreign key to the derived name when the end contract stops stating one', async () => {
+    expect(
+      await renameLabels(
+        {
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'userProfile_account_link' },
+          ],
+        },
+        { foreignKeys: (tableName) => [accountForeignKey(tableName)] },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename foreign key "userProfile_account_link" to "UserProfile_accountId_fkey" on "UserProfile"',
+    ]);
+  });
+
+  it('renames a named unique constraint to the different name the end contract states', async () => {
+    expect(
+      await renameLabels(
+        { uniques: [{ columns: ['email'], name: 'userProfile_email_unique' }] },
+        { uniques: [{ columns: ['email'], name: 'UserProfile_email_unique' }] },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename unique constraint "userProfile_email_unique" to "UserProfile_email_unique" on "UserProfile"',
     ]);
   });
 

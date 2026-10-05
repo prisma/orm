@@ -39,6 +39,7 @@ import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schem
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import type { SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
+import { plannedConstraintNameRenames } from './constraint-name-renames';
 import {
   renderPostgresSuppression,
   resolveNamespaceIdForDdlSchema,
@@ -71,7 +72,6 @@ import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
-import { statedConstraintRenames } from './stated-constraint-renames';
 import { emissionSchemaForNamespace } from './table-rename-calls';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
@@ -369,8 +369,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return plannerFailure([...(result.ok ? [] : result.failure), ...schemaDiff.conflicts]);
     }
 
-    const indexRenamePartition = partitionPostgresCallsByControlPolicy(
-      [...indexRenames.calls, ...checkRenames.calls, ...statedConstraintRenames(options)],
+    const renamePartition = partitionPostgresCallsByControlPolicy(
+      [...indexRenames.calls, ...checkRenames.calls, ...plannedConstraintNameRenames(options)],
       options.contract,
     );
 
@@ -402,7 +402,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const ordered = movePolicyDropsBeforeBlockedDdl(result.value.calls, schemaDiffPartition.kept);
     const calls = [
       ...ordered.structural,
-      ...indexRenamePartition.kept,
+      ...renamePartition.kept,
       ...ordered.policyCalls,
       ...fieldEventPartition.kept,
     ];
@@ -413,7 +413,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const seenWarnings = new Set<string>();
     const warnings: SqlPlannerConflict[] = [
       ...issuePartition.suppressions,
-      ...indexRenamePartition.suppressions,
+      ...renamePartition.suppressions,
       ...schemaDiff.suppressions,
       ...schemaDiffPartition.suppressions,
       ...fieldEventPartition.suppressions,

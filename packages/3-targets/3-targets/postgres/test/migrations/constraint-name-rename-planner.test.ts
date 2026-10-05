@@ -25,6 +25,7 @@ const ALL_CLASSES: readonly MigrationOperationClass[] = ['additive', 'widening',
 interface Names {
   readonly primaryKey?: string;
   readonly foreignKey?: string;
+  readonly unique?: string;
   readonly primaryKeyColumns?: readonly string[];
 }
 
@@ -58,7 +59,9 @@ function buildContract(names: Names): Contract<SqlStorage> {
               ...(names.foreignKey === undefined ? {} : { name: names.foreignKey }),
             },
           ],
-          uniques: [],
+          uniques: [
+            { columns: ['slug'], ...(names.unique === undefined ? {} : { name: names.unique }) },
+          ],
           indexes: [],
         }),
       },
@@ -121,6 +124,20 @@ describe('a stated constraint name that changes', () => {
       {
         id: 'foreignKey.public.post.post_author_link.rename',
         label: 'Rename foreign key "post_author_link" to "post_written_by" on "post"',
+      },
+    ]);
+  });
+
+  it('renames the unique constraint once', async () => {
+    expect(
+      await plannedOperations(
+        buildContract({ unique: 'post_slug_unique' }),
+        buildContract({ unique: 'post_slug_once' }),
+      ),
+    ).toEqual([
+      {
+        id: 'unique.public.post.post_slug_unique.rename',
+        label: 'Rename unique constraint "post_slug_unique" to "post_slug_once" on "post"',
       },
     ]);
   });
