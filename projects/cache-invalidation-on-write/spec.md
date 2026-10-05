@@ -76,6 +76,8 @@ Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](..
 - `commit()` and `rollback()` resolve only after the hooks have run. A write that has returned has already had its stage run.
 - The stage fires after `commit()` or `rollback()` resolves and before the connection is released. The hook must not use the connection.
 
+The transaction remembers a plan when the plan's first hook runs on it. A query whose row stream the caller abandons inside a transaction therefore still gets its `afterTransaction` stage when the transaction ends, with its plan and the transaction's outcome. Outside a transaction such a query fires no after-hook, and therefore no stage.
+
 A transaction that never ends, such as an abandoned manual `connection().transaction()`, never fires the stage for its plans.
 
 Why `wrapTransaction` and not `withTransaction`: the ORM's `withMutationScope` calls `runtime.connection()`, then `connection.transaction()`, and then `commit()` or `rollback()` on the returned wrapper. It never goes through `withTransaction`. A stage fired from `withTransaction` would miss every ORM mutation that opens its own transaction.
@@ -144,7 +146,7 @@ A store error from `invalidate` propagates out of the hook. The runner logs it a
 
 - Nested-relation writes discard annotations: the ORM runs them as a graph of internal statements, and the annotation reaches none of them.
 - The Mongo ORM cannot annotate writes.
-- An abandoned row stream fires no after-hook. Outside a transaction it therefore fires no `afterTransaction` either, and a write whose returned rows the caller never drains does not invalidate.
+- Outside a transaction, a write whose returned rows the caller never drains fires no after-hook and no `afterTransaction`, so it does not invalidate. Inside a transaction the same write still invalidates when the transaction ends.
 
 ### Tests
 
@@ -156,7 +158,9 @@ A store error from `invalidate` propagates out of the hook. The runner logs it a
   - a plan without the annotation does nothing;
   - a store error propagates to the runner, which logs it.
 - [`cache-query-only.test.ts`](../../packages/3-extensions/middleware-cache/test/cache-query-only.test.ts) changes to check that the middleware's only hook for writes is `afterTransaction`.
-- Postgres integration: an ORM `update()` with the annotation, then a read, sees the new row with one driver call.
+- Postgres integration:
+  - an ORM `update()` with the annotation, then a read, sees the new row with one driver call;
+  - a `db.transaction(fn)` that contains an annotated write and rolls back leaves the cached entry in place, and the next read is still served from the cache.
 
 ### Docs
 
