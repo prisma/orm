@@ -1,11 +1,7 @@
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { index } from '@internal/sql-contract/factories';
-import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { fn } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
-import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPlanDiff } from '../../src/core/migrations/diff-database-schema';
 import {
@@ -14,10 +10,15 @@ import {
   planIssues as planNodeIssues,
 } from '../../src/core/migrations/issue-planner';
 import { RenameIndexCall } from '../../src/core/migrations/op-factory-call';
-import { PostgresSchema } from '../../src/core/postgres-schema';
-import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import {
+  emptyRoot,
+  makeContract,
+  planFor,
+  rootOf,
+  type TableSpec,
+} from './node-issue-planner-fixtures';
 
 /**
  * Direct coverage for the node-based Postgres planner (the one-differ path):
@@ -30,56 +31,6 @@ import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table
  * control-policy suites and `rls-planner.test.ts`.
  */
 
-type TableSpec = ConstructorParameters<typeof StorageTable>[0];
-
-function makeContract(tables: Record<string, TableSpec>): Contract<SqlStorage> {
-  const publicSchema = new PostgresSchema({
-    id: 'public',
-    entries: {
-      table: Object.fromEntries(
-        Object.entries(tables).map(([name, spec]) => [name, new StorageTable(spec)]),
-      ),
-    },
-  });
-  return {
-    target: 'postgres',
-    targetFamily: 'sql',
-    profileHash: profileHash('node-planner'),
-    storage: new SqlStorage({
-      storageHash: coreHash('node-planner'),
-      namespaces: { public: publicSchema },
-    }),
-    roots: {},
-    domain: applicationDomainOf({ models: {} }),
-    capabilities: {},
-    extensions: {},
-    meta: {},
-  };
-}
-
-function emptyRoot(): PostgresDatabaseSchemaNode {
-  return new PostgresDatabaseSchemaNode({
-    namespaces: {},
-    roles: [],
-    existingSchemas: ['public'],
-    pgVersion: 'unknown',
-  });
-}
-
-function rootOf(tables: Record<string, PostgresTableSchemaNode>): PostgresDatabaseSchemaNode {
-  return new PostgresDatabaseSchemaNode({
-    namespaces: {
-      public: new PostgresNamespaceSchemaNode({
-        schemaName: 'public',
-        tables,
-      }),
-    },
-    roles: [],
-    existingSchemas: ['public'],
-    pgVersion: 'unknown',
-  });
-}
-
 const userTable: TableSpec = {
   columns: {
     id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
@@ -90,31 +41,6 @@ const userTable: TableSpec = {
   uniques: [],
   indexes: [],
 };
-
-function planFor(contract: Contract<SqlStorage>, actual: PostgresDatabaseSchemaNode) {
-  const { issues } = buildPostgresPlanDiff({
-    contract,
-    actualSchema: actual,
-    frameworkComponents: [],
-  });
-  // Subtree coalescing is the planner's responsibility (per the differ's
-  // contract) — the total differ emits an issue for every node in a
-  // missing/extra subtree, redundant once the table-level call accounts for it.
-  const coalesced = coalesceSubtreeIssues(issues);
-  const result = planNodeIssues({
-    issues: coalesced,
-    toContract: contract,
-    fromContract: null,
-    schemaName: 'public',
-    codecHooks: new Map(),
-    storageTypes: contract.storage.types ?? {},
-    // The default per-issue mapper is what this suite pins — the real
-    // strategy list is covered elsewhere (see module docstring).
-    strategies: [],
-  });
-  if (!result.ok) throw new Error(`expected ok, got conflicts: ${JSON.stringify(result.failure)}`);
-  return result.value.calls;
-}
 
 describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
   it('a fresh table becomes CreateTable (+ PK inline)', () => {
@@ -241,81 +167,6 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     });
     const calls = planFor(contract, actual);
     expect(calls.map((c) => c.factoryName)).toEqual(['alterColumnType', 'setNotNull']);
-  });
-
-  describe('an autoincrement default on an existing integer column', () => {
-    const contract = makeContract({
-      post: {
-        columns: {
-          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-          serial: {
-            nativeType: 'int4',
-            codecId: 'pg/int4@1',
-            nullable: false,
-            default: { kind: 'function', expression: 'autoincrement()' },
-          },
-        },
-        primaryKey: { columns: ['id'] },
-        foreignKeys: [],
-        uniques: [],
-        indexes: [],
-      },
-    });
-
-    function liveSerial(serialDefault: { raw: string; value: number } | undefined) {
-      return rootOf({
-        post: new PostgresTableSchemaNode({
-          name: 'post',
-          columns: {
-            id: { name: 'id', nativeType: 'int4', nullable: false, resolvedNativeType: 'int4' },
-            serial: {
-              name: 'serial',
-              nativeType: 'int4',
-              nullable: false,
-              resolvedNativeType: 'int4',
-              ...(serialDefault === undefined
-                ? {}
-                : {
-                    default: serialDefault.raw,
-                    resolvedDefault: { kind: 'literal', value: serialDefault.value },
-                  }),
-            },
-          },
-          primaryKey: { columns: ['id'] },
-          foreignKeys: [],
-          uniques: [],
-          indexes: [],
-          policies: [],
-          rlsEnabled: false,
-        }),
-      });
-    }
-
-    it('sets the default, additive, when the column had none', () => {
-      const calls = planFor(contract, liveSerial(undefined));
-
-      expect(calls).toMatchObject([
-        {
-          factoryName: 'setDefault',
-          operationClass: 'additive',
-          tableName: 'post',
-          column: { name: 'serial', type: 'int4', default: fn('autoincrement()') },
-        },
-      ]);
-    });
-
-    it('replaces a literal default, widening', () => {
-      const calls = planFor(contract, liveSerial({ raw: '0', value: 0 }));
-
-      expect(calls).toMatchObject([
-        {
-          factoryName: 'setDefault',
-          operationClass: 'widening',
-          tableName: 'post',
-          column: { name: 'serial', type: 'int4', default: fn('autoincrement()') },
-        },
-      ]);
-    });
   });
 
   it('an extra live table becomes DropTable (strict)', () => {
