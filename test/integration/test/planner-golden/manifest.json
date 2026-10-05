@@ -67,6 +67,7 @@
   "examples/prisma-8-postgis-demo/migrations/snapshots/7e98a4d9437e6be2f2fa7fca02fbc01c245586997a937f97cab60788612512e5/contract.json": "e6c69fa05bc6ed50d1e789026cf31298b9caafe7d5d0934641c0be50c00becf4",
   "examples/prisma-8-postgis-demo/src/prisma/contract.json": "55051982528b4de99b662b5463f7561a766992ea322b8f62005228706fec5a04",
   "examples/prisma7-adoption/generated/prisma8/contract.json": "b97ddf97c6a51036aa5da257c0e6eb65d732718bdcb7c3f565cb95349a6d66fd",
+  "examples/prisma7-adoption/migrations/snapshots/7e0fbcfc4cc5178d89ab0cda93756513a0a823a3dea3708476207b0527c2e423/contract.json": "4b093c3feaee59a1e2a86a03197e6b9a75fc3f488d7e28c1bc09c04c80ea9a55",
   "examples/prisma7-adoption/migrations/snapshots/8a3bf4f3a5f417a5be8a3c3f1fd5047d9bcee0bc6b9901c90cda00c4550f3282/contract.json": "e18e0b01be05254fc6f867cfbfacff80e904c1af9a34b5eec1aa9d6078962b1a",
   "examples/react-router-demo/src/prisma/contract.json": "bb19204ccba1cad39ab6923c286ceeb5e7d2761c70c603fcde5b98c20a71d8d6",
   "examples/supabase/src/contract.json": "1fa081ec717e569545777c3ab51810d8bc1267ff3b0af582cfffeeb2e4c06840",
