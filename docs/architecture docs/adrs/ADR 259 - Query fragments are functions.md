@@ -86,14 +86,11 @@ The field map says what the scope needs: a field of that name, that column type,
 
 The body receives a collection whose model accessor has only the declared fields, each typed as a `CodecField`, so it cannot touch a field it did not ask for. It may call `where`, `orderBy`, `limit` and `offset`; it cannot `select` or `include`. What the body has established is a declared property of that collection, as on every collection (ADR 258), and a flag that is not established is `boolean`. So the facts take part in assignment: a reassigned `let` that may or may not hold the filtered collection is typed as not known to be filtered, an explicit type argument that claims a filter the body did not apply is refused, and so is a body that returns some other collection.
 
-The scope is generic over the collection it receives. It accepts any collection, of any model, whose fields include the declared ones with the same column type and nullability: a root collection, a custom class, a chained collection, one narrowed by `select`, an include refinement, `this` in a class. It returns that collection's own type plus what the body established: a `where` in the body gives `Filtered<Self>`, so `update` is allowed after it, and an `orderBy` gives `Ordered<Self>`. The receiver is a plain type parameter, constrained to the collections of the models that have the fields, so the result keeps the receiver's own name, such as `Collection<Contract, 'Post', ...>`, and an exported chain emits a declaration. A model that lacks a field, has it with another column type, or has it with another nullability is refused. The error shows the scope's declared fields and the models that have them:
+The scope is generic over the collection it receives. It accepts any collection, of any model, whose fields include the declared ones with the same column type and nullability: a root collection, a custom class, a chained collection, one narrowed by `select`, an include refinement, `this` in a class. It returns that collection's own type plus what the body established: a `where` in the body gives `Filtered<Self>`, so `update` is allowed after it, and an `orderBy` gives `Ordered<Self>`. The receiver is a plain type parameter, constrained to the collections of the models that have the fields, so the result keeps the receiver's own name, such as `Collection<Contract, 'Post', ...>`, and an exported chain emits a declaration. A model that lacks a field, has it with another column type, or has it with another nullability is refused, and the error names the field. For a scope that declares `deletedAt` and `title`, applied to a model that has only `deletedAt`:
 
 ```
-Argument of type 'FieldScope<Contract, { readonly deletedAt: ScopeFieldSpec<"pg/timestamptz-temporal@1", true>; }, ...>' is not assignable to parameter of type '(collection: Collection<Contract, "Tag", ...>) => ...'.
-  Type 'Collection<Contract, "Tag", ...>' is not assignable to type '(HasState<{ readonly nsId: "public"; }> & { readonly modelName: "Comment"; }) | (HasState<{ readonly nsId: "public"; }> & { readonly modelName: "Post"; })'.
+Property ''the model has no field with the column type and nullability the scope declares'' is missing in type 'CollectionBase<Contract, "Comment", ...>' but required in type '{ readonly 'the model has no field with the column type and nullability the scope declares': "title"; }'.
 ```
-
-When no model of the contract has the fields, the expected type is `{ 'no model has every field the scope declares, with the declared column type and nullability': "deletedAt" }`.
 
 A field matches on its column type, the codec, and its nullability. Type parameters of the column type are not compared, so `field.uuidString()`, a `char(36)` column, matches a field of any `char(n)`. The field is matched by its name in the model, not its column name, so `@map` makes no difference. The namespace is read from the receiver, so a model of the same name in another namespace matches only if it has the fields itself. A relation, or a field that only one variant of a polymorphic model has, does not match. At run time the scope checks the receiver's model once per application, before the body runs, and throws `ORM.FIELD_UNKNOWN` with `why`, `fix` and `meta` for a JavaScript caller whose model does not match. A field map, a declaration or a body of the wrong kind throws `ORM.ARGUMENT_INVALID` when the scope is defined.
 
@@ -136,7 +133,7 @@ Measured as type instantiations with TypeScript 5.9.3 on the `prisma-8-demo` exa
 | --- | --- | --- | --- |
 | A conditional inside `apply` | none | — | 10,000 to 14,000 once per pair of collection types, then under 10 |
 | `db.orm.scope` and `Post.scope` together | +286 (+0.04%) | | |
-| `db.orm.scope` | | 225 | +1,132 with the definition |
+| `db.orm.scope` | | 225 | +1,356 with the definition: 2,125 for the definition and ten uses, against 769 for the same ten sites written inline |
 | `Post.scope` | | 21 | −7,516: the body is typed once instead of at each site |
 | `orderByField` | none | — | about 550 once, then under 20 |
 

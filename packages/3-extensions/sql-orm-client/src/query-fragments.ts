@@ -113,18 +113,23 @@ type MismatchedField<
     : K;
 }[keyof Fields & string];
 
-type ModelsWithFields<
+type ModelScopeTarget<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, ScopeFieldSpec>>,
-> = {
-  [NsId in keyof TContract['domain']['namespaces'] & string]: {
-    [ModelName in keyof TContract['domain']['namespaces'][NsId]['models'] & string]: [
-      MismatchedField<TContract, ModelName, NsId, Fields>,
-    ] extends [never]
-      ? HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName }
-      : never;
-  }[keyof TContract['domain']['namespaces'][NsId]['models'] & string];
-}[keyof TContract['domain']['namespaces'] & string];
+  ModelName extends string,
+  NsId extends string,
+> = HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName } & ([
+    MismatchedField<TContract, ModelName, NsId, Fields>,
+  ] extends [never]
+    ? unknown
+    : {
+        readonly 'the model has no field with the column type and nullability the scope declares': MismatchedField<
+          TContract,
+          ModelName,
+          NsId,
+          Fields
+        >;
+      });
 
 type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
   ? Ordered<Facts['hasWhere'] extends true ? Filtered<C> : C>
@@ -132,15 +137,16 @@ type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
     ? Filtered<C>
     : C;
 
-/** A collection of any model, in any namespace, that has the declared fields with the same column type and nullability. */
+/** A collection of any model, in any namespace, that has the declared fields with the same column type and nullability. For a model that lacks one, the type names the field, so the refusal names it too. */
 export type CollectionWithFields<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, ScopeFieldSpec>>,
-> = [ModelsWithFields<TContract, Fields>] extends [never]
-  ? {
-      readonly 'no model has every field the scope declares, with the declared column type and nullability': keyof Fields;
-    }
-  : ModelsWithFields<TContract, Fields>;
+> = {
+  [NsId in keyof TContract['domain']['namespaces'] & string]: {
+    [ModelName in keyof TContract['domain']['namespaces'][NsId]['models'] &
+      string]: ModelScopeTarget<TContract, Fields, ModelName, NsId>;
+  }[keyof TContract['domain']['namespaces'][NsId]['models'] & string];
+}[keyof TContract['domain']['namespaces'] & string];
 
 /**
  * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, and returns that collection with what the body established.

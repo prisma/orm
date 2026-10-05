@@ -8,6 +8,7 @@ import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
 import type { orm } from '../src/orm';
+import type { CollectionWithFields, ScopeFieldSpec } from '../src/query-fragments';
 import type { CodecField } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import {
@@ -191,5 +192,32 @@ describe('client.scope', () => {
       // @ts-expect-error a Post collection is not the collection the body received
       () => plain.Post.where((p) => p.deletedAt.isNull()),
     );
+  });
+
+  test('the refusal names the field the model lacks', () => {
+    type Fields = {
+      readonly deletedAt: ScopeFieldSpec<'pg/timestamptz-temporal@1', true>;
+      readonly title: ScopeFieldSpec<'pg/text@1', false>;
+    };
+    type Refusal = 'the model has no field with the column type and nullability the scope declares';
+    type ForModel<Model> = Extract<
+      CollectionWithFields<Contract, Fields>,
+      { readonly modelName: Model }
+    >;
+    expectTypeOf<ForModel<'Comment'>[Refusal]>().toEqualTypeOf<'title'>();
+    expectTypeOf<ForModel<'Tag'>[Refusal]>().toEqualTypeOf<'deletedAt' | 'title'>();
+    expectTypeOf<ForModel<'Post'>>().not.toHaveProperty(
+      'the model has no field with the column type and nullability the scope declares',
+    );
+    const deletedTitled = client.scope(
+      {
+        deletedAt: field.column(timestamptzTemporalColumn).optional(),
+        title: field.column(textColumn),
+      },
+      (rows) => rows.limit(1),
+    );
+    plain.Post.apply(deletedTitled);
+    // @ts-expect-error Comment has deletedAt but no title, and the message names title
+    plain.Comment.apply(deletedTitled);
   });
 });
