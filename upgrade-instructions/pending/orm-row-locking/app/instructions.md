@@ -1,7 +1,7 @@
 ---
 changes:
   - id: orm-collections-lock-rows
-    summary: "ORM collections gain forUpdate(), forNoKeyUpdate(), forShare() and forKeyShare(), gated on the same capability keys as the SQL builder's row-locking methods; a contract emitted before this release does not carry them and the methods are unavailable against it, so re-emit the contract before using them."
+    summary: "ORM collections gain forUpdate(), forNoKeyUpdate(), forShare() and forKeyShare(), which need the same capability keys as the SQL builder's row-locking methods and also sql.lockOf; a contract emitted before this release does not carry them and the methods are unavailable against it, so re-emit the contract before using them."
     detection:
       glob: "**/contract.json"
       contains:
@@ -23,7 +23,7 @@ await db.transaction(async (tx) => {
 
 A lock cannot be combined with `include`, `groupBy`, `aggregate`, `distinct`, `distinctOn` or a mutation terminal, and a lock method cannot be called inside an `include()` refinement callback. Each of these throws `ORM.LOCK_INCOMPATIBLE`.
 
-Each method is gated on `sql.forUpdate`, `postgres.forNoKeyUpdate`, `sql.forShare` or `postgres.forKeyShare`, and the options on `sql.lockNowait` and `sql.lockSkipLocked`. A `contract.json` emitted before this release carries none of them, so the methods do not exist on its collections. Re-emit your contract to pick up the keys:
+Each method needs `sql.forUpdate`, `postgres.forNoKeyUpdate`, `sql.forShare` or `postgres.forKeyShare`, and also `sql.lockOf`, because the ORM always renders `OF` the model's table. The `nowait` and `skipLocked` options need `sql.lockNowait` and `sql.lockSkipLocked`. A `contract.json` emitted before this release carries none of them, so the methods do not exist on its collections. Re-emit your contract to pick up the keys:
 
 ```console
 prisma contract emit

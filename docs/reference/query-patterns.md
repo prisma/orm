@@ -239,7 +239,7 @@ Each method takes an optional object:
 
 Each method and each option exists only when the adapter reports its capability (see [Capabilities](capabilities.md)). Postgres reports all of them; SQLite reports none, because SQLite has no row locks.
 
-The ORM client has the same four methods with `nowait` and `skipLocked`, but no `of`: it always renders `OF` the model's own table, so only the model's rows are locked, even when a polymorphic model joins its variant tables.
+The ORM client has the same four methods with `nowait` and `skipLocked`, but no `of`: it always renders `OF` the model's own table, so only the model's rows are locked, even when a polymorphic model joins its variant tables. Its methods therefore also need the `sql.lockOf` capability.
 
 **What to know:**
 - A lock lasts until the transaction ends, so use it inside `db.transaction(...)`. Outside a transaction the lock is released as soon as the statement ends.

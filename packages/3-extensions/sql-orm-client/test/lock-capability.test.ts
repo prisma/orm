@@ -130,6 +130,16 @@ describe('row-locking methods', () => {
       expect(call).toThrow(capabilityMissing(method, capability));
     });
 
+    it.each(['forUpdate', 'forNoKeyUpdate', 'forShare', 'forKeyShare'] as const)(
+      '%s throws without sql.lockOf, because the ORM always renders OF',
+      (method) => {
+        const posts = postsWith({ ...allFlags, sql: { ...allFlags.sql, lockOf: false } });
+
+        // @ts-expect-error every locking method needs sql.lockOf
+        expect(() => posts[method]()).toThrow(capabilityMissing(method, 'sql.lockOf'));
+      },
+    );
+
     it('checks the flag in its own group', () => {
       const collection = postsWith({
         ...allFlags,

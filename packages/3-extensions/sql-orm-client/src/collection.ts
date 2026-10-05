@@ -13,6 +13,7 @@ import {
   isWhereExpr,
   LiteralExpr,
   LockingClause,
+  type LockOptionCapabilities,
   type LockStrength,
   type LockStrengthCapabilities,
   type LockWaitOptions,
@@ -196,6 +197,13 @@ function applyUpdateDefaults(
 }
 
 type WhereDirectInput = WhereArg;
+
+type LockMethodArgs<
+  Capabilities,
+  Strength extends LockStrength,
+> = Capabilities extends LockStrengthCapabilities[Strength] & LockOptionCapabilities['of']
+  ? [options?: LockWaitOptions<Capabilities>]
+  : never;
 
 function isToWhereExprInput(value: unknown): value is ToWhereExpr {
   return (
@@ -1129,16 +1137,14 @@ class CollectionImpl<
   /**
    * Lock the selected rows of this model with `FOR UPDATE` until the transaction ends.
    *
-   * Requires the `sql.forUpdate` capability.
+   * Requires the `sql.forUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    *
    * ```typescript
    * const job = await tx.orm.Job.where({ state: 'queued' }).limit(1).forUpdate({ skipLocked: true }).first();
    * ```
    */
   forUpdate(
-    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forUpdate']
-      ? [options?: LockWaitOptions<TContract['capabilities']>]
-      : never
+    ...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>
   ): Collection<TContract, ModelName, Row, State> {
     return this.#lock('forUpdate', options[0]);
   }
@@ -1146,12 +1152,10 @@ class CollectionImpl<
   /**
    * Lock the selected rows of this model with `FOR NO KEY UPDATE` until the transaction ends. Unlike `forUpdate`, it does not block foreign-key checks from rows that reference them.
    *
-   * Requires the `postgres.forNoKeyUpdate` capability.
+   * Requires the `postgres.forNoKeyUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
   forNoKeyUpdate(
-    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forNoKeyUpdate']
-      ? [options?: LockWaitOptions<TContract['capabilities']>]
-      : never
+    ...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>
   ): Collection<TContract, ModelName, Row, State> {
     return this.#lock('forNoKeyUpdate', options[0]);
   }
@@ -1159,12 +1163,10 @@ class CollectionImpl<
   /**
    * Lock the selected rows of this model with `FOR SHARE` until the transaction ends; other transactions may share-lock them but not write them.
    *
-   * Requires the `sql.forShare` capability.
+   * Requires the `sql.forShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
   forShare(
-    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forShare']
-      ? [options?: LockWaitOptions<TContract['capabilities']>]
-      : never
+    ...options: LockMethodArgs<TContract['capabilities'], 'forShare'>
   ): Collection<TContract, ModelName, Row, State> {
     return this.#lock('forShare', options[0]);
   }
@@ -1172,12 +1174,10 @@ class CollectionImpl<
   /**
    * Lock the selected rows of this model with `FOR KEY SHARE` until the transaction ends; only deletes and key changes are blocked.
    *
-   * Requires the `postgres.forKeyShare` capability.
+   * Requires the `postgres.forKeyShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
   forKeyShare(
-    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forKeyShare']
-      ? [options?: LockWaitOptions<TContract['capabilities']>]
-      : never
+    ...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>
   ): Collection<TContract, ModelName, Row, State> {
     return this.#lock('forKeyShare', options[0]);
   }
@@ -2772,6 +2772,7 @@ class CollectionImpl<
       );
     }
     assertLockCapability(this.contract, lockStrengthCapabilities[strength], strength);
+    assertLockCapability(this.contract, lockOptionCapabilities.of, strength);
     const waitPolicy = lockWaitPolicyOf(strength, options);
     if (waitPolicy !== undefined) {
       assertLockCapability(this.contract, lockOptionCapabilities[waitPolicy], strength);

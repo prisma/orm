@@ -50,6 +50,21 @@ test('each method is unusable without its flag', () => {
   noForUpdate.forShare();
 });
 
+test('every method is unusable without sql.lockOf', () => {
+  const noLockOf = postsWith({ ...flags, sql: { ...flags.sql, lockOf: false } });
+
+  // @ts-expect-error forUpdate needs sql.lockOf
+  noLockOf.forUpdate();
+  // @ts-expect-error forNoKeyUpdate needs sql.lockOf
+  noLockOf.forNoKeyUpdate();
+  // @ts-expect-error forShare needs sql.lockOf
+  noLockOf.forShare();
+  // @ts-expect-error forKeyShare needs sql.lockOf
+  noLockOf.forKeyShare();
+
+  noLockOf.where({ id: 1 });
+});
+
 test('each option is absent without its flag', () => {
   const noNowait = postsWith({ ...flags, sql: { ...flags.sql, lockNowait: false } });
   const noSkipLocked = postsWith({ ...flags, sql: { ...flags.sql, lockSkipLocked: false } });
