@@ -216,6 +216,55 @@ describe('integration/update', () => {
   );
 
   it(
+    'update() fires afterTransaction with committed once for its UPDATE, after its transaction commits',
+    async () => {
+      const events: Array<{ readonly hook: string; readonly sql: string; readonly scope: string }> =
+        [];
+      const observer: SqlMiddleware = {
+        name: 'after-transaction-observer',
+        familyId: 'sql',
+        async afterQuery(exec, _result, ctx) {
+          events.push({ hook: 'afterQuery', sql: exec.sql, scope: ctx.scope });
+        },
+        async afterTransaction(exec, result, ctx) {
+          events.push({
+            hook: `afterTransaction:${result.outcome}`,
+            sql: exec.sql,
+            scope: ctx.scope,
+          });
+        },
+      };
+      await withCollectionRuntime(
+        async (runtime) => {
+          const users = createReturningUsersCollection(runtime);
+          await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
+          events.length = 0;
+
+          await users.where({ id: 1 }).update({ name: 'Updated' });
+
+          const updateEvents = events.filter((event) =>
+            event.sql.toLowerCase().startsWith('update'),
+          );
+          expect(updateEvents.map(({ hook, scope }) => ({ hook, scope }))).toEqual([
+            { hook: 'afterQuery', scope: 'transaction' },
+            { hook: 'afterTransaction:committed', scope: 'transaction' },
+          ]);
+          expect(events.map((event) => event.hook)).toEqual([
+            'afterQuery',
+            'afterQuery',
+            'afterTransaction:committed',
+            'afterTransaction:committed',
+          ]);
+        },
+        undefined,
+        [],
+        [observer],
+      );
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'updateAll({}) and updateAndCount({}) are no-ops',
     async () => {
       await withCollectionRuntime(async (runtime) => {
