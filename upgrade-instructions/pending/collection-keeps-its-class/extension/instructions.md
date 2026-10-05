@@ -16,13 +16,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.(?:cursor|distinctOn)\s*\([^)]*\bas\s+never\b'
-  - id: pipe-is-a-collection-member
+  - id: apply-is-a-collection-member
     summary: |
-      Every collection now has a `pipe` method. A custom collection class that declares its own `pipe` member with another signature no longer compiles; rename it.
+      Every collection now has an `apply` method. A custom collection class that declares its own `apply` member with another signature no longer compiles; rename it.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?:^|\n)[ \t]*(?:(?:public|protected|private|readonly|static|async|override)\s+)*pipe\s*[(<:=?]'
+        - '(?:^|\n)[ \t]*(?:(?:public|protected|private|readonly|static|async|override)\s+)*apply\s*[(<:=?]'
   - id: overriding-a-chaining-method
     summary: |
       In a class that extends `Collection`, an override of a chaining method (`where`, `orderBy`, `limit`, `offset`, `distinct`, `distinctOn`, `cursor`, `include`) or of a method that returns rows (`all`, `first`, `create`, `createAll`, `upsert`, `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`) must use the new signature, which takes a `this` parameter.
@@ -122,18 +122,18 @@ const unordered = db.Post as Ordered<typeof db.Post>;
 await unordered.cursor({ id }).all();
 ```
 
-## `pipe` is a member of every collection
+## `apply` is a member of every collection
 
-Collections have a new method, `pipe(step)`, which calls `step` with the collection and returns the result. A custom collection class that declares its own `pipe` with another signature no longer compiles. Rename that member and its call sites:
+Collections have a new method, `apply(step)`, which calls `step` with the collection and returns the result. A custom collection class that declares its own `apply` with another signature no longer compiles. Rename that member and its call sites:
 
 ```diff
   class PostCollection extends Collection<Contract, 'Post'> {
--   pipe(limit: number) { return this.limit(limit); }
+-   apply(limit: number) { return this.limit(limit); }
 +   firstPage(limit: number) { return this.limit(limit); }
   }
 ```
 
-An aggregate operation named `pipe` is now refused with `ORM.AGGREGATE_OPERATION_RESERVED` when the client is built; rename the operation.
+An aggregate operation named `apply` is now refused with `ORM.AGGREGATE_OPERATION_RESERVED` when the client is built; rename the operation.
 
 ## Overriding a chaining method or a method that returns rows
 

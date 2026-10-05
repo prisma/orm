@@ -64,8 +64,8 @@ describe('class methods keep the class', () => {
     >();
   });
 
-  test('inside pipe', () => {
-    expectTypeOf(Post.pipe((posts) => posts.published()).recent()).toEqualTypeOf<
+  test('inside apply', () => {
+    expectTypeOf(Post.apply((posts) => posts.published()).recent()).toEqualTypeOf<
       Filtered<Ordered<PostCollection>>
     >();
   });
@@ -130,23 +130,23 @@ describe('select and variant leave the class', () => {
   });
 });
 
-describe('pipe', () => {
+describe('apply', () => {
   const published: Step<PostCollection, Filtered<PostCollection>> = (posts) => posts.published();
 
   test('returns what the step returns', () => {
-    expectTypeOf(Post.pipe(published)).toEqualTypeOf<Filtered<PostCollection>>();
-    expectTypeOf(Post.pipe(published)).toEqualTypeOf(Post.published());
+    expectTypeOf(Post.apply(published)).toEqualTypeOf<Filtered<PostCollection>>();
+    expectTypeOf(Post.apply(published)).toEqualTypeOf(Post.published());
   });
 
   test('a step written against the shared Collection type applies to the class and returns the shared type', () => {
     const titled = (posts: Collection<TestContract, 'Post'>) => posts.where({ title: 'x' });
-    expectTypeOf(Post.pipe(titled)).toEqualTypeOf<Filtered<Collection<TestContract, 'Post'>>>();
+    expectTypeOf(Post.apply(titled)).toEqualTypeOf<Filtered<Collection<TestContract, 'Post'>>>();
   });
 
   test('a step for another class is refused', () => {
     const named = (users: ReturnType<typeof createChainingOrm>['db']['User']) => users.named('x');
     // @ts-expect-error the step takes a UserCollection, the receiver is a PostCollection
-    Post.pipe(named);
+    Post.apply(named);
   });
 });
 

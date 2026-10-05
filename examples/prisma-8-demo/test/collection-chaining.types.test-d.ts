@@ -27,7 +27,7 @@ test('class methods chain with each other and with the built-in methods', () => 
   expectTypeOf(db.Post.forUser('u1').withTitle('t').newestFirst().limit(5)).toEqualTypeOf<
     Filtered<Ordered<PostCollection>>
   >();
-  expectTypeOf(db.Post.pipe(titled).newestFirst()).toEqualTypeOf<
+  expectTypeOf(db.Post.apply(titled).newestFirst()).toEqualTypeOf<
     Filtered<Ordered<PostCollection>>
   >();
 });

@@ -339,11 +339,11 @@ After `.select(...)` or `.variant(...)` the class methods are gone: those return
 
 Inside a class body, a class method called on the result of another call loses what that call established: in `latest() { return this.byAuthor(id).newestFirst(); }` the result is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
-`pipe(step)` calls a function with the collection and returns its result. A step has the type `Step<In, Out>`, so a query can be written once and applied to any collection of that class:
+`apply(step)` calls a function with the collection and returns its result. A step has the type `Step<In, Out>`, so a query can be written once and applied to any collection of that class:
 
 ```typescript
 const newest: Step<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
-await Post.pipe(newest).limit(20).all();
+await Post.apply(newest).limit(20).all();
 ```
 
 What a chain has established is part of its type. Write a filtered collection as `Filtered<C>` and an ordered one as `Ordered<C>`; `Filtered<C>` is `C & HasWhere`, the name error messages print. A function that takes `Filtered<PostCollection>` accepts only a collection that is filtered:

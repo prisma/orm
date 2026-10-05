@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { createChainingOrm, PostCollection } from './collection-chaining-fixture';
 
-describe('pipe', () => {
+describe('apply', () => {
   it('returns what the step returns', () => {
     const { db } = createChainingOrm();
-    const result = { piped: true };
-    expect(db.Post.pipe(() => result)).toBe(result);
+    const result = { applied: true };
+    expect(db.Post.apply(() => result)).toBe(result);
   });
 
   it('passes the receiver to the step', () => {
     const { db } = createChainingOrm();
     const posts = db.Post.recent();
-    expect(posts.pipe((received) => received)).toBe(posts);
+    expect(posts.apply((received) => received)).toBe(posts);
   });
 
-  it('a piped where reaches the query plan', async () => {
+  it('an applied where reaches the query plan', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.all();
     await db.Post.where((p) => p.views.gte(100)).all();
-    await db.Post.pipe((posts) => posts.where((p) => p.views.gte(100))).all();
+    await db.Post.apply((posts) => posts.where((p) => p.views.gte(100))).all();
     expect(runtime.executions).toHaveLength(3);
-    const [unfiltered, direct, piped] = runtime.executions;
-    expect(piped?.plan.ast).toBeDefined();
-    expect(piped?.plan.ast).toEqual(direct?.plan.ast);
-    expect(piped?.plan.ast).not.toEqual(unfiltered?.plan.ast);
+    const [unfiltered, direct, applied] = runtime.executions;
+    expect(applied?.plan.ast).toBeDefined();
+    expect(applied?.plan.ast).toEqual(direct?.plan.ast);
+    expect(applied?.plan.ast).not.toEqual(unfiltered?.plan.ast);
   });
 });
 
