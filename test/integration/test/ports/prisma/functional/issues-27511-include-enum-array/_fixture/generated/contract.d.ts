@@ -599,6 +599,12 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly workspace_permission: readonly [
+            { readonly name: 'HELLO'; readonly value: 'HELLO' },
+            { readonly name: 'WORLD'; readonly value: 'WORLD' },
+          ];
+        };
       };
     };
   };
