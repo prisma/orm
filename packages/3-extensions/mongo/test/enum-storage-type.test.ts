@@ -82,54 +82,49 @@ describe('a Mongo enum over an unknown codec', () => {
   });
 });
 
-describe('a Mongo enum over a codec whose stored form is not the value', () => {
-  it('stores each member in the form its codec stores it, in the domain enum and the value set', () => {
-    const schema = [
-      'enum Level {',
-      '  @@type("mongo/int64@1")',
-      '  Low  = "1"',
-      '  High = "10"',
-      '}',
-      'enum Launch {',
-      '  @@type("mongo/date@1")',
-      '  First = "2024-01-01T00:00:00.000Z"',
-      '}',
-      'model Reading {',
-      '  id     ObjectId @id @map("_id")',
-      '  level  Level',
-      '  launch Launch',
-      '}',
-      '',
-    ].join('\n');
+describe('a Mongo enum whose members the collection validator cannot list', () => {
+  it.each([
+    ['mongo/int64@1', 'long', '"1"'],
+    ['mongo/date@1', 'date', '"2024-01-01T00:00:00.000Z"'],
+    ['mongo/objectId@1', 'objectId', '"65a1b2c3d4e5f6a7b8c9d0e1"'],
+  ])(
+    'refuses @@type("%s"), whose BSON type is %s, at the @@type argument',
+    (codecId, bsonType, written) => {
+      const schema = `enum Level {\n  @@type("${codecId}")\n  First = ${written}\n}\nmodel Reading {\n  id    ObjectId @id @map("_id")\n  level Level\n}\n`;
+      const result = interpret(schema);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      const start = schema.indexOf(`"${codecId}"`);
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "Level" @@type codec "${codecId}" stores BSON type ${bsonType}, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.`,
+          span: expect.objectContaining({
+            start: expect.objectContaining({ offset: start }),
+            end: expect.objectContaining({ offset: start + codecId.length + 2 }),
+          }),
+        }),
+      ]);
+    },
+  );
+
+  it('refuses a double member stored as text, at the member', () => {
+    const schema =
+      'enum Ratio {\n  @@type("mongo/double@1")\n  Half = 1.5\n  Unknown = "NaN"\n}\nmodel Reading {\n  id    ObjectId @id @map("_id")\n  ratio Ratio\n}\n';
     const result = interpret(schema);
 
-    expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
-    if (!result.ok) return;
-    const contract = result.value;
-    expect({
-      domain: contract.domain.namespaces['__unbound__']?.enum,
-      valueSets: contract.storage.namespaces['__unbound__']?.entries['valueSet'],
-    }).toEqual({
-      domain: {
-        Level: {
-          codecId: 'mongo/int64@1',
-          members: [
-            { name: 'Low', value: '1' },
-            { name: 'High', value: '10' },
-          ],
-        },
-        Launch: {
-          codecId: 'mongo/date@1',
-          members: [{ name: 'First', value: '2024-01-01T00:00:00.000Z' }],
-        },
-      },
-      valueSets: {
-        Level: expect.objectContaining({ kind: 'valueSet', values: ['1', '10'] }),
-        Launch: expect.objectContaining({
-          kind: 'valueSet',
-          values: ['2024-01-01T00:00:00.000Z'],
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message:
+          'enum "Ratio" member "Unknown" is stored as "NaN", which a collection validator cannot list as a double. A member of a double enum must be a finite number.',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: schema.indexOf('Unknown') }),
         }),
-      },
-    });
+      }),
+    ]);
   });
 });

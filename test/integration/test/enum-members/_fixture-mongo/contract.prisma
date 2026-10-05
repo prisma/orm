@@ -12,18 +12,6 @@ enum Int32Level {
   High = 10
 }
 
-enum Int64Level {
-  @@type("mongo/int64@1")
-  Low  = "1"
-  High = "10"
-}
-
-enum DateLevel {
-  @@type("mongo/date@1")
-  Launch = "2024-01-01T00:00:00.000Z"
-  Sunset = "2025-06-30T12:00:00.000Z"
-}
-
 enum DoubleLevel {
   @@type("mongo/double@1")
   Half  = 1.5
@@ -34,8 +22,6 @@ model Reading {
   id     ObjectId    @id @map("_id")
   text   TextLevel
   int32  Int32Level
-  int64  Int64Level
-  date   DateLevel
   double DoubleLevel
 
   @@map("readings")

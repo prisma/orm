@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'8b87fcf4f9bfb432a4ab3a14ad5ee3bf37325cc52e76493a4495f232687cbc35'>;
+  StorageHashBase<'a1b0321002e1c9f39ec19cec93cad7bcbf5ebc6115b92224a536af55e8fb792c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -29,10 +29,8 @@ export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly Reading: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
-      readonly date: CodecTypes['mongo/date@1']['output'];
       readonly double: 1.5 | 2.25;
       readonly int32: 1 | 10;
-      readonly int64: 1n | 10n;
       readonly text: 'low' | 'high';
     };
   };
@@ -41,10 +39,8 @@ export type FieldInputTypes = {
   readonly __unbound__: {
     readonly Reading: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
-      readonly date: CodecTypes['mongo/date@1']['input'];
       readonly double: 1.5 | 2.25;
       readonly int32: 1 | 10;
-      readonly int64: 1n | 10n;
       readonly text: 'low' | 'high';
     };
   };
@@ -53,10 +49,8 @@ export type FieldInputTypes = {
 export namespace Models {
   export type unbound_Reading = {
     _id: CodecTypes['mongo/objectId@1']['output'];
-    date: CodecTypes['mongo/date@1']['output'];
     double: 1.5 | 2.25;
     int32: 1 | 10;
-    int64: 1n | 10n;
     text: 'low' | 'high';
     readonly [RelationKeys]?: never;
   };
@@ -86,28 +80,17 @@ type ContractBase = Omit<
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly date: {
-                      readonly bsonType: 'date';
-                      readonly enum: readonly [
-                        '2024-01-01T00:00:00.000Z',
-                        '2025-06-30T12:00:00.000Z',
-                      ];
-                    };
                     readonly double: {
                       readonly bsonType: 'double';
                       readonly enum: readonly [1.5, 2.25];
                     };
                     readonly int32: { readonly bsonType: 'int'; readonly enum: readonly [1, 10] };
-                    readonly int64: {
-                      readonly bsonType: 'long';
-                      readonly enum: readonly ['1', '10'];
-                    };
                     readonly text: {
                       readonly bsonType: 'string';
                       readonly enum: readonly ['low', 'high'];
                     };
                   };
-                  readonly required: readonly ['_id', 'date', 'double', 'int32', 'int64', 'text'];
+                  readonly required: readonly ['_id', 'double', 'int32', 'text'];
                 };
                 readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
@@ -140,10 +123,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
               };
-              readonly date: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
-              };
               readonly double: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
@@ -151,10 +130,6 @@ type ContractBase = Omit<
               readonly int32: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
-              };
-              readonly int64: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
               };
               readonly text: {
                 readonly nullable: false;
@@ -166,13 +141,6 @@ type ContractBase = Omit<
           };
         };
         readonly enum: {
-          readonly DateLevel: {
-            readonly codecId: 'mongo/date@1';
-            readonly members: readonly [
-              { readonly name: 'Launch'; readonly value: '2024-01-01T00:00:00.000Z' },
-              { readonly name: 'Sunset'; readonly value: '2025-06-30T12:00:00.000Z' },
-            ];
-          };
           readonly DoubleLevel: {
             readonly codecId: 'mongo/double@1';
             readonly members: readonly [
@@ -187,13 +155,6 @@ type ContractBase = Omit<
               { readonly name: 'High'; readonly value: 10 },
             ];
           };
-          readonly Int64Level: {
-            readonly codecId: 'mongo/int64@1';
-            readonly members: readonly [
-              { readonly name: 'Low'; readonly value: '1' },
-              { readonly name: 'High'; readonly value: '10' },
-            ];
-          };
           readonly TextLevel: {
             readonly codecId: 'mongo/string@1';
             readonly members: readonly [
@@ -203,10 +164,6 @@ type ContractBase = Omit<
           };
         };
         readonly enumMemberTypes?: {
-          readonly DateLevel: readonly [
-            { readonly name: 'Launch'; readonly value: CodecTypes['mongo/date@1']['output'] },
-            { readonly name: 'Sunset'; readonly value: CodecTypes['mongo/date@1']['output'] },
-          ];
           readonly DoubleLevel: readonly [
             { readonly name: 'Half'; readonly value: 1.5 },
             { readonly name: 'Whole'; readonly value: 2.25 },
@@ -214,10 +171,6 @@ type ContractBase = Omit<
           readonly Int32Level: readonly [
             { readonly name: 'Low'; readonly value: 1 },
             { readonly name: 'High'; readonly value: 10 },
-          ];
-          readonly Int64Level: readonly [
-            { readonly name: 'Low'; readonly value: 1n },
-            { readonly name: 'High'; readonly value: 10n },
           ];
           readonly TextLevel: readonly [
             { readonly name: 'Low'; readonly value: 'low' },

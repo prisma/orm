@@ -23,6 +23,27 @@ export function mongoFamilyEnumSpec() {
 
 type EnumBlockValues = InferBlock<ReturnType<typeof mongoFamilyEnumSpec>>;
 
+/**
+ * A collection validator lists an enum's members in their stored forms, so an enum's BSON type must be one whose values JSON holds. Maps each such type to the JSON type of a member's stored form.
+ */
+const VALIDATOR_LISTABLE_BSON_TYPES: Readonly<
+  Record<string, 'string' | 'number' | 'boolean' | 'object'>
+> = {
+  string: 'string',
+  int: 'number',
+  double: 'number',
+  bool: 'boolean',
+  object: 'object',
+  array: 'object',
+};
+
+const STORED_JSON_TYPE_NAMES = {
+  string: 'a string',
+  number: 'a finite number',
+  boolean: 'a boolean',
+  object: 'a JSON object or array',
+} as const;
+
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
   discriminator: 'enum',
@@ -61,6 +82,17 @@ export const mongoFamilyEnumEntityDescriptor = {
         return undefined;
       }
 
+      const storedJsonType = VALIDATOR_LISTABLE_BSON_TYPES[bsonType];
+      if (storedJsonType === undefined) {
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" @@type codec "${codecId}" stores BSON type ${bsonType}, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.`,
+          sourceId,
+          span: codecSpan,
+        });
+        return undefined;
+      }
+
       const codec = ctx.codecLookup?.get(codecId);
       if (codec === undefined) {
         diagnostics?.push({
@@ -74,6 +106,20 @@ export const mongoFamilyEnumEntityDescriptor = {
 
       const members = readEnumBlockMembers(block, codecId, codec, ctx);
       if (members === undefined) return undefined;
+
+      let unlistedMember = false;
+      for (const member of members) {
+        const stored = codec.encodeJson(member.value);
+        if (typeof stored === storedJsonType) continue;
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" member "${member.name}" is stored as ${JSON.stringify(stored)}, which a collection validator cannot list as a ${bsonType}. A member of a ${bsonType} enum must be ${STORED_JSON_TYPE_NAMES[storedJsonType]}.`,
+          sourceId,
+          span: block.parameterSpans[member.name] ?? block.span,
+        });
+        unlistedMember = true;
+      }
+      if (unlistedMember) return undefined;
 
       return enumType(block.name, { codecId, nativeType: bsonType }, ...members);
     },

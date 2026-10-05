@@ -13,19 +13,6 @@
     "namespaces": {
       "__unbound__": {
         "enum": {
-          "DateLevel": {
-            "codecId": "mongo/date@1",
-            "members": [
-              {
-                "name": "Launch",
-                "value": "2024-01-01T00:00:00.000Z"
-              },
-              {
-                "name": "Sunset",
-                "value": "2025-06-30T12:00:00.000Z"
-              }
-            ]
-          },
           "DoubleLevel": {
             "codecId": "mongo/double@1",
             "members": [
@@ -49,19 +36,6 @@
               {
                 "name": "High",
                 "value": 10
-              }
-            ]
-          },
-          "Int64Level": {
-            "codecId": "mongo/int64@1",
-            "members": [
-              {
-                "name": "Low",
-                "value": "1"
-              },
-              {
-                "name": "High",
-                "value": "10"
               }
             ]
           },
@@ -89,19 +63,6 @@
                   "kind": "scalar"
                 }
               },
-              "date": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/date@1",
-                  "kind": "scalar"
-                },
-                "valueSet": {
-                  "entityKind": "enum",
-                  "entityName": "DateLevel",
-                  "namespaceId": "__unbound__",
-                  "plane": "domain"
-                }
-              },
               "double": {
                 "nullable": false,
                 "type": {
@@ -124,19 +85,6 @@
                 "valueSet": {
                   "entityKind": "enum",
                   "entityName": "Int32Level",
-                  "namespaceId": "__unbound__",
-                  "plane": "domain"
-                }
-              },
-              "int64": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int64@1",
-                  "kind": "scalar"
-                },
-                "valueSet": {
-                  "entityKind": "enum",
-                  "entityName": "Int64Level",
                   "namespaceId": "__unbound__",
                   "plane": "domain"
                 }
@@ -179,13 +127,6 @@
                     "_id": {
                       "bsonType": "objectId"
                     },
-                    "date": {
-                      "bsonType": "date",
-                      "enum": [
-                        "2024-01-01T00:00:00.000Z",
-                        "2025-06-30T12:00:00.000Z"
-                      ]
-                    },
                     "double": {
                       "bsonType": "double",
                       "enum": [
@@ -200,13 +141,6 @@
                         10
                       ]
                     },
-                    "int64": {
-                      "bsonType": "long",
-                      "enum": [
-                        "1",
-                        "10"
-                      ]
-                    },
                     "text": {
                       "bsonType": "string",
                       "enum": [
@@ -217,10 +151,8 @@
                   },
                   "required": [
                     "_id",
-                    "date",
                     "double",
                     "int32",
-                    "int64",
                     "text"
                   ]
                 },
@@ -231,13 +163,6 @@
             }
           },
           "valueSet": {
-            "DateLevel": {
-              "kind": "valueSet",
-              "values": [
-                "2024-01-01T00:00:00.000Z",
-                "2025-06-30T12:00:00.000Z"
-              ]
-            },
             "DoubleLevel": {
               "kind": "valueSet",
               "values": [
@@ -250,13 +175,6 @@
               "values": [
                 1,
                 10
-              ]
-            },
-            "Int64Level": {
-              "kind": "valueSet",
-              "values": [
-                "1",
-                "10"
               ]
             },
             "TextLevel": {
@@ -272,7 +190,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "8b87fcf4f9bfb432a4ab3a14ad5ee3bf37325cc52e76493a4495f232687cbc35"
+    "storageHash": "a1b0321002e1c9f39ec19cec93cad7bcbf5ebc6115b92224a536af55e8fb792c"
   },
   "capabilities": {},
   "extensions": {},

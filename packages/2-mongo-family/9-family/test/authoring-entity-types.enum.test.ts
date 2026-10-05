@@ -114,16 +114,16 @@ const testCodecLookup: CodecLookup = {
     return undefined;
   },
   targetTypesFor(id: string): readonly string[] | undefined {
-    if (id === TEXT_CODEC_ID) return ['text'];
+    if (id === TEXT_CODEC_ID) return ['string'];
     if (id === INT_CODEC_ID) return ['int'];
     if (id === 'mongo/json@1') {
       return ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'];
     }
     if (id === 'mongo/bson@1') return [];
-    if (id === JSON_CODEC_ID) return ['json'];
-    if (id === FOLDING_CODEC_ID) return ['text'];
-    if (id === ENCODE_FOLDING_CODEC_ID) return ['text'];
-    if (id === BROKEN_CODEC_ID) return ['text'];
+    if (id === JSON_CODEC_ID) return ['object'];
+    if (id === FOLDING_CODEC_ID) return ['string'];
+    if (id === ENCODE_FOLDING_CODEC_ID) return ['string'];
+    if (id === BROKEN_CODEC_ID) return ['string'];
     return undefined;
   },
   renderOutputTypeFor: () => undefined,
@@ -156,7 +156,7 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'text',
+      nativeType: 'string',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -171,7 +171,7 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'text',
+      nativeType: 'string',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -184,7 +184,7 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'string' });
   });
 
   it('integer members infer the int codec', () => {
@@ -288,7 +288,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'string' });
   });
 
   it('an explicit codec receives structured JSON media through the shared grammar', () => {
