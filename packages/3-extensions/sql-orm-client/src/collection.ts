@@ -155,7 +155,6 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNames,
-  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
@@ -447,24 +446,12 @@ export class CollectionBase<
    * ```
    */
   scope<Result>(
-    body: (
-      collection: Collection<
-        TContract,
-        ModelName,
-        InferRootRow<TContract, ModelName, State['nsId']>,
-        WithNsId<DefaultCollectionTypeState, State['nsId']>
-      >,
-    ) => Result,
-  ): Scope<ModelScopeReceiver<TContract, ModelName, State['nsId']>, Result> {
+    body: (collection: Collection<TContract, ModelName>) => Result,
+  ): Scope<ModelScopeReceiver<TContract, ModelName>, Result> {
     return (collection) =>
       body(
         blindCast<
-          Collection<
-            TContract,
-            ModelName,
-            InferRootRow<TContract, ModelName, State['nsId']>,
-            WithNsId<DefaultCollectionTypeState, State['nsId']>
-          >,
+          Collection<TContract, ModelName>,
           'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
         >(collection),
       );

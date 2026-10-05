@@ -35,8 +35,8 @@ describe('collection.scope', () => {
   });
 
   test('types the body against the plain collection of the model, also on a custom class', () => {
-    plain.Post.scope((p) => expectTypeOf(p).toEqualTypeOf(plain.Post));
-    db.Post.scope((p) => expectTypeOf(p).not.toHaveProperty('published'));
+    plain.Post.scope((p) => expectTypeOf(p).toEqualTypeOf<Collection<TestContract, 'Post'>>());
+    db.Post.scope((p) => expectTypeOf(p).toEqualTypeOf<Collection<TestContract, 'Post'>>());
     // @ts-expect-error published is a method of PostCollection, not of the plain Post collection
     db.Post.scope((p) => p.published());
   });
