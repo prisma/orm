@@ -299,6 +299,40 @@ describe('provideDefinition — references', () => {
   });
 });
 
+describe('provideDefinition — cursor boundaries', () => {
+  it('goes to the namespace blocks with the cursor right after the qualifier', () => {
+    expect(linksAt(postUri, 'auth|.User @relation')).toEqual(authNamespaceLinks);
+  });
+
+  it('goes to the namespace blocks with the cursor right before the qualifier', () => {
+    expect(linksAt(postUri, '|auth.User @relation')).toEqual(authNamespaceLinks);
+  });
+
+  it('goes to the model with the cursor right after the dot', () => {
+    expect(linksAt(postUri, 'auth.|User @relation')).toEqual([
+      { uri: authUri, target: userModel, name: 'User', origin: 'auth.User' },
+    ]);
+  });
+
+  it('goes to the model with the cursor right after the member', () => {
+    expect(linksAt(postUri, 'auth.User| @relation')).toEqual([
+      { uri: authUri, target: userModel, name: 'User', origin: 'auth.User' },
+    ]);
+  });
+
+  it('returns null on whitespace between a field name and its type', () => {
+    expect(linksAt(postUri, 'author  |  auth.User')).toBeNull();
+  });
+
+  it('returns null on an attribute argument key', () => {
+    expect(linksAt(postUri, '@relation(fie|lds:')).toBeNull();
+  });
+
+  it("returns null on a namespace declaration's own name", () => {
+    expect(linksAt(postUri, 'namespace au|th {')).toBeNull();
+  });
+});
+
 describe('provideDefinition — no target', () => {
   it.each([
     ['a declaration name', 'model Ta|g'],
