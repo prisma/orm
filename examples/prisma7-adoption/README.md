@@ -86,7 +86,7 @@ The test runs that loop twice. Each edited schema is a file in `test/handover/`:
 
 What each step does:
 
-- **The first `migration plan` writes two packages.** The migrations directory has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone.
+- **The first `migration plan` writes two packages.** The migrations directory has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone. The test proves it: `prisma db migrate` against a second, empty database applies all three packages, and `db verify --strict` then passes with nothing unclaimed, because Prisma 7 never created `_prisma_migrations` there.
 - **`db migrate --advance-ref db` moves the `db` ref along with the marker.** Plain `db migrate` moves only the database marker. The next `migration plan` starts from the `db` ref, so without the flag it would plan from the contract before your last change.
 - **`db verify --strict` exits 4 and lists `_prisma_migrations` as unclaimed.** That is Prisma 7's migration ledger table, and no contract declares it. Strict mode fails on any table no contract declares, so this one finding is expected; anything else in the list, or any schema finding, is real drift. Plain `prisma db verify` reports zero findings.
 - **`prisma7 migrate diff` shows Prisma 7 agrees with the database.** An empty migration means the tables, indexes and constraints Prisma 8 created are the ones Prisma 7 would have created from the same schema.
@@ -122,5 +122,5 @@ When the last route has moved to Prisma 8, `prisma contract print --output prism
 | `scripts/db-start.ts` | In-process Postgres for local runs. |
 | `test/adoption.test.ts` | Phases 1 to 3 on a fresh database, including the second Prisma 7 migration. |
 | `test/handover.test.ts` | Phase 4 on a fresh database: Prisma 8 plans, applies and verifies an additive and a destructive edit. |
-| `test/handover/` | The two edited schemas and the scripts each client runs after them. |
+| `test/handover/` | The two edited schemas, the scripts each client runs after them, and the tsconfigs the test typechecks those scripts with once the edit is applied. |
 | `test/story.ts` | Helpers both tests share. |
