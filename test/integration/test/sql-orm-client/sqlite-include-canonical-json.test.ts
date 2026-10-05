@@ -111,7 +111,7 @@ describe('integration/sqlite include canonical JSON', () => {
       throw new InternalError('SQLite execution stack is missing its adapter or driver');
     }
     await driver.connect({ kind: 'path', path });
-    runtime = new SqliteRuntimeImpl({ context, adapter, driver });
+    runtime = new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
     // SQLite has no schema namespaces, so the contract builder leaves models in
     // the unbound namespace rather than `public`.
     stations = new Collection({ runtime, context }, 'Station', {

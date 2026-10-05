@@ -51,7 +51,7 @@ function emit(root: ImportRoot): string {
           fields: { id: { column: 'id' } },
         },
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
         },
         relations: {},
       },

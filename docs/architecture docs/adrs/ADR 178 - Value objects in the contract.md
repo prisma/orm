@@ -13,7 +13,7 @@ A User model with scalar fields and value object fields. Value objects are defin
         "_id": { "nullable": false, "codecId": "mongo/objectId@1" },
         "email": { "nullable": false, "codecId": "mongo/string@1" },
         "homeAddress": { "nullable": true, "type": "Address" },
-        "previousAddresses": { "nullable": false, "type": "Address", "many": true }
+        "previousAddresses": { "nullable": false, "type": "Address", "many": { "elementNullable": false } }
       },
       "relations": {},
       "storage": { "collection": "users" }
@@ -41,7 +41,7 @@ Three things to notice:
 
 1. **Value objects live in `valueObjects`, not `models`.** They are typed data structures with no framework guarantees — no identity, no lifecycle hooks, no referential integrity. Models are full framework citizens with all of those.
 2. **Fields reference value objects via `type`, not `codecId`.** `"type": "Address"` means "this field holds an Address value object." `codecId` is for scalar types with a codec. The two are mutually exclusive.
-3. **`many: true` expresses cardinality for value objects.** Value object references use `many` (one-directional) while relations use `cardinality` (bidirectional semantics like `1:N`, `N:1`).
+3. **`many: { elementNullable: false }` expresses a list of non-null value objects.** `nullable` controls whether the whole list can be null; `many.elementNullable` controls whether its elements can be null. Relations use `cardinality` for bidirectional semantics like `1:N` and `N:1`.
 
 The resulting TypeScript row type:
 
@@ -125,7 +125,7 @@ This applies uniformly: value object fields can appear on models *and* on other 
   "fields": {
     "label": { "nullable": false, "codecId": "mongo/string@1" },
     "url": { "nullable": false, "codecId": "mongo/string@1" },
-    "children": { "nullable": false, "type": "NavItem", "many": true }
+    "children": { "nullable": false, "type": "NavItem", "many": { "elementNullable": false } }
   }
 }
 ```
@@ -134,18 +134,22 @@ A third option, `union`, handles fields that can hold one of several types — s
 
 ### Cardinality: `many` on value objects, `cardinality` on relations
 
-Value object references use two orthogonal dimensions — **nullability** (`nullable`) and **cardinality** (`many`):
+Value object references describe cardinality with `many`: omission or `false` means one value object, while `{ elementNullable: boolean }` means a list. Whole-field nullability (`nullable`) and list-element nullability (`many.elementNullable`) are independent:
 
 ```json
-"address":   { "type": "Address", "nullable": false }
-"address":   { "type": "Address", "nullable": true }
-"addresses": { "type": "Address", "nullable": false, "many": true }
-"addresses": { "type": "Address", "nullable": true, "many": true }
+{
+  "address": { "type": "Address", "nullable": false },
+  "optionalAddress": { "type": "Address", "nullable": true },
+  "addresses": { "type": "Address", "nullable": false, "many": { "elementNullable": false } },
+  "nullableElements": { "type": "Address", "nullable": false, "many": { "elementNullable": true } },
+  "optionalAddresses": { "type": "Address", "nullable": true, "many": { "elementNullable": false } },
+  "optionalNullableElements": { "type": "Address", "nullable": true, "many": { "elementNullable": true } }
+}
 ```
 
-A nullable list (`nullable: true, many: true`) means the list itself can be null — semantically different from an empty list.
+A nullable list permits the whole value to be null, which is distinct from an empty list. Nullable elements permit null entries inside a present list without making the container nullable. The four list shapes correspond to `Address[]`, `(Address | null)[]`, `Address[] | null`, and `(Address | null)[] | null`. [ADR 258](ADR%20258%20-%20List%20cardinality%20has%20independent%20container%20and%20element%20nullability.md) describes the shared representation and family-specific enforcement.
 
-Relations keep `cardinality: "1:N" | "N:1" | "1:1"` because they encode bidirectional semantics — "I have one manager" (`N:1`) is different from "I have one passport" (`1:1`) even though both are "one from my side." Value object references have no "other side," so `many: true/false` is sufficient.
+Relations keep `cardinality: "1:N" | "N:1" | "1:1"` because they encode bidirectional semantics — "I have one manager" (`N:1`) is different from "I have one passport" (`1:1`) even though both are "one from my side." Value object references have no inverse relation; their `many` descriptor records list cardinality and element nullability without relation cardinality.
 
 ### Fixed-length lists don't need contract representation
 

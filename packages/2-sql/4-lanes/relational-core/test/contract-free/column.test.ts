@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DdlColumn, FunctionColumnDefault, LiteralColumnDefault } from '../../src/exports/ast';
+import {
+  DdlColumn,
+  FunctionColumnDefault,
+  LiteralColumnDefault,
+  opaqueSql,
+} from '../../src/exports/ast';
 import {
   checkExpression,
   col,
@@ -23,7 +28,7 @@ describe('contract-free column helpers', () => {
     const value = fn("datetime('now')");
     expect(value).toBeInstanceOf(FunctionColumnDefault);
     expect(value.kind).toBe('function');
-    expect(value.expression).toBe("datetime('now')");
+    expect(value.expression).toEqual(opaqueSql("datetime('now')"));
     expect(Object.isFrozen(value)).toBe(true);
   });
 
@@ -111,7 +116,7 @@ describe('contract-free table constraint helpers', () => {
     expect({ ...checkExpression('user_age_check', 'age >= 0') }).toEqual({
       kind: 'check-expression',
       name: 'user_age_check',
-      expression: 'age >= 0',
+      expression: opaqueSql('age >= 0'),
     });
   });
 

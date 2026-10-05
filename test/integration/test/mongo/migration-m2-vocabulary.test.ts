@@ -43,6 +43,7 @@ function makeContract(
             fields: {
               _id: {
                 nullable: false,
+                many: false as const,
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
               },
             },

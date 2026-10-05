@@ -1,5 +1,6 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
@@ -219,6 +220,18 @@ describe('AlterColumnTypeCall', () => {
     const op = await call.toOp(lowerer);
     expect(op.execute[0]?.sql).toBe(
       'ALTER TABLE "public"."user" ALTER COLUMN "age" TYPE bigint USING age::bigint * 2',
+    );
+  });
+
+  it('ends a USING clause containing a line comment with a line break', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new AlterColumnTypeCall('public', 'user', 'age', {
+      ...options,
+      using: 'age::bigint -- widen',
+    });
+    const op = await call.toOp(lowerer);
+    expect(op.execute[0]?.sql).toBe(
+      'ALTER TABLE "public"."user" ALTER COLUMN "age" TYPE bigint USING age::bigint -- widen\n',
     );
   });
 
@@ -661,8 +674,8 @@ describe('CreateIndexCall', () => {
     const ddlNode = received[0] as PostgresCreateIndex;
     expect(ddlNode).toBeInstanceOf(PostgresCreateIndex);
     expect(ddlNode.unique).toBe(true);
-    expect(ddlNode.where).toBe('deleted_at IS NULL');
-    expect(ddlNode.elements).toEqual({ expression: 'lower(email)' });
+    expect(ddlNode.where).toEqual(opaqueSql('deleted_at IS NULL'));
+    expect(ddlNode.elements).toEqual({ expression: opaqueSql('lower(email)') });
     expect(op.execute[0]?.sql).toBe('LOWERED 1');
     expect(call.renderTypeScript()).toBe(
       'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: "lower(email)", extras: { where: "deleted_at IS NULL", unique: true } })',

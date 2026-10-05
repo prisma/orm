@@ -10,6 +10,7 @@ import {
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
+    many: false,
     nativeType: 'text',
     nullable: true,
     codecId: 'sqlite/text@1',

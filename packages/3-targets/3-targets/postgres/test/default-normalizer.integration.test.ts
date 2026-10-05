@@ -57,3 +57,68 @@ describe('float defaults as Postgres prints them', () => {
     timeouts.spinUpPpgDev,
   );
 });
+
+const uuidColumns = [
+  { name: 'upper', storageType: 'uuid', written: "'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid" },
+  { name: 'braced', storageType: 'uuid', written: "'{A0EEBC99-9C0B4EF8-BB6D6BB9-BD380A11}'::uuid" },
+  { name: 'bare_digits', storageType: 'uuid', written: "'A0EEBC999C0B4EF8BB6D6BB9BD380A11'" },
+  {
+    name: 'array_literal',
+    storageType: 'uuid[]',
+    written:
+      '\'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,"{B0EEBC99-9C0B4EF8-BB6D6BB9-BD380A11}"}\'::uuid[]',
+  },
+  {
+    name: 'array_constructor',
+    storageType: 'uuid[]',
+    written:
+      "ARRAY['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid, 'B0EEBC999C0B4EF8BB6D6BB9BD380A11']",
+  },
+] as const;
+
+describe('uuid defaults as Postgres stores them', () => {
+  it(
+    'reads each default, as written and as Postgres prints it, as the value Postgres stores',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await withClient(connectionString, async (client) => {
+          await client.query(
+            `CREATE TABLE uuids (${uuidColumns
+              .map((column) => `${column.name} ${column.storageType} DEFAULT ${column.written}`)
+              .join(', ')})`,
+          );
+          await client.query('INSERT INTO uuids DEFAULT VALUES');
+          const stored = await client.query<{ row: Record<string, unknown> }>(
+            'SELECT to_jsonb(u) AS row FROM uuids u',
+          );
+          const printed = await client.query<{ column_name: string; column_default: string }>(
+            `SELECT column_name, column_default FROM information_schema.columns
+             WHERE table_name = 'uuids'`,
+          );
+          const printedDefault = new Map(
+            printed.rows.map((row) => [row.column_name, row.column_default]),
+          );
+          const storedRow = stored.rows[0]?.row ?? {};
+
+          expect(
+            uuidColumns.map((column) => ({
+              name: column.name,
+              written: parsePostgresDefault(column.written, column.storageType),
+              printed: parsePostgresDefault(
+                printedDefault.get(column.name) ?? '',
+                column.storageType,
+              ),
+            })),
+          ).toEqual(
+            uuidColumns.map((column) => ({
+              name: column.name,
+              written: { kind: 'literal', value: storedRow[column.name] },
+              printed: { kind: 'literal', value: storedRow[column.name] },
+            })),
+          );
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});

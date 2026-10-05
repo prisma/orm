@@ -845,6 +845,7 @@ describe('native_enum + valueSet round-trip', () => {
                 nativeType: 'int4',
                 codecId: 'pg/int4@1',
                 nullable: false,
+                many: false,
               },
             },
             primaryKey: { columns: ['id'] },

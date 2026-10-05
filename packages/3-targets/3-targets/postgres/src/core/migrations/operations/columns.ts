@@ -1,5 +1,5 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import type { DdlColumn } from '@internal/sql-relational-core/ast';
+import { type DdlColumn, opaqueSql, renderOpaqueSql } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import {
   columnDefaultAst,
@@ -10,6 +10,7 @@ import {
   tableIsEmptyAst,
 } from '../../../contract-free/checks';
 import * as contractFreeDdl from '../../../contract-free/ddl';
+import { postgresError } from '../../errors';
 import { quoteIdentifier } from '../../sql-utils';
 import { boundSchema } from '../bound-schema';
 import { qualifyTableName } from '../planner-sql-checks';
@@ -77,7 +78,7 @@ export async function alterColumnType(
 ): Promise<Op> {
   const qualified = qualifyTableName(schemaName, tableName);
   const usingClause = options.using
-    ? ` USING ${options.using}`
+    ? ` USING ${renderOpaqueSql(opaqueSql(options.using))}`
     : ` USING ${quoteIdentifier(columnName)}::${options.qualifiedTargetType}`;
   const { present } = await columnExistsSteps(lowerer, {
     schema: schemaName,
@@ -214,6 +215,7 @@ export async function setDefault(
   lowerer: ExecuteRequestLowerer,
   operationClass: 'additive' | 'widening' = 'additive',
 ): Promise<Op> {
+  refuseUnwritableSetDefault(tableName, column);
   const columnName = column.name;
   const qualified = qualifyTableName(schemaName, tableName);
   const clause = await lowerer.renderColumnDefault(column, tableName);
@@ -249,6 +251,24 @@ export async function setDefault(
         ? []
         : [step(`verify column "${columnName}" has a default`, hasDefault.sql, hasDefault.params)],
   };
+}
+
+function refuseUnwritableSetDefault(tableName: string, column: DdlColumn): void {
+  const meta = { table: tableName, column: column.name };
+  if (column.default === undefined) {
+    throw postgresError(
+      'CONTRACT.DEFAULT_INVALID',
+      `setDefault on column "${column.name}" of table "${tableName}" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).`,
+      { meta: { ...meta, reason: 'set-default-without-default' } },
+    );
+  }
+  if (column.default.kind === 'function' && column.default.expression.text === 'autoincrement()') {
+    throw postgresError(
+      'CONTRACT.DEFAULT_INVALID',
+      `setDefault cannot give the existing column "${column.name}" of table "${tableName}" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
+      { meta: { ...meta, reason: 'set-default-autoincrement' } },
+    );
+  }
 }
 
 export async function dropDefault(

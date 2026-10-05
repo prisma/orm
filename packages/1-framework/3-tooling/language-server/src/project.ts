@@ -12,6 +12,7 @@ import {
   DocumentDiagnosticReportKind,
   type FoldingRange,
   type FullDocumentDiagnosticReport,
+  type Hover,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
@@ -25,6 +26,7 @@ import { type ConfigResolution, resolveConfigInputs } from './config-resolution'
 import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
 import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
+import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
 import {
   isWatcherCacheEligible,
@@ -108,8 +110,7 @@ export class Project {
       {
         document: document.parse().document,
         sourceFile: document.sourceFile,
-        symbolTable: data.artifacts.symbolTable(),
-        scalarTypes: data.controlStack.scalarTypes,
+        binder: data.artifacts.binder(),
       },
       range,
     );
@@ -140,6 +141,7 @@ export class Project {
           candidates: {
             ...data.controlStack,
             symbolTable: data.artifacts.symbolTable(),
+            binder: data.artifacts.binder(),
           },
           clientSupportsSnippets: capabilities.completionSnippets,
           clientSupportsTriggerSuggestCommand: capabilities.completionTriggerSuggestCommand,
@@ -169,7 +171,25 @@ export class Project {
         candidates: {
           ...data.controlStack,
           symbolTable: data.artifacts.symbolTable(),
+          binder: data.artifacts.binder(),
         },
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async hover(uri: string, position: Position): Promise<Hover | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      return providePslHover({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        binder: data.artifacts.binder(),
+        pslBlockDescriptors: data.controlStack.pslBlockDescriptors,
       });
     } catch {
       return null;
@@ -330,6 +350,7 @@ export class Project {
       this.#options.documents.text(uri),
     );
     const artifacts = new ProjectArtifacts({
+      controlStack: resolution.controlStack,
       inputs: resolution.inputs,
       readSnapshot: this.#options.documents.readSnapshot,
       onInterpretationError: (uri, error) => {

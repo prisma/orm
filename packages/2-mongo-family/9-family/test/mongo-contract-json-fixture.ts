@@ -25,7 +25,13 @@ export function mongoContractJson(params: {
   const models = normalizeModels(
     (params.models ?? {
       Item: {
-        fields: { _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false } },
+        fields: {
+          _id: {
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            nullable: false,
+            many: false,
+          },
+        },
         storage: { collection: 'items' },
       },
     }) as Record<string, ContractModelBase>,

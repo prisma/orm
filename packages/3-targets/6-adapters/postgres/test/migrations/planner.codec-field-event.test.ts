@@ -34,7 +34,7 @@ const PG_TEXT_CODEC = 'pg/text@1';
 const HOOKED_CODEC = 'cs/string@1';
 
 function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
-  return { nativeType: 'text', nullable: false, ...overrides };
+  return { many: false, nativeType: 'text', nullable: false, ...overrides };
 }
 
 function table(columns: Record<string, StorageColumn>): StorageTable {

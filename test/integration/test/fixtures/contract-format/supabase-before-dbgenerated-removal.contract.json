@@ -148,35 +148,40 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "instanceId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ipAddress": {
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "payload": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/json@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -209,63 +214,72 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "email": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "identityData": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastSignInAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "provider": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -326,105 +340,120 @@
                   "typeParams": {
                     "typeName": "auth.aal_level"
                   }
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "factorId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ip": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/inet@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "notAfter": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "oauthClientId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "refreshTokenCounter": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "refreshTokenHmacKey": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "refreshedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "scopes": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "tag": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userAgent": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -534,245 +563,280 @@
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "bannedUntil": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "confirmationSentAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "confirmationToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "confirmedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "deletedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "email": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailChange": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailChangeConfirmStatus": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int2@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailChangeSentAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailChangeTokenCurrent": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailChangeTokenNew": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailConfirmedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "encryptedPassword": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "instanceId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "invitedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "isAnonymous": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "isSsoUser": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "isSuperAdmin": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastSignInAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phone": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phoneChange": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phoneChangeSentAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phoneChangeToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phoneConfirmedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "rawAppMetaData": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "rawUserMetaData": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "reauthenticationSentAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "reauthenticationToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "recoverySentAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "recoveryToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "role": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -980,7 +1044,9 @@
           "CustomOauthProviders": {
             "fields": {
               "acceptableClientIds": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -992,129 +1058,149 @@
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authorizationParams": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authorizationUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "cachedDiscovery": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "clientId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "clientSecret": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "discoveryCachedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "discoveryUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailOptional": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "enabled": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "identifier": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "issuer": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "jwksUri": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "pkceEnabled": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerType": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "scopes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1126,28 +1212,32 @@
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "tokenUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userinfoUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -1237,28 +1327,32 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authCodeIssuedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authenticationMethod": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "codeChallenge": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "codeChallengeMethod": {
                 "nullable": true,
@@ -1268,91 +1362,104 @@
                   "typeParams": {
                     "typeName": "auth.code_challenge_method"
                   }
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "emailOptional": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "inviteToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "linkingTargetId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "oauthClientStateId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerAccessToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerRefreshToken": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerType": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "referrer": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -1433,35 +1540,40 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "rawBaseConfig": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "uuid": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -1494,35 +1606,40 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "sessionId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -1568,49 +1685,56 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "factorId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ipAddress": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/inet@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "otpCode": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "verifiedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "webAuthnSessionData": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -1662,7 +1786,8 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "factorType": {
                 "nullable": false,
@@ -1672,49 +1797,56 @@
                   "typeParams": {
                     "typeName": "auth.factor_type"
                   }
-                }
+                },
+                "many": false
               },
               "friendlyName": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastChallengedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastWebauthnChallengeData": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "phone": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "secret": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "status": {
                 "nullable": false,
@@ -1724,35 +1856,40 @@
                   "typeParams": {
                     "typeName": "auth.factor_status"
                   }
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "webAuthnAaguid": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "webAuthnCredential": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -1833,35 +1970,40 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authorizationCode": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "authorizationId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "clientId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "codeChallenge": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "codeChallengeMethod": {
                 "nullable": true,
@@ -1871,49 +2013,56 @@
                   "typeParams": {
                     "typeName": "auth.code_challenge_method"
                   }
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "expiresAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "nonce": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "redirectUri": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "resource": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "responseType": {
                 "nullable": false,
@@ -1923,21 +2072,24 @@
                   "typeParams": {
                     "typeName": "auth.oauth_response_type"
                   }
-                }
+                },
+                "many": false
               },
               "scope": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "state": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "status": {
                 "nullable": false,
@@ -1947,14 +2099,16 @@
                   "typeParams": {
                     "typeName": "auth.oauth_authorization_status"
                   }
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2048,28 +2202,32 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "providerType": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -2099,14 +2257,16 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "clientSecretHash": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "clientType": {
                 "nullable": false,
@@ -2116,56 +2276,64 @@
                   "typeParams": {
                     "typeName": "auth.oauth_client_type"
                   }
-                }
+                },
+                "many": false
               },
               "clientUri": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "deletedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "grantTypes": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "logoUri": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "redirectUris": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "registrationType": {
                 "nullable": false,
@@ -2175,21 +2343,24 @@
                   "typeParams": {
                     "typeName": "auth.oauth_registration_type"
                   }
-                }
+                },
+                "many": false
               },
               "tokenEndpointAuthMethod": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2280,42 +2451,48 @@
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "grantedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "revokedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "scopes": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2376,28 +2553,32 @@
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "relatesTo": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "tokenHash": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "tokenType": {
                 "nullable": false,
@@ -2407,21 +2588,24 @@
                   "typeParams": {
                     "typeName": "auth.one_time_token_type"
                   }
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2473,63 +2657,72 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "instanceId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "parent": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "revoked": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "sessionId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "token": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2587,63 +2780,72 @@
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "entityId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadataUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadataXml": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "nameIdFormat": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ssoProviderId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2701,56 +2903,64 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "flowStateId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "forEmail": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "redirectTo": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "requestId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ssoProviderId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2817,7 +3027,8 @@
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -2838,35 +3049,40 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "domain": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ssoProviderId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -2912,35 +3128,40 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "disabled": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "resourceId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3007,42 +3228,48 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "expiresAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "sessionData": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3091,98 +3318,112 @@
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "attestationType": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "backedUp": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "backupEligible": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "credentialId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "friendlyName": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastUsedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "publicKey": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "signCount": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "transports": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3262,49 +3503,56 @@
                   "typeParams": {
                     "typeName": "storage.buckettype"
                   }
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "deletedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "format": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3369,28 +3617,32 @@
                   "typeParams": {
                     "typeName": "storage.buckettype"
                   }
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3432,49 +3684,56 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "catalogId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadata": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3537,77 +3796,88 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "catalogId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "location": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "namespaceId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "remoteTableId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "shardId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "shardKey": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3683,28 +3953,32 @@
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "hash": {
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},
@@ -3734,70 +4008,80 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "inProgressSize": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "key": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadata": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ownerId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "uploadSignature": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userMetadata": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "version": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -3869,70 +4153,80 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "etag": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "key": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ownerId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "partNumber": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "size": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "uploadId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "version": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -4008,10 +4302,13 @@
                   "typeParams": {
                     "typeName": "storage.buckettype"
                   }
-                }
+                },
+                "many": false
               },
               "allowedMimeTypes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4023,63 +4320,72 @@
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "fileSizeLimit": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int8@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "owner": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ownerId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "public": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -4164,59 +4470,69 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "lastAccessedAt": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadata": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "owner": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "ownerId": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "pathTokens": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4228,21 +4544,24 @@
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "userMetadata": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "version": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -4309,63 +4628,72 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "dataType": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "dimension": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "distanceMetric": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "metadataConfiguration": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "name": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
-                }
+                },
+                "many": false
               }
             },
             "relations": {
@@ -4720,7 +5048,9 @@
                     "kind": "literal",
                     "value": []
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": ["elementNotNull"],
                   "nullable": false
@@ -4850,7 +5180,9 @@
                     "kind": "literal",
                     "value": []
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": ["elementNotNull"],
                   "nullable": false
@@ -7310,7 +7642,9 @@
               "columns": {
                 "allowed_mime_types": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": ["elementNotNull"],
                   "nullable": true
@@ -7852,7 +8186,9 @@
                 },
                 "path_tokens": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": ["elementNotNull"],
                   "nullable": true
@@ -8211,7 +8547,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "43f09411473534105017fa715b8932facbdf79feab1bfc75da681beb87f22cbc",
+    "storageHash": "d33b83c8764b7f9df5d102b77ce04546770d7f9780d3cefc4cc0fd7b876dfdde",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

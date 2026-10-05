@@ -2,13 +2,12 @@ import type { ContractModel } from '@internal/contract/types';
 import type { ForeignKey, SqlModelStorage, SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const baseInput = {
@@ -52,10 +51,7 @@ namespace auth {
 `;
 
   function interpret() {
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(schema, { ...baseInput });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.failure.summary);
     return result.value;
@@ -124,10 +120,7 @@ namespace auth {
 }`,
       )
       .join('\n');
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema: shared, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(shared, { ...baseInput });
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
     if (!result.ok) throw new Error(result.failure.summary);
 
@@ -167,10 +160,7 @@ namespace auth {
 }`,
       )
       .join('\n');
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema: shared, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(shared, { ...baseInput });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('Expected a non-unique backrelation');
     expect(
@@ -199,10 +189,7 @@ namespace auth {
     user User @relation(fields: [userId], references: [id])
   }
 }`;
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema: shared, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(shared, { ...baseInput });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('Expected invalid relations');
     expect(
@@ -235,10 +222,7 @@ namespace auth {
 }`,
       )
       .join('\n');
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema: shared, sourceId: 'schema.prisma' }),
-    });
+    const result = interpretSqlContract(shared, { ...baseInput });
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
     if (!result.ok) throw new Error(result.failure.summary);
     for (const namespace of ['public', 'auth']) {

@@ -1,7 +1,7 @@
 import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
-import { FunctionColumnDefault } from '@internal/sql-relational-core/ast';
+import { FunctionColumnDefault, opaqueSql } from '@internal/sql-relational-core/ast';
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -37,7 +37,13 @@ function liveSchema(rawDefault: string): SqlSchemaIR {
 function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage> {
   const event: StorageTable = {
     columns: {
-      at: { nativeType: 'text', nullable: false, codecId: 'sqlite/text@1', default: columnDefault },
+      at: {
+        many: false,
+        nativeType: 'text',
+        nullable: false,
+        codecId: 'sqlite/text@1',
+        default: columnDefault,
+      },
     },
     foreignKeys: [],
     uniques: [],
@@ -98,7 +104,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
         ddl: ddlColumnFromNode(column, false).default,
       }).toEqual({
         spec: { kind: 'function', expression },
-        ddl: new FunctionColumnDefault(expression),
+        ddl: new FunctionColumnDefault(opaqueSql(expression)),
       });
     },
   );

@@ -64,6 +64,7 @@ function col(overrides: Partial<StorageColumn> & { nativeType: string }): Storag
   return {
     codecId: 'pg/text@1',
     nullable: false,
+    many: false,
     ...overrides,
   };
 }
@@ -106,6 +107,40 @@ function contractToSchemaIR(
 }
 
 describe('contractToSchemaIR', () => {
+  it.each([
+    { cardinality: {}, array: false },
+    { cardinality: { many: false }, array: false },
+    { cardinality: { many: { elementNullable: false } }, array: true },
+    { cardinality: { many: { elementNullable: true } }, array: true },
+  ])('projects raw column cardinality $cardinality', ({ cardinality, array }) => {
+    const column = {
+      codecId: 'pg/text@1',
+      nativeType: 'text',
+      nullable: false,
+      ...cardinality,
+    } as StorageColumn;
+    const storage = {
+      storageHash: 'test',
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: {
+          id: UNBOUND_NAMESPACE_ID,
+          entries: { table: { Item: table({ columns: { tags: column } }) } },
+        },
+      },
+    } as unknown as SqlStorage;
+    const projected = contractToSchemaIR(wrap(storage)).tables['Item']?.columns['tags'];
+
+    expect({
+      resolvedNativeType: projected?.resolvedNativeType,
+      many: projected?.many,
+      codecRef: projected?.codecRef,
+    }).toEqual({
+      resolvedNativeType: array ? 'text[]' : 'text',
+      many: array ? true : undefined,
+      codecRef: array ? { codecId: 'pg/text@1', many: true } : { codecId: 'pg/text@1' },
+    });
+  });
+
   it('converts empty storage to empty schema IR', () => {
     const result = contractToSchemaIR(null, { renderDefault: testRenderer });
 
@@ -1281,7 +1316,9 @@ describe('contractToSchemaIR — resolved leaf values', () => {
 
   it('appends [] to resolvedNativeType for array columns', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { tags: col({ nativeType: 'text', many: true }) } }),
+      T: table({
+        columns: { tags: col({ nativeType: 'text', many: { elementNullable: false } }) },
+      }),
     });
 
     const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
@@ -1321,7 +1358,7 @@ describe('contractToSchemaIR — resolved leaf values', () => {
         columns: {
           tags: col({
             nativeType: 'text',
-            many: true,
+            many: { elementNullable: false },
             default: { kind: 'function', expression: "'{}'::text[]" },
           }),
         },

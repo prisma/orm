@@ -19,6 +19,7 @@ import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
+import { binderContext } from './support';
 
 class ForeignCopyOfAnAstNode {
   readonly syntax: SyntaxNode;
@@ -41,12 +42,7 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { binder } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,

@@ -4,7 +4,7 @@
  * Companion to `find-user-by-id-cached.ts` — same opt-in caching
  * mechanism, this time on a multi-row read terminal. The terminal's
  * `configure: (meta) => void` callback hands the caller a
- * `MetaBuilder<'read'>`; calling `meta.annotate(cacheAnnotation({ ttl }))`
+ * `MetaBuilder<'read'>`; calling `meta.annotate(cacheAnnotation({}))`
  * enables caching of the post-lowering execution.
  *
  * The example also shows the per-query `key` override. When set, the
@@ -23,7 +23,6 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { createOrmClient } from './client';
 
 export interface CachedListOptions {
-  readonly ttlMs?: number;
   /**
    * Optional override for the cache key. When omitted, the runtime's
    * `contentHash(exec)` is used (the default and recommended path).
@@ -37,8 +36,7 @@ export async function ormClientGetUsersCached(
   options: CachedListOptions = {},
 ) {
   const db = createOrmClient(runtime);
-  const ttl = options.ttlMs ?? 60_000;
   return db.User.limit(limit).all((meta) =>
-    meta.annotate(cacheAnnotation(options.key !== undefined ? { ttl, key: options.key } : { ttl })),
+    meta.annotate(cacheAnnotation(options.key !== undefined ? { key: options.key } : {})),
   );
 }

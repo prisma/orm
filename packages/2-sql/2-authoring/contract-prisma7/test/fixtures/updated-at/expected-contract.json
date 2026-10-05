@@ -27,7 +27,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "updatedAt": {
                 "type": {
@@ -37,7 +38,8 @@
                     "precision": 3
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "updatedAtTz": {
                 "type": {
@@ -47,7 +49,8 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -63,6 +66,7 @@
     }
   },
   "execution": {
+    "executionHash": "4c8d83c3c1f004512a786ea885ff3bdbcbb62b326cab17ee9a8301342b1f8495",
     "mutations": {
       "defaults": [
         {
@@ -96,8 +100,7 @@
           }
         }
       ]
-    },
-    "executionHash": "4c8d83c3c1f004512a786ea885ff3bdbcbb62b326cab17ee9a8301342b1f8495"
+    }
   },
   "extensions": {},
   "capabilities": {},
@@ -116,12 +119,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "updatedAt": {
                   "nativeType": "timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 3
                   }
@@ -130,6 +135,7 @@
                   "nativeType": "timestamptz",
                   "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }

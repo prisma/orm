@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   sqliteScalarColumnDescriptors,
   sqliteTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
-  interpretPslDocumentToSqlContract,
+  interpretPostgresSchema,
   postgresTemporalContributions,
   sqliteTemporalContributions,
 } from './interpreter-defaults-support';
@@ -24,9 +23,7 @@ import { unboundTables } from './unbound-tables';
 // `executionDefaults` entirely rather than emit an empty object.
 describe('temporal per-codec preset lowering', () => {
   const interpretTemporal = (schema: string) => {
-    const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-    return interpretPslDocumentToSqlContract({
-      ...document,
+    return interpretPostgresSchema(schema, {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: postgresTemporalContributions,
@@ -50,6 +47,7 @@ stamped ${field}
 }`;
 
   const pgTimestampPrecision3 = {
+    many: false,
     nativeType: 'timestamp',
     codecId: 'pg/timestamp-temporal@1',
     nullable: false,
@@ -75,6 +73,7 @@ stamped ${field}
   it('timestamp() omits the typeParams key entirely and has no execution defaults', () => {
     const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
     expect(column).toEqual({
+      many: false,
       nativeType: 'timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
@@ -91,6 +90,7 @@ stamped ${field}
       nativeType: 'timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
+      many: false,
     });
     expect(defaults).toEqual([{ ref: stampedRef, onCreate: nowPhase, onUpdate: nowPhase }]);
   });
@@ -101,6 +101,7 @@ stamped ${field}
       nativeType: 'timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
+      many: false,
     });
     expect(defaults).toEqual([{ ref: stampedRef, onUpdate: nowPhase }]);
   });
@@ -121,12 +122,7 @@ stamped ${field}
   });
 
   it('lowers sqlite temporal.datetime(onCreate: now, onUpdate: now) to the sqlite codec', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: model('temporal.datetime(onCreate: now, onUpdate: now)'),
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContractInternal({
-      ...document,
+    const result = interpretSqlContract(model('temporal.datetime(onCreate: now, onUpdate: now)'), {
       target: sqliteTarget,
       scalarColumnDescriptors: sqliteScalarColumnDescriptors,
       composedExtensionContracts: new Map(),
@@ -144,6 +140,7 @@ stamped ${field}
       nativeType: 'text',
       codecId: 'sqlite/datetime@1',
       nullable: false,
+      many: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {

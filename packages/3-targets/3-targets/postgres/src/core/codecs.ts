@@ -393,6 +393,7 @@ export const postgresSqlFloatDescriptor = postgresCodec(sqlFloatDescriptor, {
   dataType: pgFloat8.id,
   nativeType: () => 'float8',
   jsonProjection: identityJsonProjection,
+  factory: (descriptor) => () => new PgFloatCodec(descriptor),
 });
 
 export const postgresSqlTextDescriptor = postgresCodec(sqlTextDescriptor, {

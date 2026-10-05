@@ -60,6 +60,7 @@ function ns(tables: Record<string, StorageTable>): Pick<SqlStorageInput, 'namesp
 
 function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
   return {
+    many: false,
     codecId: 'pg/text@1',
     nullable: false,
     ...overrides,
@@ -204,9 +205,9 @@ describe('contractToSchemaIR → planner round-trip', () => {
       ...ns({
         user: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            name: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            email: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [{ columns: ['email'] }],
@@ -245,8 +246,8 @@ describe('contractToSchemaIR → planner round-trip', () => {
       ...ns({
         user: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            email: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -290,7 +291,7 @@ describe('contractToSchemaIR → planner round-trip', () => {
       ...ns({
         user: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -305,7 +306,7 @@ describe('contractToSchemaIR → planner round-trip', () => {
       ...ns({
         user: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -314,8 +315,8 @@ describe('contractToSchemaIR → planner round-trip', () => {
         },
         post: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            title: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -360,14 +361,16 @@ describe('contractToSchemaIR → planner round-trip', () => {
       ...ns({
         item: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
             status: {
+              many: false,
               nativeType: 'text',
               codecId: 'pg/text@1',
               nullable: false,
               default: { kind: 'literal', value: 'active' },
             },
             createdAt: {
+              many: false,
               nativeType: 'timestamptz',
               codecId: 'pg/timestamptz-temporal@1',
               nullable: false,
@@ -428,7 +431,7 @@ describe('planner — additive scenarios', () => {
           columns: {
             id: col({ nativeType: 'uuid', codecId: 'pg/uuid@1' }),
             email: col({ nativeType: 'text', codecId: 'pg/text@1' }),
-            age: col({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: true }),
+            age: col({ many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true }),
           },
           primaryKey: { columns: ['id'] },
         }),
@@ -717,7 +720,7 @@ describe('planner — type and nullability change behavior', () => {
         user: table({
           columns: {
             id: col({ nativeType: 'uuid', codecId: 'pg/uuid@1' }),
-            bio: col({ nativeType: 'text', codecId: 'pg/text@1', nullable: true }),
+            bio: col({ many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true }),
           },
           primaryKey: { columns: ['id'] },
         }),
@@ -730,7 +733,7 @@ describe('planner — type and nullability change behavior', () => {
         user: table({
           columns: {
             id: col({ nativeType: 'uuid', codecId: 'pg/uuid@1' }),
-            bio: col({ nativeType: 'text', codecId: 'pg/text@1', nullable: false }),
+            bio: col({ many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false }),
           },
           primaryKey: { columns: ['id'] },
         }),
@@ -856,11 +859,7 @@ const DEMO_BASE_TABLES = {
         codecId: 'pg/timestamptz-temporal@1',
         default: { kind: 'function', expression: 'now()' },
       }),
-      embedding: col({
-        nativeType: 'vector',
-        codecId: 'pg/vector@1',
-        nullable: true,
-      }),
+      embedding: col({ many: false, nativeType: 'vector', codecId: 'pg/vector@1', nullable: true }),
     },
     primaryKey: { columns: ['id'] },
     foreignKeys: [
@@ -939,7 +938,7 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
           ...DEMO_BASE_TABLES['user']!,
           columns: {
             ...DEMO_BASE_TABLES['user']!.columns,
-            name: col({ nativeType: 'text', codecId: 'pg/text@1', nullable: true }),
+            name: col({ many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true }),
           },
         }),
       }),

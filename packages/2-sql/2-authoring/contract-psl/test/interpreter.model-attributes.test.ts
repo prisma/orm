@@ -4,13 +4,12 @@ import { fieldRef, list, modelAttribute, optional, str, structBlock } from '@int
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
@@ -59,16 +58,11 @@ const stampAuthoringContributions: AuthoringContributions = {
 
 function interpretWith(schema: string, authoringContributions?: AuthoringContributions) {
   const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
   const createNamespace = (input: SqlNamespaceInput) => {
     capturedEntries[input.id] = { ...(capturedEntries[input.id] ?? {}), ...input.entries };
     return createTestSqlNamespace(input);
   };
-  const result = interpretPslDocumentToSqlContract({
-    ...document,
+  const result = interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     controlMutationDefaults: builtinControlMutationDefaults,

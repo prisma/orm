@@ -16,14 +16,17 @@ type TestModels = {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly status: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly amount: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
         readonly nullable: false;
+        readonly many: false;
       };
     };
     readonly relations: Record<string, never>;

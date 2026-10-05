@@ -15,7 +15,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
@@ -78,7 +82,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
@@ -117,7 +125,11 @@ describe('mongoEmission.validateStructure', () => {
           'intentionally missing "relations" to exercise validateStructure\'s runtime guard against malformed contracts'
         >({
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           storage: { collection: 'users' },
         }),
@@ -134,14 +146,22 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
         },
         Address: {
           fields: {
-            street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            street: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
@@ -160,7 +180,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         Address: {
           fields: {
-            street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            street: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: {},
@@ -179,7 +203,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {
             addresses: { to: crossRef('Address'), cardinality: '1:N' },
@@ -191,7 +219,11 @@ describe('mongoEmission.validateStructure', () => {
         },
         Address: {
           fields: {
-            street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            street: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: {},
@@ -208,8 +240,16 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         Task: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            type: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'tasks' },
@@ -218,7 +258,11 @@ describe('mongoEmission.validateStructure', () => {
         },
         Bug: {
           fields: {
-            severity: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            severity: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'tasks' },
@@ -235,8 +279,16 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         Task: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            type: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'tasks' },
@@ -245,7 +297,11 @@ describe('mongoEmission.validateStructure', () => {
         },
         Bug: {
           fields: {
-            severity: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            severity: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'bugs' },
@@ -267,7 +323,11 @@ describe('mongoEmission.validateStructure', () => {
           'intentionally missing "storage" to exercise validateStructure\'s runtime guard against malformed contracts'
         >({
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {},
         }),
@@ -284,7 +344,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         Bug: {
           fields: {
-            severity: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            severity: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'tasks' },
@@ -303,7 +367,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {
             addresses: { to: crossRef('Address'), cardinality: '1:N' },
@@ -312,7 +380,11 @@ describe('mongoEmission.validateStructure', () => {
         },
         Address: {
           fields: {
-            street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            street: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: {},
@@ -331,7 +403,11 @@ describe('mongoEmission.validateStructure', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
           },
           relations: {},
           storage: {

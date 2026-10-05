@@ -85,9 +85,23 @@ describe('column defaults', () => {
 });
 
 describe('list columns', () => {
+  it('prints nullable elements without inventing an element-not-null check', () => {
+    const model = oneModel(
+      { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: { elementNullable: true } } },
+      { id: { column: 'id' }, tags: { column: 'tags' } },
+    );
+    expect(model?.fields.find((field) => field.name === 'tags')).toMatchObject({
+      list: true,
+      elementOptional: true,
+      attributes: [],
+    });
+  });
   it('prints a waived element-not-null check as @noCheck(elementNotNull)', () => {
     const model = oneModel(
-      { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: true, noCheck: ['elementNotNull'] } },
+      {
+        id: INT_COLUMN,
+        tags: { ...TEXT_COLUMN, many: { elementNullable: false }, noCheck: ['elementNotNull'] },
+      },
       { id: { column: 'id' }, tags: { column: 'tags' } },
     );
     expect(model?.fields.map(fieldText)).toEqual([

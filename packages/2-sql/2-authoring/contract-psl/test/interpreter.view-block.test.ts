@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 function interpret(schema: string) {
-  return interpretPslDocumentToSqlContract({
-    ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     codecLookup: postgresCodecLookup,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,

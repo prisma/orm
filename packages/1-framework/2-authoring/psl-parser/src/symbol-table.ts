@@ -40,13 +40,15 @@ export interface TopLevelScope {
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
 }
 
+interface NamespaceDeclaration {
+  readonly node: NamespaceDeclarationAst;
+  readonly span: PslSpan;
+}
+
 export interface NamespaceSymbol {
   readonly kind: 'namespace';
   readonly name: string;
-  readonly declarations: {
-    readonly node: NamespaceDeclarationAst;
-    readonly span: PslSpan;
-  }[];
+  readonly declarations: [NamespaceDeclaration, ...NamespaceDeclaration[]];
   readonly models: Record<string, ModelSymbol>;
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
   readonly blocks: Record<string, BlockSymbol>;
@@ -107,6 +109,8 @@ export interface FieldSymbol {
   readonly typeContractSpaceId?: string;
   readonly optional: boolean;
   readonly list: boolean;
+  /** Element-nullability axis (`Foo?[]`); meaningful only when {@link list}. */
+  readonly elementOptional: boolean;
   readonly typeConstructor?: ResolvedTypeConstructorCall;
   readonly attributes: readonly ResolvedAttribute<FieldAttributeAst>[];
   /** Prevents cascading unsupported-type diagnostics after invalid qualification. */
@@ -183,12 +187,17 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           namespace = {
             kind: 'namespace',
             name,
-            declarations: [],
+            declarations: [{ node: declaration, span: nodePslSpan(declaration.syntax, sources) }],
             models: Object.create(null),
             compositeTypes: Object.create(null),
             blocks: Object.create(null),
           };
           namespaces[name] = namespace;
+        } else {
+          namespace.declarations.push({
+            node: declaration,
+            span: nodePslSpan(declaration.syntax, sources),
+          });
         }
         extendNamespace(namespace, declaration, diagnostics, sources);
       } else if (declaration instanceof TypesBlockAst) {
@@ -262,7 +271,6 @@ function extendNamespace(
   sources: PslSources,
 ): void {
   const { models, compositeTypes, blocks } = namespace;
-  namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sources) });
 
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
@@ -349,6 +357,7 @@ function buildField(
       typeName: path[path.length - 1] ?? '',
       optional: false,
       list: false,
+      elementOptional: false,
       malformedType: true,
       attributes,
     };
@@ -370,6 +379,7 @@ function buildField(
     ...(typeContractSpaceId !== undefined ? { typeContractSpaceId } : {}),
     optional: annotation?.isOptional() ?? false,
     list: annotation?.isList() ?? false,
+    elementOptional: annotation?.isElementOptional() ?? false,
     ...(typeConstructor !== undefined ? { typeConstructor } : {}),
     attributes,
   };

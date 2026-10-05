@@ -16,7 +16,9 @@
           "User": {
             "fields": {
               "decimals": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -69,7 +71,9 @@
               "columns": {
                 "decimals": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "numeric",
                   "nullable": false,
                   "typeRef": "D"
@@ -95,7 +99,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b19e28967332f25efa131fe414093daebeece9ea3d36b1ceb0e456dfff804ae0",
+    "storageHash": "c3f8a164c82c3becb68c4d83ba7a480a7c17c01cfe99e7e9ba050df78bff4b7f",
     "types": {
       "D": {
         "codecId": "pg/numeric@1",
