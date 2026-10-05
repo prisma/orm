@@ -5,7 +5,7 @@ import type {
   CollectionStateOf,
   Filtered,
   Ordered,
-  Step,
+  Scope,
 } from '../src/collection-types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';
@@ -131,21 +131,21 @@ describe('select and variant leave the class', () => {
 });
 
 describe('apply', () => {
-  const published: Step<PostCollection, Filtered<PostCollection>> = (posts) => posts.published();
+  const published: Scope<PostCollection, Filtered<PostCollection>> = (posts) => posts.published();
 
-  test('returns what the step returns', () => {
+  test('returns what the scope returns', () => {
     expectTypeOf(Post.apply(published)).toEqualTypeOf<Filtered<PostCollection>>();
     expectTypeOf(Post.apply(published)).toEqualTypeOf(Post.published());
   });
 
-  test('a step written against the shared Collection type applies to the class and returns the shared type', () => {
+  test('a scope written against the shared Collection type applies to the class and returns the shared type', () => {
     const titled = (posts: Collection<TestContract, 'Post'>) => posts.where({ title: 'x' });
     expectTypeOf(Post.apply(titled)).toEqualTypeOf<Filtered<Collection<TestContract, 'Post'>>>();
   });
 
-  test('a step for another class is refused', () => {
+  test('a scope for another class is refused', () => {
     const named = (users: ReturnType<typeof createChainingOrm>['db']['User']) => users.named('x');
-    // @ts-expect-error the step takes a UserCollection, the receiver is a PostCollection
+    // @ts-expect-error the scope takes a UserCollection, the receiver is a PostCollection
     Post.apply(named);
   });
 });

@@ -1,5 +1,5 @@
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { type Filtered, type Ordered, orm, type Step } from '@prisma/orm-postgres/orm-client';
+import { type Filtered, type Ordered, orm, type Scope } from '@prisma/orm-postgres/orm-client';
 import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { createOrmClient } from '../src/orm-client/client';
@@ -17,7 +17,7 @@ export const classChain = db.User.admins().newestFirst().limit(10);
 export const classChainAfterInclude = db.User.include('posts').admins();
 export const plainChain = plain.User.where({ kind: 'admin' }).orderBy((u) => u.createdAt.desc());
 export const plainInclude = plain.Post.include('user').include('tags');
-export const titled: Step<PostCollection, Filtered<PostCollection>> = (posts) =>
+export const titled: Scope<PostCollection, Filtered<PostCollection>> = (posts) =>
   posts.withTitle('x');
 
 test('class methods chain with each other and with the built-in methods', () => {

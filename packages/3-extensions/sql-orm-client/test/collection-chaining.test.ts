@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createChainingOrm, PostCollection } from './collection-chaining-fixture';
 
 describe('apply', () => {
-  it('returns what the step returns', () => {
+  it('returns what the function returns', () => {
     const { db } = createChainingOrm();
     const result = { applied: true };
     expect(db.Post.apply(() => result)).toBe(result);
   });
 
-  it('passes the receiver to the step', () => {
+  it('passes the receiver to the function', () => {
     const { db } = createChainingOrm();
     const posts = db.Post.recent();
     expect(posts.apply((received) => received)).toBe(posts);

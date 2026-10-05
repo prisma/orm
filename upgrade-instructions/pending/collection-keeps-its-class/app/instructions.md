@@ -124,7 +124,7 @@ await unordered.cursor({ id }).all();
 
 ## `apply` is a member of every collection
 
-Collections have a new method, `apply(step)`, which calls `step` with the collection and returns the result. A custom collection class that declares its own `apply` with another signature no longer compiles. Rename that member and its call sites:
+Collections have a new method, `apply(fn)`, which calls `fn` with the collection and returns the result. A custom collection class that declares its own `apply` with another signature no longer compiles. Rename that member and its call sites:
 
 ```diff
   class PostCollection extends Collection<Contract, 'Post'> {
