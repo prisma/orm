@@ -94,3 +94,15 @@ test('ilike and the search operations take a textual column and refuse a native 
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });
+
+test('ilike and fullTextMatches take a nullable textual column, rank and headline do not', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type SelfOf<Name extends 'ilike' | 'fullTextMatches' | 'fullTextRank' | 'fullTextHeadline'> =
+    Parameters<Ops[Name]['impl']>[0];
+  type NullableTextColumn = Expression<{ codecId: 'pg/text@1'; nullable: true }>;
+
+  expectTypeOf<NullableTextColumn>().toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<NullableTextColumn>().toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
+  expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
+});

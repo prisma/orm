@@ -17,6 +17,12 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
+type NullableTextualSelf<CT extends CodecTypesBase> = TraitExpression<
+  readonly ['textual'],
+  boolean,
+  CT
+>;
+
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
 /**
@@ -34,14 +40,14 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     readonly ilike: {
       readonly self: TextualSelfSpec;
       readonly impl: (
-        self: TextualSelf<CT>,
+        self: NullableTextualSelf<CT>,
         pattern: TextOperand<CT>,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
     };
     readonly fullTextMatches: {
       readonly self: TextualSelfSpec;
       readonly impl: (
-        self: TextualSelf<CT>,
+        self: NullableTextualSelf<CT>,
         query: TsqueryArgument<CT>,
         options?: FullTextMatchesOptions,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
