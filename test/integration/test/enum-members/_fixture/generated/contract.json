@@ -1,0 +1,468 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "readings": {
+      "model": "Reading",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "enum": {
+          "DayLevel": {
+            "codecId": "pg/date-temporal@1",
+            "members": [
+              {
+                "name": "Launch",
+                "value": "2024-01-01"
+              },
+              {
+                "name": "Sunset",
+                "value": "2025-06-30"
+              }
+            ]
+          },
+          "Float8Level": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": 1.5
+              },
+              {
+                "name": "Whole",
+                "value": 2.25
+              }
+            ]
+          },
+          "Int4Level": {
+            "codecId": "pg/int4@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": 1
+              },
+              {
+                "name": "High",
+                "value": 10
+              }
+            ]
+          },
+          "Int8Level": {
+            "codecId": "pg/int8@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "1"
+              },
+              {
+                "name": "High",
+                "value": "10"
+              }
+            ]
+          },
+          "StampLevel": {
+            "codecId": "pg/timestamptz-temporal@1",
+            "members": [
+              {
+                "name": "Launch",
+                "value": "2024-01-01T00:00:00Z"
+              },
+              {
+                "name": "Sunset",
+                "value": "2025-06-30T12:00:00Z"
+              }
+            ]
+          },
+          "TextLevel": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "low"
+              },
+              {
+                "name": "High",
+                "value": "high"
+              }
+            ]
+          },
+          "UuidLevel": {
+            "codecId": "pg/uuid@1",
+            "members": [
+              {
+                "name": "First",
+                "value": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+              },
+              {
+                "name": "Second",
+                "value": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Reading": {
+            "fields": {
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-temporal@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "DayLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "float8": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Float8Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "int4": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Int4Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "int8": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Int8Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "stamp": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "StampLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "text": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "TextLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "uuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "UuidLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "day": {
+                  "column": "day"
+                },
+                "float8": {
+                  "column": "float8"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "int4": {
+                  "column": "int4"
+                },
+                "int8": {
+                  "column": "int8"
+                },
+                "stamp": {
+                  "column": "stamp"
+                },
+                "text": {
+                  "column": "text"
+                },
+                "uuid": {
+                  "column": "uuid"
+                }
+              },
+              "namespaceId": "public",
+              "table": "readings"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "readings": {
+              "checks": [
+                {
+                  "expression": "\"day\" IN ('2024-01-01', '2025-06-30')",
+                  "name": "readings_day_check_6331b648",
+                  "prefix": "readings_day_check"
+                },
+                {
+                  "expression": "\"float8\" IN (1.5, 2.25)",
+                  "name": "readings_float8_check_5c33f4f0",
+                  "prefix": "readings_float8_check"
+                },
+                {
+                  "expression": "\"int4\" IN (1, 10)",
+                  "name": "readings_int4_check_b8a19f17",
+                  "prefix": "readings_int4_check"
+                },
+                {
+                  "expression": "\"int8\" IN ('1', '10')",
+                  "name": "readings_int8_check_38f38148",
+                  "prefix": "readings_int8_check"
+                },
+                {
+                  "expression": "\"stamp\" IN ('2024-01-01T00:00:00Z', '2025-06-30T12:00:00Z')",
+                  "name": "readings_stamp_check_176d9020",
+                  "prefix": "readings_stamp_check"
+                },
+                {
+                  "expression": "\"text\" IN ('low', 'high')",
+                  "name": "readings_text_check_ae00dbbb",
+                  "prefix": "readings_text_check"
+                },
+                {
+                  "expression": "\"uuid\" IN ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12')",
+                  "name": "readings_uuid_check_b66d39c9",
+                  "prefix": "readings_uuid_check"
+                }
+              ],
+              "columns": {
+                "day": {
+                  "codecId": "pg/date-temporal@1",
+                  "nativeType": "date",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "DayLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "float8": {
+                  "codecId": "pg/float8@1",
+                  "nativeType": "float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Float8Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "int4": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Int4Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "int8": {
+                  "codecId": "pg/int8@1",
+                  "nativeType": "int8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Int8Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "stamp": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "StampLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "text": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "TextLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "uuid": {
+                  "codecId": "pg/uuid@1",
+                  "nativeType": "uuid",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "UuidLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "DayLevel": {
+              "kind": "valueSet",
+              "values": [
+                "2024-01-01",
+                "2025-06-30"
+              ]
+            },
+            "Float8Level": {
+              "kind": "valueSet",
+              "values": [
+                1.5,
+                2.25
+              ]
+            },
+            "Int4Level": {
+              "kind": "valueSet",
+              "values": [
+                1,
+                10
+              ]
+            },
+            "Int8Level": {
+              "kind": "valueSet",
+              "values": [
+                "1",
+                "10"
+              ]
+            },
+            "StampLevel": {
+              "kind": "valueSet",
+              "values": [
+                "2024-01-01T00:00:00Z",
+                "2025-06-30T12:00:00Z"
+              ]
+            },
+            "TextLevel": {
+              "kind": "valueSet",
+              "values": [
+                "low",
+                "high"
+              ]
+            },
+            "UuidLevel": {
+              "kind": "valueSet",
+              "values": [
+                "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "552b1f11807afcecc55ee02813eee54c27540b16d22b7a171eba7bb953358974"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

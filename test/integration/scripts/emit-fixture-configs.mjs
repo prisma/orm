@@ -20,6 +20,7 @@ const cli = resolve(packageRoot, '../../packages/1-framework/3-tooling/cli/dist/
 const fixtureRoots = [
   'test/ports',
   'test/enum-order-by',
+  'test/enum-members',
   'test/sql-builder/fixtures',
   'test/mongo/bson-scalars',
   'test/mongo/temporal-presets',
