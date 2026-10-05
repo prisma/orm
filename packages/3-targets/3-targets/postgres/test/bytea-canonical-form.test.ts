@@ -29,27 +29,32 @@ describe('the canonical form of pg/bytea', () => {
     [
       'hex with an odd number of digits',
       '\\x686',
-      '"\\x686" is not PostgreSQL hex: after \\x it takes two hexadecimal digits for each byte, as in "\\x68656c6c6f".',
+      String.raw`"\\x686" is not PostgreSQL hex, which has two hexadecimal digits for each byte. Write base64, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
     ],
     [
       'hex with a digit that is not hexadecimal',
       '\\x6g',
-      '"\\x6g" is not PostgreSQL hex: after \\x it takes two hexadecimal digits for each byte, as in "\\x68656c6c6f".',
+      String.raw`"\\x6g" is not PostgreSQL hex, which has two hexadecimal digits for each byte. Write base64, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
     ],
     [
       'base64 without its padding',
       'aGVsbG8',
-      'pg/bytea cannot read "aGVsbG8". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, as in "\\x68656c6c6f".',
+      String.raw`pg/bytea cannot read "aGVsbG8". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
     ],
     [
       'base64 with a character outside the standard alphabet',
       'aGVs-G8=',
-      'pg/bytea cannot read "aGVs-G8=". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, as in "\\x68656c6c6f".',
+      String.raw`pg/bytea cannot read "aGVs-G8=". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
     ],
     [
       'the text PostgreSQL prints in its escape format',
       'hello',
-      'pg/bytea cannot read "hello". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, as in "\\x68656c6c6f".',
+      String.raw`pg/bytea cannot read "hello". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
+    ],
+    [
+      'hex written with one backslash in a PSL string, which reads \\x68 as h',
+      'h656c6c6f',
+      String.raw`pg/bytea cannot read "h656c6c6f". Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`,
     ],
     ['a number', 42, 'Expected text, got 42.'],
     ['an array', [HELLO], 'Expected text, got ["aGVsbG8="].'],
