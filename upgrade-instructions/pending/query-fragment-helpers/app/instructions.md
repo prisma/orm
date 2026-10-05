@@ -14,6 +14,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - 'import\s*\{[^}]*\bfield\b[^}]*\}\s*from\s*[''"]@(?:prisma/orm-|internal/)postgres/contract-builder[''"]'
+  - id: writes-refuse-limit-or-offset
+    summary: |
+      `update`, `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` now throw `ORM.ARGUMENT_INVALID` on a collection that has a `limit` or an `offset`. These writes change every row that matches the filter; the limit and the offset were ignored, so more rows changed than the chain asked for. Remove the limit and offset before the write, or read the rows first and change them by their ids.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\.(?:limit|offset)\s*\([^)]*\)[\s\S]{0,300}?\.(?:update|updateAll|updateAndCount|deleteAll|deleteAndCount)\s*\('
 ---
 
 The `scope` change applies to the SQL ORM client only. The MongoDB ORM client did not change; skip matches in code that uses it.
@@ -39,3 +46,14 @@ An aggregate operation named `scope` is now refused with `ORM.AGGREGATE_OPERATIO
 - field.column(int8Column).default(1)
 + field.column(int8Column).default(1n)
 ```
+
+## Writes refuse a limit or an offset
+
+`update`, `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` change every row that matches the filter. They ignored a `limit` or an `offset` on the collection, so a chain such as `db.orm.public.Post.where(...).limit(10).deleteAll()` deleted every matching row, not ten. They now throw `ORM.ARGUMENT_INVALID` instead. An order is still ignored without an error. Remove the limit and offset, or read the rows and change them by their ids:
+
+```diff
+- await db.orm.public.Post.where({ userId }).limit(10).deleteAll();
++ const ids = (await db.orm.public.Post.where({ userId }).select('id').limit(10).all()).map((p) => p.id);
++ await db.orm.public.Post.where((p) => p.id.in(ids)).deleteAll();
+```
+
