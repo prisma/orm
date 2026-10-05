@@ -8,6 +8,7 @@ const BIN = join(EXAMPLE_ROOT, 'node_modules/.bin');
 
 export interface RunResult {
   readonly status: number | null;
+  readonly signal: NodeJS.Signals | null;
   readonly output: string;
 }
 
@@ -36,8 +37,8 @@ export function runAllowingFailure(
     child.on('error', (error) => {
       reject(new Error(`${command} did not start: ${error.message}`));
     });
-    child.on('close', (status) => {
-      resolve({ status, output });
+    child.on('close', (status, signal) => {
+      resolve({ status, signal, output });
     });
   });
 }
@@ -48,9 +49,9 @@ export async function run(
   bin: string,
   args: readonly string[],
 ): Promise<string> {
-  const { status, output } = await runAllowingFailure(cwd, databaseUrl, bin, args);
+  const { status, signal, output } = await runAllowingFailure(cwd, databaseUrl, bin, args);
   if (status !== 0) {
-    throw new Error(`${[bin, ...args].join(' ')} exited with ${status}\n${output}`);
+    throw new Error(`${[bin, ...args].join(' ')} exited with ${status ?? signal}\n${output}`);
   }
   return output;
 }
@@ -77,16 +78,19 @@ export async function verifyHasNoFindings(cwd: string, databaseUrl: string): Pro
   expect(envelope.result['schema']).toMatchObject({ warnings: [] });
 }
 
-/** A scratch copy of this example, inside it so node_modules resolve. */
-export function copyExample(): string {
+/**
+ * A scratch copy of this example, inside it so node_modules resolve, with any
+ * further entries the caller needs.
+ */
+export function copyExample(extraEntries: readonly string[] = []): string {
   const dir = mkdtempSync(join(EXAMPLE_ROOT, '.story-'));
   for (const entry of [
     'prisma',
     'scripts',
     'src',
-    'test/handover',
     'prisma.config.ts',
     'prisma7.config.ts',
+    ...extraEntries,
   ]) {
     cpSync(join(EXAMPLE_ROOT, entry), join(dir, entry), { recursive: true });
   }

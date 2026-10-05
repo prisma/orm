@@ -4,9 +4,10 @@
  * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one and a
  * destructive one. After each, `db verify --strict` reports only Prisma 7's
  * ledger table as unclaimed, Prisma 7 sees no drift, and both clients read
- * the new shape.
+ * the new shape. Finally the migrations replay onto an empty database, which
+ * then verifies strictly with nothing unclaimed.
  */
-import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -59,7 +60,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
   it(
     'plans, applies and verifies an additive and a destructive edit that both clients read',
     async () => {
-      const dir = copyExample();
+      const dir = copyExample(['tsconfig.json', 'test/handover']);
       try {
         await withDevDatabase(async ({ connectionString }) => {
           writeFileSync(join(dir, '.env'), `DATABASE_URL=${connectionString}\n`);
@@ -68,6 +69,8 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           const v8 = async (...args: string[]) =>
             resultEnvelope(await run(dir, connectionString, 'prisma', args)).result;
           const tsx = (script: string) => run(dir, connectionString, 'tsx', [script]);
+          const typecheck = (tsconfig: string) =>
+            run(dir, connectionString, 'tsc', ['--noEmit', '-p', `test/handover/${tsconfig}`]);
 
           const editSchema = (fixture: string) =>
             cpSync(join(dir, 'test/handover', fixture), join(dir, 'prisma/schema.prisma'));
@@ -133,7 +136,24 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           expect(additivePlan).toMatchObject({ from: signedHash, to: additiveHash });
           const baseline = readBundle(dir, String(additivePlan['baselineDir']));
           expect(baseline).toMatchObject({ from: null, to: signedHash });
-          expect(baseline.operations.every((op) => op.operationClass === 'additive')).toBe(true);
+          expect(operationClasses(baseline)).toEqual([
+            ['schema.public', 'additive'],
+            ['createNativeEnumType.Role', 'additive'],
+            ['table.Post', 'additive'],
+            ['table.Tag', 'additive'],
+            ['table.User', 'additive'],
+            ['table._PostToTag', 'additive'],
+            ['index.Tag.Tag_name_key', 'additive'],
+            ['index.User.User_email_key', 'additive'],
+            ['index._PostToTag._PostToTag_B_index', 'additive'],
+            ['foreignKey.Post.Post_authorId_fkey', 'additive'],
+            ['foreignKey._PostToTag._PostToTag_A_fkey', 'additive'],
+            ['foreignKey._PostToTag._PostToTag_B_fkey', 'additive'],
+          ]);
+          const bundleNames = [additivePlan['baselineDir'], additivePlan['dir']].map((bundleDir) =>
+            basename(String(bundleDir)),
+          );
+          expect([...bundleNames].sort()).toEqual(bundleNames);
           const additive = readBundle(dir, String(additivePlan['dir']));
           expect(additive).toMatchObject({ from: signedHash, to: additiveHash });
           expect(operationClasses(additive)).toEqual([
@@ -157,6 +177,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           await migrate();
           await verifyOnlyLedgerUnclaimed();
           await v7('generate');
+          await typecheck('tsconfig.edit-1.json');
           const v7Additive = await tsx('test/handover/v7-after-edit-1.ts');
           expect(v7Additive).toContain(
             'bob@example.com bio: Written through Prisma 7 via Prisma 7',
@@ -178,15 +199,6 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           const destructivePlan = await v8('migration', 'plan', '--name', 'drop-bio');
           expect(destructivePlan).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(destructivePlan['baselineDir']).toBeUndefined();
-          expect(
-            readdirSync(join(dir, 'migrations/app'))
-              .filter((entry) => entry !== 'refs')
-              .sort(),
-          ).toEqual(
-            [additivePlan['baselineDir'], additivePlan['dir'], destructivePlan['dir']].map(
-              (bundleDir) => basename(String(bundleDir)),
-            ),
-          );
           const destructive = readBundle(dir, String(destructivePlan['dir']));
           expect(destructive).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(operationClasses(destructive)).toEqual([
@@ -205,6 +217,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           await migrate();
           await verifyOnlyLedgerUnclaimed();
           await v7('generate');
+          await typecheck('tsconfig.edit-2.json');
           const v7Destructive = await tsx('test/handover/v7-after-edit-2.ts');
           expect(v7Destructive).toContain(
             'Adopting Prisma 8 next to Prisma 7: 3 likes via Prisma 7',
@@ -214,11 +227,31 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           expect(v7Destructive).toContain(
             'bob@example.com columns: createdAt, email, id, name, role, updatedAt',
           );
+
+          await withDevDatabase(async ({ connectionString: freshUrl }) => {
+            const replayed = resultEnvelope(
+              await run(dir, freshUrl, 'prisma', ['db', 'migrate']),
+            ).result;
+            expect(replayed).toMatchObject({
+              ok: true,
+              migrationsApplied: 3,
+              markerHash: destructiveHash,
+            });
+            const strict = await runAllowingFailure(dir, freshUrl, 'prisma', [
+              'db',
+              'verify',
+              '--strict',
+              '--json',
+            ]);
+            expect(strict.status, strict.output).toBe(0);
+            expect(resultEnvelope(strict.output).result).toMatchObject({ ok: true, unclaimed: [] });
+          });
+          expect(dbRefHash(dir)).toBe(destructiveHash);
         });
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    timeouts.spinUpPpgDev * 6,
+    timeouts.spinUpPpgDev * 7 + timeouts.typeScriptCompilation * 2,
   );
 });
