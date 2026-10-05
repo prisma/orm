@@ -11,19 +11,18 @@
 An application hides soft-deleted rows on every model that has a `deletedAt` field, restricts every query to the caller's tenant, and lists posts for a request that may carry a search term and a sort field:
 
 ```ts
-import { textColumn, timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { field } from '@prisma/orm-postgres/contract-builder';
 import { orderByField } from '@prisma/orm-postgres/orm-client';
 
 const { Post, Comment, Tag } = db.orm.public;
 
 const notDeleted = db.orm.scope(
-  { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+  { deletedAt: field.temporal.timestamptz().optional() },
   (rows) => rows.where((r) => r.deletedAt.isNull()),
 );
 
 const forTenant = (tenantId: string) =>
-  db.orm.scope({ tenantId: field.column(textColumn) }, (rows) =>
+  db.orm.scope({ tenantId: field.uuidString() }, (rows) =>
     rows.where((r) => r.tenantId.eq(tenantId)),
   );
 
@@ -43,7 +42,7 @@ Tag.apply(notDeleted);       // error: Tag has no deletedAt
 ```
 
 - A **scope** is a function from a collection to a collection (ADR 258). `apply` runs one. A class method such as `published()` is a named scope.
-- `notDeleted` and `forTenant` are scopes for any model that has the fields they declare. The declaration uses the field builders of the contract DSL.
+- `notDeleted` and `forTenant` are scopes for any model that has the fields they declare. The declaration uses the same field builders as the schema.
 - `summary` is a scope for one model. It changes the row, so it is typed once against a plain `Post` collection.
 - The conditional inside `apply` is an ordinary function. Its result is typed as unfiltered, so `deleteAll` is refused on it.
 - `orderByField` turns a request string into an order and rejects a field outside the allowed list at run time.
@@ -54,7 +53,7 @@ A **query fragment** is a function. A fragment of a row is a function of the mod
 
 Three helpers cover the fragments applications share most.
 
-1. **A scope for any model with given fields: `db.orm.scope(fields, body)`**, a method of the client `orm()` returns. `fields` names each field the scope needs, with a field builder from the contract DSL or with `{ codecId, nullable }`. The body is typed against a collection that has only those fields. The scope is accepted by every collection of a model that has them, and refused for the rest.
+1. **A scope for any model with given fields: `db.orm.scope(fields, body)`**, a method of the client `orm()` returns. `fields` names each field the scope needs, with a field builder from the contract DSL, or with `{ codecId, nullable }` in a package that does not import the facade. The body is typed against a collection that has only those fields. The scope is accepted by every collection of a model that has them, and refused for the rest.
 2. **A scope for one model: `Post.scope(body)`**, a method of every collection. The body is typed once against the plain collection of the receiver's model. The scope is accepted by any collection of that model whose rows still have every field of the model, and refused for one narrowed by `select` or `variant`.
 3. **An order field from a request: `orderByField(collection, name, direction, allowed)`.** The allowed list is typed against the model's orderable fields. The name is checked at run time, before any query is built.
 
@@ -74,7 +73,7 @@ A function can be run with no support from the collection at all: `notDeleted(Po
 
 ```ts
 const notDeleted = db.orm.scope(
-  { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+  { deletedAt: field.temporal.timestamptz().optional() },
   (rows) => rows.where((r) => r.deletedAt.isNull()),
 );
 
@@ -83,7 +82,7 @@ Comment.where({ postId }).apply(notDeleted);
 Tag.apply(notDeleted);                     // error: Tag has no deletedAt
 ```
 
-The field map says what the scope needs: a field of that name, that column type, and that nullability. A field builder from the contract DSL carries exactly that, so the application declares a scope's needs in the words it used to write its schema. `field.column(...)` takes a column type from the target's `adapter/column-types` entry and needs no contract, so a package can declare fields the same way; `{ codecId: 'pg/timestamptz-temporal@1', nullable: true }` says the same without a builder. A builder that names no column type, such as `field.namedType(...)`, throws `ORM.ARGUMENT_INVALID` when the scope is defined.
+The field map says what the scope needs: a field of that name, that column type, and that nullability. A field builder from the contract DSL carries exactly that, so the application declares a scope's needs in the words it used to write its schema. The Postgres facade's `contract-builder` entry exports `field`, the same builders the `defineContract` callback receives, composed from the SQL family and the Postgres target: `field.text()`, `field.temporal.timestamptz()`, `field.uuidString()` and the rest. The helpers an extension adds, such as pgvector's, are not in it, because they depend on the extensions a contract lists. `field.column(timestamptzTemporalColumn)` is the explicit form, with a column type from the `adapter/column-types` entry. A package that offers a scope and does not import the facade declares a field as `{ codecId: 'pg/timestamptz-temporal@1', nullable: true }`. A builder that names no column type, such as `field.namedType(...)`, throws `ORM.ARGUMENT_INVALID` when the scope is defined.
 
 The body receives a collection whose model accessor has only the declared fields, each typed as a `CodecField`, so it cannot touch a field it did not ask for. It may call `where`, `orderBy`, `limit` and `offset`; it cannot `select` or `include`.
 
@@ -143,11 +142,11 @@ An earlier prototype of the scope for any model, built before ADR 258 changed `i
 ## Consequences
 
 - **Any function is a fragment.** Control flow stays in the language. The query API gains no combinators.
-- **A package can offer a scope for any model.** It declares fields with `field.column(...)` or `{ codecId, nullable }` and needs no knowledge of the application's models; it takes the client as an argument to call `scope`. A package that introduces a kind of index can offer a scope built from the index definition (ADR 260).
+- **A package can offer a scope for any model.** It declares fields with `{ codecId, nullable }` and needs no knowledge of the application's models; it takes the client as an argument to call `scope`. A package that introduces a kind of index can offer a scope built from the index definition (ADR 260).
 - **A scope declared with a field map sees only those fields.** Its body cannot filter or order on a field it did not declare.
 - **A single-model scope takes its model from the collection it is called on**, not from a type parameter, because TypeScript cannot tell one model name from a union of names.
 - **`scope` is a member of every collection and of the client.** A custom collection class cannot declare its own `scope` with another signature, an aggregate operation cannot be named `scope`, and a contract namespace named `scope` hides the client method.
-- **The field builders that `defineContract` passes to its callback, such as `field.text()` or `field.temporal.timestamptz()`, are not importable on their own.** A scope declares fields with `field.column(...)` and a column type, which the facade exports.
+- **The `field` that `@prisma/orm-postgres/contract-builder` exports has the Postgres presets.** It is the callback's `field` without extension helpers, and its `field.column(...).default(...)` checks the value against the column type, as the callback's does.
 - **Public names added:** `FieldScope` and `ScopeFieldSpec`, which declaration output needs for an exported scope for any model. The type a single-model scope accepts is printed in terms of names already public (`HasRow`, `HasState`, `DefaultModelRow`).
 
 ## Non-goals

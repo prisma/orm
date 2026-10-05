@@ -360,14 +360,13 @@ await deleteMatching(Post.byAuthor(userId)).toArray();
 
 A piece of a query used in several places is a function. Do not build a filter object and spread it into each query; write a function and pass it to `.where(...)`, `.orderBy(...)` or `.apply(...)`. A function from a collection to a collection is a **scope**, and `.apply(...)` runs it.
 
-**The same filter on several models.** Define a scope with `db.orm.scope(fields, body)`. Declare each field the scope needs with a field builder, `field.column(<column type>)`, adding `.optional()` for a field that may be null. The body sees only those fields:
+**The same filter on several models.** Define a scope with `db.orm.scope(fields, body)`. Declare each field the scope needs with the same builder the schema uses, from the `field` that `@prisma/orm-postgres/contract-builder` exports, adding `.optional()` for a field that may be null. The body sees only those fields:
 
 ```typescript
-import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { field } from '@prisma/orm-postgres/contract-builder';
 
 const createdSince = (since: Temporal.Instant) =>
-  db.orm.scope({ createdAt: field.column(timestamptzTemporalColumn) }, (rows) =>
+  db.orm.scope({ createdAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((r) => r.createdAt.gte(since)),
   );
 
@@ -375,7 +374,7 @@ await db.orm.public.User.apply(createdSince(since)).all();
 await db.orm.public.Post.apply(createdSince(since)).deleteAll();
 ```
 
-Take the column type from the field's codec in `contract.d.ts`: a PSL `DateTime` is `timestamptzTemporalColumn` (`pg/timestamptz-temporal@1`), a `String` is `textColumn` (`pg/text@1`). `{ codecId: 'pg/text@1', nullable: false }` works in place of a builder. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a scope that filters. A model without the field, or with the field under another column type or nullability, is a compile error naming the field, and a run-time `ORM.FIELD_UNKNOWN`.
+Pick the builder whose codec matches the field's codec in `contract.d.ts`: a PSL `DateTime` is `field.temporal.timestamptz()` (`pg/timestamptz-temporal@1`), a `String` is `field.text()` (`pg/text@1`), a `Uuid` is `field.uuidNative()` (`pg/uuid@1`). `field.column(columnType)` is the explicit form. A package that offers a scope and does not import the facade writes `{ codecId: 'pg/text@1', nullable: false }`. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a scope that filters. A model without the field, or with the field under another column type or nullability, is a compile error naming the field, and a run-time `ORM.FIELD_UNKNOWN`.
 
 For a filter used inside a larger `where`, a plain function of the row works too. Type the field with `CodecField<Contract, CodecId, Nullable>`, the type of any field with that codec:
 

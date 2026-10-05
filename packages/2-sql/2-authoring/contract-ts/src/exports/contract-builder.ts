@@ -1,3 +1,4 @@
+export { createComposedAuthoringHelpers } from '../composed-authoring-helpers';
 export type {
   ComposedAuthoringHelpers,
   ContractInput,

@@ -103,8 +103,9 @@ test('.default() takes the input type of the field codec', () => {
   });
 });
 
-test('the directly imported field accepts any value, which the build checks', () => {
+test('the directly imported field checks values against the column type, like the callback field', () => {
   importedField.column(int8Column).default(1n);
+  // @ts-expect-error pg/int8@1 takes a bigint, not bytes
   importedField.column(int8Column).default(new Uint8Array([120]));
   importedField.namedType('Counter').default(1n);
 });

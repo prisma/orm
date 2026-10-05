@@ -1,4 +1,3 @@
-import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { field } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
@@ -26,7 +25,7 @@ export const titleSummary = client.public.Post.scope((posts) =>
 );
 
 export const unexpired = (now: Temporal.Instant) =>
-  client.scope({ expiresAt: field.column(timestamptzTemporalColumn) }, (rows) =>
+  client.scope({ expiresAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
 

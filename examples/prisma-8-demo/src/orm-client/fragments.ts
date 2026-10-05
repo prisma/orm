@@ -1,4 +1,3 @@
-import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { field } from '@prisma/orm-postgres/contract-builder';
 import { db } from '../prisma/db';
 
@@ -6,8 +5,17 @@ import { db } from '../prisma/db';
  * A scope for any model with a `createdAt` timestamp, such as `User`, `Post` and `Task`: rows created since `since`.
  */
 export function createdSince(since: Temporal.Instant) {
-  return db.orm.scope({ createdAt: field.column(timestamptzTemporalColumn) }, (rows) =>
+  return db.orm.scope({ createdAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((row) => row.createdAt.gte(since)),
+  );
+}
+
+/**
+ * A scope for any model with a `userId`, such as `Post` and `Task`: rows that belong to one user.
+ */
+export function ownedBy(userId: string) {
+  return db.orm.scope({ userId: field.uuidNative() }, (rows) =>
+    rows.where((row) => row.userId.eq(userId)),
   );
 }
 

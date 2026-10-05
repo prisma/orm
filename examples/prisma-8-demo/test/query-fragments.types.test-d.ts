@@ -1,3 +1,4 @@
+import { field } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
   type CodecField,
@@ -9,10 +10,11 @@ import {
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import { createOrmClient } from '../src/orm-client/client';
-import { createdSince, postSummary } from '../src/orm-client/fragments';
+import { createdSince, ownedBy, postSummary } from '../src/orm-client/fragments';
 import type { ormClientGetRecentPosts } from '../src/orm-client/get-recent-posts';
 import type { ormClientGetRecentUsers } from '../src/orm-client/get-recent-users';
 import type { Contract } from '../src/prisma/contract.d';
+import { db as dbFacade } from '../src/prisma/db';
 
 declare const runtime: Runtime;
 declare const since: Temporal.Instant;
@@ -71,6 +73,19 @@ describe('db.orm.scope', () => {
   test('is refused for a model without the field', () => {
     // @ts-expect-error Tag has no createdAt
     db.Tag.apply(createdSince(since));
+  });
+
+  test('takes the preset field builders exported by the contract-builder entry', () => {
+    expectTypeOf(db.Post.apply(ownedBy('u'))).toEqualTypeOf<Filtered<typeof db.Post>>();
+    db.Task.apply(ownedBy('u'));
+    // @ts-expect-error User has no userId
+    db.User.apply(ownedBy('u'));
+    const titled = dbFacade.orm.scope({ title: field.text() }, (rows) =>
+      rows.where((r) => r.title.eq('x')),
+    );
+    db.Post.apply(titled);
+    // @ts-expect-error Post.title is not nullable
+    db.Post.apply(dbFacade.orm.scope({ title: field.text().optional() }, (rows) => rows.limit(1)));
   });
 });
 
