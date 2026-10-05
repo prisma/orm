@@ -66,7 +66,11 @@ export function combineVerifyResults(
 
   const unclaimedFails = strict && unclaimed.length > 0;
   const ok = okAll && !unclaimedFails;
+  const unclaimedOnlyFailure = okAll && unclaimedFails;
   const failingSpace = appResult.ok ? firstFailure : appResult;
+  const failureCode = unclaimedOnlyFailure
+    ? VERIFY_CODE_SCHEMA_FAILURE
+    : (failingSpace?.code ?? VERIFY_CODE_SCHEMA_FAILURE);
 
   // Prefer a failing space's family phrasing; else, when only the unclaimed list
   // fails the verdict, say so; else keep the app space's phrasing. When `okAll`
@@ -83,7 +87,7 @@ export function combineVerifyResults(
   return {
     result: {
       ok,
-      ...(ok ? {} : { code: failingSpace?.code ?? VERIFY_CODE_SCHEMA_FAILURE }),
+      ...(ok ? {} : { code: failureCode }),
       summary,
       contract: appResult.contract,
       target: appResult.target,
