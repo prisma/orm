@@ -97,12 +97,12 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     expect(forward).toEqual(interpretOk(`${base}\n${variant}`));
     expect(modelsOf(forward)['Bug']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        level: {
+        severity: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
@@ -110,24 +110,30 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       },
       relations: {},
       base: crossRef('Task', UNBOUND_NAMESPACE_ID),
-      storage: { collection: 'tasks' },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, severity: { field: 'level' } },
+      },
     });
     expect(modelsOf(forward)['Task']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        task_kind: {
+        kind: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
         },
       },
       relations: {},
-      storage: { collection: 'tasks' },
-      discriminator: { field: 'task_kind' },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, kind: { field: 'task_kind' } },
+      },
+      discriminator: { field: 'kind' },
       variants: { Bug: { value: 'bug' } },
     });
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });

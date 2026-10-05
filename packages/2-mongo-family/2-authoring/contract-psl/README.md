@@ -22,6 +22,8 @@ The family descriptor contributes `describeUnresolvedMongoType` as its `pslDiagn
 
 These earlier names are not registered in the `type` namespace, so the binder never resolves them. Any other bare name gets a message that it is not a scalar type, an enum, a composite type or a model, followed by the registered Mongo scalar types. A qualified name (`ns.Name`) or a constructor call (`Name()`) keeps the binder's default `Cannot find type "…"` message.
 
+Field `@map` names apply only to Mongo storage. Domain fields and ORM inputs/results retain the PSL field name; `model.storage.fields.updatedAt.field` records a mapped physical name such as `updated_at`. Validators, indexes, and execution defaults use storage names.
+
 ## Test helpers
 
 `@internal/mongo-contract-psl/test` exports `mongoContextInput(context)`, which maps a `ContractSourceContext` to the context fields of `interpretPslDocumentToMongoContract`'s input. Tests combine it with `bindPslSchema` from `@internal/psl-parser/test`.

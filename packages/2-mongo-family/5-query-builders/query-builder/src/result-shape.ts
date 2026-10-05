@@ -84,12 +84,13 @@ export function contractModelToMongoResultShape(
     if (Object.hasOwn(fields, key)) {
       continue;
     }
+    const storedKey = model.storage.fields?.[key]?.field ?? key;
     const cf = modelFields[key];
     if (!cf) {
-      fields[key] = UNKNOWN;
+      fields[storedKey] = UNKNOWN;
       continue;
     }
-    fields[key] = contractFieldToMongoFieldShape(cf, options?.valueObjects);
+    fields[storedKey] = contractFieldToMongoFieldShape(cf, options?.valueObjects);
   }
   return freezeMongoResultShape({ kind: 'document', fields });
 }

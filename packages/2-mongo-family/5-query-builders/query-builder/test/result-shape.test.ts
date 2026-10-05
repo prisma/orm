@@ -10,6 +10,19 @@ import type { TContract } from './fixtures/test-contract';
 import { testContractJson } from './fixtures/test-contract';
 
 describe('contractModelToMongoResultShape', () => {
+  it('uses physical keys for codec shapes and application names for selections', () => {
+    const model = {
+      fields: {
+        updatedAt: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false },
+      },
+      relations: {},
+      storage: { fields: { updatedAt: { field: 'updated_at' } } },
+    } as const;
+    expect(contractModelToMongoResultShape(model, { selection: ['updatedAt'] })).toEqual({
+      kind: 'document',
+      fields: { updated_at: { kind: 'leaf', codecId: 'mongo/date@1', nullable: false } },
+    });
+  });
   it('treats omitted cardinality as scalar', () => {
     expect(
       contractFieldToMongoFieldShape({

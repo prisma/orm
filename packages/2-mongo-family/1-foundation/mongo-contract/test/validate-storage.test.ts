@@ -17,6 +17,7 @@ import type { MongoContract, MongoModelDefinition } from '../src/contract-types'
 import { buildMongoNamespace } from '../src/ir/build-mongo-namespace';
 import { MongoCollection } from '../src/ir/mongo-collection';
 import { MongoStorage } from '../src/ir/mongo-storage';
+import { resolveMongoToOneRelationFields } from '../src/relation-fields';
 import { validateMongoStorage } from '../src/validate-storage';
 
 const DUMMY_HASH = coreHash('test');
@@ -69,6 +70,21 @@ function makeMinimalContract(overrides: MongoContractTestOverrides = {}): MongoC
 }
 
 describe('validateMongoStorage()', () => {
+  it('recognizes a mapped identity on the back side of a one-to-one relation', () => {
+    const model: MongoModelDefinition = {
+      fields: { id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false } },
+      relations: {},
+      storage: { fields: { id: { field: '_id' } } },
+    };
+    expect(
+      resolveMongoToOneRelationFields(model, {
+        cardinality: '1:1',
+        nullable: true,
+        to: crossRef('Profile'),
+        on: { localFields: ['id'], targetFields: ['userId'] },
+      }),
+    ).toEqual({ ownsForeignKey: false, fields: [{ name: 'id', nullable: false }] });
+  });
   it('accepts a valid contract', () => {
     expect(() => validateMongoStorage(makeMinimalContract())).not.toThrow();
   });

@@ -301,10 +301,24 @@ function physicalName(
 interface MongoModelEntry {
   readonly fields: Record<string, ContractField>;
   readonly relations: Record<string, ContractReferenceRelation>;
-  readonly storage: { readonly collection: string };
+  readonly storage: {
+    readonly collection: string;
+    readonly fields?: Record<string, { readonly field: string }>;
+  };
   readonly discriminator?: { readonly field: string };
   readonly variants?: Record<string, { readonly value: string }>;
   readonly base?: CrossReference;
+}
+
+function storageFieldDefinitions(
+  model: MongoModelEntry | undefined,
+): Record<string, ContractField> {
+  return Object.fromEntries(
+    Object.entries(model?.fields ?? {}).map(([name, field]) => [
+      model?.storage.fields?.[name]?.field ?? name,
+      field,
+    ]),
+  );
 }
 
 type DiscriminatorDeclaration = {
@@ -455,12 +469,7 @@ function resolvePolymorphism(input: {
     const model = patched[modelName];
     if (!model) continue;
 
-    const mappedDiscriminatorField = physicalName(
-      physicalNames,
-      declaration.fields[decl.fieldName],
-    );
-
-    if (!Object.hasOwn(model.fields, mappedDiscriminatorField)) {
+    if (!Object.hasOwn(model.fields, decl.fieldName)) {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_FIELD_NOT_FOUND',
         message: `Discriminator field "${decl.fieldName}" is not a field on model "${modelName}"`,
@@ -486,7 +495,7 @@ function resolvePolymorphism(input: {
 
     patched = {
       ...patched,
-      [modelName]: { ...model, discriminator: { field: mappedDiscriminatorField }, variants },
+      [modelName]: { ...model, discriminator: { field: decl.fieldName }, variants },
     };
   }
 
@@ -526,7 +535,7 @@ function resolvePolymorphism(input: {
         [variantName]: {
           ...variantModel,
           base: mongoCrossRef(baseName),
-          storage: { collection: baseCollection },
+          storage: { ...variantModel.storage, collection: baseCollection },
         },
       };
     }
@@ -546,7 +555,12 @@ function resolvePolymorphism(input: {
     const baseColl = collections[baseCollection];
 
     const baseModelEntry = patched[baseName];
-    const discriminatorField = baseModelEntry?.discriminator?.field;
+    const applicationDiscriminatorField = baseModelEntry?.discriminator?.field;
+    const discriminatorField =
+      applicationDiscriminatorField === undefined
+        ? undefined
+        : (baseModelEntry?.storage.fields?.[applicationDiscriminatorField]?.field ??
+          applicationDiscriminatorField);
     const scopedVariantIndexes: MongoIndex[] = [];
     if (discriminatorField) {
       for (const idx of variantOwnIndexes) {
@@ -1404,6 +1418,7 @@ export function interpretPslDocumentToMongoContract(
     const specContext = specContextFor(pslModel);
 
     const fields: Record<string, ContractField> = {};
+    const storageFields: Record<string, { readonly field: string }> = {};
     const relations: Record<string, ContractReferenceRelation> = {};
 
     for (const field of Object.values(pslModel.fields)) {
@@ -1457,20 +1472,16 @@ export function interpretPslDocumentToMongoContract(
             continue;
           }
           if (!physicalNames.has(target)) continue;
-          const localMapped = relation.fields.map((name) =>
-            physicalName(physicalNames, pslModel.fields[name]),
-          );
-          const targetMapped = relation.references.map((name) =>
-            physicalName(physicalNames, target.fields[name]),
-          );
+          const localFields = [...relation.fields];
+          const targetFields = [...relation.references];
 
           relations[field.name] = {
             to: mongoCrossRef(target.name),
             cardinality: 'N:1' as const,
             nullable: field.optional,
             on: {
-              localFields: localMapped,
-              targetFields: targetMapped,
+              localFields,
+              targetFields,
             },
           };
 
@@ -1478,8 +1489,8 @@ export function interpretPslDocumentToMongoContract(
             declaringModel: pslModel.name,
             targetModel: target.name,
             ...ifDefined('relationName', relation.name),
-            localFields: localMapped,
-            targetFields: targetMapped,
+            localFields,
+            targetFields,
           });
         }
         continue;
@@ -1496,7 +1507,8 @@ export function interpretPslDocumentToMongoContract(
       if (!resolved) continue;
 
       const mappedName = physicalName(physicalNames, field);
-      fields[mappedName] = resolved.field;
+      fields[field.name] = resolved.field;
+      if (mappedName !== field.name) storageFields[field.name] = { field: mappedName };
       if (resolved.executionDefaults) {
         presetExecutionDefaults.push({
           modelName: pslModel.name,
@@ -1538,13 +1550,10 @@ export function interpretPslDocumentToMongoContract(
           ...modelSource.at(),
         });
       } else {
-        // The resulting document must carry an `_id` of BSON type objectId. We
-        // assert on the emitted shape (the mapped-name-keyed field record), not
-        // on how the user spelled it — `id ObjectId @id @map("_id")` and a field
-        // literally named `_id` both satisfy it; a non-objectId or unmapped id
-        // does not.
         const objectIdCodecId = scalarTypeCodecIds.get(MONGO_OBJECT_ID_PSL_TYPE);
-        const idField = fields['_id'];
+        const idField = Object.entries(fields).find(
+          ([name]) => (storageFields[name]?.field ?? name) === '_id',
+        )?.[1];
         const idIsObjectId =
           idField !== undefined &&
           idField.type.kind === 'scalar' &&
@@ -1560,7 +1569,14 @@ export function interpretPslDocumentToMongoContract(
       }
     }
 
-    models[pslModel.name] = { fields, relations, storage: { collection: collectionName } };
+    models[pslModel.name] = {
+      fields,
+      relations,
+      storage: {
+        collection: collectionName,
+        ...(Object.keys(storageFields).length > 0 ? { fields: storageFields } : {}),
+      },
+    };
     const modelIndexes = collectIndexes(
       pslModel,
       specContext,
@@ -1690,12 +1706,13 @@ export function interpretPslDocumentToMongoContract(
       const variantEntries = Object.entries(modelEntry.variants).map(
         ([variantName, { value }]) => ({
           discriminatorValue: value,
-          fields: resolvedModels[variantName]?.fields ?? {},
+          fields: storageFieldDefinitions(resolvedModels[variantName]),
         }),
       );
       coll['validator'] = derivePolymorphicJsonSchema(
-        modelEntry.fields,
-        modelEntry.discriminator.field,
+        storageFieldDefinitions(modelEntry),
+        modelEntry.storage.fields?.[modelEntry.discriminator.field]?.field ??
+          modelEntry.discriminator.field,
         variantEntries,
         valueObjects,
         codecLookup,
@@ -1703,7 +1720,7 @@ export function interpretPslDocumentToMongoContract(
       );
     } else {
       coll['validator'] = deriveJsonSchema(
-        modelEntry.fields,
+        storageFieldDefinitions(modelEntry),
         valueObjects,
         codecLookup,
         storageValueSets,

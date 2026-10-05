@@ -210,7 +210,7 @@ model Item {
       },
     );
     expect(model(ir, 'Item').fields).toEqual({
-      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
       roles: {
         type: { kind: 'scalar', codecId: 'mongo/string@1' },
         nullable: false,
@@ -327,7 +327,7 @@ model Item {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: {
+          id: {
             type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
             nullable: false,
             many: false,
@@ -397,7 +397,7 @@ model Item {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false, many: false },
+          id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false, many: false },
           name: {
             type: { kind: 'scalar', codecId: 'custom/text@2' },
             nullable: false,
@@ -492,7 +492,7 @@ model Item {
       `);
 
       expect(modelsOf(ir)['User']).toMatchObject({
-        storage: { collection: 'users' },
+        storage: { collection: 'users', fields: { id: { field: '_id' } } },
       });
       expect(ir.storage).toMatchObject({
         namespaces: {
@@ -517,7 +517,7 @@ model Item {
       expect(model(ir, 'Item').fields).toHaveProperty('name');
     });
 
-    it('uses @map() to override field name', () => {
+    it('uses @map() only for the storage field name', () => {
       const ir = interpretOk(`
         model Item {
           id        ObjectId @id @map("_id")
@@ -525,8 +525,12 @@ model Item {
         }
       `);
 
-      expect(model(ir, 'Item').fields).toHaveProperty('first_name');
-      expect(model(ir, 'Item').fields).not.toHaveProperty('firstName');
+      expect(model(ir, 'Item').fields).toHaveProperty('firstName');
+      expect(model(ir, 'Item').fields).not.toHaveProperty('first_name');
+      expect(model(ir, 'Item').storage).toEqual({
+        collection: 'Item',
+        fields: { id: { field: '_id' }, firstName: { field: 'first_name' } },
+      });
     });
   });
 
@@ -588,7 +592,7 @@ model Item {
           nullable: false,
           on: {
             localFields: ['authorId'],
-            targetFields: ['_id'],
+            targetFields: ['id'],
           },
         },
       });
@@ -673,7 +677,7 @@ model Item {
           to: crossRef('Post'),
           cardinality: '1:N',
           on: {
-            localFields: ['_id'],
+            localFields: ['id'],
             targetFields: ['authorId'],
           },
         },
@@ -700,7 +704,7 @@ model Item {
       expect(result.failure.diagnostics).toEqual([diagnostic]);
     });
 
-    it('uses mapped names in forward relations, unique constraints, and indexes', () => {
+    it('keeps domain relation fields and maps storage constraints and indexes', () => {
       const ir = interpretOk(`
         model Child {
           id       ObjectId @id @map("_id")
@@ -723,12 +727,15 @@ model Item {
           cardinality: 'N:1',
           nullable: false,
           on: {
-            localFields: ['parent_id'],
-            targetFields: ['_id'],
+            localFields: ['parentId'],
+            targetFields: ['id'],
           },
         },
       });
-      expect(model(ir, 'Parent').storage).toEqual({ collection: 'parents' });
+      expect(model(ir, 'Parent').storage).toEqual({
+        collection: 'parents',
+        fields: { id: { field: '_id' }, code: { field: 'code_value' } },
+      });
       expect(getIndexes(ir, 'Child')).toEqual([
         new MongoIndex({ keys: [{ field: 'parent_id', direction: 1 }] }),
       ]);
@@ -771,12 +778,12 @@ model Item {
         createdTasks: {
           to: crossRef('Task'),
           cardinality: '1:N',
-          on: { localFields: ['_id'], targetFields: ['creatorId'] },
+          on: { localFields: ['id'], targetFields: ['creatorId'] },
         },
         assignedTasks: {
           to: crossRef('Task'),
           cardinality: '1:N',
-          on: { localFields: ['_id'], targetFields: ['assigneeId'] },
+          on: { localFields: ['id'], targetFields: ['assigneeId'] },
         },
       });
     });
@@ -854,7 +861,7 @@ model Item {
           cardinality: '1:1',
           nullable: true,
           on: {
-            localFields: ['_id'],
+            localFields: ['id'],
             targetFields: ['userId'],
           },
         },
@@ -866,7 +873,7 @@ model Item {
           nullable: false,
           on: {
             localFields: ['userId'],
-            targetFields: ['_id'],
+            targetFields: ['id'],
           },
         },
       });
@@ -1323,7 +1330,7 @@ model Item {
               models: {
                 User: {
                   fields: {
-                    _id: {
+                    id: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
                       many: false,
@@ -1348,14 +1355,14 @@ model Item {
                     posts: {
                       to: crossRef('Post'),
                       cardinality: '1:N',
-                      on: { localFields: ['_id'], targetFields: ['authorId'] },
+                      on: { localFields: ['id'], targetFields: ['authorId'] },
                     },
                   },
-                  storage: { collection: 'users' },
+                  storage: { collection: 'users', fields: { id: { field: '_id' } } },
                 },
                 Post: {
                   fields: {
-                    _id: {
+                    id: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
                       many: false,
@@ -1386,10 +1393,10 @@ model Item {
                       to: crossRef('User'),
                       cardinality: 'N:1',
                       nullable: false,
-                      on: { localFields: ['authorId'], targetFields: ['_id'] },
+                      on: { localFields: ['authorId'], targetFields: ['id'] },
                     },
                   },
-                  storage: { collection: 'posts' },
+                  storage: { collection: 'posts', fields: { id: { field: '_id' } } },
                 },
               },
             },

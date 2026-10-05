@@ -264,6 +264,10 @@ export const mongoEmission = {
 
   generateModelStorageType(_modelName: string, model: ContractModelBase): string {
     const parts: string[] = [];
+    const fields = model.storage['fields'];
+    if (fields !== undefined) {
+      parts.push(`readonly fields: ${serializeValue(fields)}`);
+    }
     const collection = model.storage['collection'] as string | undefined;
     if (collection) {
       parts.push(`readonly collection: ${serializeValue(collection)}`);

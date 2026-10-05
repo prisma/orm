@@ -232,6 +232,7 @@ const CollectionOptionsSchema = type({
 const ModelStorageSchema = type({
   '+': 'reject',
   'collection?': 'string',
+  'fields?': type({ '[string]': { field: 'string' } }),
   'relations?': type({ '[string]': StorageRelationEntrySchema }),
 });
 
