@@ -91,7 +91,11 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
               '--json',
             ]);
             expect(strict.status, strict.output).toBe(4);
-            expect(resultEnvelope(strict.output).result).toMatchObject({
+            const envelope = resultEnvelope(strict.output);
+            expect(envelope.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+              'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+            ]);
+            expect(envelope.result).toMatchObject({
               ok: false,
               unclaimed: ['_prisma_migrations'],
               schema: { issues: [], warnings: { issues: [] } },
