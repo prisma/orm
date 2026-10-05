@@ -6,7 +6,7 @@ import type {
   RootModelName,
 } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
-import type { MongoCollection } from './collection';
+import type { MongoCollection, MongoOrmCodecs } from './collection';
 import { createMongoCollection } from './collection';
 import type { MongoQueryExecutor } from './executor';
 import { ormError } from './orm-errors';
@@ -16,6 +16,8 @@ export interface MongoOrmOptions<TContract extends MongoContract> {
   readonly executor: MongoQueryExecutor;
   /** Fills the contract's execution defaults on writes. Without it, no generated values are applied. */
   readonly mutationDefaults?: MutationDefaults;
+  /** The runtime's codecs, which a written enum value is checked through. Pass the execution context's `codecs`. */
+  readonly codecs?: MongoOrmCodecs;
 }
 
 export type MongoOrmClient<
@@ -30,7 +32,7 @@ export type MongoOrmClient<
 export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
-  const { contract, executor, mutationDefaults } = options;
+  const { contract, executor, mutationDefaults, codecs } = options;
   const executionDefaults = contract.execution?.mutations.defaults ?? [];
   if (executionDefaults.length > 0 && mutationDefaults === undefined) {
     throw ormError(
@@ -50,6 +52,7 @@ export function mongoOrm<
       >(rootRef.model),
       executor,
       mutationDefaults,
+      codecs,
     );
   }
 

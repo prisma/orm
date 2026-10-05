@@ -159,7 +159,12 @@ export async function withMongoPort<
     const runtime = createMongoRuntime({ context, driver });
 
     try {
-      const db = mongoOrm<TContract>({ contract, executor: runtime, mutationDefaults: context });
+      const db = mongoOrm<TContract>({
+        contract,
+        executor: runtime,
+        mutationDefaults: context,
+        codecs: context.codecs,
+      });
       const mongoDb = client.db(dbName);
       await fn({ db, client, mongoDb, contract });
     } finally {

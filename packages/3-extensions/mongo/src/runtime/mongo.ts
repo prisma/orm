@@ -189,6 +189,7 @@ export default function mongo<
     contract,
     executor: { query: queryRows, execute: executeStats },
     mutationDefaults: context,
+    codecs: context.codecs,
   });
 
   return {

@@ -1,3 +1,4 @@
+import { createEnumAccessor, type EnumMemberCodec } from '@internal/contract/enum-accessor';
 import {
   type ContractField,
   type ContractReferenceRelation,
@@ -203,6 +204,22 @@ function topLevelUpdateFields(
   return fields;
 }
 
+/**
+ * The codecs of the runtime the ORM writes through, by codec id. The ORM checks a written enum value through the enum's codec, as `db.enums` does; without one it compares the enum's stored forms.
+ */
+export interface MongoOrmCodecs {
+  get(codecId: string): EnumMemberCodec | undefined;
+}
+
+function describeValue(value: unknown): string {
+  if (typeof value === 'bigint') return `${value}n`;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -218,6 +235,7 @@ class MongoCollectionImpl<
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults | undefined;
+  readonly #codecs: MongoOrmCodecs | undefined;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
@@ -227,11 +245,13 @@ class MongoCollectionImpl<
     modelName: ModelName,
     executor: MongoQueryExecutor,
     mutationDefaults: MutationDefaults | undefined,
+    codecs: MongoOrmCodecs | undefined,
   ) {
     this.#contract = contract;
     this.#modelName = modelName;
     this.#executor = executor;
     this.#mutationDefaults = mutationDefaults;
+    this.#codecs = codecs;
     const model = blindCast<
       MongoModelDefinition,
       'modelName is constrained to Mongo contract model keys but namespace lookup erases storage type'
@@ -964,19 +984,25 @@ class MongoCollectionImpl<
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
     if (contractEnum === undefined) return;
-    const allowed = contractEnum.members.map((member) => member.value);
-    const values = field.many && Array.isArray(value) ? value : [value];
-    const outside = values.find((entry) => entry !== null && !allowed.includes(entry));
-    if (outside === undefined) return;
-    const quoted = allowed.map((entry) => JSON.stringify(entry));
+    const accessor = createEnumAccessor(contractEnum, this.#codecs?.get(contractEnum.codecId));
+    const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
+    const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
+    if (outside === -1) return;
+    const received = values[outside];
+    const described = accessor.values.map(describeValue);
     const list =
-      quoted.length > 1
-        ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`
-        : quoted.join('');
+      described.length > 1
+        ? `${described.slice(0, -1).join(', ')} and ${described.at(-1)}`
+        : described.join('');
     throw runtimeError(
       'RUNTIME.ENCODE_FAILED',
-      `Failed to encode field ${path} in collection '${this.#collectionName}': ${JSON.stringify(outside)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
-      { label: path, collection: this.#collectionName, received: outside, allowed },
+      `Failed to encode field ${path} in collection '${this.#collectionName}': ${describeValue(received)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
+      {
+        label: path,
+        collection: this.#collectionName,
+        received,
+        allowed: contractEnum.members.map((member) => member.value),
+      },
     );
   }
 
@@ -1227,6 +1253,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#codecs,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1243,6 +1270,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#codecs,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1259,6 +1287,7 @@ export function createMongoCollection<
   modelName: ModelName,
   executor: MongoQueryExecutor,
   mutationDefaults?: MutationDefaults,
+  codecs?: MongoOrmCodecs,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults);
+  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults, codecs);
 }
