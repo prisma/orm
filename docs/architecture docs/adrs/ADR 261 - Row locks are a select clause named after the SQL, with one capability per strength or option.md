@@ -21,7 +21,7 @@ await db.transaction(async (tx) => {
 SELECT ... FROM "public"."product" WHERE "product"."id" = $1 LIMIT 1 FOR UPDATE OF "product"
 ```
 
-On the typed SQL builder, the same method with an option makes a work queue. Each worker claims the oldest queued job that no other worker holds:
+On the typed SQL builder, the same method with an option makes a work queue. Each worker takes the oldest queued job that no other worker holds, and marks it as running before its transaction commits. The commit releases the lock, so the mark is what stops the next worker from taking the same job:
 
 ```ts
 await db.transaction(async (tx) => {
@@ -34,8 +34,18 @@ await db.transaction(async (tx) => {
       .forUpdate({ skipLocked: true })
       .build(),
   );
+  if (job !== undefined) {
+    await tx.execute(
+      tx.sql.public.job
+        .update({ state: 'running' })
+        .where((f, fns) => fns.eq(f.id, job.id))
+        .build(),
+    );
+  }
 });
 ```
+
+The select renders as:
 
 ```sql
 SELECT "id" AS "id" FROM "public"."job" WHERE "state" = $1 ORDER BY "createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -47,7 +57,7 @@ SELECT "id" AS "id" FROM "public"."job" WHERE "state" = $1 ORDER BY "createdAt" 
 2. **One capability per lock strength or option.** Seven adapter-reported capabilities say which strengths and options a target can render. A method or option exists only when the adapter reports the capabilities it needs. The Postgres adapter reports all seven, and the SQLite adapter reports none.
 3. **One target-neutral clause in the shared select tree.** The lock is a `LockingClause` on `SelectAst`. It records what is locked and how to wait, in words that are not any one dialect's SQL. Each target's renderer writes its own SQL for it or refuses it. A renderer never drops it.
 4. **The ORM client locks only the model's own rows.** It always renders `OF` the model's table. Tables the ORM joins on the caller's behalf, such as the variant tables of a polymorphic model, are never locked. Because it always renders `OF`, the ORM client's methods also need the `OF` capability.
-5. **Shapes that Postgres refuses to lock are refused before a statement is sent.** The typed SQL builder and the ORM client refuse a lock together with `DISTINCT`, grouping, aggregation, or use as a subquery. The ORM client also refuses it together with `include()` or a mutation. Both use one code, `ORM.LOCK_INCOMPATIBLE`. The tree node holds no such rule, because other dialects accept some of these shapes.
+5. **Locks that cannot run as written are refused before a statement is sent.** Postgres refuses to lock a select with `DISTINCT`, grouping or aggregation, so the typed SQL builder and the ORM client refuse those shapes first. The ORM client also refuses a lock together with `include()`, because that lowering adds aggregation. Two further refusals are this design's own rules, not Postgres's. The typed SQL builder refuses a locked select used as a subquery, and the ORM client refuses a lock together with a mutation. All of these use one code, `ORM.LOCK_INCOMPATIBLE`. The tree node holds no such rule, because other dialects accept some of these shapes.
 
 ## Why a read needs a lock
 
@@ -144,7 +154,7 @@ The capabilities must still fit when Prisma gains adapters for other databases. 
 | MariaDB | yes | as `LOCK IN SHARE MODE` | no | no | yes | yes |
 | Vitess (PlanetScale for MySQL) | yes | yes | no | no | yes | yes |
 | Oracle | yes | no | no | by column | yes | yes |
-| SQL Server | as the table hint `UPDLOCK, ROWLOCK` | as `HOLDLOCK` | no | per table, through hints | `NOWAIT` hint | `READPAST` hint |
+| SQL Server | approximated by the table hints `UPDLOCK, ROWLOCK` | approximated by `HOLDLOCK` | no | per table, through hints | `NOWAIT` hint | approximated by `READPAST` |
 | SQLite, Cloudflare D1 | no | no | no | no | no | no |
 
 `FOR UPDATE`, `FOR SHARE`, `OF`, `NOWAIT` and `SKIP LOCKED` each vary independently across these databases. Any coarser set of capabilities would have to be split as soon as one of them gained an adapter. `FOR NO KEY UPDATE` and `FOR KEY SHARE` always appear together, but they are two capabilities because each is needed by its own method. SQLite and D1 have no row locks, because a writer locks the whole database.
@@ -159,7 +169,13 @@ With these capabilities, an adapter for each database would report:
 | SQL Server | the five `sql` capabilities |
 | CockroachDB | all seven |
 
-Two differences in the survey are about meaning, not syntax, and capabilities do not record them. On a sharded database, such as Vitess with more than one shard, a row lock holds only inside the shard where the row lives, and `SKIP LOCKED` with `LIMIT` can lock up to `LIMIT` rows on each shard. CockroachDB treats `FOR SHARE` more weakly than Postgres does. In both cases the SQL is the same, so the adapter reports the same capabilities, and its documentation must state the difference.
+Some differences in the survey are about meaning, not syntax, and capabilities do not record them:
+
+- **Sharded databases.** On a sharded database, such as Vitess with more than one shard, a row lock holds only inside the shard where the row lives. `SKIP LOCKED` with `LIMIT` can lock up to `LIMIT` rows on each shard.
+- **CockroachDB.** It treats `FOR SHARE` more weakly than Postgres does.
+- **SQL Server.** Its table hints only approximate the Postgres clauses. `HOLDLOCK` means serializable isolation for that table, which holds wider locks than `FOR SHARE`. `READPAST` skips locked rows but not locked pages. It is also allowed only under some isolation settings: not under read-committed snapshot isolation unless the query also asks for `READCOMMITTEDLOCK`.
+
+In each case the adapter would report the capability, because it can render something close enough to be useful. Its documentation must state the difference.
 
 ## The typed SQL builder
 
@@ -256,7 +272,7 @@ The SQLite renderer refuses any lock with `RUNTIME.AST_UNSUPPORTED`. A renderer 
 | a method or option without its capabilities | both APIs, in the types and at the call | `ORM.CAPABILITY_MISSING` | the target cannot render it |
 | `nowait` together with `skipLocked` | both APIs, in the types and at the call | `ORM.ARGUMENT_INVALID` | Postgres refuses both together |
 | a lock with `distinct()`, `distinctOn()`, `groupBy()` or `having()`, or an aggregate or window function in the projection | typed SQL builder, when the query is built | `ORM.LOCK_INCOMPATIBLE`, `distinct`, `distinctOn`, `groupBy`, `having` or `aggregate` | Postgres refuses to lock those shapes |
-| a locked select used as a subquery, through `.as(...)` or as an `exists`, `in` or lateral source | typed SQL builder, where it becomes a subquery | `ORM.LOCK_INCOMPATIBLE`, `subquery` | rare; refusing it keeps every lock on the statement that returns rows to the caller |
+| a locked select used as a subquery, through `.as(...)` or as an `exists`, `in` or lateral source | typed SQL builder, where it becomes a subquery | `ORM.LOCK_INCOMPATIBLE`, `subquery` | Postgres allows it, but it is rare; this design refuses it so that every lock is on the statement that returns rows to the caller |
 | a locked collection read with `include()` | ORM client, when the read is compiled | `ORM.LOCK_INCOMPATIBLE`, `include` | the lowering wraps the select in JSON aggregation |
 | a locked collection read with `distinct()` or `distinctOn()` | ORM client, when the read is compiled | `ORM.LOCK_INCOMPATIBLE`, `distinct` or `distinctOn` | the lowering wraps the select in a `ROW_NUMBER()` window, or uses `DISTINCT ON` |
 | a lock inside an `include()` refinement | ORM client, at the call, and again when the parent read is compiled | `ORM.LOCK_INCOMPATIBLE`, `includeRefinement` | the lock is on a related collection, not on the one being read |
