@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'552b1f11807afcecc55ee02813eee54c27540b16d22b7a171eba7bb953358974'>;
+  StorageHashBase<'c31a795355037b2fc97ecb27661bfa6b76eede1c6ffd168bcab9a3d0b9878060'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -239,6 +239,7 @@ export type FieldOutputTypes = {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly int4: 1 | 10;
       readonly int8: 1n | 10n;
+      readonly special: CodecTypes['pg/float8@1']['output'];
       readonly stamp: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly text: 'low' | 'high';
       readonly uuid: CodecTypes['pg/uuid@1']['output'];
@@ -253,6 +254,7 @@ export type FieldInputTypes = {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly int4: 1 | 10;
       readonly int8: 1n | 10n;
+      readonly special: CodecTypes['pg/float8@1']['input'];
       readonly stamp: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly text: 'low' | 'high';
       readonly uuid: CodecTypes['pg/uuid@1']['input'];
@@ -267,6 +269,7 @@ export type StorageColumnTypes = {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly int4: 1 | 10;
       readonly int8: 1n | 10n;
+      readonly special: CodecTypes['pg/float8@1']['output'];
       readonly stamp: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly text: 'low' | 'high';
       readonly uuid: CodecTypes['pg/uuid@1']['output'];
@@ -281,6 +284,7 @@ export type StorageColumnInputTypes = {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly int4: 1 | 10;
       readonly int8: 1n | 10n;
+      readonly special: CodecTypes['pg/float8@1']['input'];
       readonly stamp: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly text: 'low' | 'high';
       readonly uuid: CodecTypes['pg/uuid@1']['input'];
@@ -295,6 +299,7 @@ export namespace Models {
     id: CodecTypes['pg/int4@1']['output'];
     int4: 1 | 10;
     int8: 1n | 10n;
+    special: CodecTypes['pg/float8@1']['output'];
     stamp: CodecTypes['pg/timestamptz-temporal@1']['output'];
     text: 'low' | 'high';
     uuid: CodecTypes['pg/uuid@1']['output'];
@@ -358,6 +363,12 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly special: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly stamp: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
@@ -391,6 +402,10 @@ type ContractBase = Omit<
             readonly Float8Level: {
               readonly kind: 'valueSet';
               readonly values: readonly [1.5, 2.25];
+            };
+            readonly FloatSpecial: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['NaN', 'Infinity', '-Infinity'];
             };
             readonly Int4Level: { readonly kind: 'valueSet'; readonly values: readonly [1, 10] };
             readonly Int8Level: {
@@ -451,6 +466,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
               };
+              readonly special: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+              };
               readonly stamp: {
                 readonly nullable: false;
                 readonly type: {
@@ -477,6 +496,7 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly int4: { readonly column: 'int4' };
                 readonly int8: { readonly column: 'int8' };
+                readonly special: { readonly column: 'special' };
                 readonly stamp: { readonly column: 'stamp' };
                 readonly text: { readonly column: 'text' };
                 readonly uuid: { readonly column: 'uuid' };
@@ -497,6 +517,14 @@ type ContractBase = Omit<
             readonly members: readonly [
               { readonly name: 'Half'; readonly value: 1.5 },
               { readonly name: 'Whole'; readonly value: 2.25 },
+            ];
+          };
+          readonly FloatSpecial: {
+            readonly codecId: 'pg/float8@1';
+            readonly members: readonly [
+              { readonly name: 'Nan'; readonly value: 'NaN' },
+              { readonly name: 'Infinite'; readonly value: 'Infinity' },
+              { readonly name: 'Negative'; readonly value: '-Infinity' },
             ];
           };
           readonly Int4Level: {
@@ -543,6 +571,11 @@ type ContractBase = Omit<
           readonly Float8Level: readonly [
             { readonly name: 'Half'; readonly value: 1.5 },
             { readonly name: 'Whole'; readonly value: 2.25 },
+          ];
+          readonly FloatSpecial: readonly [
+            { readonly name: 'Nan'; readonly value: CodecTypes['pg/float8@1']['output'] },
+            { readonly name: 'Infinite'; readonly value: CodecTypes['pg/float8@1']['output'] },
+            { readonly name: 'Negative'; readonly value: CodecTypes['pg/float8@1']['output'] },
           ];
           readonly Int4Level: readonly [
             { readonly name: 'Low'; readonly value: 1 },

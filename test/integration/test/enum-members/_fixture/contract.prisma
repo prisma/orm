@@ -42,6 +42,13 @@ enum Float8Level {
   Whole = 2.25
 }
 
+enum FloatSpecial {
+  @@type("pg/float8@1")
+  Nan      = "NaN"
+  Infinite = "Infinity"
+  Negative = "-Infinity"
+}
+
 model Reading {
   id     Int         @id
   text   TextLevel
@@ -51,6 +58,7 @@ model Reading {
   stamp  StampLevel
   day    DayLevel
   float8 Float8Level
+  special FloatSpecial
 
   @@map("readings")
 }

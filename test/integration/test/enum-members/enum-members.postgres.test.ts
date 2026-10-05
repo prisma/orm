@@ -25,6 +25,7 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
             stamp: Temporal.Instant.from('2024-01-01T00:00:00Z'),
             day: Temporal.PlainDate.from('2024-01-01'),
             float8: 1.5,
+            special: client.enums.public.FloatSpecial.members.Nan,
           },
           {
             id: 2,
@@ -35,6 +36,7 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
             stamp: Temporal.Instant.from('2025-06-30T12:00:00Z'),
             day: Temporal.PlainDate.from('2025-06-30'),
             float8: 2.25,
+            special: client.enums.public.FloatSpecial.members.Negative,
           },
         ]);
         const [low, high] = await db.public.Reading.orderBy((r) => r.id.asc()).all();
@@ -50,10 +52,29 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
             stamp: levels.StampLevel.has(row.stamp),
             day: levels.DayLevel.has(row.day),
             float8: levels.Float8Level.has(row.float8),
+            special: levels.FloatSpecial.has(row.special),
           })),
         ).toEqual([
-          { text: true, int4: true, int8: true, uuid: true, stamp: true, day: true, float8: true },
-          { text: true, int4: true, int8: true, uuid: true, stamp: true, day: true, float8: true },
+          {
+            text: true,
+            int4: true,
+            int8: true,
+            uuid: true,
+            stamp: true,
+            day: true,
+            float8: true,
+            special: true,
+          },
+          {
+            text: true,
+            int4: true,
+            int8: true,
+            uuid: true,
+            stamp: true,
+            day: true,
+            float8: true,
+            special: true,
+          },
         ]);
 
         expect({
@@ -64,6 +85,10 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
           stamp: levels.StampLevel.members.Sunset.equals(high.stamp),
           day: levels.DayLevel.members.Sunset.equals(high.day),
           float8: levels.Float8Level.members.Whole === high.float8,
+          special: [
+            Number.isNaN(low.special),
+            levels.FloatSpecial.members.Negative === high.special,
+          ],
           names: [
             levels.Int8Level.nameOf(low.int8),
             levels.StampLevel.nameOf(high.stamp),
@@ -77,6 +102,7 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
           stamp: true,
           day: true,
           float8: true,
+          special: [true, true],
           names: ['Low', 'Sunset', 'Launch'],
         });
       }),
@@ -92,6 +118,7 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
     expectTypeOf<Levels['StampLevel']['members']['Launch']>().toEqualTypeOf<Temporal.Instant>();
     expectTypeOf<Levels['DayLevel']['members']['Launch']>().toEqualTypeOf<Temporal.PlainDate>();
     expectTypeOf<Levels['Float8Level']['members']['Half']>().toEqualTypeOf<1.5>();
+    expectTypeOf<Levels['FloatSpecial']['members']['Nan']>().toEqualTypeOf<number>();
     expectTypeOf<Levels['Int8Level']['values']>().toEqualTypeOf<readonly [1n, 10n]>();
   });
 });

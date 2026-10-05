@@ -256,6 +256,10 @@ export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
 export const decimalTextBigintLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? `${value}n` : undefined;
 
+/** Renders a float's stored number as a number literal. NaN and the infinities are stored as text and have no literal type, so they render nothing and the value set types as `number`. */
+export const floatNumberLiteral = (value: JsonValue): string | undefined =>
+  typeof value === 'number' ? String(value) : undefined;
+
 /** Renders the decimal text of `pg/int8number@1`, whose application type is `number`, as a number literal. */
 export const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;

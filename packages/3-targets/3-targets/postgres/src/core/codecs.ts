@@ -63,6 +63,7 @@ import {
   FLOAT4_MAX,
   fitsCharacterLength,
   fitsFloat4,
+  floatNumberLiteral,
   type PgInterval,
   type PrecisionParams,
   pgBigintEncode,
@@ -906,7 +907,7 @@ export class PgFloat4Descriptor extends PostgresCodecDescriptor<void> {
   override readonly targetTypes = ['float4'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
-    return renderTsLiteral(value);
+    return floatNumberLiteral(value);
   }
   override factory(): (ctx: CodecInstanceContext) => PgFloat4Codec {
     return () => new PgFloat4Codec(this);
@@ -954,7 +955,7 @@ export class PgFloat8Descriptor extends PostgresCodecDescriptor<void> {
   override readonly targetTypes = ['float8'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
-    return renderTsLiteral(value);
+    return floatNumberLiteral(value);
   }
   override factory(): (ctx: CodecInstanceContext) => PgFloat8Codec {
     return () => new PgFloat8Codec(this);
@@ -1875,7 +1876,7 @@ export class PgFloatDescriptor extends PostgresCodecDescriptor<void> {
   override readonly traits = sqlFloatDescriptor.traits;
   override readonly paramsSchema = sqlFloatDescriptor.paramsSchema;
   override renderValueLiteral(value: JsonValue): string | undefined {
-    return renderTsLiteral(value);
+    return floatNumberLiteral(value);
   }
   override factory(): (ctx: CodecInstanceContext) => PgFloatCodec {
     return () => new PgFloatCodec(this);

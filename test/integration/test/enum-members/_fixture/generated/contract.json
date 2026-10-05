@@ -39,6 +39,23 @@
               }
             ]
           },
+          "FloatSpecial": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Nan",
+                "value": "NaN"
+              },
+              {
+                "name": "Infinite",
+                "value": "Infinity"
+              },
+              {
+                "name": "Negative",
+                "value": "-Infinity"
+              }
+            ]
+          },
           "Int4Level": {
             "codecId": "pg/int4@1",
             "members": [
@@ -167,6 +184,19 @@
                   "plane": "domain"
                 }
               },
+              "special": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatSpecial",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
               "stamp": {
                 "nullable": false,
                 "type": {
@@ -225,6 +255,9 @@
                 "int8": {
                   "column": "int8"
                 },
+                "special": {
+                  "column": "special"
+                },
                 "stamp": {
                   "column": "stamp"
                 },
@@ -269,6 +302,11 @@
                   "expression": "\"int8\" IN ('1', '10')",
                   "name": "readings_int8_check_38f38148",
                   "prefix": "readings_int8_check"
+                },
+                {
+                  "expression": "\"special\" IN ('NaN', 'Infinity', '-Infinity')",
+                  "name": "readings_special_check_1de0e4e5",
+                  "prefix": "readings_special_check"
                 },
                 {
                   "expression": "\"stamp\" IN ('2024-01-01T00:00:00Z', '2025-06-30T12:00:00Z')",
@@ -336,6 +374,17 @@
                     "plane": "storage"
                   }
                 },
+                "special": {
+                  "codecId": "pg/float8@1",
+                  "nativeType": "float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatSpecial",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
                 "stamp": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
@@ -395,6 +444,14 @@
                 2.25
               ]
             },
+            "FloatSpecial": {
+              "kind": "valueSet",
+              "values": [
+                "NaN",
+                "Infinity",
+                "-Infinity"
+              ]
+            },
             "Int4Level": {
               "kind": "valueSet",
               "values": [
@@ -436,7 +493,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "552b1f11807afcecc55ee02813eee54c27540b16d22b7a171eba7bb953358974"
+    "storageHash": "c31a795355037b2fc97ecb27661bfa6b76eede1c6ffd168bcab9a3d0b9878060"
   },
   "capabilities": {
     "postgres": {
