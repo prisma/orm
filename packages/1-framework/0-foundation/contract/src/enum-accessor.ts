@@ -17,13 +17,13 @@ export interface EnumMemberCodec {
 export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec | undefined;
 
 /**
- * Runtime view of a domain enum, built at the client from the contract's `ContractEnum` JSON.
+ * Runtime view of a domain enum, built at the client from the contract's `ContractEnum` JSON and read through the enum's codec.
  *
  * This deliberately mirrors the accessor shape of the authoring-time
  * `EnumTypeHandle` (in `contract-ts`) rather than reusing it: that handle carries
  * the literal value generics and lives in the authoring layer, which the
  * foundation layer cannot depend on. The two are the same surface seen from the
- * two planes — authoring (typed) and runtime (validated JSON).
+ * two planes, authoring and runtime, and hold the same member values.
  */
 export interface EnumAccessor {
   readonly values: readonly unknown[];
