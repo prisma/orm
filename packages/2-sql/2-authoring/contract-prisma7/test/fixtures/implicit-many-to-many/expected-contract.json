@@ -391,7 +391,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "769a0511aee797b5c6dbdd4ecb5d9a5c1d4dc84b78ccb21342274bc5cde9c316",
+    "storageHash": "96992f872591f1bbdf7d2ad6140f69c28102a4ffbd584e9b3b4560ef7b3321b7",
     "namespaces": {
       "public": {
         "id": "public",
@@ -500,7 +500,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_Favorites_AB_pkey"
               }
             },
             "_Follows": {
@@ -557,7 +558,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_Follows_AB_pkey"
               }
             },
             "_PostToTag": {
@@ -614,7 +616,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_PostToTag_AB_pkey"
               }
             }
           }

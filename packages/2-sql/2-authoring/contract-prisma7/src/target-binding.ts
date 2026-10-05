@@ -38,6 +38,11 @@ export interface Prisma7TargetBinding {
   readonly indexTypes: Readonly<Record<string, string>>;
   /** The longest identifier the database keeps, in bytes. Prisma 7 cuts the names it generates to fit. */
   readonly identifierMaxBytes: number;
+  /** The names the target's migration planner gives a primary key or foreign key the contract leaves unnamed. */
+  readonly defaultConstraintNames: {
+    readonly primaryKey: (tableName: string) => string;
+    readonly foreignKey: (tableName: string, columns: readonly string[]) => string;
+  };
   /**
    * The relation field names `contract infer` gives a junction table whose
    * columns `A` and `B` reference `tableA` and `tableB`, so the junction model

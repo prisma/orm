@@ -1,4 +1,8 @@
 import { postgresTargetDescriptorMeta } from './descriptor-meta';
+import {
+  defaultForeignKeyName,
+  defaultPrimaryKeyName,
+} from './migrations/default-constraint-names';
 import { postgresNowGeneratorIdFor } from './now-generators';
 import { postgresCreateNamespace } from './postgres-schema';
 import { storedTemporalText, type TemporalNativeType } from './prisma7-temporal-defaults';
@@ -54,6 +58,7 @@ export const prisma7PostgresBinding = {
   },
   /** `NAMEDATALEN - 1`. */
   identifierMaxBytes: 63,
+  defaultConstraintNames: { primaryKey: defaultPrimaryKeyName, foreignKey: defaultForeignKeyName },
   junctionRelationFieldNames,
   updatedAtGeneratorId: postgresNowGeneratorIdFor,
   literalDefaultForm: ({

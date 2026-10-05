@@ -59,6 +59,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
+import { prisma7PrimaryKeyName, statedConstraintName } from './constraint-names';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
 import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -129,6 +130,8 @@ interface ModelBuild {
   readonly ignoredRelationFields: RelationField[];
   readonly rejectedFields: Set<string>;
   idFields: readonly string[];
+  /** The `map` name of the model's `@id` or `@@id`. */
+  idMap: string | undefined;
   readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
 }
@@ -343,6 +346,7 @@ export function interpretPrisma7Documents(
       ignoredRelationFields: [],
       rejectedFields: new Set(),
       idFields: declaration.id?.fields ?? [],
+      idMap: declaration.id?.map,
       uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
@@ -451,12 +455,18 @@ export function interpretPrisma7Documents(
     });
     const foreignKeys = lowered.foreignKeys.get(modelName);
     const relations = lowered.relations.get(modelName);
+    const primaryKeyName = statedConstraintName(
+      prisma7PrimaryKeyName(model.tableName, build.idMap, binding.identifierMaxBytes),
+      binding.defaultConstraintNames.primaryKey(model.tableName),
+    );
     modelNodes.push({
       modelName,
       tableName: model.tableName,
       namespaceId: model.namespaceId,
       fields: [...build.columns.values()],
-      ...(id !== undefined && id.length > 0 ? { id: { columns: id } } : {}),
+      ...(id !== undefined && id.length > 0
+        ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
+        : {}),
       ...(indexes.length > 0 ? { indexes } : {}),
       ...(foreignKeys !== undefined ? { foreignKeys } : {}),
       ...(relations !== undefined ? { relations } : {}),
@@ -950,11 +960,16 @@ function readField(args: ReadFieldArgs): void {
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
     } else if (attribute.name === 'id' && !isRelationField) {
-      if (
-        parseIndexAttribute(attribute, label, sourceId, binding.indexTypes, diagnostics) !==
-        undefined
-      ) {
+      const parsed = parseIndexAttribute(
+        attribute,
+        label,
+        sourceId,
+        binding.indexTypes,
+        diagnostics,
+      );
+      if (parsed !== undefined) {
         build.idFields = [field.name];
+        build.idMap = parsed.map;
       }
     } else if (attribute.name === 'unique' && !isRelationField) {
       const parsed = parseIndexAttribute(

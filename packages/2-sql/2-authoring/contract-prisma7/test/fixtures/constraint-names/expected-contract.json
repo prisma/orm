@@ -5,16 +5,13 @@
     "namespaces": {
       "public": {
         "models": {
-          "User": {
+          "Author": {
             "storage": {
-              "table": "User",
+              "table": "Author",
               "namespaceId": "public",
               "fields": {
                 "id": {
                   "column": "id"
-                },
-                "email": {
-                  "column": "email"
                 }
               }
             },
@@ -26,26 +23,18 @@
                 },
                 "nullable": false,
                 "many": false
-              },
-              "email": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "pg/text@1"
-                },
-                "nullable": false,
-                "many": false
               }
             },
             "relations": {
-              "edited": {
+              "longThings": {
                 "to": {
                   "namespace": "public",
-                  "model": "Post"
+                  "model": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde"
                 },
                 "cardinality": "1:N",
                 "on": {
                   "localFields": ["id"],
-                  "targetFields": ["editorId"]
+                  "targetFields": ["authorIdentifierWithAVeryLongColumnName"]
                 }
               },
               "posts": {
@@ -57,30 +46,6 @@
                 "on": {
                   "localFields": ["id"],
                   "targetFields": ["authorId"]
-                }
-              },
-              "profile": {
-                "to": {
-                  "namespace": "public",
-                  "model": "Profile"
-                },
-                "cardinality": "1:1",
-                "nullable": true,
-                "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["userId"]
-                }
-              },
-              "settings": {
-                "to": {
-                  "namespace": "public",
-                  "model": "Settings"
-                },
-                "cardinality": "1:1",
-                "nullable": true,
-                "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["userId"]
                 }
               }
             }
@@ -95,9 +60,6 @@
                 },
                 "authorId": {
                   "column": "authorId"
-                },
-                "editorId": {
-                  "column": "editorId"
                 }
               }
             },
@@ -117,21 +79,13 @@
                 },
                 "nullable": false,
                 "many": false
-              },
-              "editorId": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "pg/int4@1"
-                },
-                "nullable": true,
-                "many": false
               }
             },
             "relations": {
               "author": {
                 "to": {
                   "namespace": "public",
-                  "model": "User"
+                  "model": "Author"
                 },
                 "cardinality": "N:1",
                 "nullable": false,
@@ -139,31 +93,52 @@
                   "localFields": ["authorId"],
                   "targetFields": ["id"]
                 }
-              },
-              "editor": {
-                "to": {
-                  "namespace": "public",
-                  "model": "User"
-                },
-                "cardinality": "N:1",
-                "nullable": true,
-                "on": {
-                  "localFields": ["editorId"],
-                  "targetFields": ["id"]
-                }
               }
             }
           },
-          "Profile": {
+          "Membership": {
             "storage": {
-              "table": "Profile",
+              "table": "Membership",
+              "namespaceId": "public",
+              "fields": {
+                "userId": {
+                  "column": "userId"
+                },
+                "groupId": {
+                  "column": "groupId"
+                }
+              }
+            },
+            "fields": {
+              "userId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "groupId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
+            "storage": {
+              "table": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde",
               "namespaceId": "public",
               "fields": {
                 "id": {
                   "column": "id"
                 },
-                "userId": {
-                  "column": "userId"
+                "authorIdentifierWithAVeryLongColumnName": {
+                  "column": "authorIdentifierWithAVeryLongColumnName"
                 }
               }
             },
@@ -176,7 +151,7 @@
                 "nullable": false,
                 "many": false
               },
-              "userId": {
+              "authorIdentifierWithAVeryLongColumnName": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
@@ -186,30 +161,27 @@
               }
             },
             "relations": {
-              "user": {
+              "author": {
                 "to": {
                   "namespace": "public",
-                  "model": "User"
+                  "model": "Author"
                 },
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {
-                  "localFields": ["userId"],
+                  "localFields": ["authorIdentifierWithAVeryLongColumnName"],
                   "targetFields": ["id"]
                 }
               }
             }
           },
-          "Settings": {
+          "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
             "storage": {
-              "table": "Settings",
+              "table": "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz",
               "namespaceId": "public",
               "fields": {
                 "id": {
                   "column": "id"
-                },
-                "userId": {
-                  "column": "userId"
                 }
               }
             },
@@ -221,51 +193,60 @@
                 },
                 "nullable": false,
                 "many": false
-              },
-              "userId": {
+              }
+            },
+            "relations": {}
+          },
+          "MultibyteName": {
+            "storage": {
+              "table": "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": true,
+                "nullable": false,
                 "many": false
               }
             },
-            "relations": {
-              "user": {
-                "to": {
-                  "namespace": "public",
-                  "model": "User"
-                },
-                "cardinality": "N:1",
-                "nullable": true,
-                "on": {
-                  "localFields": ["userId"],
-                  "targetFields": ["id"]
-                }
-              }
-            }
+            "relations": {}
           }
         }
       }
     }
   },
   "roots": {
-    "User": {
+    "Author": {
       "namespace": "public",
-      "model": "User"
+      "model": "Author"
     },
     "Post": {
       "namespace": "public",
       "model": "Post"
     },
-    "Profile": {
+    "Membership": {
       "namespace": "public",
-      "model": "Profile"
+      "model": "Membership"
     },
-    "Settings": {
+    "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
       "namespace": "public",
-      "model": "Settings"
+      "model": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde"
+    },
+    "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
+      "namespace": "public",
+      "model": "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz"
+    },
+    "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt": {
+      "namespace": "public",
+      "model": "MultibyteName"
     }
   },
   "extensions": {},
@@ -273,39 +254,28 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "85b9d817d4f8bebe408f381db7d699b5ffd7ce441e207470cd7fc57a9e830705",
+    "storageHash": "a4f2a66d37ad40a19eaa68652de9af8345fcf2ecbb41cb90c43d758a5e17bfc3",
     "namespaces": {
       "public": {
         "id": "public",
         "kind": "postgres-schema",
         "entries": {
           "table": {
-            "User": {
+            "Author": {
               "columns": {
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
-                },
-                "email": {
-                  "nativeType": "text",
-                  "codecId": "pg/text@1",
-                  "nullable": false,
-                  "many": false
                 }
               },
               "uniques": [],
-              "indexes": [
-                {
-                  "name": "User_email_key",
-                  "unique": true,
-                  "columns": ["email"]
-                }
-              ],
+              "indexes": [],
               "foreignKeys": [],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": ["id"],
+                "name": "author_primary"
               }
             },
             "Post": {
@@ -321,12 +291,6 @@
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
-                },
-                "editorId": {
-                  "nativeType": "int4",
-                  "codecId": "pg/int4@1",
-                  "nullable": true,
-                  "many": false
                 }
               },
               "uniques": [],
@@ -340,41 +304,27 @@
                   },
                   "target": {
                     "namespaceId": "public",
-                    "tableName": "User",
+                    "tableName": "Author",
                     "columns": ["id"]
                   },
+                  "name": "post_written_by",
                   "onDelete": "restrict",
                   "onUpdate": "cascade"
-                },
-                {
-                  "source": {
-                    "namespaceId": "public",
-                    "tableName": "Post",
-                    "columns": ["editorId"]
-                  },
-                  "target": {
-                    "namespaceId": "public",
-                    "tableName": "User",
-                    "columns": ["id"]
-                  },
-                  "name": "post_editor_fkey",
-                  "onDelete": "setNull",
-                  "onUpdate": "noAction"
                 }
               ],
               "primaryKey": {
                 "columns": ["id"]
               }
             },
-            "Profile": {
+            "Membership": {
               "columns": {
-                "id": {
+                "userId": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
-                "userId": {
+                "groupId": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
@@ -382,34 +332,14 @@
                 }
               },
               "uniques": [],
-              "indexes": [
-                {
-                  "name": "Profile_userId_key",
-                  "unique": true,
-                  "columns": ["userId"]
-                }
-              ],
-              "foreignKeys": [
-                {
-                  "source": {
-                    "namespaceId": "public",
-                    "tableName": "Profile",
-                    "columns": ["userId"]
-                  },
-                  "target": {
-                    "namespaceId": "public",
-                    "tableName": "User",
-                    "columns": ["id"]
-                  },
-                  "onDelete": "cascade",
-                  "onUpdate": "cascade"
-                }
-              ],
+              "indexes": [],
+              "foreignKeys": [],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": ["userId", "groupId"],
+                "name": "membership_pair"
               }
             },
-            "Settings": {
+            "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
               "columns": {
                 "id": {
                   "nativeType": "int4",
@@ -417,37 +347,64 @@
                   "nullable": false,
                   "many": false
                 },
-                "userId": {
+                "authorIdentifierWithAVeryLongColumnName": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": true,
+                  "nullable": false,
                   "many": false
                 }
               },
               "uniques": [],
-              "indexes": [
-                {
-                  "name": "Settings_userId_key",
-                  "unique": true,
-                  "columns": ["userId"]
-                }
-              ],
+              "indexes": [],
               "foreignKeys": [
                 {
                   "source": {
                     "namespaceId": "public",
-                    "tableName": "Settings",
-                    "columns": ["userId"]
+                    "tableName": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde",
+                    "columns": ["authorIdentifierWithAVeryLongColumnName"]
                   },
                   "target": {
                     "namespaceId": "public",
-                    "tableName": "User",
+                    "tableName": "Author",
                     "columns": ["id"]
                   },
-                  "onDelete": "setNull",
+                  "name": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbc_fkey",
+                  "onDelete": "restrict",
                   "onUpdate": "cascade"
                 }
               ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
               "primaryKey": {
                 "columns": ["id"]
               }
