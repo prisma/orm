@@ -9,11 +9,11 @@ changes:
         - '\b(?:buildNamespacedEnums|buildEnumsMapForNamespace|createEnumAccessor)\b'
   - id: mongo-orm-takes-codecs
     summary: |
-      `mongoOrm()` from `@internal/mongo-orm` takes an optional `codecs` lookup and checks a written enum value through the enum's codec. Code that builds `mongoOrm()` itself passes the execution context's `codecs` next to `mutationDefaults`.
+      `mongoOrm()` and `createMongoCollection()` from `@internal/mongo-orm` now require the runtime's codecs, which they check a written enum value through. Code that builds them itself passes the execution context's `codecs`; `createMongoCollection()` takes them before the optional `mutationDefaults`.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
-        - '\bmongoOrm\s*(?:<[^>]*>)?\s*\('
+        - '\b(?:mongoOrm|createMongoCollection)\s*(?:<[^>]*>)?\s*\('
   - id: define-contract-carries-enums
     summary: |
       A target facade whose `defineContract` wraps `buildBoundContract` must carry the contract's enums as an `Enums` generic and export an `enumType` bound to its pack's codec types, as `@internal/postgres` and now `@internal/sqlite` do. Without them `db.enums` types each member as `JsonValue`, while it holds the value its codec reads, such as a bigint or a `Date`.
@@ -81,7 +81,7 @@ const orm = mongoOrm<TContract>({
 });
 ```
 
-Without `codecs`, the ORM compares a written enum value with the enum's stored forms, which refuses every value of an enum whose codec's stored form is not the value, such as a bigint or a date member.
+`createMongoCollection()` takes the codecs as its fourth argument, before the optional `mutationDefaults`: `createMongoCollection(contract, 'User', executor, context.codecs, mutationDefaults)`. The ORM reads each enum through its codec once and refuses a write of an enum field whose codec the lookup lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`.
 
 ## `define-contract-carries-enums`
 
