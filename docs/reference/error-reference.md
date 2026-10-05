@@ -479,7 +479,7 @@ A driver-level failure occurred while reading the contract marker table: connect
 
 ### CONTRACT.MARKER_REQUIRED
 
-A command that requires a pre-signed database (marker present) as a precondition found none; also the default failure code stamped onto a non-ok verify result when no more specific code applies, which is how `db verify --strict` reports a database holding elements no contract declares. On `db verify` it is an `error` diagnostic on a completed run that exits `4`; everywhere else it is a precondition failure at exit `2`. Those are two unrelated jobs for one code: "sign the database first" and "strict mode found elements no contract declares", and splitting them would let the exit code follow from the code alone. Fix path: run `prisma db init` first, or declare the extra elements in a contract. Payload: none notable.
+A command that requires a pre-signed database (marker present) as a precondition found none. It is a precondition failure at exit `2`. Fix path: run `prisma db init` or `prisma db sign` first. Payload: none notable.
 
 ### CONTRACT.MARKER_ROW_CORRUPT
 
@@ -571,7 +571,7 @@ A role entity is declared more than once in the entities list, or a role name is
 
 ### CONTRACT.SCHEMA_VERIFICATION_FAILED
 
-Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
+Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed, and `db verify --strict` raises it once when the database holds elements no contract declares (the result's `unclaimed` list names them). It is also the code a failing verify result carries when nothing more specific applies. Fix path: `prisma db update` or adjust the contract; for unclaimed elements, declare them in a contract or drop them from the database. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
 
 ### CONTRACT.SOURCE_IMPORT_DISALLOWED
 

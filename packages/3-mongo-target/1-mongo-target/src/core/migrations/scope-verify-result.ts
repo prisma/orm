@@ -3,7 +3,7 @@ import type {
   SchemaDiffIssue,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import { issueOutcome } from '@internal/framework-components/control';
+import { issueOutcome, VERIFY_CODE_SCHEMA_FAILURE } from '@internal/framework-components/control';
 import { elementCoordinates } from '@internal/framework-components/ir';
 
 /**
@@ -60,7 +60,7 @@ export function scopeVerifyResultToSpace(
   return {
     ...envelope,
     ok,
-    ...(ok ? {} : { code: result.code ?? 'CONTRACT.MARKER_REQUIRED' }),
+    ...(ok ? {} : { code: result.code ?? VERIFY_CODE_SCHEMA_FAILURE }),
     summary: ok ? 'Database schema satisfies contract' : result.summary,
     schema: { ...result.schema, issues },
   };
