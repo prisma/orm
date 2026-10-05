@@ -83,6 +83,40 @@ describe('parsePostgresDefault uuid literals', () => {
   });
 });
 
+describe('parsePostgresDefault numeric literals in the form PostgreSQL stores', () => {
+  it('reads a numeric default without leading zeros or a minus sign on zero, whatever spelling it was written in', () => {
+    expect(
+      [
+        ["'01.5'", 'numeric'],
+        ["'01.5'::numeric", 'numeric'],
+        ['01.5', 'numeric'],
+        ["'-0'::numeric", 'numeric(10,2)'],
+        ["'-00.10'", 'decimal'],
+      ].map(([raw, nativeType]) => parsePostgresDefault(raw ?? '', nativeType)),
+    ).toEqual([
+      { kind: 'literal', value: '1.5' },
+      { kind: 'literal', value: '1.5' },
+      { kind: 'literal', value: '1.5' },
+      { kind: 'literal', value: '0' },
+      { kind: 'literal', value: '-0.10' },
+    ]);
+  });
+
+  it('reads each element of a numeric list the same way', () => {
+    expect(parsePostgresDefault("'{01.5,-0,NULL}'::numeric[]", 'numeric[]')).toEqual({
+      kind: 'literal',
+      value: ['1.5', '0', null],
+    });
+  });
+
+  it('keeps leading zeros on a text column', () => {
+    expect(parsePostgresDefault("'01.5'::text", 'text')).toEqual({
+      kind: 'literal',
+      value: '01.5',
+    });
+  });
+});
+
 describe('parsePostgresDefault string literals', () => {
   it('parses a plain string literal', () => {
     expect(parsePostgresDefault("'hello'")).toEqual({ kind: 'literal', value: 'hello' });

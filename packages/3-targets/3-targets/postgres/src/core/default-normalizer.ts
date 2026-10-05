@@ -1,4 +1,5 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import { canonicalNumeralText } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { canonicalUuid } from './codec-helpers';
 
@@ -50,6 +51,7 @@ const DECIMAL_TEXT_TYPE_PATTERN = new RegExp(
   `^(?:bigint|int8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
   'i',
 );
+const NUMERIC_TYPE_PATTERN = new RegExp(`^(?:numeric|decimal)(?:${TYPE_MODIFIER})?$`, 'i');
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.
@@ -149,7 +151,9 @@ function readLiteralToken(expression: string): LiteralToken | undefined {
  * lost to a JavaScript number. A column that is not a number type stores the numeral as text.
  */
 function numberValue(numeral: string, nativeType: string | undefined): JsonValue | undefined {
-  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) return numeral;
+  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) {
+    return storedText(numeral, nativeType);
+  }
   if (nativeType !== undefined && !NUMBER_TYPE_PATTERN.test(nativeType)) return numeral;
   const parsed = Number(numeral);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -218,15 +222,19 @@ const BOOLEAN_TYPE_PATTERN = /^(?:bool|boolean)$/i;
 const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
 const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
 
+/** A text default as the column stores it: a uuid or a decimal numeral in the form PostgreSQL writes, which its codec reads. */
+function storedText(text: string, nativeType: string | undefined): string {
+  if (nativeType === 'uuid') return canonicalUuid(text) ?? text;
+  if (nativeType !== undefined && NUMERIC_TYPE_PATTERN.test(nativeType)) {
+    return canonicalNumeralText(text);
+  }
+  return text;
+}
+
 /**
  * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
  * would print is read; anything else keeps the raw expression.
  */
-/** A text default as the column stores it: a uuid in the form PostgreSQL writes, which its codec reads. */
-function storedText(text: string, nativeType: string | undefined): string {
-  return nativeType === 'uuid' ? (canonicalUuid(text) ?? text) : text;
-}
-
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
   if (token === '') return undefined;
   if (BOOLEAN_TYPE_PATTERN.test(elementType)) {

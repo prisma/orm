@@ -128,13 +128,21 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
-    accepts: ['999', '-999', '007'],
-    rejects: ['1000', '1.5'],
+    accepts: ['999', '-999', '7'],
+    rejects: ['1000', '1.5', '007', '-0'],
   },
   {
     codec: pgNumericDescriptor.factory({})(ctx),
-    accepts: ['123456789012345678901234567890.123', 'Infinity', 'NaN'],
-    rejects: ['1e3', 'abc', ''],
+    accepts: [
+      '123456789012345678901234567890.123',
+      'Infinity',
+      'NaN',
+      '0',
+      '0.00',
+      '-0.10',
+      '1.50',
+    ],
+    rejects: ['1e3', 'abc', '', '01.5', '00', '-0', '-0.00', '-007.50'],
   },
   {
     codec: pgIntDescriptor.factory()(ctx),
@@ -400,6 +408,25 @@ describe('pg/uuid@1 encodeJson', () => {
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    ]);
+  });
+});
+
+describe('pg/numeric@1 encodeJson', () => {
+  it('writes a decimal numeral as PostgreSQL prints it, which decodeJson reads', () => {
+    const codec = pgNumericDescriptor.factory({})(ctx);
+    const written = ['01.5', '-0', '-0.00', '00', '-007.50', '1.50', 'NaN', '-Infinity'].map(
+      (value) => codec.encodeJson(value),
+    );
+    expect(written.map((json) => codec.decodeJson(json))).toEqual([
+      '1.5',
+      '0',
+      '0.00',
+      '0',
+      '-7.50',
+      '1.50',
+      'NaN',
+      '-Infinity',
     ]);
   });
 });

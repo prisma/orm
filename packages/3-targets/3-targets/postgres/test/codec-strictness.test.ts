@@ -85,6 +85,16 @@ describe('pg/numeric@1 decodeJson', () => {
   });
 
   it.each([
+    ['a leading zero', '01.5', '1.5'],
+    ['a negative zero', '-0', '0'],
+    ['a negative zero with a fraction', '-0.00', '0.00'],
+  ])('refuses %s, naming the text PostgreSQL prints for the value', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `pg/numeric@1 JSON value must be "${printed}", as PostgreSQL writes this value`,
+    );
+  });
+
+  it.each([
     ['a whole JSON number', 42],
     ['a fractional JSON number', 1.5],
   ])('refuses %s', (_name, json) => {

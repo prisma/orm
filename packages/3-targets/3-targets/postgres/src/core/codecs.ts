@@ -27,6 +27,7 @@ import {
   encodeJsonFloat,
   INT32_RANGE,
   INT64_RANGE,
+  isNonFiniteText,
   refuseJsonValue,
   renderTsLiteral,
 } from '@internal/framework-components/codec';
@@ -35,6 +36,7 @@ import {
   BinaryExpr,
   CaseExpr,
   CastExpr,
+  canonicalNumeralText,
   FunctionCallExpr,
   LiteralExpr,
   NullCheckExpr,
@@ -197,33 +199,22 @@ const PG_INTERVAL_NATIVE_TYPE = 'interval';
 const PG_JSON_NATIVE_TYPE = 'json';
 const PG_JSONB_NATIVE_TYPE = 'jsonb';
 
+/** A decimal numeral: an optional minus sign, digits, and an optional fraction. */
+const DECIMAL_NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
+
 /**
- * Projects the expression unchanged, for codecs whose canonical JSON is what
- * PostgreSQL's own JSON conversion already produces.
+ * Numeric text in the form PostgreSQL *prints*, which is narrower than the form it accepts.
  *
- * Identity here is a claim about the target's behaviour, not an absence of one:
- * the codec's conformance cases are what test it, including at the boundaries
- * of the representation — escaping, sign, and range — where a native conversion
- * would be most likely to diverge.
- */
-/**
- * Whether a string is numeric text in the form PostgreSQL *prints*, which is
- * narrower than the form it accepts.
- *
- * `numeric` reads `+123`, `.5`, `1.`, `1e5`, `0x1f`, `1_000` and whitespace-padded
- * input, but prints every one of them in a single normalised form — `123`,
- * `0.5`, `1`, `100000`, `31`, `1000`, `12`. The projection reads the column back
- * through that printing, so accepting an input spelling here would produce an
- * application value the projection can never return: `encodeJson('1e5')` would
- * claim `1e5` where the database yields `100000`.
+ * `numeric` reads `+123`, `.5`, `1.`, `1e5`, `0x1f`, `1_000`, `007`, `-0` and whitespace-padded
+ * input, but prints every one of them in a single normalised form — `123`, `0.5`, `1`, `100000`,
+ * `31`, `1000`, `7`, `0`. The projection reads the column back through that printing, so a value in
+ * any other form is one the database never returns: `1e5` reads back as `100000`.
  *
  * `NaN`, `Infinity` and `-Infinity` are genuine `numeric` values, not error
  * states, and PostgreSQL emits them into JSON as strings — so they belong to the
  * canonical form and round-trip like any other value.
  */
-const CANONICAL_NUMERIC_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
-
-const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEXT.test(value);
+const CANONICAL_NUMERIC_TEXT = /^(?:(?!-0(?:\.0+)?$)-?(?:0|[1-9]\d*)(?:\.\d+)?|NaN|-?Infinity)$/;
 
 /**
  * Whether canonical numeric text is a value `numeric(precision, scale)` stores without rounding: a whole number of units of 10^-scale, and at most `precision` digits once counted in those units. A negative scale rounds to tens, hundreds and so on, and a scale above the precision allows only values below 1. NaN fits; an infinity does not.
@@ -244,6 +235,15 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
   return digits.length + shift <= precision;
 }
 
+/**
+ * Projects the expression unchanged, for codecs whose canonical JSON is what
+ * PostgreSQL's own JSON conversion already produces.
+ *
+ * Identity here is a claim about the target's behaviour, not an absence of one:
+ * the codec's conformance cases are what test it, including at the boundaries
+ * of the representation — escaping, sign, and range — where a native conversion
+ * would be most likely to diverge.
+ */
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 /**
@@ -1030,15 +1030,15 @@ export class PgNumericCodec extends CodecImpl<
   async decode(wire: string | number, _ctx: CodecCallContext): Promise<string> {
     return pgNumericDecode(wire);
   }
+  /** A decimal numeral is written as PostgreSQL prints it, without leading zeros or a minus sign on zero; other spellings PostgreSQL reads, such as `1e5`, are refused. */
   encodeJson(value: string): JsonValue {
-    if (!isCanonicalNumericText(value)) {
-      throw postgresError(
-        'RUNTIME.ENCODE_FAILED',
-        'pg/numeric@1 application value must be canonical numeric text: an optionally negated decimal numeral, or NaN, Infinity or -Infinity',
-        { meta: { codecId: PG_NUMERIC_CODEC_ID, received: value } },
-      );
-    }
-    return value;
+    if (typeof value !== 'string' || isNonFiniteText(value)) return value;
+    if (DECIMAL_NUMERAL_TEXT.test(value)) return canonicalNumeralText(value);
+    throw postgresError(
+      'RUNTIME.ENCODE_FAILED',
+      'pg/numeric@1 application value must be numeric text: an optionally negated decimal numeral, or NaN, Infinity or -Infinity',
+      { meta: { codecId: PG_NUMERIC_CODEC_ID, received: value } },
+    );
   }
   constructor(
     descriptor: PgNumericDescriptor,
@@ -1047,23 +1047,30 @@ export class PgNumericCodec extends CodecImpl<
     super(descriptor);
   }
   decodeJson(json: JsonValue): string {
-    const text = decodeJsonMatching(
-      PG_NUMERIC_CODEC_ID,
-      json,
-      CANONICAL_NUMERIC_TEXT,
-      'a decimal string',
-    );
+    if (typeof json !== 'string' || !CANONICAL_NUMERIC_TEXT.test(json)) {
+      const printed =
+        typeof json === 'string' && DECIMAL_NUMERAL_TEXT.test(json)
+          ? canonicalNumeralText(json)
+          : undefined;
+      return refuseJsonValue(
+        PG_NUMERIC_CODEC_ID,
+        printed === undefined
+          ? 'a decimal string'
+          : `"${printed}", as PostgreSQL writes this value`,
+        json,
+      );
+    }
     const { precision } = this.params;
-    if (precision === undefined) return text;
+    if (precision === undefined) return json;
     const scale = this.params.scale ?? 0;
-    if (!fitsNumeric(text, precision, scale)) {
+    if (!fitsNumeric(json, precision, scale)) {
       return refuseJsonValue(
         PG_NUMERIC_CODEC_ID,
         `a decimal string that numeric(${precision}, ${scale}) stores without rounding`,
         json,
       );
     }
-    return text;
+    return json;
   }
 }
 
