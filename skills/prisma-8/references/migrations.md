@@ -359,7 +359,7 @@ On Postgres the operations are **methods on the `Migration` base class**, each t
 **Postgres** operations (representative set, all `this.<name>({...})`):
 
 - Tables: `createTable`, `renameTable`, `dropTable`. `renameTable` reads the migration's start and end contracts and returns the table rename plus a rename of every constraint and index named after the old table, so spread it: `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`.
-- Columns: `addColumn` (`column: col(name, nativeType, { codecRef })`), `dropColumn`, `alterColumnType`, `setNotNull`, `dropNotNull`, `setDefault` (`column: col(name, nativeType, { default: lit(value) or fn(expression), codecRef })`), `dropDefault`.
+- Columns: `addColumn` (`column: col(name, nativeType, { codecRef })`), `dropColumn`, `alterColumnType`, `setNotNull`, `dropNotNull`, `setDefault` (`column: col(name, nativeType, { default: lit(value) or fn(expression), codecRef })`; `fn('autoincrement()')` on a smallint, integer or bigint column creates or reuses the `{table}_{column}_seq` sequence, attaches it, and starts it past the column's largest value), `dropDefault`.
 - Constraints: `addPrimaryKey`, `addForeignKey`, `addUnique`, `addCheckConstraint`, `renameConstraint` (`kind`: `primaryKey`, `unique`, `foreignKey` or `checkConstraint`), `renameCheckConstraint`, `dropCheckConstraint`, `dropConstraint`.
 - Indexes: `createIndex`, `renameIndex`, `dropIndex`.
 - Enums: `createNativeEnumType`, `addNativeEnumValue`, `dropNativeEnumType`.
