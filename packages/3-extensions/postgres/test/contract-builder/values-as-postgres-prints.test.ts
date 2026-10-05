@@ -35,10 +35,13 @@ function storedDefaults(): Record<string, unknown> {
       }),
     },
   }));
-  const columns = contract.storage.namespaces['public']?.entries.table?.['Item']?.columns ?? {};
-  return Object.fromEntries(
-    ['ratio', 'zero', 'host', 'mapped'].map((name) => [name, columns[name]?.default]),
-  );
+  const columns = contract.storage.namespaces['public']?.entries.table?.['Item']?.columns;
+  return {
+    ratio: columns?.ratio?.default,
+    zero: columns?.zero?.default,
+    host: columns?.host?.default,
+    mapped: columns?.mapped?.default,
+  };
 }
 
 describe('values in a Postgres contract are the text Postgres returns', () => {
