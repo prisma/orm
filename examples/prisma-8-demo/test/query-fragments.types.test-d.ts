@@ -69,9 +69,9 @@ describe('modelStep', () => {
 
   test('is refused after select and for another model', () => {
     // @ts-expect-error the rows no longer have every Post field
-    db.Post.select('id').pipe(postSummary);
+    db.Post.select('id').apply(postSummary);
     // @ts-expect-error a Tag collection is not a Post collection
-    db.Tag.pipe(postSummary);
+    db.Tag.apply(postSummary);
   });
 });
 

@@ -48,7 +48,7 @@ export type ModelStep<
  *
  * ```ts
  * const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
- * db.User.include('posts', (posts) => posts.pipe(summary));
+ * db.User.include('posts', (posts) => posts.apply(summary));
  * ```
  */
 export function modelStep<

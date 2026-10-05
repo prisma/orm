@@ -17,7 +17,7 @@ export async function ormClientGetRecentUsers(
       posts
         .where(createdSince(since))
         .orderBy((post) => post.createdAt.asc())
-        .pipe(postSummary),
+        .apply(postSummary),
     )
     .orderBy((user) => user.createdAt.asc())
     .limit(limit)

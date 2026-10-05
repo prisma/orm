@@ -86,7 +86,7 @@ The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not 
 
 ## Query fragments
 
-A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A step is a function of a collection, and `pipe` applies it. Three helpers cover the common cases. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
+A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A step is a function of a collection, and `apply` runs it. Three helpers cover the common cases. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
 
 **A filter for every model with a field.** `CodecField<Contract, CodecId, Nullable>` is the model accessor's type for any field with that codec and nullability. A row fragment whose parameter asks for that one field fits every model that has it:
 
@@ -109,9 +109,9 @@ A `CodecField` checks values against the codec's output type, not against the fi
 const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
 type PostSummary = CollectionRowOf<ReturnType<typeof summary>>;
 
-db.Post.where({ userId }).pipe(summary);
-db.User.include('posts', (posts) => posts.pipe(summary));
-db.Post.select('id').pipe(summary); // error: the rows no longer have every Post field
+db.Post.where({ userId }).apply(summary);
+db.User.include('posts', (posts) => posts.apply(summary));
+db.Post.select('id').apply(summary); // error: the rows no longer have every Post field
 ```
 
 `Model` is one model name of the contract; a misspelled name or a union of names is a compile error. A type parameter is refused as well, because TypeScript cannot tell whether it is one name or a union, so pass a literal model name. The step takes an `UnnarrowedCollection<Contract, Model>`: a root, filtered, ordered or included collection, a custom class, an include refinement, or `this` in a custom class. It refuses a collection of another model, one narrowed by `select`, whose rows lack fields the body's result would claim, and one narrowed by `variant`, after which the model's class methods do not apply either. Its result has the default type state: a filter or order applied before it still runs, but `update` and `cursor` are refused after it.

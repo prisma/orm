@@ -25,7 +25,7 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
   }
 
   summaries() {
-    return this.pipe(titleSummary);
+    return this.apply(titleSummary);
   }
 
   orderedBy(name: string) {

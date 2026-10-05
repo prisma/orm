@@ -11,12 +11,12 @@ describe('modelStep', () => {
   it('runs the body on the collection it is applied to', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.select('id', 'title').include('author').all();
-    await db.Post.pipe(summary).all();
+    await db.Post.apply(summary).all();
     await db.Post.all();
-    const [inline, piped, unchanged] = runtime.executions;
-    expect(piped?.plan.ast).toBeDefined();
-    expect(piped?.plan.ast).toEqual(inline?.plan.ast);
-    expect(piped?.plan.ast).not.toEqual(unchanged?.plan.ast);
+    const [inline, applied, unchanged] = runtime.executions;
+    expect(applied?.plan.ast).toBeDefined();
+    expect(applied?.plan.ast).toEqual(inline?.plan.ast);
+    expect(applied?.plan.ast).not.toEqual(unchanged?.plan.ast);
   });
 
   it('keeps a filter applied before the step', async () => {
@@ -25,10 +25,10 @@ describe('modelStep', () => {
       .select('id', 'title')
       .include('author')
       .all();
-    await db.Post.published().pipe(summary).all();
-    const [inline, piped] = runtime.executions;
-    expect(piped?.plan.ast).toBeDefined();
-    expect(piped?.plan.ast).toEqual(inline?.plan.ast);
+    await db.Post.published().apply(summary).all();
+    const [inline, applied] = runtime.executions;
+    expect(applied?.plan.ast).toBeDefined();
+    expect(applied?.plan.ast).toEqual(inline?.plan.ast);
   });
 
   it('keeps an order applied before the step', async () => {
@@ -37,20 +37,20 @@ describe('modelStep', () => {
       .select('id', 'title')
       .include('author')
       .all();
-    await db.Post.recent().pipe(summary).all();
-    await db.Post.pipe(summary).all();
-    const [inline, piped, unordered] = runtime.executions;
-    expect(piped?.plan.ast).toBeDefined();
-    expect(piped?.plan.ast).toEqual(inline?.plan.ast);
-    expect(piped?.plan.ast).not.toEqual(unordered?.plan.ast);
+    await db.Post.recent().apply(summary).all();
+    await db.Post.apply(summary).all();
+    const [inline, applied, unordered] = runtime.executions;
+    expect(applied?.plan.ast).toBeDefined();
+    expect(applied?.plan.ast).toEqual(inline?.plan.ast);
+    expect(applied?.plan.ast).not.toEqual(unordered?.plan.ast);
   });
 
   it('runs inside an include refinement', async () => {
     const { db, runtime } = createChainingOrm();
     await db.User.include('posts', (posts) => posts.select('id', 'title').include('author')).all();
-    await db.User.include('posts', (posts) => posts.pipe(summary)).all();
-    const [inline, piped] = runtime.executions;
-    expect(piped?.plan.ast).toBeDefined();
-    expect(piped?.plan.ast).toEqual(inline?.plan.ast);
+    await db.User.include('posts', (posts) => posts.apply(summary)).all();
+    const [inline, applied] = runtime.executions;
+    expect(applied?.plan.ast).toBeDefined();
+    expect(applied?.plan.ast).toEqual(inline?.plan.ast);
   });
 });

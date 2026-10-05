@@ -11,7 +11,7 @@ export function createdSince(since: Temporal.Instant) {
 }
 
 /**
- * The fields of a post that a list of posts shows, applied with `pipe` to any collection of posts.
+ * The fields of a post that a list of posts shows, run with `apply` to any collection of posts.
  */
 export const postSummary = modelStep<Contract, 'Post'>()((posts) =>
   posts.select('id', 'title', 'createdAt').include('tags'),

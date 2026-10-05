@@ -18,7 +18,7 @@ export async function ormClientGetRecentPosts(
   const db = createOrmClient(runtime);
   return db.Post.where(createdSince(since))
     .orderBy(orderByField(db.Post, orderBy, direction, ['title', 'createdAt']))
-    .pipe(postSummary)
+    .apply(postSummary)
     .limit(limit)
     .all();
 }
