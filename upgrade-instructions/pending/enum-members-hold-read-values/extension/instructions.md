@@ -140,6 +140,7 @@ import {
   type ExtractCodecTypesFromPack,
 } from '@internal/sql-contract-ts/contract-builder';
 
+/** `enumType` bound to the pack's codec types, so each `member()` value is checked against the enum codec's input type. */
 export const enumType = bindEnumType<ExtractCodecTypesFromPack<typeof targetPack>>();
 ```
 
