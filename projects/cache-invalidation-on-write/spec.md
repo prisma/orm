@@ -35,6 +35,8 @@ This is the default path, not an edge case. These ORM mutations run in a transac
 
 ## Slice 1: the `afterTransaction` stage (TML-3399)
 
+The decision itself, with its reasoning, prior art and the alternatives that were rejected, is written up as an ADR draft in [`adr-draft-after-transaction-stage.md`](adr-draft-after-transaction-stage.md). This section holds the implementation detail the slice needs.
+
 ### Surface
 
 The query lifecycle gains one more stage: the point where the query's effects are final. In [`runtime-middleware.ts`](../../packages/1-framework/1-core/framework-components/src/execution/runtime-middleware.ts):
