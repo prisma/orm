@@ -56,16 +56,20 @@ import {
 import type {
   CollectionConstructor,
   CollectionInit,
+  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
+  DropsRow,
   IncludedRelationsForRow,
   IncludeRefinementCollection,
   IncludeRefinementResult,
   IncludeRefinementValue,
   IsToManyRelation,
+  RefinementDropsRow,
   RowSelection,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
   RowType,
+  RowWitness,
   WhereInput,
   WithOrderByState,
+  WithPagingState,
   WithVariantState,
   WithWhereState,
 } from './collection-internal-types';
@@ -257,9 +261,10 @@ class CollectionImpl<
   ModelName extends string,
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
-> implements RowSelection<Row>
+> implements RowSelection<Row>, RowWitness<State>
 {
   declare readonly [RowType]: Row;
+  declare readonly [DropsRow]?: RefinementDropsRow<State> | undefined;
   declare readonly _row?: Row;
   /** @internal */
   readonly ctx: CollectionContext<TContract>;
@@ -1023,7 +1028,7 @@ class CollectionImpl<
     cursorValues: State['hasOrderBy'] extends true
       ? Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>
       : never,
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Collection<TContract, ModelName, Row, WithPagingState<State>> {
     assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
       this.contract,
@@ -1034,12 +1039,12 @@ class CollectionImpl<
 
     if (Object.keys(mappedCursor).length === 0) {
       return blindCast<
-        Collection<TContract, ModelName, Row, State>,
+        Collection<TContract, ModelName, Row, WithPagingState<State>>,
         'the constructor installed the reducer members the surface type declares'
       >(this);
     }
 
-    return this.#clone({
+    return this.#clone<WithPagingState<State>>({
       cursor: mappedCursor,
     });
   }
@@ -1123,8 +1128,8 @@ class CollectionImpl<
    */
   limit(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ limit: typeof n === 'number' ? n : toExpr(n) });
+  ): Collection<TContract, ModelName, Row, WithPagingState<State>> {
+    return this.#clone<WithPagingState<State>>({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1140,8 +1145,8 @@ class CollectionImpl<
    */
   offset(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ offset: typeof n === 'number' ? n : toExpr(n) });
+  ): Collection<TContract, ModelName, Row, WithPagingState<State>> {
+    return this.#clone<WithPagingState<State>>({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**

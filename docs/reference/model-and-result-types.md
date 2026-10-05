@@ -174,7 +174,7 @@ const narrowed = db.orm.public.User.include('posts', (posts) =>
 type UserWithNarrowedPosts = ResultType<typeof narrowed>; // Shape<Models.public_User, { posts: { '+': 'id' | 'title' | 'author' } }>
 ```
 
-One rule of the query builder is not in the type: a refined to-one include (`include('reviewer', (r) => r.where(...))`) is `| null` even on a required relation, because the refinement can exclude the row.
+One rule of the query builder is not in the type: a refined to-one include (`include('reviewer', (r) => r.where(...))`) is `| null` even on a required relation, because the refinement can exclude the row. That applies to `where`, `variant`, `limit`, `offset` and `cursor`; a refinement that only selects, orders or nests includes keeps the relation's own nullability.
 
 To name a model plus some of its relations, use `Shape`, not `Pick`. `Pick<Models.public_User, 'id' | 'posts'>` demands `posts: Models.public_Post[]` with every post carrying its own `author` and `comments`, and no query returns that. Write `Shape<Models.public_User, { '+': 'id' | 'posts' }>` instead.
 
