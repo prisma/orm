@@ -3,6 +3,7 @@ export {
   type ColumnExistsCheckBuilder,
   type ConstraintExistsCheckBuilder,
   columnDefaultAst,
+  columnDefaultSequenceAst,
   columnExistsAst,
   columnNullabilityAst,
   columnTypeAst,

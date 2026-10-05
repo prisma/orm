@@ -2,6 +2,7 @@ import { cfExpr, cfTable, exprSelect } from '@internal/sql-relational-core/contr
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   columnDefaultAst,
+  columnDefaultSequenceAst,
   columnExistsAst,
   columnNullabilityAst,
   columnTypeAst,
@@ -255,6 +256,24 @@ describe('D3 catalog check builders — lowering pins', () => {
     expect(noDefault.sql).toBe(
       `SELECT NOT EXISTS (${infoSchemaBody} AND "column_default" IS NOT NULL)) AS "result"`,
     );
+  });
+
+  it('columnDefaultSequenceAst — an attached sequence and a nextval default', async () => {
+    const ast = columnDefaultSequenceAst({ schema: 'public', table: 'Post', column: 'serial' });
+
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+
+    expect(result.sql).toBe(
+      'SELECT ((pg_get_serial_sequence($1, $2)) IS NOT NULL AND EXISTS (SELECT 1 AS "one" FROM "information_schema"."columns" WHERE ("table_schema" = $3 AND "table_name" = $4 AND "column_name" = $5 AND starts_with("column_default", $6)))) AS "result"',
+    );
+    expect(result.params).toEqual([
+      '"public"."Post"',
+      'serial',
+      'public',
+      'Post',
+      'serial',
+      'nextval(',
+    ]);
   });
 
   it('tablePrimaryKeyAst — pg_index joins with LEFT JOIN and bare boolean conjunct', async () => {
