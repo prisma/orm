@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { prisma7PostgresTypeMap } from '../../../3-targets/postgres/src/core/prisma7-type-map';
 import { INFERRED_PSL_TYPE_NAMES } from '../../../3-targets/postgres/src/core/psl-build/postgres-type-map';
-import { postgresAuthoringTypes } from '../src/core/control-mutation-defaults';
+import { postgresPslTypeConstructors } from '../src/core/control-mutation-defaults';
 
 const TEMPORAL_CODEC_IDS = [
   'pg/date-temporal@1',
@@ -19,8 +19,8 @@ const constructorNames = [
 ];
 
 function codecIdOf(name: string): string | undefined {
-  return Object.hasOwn(postgresAuthoringTypes, name)
-    ? postgresAuthoringTypes[name as keyof typeof postgresAuthoringTypes].output.codecId
+  return Object.hasOwn(postgresPslTypeConstructors, name)
+    ? postgresPslTypeConstructors[name as keyof typeof postgresPslTypeConstructors].output.codecId
     : undefined;
 }
 
