@@ -73,17 +73,17 @@ import {
 import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
 import type {
   CollectionRowOf,
-  CollectionStateOf,
+  CollectionTypeStateOf,
   Filtered,
   HasOrderBy,
   HasRow,
-  HasState,
+  HasTypeState,
   HasWhere,
   Including,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
-  StateType,
+  TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
 import { GroupedCollection } from './grouped-collection';
@@ -267,9 +267,9 @@ export class CollectionBase<
   ModelName extends string,
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
-> implements HasRow<Row>, HasState<State>
+> implements HasRow<Row>, HasTypeState<State>
 {
-  declare readonly [StateType]: State;
+  declare readonly [TypeState]: State;
   declare readonly [RowType]: Row;
   declare readonly _row?: CollectionRowOf<this>;
   /** @internal */
@@ -469,7 +469,7 @@ export class CollectionBase<
    * ```
    */
   variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
-    this: HasState<S>,
+    this: HasTypeState<S>,
     variantName: V,
   ): Collection<
     TContract,
@@ -731,7 +731,7 @@ export class CollectionBase<
         >;
       }
     >,
-    CollectionStateOf<this>
+    CollectionTypeStateOf<this>
   > {
     const relation = resolveIncludeRelation(
       this.contract,
@@ -821,7 +821,7 @@ export class CollectionBase<
           >;
         }
       >,
-      CollectionStateOf<this>
+      CollectionTypeStateOf<this>
     >({
       includes: [...this.state.includes, includeExpr],
     });
@@ -849,7 +849,7 @@ export class CollectionBase<
     S extends CollectionTypeState = State,
     R = Row,
   >(
-    this: HasState<S> & HasRow<R>,
+    this: HasTypeState<S> & HasRow<R>,
     ...fields: Fields
   ): Collection<
     TContract,
@@ -1304,9 +1304,9 @@ export class CollectionBase<
     TContract,
     ModelName,
     CollectionRowOf<this>,
-    CollectionStateOf<this>
+    CollectionTypeStateOf<this>
   > {
-    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionStateOf<this>> = {
+    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>> = {
       aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
       all: (configure) => {
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
@@ -1321,7 +1321,7 @@ export class CollectionBase<
       },
     };
     return blindCast<
-      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionStateOf<this>>,
+      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionTypeStateOf<this>>,
       'the row this collection reads is the row its type carries'
     >(prepared);
   }

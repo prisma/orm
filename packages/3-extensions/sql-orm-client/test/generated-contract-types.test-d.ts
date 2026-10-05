@@ -3,7 +3,7 @@ import type { ContractWithTypeMaps, TypeMaps } from '@internal/sql-contract/type
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { CollectionRowOf, CollectionStateOf } from '../src/collection-types';
+import type { CollectionRowOf, CollectionTypeStateOf } from '../src/collection-types';
 
 import { createMockRuntime } from './helpers';
 
@@ -347,11 +347,11 @@ type SelectedUserRow = CollectionRowOf<typeof selectedUsers>;
 type SelectedUserWithPostsRow = CollectionRowOf<typeof selectedUsersWithPosts>;
 type UsersWithPostCountRow = CollectionRowOf<typeof usersWithPostCount>;
 type UsersWithPostSummaryRow = CollectionRowOf<typeof usersWithPostSummary>;
-type FilteredUsersState = CollectionStateOf<typeof filteredUsers>;
-type OrderedUsersState = CollectionStateOf<typeof orderedUsers>;
-type CursorPagedUsersState = CollectionStateOf<typeof cursorPagedUsers>;
-type DistinctUsersState = CollectionStateOf<typeof distinctUsers>;
-type DistinctOnUsersState = CollectionStateOf<typeof distinctOnUsers>;
+type FilteredUsersState = CollectionTypeStateOf<typeof filteredUsers>;
+type OrderedUsersState = CollectionTypeStateOf<typeof orderedUsers>;
+type CursorPagedUsersState = CollectionTypeStateOf<typeof cursorPagedUsers>;
+type DistinctUsersState = CollectionTypeStateOf<typeof distinctUsers>;
+type DistinctOnUsersState = CollectionTypeStateOf<typeof distinctOnUsers>;
 type UserAggregateResult = Awaited<typeof userAggregate>;
 type GroupedUserStatsResult = Awaited<typeof groupedUserStats>;
 type GroupedUserStatsRow = GroupedUserStatsResult[number];
