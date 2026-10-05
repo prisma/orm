@@ -367,11 +367,47 @@ describe('providePslHover', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null for a namespace resolution', () => {
+  it('shows a namespace declaration line at a namespace resolution', () => {
     const result = hover(
       'namespace billing {\n  model Invoice {\n    id Int\n  }\n}\nmodel Foo {\n  bad billi|ng\n}',
     );
-    expect(result).toBeNull();
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace billing\n```' },
+      range: { start: { line: 6, character: 6 }, end: { line: 6, character: 13 } },
+    });
+  });
+
+  it('shows the namespace at the qualifier of a type reference', () => {
+    const result = hover('model Post {\n  author au|th.User\n}', [
+      'namespace auth {\n  /// A user.\n  model User {\n    id Int\n  }\n}',
+    ]);
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace auth\n```' },
+      range: { start: { line: 1, character: 9 }, end: { line: 1, character: 13 } },
+    });
+  });
+
+  it('shows the namespace at the qualifier of an entity reference', () => {
+    const result = hover(
+      'namespace auth {\n  policy ReadOwn {\n  }\n}\nmodel Invoice {\n  id Int\n  @@guardedBy(policy: au|th.ReadOwn)\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace auth\n```' },
+      range: { start: { line: 6, character: 22 }, end: { line: 6, character: 26 } },
+    });
+  });
+
+  it('shows the member at the member of a qualified entity reference', () => {
+    const result = hover(
+      'namespace auth {\n  /// Owner-only access.\n  policy ReadOwn {\n  }\n}\nmodel Invoice {\n  id Int\n  @@guardedBy(policy: auth.Read|Own)\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npolicy ReadOwn\n```\n\nOwner-only access.',
+      },
+      range: { start: { line: 7, character: 27 }, end: { line: 7, character: 34 } },
+    });
   });
 
   it('returns null for a contributedNamespace resolution', () => {

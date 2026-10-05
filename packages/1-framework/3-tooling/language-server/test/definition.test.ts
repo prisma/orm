@@ -67,6 +67,16 @@ const postSource = [
   '  on = Post',
   '}',
   '',
+  'model Profile {',
+  '  id Int @id',
+  '',
+  '  @@extends(auth.User)',
+  '}',
+  '',
+  'policy AuthPolicy {',
+  '  on = auth.User',
+  '}',
+  '',
 ].join('\n');
 
 const fieldList = (key: string) => ({
@@ -203,6 +213,16 @@ const postModel = postSource.slice(
   postSource.indexOf('}\n\nmodel Tag') + 1,
 );
 
+const authNamespaceLinks = [
+  { uri: authUri, target: authSource.trimEnd(), name: 'auth', origin: 'auth' },
+  {
+    uri: postUri,
+    target: postSource.slice(0, postSource.indexOf('\n\nmodel Post')),
+    name: 'auth',
+    origin: 'auth',
+  },
+];
+
 describe('provideDefinition — references', () => {
   it('goes from a qualified type reference to the model', () => {
     expect(linksAt(postUri, 'auth.Us|er @relation')).toEqual([
@@ -220,6 +240,14 @@ describe('provideDefinition — references', () => {
         origin: 'auth',
       },
     ]);
+  });
+
+  it('goes from the qualifier of an entity reference in an attribute to every namespace block', () => {
+    expect(linksAt(postUri, '@@extends(au|th.User)')).toEqual(authNamespaceLinks);
+  });
+
+  it('goes from the qualifier of an entity reference in a block value to every namespace block', () => {
+    expect(linksAt(postUri, 'on = au|th.User')).toEqual(authNamespaceLinks);
   });
 
   it('goes from a type reference in another file to the model', () => {

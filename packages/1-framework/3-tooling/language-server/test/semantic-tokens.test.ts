@@ -339,6 +339,37 @@ model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.
     ]);
   });
 
+  it('classifies the qualifier of a qualified entity reference as a namespace', () => {
+    const source = parseSemanticTokenSource(
+      `namespace auth { model User { id Int } }
+model Top { id Int }
+policy Probe { on = auth.User\n other = Top.User }`,
+      {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: () =>
+            structBlock({
+              parameters: {
+                on: { type: entityRef({ kind: 'model' }), documentation: '' },
+                other: { type: entityRef({ kind: 'model' }), documentation: '' },
+              },
+            }),
+        },
+      },
+    );
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line >= 2 && ['auth', 'Top'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'auth', tokenType: 'namespace', modifiers: [] },
+      { text: 'Top', tokenType: 'property', modifiers: [] },
+    ]);
+  });
+
   it('keeps the semantic token legend stable', () => {
     expect(semanticTokenTypes).toEqual([
       'keyword',

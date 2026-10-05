@@ -8,6 +8,7 @@ import type {
   SyntaxToken,
 } from '@internal/psl-parser/syntax';
 import type { Location, LocationLink, Position, Range } from 'vscode-languageserver';
+import { resolvedNodeAt } from './cursor-resolution';
 
 export interface DefinitionSource {
   readonly document: DocumentAst;
@@ -21,18 +22,13 @@ interface Declaration {
   readonly name: IdentifierAst | undefined;
 }
 
-interface Reference {
-  readonly node: SyntaxNode;
-  readonly resolution: Resolution;
-}
-
 export function provideDefinition(
   source: DefinitionSource,
   position: Position,
   linkSupport: boolean,
 ): LocationLink[] | Location[] | null {
   const token = tokenAt(source, source.sourceFile.offsetAt(position));
-  const reference = token === undefined ? undefined : referenceAt(token, source.binder);
+  const reference = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
   if (reference === undefined) return null;
   const declarations = declarationsOf(reference.resolution);
   if (declarations.length === 0) return null;
@@ -59,15 +55,6 @@ function tokenAt(source: DefinitionSource, offset: number): SyntaxToken | undefi
   const at = source.document.syntax.tokenAtOffset(offset);
   const right = at.rightBiased();
   return right?.kind === 'Ident' ? right : at.leftBiased();
-}
-
-function referenceAt(token: SyntaxToken, binder: Binder): Reference | undefined {
-  const found = token.parent.findAncestor((node): Reference | 'declaration' | undefined => {
-    const resolution = binder.symbolForNode(node);
-    if (resolution !== undefined) return { node, resolution };
-    return binder.declaredSymbol(node) === undefined ? undefined : 'declaration';
-  });
-  return found === 'declaration' ? undefined : found;
 }
 
 function declarationsOf(resolution: Resolution): readonly Declaration[] {
