@@ -183,7 +183,7 @@ describe('PostgresMigration.renameTable', () => {
     ]);
   });
 
-  it('renames an unnamed constraint to the explicit name the end contract gives it', async () => {
+  it('renames an unnamed constraint to the name the end contract states', async () => {
     expect(
       await renameLabels(
         { uniques: [{ columns: ['email'] }] },
@@ -240,7 +240,7 @@ describe('PostgresMigration.renameTable', () => {
     ).toEqual(['Rename table "userProfile" to "UserProfile"']);
   });
 
-  it('leaves explicitly named objects alone', async () => {
+  it('leaves objects whose stated names stay the same alone', async () => {
     const spec: ProfileSpec = {
       primaryKey: { columns: ['id'], name: 'profile_pk' },
       uniques: [{ columns: ['email'], name: 'profile_email_unique' }],
