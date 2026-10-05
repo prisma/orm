@@ -334,6 +334,43 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
     ]);
   });
 
+  it("a codec whose descriptor says an enum cannot use it is reported with the descriptor's reason", () => {
+    const PRINTED_CODEC_ID = 'test/printed-text@1';
+    const diagnostics: unknown[] = [];
+    const context: AuthoringEntityContext = {
+      ...makeContext(diagnostics),
+      codecLookup: {
+        ...testCodecLookup,
+        get: (id) => (id === PRINTED_CODEC_ID ? textCodec : testCodecLookup.get(id)),
+        enumRefusalFor: (id) =>
+          id === PRINTED_CODEC_ID
+            ? 'A query reads its values as text the contract does not store.'
+            : undefined,
+      },
+    };
+    const handle = factory(
+      enumBlock({
+        name: 'Stamp',
+        values: { start: '2024-01-02T03:04:05' },
+        typeCodecId: PRINTED_CODEC_ID,
+      }),
+      context,
+    );
+
+    expect({ handle, diagnostics }).toEqual({
+      handle: undefined,
+      diagnostics: [
+        {
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message:
+            'enum "Stamp" cannot use the codec "test/printed-text@1". A query reads its values as text the contract does not store.',
+          sourceId: 'schema.prisma',
+          span: SPAN,
+        },
+      ],
+    });
+  });
+
   it('an unknown codec id is reported', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
