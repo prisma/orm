@@ -8,7 +8,7 @@ import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
 import type { orm } from '../src/orm';
-import type { CollectionWithFields, DeclaredField } from '../src/scopes';
+import type { DeclaredField, MissingScopeFields } from '../src/scopes';
 import type { CodecField } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { Contract as ScopeNamespaceContract } from './fixtures/scope-namespace/generated/contract';
@@ -201,16 +201,16 @@ describe('client.scope', () => {
       readonly deletedAt: DeclaredField<'pg/timestamptz-temporal@1', true>;
       readonly title: DeclaredField<'pg/text@1', false>;
     };
-    type Refusal = 'the model has no field with the codec and nullability the scope declares';
-    type ForModel<Model> = Extract<
-      CollectionWithFields<Contract, Fields>,
-      { readonly modelName: Model }
-    >;
-    expectTypeOf<ForModel<'Comment'>[Refusal]>().toEqualTypeOf<'title'>();
-    expectTypeOf<ForModel<'Tag'>[Refusal]>().toEqualTypeOf<'deletedAt' | 'title'>();
-    expectTypeOf<ForModel<'Post'>>().not.toHaveProperty(
-      'the model has no field with the codec and nullability the scope declares',
-    );
+    expectTypeOf<
+      MissingScopeFields<Contract, 'Comment', 'public', Fields>
+    >().toEqualTypeOf<'title'>();
+    expectTypeOf<MissingScopeFields<Contract, 'Tag', 'public', Fields>>().toEqualTypeOf<
+      'deletedAt' | 'title'
+    >();
+    expectTypeOf<MissingScopeFields<Contract, 'Post', 'public', Fields>>().toBeNever();
+    expectTypeOf<
+      MissingScopeFields<Contract, 'Post' | 'Comment', 'public', Fields>
+    >().toEqualTypeOf<'title'>();
     const deletedTitled = client.scope(
       {
         deletedAt: field.column(timestamptzTemporalColumn).optional(),
@@ -238,5 +238,13 @@ describe('client.scope', () => {
       { title: { codecId: 'pg/text@1', nullable: false } },
       (rows: unknown) => rows,
     );
+  });
+
+  test('a union of collections is accepted when every model in it has the fields', () => {
+    const either = flag ? plain.Post : plain.Comment;
+    expectTypeOf(either.apply(notDeleted)).toEqualTypeOf<Filtered<typeof either>>();
+    const postOrTag = flag ? plain.Post : plain.Tag;
+    // @ts-expect-error Tag, one of the models in the union, has no deletedAt
+    postOrTag.apply(notDeleted);
   });
 });

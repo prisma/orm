@@ -93,70 +93,75 @@ export interface ScopeCollection<Row, Facts extends ScopeFacts> {
   offset(n: number): ScopeCollection<Row, Facts>;
 }
 
-type MismatchedField<
+/** The declared fields that the model lacks, or has with another codec or nullability. For a union of models, the fields any of them lacks. */
+export type MissingScopeFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
   Fields extends Readonly<Record<string, DeclaredField>>,
-> = {
-  [K in keyof Fields & string]: K extends keyof FieldsOf<TContract, ModelName, NsId>
-    ? [
-        FieldCodecId<TContract, ModelName, K, NsId>,
-        FieldNullable<TContract, ModelName, K, NsId>,
-      ] extends [Fields[K]['codecId'], Fields[K]['nullable']]
-      ? [Fields[K]['codecId'], Fields[K]['nullable']] extends [
-          FieldCodecId<TContract, ModelName, K, NsId>,
-          FieldNullable<TContract, ModelName, K, NsId>,
-        ]
-        ? never
-        : K
-      : K
-    : K;
-}[keyof Fields & string];
+> = ModelName extends string
+  ? {
+      [K in keyof Fields & string]: K extends keyof FieldsOf<TContract, ModelName, NsId>
+        ? [
+            FieldCodecId<TContract, ModelName, K, NsId>,
+            FieldNullable<TContract, ModelName, K, NsId>,
+          ] extends [Fields[K]['codecId'], Fields[K]['nullable']]
+          ? [Fields[K]['codecId'], Fields[K]['nullable']] extends [
+              FieldCodecId<TContract, ModelName, K, NsId>,
+              FieldNullable<TContract, ModelName, K, NsId>,
+            ]
+            ? never
+            : K
+          : K
+        : K;
+    }[keyof Fields & string]
+  : never;
 
-type ModelScopeTarget<
+type ScopeFieldsCheck<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, DeclaredField>>,
   ModelName extends string,
   NsId extends string,
-> = HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName } & ([
-    MismatchedField<TContract, ModelName, NsId, Fields>,
-  ] extends [never]
-    ? unknown
-    : {
-        readonly 'the model has no field with the codec and nullability the scope declares': MismatchedField<
-          TContract,
-          ModelName,
-          NsId,
-          Fields
-        >;
-      });
+  Fields extends Readonly<Record<string, DeclaredField>>,
+> = [MissingScopeFields<TContract, ModelName, NsId, Fields>] extends [never]
+  ? unknown
+  : {
+      readonly 'the model has no field with the codec and nullability the scope declares': MissingScopeFields<
+        TContract,
+        ModelName,
+        NsId,
+        Fields
+      >;
+    };
 
-type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
+/** A collection plus the filter and order a scope's body established. */
+export type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
   ? Ordered<Facts['hasWhere'] extends true ? Filtered<C> : C>
   : Facts['hasWhere'] extends true
     ? Filtered<C>
     : C;
 
-/** A collection of any model, in any namespace, that has the declared fields with the same codec and nullability. For a model that lacks one, the type names the field, so the refusal names it too. */
-export type CollectionWithFields<
-  TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, DeclaredField>>,
-> = {
-  [NsId in keyof TContract['domain']['namespaces'] & string]: {
-    [ModelName in keyof TContract['domain']['namespaces'][NsId]['models'] &
-      string]: ModelScopeTarget<TContract, Fields, ModelName, NsId>;
-  }[keyof TContract['domain']['namespaces'][NsId]['models'] & string];
-}[keyof TContract['domain']['namespaces'] & string];
-
 /**
- * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, and returns that collection with what the body established.
+ * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, checked against the collection's own contract, model and namespace, and returns that collection with what the body established. `apply` reads the result from the receiver's type and the scope's facts.
  */
-export type FieldScope<
+export interface FieldScope<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, DeclaredField>>,
   Facts extends ScopeFacts,
-> = <C extends CollectionWithFields<TContract, Fields>>(collection: C) => WithFacts<C, Facts>;
+> {
+  <
+    C,
+    ModelName extends string,
+    ReceiverContract extends Contract<SqlStorage> = TContract,
+    NsId extends string = never,
+  >(
+    collection: C &
+      HasState<{ readonly nsId: NsId }> & {
+        readonly modelName: ModelName;
+        readonly ctx: { readonly context: { readonly contract: ReceiverContract } };
+      } & ScopeFieldsCheck<ReceiverContract, ModelName, NsId, Fields>,
+  ): WithFacts<C, Facts>;
+  readonly [ScopeFactsType]: Facts;
+}
 
 function nullability(nullable: boolean): string {
   return nullable ? 'may be null' : 'is never null';
@@ -408,7 +413,10 @@ export function defineFieldScope<
 ): FieldScope<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
   assertScopeBody(body);
-  return (collection) => {
+  return blindCast<
+    FieldScope<TContract, DeclaredFields<Declarations>, Facts>,
+    'the facts are a declared property that exists only in the type'
+  >((collection: unknown) => {
     const receiver: unknown = collection;
     assertScopeReceiver(receiver);
     assertScopeFields(receiver, fields);
@@ -419,11 +427,8 @@ export function defineFieldScope<
       >(collection),
     );
     assertScopeResult(receiver, result);
-    return blindCast<
-      WithFacts<typeof collection, Facts>,
-      "checked above: a collection of the receiver's model, namespace and class, with the facts the body established"
-    >(result);
-  };
+    return result;
+  });
 }
 
 export interface ModelCollection<

@@ -122,7 +122,13 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import { assertModelScopeReceiver, assertScopeBody } from './scopes';
+import {
+  assertModelScopeReceiver,
+  assertScopeBody,
+  type ScopeFacts,
+  type ScopeFactsType,
+  type WithFacts,
+} from './scopes';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -457,9 +463,14 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result.
+   * Call `fn` with this collection and return its result. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
    */
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+  apply<Self, Facts extends ScopeFacts>(
+    this: Self,
+    scope: ((collection: NoInfer<Self>) => unknown) & { readonly [ScopeFactsType]: Facts },
+  ): WithFacts<Self, Facts>;
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  apply(fn: (collection: unknown) => unknown): unknown {
     return fn(this);
   }
 
