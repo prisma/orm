@@ -25,7 +25,7 @@ function unchangedIn<TNode extends DiffableNode>(
 }
 
 /**
- * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the start contract left unnamed carries a name derived from the old table name. When the end contract keeps the same constraint unchanged, it is renamed to the name the end contract gives it explicitly, or otherwise to the name derived from the new table name. A constraint the end contract changes is not renamed, so it keeps its name in the database. A constraint the start contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the index and check rename passes.
+ * The constraint renames that follow a table rename. A primary key, unique constraint or foreign key the start contract left unnamed carries a name derived from the old table name. When the end contract keeps the same constraint unchanged, it is renamed to the name the end contract gives it explicitly, or otherwise to the name derived from the new table name. A primary key or foreign key both contracts name is renamed when the end contract states a different name. A constraint the end contract changes is not renamed, so it keeps its name in the database. Any other constraint the start contract named keeps its name. Indexes and checks are not handled here: their wire names pair by content hash in the index and check rename passes.
  */
 export function constraintRenamesForTableRename(
   input: TableRenameConstraintInput,
@@ -34,25 +34,34 @@ export function constraintRenamesForTableRename(
   const rename = (
     kind: 'primaryKey' | 'unique' | 'foreignKey',
     oldName: string,
-    unchanged: { readonly name?: string } | undefined,
-    derivedName: string,
-  ): readonly RenameConstraintCall[] => {
-    if (unchanged === undefined) return [];
-    const newName = unchanged.name ?? derivedName;
-    return oldName === newName
+    newName: string | undefined,
+  ): readonly RenameConstraintCall[] =>
+    newName === undefined || oldName === newName
       ? []
       : [new RenameConstraintCall(schemaName, to, kind, oldName, newName)];
+  const unchangedName = (
+    oldName: string | undefined,
+    unchanged: { readonly name?: string } | undefined,
+    derivedName: string,
+  ): string | undefined => {
+    if (unchanged === undefined) return undefined;
+    if (oldName === undefined) return unchanged.name ?? derivedName;
+    return unchanged.name;
   };
 
+  const previousKey = previous.primaryKey;
   const primaryKey =
-    previous.primaryKey !== undefined && previous.primaryKey.name === undefined
-      ? rename(
+    previousKey === undefined
+      ? []
+      : rename(
           'primaryKey',
-          defaultPrimaryKeyName(from),
-          unchangedIn(previous.primaryKey, next.primaryKey === undefined ? [] : [next.primaryKey]),
-          defaultPrimaryKeyName(to),
-        )
-      : [];
+          previousKey.name ?? defaultPrimaryKeyName(from),
+          unchangedName(
+            previousKey.name,
+            unchangedIn(previousKey, next.primaryKey === undefined ? [] : [next.primaryKey]),
+            defaultPrimaryKeyName(to),
+          ),
+        );
 
   const uniques = previous.uniques
     .filter((unique) => unique.name === undefined)
@@ -60,21 +69,25 @@ export function constraintRenamesForTableRename(
       rename(
         'unique',
         defaultUniqueName(from, unique.columns),
-        unchangedIn(unique, next.uniques),
-        defaultUniqueName(to, unique.columns),
+        unchangedName(
+          undefined,
+          unchangedIn(unique, next.uniques),
+          defaultUniqueName(to, unique.columns),
+        ),
       ),
     );
 
-  const foreignKeys = previous.foreignKeys
-    .filter((fk) => fk.name === undefined)
-    .flatMap((fk) =>
-      rename(
-        'foreignKey',
-        defaultForeignKeyName(from, fk.columns),
+  const foreignKeys = previous.foreignKeys.flatMap((fk) =>
+    rename(
+      'foreignKey',
+      fk.name ?? defaultForeignKeyName(from, fk.columns),
+      unchangedName(
+        fk.name,
         unchangedIn(fk, next.foreignKeys),
         defaultForeignKeyName(to, fk.columns),
       ),
-    );
+    ),
+  );
 
   return [...primaryKey, ...uniques, ...foreignKeys];
 }

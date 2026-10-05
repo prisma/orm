@@ -1,5 +1,5 @@
 /**
- * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. Explicitly named objects keep their names. A table missing from either contract is refused.
+ * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. A primary key or foreign key both contracts name is renamed when the end contract states a different name; other explicitly named objects keep their names. A table missing from either contract is refused.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
@@ -251,6 +251,29 @@ describe('PostgresMigration.renameTable', () => {
     };
 
     expect(await renameLabels(spec)).toEqual(['Rename table "userProfile" to "UserProfile"']);
+  });
+
+  it('renames a named primary key and foreign key to the different names the end contract states', async () => {
+    expect(
+      await renameLabels(
+        {
+          primaryKey: { columns: ['id'], name: 'userProfile_primary' },
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'userProfile_account_link' },
+          ],
+        },
+        {
+          primaryKey: { columns: ['id'], name: 'UserProfile_primary' },
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'UserProfile_account_link' },
+          ],
+        },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename primary key "userProfile_primary" to "UserProfile_primary" on "UserProfile"',
+      'Rename foreign key "userProfile_account_link" to "UserProfile_account_link" on "UserProfile"',
+    ]);
   });
 
   it('leaves a foreign key on another table that references the renamed table alone', async () => {
