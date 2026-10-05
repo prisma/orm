@@ -127,6 +127,10 @@ export type AfterExecuteResult = AfterResultBase &
       }
   );
 
+export interface AfterTransactionResult {
+  readonly outcome: 'committed' | 'rolled-back' | 'unknown';
+}
+
 export interface QueryInterceptResult {
   readonly rows: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>;
 }
@@ -293,6 +297,18 @@ export interface RuntimeMiddleware<
   afterExecute?(
     plan: TPlan,
     result: AfterExecuteResult,
+    ctx: RuntimeMiddlewareContext,
+  ): Promise<void>;
+  /**
+   * Fires once per query when the transaction enclosing the query has ended,
+   * with its outcome. Outside a transaction it fires right after `afterQuery`
+   * or `afterExecute` with `committed`. Receives the same plan and context as
+   * the query's other hooks. The runner logs and swallows thrown errors. The
+   * hook must not use the connection.
+   */
+  afterTransaction?(
+    plan: TPlan,
+    result: AfterTransactionResult,
     ctx: RuntimeMiddlewareContext,
   ): Promise<void>;
 }

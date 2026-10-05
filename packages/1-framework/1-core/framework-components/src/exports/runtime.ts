@@ -28,6 +28,7 @@ export {
 export type { ExecutionPlan, QueryPlan, ResultType } from '../execution/query-plan';
 export { checkAborted, raceAgainstAbort } from '../execution/race-against-abort';
 export {
+  runAfterTransaction,
   runExecuteWithMiddleware,
   runQueryWithMiddleware,
 } from '../execution/run-with-middleware';
@@ -43,6 +44,7 @@ export {
 export type {
   AfterExecuteResult,
   AfterQueryResult,
+  AfterTransactionResult,
   CrossFamilyMiddleware,
   ExecuteInterceptResult,
   ParamRefMutator,

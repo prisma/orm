@@ -3,6 +3,7 @@ import { AsyncIterableResult } from './async-iterable-result';
 import type { ExecutionPlan } from './query-plan';
 import type {
   AfterQueryResult,
+  AfterTransactionResult,
   RuntimeMiddleware,
   RuntimeMiddlewareContext,
   RuntimeStatementStats,
@@ -216,6 +217,27 @@ export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
     }
   }
   return stats;
+}
+
+/**
+ * Calls each middleware's `afterTransaction` hook in registration order. A
+ * thrown error is passed to `ctx.log.error` and swallowed, and later
+ * middleware still run.
+ */
+export async function runAfterTransaction<TExec extends ExecutionPlan>(
+  exec: TExec,
+  middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
+  result: AfterTransactionResult,
+  ctx: RuntimeMiddlewareContext,
+): Promise<void> {
+  for (const mw of middleware) {
+    if (!mw.afterTransaction) continue;
+    try {
+      await mw.afterTransaction(exec, result, ctx);
+    } catch (error) {
+      ctx.log.error({ event: 'middleware.afterTransaction.error', middleware: mw.name, error });
+    }
+  }
 }
 
 async function notifyQueryCompletion<TExec extends ExecutionPlan>(
