@@ -361,7 +361,12 @@ describe('the renameTable call the Postgres case guard suggests', () => {
 
     expect(result).toEqual({
       call: '...this.renameTable({ schema: "public", table: "userProfile", to: "UserProfile" })',
-      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
+      statements: [
+        ['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"'],
+        [
+          'ALTER TABLE "public"."UserProfile" RENAME CONSTRAINT "userProfile_pkey" TO "UserProfile_pkey"',
+        ],
+      ],
     });
   });
 

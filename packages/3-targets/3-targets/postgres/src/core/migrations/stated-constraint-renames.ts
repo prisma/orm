@@ -2,6 +2,7 @@ import type { SqlMigrationPlannerPlanOptions } from '@internal/family-sql/contro
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
+import { defaultForeignKeyName, defaultPrimaryKeyName } from './default-constraint-names';
 import { RenameConstraintCall } from './op-factory-call';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
 
@@ -14,40 +15,31 @@ function tableRenames(
   const calls: RenameConstraintCall[] = [];
   const previousKey = previous.primaryKey;
   const nextKey = next.primaryKey;
-  if (
-    previousKey?.name !== undefined &&
-    nextKey?.name !== undefined &&
-    previousKey.name !== nextKey.name &&
-    nextKey.isEqualTo(previousKey)
-  ) {
-    calls.push(
-      new RenameConstraintCall(schemaName, tableName, 'primaryKey', previousKey.name, nextKey.name),
-    );
+  if (previousKey !== undefined && nextKey?.isEqualTo(previousKey)) {
+    const oldName = previousKey.name ?? defaultPrimaryKeyName(tableName);
+    const newName = nextKey.name ?? defaultPrimaryKeyName(tableName);
+    if (oldName !== newName) {
+      calls.push(new RenameConstraintCall(schemaName, tableName, 'primaryKey', oldName, newName));
+    }
   }
   for (const previousForeignKey of previous.foreignKeys) {
-    if (previousForeignKey.name === undefined) continue;
     const nextForeignKey = next.foreignKeys.find(
       (candidate) =>
         candidate.id === previousForeignKey.id && candidate.isEqualTo(previousForeignKey),
     );
-    if (nextForeignKey?.name === undefined || nextForeignKey.name === previousForeignKey.name) {
-      continue;
+    if (nextForeignKey === undefined) continue;
+    const derivedName = defaultForeignKeyName(tableName, previousForeignKey.columns);
+    const oldName = previousForeignKey.name ?? derivedName;
+    const newName = nextForeignKey.name ?? derivedName;
+    if (oldName !== newName) {
+      calls.push(new RenameConstraintCall(schemaName, tableName, 'foreignKey', oldName, newName));
     }
-    calls.push(
-      new RenameConstraintCall(
-        schemaName,
-        tableName,
-        'foreignKey',
-        previousForeignKey.name,
-        nextForeignKey.name,
-      ),
-    );
   }
   return calls;
 }
 
 /**
- * The renames of each primary key and foreign key whose name both the start and end contracts state, when the stated name changes and the constraint is otherwise unchanged. The diff never compares constraint names, so without these the database keeps the old name. A constraint only one contract names is left alone: an end contract that starts stating a name describes the name the database already has.
+ * The renames of each primary key and foreign key the start and end contracts both have, otherwise unchanged, whose name changes: a stated name that changes, a name the end contract starts or stops stating. The diff never compares constraint names, so without these the database keeps the old name. A database may already have the new name, as when Prisma 7 created it and the contract only now states it; the rename's postcheck then holds before it runs, and the runner skips it.
  */
 export function statedConstraintRenames(
   options: Pick<

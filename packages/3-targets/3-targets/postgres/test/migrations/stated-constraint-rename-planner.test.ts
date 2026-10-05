@@ -1,8 +1,8 @@
 /**
- * A primary key or foreign key whose name both contracts state, and which is
- * otherwise unchanged, is renamed when the stated name changes: `db verify`
- * does not compare names, so without the rename the database would keep the
- * old name while the contract states the new one.
+ * An otherwise unchanged primary key or foreign key is renamed when the name
+ * the end contract gives it (stated, or derived when unnamed) differs from the
+ * start contract's: `db verify` does not compare names, so without the rename
+ * the database would keep the old name while the contract states the new one.
  */
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
@@ -130,9 +130,31 @@ describe('a stated constraint name that changes', () => {
     expect(await plannedOperations(contract, contract)).toEqual([]);
   });
 
-  it('plans nothing when only the end contract states a name, which the database already has', async () => {
+  it('renames a primary key from the derived name to the name the end contract starts stating', async () => {
     expect(
       await plannedOperations(buildContract({}), buildContract({ primaryKey: 'post_primary' })),
+    ).toEqual([
+      {
+        id: 'primaryKey.public.post.post_pkey.rename',
+        label: 'Rename primary key "post_pkey" to "post_primary" on "post"',
+      },
+    ]);
+  });
+
+  it('renames a foreign key back to the derived name when the end contract stops stating one', async () => {
+    expect(
+      await plannedOperations(buildContract({ foreignKey: 'post_author_link' }), buildContract({})),
+    ).toEqual([
+      {
+        id: 'foreignKey.public.post.post_author_link.rename',
+        label: 'Rename foreign key "post_author_link" to "post_author_id_fkey" on "post"',
+      },
+    ]);
+  });
+
+  it('plans nothing when the end contract states the derived name', async () => {
+    expect(
+      await plannedOperations(buildContract({}), buildContract({ primaryKey: 'post_pkey' })),
     ).toEqual([]);
   });
 
