@@ -73,6 +73,48 @@ model Token {
     ]);
   });
 
+  it('an Inet default in any form PostgreSQL reads is stored in the form PostgreSQL writes', async () => {
+    const forms = [
+      ['10.0.0.1/32', '10.0.0.1'],
+      ['::FFFF:10.0.0.1', '::ffff:10.0.0.1'],
+      ['2001:0DB8:0:0:0:0:0:1/64', '2001:db8::1/64'],
+      ['10.0.0.0/8', '10.0.0.0/8'],
+    ] as const;
+    const authored = await authorSqlContractFromPsl(`
+model Host {
+  id Int @id
+${forms.map(([form], index) => `  a${index} Inet @default("${form}")`).join('\n')}
+}
+`);
+
+    expect({
+      diagnostics: authored.diagnostics,
+      defaults: forms.map(
+        (_, index) => findStorageColumn(authored.contract!, `a${index}`)?.['default'],
+      ),
+    }).toEqual({
+      diagnostics: [],
+      defaults: forms.map(([, printed]) => ({ kind: 'literal', value: printed })),
+    });
+  });
+
+  it('an Inet default PostgreSQL does not read is refused', async () => {
+    const authored = await authorSqlContractFromPsl(`
+model Host {
+  id Int  @id
+  a  Inet @default("not an address")
+}
+`);
+
+    expect(authored.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_INVALID_LITERAL',
+        message:
+          'Field "Host.a": "not an address" is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.',
+      },
+    ]);
+  });
+
   it('a VarChar default longer than its length is refused', async () => {
     const authored = await authorSqlContractFromPsl(`
 model Token {
@@ -157,6 +199,30 @@ model Task {
         '  @@type("pg/text@1")\n  Low = 1',
         'PSL_EXTENSION_INVALID_VALUE',
         'enum "Priority" member "Low" was rejected by codec "pg/text@1": pg/text@1 JSON value must be a string',
+      ],
+      [
+        'a numeric member with a leading zero',
+        '  @@type("pg/numeric@1")\n  Low = "01.5"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "1.5", as PostgreSQL writes this value',
+      ],
+      [
+        'a numeric member written as negative zero',
+        '  @@type("pg/numeric@1")\n  Low = "-0"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "0", as PostgreSQL writes this value',
+      ],
+      [
+        'an inet member with /32',
+        '  @@type("pg/inet@1")\n  Low = "10.0.0.1/32"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be "10.0.0.1", as PostgreSQL writes this address',
+      ],
+      [
+        'an inet member that is not an address',
+        '  @@type("pg/inet@1")\n  Low = "not an address"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
       ],
       [
         'a fraction under an integer codec',
