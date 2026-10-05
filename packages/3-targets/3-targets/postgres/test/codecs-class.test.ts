@@ -322,8 +322,8 @@ describe('codecs-class', () => {
       expect(await codec.decode(SAMPLE_INET, callCtx)).toBe(SAMPLE_INET);
     });
 
-    it('round-trips through JSON identity', () => {
-      expect(codec.encodeJson(SAMPLE_INET)).toBe(SAMPLE_INET);
+    it('writes JSON as PostgreSQL prints the address and reads it back unchanged', () => {
+      expect(codec.encodeJson(`${SAMPLE_INET}/32`)).toBe(SAMPLE_INET);
       expect(codec.decodeJson(SAMPLE_INET)).toBe(SAMPLE_INET);
     });
   });

@@ -177,6 +177,15 @@ describe('what each cast converts', () => {
   });
 
   it.each([
+    ['an IPv4 host with /32', '10.0.0.1/32', '10.0.0.1'],
+    ['an upper-case IPv4-mapped address', '::FFFF:10.0.0.1', '::ffff:10.0.0.1'],
+    ['an IPv6 address written in full', '2001:0DB8:0:0:0:0:0:1/64', '2001:db8::1/64'],
+    ['an IPv4 network', '10.0.0.0/8', '10.0.0.0/8'],
+  ])('pg/text to pg/inet, %s to the form PostgreSQL writes', (_name, text, printed) => {
+    expect(pgInet.casts[pgText.id]?.(text)).toBe(printed);
+  });
+
+  it.each([
     ['a whole number too large for a double', '1'.padEnd(400, '0')],
     ['a negative number too large for a double', `-${'1'.padEnd(400, '0')}`],
   ])('refuses %s rather than rounding it to a word', (_name, text) => {
@@ -198,6 +207,8 @@ describe('what each cast converts', () => {
   it.each([
     ['text that is not a UUID', pgUuid, pgText.id, 'not-a-uuid'],
     ['a UUID with a stray hyphen', pgUuid, pgText.id, 'a0eebc99--9c0b-4ef8-bb6d-6bb9bd380a11'],
+    ['text that is not an address', pgInet, pgText.id, 'not an address'],
+    ['an IPv4 prefix past 32', pgInet, pgText.id, '10.0.0.1/33'],
     ['a value in a shape the source type does not store', pgInt8, pgInt2.id, 'not a number'],
     ['a magnitude no double holds', pgFloat8, pgNumeric.id, '1'.padEnd(400, '0')],
     ['a magnitude no float4 holds', pgFloat4, pgNumeric.id, '3.5e38'],
@@ -215,6 +226,16 @@ describe('what each cast converts', () => {
     ['pg/numeric, whose canonical form is text', pgNumeric, pgInt4.id],
   ])('refuses a value %s cannot have been handed', (_name, type, source) => {
     expect(() => type.casts[source]?.('not a number')).toThrow(/Expected a number/);
+  });
+
+  it('pg/inet names what it reads when it refuses text', () => {
+    expect(() => pgInet.casts[pgText.id]?.('nope')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.CAST_REFUSED',
+        message:
+          '"nope" is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.',
+      }),
+    );
   });
 
   it('pg/uuid names what it reads when it refuses text', () => {

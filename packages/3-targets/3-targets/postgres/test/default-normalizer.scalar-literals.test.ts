@@ -117,6 +117,34 @@ describe('parsePostgresDefault numeric literals in the form PostgreSQL stores', 
   });
 });
 
+describe('parsePostgresDefault inet literals', () => {
+  it('reads an inet default in the form PostgreSQL stores, whatever spelling it was written in', () => {
+    expect(
+      ["'10.0.0.1/32'::inet", "'::FFFF:10.0.0.1'", "'10.0.0.1'::inet"].map((raw) =>
+        parsePostgresDefault(raw, 'inet'),
+      ),
+    ).toEqual([
+      { kind: 'literal', value: '10.0.0.1' },
+      { kind: 'literal', value: '::ffff:10.0.0.1' },
+      { kind: 'literal', value: '10.0.0.1' },
+    ]);
+  });
+
+  it('reads each element of an inet list the same way', () => {
+    expect(parsePostgresDefault("'{10.0.0.1/32,NULL}'::inet[]", 'inet[]')).toEqual({
+      kind: 'literal',
+      value: ['10.0.0.1', null],
+    });
+  });
+
+  it('keeps text that is not an address as written on an inet column', () => {
+    expect(parsePostgresDefault("'not an address'::inet", 'inet')).toEqual({
+      kind: 'literal',
+      value: 'not an address',
+    });
+  });
+});
+
 describe('parsePostgresDefault string literals', () => {
   it('parses a plain string literal', () => {
     expect(parsePostgresDefault("'hello'")).toEqual({ kind: 'literal', value: 'hello' });

@@ -4,6 +4,7 @@ import {
   pgFloat4Descriptor,
   pgFloat8Descriptor,
   pgFloatDescriptor,
+  pgInetDescriptor,
   pgInt8Descriptor,
   pgInt8NumberDescriptor,
   pgNumericDescriptor,
@@ -100,6 +101,27 @@ describe('pg/numeric@1 decodeJson', () => {
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
       'pg/numeric@1 JSON value must be a decimal string',
+    );
+  });
+});
+
+describe('pg/inet@1 decodeJson', () => {
+  const codec = pgInetDescriptor.factory()(ctx);
+
+  it.each([
+    ['an IPv4 host with /32', '10.0.0.1/32', '10.0.0.1'],
+    ['an IPv6 host with /128', '::1/128', '::1'],
+    ['upper-case hex', '::FFFF:10.0.0.1', '::ffff:10.0.0.1'],
+    ['zeros Postgres compresses', '2001:db8:0:0:0:0:0:1', '2001:db8::1'],
+  ])('refuses %s, naming the text PostgreSQL prints for the address', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `pg/inet@1 JSON value must be "${printed}", as PostgreSQL writes this address`,
+    );
+  });
+
+  it('refuses text that is not an address', () => {
+    expect(() => codec.decodeJson('not an address')).toThrow(
+      'pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
     );
   });
 });

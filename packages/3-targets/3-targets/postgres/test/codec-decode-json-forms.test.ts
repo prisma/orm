@@ -170,8 +170,19 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgInetDescriptor.factory()(ctx),
-    accepts: ['192.168.0.1', '::1', '10.0.0.0/8'],
-    rejects: [192, null],
+    accepts: ['192.168.0.1', '::1', '10.0.0.0/8', '::ffff:10.0.0.1', '2001:db8::1/64'],
+    rejects: [
+      192,
+      null,
+      '10.0.0.1/32',
+      '::1/128',
+      '::FFFF:10.0.0.1',
+      '2001:0db8::1',
+      '0:0:0:0:0:0:0:1',
+      '010.0.0.1',
+      'not an address',
+      '',
+    ],
   },
   {
     codec: pgTsqueryDescriptor.factory()(ctx),
@@ -409,6 +420,25 @@ describe('pg/uuid@1 encodeJson', () => {
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     ]);
+  });
+});
+
+describe('pg/inet@1 encodeJson', () => {
+  it('writes an address in the form PostgreSQL writes, which decodeJson reads', () => {
+    const codec = pgInetDescriptor.factory()(ctx);
+    const written = ['10.0.0.1/32', '::FFFF:10.0.0.1', '2001:0DB8:0:0:0:0:0:1/64'].map((value) =>
+      codec.encodeJson(value),
+    );
+    expect(written.map((json) => codec.decodeJson(json))).toEqual([
+      '10.0.0.1',
+      '::ffff:10.0.0.1',
+      '2001:db8::1/64',
+    ]);
+  });
+
+  it('keeps text that is not an address, which decodeJson refuses', () => {
+    const codec = pgInetDescriptor.factory()(ctx);
+    expect(codec.encodeJson('not an address')).toBe('not an address');
   });
 });
 

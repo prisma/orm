@@ -23,6 +23,7 @@ import {
   numeralText,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
+import { canonicalInet } from './canonical-inet';
 import { canonicalUuid, fitsFloat4, pgIntervalCanonical } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
@@ -134,7 +135,22 @@ const asUuid: Cast = (value) => {
 };
 
 export const pgUuid: DataType = dataType('pg/uuid', { casts: { [pgText.id]: asUuid } });
-export const pgInet: DataType = dataType('pg/inet', { casts: fromText });
+/** Text PostgreSQL reads as an IP address, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
+const asInet: Cast = (value) => {
+  if (typeof value !== 'string') return wrongShape(value, 'text');
+  const inet = canonicalInet(value);
+  if (inet !== undefined) return inet;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${JSON.stringify(value)} is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.`,
+    {
+      why: 'An inet column takes only text PostgreSQL reads as an IP address.',
+      fix: 'Write an address such as 192.168.0.1 or 2001:db8::1/64.',
+    },
+  );
+};
+
+export const pgInet: DataType = dataType('pg/inet', { casts: { [pgText.id]: asInet } });
 export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });
 export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });

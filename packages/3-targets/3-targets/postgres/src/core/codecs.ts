@@ -56,6 +56,7 @@ import { blindCast } from '@internal/utils/casts';
 import { counted, withoutTrailing } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
+import { canonicalInet } from './canonical-inet';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
 import {
   CANONICAL_UUID,
@@ -1456,10 +1457,18 @@ export class PgInetCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return canonicalInet(value) ?? value;
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_INET_CODEC_ID, json);
+    const printed = typeof json === 'string' ? canonicalInet(json) : undefined;
+    if (printed !== undefined && printed === json) return printed;
+    return refuseJsonValue(
+      PG_INET_CODEC_ID,
+      printed === undefined
+        ? 'an IP address as PostgreSQL writes it'
+        : `"${printed}", as PostgreSQL writes this address`,
+      json,
+    );
   }
 }
 

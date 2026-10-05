@@ -1,6 +1,7 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import { canonicalNumeralText } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import { canonicalInet } from './canonical-inet';
 import { canonicalUuid } from './codec-helpers';
 
 /**
@@ -222,9 +223,10 @@ const BOOLEAN_TYPE_PATTERN = /^(?:bool|boolean)$/i;
 const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
 const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
 
-/** A text default as the column stores it: a uuid or a decimal numeral in the form PostgreSQL writes, which its codec reads. */
+/** A text default as the column stores it: a uuid, an IP address or a decimal numeral in the form PostgreSQL writes, which its codec reads. */
 function storedText(text: string, nativeType: string | undefined): string {
   if (nativeType === 'uuid') return canonicalUuid(text) ?? text;
+  if (nativeType === 'inet') return canonicalInet(text) ?? text;
   if (nativeType !== undefined && NUMERIC_TYPE_PATTERN.test(nativeType)) {
     return canonicalNumeralText(text);
   }
