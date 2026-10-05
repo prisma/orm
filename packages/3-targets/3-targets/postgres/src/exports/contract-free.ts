@@ -17,6 +17,7 @@ export {
   type RlsPolicyExistsCheckBuilder,
   rlsEnabledAst,
   rlsPolicyExistsAst,
+  sequenceNameAvailableAst,
   type TableExistsCheckBuilder,
   type TablePrimaryKeyCheckBuilder,
   tableExistsAst,

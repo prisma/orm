@@ -237,6 +237,34 @@ export function columnDefaultSequenceAst(options: {
 }
 
 /**
+ * Typed check that `sequence` is free for a column's autoincrement default: no relation has the name, or the relation that has it is the sequence the column already owns, left in place when its default was dropped.
+ */
+export function sequenceNameAvailableAst(options: {
+  readonly schema: string;
+  readonly table: string;
+  readonly column: string;
+  readonly sequence: string;
+}): SelectAst {
+  const namespace = checkNamespace(options.schema);
+  const qualifiedSequence = namespace.qualifyTable(options.sequence);
+  const ownedSequence = cfExpr.fn({
+    method: 'pg_get_serial_sequence',
+    template: 'pg_get_serial_sequence({{self}}, {{arg0}})::regclass',
+    self: cfExpr.param(namespace.qualifyTable(options.table), PG_TEXT_CODEC_ID),
+    args: [cfExpr.param(options.column, PG_TEXT_CODEC_ID)],
+    returns: { codecId: PG_TEXT_CODEC_ID, nullable: true },
+  });
+  return exprSelect()
+    .project(
+      'result',
+      toRegclass(qualifiedSequence)
+        .isNull()
+        .or(toRegclass(qualifiedSequence).eqExpr(ownedSequence)),
+    )
+    .build();
+}
+
+/**
  * Typed column-type check: EXISTS over `pg_attribute` joined to `pg_class`
  * and `pg_namespace`, comparing `format_type(a.atttypid, a.atttypmod)`
  * against the bound expected display type and excluding dropped columns.

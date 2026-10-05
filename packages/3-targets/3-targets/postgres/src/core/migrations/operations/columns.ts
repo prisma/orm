@@ -8,6 +8,7 @@ import {
   columnNullabilityAst,
   columnTypeAst,
   noNullValuesAst,
+  sequenceNameAvailableAst,
   tableIsEmptyAst,
 } from '../../../contract-free/checks';
 import * as contractFreeDdl from '../../../contract-free/ddl';
@@ -272,8 +273,9 @@ export async function setDefault(
  * Gives an existing smallint, integer or bigint column an `autoincrement()` default: creates the
  * sequence a SERIAL column of that width would get (or reuses it, since dropping the default leaves
  * it in place), sets the column's default to it, makes the column own it, and starts it past the
- * column's largest value so existing rows never collide. The postcheck asks for both the attached
- * sequence and the `nextval(` default, which no earlier default satisfies.
+ * column's largest value so existing rows never collide. The precheck refuses a name another
+ * relation holds, which `IF NOT EXISTS` would otherwise skip over and then attach. The postcheck asks
+ * for both the attached sequence and the `nextval(` default, which no earlier default satisfies.
  */
 async function setAutoincrementDefault(
   schemaName: string,
@@ -301,6 +303,14 @@ async function setAutoincrementDefault(
     table: tableName,
     column: columnName,
   });
+  const nameAvailable = await lowerer.lowerToExecuteRequest(
+    sequenceNameAvailableAst({
+      schema: schemaName,
+      table: tableName,
+      column: columnName,
+      sequence: sequenceName,
+    }),
+  );
   const attached = await lowerer.lowerToExecuteRequest(
     columnDefaultSequenceAst({ schema: schemaName, table: tableName, column: columnName }),
   );
@@ -309,7 +319,14 @@ async function setAutoincrementDefault(
     label: `Set default on "${tableName}"."${columnName}"`,
     operationClass,
     target: targetDetails('column', columnName, schemaName, tableName),
-    precheck: [step(`ensure column "${columnName}" exists`, present.sql, present.params)],
+    precheck: [
+      step(`ensure column "${columnName}" exists`, present.sql, present.params),
+      step(
+        `ensure no relation other than the sequence "${columnName}" owns is named ${qualifiedSequence} (rename that relation, or write this migration with migration new)`,
+        nameAvailable.sql,
+        nameAvailable.params,
+      ),
+    ],
     execute: [
       step(
         `create sequence "${sequenceName}"`,

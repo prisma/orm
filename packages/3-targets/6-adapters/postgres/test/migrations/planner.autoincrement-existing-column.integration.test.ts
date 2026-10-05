@@ -138,7 +138,14 @@ describe('autoincrement() on an existing integer column', { concurrent: false },
     schema: SqlSchemaIRNode,
     policy: MigrationOperationPolicy,
   ): Promise<void> {
-    const migrationPlan = plan(contract, schema, policy);
+    await apply(plan(contract, schema, policy), contract, policy);
+  }
+
+  async function apply(
+    migrationPlan: ReturnType<typeof plan>,
+    contract: Contract<SqlStorage>,
+    policy: MigrationOperationPolicy,
+  ): Promise<void> {
     const executeResult = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver: driver!,
       perSpaceOptions: [
@@ -219,6 +226,25 @@ describe('autoincrement() on an existing integer column', { concurrent: false },
       expect(await sequenceCount()).toBe(1);
       expect(await insertWithoutNumber(4)).toBe(11);
       expect(await plannedOperationIds(withAutoincrement)).toEqual([]);
+    },
+  );
+
+  it.each([
+    { kind: 'table', create: 'CREATE TABLE public.orders_number_seq (id int4)' },
+    { kind: 'sequence', create: 'CREATE SEQUENCE public.orders_number_seq' },
+  ])(
+    'refuses before any step when an unrelated $kind holds the sequence name',
+    { timeout: testTimeout },
+    async ({ create }) => {
+      await planAndApply(buildContract('int4', undefined), emptySchema, INIT_ADDITIVE_POLICY);
+      const withAutoincrement = buildContract('int4', AUTOINCREMENT);
+      const migrationPlan = plan(withAutoincrement, await introspect(withAutoincrement), anyClass);
+      await driver!.query(create);
+
+      await expect(apply(migrationPlan, withAutoincrement, anyClass)).rejects.toThrow(
+        'Operation setDefault.orders.number failed during precheck: ensure no relation other than the sequence "number" owns is named "public"."orders_number_seq" (rename that relation, or write this migration with migration new)',
+      );
+      expect(await numberColumn()).toEqual({ column_default: null, serial_sequence: null });
     },
   );
 

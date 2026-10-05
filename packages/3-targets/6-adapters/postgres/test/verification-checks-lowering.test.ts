@@ -12,6 +12,7 @@ import {
   noNullValuesAst,
   rlsEnabledAst,
   rlsPolicyExistsAst,
+  sequenceNameAvailableAst,
   tableExistsAst,
   tableIsEmptyAst,
   tablePrimaryKeyAst,
@@ -273,6 +274,27 @@ describe('D3 catalog check builders — lowering pins', () => {
       'Post',
       'serial',
       'nextval(',
+    ]);
+  });
+
+  it("sequenceNameAvailableAst — the name is free or is the column's own sequence", async () => {
+    const ast = sequenceNameAvailableAst({
+      schema: 'public',
+      table: 'Post',
+      column: 'serial',
+      sequence: 'Post_serial_seq',
+    });
+
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+
+    expect(result.sql).toBe(
+      'SELECT ((to_regclass($1)) IS NULL OR (to_regclass($2)) = pg_get_serial_sequence($3, $4)::regclass) AS "result"',
+    );
+    expect(result.params).toEqual([
+      '"public"."Post_serial_seq"',
+      '"public"."Post_serial_seq"',
+      '"public"."Post"',
+      'serial',
     ]);
   });
 

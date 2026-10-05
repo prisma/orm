@@ -359,6 +359,7 @@ describe('SetDefaultCall', () => {
     });
     expect(op.precheck.map((check) => check.description)).toEqual([
       'ensure column "serial" exists',
+      'ensure no relation other than the sequence "serial" owns is named "public"."Post_serial_seq" (rename that relation, or write this migration with migration new)',
     ]);
     expect(op.postcheck.map((check) => check.description)).toEqual([
       'verify column "serial" takes its default from an attached sequence',
