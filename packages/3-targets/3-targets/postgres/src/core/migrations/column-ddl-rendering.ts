@@ -14,10 +14,13 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { postgresError } from '../errors';
+import { autoincrementSequenceType } from './autoincrement-sequence-type';
 import { postgresDefaultToDdlColumnDefault } from './op-factory-call';
 import { buildColumnTypeSql } from './planner-ddl-builders';
 import { resolveIdentityValue } from './planner-identity-values';
 import { buildExpectedFormatType } from './planner-sql-checks';
+
+const AUTOINCREMENT = 'autoincrement()';
 
 /**
  * Reconstructs the `StorageColumn`-shaped fields the DDL builder functions
@@ -154,7 +157,7 @@ export function resolveColumnTemporaryDefault(
 }
 
 /**
- * The column whose `SET DEFAULT` a column-default diff node asks for, carrying its authored default, or its resolved one when nothing was authored, and its type and codec, from which the adapter writes the clause. `undefined` when the node carries no default, or one DDL does not write, as for an autoincrement column.
+ * The column whose `SET DEFAULT` a column-default diff node asks for, carrying its authored default, or its resolved one when nothing was authored, and its type and codec, from which the adapter writes the clause. An `autoincrement()` default is carried as itself, for `setDefault` to attach a sequence; it is refused on a column that is not a smallint, integer or bigint. `undefined` when the node carries no default, or one DDL does not write.
  */
 export function buildSetDefaultColumn(
   columnName: string,
@@ -164,6 +167,25 @@ export function buildSetDefaultColumn(
   const authored = defaultNode.authored ?? defaultNode.resolved;
   if (authored === undefined) return undefined;
   const typeLike = columnTypeLike('column default', defaultNode);
+  if (authored.kind === 'function' && authored.expression === AUTOINCREMENT) {
+    if (typeLike.many !== false || autoincrementSequenceType(typeLike.nativeType) === undefined) {
+      throw postgresError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Column "${columnName}" has an autoincrement() default, which needs a smallint, integer or bigint column; its type is "${typeLike.nativeType}".`,
+        {
+          meta: {
+            column: columnName,
+            nativeType: typeLike.nativeType,
+            reason: 'set-default-autoincrement',
+          },
+        },
+      );
+    }
+    return contractFree.col(columnName, buildColumnTypeSql(typeLike, codecHooks, {}, false), {
+      default: contractFree.fn(AUTOINCREMENT),
+      ...ifDefined('codecRef', defaultNode.codecRef),
+    });
+  }
   const ddlDefault = postgresDefaultToDdlColumnDefault(
     inCanonicalForm(columnName, authored, defaultNode.dataType, typeLike.many !== false),
   );

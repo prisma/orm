@@ -2,6 +2,7 @@ import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { index } from '@internal/sql-contract/factories';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { fn } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -240,6 +241,81 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     });
     const calls = planFor(contract, actual);
     expect(calls.map((c) => c.factoryName)).toEqual(['alterColumnType', 'setNotNull']);
+  });
+
+  describe('an autoincrement default on an existing integer column', () => {
+    const contract = makeContract({
+      post: {
+        columns: {
+          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          serial: {
+            nativeType: 'int4',
+            codecId: 'pg/int4@1',
+            nullable: false,
+            default: { kind: 'function', expression: 'autoincrement()' },
+          },
+        },
+        primaryKey: { columns: ['id'] },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+      },
+    });
+
+    function liveSerial(serialDefault: { raw: string; value: number } | undefined) {
+      return rootOf({
+        post: new PostgresTableSchemaNode({
+          name: 'post',
+          columns: {
+            id: { name: 'id', nativeType: 'int4', nullable: false, resolvedNativeType: 'int4' },
+            serial: {
+              name: 'serial',
+              nativeType: 'int4',
+              nullable: false,
+              resolvedNativeType: 'int4',
+              ...(serialDefault === undefined
+                ? {}
+                : {
+                    default: serialDefault.raw,
+                    resolvedDefault: { kind: 'literal', value: serialDefault.value },
+                  }),
+            },
+          },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+          policies: [],
+          rlsEnabled: false,
+        }),
+      });
+    }
+
+    it('sets the default, additive, when the column had none', () => {
+      const calls = planFor(contract, liveSerial(undefined));
+
+      expect(calls).toMatchObject([
+        {
+          factoryName: 'setDefault',
+          operationClass: 'additive',
+          tableName: 'post',
+          column: { name: 'serial', type: 'int4', default: fn('autoincrement()') },
+        },
+      ]);
+    });
+
+    it('replaces a literal default, widening', () => {
+      const calls = planFor(contract, liveSerial({ raw: '0', value: 0 }));
+
+      expect(calls).toMatchObject([
+        {
+          factoryName: 'setDefault',
+          operationClass: 'widening',
+          tableName: 'post',
+          column: { name: 'serial', type: 'int4', default: fn('autoincrement()') },
+        },
+      ]);
+    });
   });
 
   it('an extra live table becomes DropTable (strict)', () => {

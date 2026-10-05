@@ -327,8 +327,76 @@ describe('SetDefaultCall', () => {
     });
   });
 
-  it.each(['serial', 'int4'])(
-    'refuses an autoincrement() default on a %s column, which SET DEFAULT cannot write',
+  it('gives an existing integer column a sequence default that starts past its largest value', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({
+      id: 'setDefault.Post.serial',
+      label: 'Set default on "Post"."serial"',
+      operationClass: 'additive',
+      execute: [
+        {
+          description: 'create sequence "Post_serial_seq"',
+          sql: 'CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS integer',
+        },
+        {
+          description: 'set default on "serial"',
+          sql: `ALTER TABLE "public"."Post" ALTER COLUMN "serial" SET DEFAULT nextval('"public"."Post_serial_seq"'::regclass)`,
+        },
+        {
+          description: 'attach sequence "Post_serial_seq" to "serial"',
+          sql: 'ALTER SEQUENCE "public"."Post_serial_seq" OWNED BY "public"."Post"."serial"',
+        },
+        {
+          description: 'start sequence "Post_serial_seq" past the largest "serial"',
+          sql: `SELECT setval('"public"."Post_serial_seq"'::regclass, COALESCE(MAX("serial"), 0) + 1, false) FROM "public"."Post"`,
+        },
+      ],
+    });
+    expect(op.precheck.map((check) => check.description)).toEqual([
+      'ensure column "serial" exists',
+    ]);
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+    ]);
+  });
+
+  it.each([
+    { type: 'int2', sequenceType: 'smallint' },
+    { type: 'int8', sequenceType: 'bigint' },
+    { type: 'bigint', sequenceType: 'bigint' },
+  ])('creates the sequence as $sequenceType for a $type column', async ({ type, sequenceType }) => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', type, { default: fn('autoincrement()') }),
+    ).toOp(testAdapter);
+
+    expect(op.execute[0]?.sql).toBe(
+      `CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS ${sequenceType}`,
+    );
+  });
+
+  it('checks for the attached sequence when an autoincrement default replaces another default', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+      'widening',
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({ operationClass: 'widening' });
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+    ]);
+  });
+
+  it.each(['serial', 'text', 'int4[]'])(
+    'refuses an autoincrement() default on a %s column, which is not an integer column',
     async (type) => {
       await expect(
         new SetDefaultCall(
@@ -338,7 +406,7 @@ describe('SetDefaultCall', () => {
         ).toOp(testAdapter),
       ).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
-        message: `setDefault cannot give the existing column "id" of table "user" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
+        message: `setDefault can give the column "id" of table "user" an autoincrement() default only when its type is smallint, integer or bigint (int2, int4 or int8); its type is "${type}".`,
         meta: { table: 'user', column: 'id', reason: 'set-default-autoincrement' },
       });
     },

@@ -3,6 +3,7 @@ import { type DdlColumn, opaqueSql, renderOpaqueSql } from '@internal/sql-relati
 import { ifDefined } from '@internal/utils/defined';
 import {
   columnDefaultAst,
+  columnDefaultSequenceAst,
   columnExistsAst,
   columnNullabilityAst,
   columnTypeAst,
@@ -11,8 +12,10 @@ import {
 } from '../../../contract-free/checks';
 import * as contractFreeDdl from '../../../contract-free/ddl';
 import { postgresError } from '../../errors';
-import { quoteIdentifier } from '../../sql-utils';
+import { escapeLiteral, quoteIdentifier } from '../../sql-utils';
+import { autoincrementSequenceType } from '../autoincrement-sequence-type';
 import { boundSchema } from '../bound-schema';
+import { defaultSequenceName } from '../default-sequence-name';
 import { qualifyTableName } from '../planner-sql-checks';
 import { type Op, step, targetDetails } from './shared';
 
@@ -198,7 +201,8 @@ export async function dropNotNull(
 
 /**
  * Sets `column`'s default. The adapter writes the `DEFAULT …` clause, reading a literal default with
- * the column's codec first, as every DDL statement that writes a default does.
+ * the column's codec first, as every DDL statement that writes a default does. An `autoincrement()`
+ * default attaches a sequence instead ({@link setAutoincrementDefault}).
  *
  * `operationClass` defaults to `'additive'` (setting a default on a column
  * that currently has none). The reconciliation planner passes `'widening'`
@@ -215,7 +219,18 @@ export async function setDefault(
   lowerer: ExecuteRequestLowerer,
   operationClass: 'additive' | 'widening' = 'additive',
 ): Promise<Op> {
-  refuseUnwritableSetDefault(tableName, column);
+  if (column.default === undefined) {
+    throw postgresError(
+      'CONTRACT.DEFAULT_INVALID',
+      `setDefault on column "${column.name}" of table "${tableName}" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).`,
+      {
+        meta: { table: tableName, column: column.name, reason: 'set-default-without-default' },
+      },
+    );
+  }
+  if (column.default.kind === 'function' && column.default.expression.text === 'autoincrement()') {
+    return setAutoincrementDefault(schemaName, tableName, column, lowerer, operationClass);
+  }
   const columnName = column.name;
   const qualified = qualifyTableName(schemaName, tableName);
   const clause = await lowerer.renderColumnDefault(column, tableName);
@@ -253,22 +268,74 @@ export async function setDefault(
   };
 }
 
-function refuseUnwritableSetDefault(tableName: string, column: DdlColumn): void {
-  const meta = { table: tableName, column: column.name };
-  if (column.default === undefined) {
+/**
+ * Gives an existing smallint, integer or bigint column an `autoincrement()` default: creates the
+ * sequence a SERIAL column of that width would get (or reuses it, since dropping the default leaves
+ * it in place), sets the column's default to it, makes the column own it, and starts it past the
+ * column's largest value so existing rows never collide. The postcheck asks for both the attached
+ * sequence and the `nextval(` default, which no earlier default satisfies.
+ */
+async function setAutoincrementDefault(
+  schemaName: string,
+  tableName: string,
+  column: DdlColumn,
+  lowerer: ExecuteRequestLowerer,
+  operationClass: 'additive' | 'widening',
+): Promise<Op> {
+  const columnName = column.name;
+  const sequenceType = autoincrementSequenceType(column.type);
+  if (sequenceType === undefined) {
     throw postgresError(
       'CONTRACT.DEFAULT_INVALID',
-      `setDefault on column "${column.name}" of table "${tableName}" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).`,
-      { meta: { ...meta, reason: 'set-default-without-default' } },
+      `setDefault can give the column "${columnName}" of table "${tableName}" an autoincrement() default only when its type is smallint, integer or bigint (int2, int4 or int8); its type is "${column.type}".`,
+      { meta: { table: tableName, column: columnName, reason: 'set-default-autoincrement' } },
     );
   }
-  if (column.default.kind === 'function' && column.default.expression.text === 'autoincrement()') {
-    throw postgresError(
-      'CONTRACT.DEFAULT_INVALID',
-      `setDefault cannot give the existing column "${column.name}" of table "${tableName}" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
-      { meta: { ...meta, reason: 'set-default-autoincrement' } },
-    );
-  }
+  const qualifiedTable = qualifyTableName(schemaName, tableName);
+  const qualifiedColumn = quoteIdentifier(columnName);
+  const sequenceName = defaultSequenceName(tableName, columnName);
+  const qualifiedSequence = qualifyTableName(schemaName, sequenceName);
+  const sequenceRegclass = `'${escapeLiteral(qualifiedSequence)}'::regclass`;
+  const { present } = await columnExistsSteps(lowerer, {
+    schema: schemaName,
+    table: tableName,
+    column: columnName,
+  });
+  const attached = await lowerer.lowerToExecuteRequest(
+    columnDefaultSequenceAst({ schema: schemaName, table: tableName, column: columnName }),
+  );
+  return {
+    id: `setDefault.${tableName}.${columnName}`,
+    label: `Set default on "${tableName}"."${columnName}"`,
+    operationClass,
+    target: targetDetails('column', columnName, schemaName, tableName),
+    precheck: [step(`ensure column "${columnName}" exists`, present.sql, present.params)],
+    execute: [
+      step(
+        `create sequence "${sequenceName}"`,
+        `CREATE SEQUENCE IF NOT EXISTS ${qualifiedSequence} AS ${sequenceType}`,
+      ),
+      step(
+        `set default on "${columnName}"`,
+        `ALTER TABLE ${qualifiedTable} ALTER COLUMN ${qualifiedColumn} SET DEFAULT nextval(${sequenceRegclass})`,
+      ),
+      step(
+        `attach sequence "${sequenceName}" to "${columnName}"`,
+        `ALTER SEQUENCE ${qualifiedSequence} OWNED BY ${qualifiedTable}.${qualifiedColumn}`,
+      ),
+      step(
+        `start sequence "${sequenceName}" past the largest "${columnName}"`,
+        `SELECT setval(${sequenceRegclass}, COALESCE(MAX(${qualifiedColumn}), 0) + 1, false) FROM ${qualifiedTable}`,
+      ),
+    ],
+    postcheck: [
+      step(
+        `verify column "${columnName}" takes its default from an attached sequence`,
+        attached.sql,
+        attached.params,
+      ),
+    ],
+  };
 }
 
 export async function dropDefault(

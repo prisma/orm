@@ -1,5 +1,5 @@
 import { opaqueSql } from '@internal/sql-relational-core/ast';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -149,15 +149,41 @@ describe('buildSetDefaultColumn', () => {
     );
   });
 
-  it('has no column to set for an autoincrement default, which the column type writes', () => {
+  it.each(['int2', 'int4', 'int8'])(
+    'carries an autoincrement default on a %s column, for setDefault to attach a sequence',
+    (nativeType) => {
+      const defaultNode = new SqlColumnDefaultIR({
+        resolved: { kind: 'function', expression: 'autoincrement()' },
+        nativeTypeContext: nativeType,
+        codecRef: { codecId: `pg/${nativeType}@1` },
+        codecBaseNativeType: nativeType,
+      });
+
+      expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toEqual(
+        col('v', nativeType, {
+          default: fn('autoincrement()'),
+          codecRef: { codecId: `pg/${nativeType}@1` },
+        }),
+      );
+    },
+  );
+
+  it('refuses an autoincrement default on a column that is not an integer', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'function', expression: 'autoincrement()' },
-      nativeTypeContext: 'int4',
-      codecRef: { codecId: 'pg/int4@1' },
-      codecBaseNativeType: 'int4',
+      nativeTypeContext: 'text',
+      codecRef: { codecId: 'pg/text@1' },
+      codecBaseNativeType: 'text',
     });
 
-    expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toBeUndefined();
+    expect(() => buildSetDefaultColumn('v', defaultNode, noHooks)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message:
+          'Column "v" has an autoincrement() default, which needs a smallint, integer or bigint column; its type is "text".',
+        meta: { column: 'v', nativeType: 'text', reason: 'set-default-autoincrement' },
+      }),
+    );
   });
 
   it.each([
