@@ -227,6 +227,11 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           expect(v7Destructive).toContain(
             'bob@example.com columns: createdAt, email, id, name, role, updatedAt',
           );
+          const v8Destructive = await tsx('test/handover/v8-after-edit-2.ts');
+          expect(v8Destructive).toContain(
+            'Adopting Prisma 8 next to Prisma 7: likes null via Prisma 8',
+          );
+          expect(v8Destructive).toContain('Draft: what changes at cutover: likes 0 via Prisma 8');
 
           await withDevDatabase(async ({ connectionString: freshUrl }) => {
             const replayed = resultEnvelope(

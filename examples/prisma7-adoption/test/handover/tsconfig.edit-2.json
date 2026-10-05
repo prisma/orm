@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
   "include": [],
-  "files": ["v7-after-edit-2.ts"]
+  "files": ["v7-after-edit-2.ts", "v8-after-edit-2.ts"]
 }
