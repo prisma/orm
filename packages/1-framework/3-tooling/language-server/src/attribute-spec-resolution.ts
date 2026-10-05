@@ -8,6 +8,7 @@ import {
   assembleAttributeSpecs,
   type Binder,
   type BlockAttributeSpecFactory,
+  blockSpecFactoryOf,
   findBlockDescriptor,
   type SymbolTable,
   typeReferenceNode,
@@ -18,6 +19,7 @@ import type {
   ModelDeclarationAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
+import type { ArgumentGrammar } from './attribute-argument-grammar';
 
 export interface AttributeSpecSource {
   readonly binder: Binder;
@@ -27,35 +29,79 @@ export interface AttributeSpecSource {
   readonly controlMutationDefaults?: ControlMutationDefaults;
 }
 
-export type AttributeSpecOwner =
-  | {
-      readonly ownerKind: 'block';
-      readonly block: GenericBlockDeclarationAst;
-      readonly blockKeyword: string;
-    }
-  | {
-      readonly ownerKind: 'field';
-      readonly model: ModelDeclarationAst;
-      readonly field: FieldDeclarationAst;
-    }
-  | { readonly ownerKind: 'model'; readonly model: ModelDeclarationAst };
+export interface FieldAttributeOwner {
+  readonly ownerKind: 'field';
+  readonly field: FieldDeclarationAst;
+  readonly model: ModelDeclarationAst;
+}
+
+export interface ModelAttributeOwner {
+  readonly ownerKind: 'model';
+  readonly model: ModelDeclarationAst;
+}
+
+export interface BlockAttributeOwner {
+  readonly ownerKind: 'block';
+  readonly block: GenericBlockDeclarationAst;
+  readonly blockKeyword: string;
+}
+
+export type AttributeOwner = BlockAttributeOwner | FieldAttributeOwner | ModelAttributeOwner;
+
+export interface NamedAttribute {
+  readonly attributeName: string;
+}
+
+export type AttributeArgumentOwner = AttributeOwner & NamedAttribute;
+
+export interface BlockValueOwner {
+  readonly ownerKind: 'blockValue';
+  readonly block: GenericBlockDeclarationAst;
+  readonly blockKeyword: string;
+  readonly key: string;
+}
+
+export type ArgumentOwner = AttributeArgumentOwner | BlockValueOwner;
+
+export function argumentRootGrammar(
+  owner: ArgumentOwner,
+  source: AttributeSpecSource,
+): ArgumentGrammar | undefined {
+  switch (owner.ownerKind) {
+    case 'field':
+    case 'model':
+    case 'block':
+      return attributeSpecResolver(owner, source)(owner.attributeName);
+    case 'blockValue':
+      return blockValueGrammar(owner, source);
+  }
+}
+
+function blockValueGrammar(
+  owner: BlockValueOwner,
+  source: AttributeSpecSource,
+): ArgumentGrammar | undefined {
+  const descriptor = findBlockDescriptor(source.pslBlockDescriptors, owner.blockKeyword);
+  if (descriptor === undefined) return undefined;
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
+  if (spec.mode === 'map') return spec.value.type;
+  return Object.hasOwn(spec.parameters, owner.key) ? spec.parameters[owner.key]?.type : undefined;
+}
 
 export function attributeSpecResolver(
-  context: AttributeSpecOwner,
+  context: AttributeOwner,
   source: AttributeSpecSource,
 ): (name: string) => AttributeSpec<never, never> | undefined {
   switch (context.ownerKind) {
     case 'block': {
       const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
-      const block = source.binder.declaredSymbol(context.block.syntax);
-      if (block?.kind !== 'block') return () => undefined;
       return (name) => {
         const factory = descriptor?.attributes?.[name];
         if (factory === undefined) return undefined;
         return blindCast<
           BlockAttributeSpecFactory,
           'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-        >(factory)({ symbols: source.symbolTable, block });
+        >(factory)({ symbols: source.symbolTable });
       };
     }
     case 'model': {

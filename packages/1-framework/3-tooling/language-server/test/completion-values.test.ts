@@ -318,7 +318,6 @@ describe('classified positions without cursor AST', () => {
             offset: 1,
             replacementStartOffset: 0,
             replacementEndOffset: 4,
-            attributeName: 'probe',
             path: [],
             existingNamedKeys: [],
             hasColon,
@@ -353,7 +352,6 @@ describe('classified positions without cursor AST', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [
             { kind: 'namedArgument', name: 'overlap' },
             { kind: 'functionCall', name: 'same' },
@@ -376,7 +374,6 @@ describe('classified positions without cursor AST', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [
             { kind: 'namedArgument', name: 'choice' },
             { kind: 'functionCall', name: 'ordered' },
@@ -415,9 +412,9 @@ describe('classified positions without cursor AST', () => {
           offset: 1,
           replacementStartOffset: 0,
           replacementEndOffset: 1,
-          attributeName: 'probe',
           path: [{ kind: 'namedArgument', name: 'value' }],
           syntax: 'functionName',
+          qualifier: undefined,
         },
         sourceFile: new SourceFile('language-server-test.psl', 'f()'),
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
@@ -444,9 +441,9 @@ describe('classified positions without cursor AST', () => {
           offset: 1,
           replacementStartOffset: 0,
           replacementEndOffset: 3,
-          attributeName: 'probe',
           path: [{ kind: 'namedArgument', name: 'mode' }],
           syntax: 'scalar',
+          qualifier: undefined,
         },
         sourceFile,
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
@@ -477,16 +474,28 @@ namespace sibling { model Hidden {} }
 `;
 
   it.each([
-    ['model', ['Example', 'Later']],
+    ['model', ['Example', 'Later', 'sibling']],
     ['composite', ['Address']],
     ['named', ['Alias']],
     ['block', ['Rules']],
     ['enumeration', ['Choice']],
-  ])('filters the %s selector without offering namespaces or contributed types', (key, labels) => {
-    expect(
-      complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
-    ).toEqual(labels);
-  });
+  ])(
+    'filters the %s selector to matches and namespaces holding one, without contributed types',
+    (key, labels) => {
+      expect(
+        complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
+      ).toEqual(labels);
+    },
+  );
+
+  it.each(['model: sibling.|', 'sibling.|', 'model: sibling.H|'])(
+    'offers matching members after a namespace qualifier in an attribute argument: %s',
+    (args) => {
+      expect(
+        complete(`model Example { value String @entity(${args}) }${declarations}`).labels,
+      ).toEqual(['Hidden']);
+    },
+  );
 
   it.each([
     ['model', 'Later', CompletionItemKind.Class],
@@ -560,7 +569,7 @@ namespace sibling { model Hidden {} }
   });
 
   it.each(['|', 'model: |', 'nested: { targets: [ref(|)] }'])(
-    'respects namespace visibility before selector filtering: %s',
+    'offers visible matches and visible namespaces holding one: %s',
     (args) => {
       const result = complete(`
 model Global {}
@@ -576,6 +585,8 @@ namespace sibling { model Hidden {} }
         'Self',
         'Forward',
         'Global',
+        'local',
+        'sibling',
         ...(args === '|' ? Object.keys(entitySignature.named) : []),
       ]);
       expect(rejectedParse).not.toHaveBeenCalled();
@@ -868,7 +879,6 @@ describe('recursive function arguments', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [],
           existingNamedKeys: [],
           hasColon: false,

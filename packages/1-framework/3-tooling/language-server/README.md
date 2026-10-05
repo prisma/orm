@@ -1,6 +1,6 @@
 # Prisma 8 language server
 
-The Prisma 8 language server provides diagnostics, formatting, code completion, and attribute signature help for PSL schemas through the Language Server Protocol.
+The Prisma 8 language server provides diagnostics, formatting, code completion, attribute signature help, and hover for PSL schemas through the Language Server Protocol.
 
 ## Project membership and diagnostics
 
@@ -56,3 +56,11 @@ Field, model, and generic-block attributes use the project's contribution specs,
 Snippet-capable clients can opt into argument hints after completion by setting `initializationOptions.completion.supportsTriggerParameterHintsCommand: true` when they implement `editor.action.triggerParameterHints`. Only completions inserting argument snippets carry that command; plain names, existing argument lists, and nullary functions do not. Optional-only function snippets place a tab stop inside the parentheses. The playground also retriggers hints when Tab or Shift+Tab moves within an active PSL snippet.
 
 The client controls tooltip presentation and the shortcut for an explicit signature-help request. Closed or unmanaged documents receive no help, and failures while resolving signature metadata produce an empty response without terminating the server.
+
+## Hover
+
+In an open, configured PSL input, clients can request hover over a model, composite type, field, named type, or generic block, at either its declaration or a reference to it. The tooltip shows the declaration line — `model User`, a field's full declaration, a named type's binding, or a block's keyword and name — followed by its `///` documentation comment, when one is present.
+
+Hovering a model or field attribute shows the same signature label signature help renders for it, followed by the attribute's documentation. Hovering a contributed type (a scalar constructor such as a database-specific type) shows its dotted path with its argument types, followed by the contributing extension's documentation for it. Hovering a generic block's keyword (`policy`, `view`, and similar) shows the extension's documentation for that kind of block, with no declaration line.
+
+A declaration, attribute, or contributed type with no documentation to show omits that section rather than leaving a blank one; a block keyword with no contributed documentation shows no hover at all. Closed or unmanaged documents, and positions with nothing to show, also receive no hover.

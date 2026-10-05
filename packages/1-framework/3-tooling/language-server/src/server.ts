@@ -6,6 +6,7 @@ import {
   type DocumentDiagnosticReport,
   DocumentDiagnosticReportKind,
   type FoldingRange,
+  type Hover,
   type InitializeParams,
   type InitializeResult,
   type Position,
@@ -83,6 +84,12 @@ function createServerOn(connection: Connection): LanguageServer {
     return project?.signatureHelp(uri, position, clientCapabilities.signatureLabelOffsets) ?? null;
   }
 
+  async function hoverForDocument(uri: string, position: Position): Promise<Hover | null> {
+    if (getOpenDocument(uri) === undefined) return null;
+    const project = await projects.nearestProject(uri);
+    return project?.hover(uri, position) ?? null;
+  }
+
   connection.onInitialize(async (params): Promise<InitializeResult> => {
     rootPath = resolveRootPath(params);
     clientCapabilities = resolveClientCapabilities(params);
@@ -95,6 +102,7 @@ function createServerOn(connection: Connection): LanguageServer {
         semanticTokensProvider: { legend: semanticTokensLegend, full: true, range: true },
         completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
+        hoverProvider: true,
         ...(clientCapabilities.pullDiagnostics
           ? { diagnosticProvider: { interFileDependencies: true, workspaceDiagnostics: false } }
           : {}),
@@ -110,6 +118,7 @@ function createServerOn(connection: Connection): LanguageServer {
   connection.onSignatureHelp((params) =>
     signatureHelpForDocument(params.textDocument.uri, params.position),
   );
+  connection.onHover((params) => hoverForDocument(params.textDocument.uri, params.position));
   connection.languages.semanticTokens.on((params) =>
     semanticTokensForDocument(params.textDocument.uri),
   );

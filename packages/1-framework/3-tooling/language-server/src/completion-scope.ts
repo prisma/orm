@@ -2,7 +2,9 @@ import {
   type Binder,
   type EntitySelector,
   entityReference,
+  isNamespaceLike,
   matchesSelector,
+  memberEntries,
   type ScopeResolution,
 } from '@internal/psl-parser';
 import {
@@ -20,18 +22,22 @@ export interface ScopeCompletionCapabilities {
   readonly clientSupportsTriggerSuggestCommand?: boolean;
 }
 
+export interface EntitySelection {
+  readonly selector: EntitySelector;
+  readonly namespaces: boolean;
+}
+
 export function scopeCompletionItems(
   entries: Iterable<readonly [string, ScopeResolution]>,
   binder: Binder,
   range: Range,
   capabilities: ScopeCompletionCapabilities,
-  selector?: EntitySelector,
+  selection?: EntitySelection,
 ): readonly CompletionItem[] {
   const items: CompletionItem[] = [];
   for (const [name, resolution] of entries) {
-    if (selector !== undefined) {
-      const reference = entityReference(resolution);
-      if (reference === undefined || !matchesSelector(reference, selector)) continue;
+    if (selection !== undefined) {
+      if (!offersEntity(resolution, selection)) continue;
     } else if (resolution.kind === 'block') {
       continue;
     }
@@ -105,4 +111,20 @@ export function scopeCompletionItems(
     items.push(item);
   }
   return items;
+}
+
+function offersEntity(resolution: ScopeResolution, selection: EntitySelection): boolean {
+  if (isNamespaceLike(resolution)) {
+    if (!selection.namespaces) return false;
+    for (const [, member] of memberEntries(resolution)) {
+      if (matchesEntity(member, selection.selector)) return true;
+    }
+    return false;
+  }
+  return matchesEntity(resolution, selection.selector);
+}
+
+function matchesEntity(resolution: ScopeResolution, selector: EntitySelector): boolean {
+  const reference = entityReference(resolution);
+  return reference !== undefined && matchesSelector(reference, selector);
 }

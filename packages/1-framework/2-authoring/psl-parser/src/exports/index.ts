@@ -72,6 +72,7 @@ export type {
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
+  BlockAttributeCtx,
   EntityRefArgType,
   FieldAttributeCtx,
   FixedIdentifierArgType,

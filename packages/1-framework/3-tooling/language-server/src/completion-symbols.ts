@@ -11,7 +11,7 @@ export function localFieldNames(
   context: AttributeArgumentCompletionContext,
   binder: Binder,
 ): readonly string[] {
-  if (context.ownerKind === 'block') return [];
+  if (context.ownerKind === 'block' || context.ownerKind === 'blockValue') return [];
   const model = binder.declaredSymbol(context.model.syntax);
   return scalarFieldNames(model?.kind === 'model' ? model : undefined, binder);
 }

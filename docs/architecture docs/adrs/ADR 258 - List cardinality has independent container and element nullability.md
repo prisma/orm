@@ -1,4 +1,4 @@
-# ADR 248 — List cardinality has independent container and element nullability
+# ADR 258 — List cardinality has independent container and element nullability
 
 Status: **Accepted**
 
@@ -73,11 +73,13 @@ The first declares `ReadonlyArray<string | null>` and produces no element-non-nu
 
 No automatic `noCheck` is added for nullable elements, and type generation never infers nullable elements from `noCheck`. An explicit `elementNotNull` waiver on an element-nullable list is rejected because there is no applicable generated check to waive.
 
+An absent database check is therefore not evidence of semantic element nullability. When the live database lacks the derived check, `contract infer` conservatively emits a strict list with `@noCheck(elementNotNull)`, not `Foo?[]`. The author must declare nullable elements explicitly. Changing declared element nullability changes the derived check set; migration comparison and verification observe that physical difference, not a separate schema-IR marker.
+
 ### Family enforcement follows the semantic marker
 
 PostgreSQL omits the element-non-null check for nullable-element native arrays. Other generated checks remain independent. In particular, membership checks for enum arrays ignore `NULL` elements while continuing to reject non-null values outside the declared set.
 
-MongoDB derives array-item schemas from `ContractField.many.elementNullable`. Scalar items include `null` in `bsonType`; enum items also include `null` in their allowed values; value-object items admit either the object schema or `null`. Strict-element arrays retain their existing item schemas.
+MongoDB derives array-item schemas from `ContractField.many.elementNullable`. Scalar items include `null` in `bsonType`; enum items also include `null` in their allowed values; value-object items admit either the object schema or `null`. Strict-element arrays retain their existing item schemas. Container nullability is applied separately: nullable containers use `bsonType: ['null', 'array']`, while required containers remain array-only. Exclusion from `required` permits omission but does not by itself permit an explicit null.
 
 SQLite has no scalar-list capability, so it has no storage or enforcement behavior for this axis.
 
@@ -90,6 +92,16 @@ Defaults follow the same rule: a nullable-element list may contain bare `null`; 
 ### PSL formatting and semantic printing are separate surfaces
 
 The parser AST distinguishes the `?` before `[]` from the trailing `?`, and the parser's token formatter round-trips all four spellings. This decision does not require the separate semantic `PslField` printer to synthesize the new spelling; that surface remains unchanged until it has a consumer requirement of its own.
+
+## Compatibility and historical artifacts
+
+The nested representation intentionally replaces legacy `many: true` in domain fields and native SQL array storage. Strict lists now serialize as `many: { elementNullable: false }`; loaders reject the old boolean-list form rather than deriving a descriptor from it. Scalar-domain omission remains compatible, but existing strict-list JSON and affected contract hashes are not byte-stable. Their PostgreSQL DDL and element-non-null checks remain unchanged.
+
+This is the operator-authorized representation decision shipped in [PR #30051](https://github.com/prisma/orm/pull/30051): cardinality and element semantics must be one nested descriptor, with no legacy-`true` acceptance path. It is a specific exception for nullable scalar lists to the [artifact-compatibility floor](../../../drive/calibration/dod.md#documentation--migration), which ordinarily requires loading a real previous-release artifact and deriving or defaulting new fields. That floor is not weakened for other changes. A test rejecting a mutated fresh artifact is not proof of historical-snapshot compatibility, and this change does not claim that compatibility.
+
+The [application](../../../upgrade-instructions/pending/nullable-scalar-lists/app/instructions.md) and [extension](../../../upgrade-instructions/pending/nullable-scalar-lists/extension/instructions.md) upgrade instructions cover the resulting inventory and coordinated regeneration. Old list-bearing snapshots cannot be loaded unchanged by the new serializers. Re-emitting only the current contract is insufficient when tools also load historical states: each affected state needs its own source and configuration, a consistent JSON/declaration pair, and corresponding content-addressed entries, imports, start/end hashes, and dependent migration references. If historical sources or the reference mapping are unavailable, stop rather than substitute the current schema or guess hashes. Applied production history must be retained; changed identities and database markers require a separately reviewed upgrade procedure and disposable-database rehearsal, not automatic rewriting of applied snapshots or a database reset. These are upgrade obligations and limitations, not a claim that a universal historical migration has been tested.
+
+The later Mongo container-validator correction in [PR #30568](https://github.com/prisma/orm/pull/30568) is separate from this wire migration. For contracts already using nested descriptors, consumers retain their historical snapshots and applied migrations, re-emit the current contract, and apply a **new** validator migration before writing null containers. Runtime deployment alone does not alter stored validators. The [Mongo fix upgrade instructions](../../../upgrade-instructions/pending/mongo-nullable-list-containers/app/instructions.md) distinguish this production procedure from regeneration of disposable repository fixtures.
 
 ## Consequences
 

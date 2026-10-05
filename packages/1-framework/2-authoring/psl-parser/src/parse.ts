@@ -79,6 +79,25 @@ export class Cursor {
     }
   }
 
+  newlineBefore(ahead = 0): boolean {
+    let rawIndex = 0;
+    let remaining = ahead;
+    let newline = false;
+    for (;;) {
+      const token = this.#tokenizer.peek(rawIndex);
+      if (token.kind === 'Eof') return newline;
+      if (TRIVIA_KINDS.has(token.kind)) {
+        if (token.kind === 'Newline') newline = true;
+        rawIndex++;
+        continue;
+      }
+      if (remaining === 0) return newline;
+      remaining--;
+      newline = false;
+      rawIndex++;
+    }
+  }
+
   /** Span of the significant token `lookahead` positions ahead (`mark(0)` = the next). */
   mark(lookahead = 0): DiagnosticMark {
     let rawIndex = 0;
@@ -247,7 +266,7 @@ export function parseQualifiedName(cursor: Cursor): void {
  */
 function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): void {
   let seen = 0;
-  while (cursor.peekKind() === separator) {
+  while (cursor.peekKind() === separator && !cursor.newlineBefore()) {
     seen++;
     const separatorMark = cursor.mark();
     cursor.bump();
@@ -258,16 +277,20 @@ function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): voi
         separatorMark,
       );
     }
-    if (cursor.peekKind() === 'Ident') {
+    if (cursor.peekKind() === 'Ident' && !cursor.newlineBefore()) {
       parseIdentifier(cursor);
     } else {
-      cursor.diagnostic(
-        'PSL_INVALID_QUALIFIED_NAME',
-        'Qualified name is missing a name after the separator',
-        cursor.mark(),
-      );
+      reportMissingSegment(cursor);
     }
   }
+}
+
+function reportMissingSegment(cursor: Cursor): void {
+  cursor.diagnostic(
+    'PSL_INVALID_QUALIFIED_NAME',
+    'Qualified name is missing a name after the separator',
+    cursor.markAfterLastToken(),
+  );
 }
 
 /**
@@ -388,17 +411,26 @@ export function parseObjectField(cursor: Cursor): GreenNode {
   return cursor.finishNode();
 }
 
+interface DottedChain {
+  readonly length: number;
+  readonly trailingDot: boolean;
+}
+
 /**
- * The number of significant tokens in the dotted chain `Ident ('.' Ident)*` at
- * the cursor: 1 for `a`, 3 for `a.b`, 5 for `a.b.c`; 0 when no `Ident` is next.
+ * The dotted chain `Ident ('.' Ident)*` at the cursor, which stays on one line. `length` counts its
+ * significant tokens: 1 for `a`, 3 for `a.b`, 5 for `a.b.c`; 0 when no `Ident` is next.
+ * `trailingDot` marks a chain that ends in a `.` with no name after it, as in `auth.`.
  */
-function dottedChainLength(cursor: Cursor): number {
-  if (cursor.peekKind() !== 'Ident') return 0;
+function dottedChain(cursor: Cursor): DottedChain {
+  if (cursor.peekKind() !== 'Ident') return { length: 0, trailingDot: false };
   let length = 1;
-  while (cursor.peekKind(length) === 'Dot' && cursor.peekKind(length + 1) === 'Ident') {
+  while (cursor.peekKind(length) === 'Dot' && !cursor.newlineBefore(length)) {
+    if (cursor.peekKind(length + 1) !== 'Ident' || cursor.newlineBefore(length + 1)) {
+      return { length, trailingDot: true };
+    }
     length += 2;
   }
-  return length;
+  return { length, trailingDot: false };
 }
 
 /**
@@ -407,8 +439,8 @@ function dottedChainLength(cursor: Cursor): number {
  * with no `(` after it, like `a.b`, is a path, not a call.
  */
 function isCallAhead(cursor: Cursor): boolean {
-  const chain = dottedChainLength(cursor);
-  return chain > 0 && cursor.peekKind(chain) === 'LParen';
+  const chain = dottedChain(cursor);
+  return chain.length > 0 && !chain.trailingDot && cursor.peekKind(chain.length) === 'LParen';
 }
 
 /**
@@ -421,9 +453,9 @@ function isCallAhead(cursor: Cursor): boolean {
  */
 export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
   if (!isCallAhead(cursor)) return undefined;
-  const chain = dottedChainLength(cursor);
+  const chain = dottedChain(cursor);
   cursor.startNode('FunctionCall');
-  if (chain > 1) {
+  if (chain.length > 1) {
     parsePath(cursor, chain);
   } else {
     parseQualifiedName(cursor);
@@ -436,20 +468,26 @@ export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
 
 /**
  * Parses a member path `Ident ('.' Ident)+` that is neither a call nor the tag
- * of a tagged literal, such as `address.city` in `@@index([address.city])`.
+ * of a tagged literal, such as `address.city` in `@@index([address.city])`. A
+ * path that ends in a `.` keeps the dot and reports the missing name, as in
+ * `auth.` while the member is still being typed.
  */
 export function parsePathExpr(cursor: Cursor): GreenNode | undefined {
-  const chain = dottedChainLength(cursor);
-  if (chain < 3) return undefined;
+  const chain = dottedChain(cursor);
+  if (chain.length < 3 && !chain.trailingDot) return undefined;
   return parsePath(cursor, chain);
 }
 
-function parsePath(cursor: Cursor, chain: number): GreenNode {
+function parsePath(cursor: Cursor, chain: DottedChain): GreenNode {
   cursor.startNode('PathExpr');
   parseIdentifier(cursor);
-  for (let consumed = 1; consumed < chain; consumed += 2) {
+  for (let consumed = 1; consumed < chain.length; consumed += 2) {
     cursor.bump();
     parseIdentifier(cursor);
+  }
+  if (chain.trailingDot) {
+    cursor.bump();
+    reportMissingSegment(cursor);
   }
   return cursor.finishNode();
 }

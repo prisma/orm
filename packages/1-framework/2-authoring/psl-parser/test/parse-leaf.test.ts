@@ -33,19 +33,18 @@ function greenText(element: GreenElement): string {
 
 describe('offset tracking', () => {
   it('maps a diagnostic range through interspersed trivia using the running offset', () => {
-    // The second `.` is the offending separator; a newline precedes it, so its
+    // The second `.` is the offending separator; spaces precede it, so its
     // start offset is only correct if every consumed token (the leading
     // segments and that trivia) advanced the running offset counter.
-    const source = 'a.b\n.c';
+    const source = 'a.b  .c';
     const { diagnostics, cursor } = parseTypeAnnotationTree(source);
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]!.code).toBe('PSL_INVALID_QUALIFIED_NAME');
     expect(highlight(cursor.sourceFile, diagnostics[0]!.range)).toMatchInlineSnapshot(`
       "
-      a.b
-      .c
-      ~
+      a.b  .c
+           ~
       "
     `);
   });

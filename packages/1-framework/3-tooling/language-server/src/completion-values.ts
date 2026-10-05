@@ -1,14 +1,25 @@
-import type { ArgType, AttributeSpec, Binder, Scope } from '@internal/psl-parser';
+import {
+  type ArgType,
+  type Binder,
+  isNamespaceLike,
+  memberEntries,
+  type Scope,
+  type ScopeResolution,
+} from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
+import {
+  type ArgumentGrammar,
+  type ArgumentSignature,
+  resolveGrammar,
+} from './attribute-argument-grammar';
 import type {
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
   AttributeNamedKeyPosition,
   AttributeValuePosition,
 } from './completion-context';
-import { scopeCompletionItems } from './completion-scope';
+import { type EntitySelection, scopeCompletionItems } from './completion-scope';
 import { requiredArgumentsSnippet } from './completion-snippets';
 
 interface CompletionInput<Position extends AttributeArgumentPosition> {
@@ -28,10 +39,10 @@ interface ValueCompletionInput<Position extends AttributeArgumentPosition>
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) =>
+    resolveGrammar(root, input.context.path).flatMap((grammar) =>
       'kind' in grammar ? [] : namedKeyItems(input, grammar),
     ),
   );
@@ -39,24 +50,26 @@ export function provideAttributeNamedKeyCompletionItems(
 
 export function provideAttributeArgumentSlotCompletionItems(
   input: ValueCompletionInput<AttributeArgumentSlotPosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) => {
+    resolveGrammar(root, input.context.path).flatMap((grammar) => {
       if ('kind' in grammar) return [];
       const param = grammar.positional?.[input.context.positionalIndex]?.type;
-      return [...valueItems(input, param, 'scalar'), ...namedKeyItems(input, grammar)];
+      return [...valueItems(input, param, 'scalar', undefined), ...namedKeyItems(input, grammar)];
     }),
   );
 }
 
 export function provideAttributeValueCompletionItems(
   input: ValueCompletionInput<AttributeValuePosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) =>
-      'kind' in grammar ? valueItems(input, grammar, input.context.syntax) : [],
+    resolveGrammar(root, input.context.path).flatMap((grammar) =>
+      'kind' in grammar
+        ? valueItems(input, grammar, input.context.syntax, input.context.qualifier)
+        : [],
     ),
   );
 }
@@ -96,10 +109,13 @@ function valueItems(
   input: ValueCompletionInput<AttributeArgumentPosition>,
   type: ArgType<unknown, never> | undefined,
   syntax: AttributeValuePosition['syntax'],
+  qualifier: string | undefined,
 ): readonly CompletionItem[] {
   if (type === undefined) return [];
   if (type.kind === 'oneOf') {
-    return type.alternatives.flatMap((alternative) => valueItems(input, alternative, syntax));
+    return type.alternatives.flatMap((alternative) =>
+      valueItems(input, alternative, syntax, qualifier),
+    );
   }
   if (type.kind === 'funcCall') {
     const snippet = input.clientSupportsSnippets && syntax !== 'functionName';
@@ -130,6 +146,7 @@ function valueItems(
     ];
   }
   if (syntax === 'functionName') return [];
+  if (qualifier !== undefined) return qualifiedItems(input, type, qualifier);
   if (type.kind === 'taggedLiteral') {
     return type.tags.map((tag) => ({
       ...completionItem(
@@ -157,16 +174,10 @@ function valueItems(
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
     case 'entityRef':
-      return scopeCompletionItems(
-        input.scope.entries(),
-        input.binder,
-        {
-          start: input.sourceFile.positionAt(input.context.replacementStartOffset),
-          end: input.sourceFile.positionAt(input.context.replacementEndOffset),
-        },
-        input,
-        type.expected,
-      );
+      return entityItems(input, input.scope.entries(), {
+        selector: type.expected,
+        namespaces: true,
+      });
     case 'list':
     case 'record':
     case 'int':
@@ -174,6 +185,37 @@ function valueItems(
     case 'rejecting':
       return [];
   }
+}
+
+function qualifiedItems(
+  input: ValueCompletionInput<AttributeArgumentPosition>,
+  type: ArgType<unknown, never>,
+  qualifier: string,
+): readonly CompletionItem[] {
+  if (type.kind !== 'entityRef') return [];
+  const namespace = input.scope.lookup(qualifier);
+  if (namespace === undefined || !isNamespaceLike(namespace)) return [];
+  return entityItems(input, memberEntries(namespace), {
+    selector: type.expected,
+    namespaces: false,
+  });
+}
+
+function entityItems(
+  input: ValueCompletionInput<AttributeArgumentPosition>,
+  entries: Iterable<readonly [string, ScopeResolution]>,
+  selection: EntitySelection,
+): readonly CompletionItem[] {
+  return scopeCompletionItems(
+    entries,
+    input.binder,
+    {
+      start: input.sourceFile.positionAt(input.context.replacementStartOffset),
+      end: input.sourceFile.positionAt(input.context.replacementEndOffset),
+    },
+    input,
+    selection,
+  );
 }
 
 function scalarItems(
