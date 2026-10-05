@@ -269,32 +269,38 @@ type ContractBase = Omit<
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/bigint@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly bigintNumber: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly blob: {
                   readonly nativeType: 'blob';
                   readonly codecId: 'sqlite/blob@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly char: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly charLength: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly datetime: {
                   readonly nativeType: 'text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'integer';
@@ -304,53 +310,63 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly integer: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly json: {
                   readonly nativeType: 'text';
                   readonly codecId: 'sqlite/json@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly real: {
                   readonly nativeType: 'real';
                   readonly codecId: 'sqlite/real@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly shortText: {
                   readonly nativeType: 'character varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeRef: 'ShortText';
+                  readonly many: false;
                 };
                 readonly sqlFloat: {
                   readonly nativeType: 'real';
                   readonly codecId: 'sql/float@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly sqlInt: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sql/int@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly text: {
                   readonly nativeType: 'text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly varchar: {
                   readonly nativeType: 'character varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly varcharLength: {
                   readonly nativeType: 'character varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 255 };
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

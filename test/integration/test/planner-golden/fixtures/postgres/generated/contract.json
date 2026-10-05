@@ -99,7 +99,9 @@
           "List": {
             "fields": {
               "bit": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bit@1",
@@ -107,7 +109,9 @@
                 }
               },
               "bitLength": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bit@1",
@@ -118,7 +122,9 @@
                 }
               },
               "char": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -126,7 +132,9 @@
                 }
               },
               "charLength": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -137,7 +145,9 @@
                 }
               },
               "geometrySrid": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/geometry@1",
@@ -155,7 +165,9 @@
                 }
               },
               "int4": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -163,7 +175,9 @@
                 }
               },
               "interval": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/interval@1",
@@ -171,7 +185,9 @@
                 }
               },
               "jsonb": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -179,7 +195,9 @@
                 }
               },
               "mood": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -190,7 +208,9 @@
                 }
               },
               "numeric": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -198,7 +218,9 @@
                 }
               },
               "numericPrecision": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -209,7 +231,9 @@
                 }
               },
               "numericPrecisionScale": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -221,7 +245,9 @@
                 }
               },
               "text": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -229,7 +255,9 @@
                 }
               },
               "timePrecision": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/time-temporal@1",
@@ -240,7 +268,9 @@
                 }
               },
               "timestamptz": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -248,7 +278,9 @@
                 }
               },
               "timestamptzPrecision": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -259,7 +291,9 @@
                 }
               },
               "uuid": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -267,7 +301,9 @@
                 }
               },
               "varbitLength": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/varbit@1",
@@ -278,7 +314,9 @@
                 }
               },
               "varchar": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -286,7 +324,9 @@
                 }
               },
               "varcharLength": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -297,7 +337,9 @@
                 }
               },
               "vector": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/vector@1",
@@ -1175,13 +1217,17 @@
               "columns": {
                 "bit": {
                   "codecId": "pg/bit@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bit",
                   "nullable": false
                 },
                 "bitLength": {
                   "codecId": "pg/bit@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bit",
                   "nullable": false,
                   "typeParams": {
@@ -1190,13 +1236,17 @@
                 },
                 "char": {
                   "codecId": "sql/char@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "character",
                   "nullable": false
                 },
                 "charLength": {
                   "codecId": "sql/char@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "character",
                   "nullable": false,
                   "typeParams": {
@@ -1205,7 +1255,9 @@
                 },
                 "geometrySrid": {
                   "codecId": "pg/geometry@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "geometry",
                   "nullable": false,
                   "typeParams": {
@@ -1219,25 +1271,33 @@
                 },
                 "int4": {
                   "codecId": "pg/int4@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
                 "interval": {
                   "codecId": "pg/interval@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "interval",
                   "nullable": false
                 },
                 "jsonb": {
                   "codecId": "pg/jsonb@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "jsonb",
                   "nullable": false
                 },
                 "mood": {
                   "codecId": "pg/enum@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "Mood",
                   "nullable": false,
                   "typeParams": {
@@ -1252,13 +1312,17 @@
                 },
                 "numeric": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "numeric",
                   "nullable": false
                 },
                 "numericPrecision": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
@@ -1267,7 +1331,9 @@
                 },
                 "numericPrecisionScale": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
@@ -1277,13 +1343,17 @@
                 },
                 "text": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 },
                 "timePrecision": {
                   "codecId": "pg/time-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "time",
                   "nullable": false,
                   "typeParams": {
@@ -1292,13 +1362,17 @@
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "timestamptzPrecision": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false,
                   "typeParams": {
@@ -1307,13 +1381,17 @@
                 },
                 "uuid": {
                   "codecId": "pg/uuid@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "uuid",
                   "nullable": false
                 },
                 "varbitLength": {
                   "codecId": "pg/varbit@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bit varying",
                   "nullable": false,
                   "typeParams": {
@@ -1322,13 +1400,17 @@
                 },
                 "varchar": {
                   "codecId": "sql/varchar@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "character varying",
                   "nullable": false
                 },
                 "varcharLength": {
                   "codecId": "sql/varchar@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "character varying",
                   "nullable": false,
                   "typeParams": {
@@ -1337,7 +1419,9 @@
                 },
                 "vector": {
                   "codecId": "pg/vector@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "vector",
                   "nullable": false,
                   "typeParams": {
@@ -1735,7 +1819,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3c7936fce6f8d5b9b90f9388a2269a5704aa5563c968ff44ed5b46341f3e146d",
+    "storageHash": "a30ad98af6cd338809f11126b5522c80138ed5411b9fd262869ee72951759589",
     "types": {
       "Code": {
         "codecId": "sql/char@1",
