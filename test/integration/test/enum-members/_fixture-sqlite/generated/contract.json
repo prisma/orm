@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "sqlite",
+  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "roots": {
+    "readings": {
+      "model": "Reading",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "enum": {
+          "BigLevel": {
+            "codecId": "sqlite/bigint@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "1"
+              },
+              {
+                "name": "High",
+                "value": "10"
+              }
+            ]
+          },
+          "RealLevel": {
+            "codecId": "sqlite/real@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": 1.5
+              },
+              {
+                "name": "Infinite",
+                "value": "Infinity"
+              }
+            ]
+          },
+          "TextLevel": {
+            "codecId": "sqlite/text@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "low"
+              },
+              {
+                "name": "High",
+                "value": "high"
+              }
+            ]
+          },
+          "WhenLevel": {
+            "codecId": "sqlite/datetime@1",
+            "members": [
+              {
+                "name": "Launch",
+                "value": "2024-01-01T00:00:00Z"
+              },
+              {
+                "name": "Sunset",
+                "value": "2025-06-30T12:00:00Z"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Reading": {
+            "fields": {
+              "big": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/bigint@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "BigLevel",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "real": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/real@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RealLevel",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              },
+              "text": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "TextLevel",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              },
+              "when": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "WhenLevel",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "big": {
+                  "column": "big"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "real": {
+                  "column": "real"
+                },
+                "text": {
+                  "column": "text"
+                },
+                "when": {
+                  "column": "when"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "readings"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "readings": {
+              "columns": {
+                "big": {
+                  "codecId": "sqlite/bigint@1",
+                  "nativeType": "integer",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "BigLevel",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "sqlite/integer@1",
+                  "nativeType": "integer",
+                  "nullable": false
+                },
+                "real": {
+                  "codecId": "sqlite/real@1",
+                  "nativeType": "real",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RealLevel",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "text": {
+                  "codecId": "sqlite/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "TextLevel",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "when": {
+                  "codecId": "sqlite/datetime@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "WhenLevel",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "BigLevel": {
+              "kind": "valueSet",
+              "values": [
+                "1",
+                "10"
+              ]
+            },
+            "RealLevel": {
+              "kind": "valueSet",
+              "values": [
+                1.5,
+                "Infinity"
+              ]
+            },
+            "TextLevel": {
+              "kind": "valueSet",
+              "values": [
+                "low",
+                "high"
+              ]
+            },
+            "WhenLevel": {
+              "kind": "valueSet",
+              "values": [
+                "2024-01-01T00:00:00Z",
+                "2025-06-30T12:00:00Z"
+              ]
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "302d84ab4139f90dc83498056a6472496c58ce9543d6ebe7b98e4a2b39e9e4e9"
+  },
+  "capabilities": {
+    "sql": {
+      "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}
