@@ -1,20 +1,11 @@
-const IDENTIFIER_MAX_BYTES = 63;
-const utf8 = new TextEncoder();
+import { clipToUtf8Bytes, utf8ByteLength } from '@internal/utils/text';
 
-function byteLength(value: string): number {
-  return utf8.encode(value).length;
-}
+/** `NAMEDATALEN - 1`: the longest identifier Postgres stores, in bytes. */
+export const POSTGRES_IDENTIFIER_MAX_BYTES = 63;
 
-function clipToBytes(value: string, maxBytes: number): string {
-  let kept = '';
-  let bytes = 0;
-  for (const character of value) {
-    const size = byteLength(character);
-    if (bytes + size > maxBytes) break;
-    kept += character;
-    bytes += size;
-  }
-  return kept;
+/** The name Postgres stores for an identifier it is given: the first 63 bytes, cut on a character boundary. */
+export function storedIdentifier(name: string): string {
+  return clipToUtf8Bytes(name, POSTGRES_IDENTIFIER_MAX_BYTES);
 }
 
 /**
@@ -26,15 +17,15 @@ export function postgresObjectName(
   label: string,
 ): string {
   const separators = second === undefined ? 1 : 2;
-  const available = IDENTIFIER_MAX_BYTES - byteLength(label) - separators;
-  let firstBytes = byteLength(first);
-  let secondBytes = second === undefined ? 0 : byteLength(second);
+  const available = POSTGRES_IDENTIFIER_MAX_BYTES - utf8ByteLength(label) - separators;
+  let firstBytes = utf8ByteLength(first);
+  let secondBytes = second === undefined ? 0 : utf8ByteLength(second);
   while (firstBytes + secondBytes > available) {
     if (firstBytes > secondBytes) firstBytes--;
     else secondBytes--;
   }
-  const head = clipToBytes(first, firstBytes);
+  const head = clipToUtf8Bytes(first, firstBytes);
   return second === undefined
     ? `${head}_${label}`
-    : `${head}_${clipToBytes(second, secondBytes)}_${label}`;
+    : `${head}_${clipToUtf8Bytes(second, secondBytes)}_${label}`;
 }
