@@ -101,6 +101,46 @@ describe('combineVerifyResults', () => {
     expect(combined.result.schema.issues).toHaveLength(1);
   });
 
+  it('keeps the failing extension space code when the app passes', () => {
+    const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
+      ['app', makeResult({ spaceId: 'app', ok: true, summary: 'Schema matches contract' })],
+      [
+        'cipher',
+        {
+          ...makeResult({ spaceId: 'cipher', ok: false, summary: 'cipher failure' }),
+          code: 'CONTRACT.EXTENSION_DRIFT',
+        },
+      ],
+    ]);
+
+    const combined = combineVerifyResults(perSpace, 'app', false, []);
+
+    expect(combined.result.code).toBe('CONTRACT.EXTENSION_DRIFT');
+  });
+
+  it('keeps the app space code when the app and an extension both fail', () => {
+    const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
+      [
+        'cipher',
+        {
+          ...makeResult({ spaceId: 'cipher', ok: false, summary: 'cipher failure' }),
+          code: 'CONTRACT.EXTENSION_DRIFT',
+        },
+      ],
+      [
+        'app',
+        {
+          ...makeResult({ spaceId: 'app', ok: false, summary: 'app failure' }),
+          code: 'CONTRACT.APP_DRIFT',
+        },
+      ],
+    ]);
+
+    const combined = combineVerifyResults(perSpace, 'app', false, []);
+
+    expect(combined.result.code).toBe('CONTRACT.APP_DRIFT');
+  });
+
   it('returns a non-`ok` envelope when any space fails, even when the app passes', () => {
     const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
       ['app', makeResult({ spaceId: 'app', ok: true, summary: 'Schema matches contract' })],
