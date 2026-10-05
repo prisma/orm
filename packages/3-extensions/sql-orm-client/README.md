@@ -88,7 +88,7 @@ The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not 
 
 A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A scope is a function from a collection to a collection, and `apply` runs it. Three helpers make the scopes TypeScript cannot type on its own. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
 
-**A scope for any model with given fields.** `client.scope(fields, body)`, on the client `orm()` returns (`db.orm.scope` on the Postgres client), declares the fields the scope needs and returns a scope for every model that has them:
+**A scope for any model with given fields.** The client's `scope` method, `scope(fields, body)` on the client `orm()` returns (`db.orm.scope` on the Postgres client), declares the fields the scope needs and returns a scope for every model that has them:
 
 ```ts
 import { field } from '@prisma/orm-postgres/contract-builder';

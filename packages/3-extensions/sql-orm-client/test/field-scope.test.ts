@@ -1,7 +1,7 @@
 import { textColumn, timestamptzTemporalColumn } from '@internal/adapter-postgres/column-types';
 import { field } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFragmentsOrm } from './fragments-fixture';
 
 function scopes() {
@@ -61,7 +61,22 @@ describe('client.scope', () => {
     expect(appliedInclude?.plan.ast).toEqual(inlineInclude?.plan.ast);
   });
 
-  it('refuses a model without the field before building a query', () => {
+  it('refuses a model without the field before running the body', () => {
+    const { client, plain } = scopes();
+    const body = vi.fn((rows: { limit(n: number): unknown }) => rows.limit(1));
+    const limited = blindCast<
+      (fields: unknown, body: unknown) => unknown,
+      'the body is a spy that records its calls'
+    >(client.scope)({ deletedAt: field.column(timestamptzTemporalColumn).optional() }, body);
+    expect(() => untyped(limited)(plain.Tag)).toThrow(
+      expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }),
+    );
+    expect(body).not.toHaveBeenCalled();
+    untyped(limited)(plain.Post);
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a model without the field with why, fix and meta', () => {
     const { plain, runtime, notDeleted } = scopes();
     expect(() => untyped(notDeleted)(plain.Tag)).toThrow(
       expect.objectContaining({
@@ -127,8 +142,63 @@ describe('client.scope', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
-        message: 'Cannot declare the scope field kind: the field builder names no column type',
+        message: 'Cannot define the scope: the field builder for kind names no column type',
       }),
     );
+  });
+
+  describe('input from a JavaScript caller', () => {
+    const scopeOf = (fields: unknown, body: unknown) => () => {
+      const { client } = scopes();
+      return blindCast<(fields: unknown, body: unknown) => unknown, 'a JavaScript caller'>(
+        client.scope,
+      )(fields, body);
+    };
+    const validBody = (rows: { limit(n: number): unknown }) => rows.limit(1);
+    const validFields = { deletedAt: { codecId: 'pg/timestamptz-temporal@1', nullable: true } };
+
+    it.each([
+      ['undefined', undefined, 'undefined'],
+      ['null', null, 'null'],
+      ['a number', 3, 'a number'],
+    ])('refuses %s as the field map', (_label, fields, received) => {
+      expect(scopeOf(fields, validBody)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: 'Cannot define the scope: the fields are not an object',
+          why: `The first argument of scope maps the name of each field the scope needs to its declaration; received ${received}.`,
+        }),
+      );
+    });
+
+    it.each([
+      ['null', null, 'null'],
+      ['a number', 3, 'a number'],
+      ['an object without nullable', { codecId: 'pg/text@1' }, 'an object'],
+    ])('refuses %s as a field declaration', (_label, declaration, received) => {
+      expect(scopeOf({ title: declaration }, validBody)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message:
+            'Cannot define the scope: the declaration of field title is not a field builder or { codecId, nullable }',
+          why: `Each field of a scope is declared with a field builder or with an object that has a string codecId and a boolean nullable; received ${received} for title.`,
+        }),
+      );
+    });
+
+    it.each([
+      ['undefined', undefined, 'undefined'],
+      ['null', null, 'null'],
+      ['a number', 3, 'a number'],
+      ['an object', {}, 'an object'],
+    ])('refuses %s as the body', (_label, body, received) => {
+      expect(scopeOf(validFields, body)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: 'Cannot define the scope: the body is not a function',
+          why: `The body of a scope is a function that receives a collection and returns one; received ${received}.`,
+        }),
+      );
+    });
   });
 });

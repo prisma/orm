@@ -30,7 +30,7 @@ export interface ScopeFieldSpec<
   readonly nullable: Nullable;
 }
 
-/** A field builder from the contract DSL, such as `field.column(textColumn).optional()`: what `client.scope` reads from it. */
+/** A field builder from the contract DSL, such as `field.column(textColumn).optional()`: what the client's `scope` method reads from it. */
 export interface ScopeFieldBuilder<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
@@ -69,21 +69,19 @@ export type ScopeRow<
     : never;
 };
 
-/** What a scope for any model has established: a filter, an order. */
+export declare const ScopeFactsType: unique symbol;
+
+/** What the body of a scope for any model has established. A flag that is `boolean` is not known; `true` is established. */
 export interface ScopeFacts {
   readonly hasWhere: boolean;
   readonly hasOrderBy: boolean;
 }
 
-export interface NoFacts extends ScopeFacts {
-  readonly hasWhere: false;
-  readonly hasOrderBy: false;
-}
-
 type OrderSelector<Row> = (row: Row) => OrderByItem;
 
-/** The collection the body of a scope for any model receives: the methods that keep the row, on the declared fields. */
+/** The collection the body of a scope for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
 export interface ScopeQuery<Row, Facts extends ScopeFacts> {
+  readonly [ScopeFactsType]: Facts;
   where(
     fn: (row: Row) => WhereArg,
   ): ScopeQuery<Row, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>;
@@ -115,21 +113,18 @@ type MismatchedField<
     : K;
 }[keyof Fields & string];
 
-type ScopeFieldsCheck<
+type ModelsWithFields<
   TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  NsId extends string,
   Fields extends Readonly<Record<string, ScopeFieldSpec>>,
-> = [MismatchedField<TContract, ModelName, NsId, Fields>] extends [never]
-  ? unknown
-  : {
-      readonly 'the model has no field with the column type and nullability the scope declares': MismatchedField<
-        TContract,
-        ModelName,
-        NsId,
-        Fields
-      >;
-    };
+> = {
+  [NsId in keyof TContract['domain']['namespaces'] & string]: {
+    [ModelName in keyof TContract['domain']['namespaces'][NsId]['models'] & string]: [
+      MismatchedField<TContract, ModelName, NsId, Fields>,
+    ] extends [never]
+      ? HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName }
+      : never;
+  }[keyof TContract['domain']['namespaces'][NsId]['models'] & string];
+}[keyof TContract['domain']['namespaces'] & string];
 
 type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
   ? Ordered<Facts['hasWhere'] extends true ? Filtered<C> : C>
@@ -137,46 +132,118 @@ type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
     ? Filtered<C>
     : C;
 
+/** A collection of any model, in any namespace, that has the declared fields with the same column type and nullability. */
+export type CollectionWithFields<
+  TContract extends Contract<SqlStorage>,
+  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+> = [ModelsWithFields<TContract, Fields>] extends [never]
+  ? {
+      readonly 'no model has every field the scope declares, with the declared column type and nullability': keyof Fields;
+    }
+  : ModelsWithFields<TContract, Fields>;
+
 /**
- * A scope made by `client.scope`: it accepts a collection of any model that has the declared fields, and returns that collection with what the body established.
+ * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, and returns that collection with what the body established.
  */
 export type FieldScope<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, ScopeFieldSpec>>,
   Facts extends ScopeFacts,
-> = <C, ModelName extends string, NsId extends string = never>(
-  collection: C &
-    HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName } & ScopeFieldsCheck<
-      TContract,
-      ModelName,
-      NsId,
-      Fields
-    >,
-) => WithFacts<C, Facts>;
+> = <C extends CollectionWithFields<TContract, Fields>>(collection: C) => WithFacts<C, Facts>;
 
 function nullability(nullable: boolean): string {
   return nullable ? 'may be null' : 'is never null';
 }
 
-function declaredFieldSpecs(
-  declarations: ScopeFieldDeclarations,
-): ReadonlyArray<readonly [string, ScopeFieldSpec]> {
-  return Object.entries(declarations).map(([name, declaration]) => {
-    if (!('build' in declaration)) return [name, declaration];
-    const built = declaration.build();
-    if (built.descriptor === undefined) {
+function isFieldBuilder(value: object): value is ScopeFieldBuilder {
+  return 'build' in value && typeof value.build === 'function';
+}
+
+function isFieldSpec(value: object): value is ScopeFieldSpec {
+  return (
+    'codecId' in value &&
+    typeof value.codecId === 'string' &&
+    'nullable' in value &&
+    typeof value.nullable === 'boolean'
+  );
+}
+
+const FIELD_DECLARATION_FIX =
+  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }.';
+
+function declaredFieldSpec(name: string, declaration: unknown): ScopeFieldSpec {
+  if (typeof declaration === 'object' && declaration !== null && isFieldBuilder(declaration)) {
+    const built: unknown = declaration.build();
+    const descriptor =
+      typeof built === 'object' && built !== null && 'descriptor' in built
+        ? built.descriptor
+        : undefined;
+    const nullable =
+      typeof built === 'object' && built !== null && 'nullable' in built
+        ? built.nullable
+        : undefined;
+    if (
+      typeof descriptor !== 'object' ||
+      descriptor === null ||
+      !('codecId' in descriptor) ||
+      typeof descriptor.codecId !== 'string' ||
+      typeof nullable !== 'boolean'
+    ) {
       throw ormError(
         'ORM.ARGUMENT_INVALID',
-        `Cannot declare the scope field ${name}: the field builder names no column type`,
+        `Cannot define the scope: the field builder for ${name} names no column type`,
         {
-          why: 'A scope for any model matches each declared field by its column type, and this builder refers to a named type instead of a column type.',
-          fix: 'Declare the field with field.column(...) and a column type, or with { codecId, nullable }.',
+          why: 'A scope for any model matches each declared field by its column type and nullability, and this builder refers to a named type instead of a column type.',
+          fix: 'Declare the field with a builder that has a column type, such as field.text() or field.column(textColumn), or with { codecId, nullable }.',
           meta: { field: name },
         },
       );
     }
-    return [name, { codecId: built.descriptor.codecId, nullable: built.nullable }];
-  });
+    return { codecId: descriptor.codecId, nullable };
+  }
+  if (typeof declaration === 'object' && declaration !== null && isFieldSpec(declaration)) {
+    return { codecId: declaration.codecId, nullable: declaration.nullable };
+  }
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `Cannot define the scope: the declaration of field ${name} is not a field builder or { codecId, nullable }`,
+    {
+      why: `Each field of a scope is declared with a field builder or with an object that has a string codecId and a boolean nullable; received ${describeReceived(declaration)} for ${name}.`,
+      fix: FIELD_DECLARATION_FIX,
+      meta: { field: name },
+    },
+  );
+}
+
+function declaredFieldSpecs(
+  declarations: unknown,
+): ReadonlyArray<readonly [string, ScopeFieldSpec]> {
+  if (typeof declarations !== 'object' || declarations === null || Array.isArray(declarations)) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      'Cannot define the scope: the fields are not an object',
+      {
+        why: `The first argument of scope maps the name of each field the scope needs to its declaration; received ${describeReceived(declarations)}.`,
+        fix: FIELD_DECLARATION_FIX,
+        meta: { argument: 'fields' },
+      },
+    );
+  }
+  return Object.entries(declarations).map(([name, declaration]) => [
+    name,
+    declaredFieldSpec(name, declaration),
+  ]);
+}
+
+/** Throws `ORM.ARGUMENT_INVALID` unless `body`, the body of a scope, is a function. */
+export function assertScopeBody(body: unknown): void {
+  if (typeof body !== 'function') {
+    throw ormError('ORM.ARGUMENT_INVALID', 'Cannot define the scope: the body is not a function', {
+      why: `The body of a scope is a function that receives a collection and returns one; received ${describeReceived(body)}.`,
+      fix: 'Pass a function, such as (rows) => rows.where(...).',
+      meta: { argument: 'body' },
+    });
+  }
 }
 
 function assertScopeFields(
@@ -225,7 +292,7 @@ function assertScopeFields(
 }
 
 /**
- * Define a scope for any model that has the declared fields. Reached as `client.scope(fields, body)` on the client `orm()` returns.
+ * Define a scope for any model that has the declared fields. Reached as the `scope` method of the client `orm()` returns.
  */
 export function defineFieldScope<
   TContract extends Contract<SqlStorage>,
@@ -234,10 +301,11 @@ export function defineFieldScope<
 >(
   declarations: Declarations,
   body: (
-    rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+    rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
   ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
 ): FieldScope<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
+  assertScopeBody(body);
   return (collection) => {
     assertScopeFields(
       blindCast<
@@ -252,7 +320,7 @@ export function defineFieldScope<
     >(
       body(
         blindCast<
-          ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+          ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
           'a collection offers where, orderBy, limit and offset with these run-time shapes'
         >(collection),
       ),

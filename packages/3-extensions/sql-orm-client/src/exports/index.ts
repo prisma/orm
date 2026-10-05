@@ -28,6 +28,7 @@ export {
 export {
   type FieldScope,
   orderByField,
+  type ScopeFacts,
   type ScopeFieldSpec,
 } from '../query-fragments';
 export type {

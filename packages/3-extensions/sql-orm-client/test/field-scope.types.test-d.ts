@@ -40,6 +40,7 @@ const titled = (term: string) =>
   client.scope({ title: field.column(textColumn) }, (rows) => rows.where((r) => r.title.eq(term)));
 
 declare const tasks: Collection<PolyContract, 'Task'>;
+declare const flag: boolean;
 declare const polyClient: ReturnType<typeof orm<PolyContract>>;
 
 class LivePostCollection extends Collection<Contract, 'Post'> {
@@ -157,5 +158,38 @@ describe('client.scope', () => {
     tasks.apply(bySeverity);
     // @ts-expect-error severity is a field of the Bug variant, not of Task
     tasks.variant('Bug').apply(bySeverity);
+  });
+
+  test('a body cannot claim a filter it may not have applied', () => {
+    const deletedAt = { deletedAt: field.column(timestamptzTemporalColumn).optional() } as const;
+    client.scope(deletedAt, (rows) => {
+      let query = rows.where((r) => r.deletedAt.isNull());
+      if (flag) {
+        // @ts-expect-error rows has no filter, so it cannot replace a filtered query
+        query = rows;
+      }
+      return query;
+    });
+    const maybeFiltered = client.scope(deletedAt, (rows) => {
+      let query = rows;
+      if (flag) query = query.where((r) => r.deletedAt.isNull());
+      return query;
+    });
+    expectTypeOf(plain.Post.apply(maybeFiltered)).toEqualTypeOf<typeof plain.Post>();
+    // @ts-expect-error the scope may not have filtered, so deleteAll is refused
+    plain.Post.apply(maybeFiltered).deleteAll();
+    client.scope<typeof deletedAt, { readonly hasWhere: true; readonly hasOrderBy: true }>(
+      deletedAt,
+      // @ts-expect-error the body applied no filter, so it cannot be typed as filtering
+      (rows) => rows,
+    );
+  });
+
+  test('the body returns the collection it received, not another one', () => {
+    client.scope(
+      { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+      // @ts-expect-error a Post collection is not the collection the body received
+      () => plain.Post.where((p) => p.deletedAt.isNull()),
+    );
   });
 });

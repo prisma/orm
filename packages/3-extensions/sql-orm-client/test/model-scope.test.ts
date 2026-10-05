@@ -1,3 +1,4 @@
+import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createChainingOrm } from './collection-chaining-fixture';
 
@@ -49,5 +50,24 @@ describe('collection.scope', () => {
     const [inline, applied] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
+  });
+
+  it.each([
+    ['undefined', undefined, 'undefined'],
+    ['null', null, 'null'],
+    ['a number', 3, 'a number'],
+    ['an object', {}, 'an object'],
+  ])('refuses %s as the body from a JavaScript caller', (_label, body, received) => {
+    const { db } = createChainingOrm();
+    const scope = blindCast<(body: unknown) => unknown, 'a JavaScript caller'>(
+      db.Post.scope.bind(db.Post),
+    );
+    expect(() => scope(body)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: 'Cannot define the scope: the body is not a function',
+        why: `The body of a scope is a function that receives a collection and returns one; received ${received}.`,
+      }),
+    );
   });
 });

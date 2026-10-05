@@ -107,6 +107,7 @@ import {
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
+import { assertScopeBody } from './query-fragments';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -155,6 +156,7 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNames,
+  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
@@ -273,6 +275,19 @@ interface ScopeSource {
 type ContractOf<C extends ScopeSource> = C['ctx']['context']['contract'];
 
 type ModelNameOf<C extends ScopeSource> = C['modelName'];
+
+type ModelScopeBody<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = [NsId] extends [never]
+  ? Collection<TContract, ModelName>
+  : Collection<
+      TContract,
+      ModelName,
+      InferRootRow<TContract, ModelName, NsId>,
+      WithNsId<DefaultCollectionTypeState, NsId>
+    >;
 
 export class CollectionBase<
   TContract extends Contract<SqlStorage>,
@@ -455,14 +470,15 @@ export class CollectionBase<
    * db.User.include('posts', (posts) => posts.apply(summary));
    * ```
    */
-  scope<Self extends ScopeSource, Result>(
-    this: Self,
-    body: (collection: Collection<ContractOf<Self>, ModelNameOf<Self>>) => Result,
-  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>>, Result> {
+  scope<Self extends ScopeSource, NsId extends string, Result>(
+    this: Self & HasState<{ readonly nsId: NsId }>,
+    body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
+  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+    assertScopeBody(body);
     return (collection) =>
       body(
         blindCast<
-          Collection<ContractOf<Self>, ModelNameOf<Self>>,
+          ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
           'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
         >(collection),
       );

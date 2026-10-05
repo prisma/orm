@@ -13,6 +13,7 @@ export async function ormClientGetRecentUsers(
 ) {
   const db = createOrmClient(runtime);
   return db.User.apply(createdSince(since))
+    .select('id', 'email')
     .include('posts', (posts) =>
       posts
         .apply(createdSince(since))

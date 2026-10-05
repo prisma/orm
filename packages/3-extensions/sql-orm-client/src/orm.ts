@@ -12,7 +12,6 @@ import {
   type DeclaredFields,
   defineFieldScope,
   type FieldScope,
-  type NoFacts,
   type ScopeFacts,
   type ScopeFieldDeclarations,
   type ScopeQuery,
@@ -114,7 +113,7 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
   scope<const Declarations extends ScopeFieldDeclarations, Facts extends ScopeFacts>(
     fields: Declarations,
     body: (
-      rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+      rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, ScopeFacts>,
     ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
   ): FieldScope<TContract, DeclaredFields<Declarations>, Facts>;
 }

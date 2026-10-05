@@ -14,6 +14,7 @@ import { ormClientFindSimilarPosts } from '../src/orm-client/find-similar-posts'
 import { ormClientFindUserByEmail } from '../src/orm-client/find-user-by-email';
 import { ormClientFindUserById } from '../src/orm-client/find-user-by-id';
 import { ormClientFindUserByIdCached } from '../src/orm-client/find-user-by-id-cached';
+import { ownedBy } from '../src/orm-client/fragments';
 import { ormClientGetAdminUsers } from '../src/orm-client/get-admin-users';
 import { ormClientGetDashboardUsers } from '../src/orm-client/get-dashboard-users';
 import { ormClientGetFeatureRoadmap } from '../src/orm-client/get-feature-roadmap';
@@ -516,6 +517,42 @@ describe('ORM client integration examples', () => {
   );
 
   it(
+    'ownedBy filters any model with a userId with the plan of the same where written inline',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+          const query = vi.spyOn(runtime, 'query');
+          const ormClient = createOrmClient(runtime);
+          const inline = await ormClient.Post.where((post) => post.userId.eq(seededUserIds.admin))
+            .select('id', 'userId')
+            .orderBy((post) => post.id.asc())
+            .all();
+          const scoped = await ormClient.Post.apply(ownedBy(seededUserIds.admin))
+            .select('id', 'userId')
+            .orderBy((post) => post.id.asc())
+            .all();
+
+          expect(scoped).toEqual([
+            { id: seededPostIds.older, userId: seededUserIds.admin },
+            { id: seededPostIds.newer, userId: seededUserIds.admin },
+          ]);
+          expect(scoped).toEqual(inline);
+          const [inlinePlan, scopedPlan] = query.mock.calls.map(([plan]) => plan);
+          expect(scopedPlan).toBeDefined();
+          expect(scopedPlan).toEqual(inlinePlan);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'ormClientGetDashboardUsers composes compound filters with select and include',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
@@ -649,12 +686,13 @@ describe('ORM client integration examples', () => {
 
           expect(
             users.map((user) => ({
-              id: user.id,
+              ...user,
               posts: user.posts.map((post) => ({ ...post, createdAt: post.createdAt.toString() })),
             })),
           ).toEqual([
             {
               id: seededUserIds.member,
+              email: 'member@example.com',
               posts: [
                 {
                   id: seededPostIds.memberNote,
@@ -666,6 +704,7 @@ describe('ORM client integration examples', () => {
             },
             {
               id: seededUserIds.adminTwo,
+              email: 'admin2@example.org',
               posts: [
                 {
                   id: seededPostIds.adminDeepDive,
@@ -681,7 +720,7 @@ describe('ORM client integration examples', () => {
                 },
               ],
             },
-            { id: seededUserIds.reader, posts: [] },
+            { id: seededUserIds.reader, email: 'reader@example.com', posts: [] },
           ]);
         } finally {
           await runtime.close();

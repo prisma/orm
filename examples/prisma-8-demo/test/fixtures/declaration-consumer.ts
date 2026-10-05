@@ -12,6 +12,7 @@ import type { Contract } from '../../src/prisma/contract.d';
 import {
   filteredChain,
   filterPosts,
+  firstPage,
   type GenericLibrary,
   notExpired,
   type PostLibrary,
@@ -21,6 +22,7 @@ import {
   type TaskLibrary,
   titleSummary,
   unexpired,
+  unexpiredPosts,
 } from './declaration-library';
 
 type PostKey =
@@ -147,6 +149,13 @@ export function queryFragments(now: Temporal.Instant) {
   expectTypeOf(posts.apply(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
   // @ts-expect-error User has no expiresAt field
   users.apply(unexpired(now));
+  expectTypeOf(posts.apply(firstPage)).toEqualTypeOf<PostLibrary>();
+  // @ts-expect-error firstPage applied no filter, so delete is refused
+  posts.apply(firstPage).deleteAll();
+  expectTypeOf(unexpiredPosts(now)).not.toBeAny();
+  unexpiredPosts(now).cursor({ id: 'x' });
+  unexpiredPosts(now).deleteAll();
+  expectTypeOf<keyof CollectionRowOf<ReturnType<typeof unexpiredPosts>>>().toEqualTypeOf<PostKey>();
   expectTypeOf<CollectionRowOf<Summary>>().toEqualTypeOf<{
     id: string;
     title: string;
