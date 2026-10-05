@@ -574,7 +574,7 @@ describe('ORM client integration examples', () => {
   );
 
   it(
-    'ormClientGetRecentPosts filters with a shared row fragment, orders by a request field and shapes summaries',
+    'ormClientGetRecentPosts filters with a scope for any model, orders by a request field and shapes summaries',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
@@ -635,7 +635,7 @@ describe('ORM client integration examples', () => {
   );
 
   it(
-    'ormClientGetRecentUsers applies the same row fragment to users and their included posts',
+    'ormClientGetRecentUsers applies the same scope to users and their included posts',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });

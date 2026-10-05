@@ -86,9 +86,27 @@ The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not 
 
 ## Query fragments
 
-A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A step is a function of a collection, and `apply` runs it. Three helpers cover the common cases. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
+A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A scope is a function from a collection to a collection, and `apply` runs it. Three helpers make the scopes TypeScript cannot type on its own. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
 
-**A filter for every model with a field.** `CodecField<Contract, CodecId, Nullable>` is the model accessor's type for any field with that codec and nullability. A row fragment whose parameter asks for that one field fits every model that has it:
+**A scope for any model with given fields.** `client.scope(fields, body)`, on the client `orm()` returns (`db.orm.scope` on the Postgres client), declares the fields the scope needs and returns a scope for every model that has them:
+
+```ts
+import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
+import { field } from '@prisma/orm-postgres/contract-builder';
+
+const notDeleted = db.orm.scope(
+  { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+  (rows) => rows.where((r) => r.deletedAt.isNull()),
+);
+
+db.orm.public.Post.apply(notDeleted);   // Filtered<typeof db.orm.public.Post>
+db.orm.public.Comment.apply(notDeleted);
+db.orm.public.Tag.apply(notDeleted);    // error: Tag has no deletedAt
+```
+
+Declare each field with a field builder from the contract DSL, which carries a column type and a nullability, or with `{ codecId: 'pg/timestamptz-temporal@1', nullable: true }`. A builder that names no column type, such as `field.namedType(...)`, throws `ORM.ARGUMENT_INVALID`. The body sees only the declared fields, each typed as a `CodecField`, and may call `where`, `orderBy`, `limit` and `offset`; `select` and `include` are not available. The scope accepts a collection of any model whose fields include the declared ones with the same column type and nullability: a root collection, a custom class, a chained or narrowed collection, an include refinement, `this` in a class. It returns the receiver's own type plus what the body established, `Filtered<C>` after a `where` and `Ordered<C>` after an `orderBy`, so `update` is allowed after a scope that filters. A model that lacks a field, or has it with another column type or nullability, is a compile error that names the field. The field is matched by its name in the model, not its column name, and a relation or a field that only a variant has does not match. At run time the scope checks the fields before building a query and throws `ORM.FIELD_UNKNOWN` for a model that does not match, for JavaScript callers. If the contract has a namespace named `scope`, the namespace takes the name and the client has no `scope` method. A scope that needs a value is a function that returns a scope: `const forTenant = (id: string) => db.orm.scope({ tenantId: field.column(textColumn) }, (rows) => rows.where((r) => r.tenantId.eq(id)))`.
+
+**A filter for every model with a field, as a row fragment.** `CodecField<Contract, CodecId, Nullable>` is the model accessor's type for any field with that codec and nullability. A row fragment whose parameter asks for that one field fits every model that has it:
 
 ```ts
 type DeletedAt = CodecField<Contract, 'pg/timestamptz-temporal@1', true>;
@@ -103,10 +121,10 @@ It has the same set of comparison methods as the field on the model accessor, ch
 
 A `CodecField` checks values against the codec's output type, not against the field's own type. Where a field refines its codec's value, such as a PSL enum stored as text or a `Char<36>` column, the fragment accepts values the field does not: `(row: { kind: CodecField<Contract, 'pg/text@1'> }) => row.kind.eq('superuser')` compiles, while `user.kind.eq('superuser')` written on the model is refused. One fragment serves many models, so it can only know the codec.
 
-**A shared `select` and `include`.** `modelStep<Contract, Model>()(body)` types the body once, against the model's plain collection, and returns a step, a `ModelStep<Contract, Model, Result>`:
+**A scope for one model, such as a shared `select` and `include`.** `collection.scope(body)` types the body once, against the plain collection of the receiver's model, and returns a scope:
 
 ```ts
-const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
+const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
 type PostSummary = CollectionRowOf<ReturnType<typeof summary>>;
 
 db.Post.where({ userId }).apply(summary);
@@ -114,7 +132,7 @@ db.User.include('posts', (posts) => posts.apply(summary));
 db.Post.select('id').apply(summary); // error: the rows no longer have every Post field
 ```
 
-`Model` is one model name of the contract; a misspelled name or a union of names is a compile error. A type parameter is refused as well, because TypeScript cannot tell whether it is one name or a union, so pass a literal model name. The step takes an `UnnarrowedCollection<Contract, Model>`: a root, filtered, ordered or included collection, a custom class, an include refinement, or `this` in a custom class. It refuses a collection of another model, one narrowed by `select`, whose rows lack fields the body's result would claim, and one narrowed by `variant`, after which the model's class methods do not apply either. Its result has the default type state: a filter or order applied before it still runs, but `update` and `cursor` are refused after it.
+The body receives the plain collection even when the receiver is a custom class, so the class's methods are not available in it. The scope accepts a root, filtered, ordered or included collection of the model, a custom class, an include refinement, or `this` in a custom class. It refuses a collection of another model, one narrowed by `select`, whose rows lack fields the body's result would claim, and one narrowed by `variant`. Its result has the default type state when the body changes the row: a filter or order applied before it still runs, but `update` and `cursor` are refused after it.
 
 **A field to order by, from a request.** `orderByField(collection, name, direction?, allowed?)` returns an `orderBy` selector:
 

@@ -26,10 +26,9 @@ export {
   prepareQuery,
 } from '../prepared-row-query';
 export {
-  type ModelStep,
-  modelStep,
+  type FieldScope,
   orderByField,
-  type UnnarrowedCollection,
+  type ScopeFieldSpec,
 } from '../query-fragments';
 export type {
   AggregateBuilder,

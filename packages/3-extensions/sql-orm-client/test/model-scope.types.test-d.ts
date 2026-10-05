@@ -1,21 +1,18 @@
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { CollectionRowOf } from '../src/collection-types';
-import { modelStep } from '../src/query-fragments';
-import type { CollectionModelName } from '../src/types';
 import { createChainingOrm } from './collection-chaining-fixture';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { TestContract } from './helpers';
 
 const { db, plain } = createChainingOrm();
 
-const summary = modelStep<TestContract, 'Post'>()((posts) =>
-  posts.select('id', 'title').include('author'),
-);
+const summary = db.Post.scope((posts) => posts.select('id', 'title').include('author'));
 type PostSummary = CollectionRowOf<ReturnType<typeof summary>>;
 
+const inline = plain.Post.select('id', 'title').include('author');
+
 declare const posts: Collection<TestContract, 'Post'>;
-const inline = posts.select('id', 'title').include('author');
 
 class SummaryPostCollection extends Collection<TestContract, 'Post'> {
   summaries() {
@@ -28,18 +25,26 @@ class SummaryPostCollection extends Collection<TestContract, 'Post'> {
 }
 
 declare const tasks: Collection<PolyContract, 'Task'>;
-const taskTitles = modelStep<PolyContract, 'Task'>()((t) => t.select('id', 'title'));
+const taskTitles = tasks.scope((t) => t.select('id', 'title'));
 
-describe('modelStep', () => {
+describe('collection.scope', () => {
   test('names the row of the body', () => {
     expectTypeOf<PostSummary>().not.toBeAny();
     expectTypeOf<PostSummary>().toEqualTypeOf<CollectionRowOf<typeof inline>>();
     expectTypeOf<keyof PostSummary>().toEqualTypeOf<'id' | 'title' | 'author'>();
   });
 
+  test('types the body against the plain collection of the model, also on a custom class', () => {
+    plain.Post.scope((p) => expectTypeOf(p).toEqualTypeOf(plain.Post));
+    db.Post.scope((p) => expectTypeOf(p).not.toHaveProperty('published'));
+    // @ts-expect-error published is a method of PostCollection, not of the plain Post collection
+    db.Post.scope((p) => p.published());
+  });
+
   test('returns the body result for a collection of the model', () => {
     expectTypeOf(plain.Post.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
     expectTypeOf(db.Post.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
+    expectTypeOf(posts.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
   });
 
   test('accepts a filtered, ordered or included collection', () => {
@@ -72,28 +77,13 @@ describe('modelStep', () => {
     >();
   });
 
-  test('the result has the default state', () => {
-    // @ts-expect-error update needs a where; the step does not record the earlier one
+  test('the result has the default state when the body changes the row', () => {
+    // @ts-expect-error update needs a where; the scope does not record the earlier one
     db.Post.where({ title: 'x' }).apply(summary).update({ title: 'y' });
-    // @ts-expect-error cursor needs an orderBy; the step does not record the earlier one
+    // @ts-expect-error cursor needs an orderBy; the scope does not record the earlier one
     db.Post.orderBy((p) => p.id.asc())
       .apply(summary)
       .cursor({ id: 1 });
-  });
-
-  test('takes one model name of the contract', () => {
-    // @ts-expect-error Pots is not a model of the contract
-    modelStep<TestContract, 'Pots'>();
-    // @ts-expect-error a step is defined for one model, not a union of models
-    modelStep<TestContract, 'Post' | 'Article'>();
-  });
-
-  test('does not take a generic model name', () => {
-    function stepFor<M extends CollectionModelName<TestContract>>() {
-      // @ts-expect-error TypeScript cannot tell whether a type parameter is one name or a union
-      return modelStep<TestContract, M>();
-    }
-    expectTypeOf(stepFor).toBeFunction();
   });
 
   test('refuses a collection of another model', () => {

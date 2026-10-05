@@ -80,9 +80,11 @@ import type {
   HasState,
   HasWhere,
   Including,
+  ModelScopeReceiver,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
+  Scope,
   StateType,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
@@ -153,6 +155,7 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNames,
+  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
@@ -433,6 +436,38 @@ export class CollectionBase<
    */
   apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
     return fn(this);
+  }
+
+  /**
+   * Define a scope for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The scope accepts any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * ```ts
+   * const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
+   * db.User.include('posts', (posts) => posts.apply(summary));
+   * ```
+   */
+  scope<Result>(
+    body: (
+      collection: Collection<
+        TContract,
+        ModelName,
+        InferRootRow<TContract, ModelName, State['nsId']>,
+        WithNsId<DefaultCollectionTypeState, State['nsId']>
+      >,
+    ) => Result,
+  ): Scope<ModelScopeReceiver<TContract, ModelName, State['nsId']>, Result> {
+    return (collection) =>
+      body(
+        blindCast<
+          Collection<
+            TContract,
+            ModelName,
+            InferRootRow<TContract, ModelName, State['nsId']>,
+            WithNsId<DefaultCollectionTypeState, State['nsId']>
+          >,
+          'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
+        >(collection),
+      );
   }
 
   /**

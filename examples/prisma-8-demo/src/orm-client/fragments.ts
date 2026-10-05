@@ -1,18 +1,19 @@
-import { type CodecField, modelStep } from '@prisma/orm-postgres/orm-client';
-import type { Contract } from '../prisma/contract.d';
-
-type CreatedAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
+import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
+import { field } from '@prisma/orm-postgres/contract-builder';
+import { db } from '../prisma/db';
 
 /**
- * A `where` callback for any model with a `createdAt` timestamp: `User`, `Post` and `Task`.
+ * A scope for any model with a `createdAt` timestamp, such as `User`, `Post` and `Task`: rows created since `since`.
  */
 export function createdSince(since: Temporal.Instant) {
-  return (row: { createdAt: CreatedAt }) => row.createdAt.gte(since);
+  return db.orm.scope({ createdAt: field.column(timestamptzTemporalColumn) }, (rows) =>
+    rows.where((row) => row.createdAt.gte(since)),
+  );
 }
 
 /**
- * The fields of a post that a list of posts shows, run with `apply` to any collection of posts.
+ * The fields of a post that a list of posts shows, run with `apply` on any collection of posts.
  */
-export const postSummary = modelStep<Contract, 'Post'>()((posts) =>
+export const postSummary = db.orm.public.Post.scope((posts) =>
   posts.select('id', 'title', 'createdAt').include('tags'),
 );

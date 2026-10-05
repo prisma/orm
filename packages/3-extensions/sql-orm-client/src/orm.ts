@@ -8,6 +8,16 @@ import { blindCast } from '@internal/utils/casts';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import { ormError } from './orm-errors';
+import {
+  type DeclaredFields,
+  defineFieldScope,
+  type FieldScope,
+  type NoFacts,
+  type ScopeFacts,
+  type ScopeFieldDeclarations,
+  type ScopeQuery,
+  type ScopeRow,
+} from './query-fragments';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
   CollectionContext,
@@ -88,10 +98,32 @@ type NamespacedClientMap<
   [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, Collections, Ns>;
 };
 
+/** The members of the client beside its namespaces. */
+export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
+  /**
+   * Define a scope for any model that has the declared fields. Declare each field with a field builder from the contract DSL or with `{ codecId, nullable }`. The body sees only the declared fields and may call `where`, `orderBy`, `limit` and `offset`. The scope accepts a collection of any model whose fields include the declared ones with the same column type and nullability, and returns that collection with the filter and order the body applied.
+   *
+   * ```ts
+   * const notDeleted = db.orm.scope(
+   *   { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+   *   (rows) => rows.where((r) => r.deletedAt.isNull()),
+   * );
+   * db.orm.public.Post.apply(notDeleted).deleteAll();
+   * ```
+   */
+  scope<const Declarations extends ScopeFieldDeclarations, Facts extends ScopeFacts>(
+    fields: Declarations,
+    body: (
+      rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+    ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
+  ): FieldScope<TContract, DeclaredFields<Declarations>, Facts>;
+}
+
 type OrmClient<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
-> = NamespacedClientMap<TContract, Collections>;
+> = NamespacedClientMap<TContract, Collections> &
+  ('scope' extends keyof TContract['domain']['namespaces'] ? unknown : OrmClientMembers<TContract>);
 
 /**
  * Reject a contributed aggregate operation whose name a collection member
@@ -194,11 +226,11 @@ export function orm<
         return undefined;
       }
 
-      if (!Object.hasOwn(contract.domain.namespaces, prop)) {
-        return undefined;
+      if (Object.hasOwn(contract.domain.namespaces, prop)) {
+        return namespaceFacet(prop);
       }
 
-      return namespaceFacet(prop);
+      return prop === 'scope' ? defineFieldScope : undefined;
     },
   });
 }

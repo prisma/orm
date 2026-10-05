@@ -5,7 +5,6 @@ import type {
   Collection,
   CollectionRowOf,
   Filtered,
-  ModelStep,
   Ordered,
 } from '@prisma/orm-postgres/orm-client';
 import { expectTypeOf } from 'vitest';
@@ -21,6 +20,7 @@ import {
   type SubLibrary,
   type TaskLibrary,
   titleSummary,
+  unexpired,
 } from './declaration-library';
 
 type PostKey =
@@ -139,8 +139,14 @@ export function queryFragments(now: Temporal.Instant) {
     }) => ReturnType<ReturnType<typeof notExpired>>
   >();
   type Summary = ReturnType<typeof titleSummary>;
-  expectTypeOf(titleSummary).toEqualTypeOf<ModelStep<Contract, 'Post', Summary>>();
   expectTypeOf(posts.summaries()).toEqualTypeOf<Summary>();
+  expectTypeOf(posts.apply(titleSummary)).toEqualTypeOf<Summary>();
+  // @ts-expect-error the rows no longer have every Post field
+  posts.select('id').apply(titleSummary);
+  expectTypeOf(posts.unexpired(now)).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  expectTypeOf(posts.apply(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  // @ts-expect-error User has no expiresAt field
+  users.apply(unexpired(now));
   expectTypeOf<CollectionRowOf<Summary>>().toEqualTypeOf<{
     id: string;
     title: string;

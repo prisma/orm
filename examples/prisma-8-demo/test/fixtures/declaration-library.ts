@@ -1,9 +1,10 @@
+import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
+import { field } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
   type CodecField,
   Collection,
   type Filtered,
-  modelStep,
   orderByField,
   orm,
 } from '@prisma/orm-postgres/orm-client';
@@ -15,9 +16,19 @@ type ExpiresAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
 export const notExpired = (now: Temporal.Instant) => (row: { expiresAt: ExpiresAt }) =>
   row.expiresAt.gt(now);
 
-export const titleSummary = modelStep<Contract, 'Post'>()((posts) =>
+declare const runtime: Runtime;
+declare const context: ExecutionContext<Contract>;
+
+const client = orm({ runtime, context });
+
+export const titleSummary = client.public.Post.scope((posts) =>
   posts.select('id', 'title').include('user'),
 );
+
+export const unexpired = (now: Temporal.Instant) =>
+  client.scope({ expiresAt: field.column(timestamptzTemporalColumn) }, (rows) =>
+    rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
+  );
 
 export class PostLibrary extends Collection<Contract, 'Post'> {
   live(now: Temporal.Instant) {
@@ -26,6 +37,10 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
 
   summaries() {
     return this.apply(titleSummary);
+  }
+
+  unexpired(now: Temporal.Instant) {
+    return this.apply(unexpired(now));
   }
 
   orderedBy(name: string) {
@@ -208,9 +223,6 @@ export class SubLibrary extends PostLibrary {
     return this.ordered().first();
   }
 }
-
-declare const runtime: Runtime;
-declare const context: ExecutionContext<Contract>;
 
 export const posts = orm({ runtime, context, collections: { Post: PostLibrary } }).public.Post;
 export const filteredChain = posts.filtered().ordered().withUser();

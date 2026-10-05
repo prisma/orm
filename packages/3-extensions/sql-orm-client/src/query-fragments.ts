@@ -1,70 +1,263 @@
 import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   type Direction,
   isOrderByDirection,
   type OrderByItem,
+  type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
-import type { Collection } from './collection';
 import { modelOf, resolveFieldToColumn } from './collection-contract';
-import type { HasRow, HasState, Step } from './collection-types';
+import type { Filtered, HasState, Ordered } from './collection-types';
 import { hasTrait, resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import type {
-  CollectionModelName,
-  DefaultModelRow,
-  IsUnion,
+  CodecField,
+  FieldCodecId,
+  FieldNullable,
+  FieldsOf,
   Orderable,
   OrderableFieldName,
 } from './types';
 
-type OneModelName<TContract extends Contract<SqlStorage>, ModelName> =
-  IsUnion<ModelName> extends true
-    ? 'modelStep takes one model name, not a union of names'
-    : CollectionModelName<TContract>;
-
-/**
- * A collection of `ModelName` that neither `select` nor `variant` has narrowed: its rows have every field of the model, and it is not narrowed to a variant.
- */
-export interface UnnarrowedCollection<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends CollectionModelName<TContract>,
-> extends HasRow<DefaultModelRow<TContract, ModelName>>,
-    HasState<{ readonly variantName: undefined }> {
-  readonly modelName: ModelName;
+/** A field declared by its column type and nullability, for a scope written without a field builder. */
+export interface ScopeFieldSpec<
+  CodecId extends string = string,
+  Nullable extends boolean = boolean,
+> {
+  readonly codecId: CodecId;
+  readonly nullable: Nullable;
 }
 
-/** A step made by `modelStep`: it takes an unnarrowed collection of the model and returns the body's result. */
-export type ModelStep<
+/** A field builder from the contract DSL, such as `field.column(textColumn).optional()`: what `client.scope` reads from it. */
+export interface ScopeFieldBuilder<
+  CodecId extends string = string,
+  Nullable extends boolean = boolean,
+> {
+  build(): {
+    readonly descriptor?: { readonly codecId: CodecId } | undefined;
+    readonly nullable: Nullable;
+  };
+}
+
+/** The fields a scope for any model needs, each declared with a field builder or a {@link ScopeFieldSpec}. */
+export type ScopeFieldDeclarations = Readonly<Record<string, ScopeFieldBuilder | ScopeFieldSpec>>;
+
+type DeclaredField<Declaration> =
+  Declaration extends ScopeFieldBuilder<infer Id, infer Nullable>
+    ? ScopeFieldSpec<Id, Nullable>
+    : Declaration extends ScopeFieldSpec<infer Id, infer Nullable>
+      ? ScopeFieldSpec<Id, Nullable>
+      : never;
+
+/** The declared fields with each builder read as its column type and nullability. */
+export type DeclaredFields<Declarations extends ScopeFieldDeclarations> = {
+  readonly [K in keyof Declarations]: DeclaredField<Declarations[K]>;
+} extends infer Fields
+  ? { readonly [K in keyof Fields]: Fields[K] }
+  : never;
+
+/** The model accessor of a scope for any model: only the declared fields, typed by column type. */
+export type ScopeRow<
   TContract extends Contract<SqlStorage>,
-  ModelName extends CollectionModelName<TContract>,
-  Result,
-> = Step<UnnarrowedCollection<TContract, ModelName>, Result>;
+  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+> = {
+  readonly [K in keyof Fields]: Fields[K]['codecId'] extends keyof ExtractCodecTypes<TContract> &
+    string
+    ? CodecField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
+    : never;
+};
+
+/** What a scope for any model has established: a filter, an order. */
+export interface ScopeFacts {
+  readonly hasWhere: boolean;
+  readonly hasOrderBy: boolean;
+}
+
+export interface NoFacts extends ScopeFacts {
+  readonly hasWhere: false;
+  readonly hasOrderBy: false;
+}
+
+type OrderSelector<Row> = (row: Row) => OrderByItem;
+
+/** The collection the body of a scope for any model receives: the methods that keep the row, on the declared fields. */
+export interface ScopeQuery<Row, Facts extends ScopeFacts> {
+  where(
+    fn: (row: Row) => WhereArg,
+  ): ScopeQuery<Row, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>;
+  orderBy(
+    selection: OrderSelector<Row> | ReadonlyArray<OrderSelector<Row>>,
+  ): ScopeQuery<Row, { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }>;
+  limit(n: number): ScopeQuery<Row, Facts>;
+  offset(n: number): ScopeQuery<Row, Facts>;
+}
+
+type MismatchedField<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+> = {
+  [K in keyof Fields & string]: K extends keyof FieldsOf<TContract, ModelName, NsId>
+    ? [
+        FieldCodecId<TContract, ModelName, K, NsId>,
+        FieldNullable<TContract, ModelName, K, NsId>,
+      ] extends [Fields[K]['codecId'], Fields[K]['nullable']]
+      ? [Fields[K]['codecId'], Fields[K]['nullable']] extends [
+          FieldCodecId<TContract, ModelName, K, NsId>,
+          FieldNullable<TContract, ModelName, K, NsId>,
+        ]
+        ? never
+        : K
+      : K
+    : K;
+}[keyof Fields & string];
+
+type ScopeFieldsCheck<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+> = [MismatchedField<TContract, ModelName, NsId, Fields>] extends [never]
+  ? unknown
+  : {
+      readonly 'the model has no field with the column type and nullability the scope declares': MismatchedField<
+        TContract,
+        ModelName,
+        NsId,
+        Fields
+      >;
+    };
+
+type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
+  ? Ordered<Facts['hasWhere'] extends true ? Filtered<C> : C>
+  : Facts['hasWhere'] extends true
+    ? Filtered<C>
+    : C;
 
 /**
- * Define a step for one model that may change the row, such as a shared `select` and `include`. The body is typed once against the model's plain collection; the step accepts any collection of that model that `select` and `variant` have not narrowed.
- *
- * ```ts
- * const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
- * db.User.include('posts', (posts) => posts.apply(summary));
- * ```
+ * A scope made by `client.scope`: it accepts a collection of any model that has the declared fields, and returns that collection with what the body established.
  */
-export function modelStep<
+export type FieldScope<
   TContract extends Contract<SqlStorage>,
-  ModelName extends OneModelName<TContract, ModelName>,
->() {
-  return <Result>(
-    body: Step<Collection<TContract, ModelName>, Result>,
-  ): ModelStep<TContract, ModelName, Result> =>
-    (collection) =>
+  Fields extends Readonly<Record<string, ScopeFieldSpec>>,
+  Facts extends ScopeFacts,
+> = <C, ModelName extends string, NsId extends string = never>(
+  collection: C &
+    HasState<{ readonly nsId: NsId }> & { readonly modelName: ModelName } & ScopeFieldsCheck<
+      TContract,
+      ModelName,
+      NsId,
+      Fields
+    >,
+) => WithFacts<C, Facts>;
+
+function nullability(nullable: boolean): string {
+  return nullable ? 'may be null' : 'is never null';
+}
+
+function declaredFieldSpecs(
+  declarations: ScopeFieldDeclarations,
+): ReadonlyArray<readonly [string, ScopeFieldSpec]> {
+  return Object.entries(declarations).map(([name, declaration]) => {
+    if (!('build' in declaration)) return [name, declaration];
+    const built = declaration.build();
+    if (built.descriptor === undefined) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `Cannot declare the scope field ${name}: the field builder names no column type`,
+        {
+          why: 'A scope for any model matches each declared field by its column type, and this builder refers to a named type instead of a column type.',
+          fix: 'Declare the field with field.column(...) and a column type, or with { codecId, nullable }.',
+          meta: { field: name },
+        },
+      );
+    }
+    return [name, { codecId: built.descriptor.codecId, nullable: built.nullable }];
+  });
+}
+
+function assertScopeFields(
+  collection: RuntimeModelCollection,
+  fields: ReadonlyArray<readonly [string, ScopeFieldSpec]>,
+): void {
+  const { contract } = collection.ctx.context;
+  const { modelName, namespaceId } = collection;
+  const model = modelOf(contract, namespaceId, modelName);
+  for (const [name, spec] of fields) {
+    const declared = `The scope was declared for models that have a field ${name} of column type ${spec.codecId} that ${nullability(spec.nullable)}.`;
+    const meta = { model: modelName, field: name, codecId: spec.codecId, nullable: spec.nullable };
+    if (!Object.hasOwn(model?.fields ?? {}, name)) {
+      throw ormError(
+        'ORM.FIELD_UNKNOWN',
+        `Cannot apply a scope to ${modelName}: it has no field ${name}`,
+        {
+          why: declared,
+          fix: `Apply the scope to a model that has a field ${name}, or remove ${name} from the declaration in the scope.`,
+          meta,
+        },
+      );
+    }
+    const column = resolveColumn(
+      contract,
+      namespaceId,
+      collection.tableName,
+      resolveFieldToColumn(contract, namespaceId, modelName, name),
+    );
+    if (column?.codecId !== spec.codecId || column.nullable !== spec.nullable) {
+      const actual =
+        column === undefined
+          ? `${modelName}.${name} has no column.`
+          : `${modelName}.${name} has column type ${column.codecId} and ${nullability(column.nullable)}.`;
+      throw ormError(
+        'ORM.FIELD_UNKNOWN',
+        `Cannot apply a scope to ${modelName}: its field ${name} does not match the declaration`,
+        {
+          why: `${declared} ${actual}`,
+          fix: `Apply the scope to a model whose ${name} field has that column type and nullability, or change the declaration in the scope.`,
+          meta,
+        },
+      );
+    }
+  }
+}
+
+/**
+ * Define a scope for any model that has the declared fields. Reached as `client.scope(fields, body)` on the client `orm()` returns.
+ */
+export function defineFieldScope<
+  TContract extends Contract<SqlStorage>,
+  const Declarations extends ScopeFieldDeclarations,
+  Facts extends ScopeFacts,
+>(
+  declarations: Declarations,
+  body: (
+    rows: ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+  ) => ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, Facts>,
+): FieldScope<TContract, DeclaredFields<Declarations>, Facts> {
+  const fields = declaredFieldSpecs(declarations);
+  return (collection) => {
+    assertScopeFields(
+      blindCast<
+        RuntimeModelCollection,
+        'every collection carries its context, model, namespace and table'
+      >(collection),
+      fields,
+    );
+    return blindCast<
+      WithFacts<typeof collection, Facts>,
+      'where, orderBy, limit and offset return a collection of the same class with the facts the body established'
+    >(
       body(
         blindCast<
-          Collection<TContract, ModelName>,
-          'an unnarrowed collection of this model has the methods of its plain collection'
+          ScopeQuery<ScopeRow<TContract, DeclaredFields<Declarations>>, NoFacts>,
+          'a collection offers where, orderBy, limit and offset with these run-time shapes'
         >(collection),
-      );
+      ),
+    );
+  };
 }
 
 interface ModelCollection<

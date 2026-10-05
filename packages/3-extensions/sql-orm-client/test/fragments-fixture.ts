@@ -20,5 +20,5 @@ export function createFragmentsOrm() {
   const runtime = createMockRuntime();
   const db = orm({ runtime, context, collections: { Post: SoftPostCollection } });
   const plain = orm({ runtime, context });
-  return { runtime, db: db.public, plain: plain.public };
+  return { runtime, client: db, db: db.public, plain: plain.public };
 }

@@ -1136,7 +1136,7 @@ type ResolvedNsId<
       : never
   : NsId;
 
-type FieldsOf<
+export type FieldsOf<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
@@ -1315,7 +1315,7 @@ type FieldStorageColumn<
   NsId extends string = never,
 > = ResolvedStorageColumn<TContract, ModelName, FieldName, NsId>;
 
-type FieldCodecId<
+export type FieldCodecId<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
@@ -1327,7 +1327,7 @@ type FieldCodecId<
     ? Id
     : never;
 
-type FieldNullable<
+export type FieldNullable<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
@@ -1979,7 +1979,7 @@ export type RelationNames<
     }[keyof RelationsOf<TContract, ModelName, NsId>]) &
   string;
 
-export type IsUnion<T, Whole = T> = T extends Whole ? ([Whole] extends [T] ? false : true) : never;
+type IsUnion<T, Whole = T> = T extends Whole ? ([Whole] extends [T] ? false : true) : never;
 
 type IsSingletonString<T> = [T] extends [string]
   ? string extends T

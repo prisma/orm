@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { modelStep } from '../src/query-fragments';
 import { createChainingOrm } from './collection-chaining-fixture';
-import type { TestContract } from './helpers';
 
-const summary = modelStep<TestContract, 'Post'>()((posts) =>
-  posts.select('id', 'title').include('author'),
-);
+const { db: scopes } = createChainingOrm();
+const summary = scopes.Post.scope((posts) => posts.select('id', 'title').include('author'));
 
-describe('modelStep', () => {
+describe('collection.scope', () => {
   it('runs the body on the collection it is applied to', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.select('id', 'title').include('author').all();
@@ -19,7 +16,7 @@ describe('modelStep', () => {
     expect(applied?.plan.ast).not.toEqual(unchanged?.plan.ast);
   });
 
-  it('keeps a filter applied before the step', async () => {
+  it('keeps a filter applied before the scope', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.where((p) => p.views.gte(100))
       .select('id', 'title')
@@ -31,7 +28,7 @@ describe('modelStep', () => {
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
   });
 
-  it('keeps an order applied before the step', async () => {
+  it('keeps an order applied before the scope', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.orderBy((p) => p.views.desc())
       .select('id', 'title')

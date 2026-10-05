@@ -16,7 +16,7 @@ export async function ormClientGetRecentPosts(
   runtime: Runtime,
 ) {
   const db = createOrmClient(runtime);
-  return db.Post.where(createdSince(since))
+  return db.Post.apply(createdSince(since))
     .orderBy(orderByField(db.Post, orderBy, direction, ['title', 'createdAt']))
     .apply(postSummary)
     .limit(limit)

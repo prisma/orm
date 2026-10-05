@@ -2,6 +2,7 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
   type CodecField,
   type CollectionRowOf,
+  type Filtered,
   type ModelAccessor,
   orderByField,
 } from '@prisma/orm-postgres/orm-client';
@@ -48,16 +49,32 @@ describe('CodecField', () => {
   });
 
   test('a row fragment fits every model with the field and no other', () => {
-    db.User.where(createdSince(since));
-    db.Post.where(createdSince(since));
-    db.Task.where(createdSince(since));
-    db.Task.bugs().where(createdSince(since));
+    const created = (row: { createdAt: CreatedAt }) => row.createdAt.gte(since);
+    db.User.where(created);
+    db.Post.where(created);
+    db.Task.where(created);
+    db.Task.bugs().where(created);
     // @ts-expect-error Tag has no createdAt
-    db.Tag.where(createdSince(since));
+    db.Tag.where(created);
   });
 });
 
-describe('modelStep', () => {
+describe('db.orm.scope', () => {
+  test('fits every model with the field, keeps its class and records the filter', () => {
+    expectTypeOf(db.User.apply(createdSince(since))).toEqualTypeOf<Filtered<typeof db.User>>();
+    expectTypeOf(db.Post.apply(createdSince(since))).toEqualTypeOf<Filtered<typeof db.Post>>();
+    db.Task.apply(createdSince(since)).bugs();
+    db.Task.bugs().apply(createdSince(since));
+    db.Post.apply(createdSince(since)).updateAll({ title: 'x' });
+  });
+
+  test('is refused for a model without the field', () => {
+    // @ts-expect-error Tag has no createdAt
+    db.Tag.apply(createdSince(since));
+  });
+});
+
+describe('db.orm.public.Post.scope', () => {
   test('names the row of the summary', () => {
     expectTypeOf<PostSummary>().toEqualTypeOf<{
       id: string;
