@@ -13,6 +13,7 @@ import { mongoQuery } from '@internal/mongo-query-builder';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
+  type MongoCodecLookup,
   type MongoExecutionContext,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
@@ -24,8 +25,10 @@ type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, Any
 
 function extractUnboundEnums<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(contract: TContract): UnboundEnums<TContract> {
-  const enums = buildNamespacedEnums<TContract>(contract.domain)[UNBOUND_NAMESPACE_ID];
+>(contract: TContract, codecs: MongoCodecLookup): UnboundEnums<TContract> {
+  const enums = buildNamespacedEnums<TContract>(contract.domain, (codecId) => codecs.get(codecId))[
+    UNBOUND_NAMESPACE_ID
+  ];
   assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
   return enums;
 }
@@ -48,7 +51,7 @@ export function buildMongoStaticContext<
     adapter: mongoRuntimeAdapter,
   });
   const context = createMongoExecutionContext<TContract>({ contract, stack });
-  const enums = extractUnboundEnums(contract);
+  const enums = extractUnboundEnums(contract, context.codecs);
   const query = mongoQuery<TContract>({ contractJson: contract });
   const raw = mongoRaw<TContract>({ contract });
   return { context, contract, enums, query, raw };

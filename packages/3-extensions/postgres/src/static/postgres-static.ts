@@ -27,7 +27,11 @@ export function buildPostgresStaticContext<TContract extends Contract<SqlStorage
 ): PostgresStaticContext<TContract> {
   const sqlDb: Db<TContract> = sql<TContract>({ context, rawCodecInferer });
   const raw: RawLane<TContract> = createRawLane<TContract>({ context, rawCodecInferer });
-  const enums = Object.freeze(buildNamespacedEnums<TContract>(context.contract.domain));
+  const enums = Object.freeze(
+    buildNamespacedEnums<TContract>(context.contract.domain, (codecId) =>
+      context.contractCodecs.forCodecRef({ codecId }),
+    ),
+  );
   const nativeEnums = blindCast<
     NamespacedNativeEnums<TContract>,
     'buildNamespacedNativeEnums returns the namespace-keyed accessor map this contract types'

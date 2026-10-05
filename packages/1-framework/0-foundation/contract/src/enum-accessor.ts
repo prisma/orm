@@ -1,11 +1,23 @@
+import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
+import { isInternalError } from '@internal/utils/internal-error';
 import type { Contract } from './contract-types';
 import type { ContractEnum } from './domain-types';
 import type { JsonValue } from './types';
 
 /**
- * Runtime view of a domain enum, built at the client from the emitted
- * `ContractEnum` JSON (codec-encoded `JsonValue` members, literal types erased).
+ * The two conversions of an enum's codec that its accessor uses: `decodeJson` reads a member's stored form as the value the application reads from the database, and `encodeJson` writes a value in its stored form, which is how values are compared.
+ */
+export interface EnumMemberCodec {
+  decodeJson(json: JsonValue): unknown;
+  encodeJson(value: unknown): JsonValue;
+}
+
+/** The codec an enum's `codecId` names, or `undefined` when the runtime has none for it. */
+export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec | undefined;
+
+/**
+ * Runtime view of a domain enum, built at the client from the contract's `ContractEnum` JSON.
  *
  * This deliberately mirrors the accessor shape of the authoring-time
  * `EnumTypeHandle` (in `contract-ts`) rather than reusing it: that handle carries
@@ -14,35 +26,60 @@ import type { JsonValue } from './types';
  * two planes — authoring (typed) and runtime (validated JSON).
  */
 export interface EnumAccessor {
-  readonly values: readonly JsonValue[];
+  readonly values: readonly unknown[];
   readonly names: readonly string[];
-  readonly members: Readonly<Record<string, JsonValue>>;
-  has(v: JsonValue): boolean;
+  readonly members: Readonly<Record<string, unknown>>;
+  has(v: unknown): boolean;
   hasName(name: string): boolean;
-  nameOf(v: JsonValue): string | undefined;
-  ordinalOf(v: JsonValue): number;
+  nameOf(v: unknown): string | undefined;
+  ordinalOf(v: unknown): number;
 }
 
-export function createEnumAccessor(contractEnum: ContractEnum): EnumAccessor {
-  const values = Object.freeze(contractEnum.members.map((m) => m.value));
+/**
+ * Builds the accessor for one enum. Each member holds the value `codec` reads from its stored form, which is the value a query returns. A value is a member when it has the member's JavaScript type and `codec` stores it as the member is stored, so two equal dates match; a value `codec` refuses is no member. Without a codec, members are their stored forms.
+ */
+export function createEnumAccessor(
+  contractEnum: ContractEnum,
+  codec?: EnumMemberCodec,
+): EnumAccessor {
+  const values = Object.freeze(
+    contractEnum.members.map((m) => (codec === undefined ? m.value : codec.decodeJson(m.value))),
+  );
   const names = Object.freeze(contractEnum.members.map((m) => m.name));
-  const members: Readonly<Record<string, JsonValue>> = Object.freeze(
-    Object.fromEntries(contractEnum.members.map((m) => [m.name, m.value])),
+  const members: Readonly<Record<string, unknown>> = Object.freeze(
+    Object.fromEntries(names.map((name, i) => [name, values[i]])),
+  );
+  const storedForm = (value: unknown): unknown =>
+    codec === undefined ? value : codec.encodeJson(value);
+
+  const nameSet = Object.freeze(new Set(names));
+  const ordinalByStoredForm = new Map(
+    values.map((value, i) => [canonicalStringify(storedForm(value)), i]),
   );
 
-  const valueSet = new Set(values);
-  const nameSet = Object.freeze(new Set(names));
-  const valueToName = new Map(contractEnum.members.map((m) => [m.value, m.name]));
-  const valueToOrdinal = new Map(values.map((v, i) => [v, i]));
+  const ordinalOf = (v: unknown): number => {
+    let key: string;
+    try {
+      key = canonicalStringify(storedForm(v));
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return -1;
+    }
+    const ordinal = ordinalByStoredForm.get(key);
+    return ordinal !== undefined && typeof values[ordinal] === typeof v ? ordinal : -1;
+  };
 
   return {
     values,
     names,
     members,
-    has: (v: JsonValue) => valueSet.has(v),
+    has: (v: unknown) => ordinalOf(v) !== -1,
     hasName: (name: string) => nameSet.has(name),
-    nameOf: (v: JsonValue) => valueToName.get(v),
-    ordinalOf: (v: JsonValue) => valueToOrdinal.get(v) ?? -1,
+    nameOf: (v: unknown) => {
+      const ordinal = ordinalOf(v);
+      return ordinal === -1 ? undefined : names[ordinal];
+    },
+    ordinalOf,
   };
 }
 
@@ -53,12 +90,13 @@ export function buildEnumsMapForNamespace(
     >;
   },
   namespaceId: string,
+  codecFor: EnumMemberCodecFor,
 ): Record<string, EnumAccessor> {
   const result: Record<string, EnumAccessor> = {};
   const namespace = domain.namespaces[namespaceId];
   if (namespace?.enum) {
     for (const [name, contractEnum] of Object.entries(namespace.enum)) {
-      result[name] = createEnumAccessor(contractEnum);
+      result[name] = createEnumAccessor(contractEnum, codecFor(contractEnum.codecId));
     }
   }
   return result;
@@ -66,10 +104,11 @@ export function buildEnumsMapForNamespace(
 
 export function buildNamespacedEnums<TContract extends Contract>(
   domain: TContract['domain'],
+  codecFor: EnumMemberCodecFor,
 ): NamespacedEnums<TContract> {
   const result: Record<string, Record<string, EnumAccessor>> = {};
   for (const namespaceId of Object.keys(domain.namespaces)) {
-    result[namespaceId] = buildEnumsMapForNamespace(domain, namespaceId);
+    result[namespaceId] = buildEnumsMapForNamespace(domain, namespaceId, codecFor);
   }
   return blindCast<
     NamespacedEnums<TContract>,
@@ -79,7 +118,7 @@ export function buildNamespacedEnums<TContract extends Contract>(
 
 type Present<T> = Exclude<T, undefined>;
 
-type EnumMemberEntry = { readonly name: string; readonly value: JsonValue };
+type EnumMemberEntry = { readonly name: string; readonly value: unknown };
 type EnumEntry = { readonly members: readonly EnumMemberEntry[] };
 
 // Mapped over a bare type parameter so the mapped type is homomorphic — a
@@ -106,7 +145,7 @@ export type ContractEnumAccessor<Entry extends EnumEntry> = {
   readonly names: EnumEntryNames<Entry>;
   readonly members: EnumEntryMembers<Entry>;
   /** Returns true and narrows `v` to the enum's value union when `v` is a declared member value. */
-  has(v: JsonValue): v is EnumEntryValues<Entry>[number];
+  has(v: unknown): v is EnumEntryValues<Entry>[number];
   /** Returns true and narrows `name` to the enum's member-name union when `name` is a declared member name. */
   hasName(name: string): name is Extract<EnumEntryNames<Entry>[number], string>;
   nameOf(v: EnumEntryValues<Entry>[number]): string | undefined;
@@ -140,13 +179,27 @@ type BuiltEnumAccessorsOf<TContract> = TContract extends {
   ? Exclude<A, undefined>
   : Record<never, never>;
 
-type NamespaceEnumEntries<TNamespace> = TNamespace extends {
+type DomainEnumEntries<TNamespace> = TNamespace extends {
   readonly enum?: infer E;
 }
   ? unknown extends E
     ? Record<never, never>
     : Present<E>
   : Record<never, never>;
+
+// An emitted contract types each member twice: `enum` as `contract.json` stores it, and
+// `enumMemberTypes` as the application reads it, which is what the runtime accessor holds.
+type NamespaceEnumEntries<TNamespace> = TNamespace extends {
+  readonly enumMemberTypes?: infer MemberTuples;
+}
+  ? unknown extends MemberTuples
+    ? DomainEnumEntries<TNamespace>
+    : {
+        readonly [K in keyof Present<MemberTuples>]: {
+          readonly members: Present<MemberTuples>[K];
+        };
+      }
+  : DomainEnumEntries<TNamespace>;
 
 // When `enumAccessors` is present (TS-DSL contract), it is the sole source because merging
 // both carriers would create conflicting `values` types for the same enum key.

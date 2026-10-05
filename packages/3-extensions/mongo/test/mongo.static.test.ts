@@ -79,12 +79,11 @@ describe('mongoStatic({ contractJson })', () => {
   });
 
   it('enums matches what buildNamespacedEnums produces for the unbound namespace', () => {
-    const allNamespaced = buildNamespacedEnums(
-      contract.domain,
+    const result = mongoStatic<TestContract>({ contractJson });
+    const allNamespaced = buildNamespacedEnums(contract.domain, (codecId) =>
+      result.context.codecs.get(codecId),
     ) as NamespacedEnums<AnyMongoContract>;
     const expectedEnums = allNamespaced[UNBOUND_NAMESPACE_ID];
-
-    const result = mongoStatic<TestContract>({ contractJson });
 
     expect(result.enums.Role.values).toEqual(expectedEnums?.['Role']?.values);
     expect(result.enums.Role.names).toEqual(expectedEnums?.['Role']?.names);
