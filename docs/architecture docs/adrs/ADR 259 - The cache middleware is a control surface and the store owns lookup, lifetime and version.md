@@ -25,10 +25,9 @@ const alice = await db.orm.public.User.first({ id: 1 }, (m) =>
 // After a write has returned, remove the entry by the key you named.
 await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' });
 await cache.invalidate({ keys: ['user-1'] });
-
-// With a store that indexes `meta`, remove every entry that matches it.
-await cache.invalidate({ meta: { table: 'users' } });
 ```
+
+The default store ignores `meta` and throws on `invalidate({ meta })`. Invalidating by `meta` takes a store that indexes it, such as the tagging store under [Consequences](#what-is-deliberately-outside-core-and-how-an-extension-builds-it).
 
 The cache middleware in [`@internal/middleware-cache`](../../../packages/3-extensions/middleware-cache/README.md) is a read-through cache with a control surface. It carries data between annotations and the store and never interprets that data. Core ships primitives, not policy: an operation belongs in the middleware only if it cannot be built outside it.
 
@@ -44,7 +43,7 @@ The design is a community contribution: paulwer proposed it, including moving th
 
 A cache whose entries leave only when their lifetime runs out returns stale rows after every write. Removing entries is the missing operation. The question is how much of the policy around removal belongs in core.
 
-Every policy a user has asked for is buildable from outside the middleware: tags, namespaces, table-based invalidation, versioned keys, request coalescing. Each one carries decisions that suit some users and not others, such as which grouping scheme, which backend index, and what to do when a waiter's leader never finishes. Putting any of them in core forces those decisions on every user and leaves the edge cases of one scheme in a package that cannot serve the rest. Keeping core to the operations that cannot be built outside keeps it small and lets each policy live in a package that owns its decisions.
+Every policy a user has asked for is buildable from outside the middleware: tags, namespaces, table-based invalidation, versioned keys, request coalescing. Each one carries decisions that suit some users and not others, such as which grouping scheme, which backend index, and what to do when the request that other requests are waiting on never finishes. Putting any of them in core forces those decisions on every user and leaves the edge cases of one scheme in a package that cannot serve the rest. Keeping core to the operations that cannot be built outside keeps it small and lets each policy live in a package that owns its decisions.
 
 The middleware cannot delegate one thing: the guard that stops a read from storing rows that predate an invalidation. That guard needs a version that every process sharing a store agrees on, so the version lives in the store.
 
@@ -76,11 +75,11 @@ export interface CacheStore<TMeta = unknown, TValue = CachedRows> {
 
 The store is a cache of values. Rows are what this middleware puts in it, so `TValue` defaults to `CachedRows`, and `createCacheMiddleware` takes a `CacheStore<TMeta, CachedRows>`. A store of any other value type, `unknown` included, is a type error there.
 
-The store keeps a version per key, an integer it keeps even for a key that holds no value. A key never seen has version 0. Only `unset` changes a version.
+The store keeps a version per key, an integer it keeps even for a key that holds no value. A key never seen has version 0. The store changes a version only in `unset`, which moves it up. A store may forget a version: the default store forgets it `ttlMs` after its last bump, after which it reads as 0 again.
 
 - **`get({ key, meta })`** always returns an entry. On a miss `data` is `{ empty: true }`, and the entry still carries the key, the `meta` the read supplied, and the current version. A store that groups entries by `meta` folds the versions of the groups `meta` names into the version it returns.
 - **`set(entry, value)`** stores `value` under `entry.key` with `entry.meta` if and only if the key's current version (folded the same way) still equals `entry.version`, and returns whether it stored. The entry passed is the one `get` returned. The compare and the write are one step that no `unset` of the same key can fall between: one synchronous step in memory, one script on a server. There is no unconditional write; a prefill is `get` followed by `set`.
-- **`unset({ keys, meta })`** removes every value named in `keys` and every value that matches `meta`, in one call so the store can batch them. It increments the version of every key it removes or would remove, including keys that hold no value. A store that cannot act on a `meta` it is given throws rather than ignoring it; the default store throws `RUNTIME.CACHE_STORE_META_UNSUPPORTED`. A silently dropped invalidation is the worst outcome a cache can have.
+- **`unset({ keys, meta })`** removes every value named in `keys` and every value that matches `meta`, in one call so the store can batch them. It increments the version of every key it removes, including keys named in `keys` that hold no value, so any in-flight miss on those keys is refused whatever its `meta`. A store that indexes `meta` also increments the version of the `meta` group named, which it folds into the version `get` returns for reads under that `meta`, so a read under that `meta` of a key the store has never seen is refused too. A store that cannot act on a `meta` it is given throws rather than ignoring it; the default store throws `RUNTIME.CACHE_STORE_META_UNSUPPORTED`. A silently dropped invalidation is the worst outcome a cache can have.
 
 All three methods take one object (or an entry and a value), so a store written against a positional shape is a compile error instead of a store that deletes key `undefined`. `unset` is required, because a cache that cannot be invalidated is the defect this design removes.
 
@@ -88,7 +87,7 @@ All three methods take one object (or an entry and a value), so a store written 
 
 ### Keys
 
-Every entry sits under one string. `cacheAnnotation({ key })` uses the string as given and never calls `deriveKey`, so `invalidate({ keys })` matches the literal string the user wrote. Otherwise the middleware calls `deriveKey(exec, ctx)`. The default, `deriveKeyFromContentHash`, returns `ctx.contentHash(exec)`: a hash of the statement, its parameters and the storage hash, so two callers running the same statement share one entry and a migration changes every derived key. Because `deriveKey` receives the lowered plan, an extension can put the tables a query touches into the key:
+Every entry sits under one string. `cacheAnnotation({ key })` uses the string as given and never calls `deriveKey`, so `invalidate({ keys })` matches the literal string the user wrote. Otherwise the middleware calls `deriveKey(exec, ctx)`. The default, `deriveKeyFromContentHash`, returns `ctx.contentHash(exec)`: a hash of the statement, its parameters and the storage hash, so two callers running the same statement share one entry and a migration changes every derived key. `deriveKey` receives the lowered plan, so an extension can shape the key, for example by prefixing it with a namespace:
 
 ```ts
 const cache = createCacheMiddleware({
@@ -131,18 +130,18 @@ The middleware and the annotation have no lifetime option. Lifetime is the store
 - An annotated, non-bypassed read in runtime scope is always cached; how long is the store's decision.
 - A store that does not index `meta` throws on `invalidate({ meta })`. Grouping by `meta` requires a store that implements it.
 - Store authors carry real obligations: an atomic conditional `set`, versions that outlive in-flight reads, and an `unset` by key that also drops the key from any `meta` index.
-- Invalidation happens when the application calls `invalidate`, after the write has returned and therefore after its commit. Attaching an invalidation to the write itself needs a runtime hook that fires after the enclosing transaction commits; without one, a concurrent reader could refill the entry with the old row between the write and the commit.
+- Invalidation happens when the application calls `invalidate`, after the write has returned. Outside a transaction that is after its commit; inside one, the application must call `invalidate` after `db.transaction()` returns. Attaching an invalidation to the write itself needs a runtime hook that fires after the enclosing transaction commits; without one, a concurrent reader could refill the entry with the old row between the write and the commit.
 - Serve-stale strategies are out of reach of an extension: only the middleware decides hit or miss.
 
 ### What is deliberately outside core, and how an extension builds it
 
-- **Tags.** The store's `set` indexes `meta.tags`; its `unset({ meta: { tags } })` removes the tagged keys and moves their versions.
+- **Tags.** The store's `set` indexes `meta.tags`; its `unset({ meta: { tags } })` removes the tagged keys, increments each of their versions, and increments the tag's version.
 - **Namespaces.** A namespace is one label per entry in `meta`, indexed like a tag, or a key prefix added by `deriveKey`.
 - **Named stores.** One store that routes on `meta.store` to the real backends, or two middleware instances with two stores.
-- **Strategies** such as table-based invalidation. `deriveKey` puts the tables a read touches into its key; the extension's own middleware reads a write's tables from the plan in `afterQuery`/`afterExecute` and calls `cache.invalidate`.
-- **Versioned keys.** `deriveKey` puts a generation counter into every key and an invalidation bumps it; old keys are never asked for again and expire on the store's schedule.
+- **Strategies** such as table-based invalidation. Each read carries the tables it touches in its `meta`, for example through the extension's annotation wrapper, and the store indexes them in `set`. The extension's own middleware reads a write's tables from the plan in `afterQuery`/`afterExecute` and calls `cache.invalidate({ meta: { tables } })`, which the store matches against that index.
+- **Versioned keys.** `deriveKey` puts a generation counter into every key and an invalidation bumps it. The counter lives in the shared store's backend, so every process sharing the store reads the same one; old keys are never asked for again and expire on the store's schedule.
 - **Request coalescing (dedupe).** A separate middleware placed after the cache, built on `interceptQuery` and `afterQuery`, sees only the reads the cache did not answer.
-- **Write-driven invalidation.** An annotation on the write that invalidates after the transaction commits, once the runtime has a post-commit hook.
+- **Write-driven invalidation.** An annotation on the write that invalidates after the transaction commits. It needs a post-commit hook in the runtime; once that exists, the package provides it as an annotation. That is not policy entering core: the annotation reaches the same `invalidate` call as the manual form and names its own target, and queuing until the commit then has one owner, the middleware that already holds the store, instead of every extension re-implementing the deferral.
 - **Serve-stale.** Not buildable outside; it needs the middleware to answer a hit with an expired entry while refreshing it.
 
 A tagging store, as a sketch (it never forgets versions):
@@ -194,6 +193,7 @@ function createTagStore(): CacheStore<TagMeta> {
       for (const tag of meta?.tags ?? []) {
         for (const key of keysByTag.get(tag) ?? []) {
           values.delete(key);
+          bump(`key:${key}`);
         }
         keysByTag.delete(tag);
         bump(`tag:${tag}`);
@@ -203,7 +203,7 @@ function createTagStore(): CacheStore<TagMeta> {
 }
 ```
 
-A read annotated with `meta: { tags: ['users'] }` that misses before `cache.invalidate({ meta: { tags: ['users'] } })` gets a folded version that the invalidation moves, so its `set` is refused even though the store had never seen its key.
+A read annotated with `meta: { tags: ['users'] }` that misses before `cache.invalidate({ meta: { tags: ['users'] } })` gets a folded version that the invalidation moves, so its `set` is refused even though the store had never seen its key. A read already in flight for one of the tagged keys under other `meta` is refused too, because the invalidation also moved that key's own version.
 
 ## Alternatives considered
 
@@ -211,7 +211,7 @@ A read annotated with `meta: { tags: ['users'] }` that misses before `cache.inva
 - **`invalidate(fn)`,** a predicate over entries, with a matching `deleteWhere` on the default store. Rejected: a function is not data. It cannot ride on an annotation, it cannot be sent to a shared store, and it forces callers to hold a store reference.
 - **A store argument to `invalidate(fn)`,** so the predicate can reach the store. Rejected for the same reason: invalidation is described as data the store interprets, not as code that runs against it.
 - **Version counters in the middleware,** a generation per key and a global one in the middleware's memory. Rejected: the guard then protects only reads in one process, and the middleware needs reference counting for in-flight misses and a second `unset` after a late `set`, all to track a number the store already has to know.
-- **An unconditional `set`, or a `set` with an explicit version argument.** Rejected for one entry type that `get` returns and `set` fills: the entry already carries the version, and a prefill is a miss filled by hand.
+- **An unconditional `set`, or a `set` with an explicit version argument.** Rejected: `get` already returns an entry that carries the version, `set` takes that entry back, and a prefill is a `get` followed by a `set`.
 - **A TTL on the middleware or the annotation.** Rejected: lifetime is the store's policy, and the middleware deciding it by proxy makes "annotated but no TTL" a third state with its own behaviour.
 - **Positional `set(key, meta, entry)` and `unset(key, meta)`.** Rejected: a store written against `unset(key)` still compiles against the positional shape and silently deletes key `undefined` when handed `meta`.
 - **Naming the blob `attributes` or `labels`.** `attributes` implies a meaning the middleware assigns, and it assigns none. Labels are strings, which is tags again. `meta` says what it is: opaque data that travels with the entry.
