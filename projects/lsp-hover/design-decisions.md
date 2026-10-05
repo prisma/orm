@@ -55,3 +55,19 @@
 
 **Rejected:**
 - The binder also reporting a diagnostic. It would duplicate the interpreter's error, would need its own `oneOf` aggregation, and raises the question of checking scalar values in the binder. It is deferred to its own change, together with removing the interpreter's check.
+
+## 5. Scalar leaf rules match by syntactic shape (2026-10-05, operator decision after manual QA)
+
+**Trigger:** I12 falsified assumption, found in manual QA (`qa/run-2026-10-02.md` F-1). In the binder, `str()`, `num()`, `bool()`, `nullLiteral()` and the other scalar leaves counted as matched whatever was written. SQL's `@default` argument is `oneOf(str(), numLiteral(), bool(), nullLiteral(), ...funcCalls, …)`, so `str()` "matched" `autoincrement()`, the function alternatives were never tried, and function names in `@default` got no `function` resolution and no hover.
+
+**Decision:**
+- Each scalar leaf rule matches only the expression shapes its own `parse` can accept: a string literal for `str`, a number literal for the number kinds, `true` / `false` for `bool`, `null` for `nullLiteral`, a tagged literal for `taggedLiteral`, and so on.
+- A mismatch is a non-match with no binder diagnostic.
+- Value constraints (`num(2)`, `int({ min })`, string sets, tag validity) stay with the interpreter's `parse`.
+- This extends decision 4 from fixed identifiers to every scalar leaf.
+
+**Consequence:** the `block-binder.test.ts` cases where `bool()`, `num()` or `str()` sat next to a missing reference now report `Cannot find entity "Missing"`, like the `identifier('Other')` cases.
+
+**Rejected:**
+- Reordering SQL's `scalarDefaultArms` so function calls come first. It fixes one spec and keeps the confusing rule.
+- Dropping function-name hover in `@default`.

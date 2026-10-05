@@ -43,6 +43,7 @@ Recording rules:
 - **Named function-call keys and function names** are recorded inside `tryBindExpression`'s `funcCall` case, into the trial's `references`.
 - **Constants** are recorded inside `tryBindExpression` when an `identifier` rule with a fixed `name` matches the expression.
 - **A fixed `identifier(name)` rule** matches only when the written identifier equals `name`, and records a `constant`. Otherwise it fails to match, with no binder diagnostic. Unrestricted `identifier()` matches any identifier (design decision 4).
+- **Scalar leaf rules** (`str`, the number kinds, `bool`, `nullLiteral`, `taggedLiteral`, …) match only the expression shapes their `parse` accepts, with no binder diagnostic. Value constraints stay with the interpreter (design decision 5).
 - **Inside a `oneOf` rule**, the existing first-match loop applies. Only the matching alternative's records survive. Today the `oneOf` case copies only `unresolved` resolutions from failed trials; it must keep doing that, so a failed alternative never leaks `parameter`, `function` or `constant` records.
 - **Struct-block entry keys** are recorded in `bindBlock`, keyed on `entry.key()`. Map-mode blocks record nothing for keys.
 
