@@ -527,7 +527,14 @@ describe('MongoCollection variant()', () => {
     expect(match.filter.kind).toBe('and');
     if (match.filter.kind === 'and') {
       expect(match.filter.exprs).toEqual([
-        MongoFieldFilter.eq('title', 'Login'),
+        MongoFieldFilter.eq(
+          'title',
+          new MongoParamRef('Login', {
+            codecId: 'mongo/string@1',
+            name: 'title',
+            collection: 'tasks',
+          }),
+        ),
         MongoFieldFilter.eq('type', new MongoParamRef('feature')),
       ]);
     }
