@@ -117,6 +117,31 @@ describe('parsePostgresDefault numeric literals in the form PostgreSQL stores', 
   });
 });
 
+describe('parsePostgresDefault int8 literals in the form PostgreSQL stores', () => {
+  it('reads an int8 default without leading zeros or a minus sign on zero, whatever spelling it was written in', () => {
+    expect(
+      [
+        ["'007'", 'bigint'],
+        ["'007'::bigint", 'int8'],
+        ['007', 'bigint'],
+        ["'-0'::bigint", 'bigint'],
+      ].map(([raw, nativeType]) => parsePostgresDefault(raw ?? '', nativeType)),
+    ).toEqual([
+      { kind: 'literal', value: '7' },
+      { kind: 'literal', value: '7' },
+      { kind: 'literal', value: '7' },
+      { kind: 'literal', value: '0' },
+    ]);
+  });
+
+  it('reads each element of an int8 list the same way', () => {
+    expect(parsePostgresDefault("'{007,-0,NULL}'::bigint[]", 'bigint[]')).toEqual({
+      kind: 'literal',
+      value: ['7', '0', null],
+    });
+  });
+});
+
 describe('parsePostgresDefault inet literals', () => {
   it('reads an inet default in the form PostgreSQL stores, whatever spelling it was written in', () => {
     expect(

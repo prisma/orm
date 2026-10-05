@@ -213,6 +213,18 @@ model Task {
         'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "0", as PostgreSQL writes this value',
       ],
       [
+        'an int8 member with a leading zero',
+        '  @@type("pg/int8@1")\n  Low = "007"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8@1 JSON value must be "7", as PostgreSQL writes this value',
+      ],
+      [
+        'a string timestamp codec, which an enum cannot use',
+        '  @@type("pg/timestamp-string@1")\n  Low = "2024-01-02T03:04:05"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" cannot use the codec "pg/timestamp-string@1". A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member.',
+      ],
+      [
         'an inet member with /32',
         '  @@type("pg/inet@1")\n  Low = "10.0.0.1/32"',
         'PSL_EXTENSION_INVALID_VALUE',

@@ -10,8 +10,10 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
+  type BigIntRange,
   decodeJsonIntegerText,
   decodeJsonMatching,
+  refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-relational-core/ast';
@@ -244,8 +246,25 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
+/**
+ * Reads integer digit text as PostgreSQL prints it, with no leading zeros and no minus sign on
+ * zero. Another spelling of an integer is refused with the text to write: PostgreSQL reads `007`
+ * and returns `7`.
+ */
+export function decodeJsonPrintedIntegerText(
+  codecId: string,
+  json: JsonValue,
+  range?: BigIntRange,
+): bigint {
+  const value = decodeJsonIntegerText(codecId, json, range);
+  const printed = value.toString();
+  return json === printed
+    ? value
+    : refuseJsonValue(codecId, `"${printed}", as PostgreSQL writes this value`, json);
+}
+
 export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
-  Number(decodeJsonIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
+  Number(decodeJsonPrintedIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
 
 /**
  * Renders a decimal-text default as a `bigint` literal, for the codecs whose

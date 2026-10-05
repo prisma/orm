@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
@@ -75,6 +76,36 @@ describe('pg/int8number@1 digit text', () => {
     expect(() => codec.decodeJson('1.5')).toThrow(
       'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
     );
+  });
+});
+
+describe.each([
+  ['pg/int8@1', () => pgInt8Descriptor.factory()(ctx), (value: bigint) => value],
+  [
+    'pg/int8number@1',
+    () => pgInt8NumberDescriptor.factory()(ctx),
+    (value: bigint) => Number(value),
+  ],
+  ['pg/unboundedint@1', () => pgUnboundedIntDescriptor.factory()(ctx), (value: bigint) => value],
+])('%s digit text as PostgreSQL prints it', (codecId, build, applicationValue) => {
+  const codec: { encodeJson(value: never): JsonValue; decodeJson(json: JsonValue): unknown } =
+    build();
+
+  it.each([
+    ['a leading zero', '007', '7'],
+    ['a negative zero', '-0', '0'],
+    ['a negative number with a leading zero', '-007', '-7'],
+    ['two zeros', '00', '0'],
+  ])('refuses %s, naming the text PostgreSQL prints for the value', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `${codecId} JSON value must be "${printed}", as PostgreSQL writes this value`,
+    );
+  });
+
+  it('writes digit text without leading zeros or a minus sign on zero', () => {
+    expect(
+      [0n, 7n, -7n].map((value) => codec.encodeJson(applicationValue(value) as never)),
+    ).toEqual(['0', '7', '-7']);
   });
 });
 

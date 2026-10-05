@@ -21,7 +21,6 @@ import {
   decodeJsonBoolean,
   decodeJsonFloat,
   decodeJsonInteger,
-  decodeJsonIntegerText,
   decodeJsonMatching,
   decodeJsonString,
   encodeJsonFloat,
@@ -63,6 +62,7 @@ import {
   canonicalUuid,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
+  decodeJsonPrintedIntegerText,
   FLOAT4_MAX,
   fitsCharacterLength,
   fitsFloat4,
@@ -779,7 +779,7 @@ export class PgInt8Codec extends CodecImpl<
     return pgBigintEncodeJson(PG_INT8_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    return decodeJsonIntegerText(PG_INT8_CODEC_ID, json, INT64_RANGE);
+    return decodeJsonPrintedIntegerText(PG_INT8_CODEC_ID, json, INT64_RANGE);
   }
 }
 
@@ -1125,7 +1125,7 @@ export class PgUnboundedIntCodec extends CodecImpl<
     return pgBigintEncodeJson(PG_UNBOUNDED_INT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    return decodeJsonIntegerText(PG_UNBOUNDED_INT_CODEC_ID, json);
+    return decodeJsonPrintedIntegerText(PG_UNBOUNDED_INT_CODEC_ID, json);
   }
 }
 

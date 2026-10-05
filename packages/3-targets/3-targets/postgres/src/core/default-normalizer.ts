@@ -52,7 +52,6 @@ const DECIMAL_TEXT_TYPE_PATTERN = new RegExp(
   `^(?:bigint|int8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
   'i',
 );
-const NUMERIC_TYPE_PATTERN = new RegExp(`^(?:numeric|decimal)(?:${TYPE_MODIFIER})?$`, 'i');
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.
@@ -223,11 +222,11 @@ const BOOLEAN_TYPE_PATTERN = /^(?:bool|boolean)$/i;
 const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
 const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
 
-/** A text default as the column stores it: a uuid, an IP address or a decimal numeral in the form PostgreSQL writes, which its codec reads. */
+/** A text default as the column stores it: a uuid, an IP address or the numeral of an int8 or numeric in the form PostgreSQL writes, which its codec reads. */
 function storedText(text: string, nativeType: string | undefined): string {
   if (nativeType === 'uuid') return canonicalUuid(text) ?? text;
   if (nativeType === 'inet') return canonicalInet(text) ?? text;
-  if (nativeType !== undefined && NUMERIC_TYPE_PATTERN.test(nativeType)) {
+  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) {
     return canonicalNumeralText(text);
   }
   return text;
