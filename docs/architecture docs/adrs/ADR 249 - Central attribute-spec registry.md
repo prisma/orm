@@ -170,7 +170,7 @@ This makes coverage a correctness requirement, not a nicety: a diagnostic driven
 
 ## Block attributes are declared on their block descriptor
 
-Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
+Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
 
 ```ts
 export const sqlFamilyPslBlockDescriptors = {
@@ -198,7 +198,7 @@ export interface PslExtensionBlockParsedAttribute {
 }
 ```
 
-`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
+`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
 
 ---
 

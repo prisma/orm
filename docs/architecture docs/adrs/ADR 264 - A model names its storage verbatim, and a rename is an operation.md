@@ -1,4 +1,4 @@
-# ADR 258 — A model names its storage verbatim, and a rename is an operation
+# ADR 264 — A model names its storage verbatim, and a rename is an operation
 
 ## Decision
 

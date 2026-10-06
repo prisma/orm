@@ -14,7 +14,7 @@ export {
 } from '../aggregate/check-integrity';
 export { buildFabricatedMigrationEdge } from '../aggregate/fabricated-migration-edge';
 export { type LoadAggregateInput, loadContractSpaceAggregate } from '../aggregate/loader';
-export type { ContractMarkerRecordLike } from '../aggregate/marker-types';
+export { type ContractMarkerRecordLike, contractHashAtMarker } from '../aggregate/marker-types';
 export {
   type AggregateCurrentDBState,
   type AggregateMigrationEdgeRef,

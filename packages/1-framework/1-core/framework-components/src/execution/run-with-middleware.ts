@@ -3,6 +3,7 @@ import { AsyncIterableResult } from './async-iterable-result';
 import type { ExecutionPlan } from './query-plan';
 import type {
   AfterQueryResult,
+  AfterTransactionResult,
   RuntimeMiddleware,
   RuntimeMiddlewareContext,
   RuntimeStatementStats,
@@ -216,6 +217,127 @@ export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
     }
   }
   return stats;
+}
+
+/**
+ * Calls each middleware's `afterTransaction` hook in registration order. A
+ * thrown error is passed to `ctx.log.error` and swallowed, and later
+ * middleware still run. Never rejects, so a query's result or a resolved
+ * commit is never replaced by a hook's failure.
+ */
+export async function runAfterTransaction<TExec extends ExecutionPlan>(
+  exec: TExec,
+  middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
+  result: AfterTransactionResult,
+  ctx: RuntimeMiddlewareContext,
+): Promise<void> {
+  for (const mw of middleware) {
+    if (!mw.afterTransaction) continue;
+    try {
+      await mw.afterTransaction(exec, result, ctx);
+    } catch (error) {
+      try {
+        ctx.log.error({ event: 'middleware.afterTransaction.error', middleware: mw.name, error });
+      } catch {
+        // Preserve the query's result when the logger also fails.
+      }
+    }
+  }
+}
+
+/** How a query ended: its rows or statistics all arrived, an error came out of it, or the caller stopped reading its rows. */
+export type QueryEnding = 'completed' | 'failed' | 'stopped';
+
+/**
+ * Returns what a query outside a transaction calls when it ends: it runs `runStage` with `committed` when the query completed and `unknown` otherwise. Returns `undefined` when `runStage` is `undefined`.
+ */
+export function onQueryEndOutsideTransaction(
+  runStage: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+): ((ending: QueryEnding) => Promise<void>) | undefined {
+  if (runStage === undefined) return undefined;
+  return (ending) => runStage({ outcome: ending === 'completed' ? 'committed' : 'unknown' });
+}
+
+/**
+ * Streams `rows()` and then calls `onQueryEnd` exactly once with how the query ended: `completed` when the stream completes, `failed` when an error comes out of it, and `stopped` when the caller stops reading, calls `return()` or throws into the iterator, before or after the first row. Returns `rows()` itself when `onQueryEnd` is `undefined`.
+ */
+export function reportQueryEnding<Row>(
+  onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
+  rows: () => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return onQueryEnd === undefined ? rows() : rowsThenQueryEnd(onQueryEnd, rows);
+}
+
+function rowsThenQueryEnd<Row>(
+  onQueryEnd: (ending: QueryEnding) => Promise<void>,
+  rows: () => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<Row, void, undefined> {
+      let thrownByCaller: { readonly error: unknown } | undefined;
+      const generator = streamThenQueryEnd(
+        onQueryEnd,
+        rows,
+        (error) => thrownByCaller !== undefined && thrownByCaller.error === error,
+      );
+      let started = false;
+      const reportStoppedBeforeStart = async (): Promise<void> => {
+        if (started) return;
+        started = true;
+        await onQueryEnd('stopped');
+      };
+      return {
+        next: () => {
+          started = true;
+          return generator.next();
+        },
+        return: async () => {
+          await reportStoppedBeforeStart();
+          return generator.return(undefined);
+        },
+        throw: async (error: unknown) => {
+          thrownByCaller = { error };
+          await reportStoppedBeforeStart();
+          return generator.throw(error);
+        },
+      };
+    },
+  };
+}
+
+async function* streamThenQueryEnd<Row>(
+  onQueryEnd: (ending: QueryEnding) => Promise<void>,
+  rows: () => AsyncIterable<Row>,
+  isThrownByCaller: (error: unknown) => boolean,
+): AsyncGenerator<Row, void, unknown> {
+  let ending: QueryEnding = 'stopped';
+  try {
+    yield* rows();
+    ending = 'completed';
+  } catch (error) {
+    if (!isThrownByCaller(error)) ending = 'failed';
+    throw error;
+  } finally {
+    await onQueryEnd(ending);
+  }
+}
+
+/**
+ * Runs `execute()` and then calls `onQueryEnd` exactly once: with `completed` when it resolves, and with `failed` when it rejects.
+ */
+export async function reportExecuteEnding<T>(
+  onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
+  execute: () => Promise<T>,
+): Promise<T> {
+  if (onQueryEnd === undefined) return execute();
+  let ending: QueryEnding = 'failed';
+  try {
+    const result = await execute();
+    ending = 'completed';
+    return result;
+  } finally {
+    await onQueryEnd(ending);
+  }
 }
 
 async function notifyQueryCompletion<TExec extends ExecutionPlan>(

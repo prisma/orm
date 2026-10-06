@@ -119,7 +119,7 @@ None.
 
 - Parent project: [`projects/lsp-go-to-definition/spec.md`](../../spec.md)
 - Linear issue: none (skipped by operator)
-- ADRs: ADR 231, ADR 249, ADR 255
+- ADRs: ADR 231, ADR 249, ADR 262
 - Origin of the removed filters: #30349 (`62ceaab854`)
 
 ## Amendment (after review on #30563)

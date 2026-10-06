@@ -664,7 +664,7 @@ prisma db sign [<contract> | --contract <contract>] [--db <url>] [--advance-ref 
 ```
 
 Options:
-- `<contract>` / `--contract <contract>`: Optional. The application contract to sign with: a hash, hash prefix, ref name, migration directory name, `<dir>^`, or `./path`. Defaults to the emitted `contract.json`
+- `<contract>` / `--contract <contract>`: Optional. The application contract to sign with: a hash, hash prefix, ref name, migration directory name, or `<dir>^`. Defaults to the emitted `contract.json`
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection` if set)
 - `--advance-ref <name>`: Advance the named ref of every signed space instead of `db`
 - `--no-advance-ref`: Sign without writing any ref or snapshot
@@ -1006,8 +1006,8 @@ prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--t
 **Options:**
 - `--config <path>`: Path to `prisma.config.ts`
 - `--name <slug>`: Name slug for the migration directory (default: `migration`)
-- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@empty`, or filesystem path). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
-- `--to <contract>`: Destination contract reference (same grammar as `--from`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
+- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or `@empty`). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
+- `--to <contract>`: Destination contract reference (hash, prefix, ref name, migration directory, or `<dir>^`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output (debug info, timings)
@@ -1053,45 +1053,47 @@ prisma migration show [target] [--config <path>] [--json] [-v] [-q] [--color/--n
 
 ### `prisma migration status`
 
-Show the migration graph and applied status. Adapts based on context:
-
-- **With DB connection**: Shows applied/pending markers and "you are here" indicators
-- **Without DB connection**: Shows the graph structure from disk only
-- **With `--ref`**: Targets a specific ref instead of the contract hash; all refs from `refs.json` are rendered on the graph
+Shows which migrations are pending between the database marker and the target contract. It reads the database marker by default and needs a connection. `--from` names the origin instead and runs offline, unless `--from` or `--to` is `@db`, which reads the database.
 
 ```bash
-prisma migration status [--db <url>] [--ref <name>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma migration status [--db <url>] [--to <contract>] [--from <contract>] [--space <id>] [--legend] [--ascii] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
-- `--db <url>`: Database connection string (enables online mode)
-- `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
+- `--db <url>`: Database connection string
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration dir name, `<dir>^`, `@contract`, `@db`, or `@empty`). Defaults to the emitted contract.
+- `--from <contract>`: Origin contract reference, with the same forms as `--to`. Defaults to the database marker. With `--from`, the path is computed without reading the database, unless `--from` or `--to` is `@db`.
+- `--space <id>`: Narrow output to a single contract space
+- `--legend`: Print a key for the tree glyphs and lane colors
+- `--ascii`: Use ASCII glyphs
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output
 
+`@db` in either `--to` or `--from` resolves to the database marker, so the command reads the database and needs a connection. `--from` and `--to` apply to the app space. Each extension space goes to its own head: from its own marker when the command reads the database for the origin (no `--from`, or `--from @db`), and from the empty contract when `--from` names a contract.
+
 **What it does:**
-1. Reads migration packages from disk and reconstructs the migration graph
-2. Loads all refs from `migrations/refs.json` (if present) and renders them on the graph
-3. If `--ref` is provided, uses the ref's hash as the target instead of the contract hash; the active ref is highlighted in bold, other refs are dimmed
-4. If a DB connection is available, reads the marker to determine applied/pending status and shows distance from the ref target (e.g., "2 edge(s) behind ref")
-5. Displays the graph with `◄ DB`, `◄ Contract`, and `◄ ref:<name>` markers
-6. Shows operation summaries with destructive operation highlighting
-7. In `--ref` mode, the `CONTRACT.AHEAD` warning is suppressed — contract being ahead of a ref target is expected in multi-environment workflows
+1. Reads migration packages from disk and reconstructs each space's migration graph
+2. Resolves the origin (the database marker, or `--from`) and the target (the emitted contract, or `--to`)
+3. With a database connection, reads each space's marker and ledger to mark migrations applied or pending
+4. Draws each space's graph with `@db`, `@contract` and ref labels, and summarises what is pending
+5. Warns `MIGRATION.MARKER_NOT_IN_HISTORY` when a marker is not in its space's history (a graph node, or the head of a space with no migrations)
 
 ### `prisma db migrate`
 
 Apply planned migrations to the database. Executes previously planned migrations (created by `migration plan`). Compares the database marker against the migration graph to determine which migrations are pending, then executes them sequentially. Each migration runs in its own transaction. Does not plan new migrations — run `migration plan` first.
 
 ```bash
-prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show] [--from <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection`)
-- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or filesystem path). When omitted, applies toward the emitted `contract.json`. When `--to` resolves to an on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source.
-- `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@contract`, `@db`, or `@empty`). When omitted, applies toward the emitted `contract.json`; `--to @contract` does the same. When `--to` resolves to another on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source. A ref name is a `--to` form; refs live in `migrations/<space>/refs/<name>.json`.
+- `--advance-ref <name>`: After a successful apply, advance the named ref to the new marker
+- `--show`: Preview the migration route without applying anything (read-only)
+- `--from <contract>`: The origin for the `--show` preview, with the same forms as `--to`. Defaults to the database marker. A contract other than `@db` makes the preview start offline; it still reads the database when `--to` is `@db`.
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
@@ -1100,7 +1102,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v]
 **What it does:**
 1. Reads migration packages from `config.migrations.dir`. Every package is attested — there is no on-disk draft state. The loader (`readMigrationPackage` in `@internal/migration-tools/io`) rehashes `(metadata, ops)` for each `MigrationPackage` it returns and confirms the result matches the stored `migrationHash`. If a package has been hand-edited or partially written since emit, the load fails with `MIGRATION.HASH_MISMATCH` pointing at the offending directory and asks the developer to re-run `node migrations/<dir>/migration.ts` (or restore from version control).
 2. Reconstructs the migration graph from all loaded packages
-3. Determines the destination hash and apply contract: from `--to` / `--ref`, or from `contract.json` when neither is supplied
+3. Determines the destination hash and apply contract: from `--to`, or from `contract.json` when `--to` is omitted or `@contract`
 4. Connects to the database and reads the current marker hash
 5. Finds the shortest path from the marker hash to the destination using graph pathfinding
 6. Executes each pending migration in order using the target's `MigrationRunner`
@@ -1112,8 +1114,6 @@ prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v]
 **Config requirements:** Requires `driver` and `db.connection` (or `--db`). `migrations.dir` is optional and defaults to `migrations/`.
 
 **Resume semantics:** If a migration fails, previously applied migrations are preserved. Re-running `db migrate` resumes from the last successful migration.
-
-**Ref-based routing:** With `--ref`, apply targets the ref's hash instead of the contract hash. This enables multi-environment workflows where staging and production track different points in the migration graph.
 
 ### Emitting `ops.json` and computing `migrationHash`
 
@@ -1132,7 +1132,7 @@ The scaffolded `migration.ts` calls `MigrationCLI.run(import.meta.url, ...)` fro
 
 ### `prisma migration ref`
 
-Manage named refs in `migrations/refs.json`. Refs map logical environment names (e.g., `staging`, `production`) to contract hashes, enabling multi-environment migration workflows where different environments track different points in the migration graph.
+Manage named refs, one file per ref at `migrations/<space>/refs/<name>.json`. Refs map logical environment names (e.g., `staging`, `production`) to contract hashes, enabling multi-environment migration workflows where different environments track different points in the migration graph.
 
 ```bash
 prisma migration ref set <name> <contract>          # Set a ref to a contract (hash, ref, dir, ...)
@@ -1149,7 +1149,7 @@ prisma migration ref delete <name>                  # Delete a ref
 
 **Ref values:** Must be valid contract hashes (64 lowercase hex chars, or the `empty` sentinel).
 
-**Atomic writes:** `refs.json` is written atomically via temp file + rename to prevent corruption from concurrent writes.
+**Atomic writes:** each ref file is written atomically via temp file + rename to prevent corruption from concurrent writes.
 
 ## Architecture
 

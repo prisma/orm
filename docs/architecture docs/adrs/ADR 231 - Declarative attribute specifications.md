@@ -1,6 +1,6 @@
 # ADR 231 — Declarative attribute specifications: composable argument combinators with typed inference
 
-**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md).
+**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md).
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
@@ -50,7 +50,7 @@ The SQL and Mongo family interpreters are the first consumers. They define their
 
 The kit consumes `ExpressionAst` directly. No intermediate argument representation is introduced, and no combinator reparses flattened source text except `json()`, the deliberate quoted-JSON-object exception.
 
-Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts. Symbol-table construction collects declarations without interpreting blocks; consumers then bind references and interpret block values and attributes against the complete snapshot, as described in ADR 255.
+Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts. Symbol-table construction collects declarations without interpreting blocks; consumers then bind references and interpret block values and attributes against the complete snapshot, as described in ADR 262.
 
 ---
 
