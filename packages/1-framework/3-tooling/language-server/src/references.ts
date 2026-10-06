@@ -1,7 +1,7 @@
 import type { Binder, PslSymbol, Resolution } from '@internal/psl-parser';
 import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import type { Location, Position } from 'vscode-languageserver';
-import { resolvedNodeAt, tokenAtCursor } from './cursor-resolution';
+import { identTokenAt, resolvedNodeAt } from './cursor-resolution';
 
 export interface ReferencesDocument {
   readonly text: string;
@@ -21,10 +21,12 @@ export function provideReferences(
   position: Position,
   includeDeclaration: boolean,
 ): Location[] {
-  const token = tokenAtCursor(source.document, source.sourceFile.offsetAt(position));
+  const token = identTokenAt(source.document.syntax, source.sourceFile.offsetAt(position));
   const resolved = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
   const target = resolved === undefined ? undefined : targetOf(resolved.resolution);
   if (target === undefined) return [];
+  // A namespace has no single declaration: every `namespace X` block both declares and
+  // reopens it, so each block name is a usage and none is dropped when the declaration is excluded.
   const declarationName = target.kind === 'namespace' ? undefined : target.node.name()?.syntax;
   const locations: Location[] = [];
   for (const { text, document, sourceFile } of source.documents) {
@@ -80,5 +82,9 @@ function* occurrencesOf(name: string, text: string): Iterable<number> {
 }
 
 function names(resolution: Resolution, target: PslSymbol): boolean {
-  return 'symbol' in resolution && resolution.symbol === target;
+  return (
+    resolution.kind !== 'unresolved' &&
+    resolution.kind !== 'crossSpace' &&
+    resolution.symbol === target
+  );
 }

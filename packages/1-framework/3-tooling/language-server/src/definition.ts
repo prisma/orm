@@ -7,7 +7,7 @@ import type {
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import type { Location, LocationLink, Position, Range } from 'vscode-languageserver';
-import { resolvedNodeAt, tokenAtCursor } from './cursor-resolution';
+import { identTokenAt, resolvedNodeAt } from './cursor-resolution';
 
 export interface DefinitionSource {
   readonly document: DocumentAst;
@@ -26,7 +26,7 @@ export function provideDefinition(
   position: Position,
   linkSupport: boolean,
 ): LocationLink[] | Location[] | null {
-  const token = tokenAtCursor(source.document, source.sourceFile.offsetAt(position));
+  const token = identTokenAt(source.document.syntax, source.sourceFile.offsetAt(position));
   const reference = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
   if (reference === undefined) return null;
   const declarations = declarationsOf(reference.resolution);
