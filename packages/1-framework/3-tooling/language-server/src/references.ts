@@ -1,5 +1,5 @@
 import type { Binder, PslSymbol, Resolution } from '@internal/psl-parser';
-import type { DocumentAst, SourceFile, SyntaxNode, SyntaxToken } from '@internal/psl-parser/syntax';
+import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import type { Location, Position } from 'vscode-languageserver';
 import { resolvedNodeAt, tokenAtCursor } from './cursor-resolution';
 
@@ -34,7 +34,6 @@ export function provideReferences(
       if (candidate.offset !== offset || candidate.text !== target.name) continue;
       const usage = resolvedNodeAt(candidate, source.binder);
       if (usage === undefined || !names(usage.resolution, target)) continue;
-      if (!isLastIdentifierOf(usage.node, candidate)) continue;
       if (!includeDeclaration && usage.node === declarationName) continue;
       locations.push({
         uri: sourceFile.filename,
@@ -82,12 +81,4 @@ function* occurrencesOf(name: string, text: string): Iterable<number> {
 
 function names(resolution: Resolution, target: PslSymbol): boolean {
   return 'symbol' in resolution && resolution.symbol === target;
-}
-
-function isLastIdentifierOf(node: SyntaxNode, candidate: SyntaxToken): boolean {
-  let last: SyntaxToken | undefined;
-  for (const token of node.tokens()) {
-    if (token.kind === 'Ident') last = token;
-  }
-  return last?.offset === candidate.offset;
 }
