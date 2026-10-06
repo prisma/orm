@@ -118,17 +118,25 @@ async function readDatabaseState(inputs: {
   }
 }
 
-/** Where a status path starts: the database marker, or the contract `--from` names. */
-export type NoPathOrigin =
-  | { readonly kind: 'database'; readonly markerHash: string | undefined }
-  | { readonly kind: 'from'; readonly hash: string };
+/** Where a space's status path starts: the marker the database holds, or a contract `--from` names. */
+export type StatusOrigin =
+  | { readonly kind: 'database'; readonly marker: ContractMarkerRecordLike | undefined }
+  | { readonly kind: 'offline'; readonly hash: string };
 
-function describeOrigin(origin: NoPathOrigin): string {
-  if (origin.kind === 'from') {
+function originHashOf(origin: StatusOrigin | undefined): string {
+  return origin?.kind === 'offline' ? origin.hash : contractHashAtMarker(origin?.marker);
+}
+
+function currentContractOf(origin: StatusOrigin | undefined): string | null {
+  return origin?.kind === 'offline' ? origin.hash : (origin?.marker?.storageHash ?? null);
+}
+
+function describeOrigin(origin: StatusOrigin): string {
+  if (origin.kind === 'offline') {
     return `the --from contract (${shortDisplayHash(origin.hash)})`;
   }
-  return origin.markerHash !== undefined
-    ? `the database state (${shortDisplayHash(origin.markerHash)})`
+  return origin.marker !== undefined
+    ? `the database state (${shortDisplayHash(origin.marker.storageHash)})`
     : 'the database state';
 }
 
@@ -142,7 +150,7 @@ export type NoPathTarget =
   | { readonly space: 'extension'; readonly spaceId: string };
 
 export function buildNoPathSummary(args: {
-  readonly origin: NoPathOrigin;
+  readonly origin: StatusOrigin;
   readonly targetHash: string;
   readonly target: NoPathTarget;
 }): string {
@@ -397,7 +405,7 @@ export const migrationStatusCommand = defineOrmCommand({
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
     let noPath:
       | {
-          readonly origin: NoPathOrigin;
+          readonly origin: StatusOrigin;
           readonly targetHash: string;
           readonly target: NoPathTarget;
         }
@@ -418,18 +426,18 @@ export const migrationStatusCommand = defineOrmCommand({
         headlineTargetHash = targetHash;
       }
 
-      const offlineOrigin = isAppSpace ? fromOverrideHash : undefined;
-      const marker = liveOrigin
-        ? database.markersBySpace.get(entry.space)
-        : offlineOrigin !== undefined
-          ? { storageHash: offlineOrigin }
+      const origin: StatusOrigin | undefined = liveOrigin
+        ? { kind: 'database', marker: database.markersBySpace.get(entry.space) }
+        : isAppSpace && fromOverrideHash !== undefined
+          ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
-      const markerHash = marker?.storageHash;
-      const originHash = contractHashAtMarker(marker);
+      const originHash = originHashOf(origin);
       const readMarker =
-        liveOrigin || (isAppSpace && liveTarget)
-          ? database.markersBySpace.get(entry.space)
-          : undefined;
+        origin?.kind === 'database'
+          ? origin.marker
+          : isAppSpace && liveTarget
+            ? appMarker
+            : undefined;
       const markerDiverged =
         readMarker !== undefined &&
         !isInSpaceHistory(readMarker.storageHash, { graph, headHash: space.headRef?.hash });
@@ -438,11 +446,6 @@ export const migrationStatusCommand = defineOrmCommand({
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
         findings.push(markerNotInHistoryFinding(entry.space));
       }
-      const origin: NoPathOrigin | undefined = liveOrigin
-        ? { kind: 'database', markerHash }
-        : offlineOrigin !== undefined
-          ? { kind: 'from', hash: offlineOrigin }
-          : undefined;
       if (
         origin !== undefined &&
         !markerDiverged &&
@@ -475,7 +478,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
       statusSpaces.push({
         space: entry.space,
-        currentContract: markerHash ?? null,
+        currentContract: currentContractOf(origin),
         targetContract: targetHash,
         migrations,
       });

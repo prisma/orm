@@ -5,7 +5,7 @@ describe('buildNoPathSummary', () => {
   it('names the live contract when no --to was passed', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
+        origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
         target: { space: 'app', explicitTarget: false, refName: undefined },
       }),
@@ -17,7 +17,7 @@ describe('buildNoPathSummary', () => {
   it('names the ref when --to resolved via ref', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
+        origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
         target: { space: 'app', explicitTarget: true, refName: 'prod' },
       }),
@@ -29,7 +29,7 @@ describe('buildNoPathSummary', () => {
   it('omits via ref when --to was a raw hash', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
+        origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
         target: { space: 'app', explicitTarget: true, refName: undefined },
       }),
@@ -41,7 +41,7 @@ describe('buildNoPathSummary', () => {
   it('omits the marker parenthetical when the marker hash is unknown', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'database', markerHash: undefined },
+        origin: { kind: 'database', marker: undefined },
         targetHash: 'b'.repeat(64),
         target: { space: 'app', explicitTarget: false, refName: undefined },
       }),
@@ -53,7 +53,7 @@ describe('buildNoPathSummary', () => {
   it('names the --from contract when the origin is offline', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'from', hash: 'a'.repeat(64) },
+        origin: { kind: 'offline', hash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
         target: { space: 'app', explicitTarget: true, refName: undefined },
       }),
@@ -65,7 +65,7 @@ describe('buildNoPathSummary', () => {
   it('names the head of an extension space and leaves out the app remedies', () => {
     expect(
       buildNoPathSummary({
-        origin: { kind: 'database', markerHash: undefined },
+        origin: { kind: 'database', marker: undefined },
         targetHash: 'b'.repeat(64),
         target: { space: 'extension', spaceId: 'pgvector' },
       }),
