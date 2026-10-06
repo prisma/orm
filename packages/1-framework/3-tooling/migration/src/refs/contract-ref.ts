@@ -38,9 +38,9 @@ export function isLiveMarkerRef(input: string | undefined): boolean {
  * Accepted forms:
  * - `@contract` — the on-disk working contract hash (offline; requires
  *   `ctx.contractHash` to be set)
- * - `@db` — the live database marker (connection-required); callers MUST
- *   check `result.value.provenance.kind === 'reserved-db'` and resolve the
- *   actual hash via `readAllMarkers()` before using `result.value.hash`
+ * - `@db` — the live database marker. Callers that accept `@db` test
+ *   `isLiveMarkerRef(input)` before parsing and resolve it from the marker;
+ *   the `reserved-db` result carries a placeholder hash that must not be used
  * - `@empty` — the empty contract (offline; resolves to
  *   `EMPTY_CONTRACT_HASH`, the origin with no prior storage state)
  * - Full storage hash (64 hex chars or `empty`)
@@ -69,11 +69,6 @@ export function parseContractRef(
   }
 
   if (input === LIVE_MARKER_REF) {
-    // The live DB marker is not available offline. Return a sentinel result with
-    // a `reserved-db` provenance; callers must resolve the actual hash via
-    // `readAllMarkers()`. The `hash` placeholder is intentionally empty — it
-    // must NOT be used directly. This is enforced by convention; callers
-    // should check `provenance.kind` before using the hash.
     return ok({ hash: '', provenance: { kind: 'reserved-db' } });
   }
 

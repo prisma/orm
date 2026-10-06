@@ -24,10 +24,9 @@ export type ContractRefProvenance =
    */
   | { readonly kind: 'reserved-contract' }
   /**
-   * Resolved from the `@db` reserved token — the live database marker.
-   * The `hash` field is a placeholder; callers must resolve the actual hash
-   * via `readAllMarkers()` before using it. Check `provenance.kind ===
-   * 'reserved-db'` to detect this case and perform the DB lookup.
+   * Resolved from the `@db` reserved token. The `hash` field is a placeholder
+   * that must not be used: callers that accept `@db` test `isLiveMarkerRef`
+   * before parsing and resolve it from the live marker.
    */
   | { readonly kind: 'reserved-db' }
   /**
