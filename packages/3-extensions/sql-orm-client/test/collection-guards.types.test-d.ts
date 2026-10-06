@@ -1,3 +1,4 @@
+import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { describe, expectTypeOf, test } from 'vitest';
 import type { CollectionRowOf, Filtered } from '../src/collection-types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
@@ -54,6 +55,96 @@ describe('writes need a filter', () => {
     expectTypeOf(plain.Post.where((p) => p.id.eq(1)).update({ title: 'x' })).not.toBeAny();
     expectTypeOf(plain.Post.where((p) => p.id.eq(1)).delete()).not.toBeAny();
     expectTypeOf(plain.Post.where((p) => p.id.eq(1)).prepared).not.toBeAny();
+  });
+});
+
+describe('the row a write returns', () => {
+  type Row = CollectionRowOf<PostCollection>;
+  type PostRow = {
+    id: number;
+    title: string;
+    userId: number;
+    embedding: number[] | null;
+    views: number;
+  };
+
+  test('ReturnType of a write that needs a filter is the row', () => {
+    expectTypeOf<Row>().toEqualTypeOf<PostRow>();
+    expectTypeOf<Awaited<ReturnType<PostCollection['update']>>>().toEqualTypeOf<Row | null>();
+    expectTypeOf<Awaited<ReturnType<PostCollection['delete']>>>().toEqualTypeOf<Row | null>();
+    expectTypeOf<ReturnType<PostCollection['updateAll']>>().toEqualTypeOf<
+      AsyncIterableResult<Row>
+    >();
+    expectTypeOf<ReturnType<PostCollection['deleteAll']>>().toEqualTypeOf<
+      AsyncIterableResult<Row>
+    >();
+  });
+
+  test('ReturnType of a write on a filtered collection is the row', () => {
+    const posts = Post.published();
+    expectTypeOf<Awaited<ReturnType<typeof posts.update>>>().toEqualTypeOf<Row | null>();
+    expectTypeOf<Awaited<ReturnType<typeof posts.delete>>>().toEqualTypeOf<Row | null>();
+    expectTypeOf<ReturnType<typeof posts.updateAll>>().toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf<ReturnType<typeof posts.deleteAll>>().toEqualTypeOf<AsyncIterableResult<Row>>();
+  });
+
+  test('ReturnType of a write that needs no filter is the row', () => {
+    expectTypeOf<Awaited<ReturnType<PostCollection['create']>>>().toEqualTypeOf<Row>();
+    expectTypeOf<Awaited<ReturnType<PostCollection['upsert']>>>().toEqualTypeOf<Row>();
+    expectTypeOf<ReturnType<PostCollection['createAll']>>().toEqualTypeOf<
+      AsyncIterableResult<Row>
+    >();
+  });
+
+  test('ReturnType of a write that counts is a number', () => {
+    expectTypeOf<Awaited<ReturnType<PostCollection['updateAndCount']>>>().toEqualTypeOf<number>();
+    expectTypeOf<Awaited<ReturnType<PostCollection['deleteAndCount']>>>().toEqualTypeOf<number>();
+  });
+
+  test('after include, a write returns the included relation', async () => {
+    const posts = Post.published().include('author');
+    type AuthorRow = CollectionRowOf<typeof posts>;
+    expectTypeOf<keyof AuthorRow>().toEqualTypeOf<keyof PostRow | 'author'>();
+    expectTypeOf(await posts.update({ title: 'x' })).toEqualTypeOf<AuthorRow | null>();
+    expectTypeOf(await posts.delete()).toEqualTypeOf<AuthorRow | null>();
+    expectTypeOf(await posts.updateAll({ title: 'x' }).toArray()).toEqualTypeOf<AuthorRow[]>();
+    expectTypeOf(await posts.deleteAll().toArray()).toEqualTypeOf<AuthorRow[]>();
+    expectTypeOf(
+      await posts.create({ id: 1, title: 'x', userId: 1, views: 0 }),
+    ).toEqualTypeOf<AuthorRow>();
+    expectTypeOf(
+      await posts.createAll([{ id: 1, title: 'x', userId: 1, views: 0 }]).toArray(),
+    ).toEqualTypeOf<AuthorRow[]>();
+    expectTypeOf(
+      await posts.upsert({ create: { id: 1, title: 'x', userId: 1, views: 0 }, update: {} }),
+    ).toEqualTypeOf<AuthorRow>();
+  });
+
+  test('after include, ReturnType of a write includes the relation', () => {
+    const posts = Post.published().include('author');
+    type AuthorRow = CollectionRowOf<typeof posts>;
+    expectTypeOf<Awaited<ReturnType<typeof posts.update>>>().toEqualTypeOf<AuthorRow | null>();
+    expectTypeOf<Awaited<ReturnType<typeof posts.delete>>>().toEqualTypeOf<AuthorRow | null>();
+    expectTypeOf<ReturnType<typeof posts.updateAll>>().toEqualTypeOf<
+      AsyncIterableResult<AuthorRow>
+    >();
+    expectTypeOf<ReturnType<typeof posts.deleteAll>>().toEqualTypeOf<
+      AsyncIterableResult<AuthorRow>
+    >();
+  });
+
+  test('after select, a write returns the selected fields', async () => {
+    const posts = Post.published().select('id');
+    expectTypeOf(await posts.update({ title: 'x' })).toEqualTypeOf<{ id: number } | null>();
+    expectTypeOf(await posts.deleteAll().toArray()).toEqualTypeOf<{ id: number }[]>();
+  });
+
+  test('after include and select, a write returns the selected fields and the relation', async () => {
+    const posts = Post.published().include('author').select('id');
+    type Selected = CollectionRowOf<typeof posts>;
+    expectTypeOf<keyof Selected>().toEqualTypeOf<'id' | 'author'>();
+    expectTypeOf(await posts.update({ title: 'x' })).toEqualTypeOf<Selected | null>();
+    expectTypeOf(await posts.deleteAll().toArray()).toEqualTypeOf<Selected[]>();
   });
 });
 

@@ -337,7 +337,7 @@ await Post.include('user').newestFirst().all();
 
 After `.select(...)` or `.variant(...)` the class methods are gone: those return the base `Collection` type. Call class methods before them. Inside an include refinement, the related collection is the base `Collection` type, not its registered class.
 
-Inside a class body, a class method called on the result of another call loses what that call established: in `latest() { return this.byAuthor(id).newestFirst(); }` the result is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
+Inside a class body, a class method called on the result of another call loses what that call established. So a class method whose body chains two class methods loses the first call's facts for every caller: with `latest() { return this.byAuthor(id).newestFirst(); }`, `Post.latest()` is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
 `apply(fn)` calls a function with the collection and returns its result. A function from a collection to a collection is a scope, of type `Scope<In, Out>`, so a query can be written once and applied to any collection of that class:
 
