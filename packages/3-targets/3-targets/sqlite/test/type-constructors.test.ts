@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { sqliteAuthoringTypes } from '../src/core/authoring';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-registry';
 import { sqliteDataTypes } from '../src/core/data-types';
-import { sqliteScalarAuthoringTypes } from '../src/core/type-constructors';
+import { sqlitePslTypeConstructors } from '../src/core/type-constructors';
 import sqliteTargetPack from '../src/exports/pack';
 
 describe('the type constructors the SQLite target contributes', () => {
@@ -14,7 +14,7 @@ describe('the type constructors the SQLite target contributes', () => {
     expect(Object.keys(sqliteAuthoringTypes)).toEqual(['BigIntNumber']);
   });
 
-  const allConstructors = { ...sqliteAuthoringTypes, ...sqliteScalarAuthoringTypes };
+  const allConstructors = { ...sqliteAuthoringTypes, ...sqlitePslTypeConstructors };
 
   const scalarNames = [
     ['String', 'sqlite/text@1', 'text'],
@@ -28,7 +28,7 @@ describe('the type constructors the SQLite target contributes', () => {
   ] as const;
 
   it('pins every base scalar to its codec', () => {
-    expect(Object.fromEntries(collectScalarTypeConstructors(sqliteScalarAuthoringTypes))).toEqual(
+    expect(Object.fromEntries(collectScalarTypeConstructors(sqlitePslTypeConstructors))).toEqual(
       Object.fromEntries(scalarNames.map(([name, codecId]) => [name, { codecId }])),
     );
   });

@@ -7,8 +7,6 @@ import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
  *
  * The type position is the only storage decider: a mutation-default generator
  * (`@default(uuid())`) never re-picks a column's storage.
- *
- * These and `postgresNativeAuthoringTypes` are defined here, next to the codecs they name, but the adapter contributes them: the TypeScript contract builder builds its `type.*` helpers from the target, so a target contribution would add `type.String()` and the like there.
  */
 export const postgresScalarAuthoringTypes = {
   String: {
@@ -225,4 +223,12 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * The constructors only PSL offers, defined here next to the codecs they name. The adapter contributes them: the TypeScript contract builder builds its `type.*` helpers from the target, so a target contribution would add `type.String()` and the like there. The constructors that should also be `type.*` helpers are the target's own, in `postgresAuthoringTypes`.
+ */
+export const postgresPslTypeConstructors = {
+  ...postgresScalarAuthoringTypes,
+  ...postgresNativeAuthoringTypes,
 } as const satisfies AuthoringTypeNamespace;

@@ -1,5 +1,5 @@
+import { postgresPslTypeConstructors } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
-import { postgresPslTypeConstructors } from '../src/core/control-mutation-defaults';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 

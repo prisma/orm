@@ -3,9 +3,7 @@ import sqlFamilyDescriptor from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { SQL_CHAR_CODEC_ID, SQL_VARCHAR_CODEC_ID } from '@internal/sql-relational-core/ast';
 import { sqliteCodecRegistry } from '@internal/target-sqlite/codecs';
-import sqliteTargetDescriptor, {
-  sqliteScalarAuthoringTypes,
-} from '@internal/target-sqlite/control';
+import sqliteTargetDescriptor, { sqlitePslTypeConstructors } from '@internal/target-sqlite/control';
 import { describe, expect, it } from 'vitest';
 import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import sqliteAdapterDescriptor from '../src/exports/control';
@@ -30,7 +28,7 @@ describe('the SQLite adapter descriptor metadata', () => {
   });
 
   it('contributes the base scalar type constructors the target defines', () => {
-    expect(sqliteAdapterDescriptor.authoring?.type).toBe(sqliteScalarAuthoringTypes);
+    expect(sqliteAdapterDescriptor.authoring?.type).toBe(sqlitePslTypeConstructors);
   });
 
   it('contributes no data type entries, because the target contributes them', () => {

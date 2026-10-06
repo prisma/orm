@@ -1,7 +1,7 @@
+import { postgresPslTypeConstructors } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
 import { prisma7PostgresTypeMap } from '../../../3-targets/postgres/src/core/prisma7-type-map';
 import { INFERRED_PSL_TYPE_NAMES } from '../../../3-targets/postgres/src/core/psl-build/postgres-type-map';
-import { postgresPslTypeConstructors } from '../src/core/control-mutation-defaults';
 
 const TEMPORAL_CODEC_IDS = [
   'pg/date-temporal@1',

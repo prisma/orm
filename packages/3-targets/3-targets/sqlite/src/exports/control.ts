@@ -4,4 +4,4 @@ export {
   SqliteUnboundDatabase,
   sqliteCreateNamespace,
 } from '../core/sqlite-unbound-database';
-export { sqliteScalarAuthoringTypes } from '../core/type-constructors';
+export { sqlitePslTypeConstructors } from '../core/type-constructors';

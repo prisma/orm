@@ -14,6 +14,7 @@ import { EXISTING_COLUMN_DATE_TIME_TYPES } from '../src/core/psl-build/existing-
 import { INFERRED_PSL_TYPE_NAMES } from '../src/core/psl-build/postgres-type-map';
 import {
   postgresNativeAuthoringTypes,
+  postgresPslTypeConstructors,
   postgresScalarAuthoringTypes,
 } from '../src/core/type-constructors';
 import postgresTargetPack from '../src/exports/pack';
@@ -22,6 +23,13 @@ describe('the type constructors the target contributes', () => {
   it('are only the target’s own; the adapter contributes the scalar and native ones', () => {
     expect(postgresTargetPack.authoring.type).toBe(postgresAuthoringTypes);
     expect(Object.keys(postgresAuthoringTypes)).toEqual(['BigIntNumber', 'UnboundedInt', 'pg']);
+  });
+
+  it('define the PSL-only constructors as the scalar and native ones together', () => {
+    expect(Object.keys(postgresPslTypeConstructors)).toEqual([
+      ...Object.keys(postgresScalarAuthoringTypes),
+      ...Object.keys(postgresNativeAuthoringTypes),
+    ]);
   });
 
   it.each(Object.entries(postgresAuthoringTypes).filter(([name]) => name !== 'pg'))(

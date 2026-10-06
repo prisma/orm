@@ -16,9 +16,9 @@ import {
  * The type position is the only storage decider: a mutation-default generator
  * (`@default(uuid())`) never re-picks a column's storage.
  *
- * Defined here, next to the codecs they name, but the adapter contributes them: the TypeScript contract builder builds its `type.*` helpers from the target, so a target contribution would add `type.String()` and the like there.
+ * These are the constructors only PSL offers. They are defined here, next to the codecs they name, but the adapter contributes them: the TypeScript contract builder builds its `type.*` helpers from the target, so a target contribution would add `type.String()` and the like there. The constructors that should also be `type.*` helpers are the target's own (`sqliteAuthoringTypes`).
  */
-export const sqliteScalarAuthoringTypes = {
+export const sqlitePslTypeConstructors = {
   String: {
     kind: 'typeConstructor',
     documentation: 'Variable-length text stored as SQLite text.',
