@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { contractHashAtMarker, EMPTY_CONTRACT_HASH } from '../src/constants';
+import { contractHashAtMarker } from '../../src/aggregate/marker-types';
+import { EMPTY_CONTRACT_HASH } from '../../src/constants';
 
 describe('contractHashAtMarker', () => {
   it('is the marker storage hash when a marker exists', () => {

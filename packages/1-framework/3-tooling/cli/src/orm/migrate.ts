@@ -1,7 +1,7 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
-import { contractHashAtMarker } from '@internal/migration-tools/constants';
+import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';

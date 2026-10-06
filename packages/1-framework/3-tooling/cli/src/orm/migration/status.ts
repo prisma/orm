@@ -1,10 +1,10 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { LedgerEntryRecord } from '@internal/contract/types';
-import type {
-  AggregateContractSpace,
-  ContractMarkerRecordLike,
+import {
+  type AggregateContractSpace,
+  type ContractMarkerRecordLike,
+  contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
-import { contractHashAtMarker } from '@internal/migration-tools/constants';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';

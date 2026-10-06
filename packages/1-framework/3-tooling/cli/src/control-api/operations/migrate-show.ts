@@ -6,9 +6,10 @@ import type { PrismaNextConfig } from '@internal/config/config-types';
 import {
   type AggregateContractSpace,
   type ContractSpaceAggregate,
+  contractHashAtMarker,
   requireHeadRef,
 } from '@internal/migration-tools/aggregate';
-import { contractHashAtMarker, EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import type { Refs } from '@internal/migration-tools/refs';
 import { readRefs } from '@internal/migration-tools/refs';

@@ -1,1 +1,1 @@
-export { contractHashAtMarker, EMPTY_CONTRACT_HASH } from '../constants';
+export { EMPTY_CONTRACT_HASH } from '../constants';

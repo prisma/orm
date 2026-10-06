@@ -16,11 +16,12 @@ import {
   buildFabricatedMigrationEdge,
   type ContractMarkerRecordLike,
   type ContractSpaceAggregate,
+  contractHashAtMarker,
   type PerSpacePlan,
   requireHeadRef,
   resolveRecordedPath,
 } from '@internal/migration-tools/aggregate';
-import { contractHashAtMarker, EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { errorNoInvariantPath } from '@internal/migration-tools/errors';
 import { findPathWithDecision } from '@internal/migration-tools/migration-graph';
