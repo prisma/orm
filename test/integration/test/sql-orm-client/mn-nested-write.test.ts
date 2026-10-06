@@ -765,4 +765,51 @@ describe('integration/mn-nested-write', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'update(): updateAll and deleteAll on a junction relation are rejected and nothing is written',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+        await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
+        await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
+
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (t) => t.where({ name: 'Rust' }).updateAll({ name: 'Rust 2' }),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          meta: { kind: 'updateAll', relation: 'tags', reason: 'many-to-many-relation' },
+        });
+
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (t) => t.deleteAll(),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          meta: { kind: 'deleteAll', relation: 'tags', reason: 'many-to-many-relation' },
+        });
+
+        const userRows = await runtime.query<{ id: number; name: string }>(
+          'select id, name from users',
+        );
+        expect(userRows).toEqual([{ id: 1, name: 'Alice' }]);
+        const tagRows = await runtime.query<{ id: string; name: string }>(
+          'select id, name from tags',
+        );
+        expect(tagRows).toEqual([{ id: TAG_RUST, name: 'Rust' }]);
+        const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
+          'select user_id, tag_id from user_tags',
+        );
+        expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

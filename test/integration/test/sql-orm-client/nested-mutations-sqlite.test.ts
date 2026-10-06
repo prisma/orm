@@ -112,7 +112,7 @@ const seedSql = `
   insert into user_tags values (1, 1);
 `;
 
-describe('integration/nested mutation arrays on SQLite', () => {
+describe('integration/nested mutations on SQLite', () => {
   it(
     'update() applies an array of operations on a to-many relation in array order',
     async () => {
@@ -354,6 +354,304 @@ describe('integration/nested mutation arrays on SQLite', () => {
           { id: 10 },
           { id: 11 },
           { id: 12 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  const twoParentsSeedSql = `
+    insert into users values (1, 'Alice'), (2, 'Bob');
+    insert into posts values (10, 'Draft', 1), (11, 'Kept', 1), (20, 'Draft', 2);
+  `;
+  const postRowsSql = 'select id, title, user_id from posts order by id';
+
+  it(
+    'update() where().updateAll() changes matching posts of the parent and leaves a matching post of another parent unchanged',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+          )
+          .update({
+            posts: (posts) => posts.where({ title: 'Draft' }).updateAll({ title: 'Published' }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Published' },
+            { id: 11, title: 'Kept' },
+          ],
+        });
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Published', user_id: 1 },
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() where().deleteAll() deletes matching posts of the parent and leaves a matching post of another parent unchanged',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .update({
+            posts: (posts) => posts.where({ title: 'Draft' }).deleteAll(),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', posts: [{ id: 11, title: 'Kept' }] });
+        expect(rows(postRowsSql)).toEqual([
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() updateAll() and deleteAll() without where apply to every post of the parent only',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
+        const alice = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+          )
+          .update({ posts: (posts) => posts.updateAll({ title: 'Same' }) });
+
+        expect(alice).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Same' },
+            { id: 11, title: 'Same' },
+          ],
+        });
+
+        const bob = await users
+          .where({ id: 2 })
+          .select('id', 'name')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .update({ posts: (posts) => posts.deleteAll() });
+
+        expect(bob).toEqual({ id: 2, name: 'Bob', posts: [] });
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Same', user_id: 1 },
+          { id: 11, title: 'Same', user_id: 1 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() where() takes a callback over the related model and chained calls combine with AND',
+    async () => {
+      await withSqlite(
+        `${twoParentsSeedSql} insert into posts values (12, 'Draft', 1);`,
+        async ({ users, rows }) => {
+          const updated = await users
+            .where({ id: 1 })
+            .select('id', 'name')
+            .include('posts', (posts) =>
+              posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+            )
+            .update({
+              posts: (posts) => [
+                posts
+                  .where((post) => post['id']!.gt(10))
+                  .where({ title: 'Draft' })
+                  .updateAll({ title: 'Late draft' }),
+                posts.where((post) => post['id']!.lt(11)).deleteAll(),
+              ],
+            });
+
+          expect(updated).toEqual({
+            id: 1,
+            name: 'Alice',
+            posts: [
+              { id: 11, title: 'Kept' },
+              { id: 12, title: 'Late draft' },
+            ],
+          });
+          expect(rows(postRowsSql)).toEqual([
+            { id: 11, title: 'Kept', user_id: 1 },
+            { id: 12, title: 'Late draft', user_id: 1 },
+            { id: 20, title: 'Draft', user_id: 2 },
+          ]);
+        },
+      );
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() updateAll() and deleteAll() change nothing when no post matches or the data is empty',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+          )
+          .update({
+            posts: (posts) => [
+              posts.where({ title: 'Missing' }).updateAll({ title: 'Found' }),
+              posts.where({ title: 'Missing' }).deleteAll(),
+              posts.updateAll({}),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Draft' },
+            { id: 11, title: 'Kept' },
+          ],
+        });
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Draft', user_id: 1 },
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() runs updateAll() and deleteAll() in array order with create()',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+          )
+          .update({
+            posts: (posts) => [
+              posts.where({ title: 'Draft' }).updateAll({ title: 'Published' }),
+              posts.create({ id: 30, title: 'Draft' }),
+              posts.where({ title: 'Kept' }).deleteAll(),
+              posts.create({ id: 31, title: 'Kept' }),
+              posts.where({ title: 'Kept' }).updateAll({ title: 'Kept again' }),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Published' },
+            { id: 30, title: 'Draft' },
+            { id: 31, title: 'Kept again' },
+          ],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() rejects updateAll() data that sets the foreign key to the parent and rolls back',
+    async () => {
+      await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            posts: (posts) => [
+              posts.where({ title: 'Kept' }).deleteAll(),
+              posts.updateAll({ userId: 2 }),
+            ],
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: {
+            kind: 'updateAll',
+            relation: 'posts',
+            problem: 'parent-link-column',
+            fields: ['userId'],
+          },
+        });
+
+        expect(rows('select id, name from users order by id')).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Draft', user_id: 1 },
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'updateAll() and deleteAll() are rejected in create(), on a to-one relation and on a junction relation, writing nothing',
+    async () => {
+      await withSqlite(seedSql, async ({ users, posts, rows }) => {
+        await expect(
+          users.create({
+            id: 3,
+            name: 'Carol',
+            // @ts-expect-error
+            posts: (related) => related.deleteAll(),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          meta: { kind: 'deleteAll', relation: 'posts' },
+        });
+
+        await expect(
+          posts.where({ id: 10 }).update({
+            title: 'Renamed',
+            author: (author) => author.updateAll({ name: 'Renamed' }),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
+        });
+
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (tags) => tags.where({ name: 'Rust' }).deleteAll(),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          meta: { kind: 'deleteAll', relation: 'tags', reason: 'many-to-many-relation' },
+        });
+
+        expect(rows('select id, name from users order by id')).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(rows('select id, title from posts order by id')).toEqual([
+          { id: 10, title: 'Old first' },
+          { id: 11, title: 'Old second' },
+          { id: 12, title: 'Unowned' },
+        ]);
+        expect(rows('select id, name from tags order by id')).toEqual([
+          { id: 1, name: 'Rust' },
+          { id: 2, name: 'TypeScript' },
         ]);
       });
     },
