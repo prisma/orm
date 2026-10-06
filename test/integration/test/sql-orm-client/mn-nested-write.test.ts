@@ -16,7 +16,7 @@
 
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
-import { Collection } from '@internal/sql-orm-client';
+import { Collection, or } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import type { Char } from '@internal/target-postgres/codec-types';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -31,6 +31,7 @@ import { seedRoles, seedTags, seedUserRoles, seedUsers, seedUserTags } from './r
 
 const TAG_RUST = 'tag-rust' as Char<36>;
 const TAG_TS = 'tag-typescript' as Char<36>;
+const TAG_GO = 'tag-go' as Char<36>;
 const ROLE_ADMIN = 'role-admin' as Char<36>;
 const ROLE_EDITOR = 'role-editor' as Char<36>;
 
@@ -766,48 +767,258 @@ describe('integration/mn-nested-write', () => {
     timeouts.spinUpPpgDev,
   );
 
+  async function seedTwoUsersWithTags(runtime: Parameters<typeof seedUsers>[0]) {
+    await seedUsers(runtime, [
+      { id: 1, name: 'Alice', email: 'alice@example.com' },
+      { id: 2, name: 'Bob', email: 'bob@example.com' },
+    ]);
+    await seedTags(runtime, [
+      { id: TAG_RUST, name: 'Rust' },
+      { id: TAG_TS, name: 'TypeScript' },
+      { id: TAG_GO, name: 'Go' },
+    ]);
+    await seedUserTags(runtime, [
+      { userId: 1, tagId: TAG_RUST },
+      { userId: 1, tagId: TAG_TS },
+      { userId: 2, tagId: TAG_GO },
+    ]);
+  }
+
+  function tagRows(runtime: Parameters<typeof seedUsers>[0]) {
+    return runtime.query<{ id: string; name: string }>('select id, name from tags order by id');
+  }
+
+  function userTagRows(runtime: Parameters<typeof seedUsers>[0]) {
+    return runtime.query<{ user_id: number; tag_id: string }>(
+      'select user_id, tag_id from user_tags order by user_id, tag_id',
+    );
+  }
+
+  function addTagForeignKey(runtime: Parameters<typeof seedUsers>[0], action: string) {
+    return runtime.query(
+      `alter table user_tags add constraint user_tags_tag_id_fkey foreign key (tag_id) references tags (id) on delete ${action}`,
+    );
+  }
+
+  const allSeededTags = [
+    { id: TAG_GO, name: 'Go' },
+    { id: TAG_RUST, name: 'Rust' },
+    { id: TAG_TS, name: 'TypeScript' },
+  ];
+
+  const allSeededUserTags = [
+    { user_id: 1, tag_id: TAG_RUST },
+    { user_id: 1, tag_id: TAG_TS },
+    { user_id: 2, tag_id: TAG_GO },
+  ];
+
   it(
-    'update(): updateAll and deleteAll on a junction relation are rejected and nothing is written',
+    'update(): where().updateAll() changes a matching linked tag and leaves a matching tag linked only to another user unchanged',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
 
-        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
-        await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
-        await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
+          .update({
+            tags: (t) =>
+              t
+                .where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go')))
+                .updateAll({ name: 'Changed' }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [
+            { id: TAG_RUST, name: 'Changed' },
+            { id: TAG_TS, name: 'TypeScript' },
+          ],
+        });
+        expect(await tagRows(runtime)).toEqual([
+          { id: TAG_GO, name: 'Go' },
+          { id: TAG_RUST, name: 'Changed' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): where().deleteAll() with cascading junction keys deletes a matching linked tag and its junction rows, leaving a matching tag linked only to another user',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await addTagForeignKey(runtime, 'cascade');
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({
+            tags: (t) => t.where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go'))).deleteAll(),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [{ id: TAG_TS, name: 'TypeScript' }],
+        });
+        expect(await tagRows(runtime)).toEqual([
+          { id: TAG_GO, name: 'Go' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+        expect(await userTagRows(runtime)).toEqual([
+          { user_id: 1, tag_id: TAG_TS },
+          { user_id: 2, tag_id: TAG_GO },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): deleteAll() with junction keys that do not cascade surfaces the database error and rolls back the whole update',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await addTagForeignKey(runtime, 'restrict');
 
         await expect(
           users.where({ id: 1 }).update({
             name: 'Renamed',
-            tags: (t) => t.where({ name: 'Rust' }).updateAll({ name: 'Rust 2' }),
+            tags: (t) => [
+              t.where({ name: 'TypeScript' }).updateAll({ name: 'Changed' }),
+              t.where({ name: 'Rust' }).deleteAll(),
+            ],
           }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'updateAll', relation: 'tags', reason: 'many-to-many-relation' },
-        });
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            tags: (t) => t.deleteAll(),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'deleteAll', relation: 'tags', reason: 'many-to-many-relation' },
-        });
+        ).rejects.toThrow(/user_tags_tag_id_fkey/);
 
         const userRows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users',
+          'select id, name from users order by id',
         );
-        expect(userRows).toEqual([{ id: 1, name: 'Alice' }]);
-        const tagRows = await runtime.query<{ id: string; name: string }>(
-          'select id, name from tags',
-        );
-        expect(tagRows).toEqual([{ id: TAG_RUST, name: 'Rust' }]);
-        const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
-          'select user_id, tag_id from user_tags',
-        );
-        expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
+        expect(userRows).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(await tagRows(runtime)).toEqual(allSeededTags);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): updateAll() changes a tag linked to this user and to another user, because it is related to this user',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await seedUserTags(runtime, [{ userId: 2, tagId: TAG_RUST }]);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
+          .update({
+            tags: (t) => t.where({ name: 'Rust' }).updateAll({ name: 'Changed' }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [
+            { id: TAG_RUST, name: 'Changed' },
+            { id: TAG_TS, name: 'TypeScript' },
+          ],
+        });
+        expect(await tagRows(runtime)).toEqual([
+          { id: TAG_GO, name: 'Go' },
+          { id: TAG_RUST, name: 'Changed' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+        expect(await userTagRows(runtime)).toEqual([
+          { user_id: 1, tag_id: TAG_RUST },
+          { user_id: 1, tag_id: TAG_TS },
+          { user_id: 2, tag_id: TAG_GO },
+          { user_id: 2, tag_id: TAG_RUST },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): updateAll() and deleteAll() without where apply to every tag linked to the user and to no other tag',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await addTagForeignKey(runtime, 'cascade');
+
+        const bob = await users
+          .where({ id: 2 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({ tags: (t) => t.updateAll({ name: 'Changed' }) });
+
+        expect(bob).toEqual({ id: 2, name: 'Bob', tags: [{ id: TAG_GO, name: 'Changed' }] });
+        expect(await tagRows(runtime)).toEqual([
+          { id: TAG_GO, name: 'Changed' },
+          { id: TAG_RUST, name: 'Rust' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+
+        const alice = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({ tags: (t) => t.deleteAll() });
+
+        expect(alice).toEqual({ id: 1, name: 'Alice', tags: [] });
+        expect(await tagRows(runtime)).toEqual([{ id: TAG_GO, name: 'Changed' }]);
+        expect(await userTagRows(runtime)).toEqual([{ user_id: 2, tag_id: TAG_GO }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): updateAll() and deleteAll() change nothing when no linked tag matches or the data is empty',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
+          .update({
+            tags: (t) => [
+              t.where({ name: 'Go' }).updateAll({ name: 'Changed' }),
+              t.where({ name: 'Go' }).deleteAll(),
+              t.updateAll({}),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [
+            { id: TAG_RUST, name: 'Rust' },
+            { id: TAG_TS, name: 'TypeScript' },
+          ],
+        });
+        expect(await tagRows(runtime)).toEqual(allSeededTags);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
       });
     },
     timeouts.spinUpPpgDev,

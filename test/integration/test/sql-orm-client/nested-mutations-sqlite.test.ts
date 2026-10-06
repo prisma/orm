@@ -72,11 +72,20 @@ interface Harness {
   rows(sql: string): unknown[];
 }
 
-async function withSqlite(seedSql: string, fn: (harness: Harness) => Promise<void>): Promise<void> {
+const cascadingSchemaSql = schemaSql.replace(
+  'references tags (id)',
+  'references tags (id) on delete cascade',
+);
+
+async function withSqlite(
+  seedSql: string,
+  fn: (harness: Harness) => Promise<void>,
+  tablesSql = schemaSql,
+): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'orm-nested-mutation-arrays-'));
   const path = join(directory, 'test.db');
   const database = new DatabaseSync(path);
-  database.exec(schemaSql);
+  database.exec(tablesSql);
   database.exec(seedSql);
 
   const stack = createSqlExecutionStack({
@@ -605,7 +614,7 @@ describe('integration/nested mutations on SQLite', () => {
   );
 
   it(
-    'updateAll() and deleteAll() are rejected in create(), on a to-one relation and on a junction relation, writing nothing',
+    'updateAll() and deleteAll() are rejected in create() and on a to-one relation, writing nothing',
     async () => {
       await withSqlite(seedSql, async ({ users, posts, rows }) => {
         await expect(
@@ -628,16 +637,6 @@ describe('integration/nested mutations on SQLite', () => {
         ).rejects.toMatchObject({
           code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
           meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
-        });
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            tags: (tags) => tags.where({ name: 'Rust' }).deleteAll(),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'deleteAll', relation: 'tags', reason: 'many-to-many-relation' },
         });
 
         expect(rows('select id, name from users order by id')).toEqual([
@@ -710,6 +709,230 @@ describe('integration/nested mutations on SQLite', () => {
 
         expect(updated).toEqual({ id: 1, name: 'Alice', posts: [] });
         expect(rows(postRowsSql)).toEqual([{ id: 20, title: 'Draft', user_id: 2 }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  const twoUsersWithTagsSeedSql = `
+    insert into users values (1, 'Alice'), (2, 'Bob');
+    insert into tags values (1, 'Rust'), (2, 'TypeScript'), (3, 'Go');
+    insert into user_tags values (1, 1), (1, 2), (2, 3);
+  `;
+  const tagRowsSql = 'select id, name from tags order by id';
+  const userTagRowsSql = 'select user_id, tag_id from user_tags order by user_id, tag_id';
+  const seededTagRows = [
+    { id: 1, name: 'Rust' },
+    { id: 2, name: 'TypeScript' },
+    { id: 3, name: 'Go' },
+  ];
+  const seededUserTagRows = [
+    { user_id: 1, tag_id: 1 },
+    { user_id: 1, tag_id: 2 },
+    { user_id: 2, tag_id: 3 },
+  ];
+
+  it(
+    'update() where().updateAll() on a junction relation changes a matching linked tag and leaves a matching tag linked only to another user unchanged',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
+          .update({
+            tags: (tags) =>
+              tags
+                .where((tag) => or(tag['name']!.eq('Rust'), tag['name']!.eq('Go')))
+                .updateAll({ name: 'Changed' }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [
+            { id: 1, name: 'Changed' },
+            { id: 2, name: 'TypeScript' },
+          ],
+        });
+        expect(rows(tagRowsSql)).toEqual([
+          { id: 1, name: 'Changed' },
+          { id: 2, name: 'TypeScript' },
+          { id: 3, name: 'Go' },
+        ]);
+        expect(rows(userTagRowsSql)).toEqual(seededUserTagRows);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() where().deleteAll() with cascading junction keys deletes a matching linked tag and its junction rows, leaving a matching tag linked only to another user',
+    async () => {
+      await withSqlite(
+        twoUsersWithTagsSeedSql,
+        async ({ users, rows }) => {
+          const updated = await users
+            .where({ id: 1 })
+            .select('id', 'name')
+            .include('tags', (tags) => tags.select('id', 'name'))
+            .update({
+              tags: (tags) =>
+                tags.where((tag) => or(tag['name']!.eq('Rust'), tag['name']!.eq('Go'))).deleteAll(),
+            });
+
+          expect(updated).toEqual({
+            id: 1,
+            name: 'Alice',
+            tags: [{ id: 2, name: 'TypeScript' }],
+          });
+          expect(rows(tagRowsSql)).toEqual([
+            { id: 2, name: 'TypeScript' },
+            { id: 3, name: 'Go' },
+          ]);
+          expect(rows(userTagRowsSql)).toEqual([
+            { user_id: 1, tag_id: 2 },
+            { user_id: 2, tag_id: 3 },
+          ]);
+        },
+        cascadingSchemaSql,
+      );
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() deleteAll() with junction keys that do not cascade surfaces the database error and rolls back the whole update',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (tags) => [
+              tags.where({ name: 'TypeScript' }).updateAll({ name: 'Changed' }),
+              tags.where({ name: 'Rust' }).deleteAll(),
+            ],
+          }),
+        ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+
+        expect(rows('select id, name from users order by id')).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(rows(tagRowsSql)).toEqual(seededTagRows);
+        expect(rows(userTagRowsSql)).toEqual(seededUserTagRows);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() updateAll() changes a tag linked to this user and to another user, because it is related to this user',
+    async () => {
+      await withSqlite(
+        `${twoUsersWithTagsSeedSql} insert into user_tags values (2, 1);`,
+        async ({ users, rows }) => {
+          const updated = await users
+            .where({ id: 1 })
+            .select('id', 'name')
+            .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
+            .update({
+              tags: (tags) => tags.where({ name: 'Rust' }).updateAll({ name: 'Changed' }),
+            });
+
+          expect(updated).toEqual({
+            id: 1,
+            name: 'Alice',
+            tags: [
+              { id: 1, name: 'Changed' },
+              { id: 2, name: 'TypeScript' },
+            ],
+          });
+          expect(rows(tagRowsSql)).toEqual([
+            { id: 1, name: 'Changed' },
+            { id: 2, name: 'TypeScript' },
+            { id: 3, name: 'Go' },
+          ]);
+          expect(rows(userTagRowsSql)).toEqual([
+            { user_id: 1, tag_id: 1 },
+            { user_id: 1, tag_id: 2 },
+            { user_id: 2, tag_id: 1 },
+            { user_id: 2, tag_id: 3 },
+          ]);
+        },
+      );
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() updateAll() and deleteAll() without where on a junction relation apply to every tag linked to the user and to no other tag',
+    async () => {
+      await withSqlite(
+        twoUsersWithTagsSeedSql,
+        async ({ users, rows }) => {
+          const alice = await users
+            .where({ id: 1 })
+            .select('id', 'name')
+            .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
+            .update({ tags: (tags) => tags.updateAll({ name: 'Changed' }) });
+
+          expect(alice).toEqual({
+            id: 1,
+            name: 'Alice',
+            tags: [
+              { id: 1, name: 'Changed' },
+              { id: 2, name: 'Changed' },
+            ],
+          });
+          expect(rows(tagRowsSql)).toEqual([
+            { id: 1, name: 'Changed' },
+            { id: 2, name: 'Changed' },
+            { id: 3, name: 'Go' },
+          ]);
+
+          const emptied = await users
+            .where({ id: 1 })
+            .select('id', 'name')
+            .include('tags', (tags) => tags.select('id', 'name'))
+            .update({ tags: (tags) => tags.deleteAll() });
+
+          expect(emptied).toEqual({ id: 1, name: 'Alice', tags: [] });
+          expect(rows(tagRowsSql)).toEqual([{ id: 3, name: 'Go' }]);
+          expect(rows(userTagRowsSql)).toEqual([{ user_id: 2, tag_id: 3 }]);
+        },
+        cascadingSchemaSql,
+      );
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() updateAll() and deleteAll() on a junction relation change nothing when no linked tag matches or the data is empty',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
+          .update({
+            tags: (tags) => [
+              tags.where({ name: 'Go' }).updateAll({ name: 'Changed' }),
+              tags.where({ name: 'Go' }).deleteAll(),
+              tags.updateAll({}),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [
+            { id: 1, name: 'Rust' },
+            { id: 2, name: 'TypeScript' },
+          ],
+        });
+        expect(rows(tagRowsSql)).toEqual(seededTagRows);
+        expect(rows(userTagRowsSql)).toEqual(seededUserTagRows);
       });
     },
     timeouts.databaseOperation,
