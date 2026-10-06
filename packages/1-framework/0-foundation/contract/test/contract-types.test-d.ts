@@ -53,8 +53,8 @@ type ExampleStorage = StorageBase<'abc123'> & {
   readonly tables: {
     readonly user: {
       readonly columns: {
-        readonly id: { readonly nativeType: 'int4' };
-        readonly email: { readonly nativeType: 'text' };
+        readonly id: { readonly dataType: 'example/int4' };
+        readonly email: { readonly dataType: 'example/text' };
       };
     };
   };
@@ -112,8 +112,8 @@ test('preserves storage hash literal through TStorage', () => {
 
 test('preserves storage table literal types through TStorage', () => {
   expectTypeOf<
-    ExampleContract['storage']['tables']['user']['columns']['id']['nativeType']
-  >().toEqualTypeOf<'int4'>();
+    ExampleContract['storage']['tables']['user']['columns']['id']['dataType']
+  >().toEqualTypeOf<'example/int4'>();
 });
 
 // ── Framework consumer compatibility ─────────────────────────────────────────

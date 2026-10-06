@@ -19,8 +19,9 @@ import { SqliteContractSerializer } from './sqlite-contract-serializer';
  * view.storage          // the full contract is still present
  * ```
  *
- * SQLite has `sql.enums: false`, so it never emits `valueSet` entries; the
- * `valueSet` slot is therefore an empty map.
+ * SQLite has `sql.enums: false`, so it has no native enum types, but an
+ * `enum` block still emits a `valueSet` entry listing the values its columns
+ * may store, and the `valueSet` slot holds those.
  */
 export type SqliteContractView<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> =
   SqlSingleNamespaceView<TContract>;

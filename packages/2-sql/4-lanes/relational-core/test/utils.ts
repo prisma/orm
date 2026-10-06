@@ -43,7 +43,6 @@ export function createTestContext<TContract extends Contract<SqlStorage>>(
       descriptorFor: () => undefined,
       codecRefForColumn: () => undefined,
       values: function* () {},
-      byTargetType: () => Object.freeze([]),
     },
     aggregateDescriptors: {
       resolve: () => undefined,

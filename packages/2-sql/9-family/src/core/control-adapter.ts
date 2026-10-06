@@ -10,7 +10,7 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import type { DefaultNormalizer, NativeTypeNormalizer } from './diff/sql-schema-diff';
+import type { DefaultNormalizer } from './diff/sql-schema-diff';
 
 /**
  * Structural interface for anything that can lower a SQL/DDL AST node to a
@@ -91,9 +91,9 @@ export interface SqlControlAdapter<TTarget extends string = string>
 
   /**
    * Inserts the initial marker row for `space` (`INSERT` only). Fails when a
-   * row for that space already exists. Used by `sign()` so concurrent first-time
+   * row for that space already exists. Used by `signSpaces()` so concurrent first-time
    * stamps cannot silently overwrite each other. `updated_at` is DB-side
-   * (`now()` / `datetime('now')`). Mirrors `MongoControlAdapter.initMarker`.
+   * (`now()` / `strftime('%Y-%m-%dT%H:%M:%fZ','now')`). Mirrors `MongoControlAdapter.initMarker`.
    */
   insertMarker(
     driver: SqlControlDriverInstance<TTarget>,
@@ -109,7 +109,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
    * Writes the initial marker row for `space` as an upsert (`INSERT … ON
    * CONFLICT (space) DO UPDATE SET …`), so re-stamping a space overwrites the
    * existing row rather than failing. `updated_at` is stamped with a DB-side
-   * time expression (`now()` / `datetime('now')`), never an app-side clock.
+   * time expression (`now()` / `strftime('%Y-%m-%dT%H:%M:%fZ','now')`), never an app-side clock.
    */
   initMarker(
     driver: SqlControlDriverInstance<TTarget>,
@@ -160,6 +160,16 @@ export interface SqlControlAdapter<TTarget extends string = string>
   ): Promise<void>;
 
   /**
+   * Runs `fn` in one transaction on `driver`: `BEGIN`, then `COMMIT` when `fn` resolves, or `ROLLBACK` and the error rethrown when it throws. The driver must send `BEGIN`, every statement `fn` sends through it and the final `COMMIT` or `ROLLBACK` over one database session; the Postgres and SQLite control drivers each hold one connection.
+   */
+  withTransaction<T>(driver: SqlControlDriverInstance<TTarget>, fn: () => Promise<T>): Promise<T>;
+
+  /**
+   * Inside a transaction `withTransaction` opened, takes the one lock the migration runner holds while it reads and writes markers, and holds it until the transaction ends. The lock covers the marker table, so it is the same for every space. A target whose `withTransaction` already takes a lock that excludes the runner does nothing here.
+   */
+  lockMarker(driver: SqlControlDriverInstance<TTarget>): Promise<void>;
+
+  /**
    * Introspects a database schema and returns the target's schema-IR node.
    *
    * This is a pure schema discovery operation that queries the database catalog
@@ -188,13 +198,6 @@ export interface SqlControlAdapter<TTarget extends string = string>
    * with contract defaults (ColumnDefault objects) during schema verification.
    */
   readonly normalizeDefault?: DefaultNormalizer;
-
-  /**
-   * Optional target-specific normalizer for schema native type names.
-   * When provided, schema native types (from introspection) are normalized
-   * before comparison with contract native types during schema verification.
-   */
-  readonly normalizeNativeType?: NativeTypeNormalizer;
 
   /**
    * Ordered DDL queries that bootstrap marker/ledger control tables for migration

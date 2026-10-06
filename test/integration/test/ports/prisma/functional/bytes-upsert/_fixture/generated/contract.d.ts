@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'cdaf3dc2b0878f5162c0e73200191c9e0af03fb534ae64a67becee0c0b00f916'>;
+  StorageHashBase<'3688ad17a138df896ce0419f6beb2bd3e4fab8b12c4162c04ad51ec4a497397b'>;
 export type ExecutionHash =
   ExecutionHashBase<'27c5ba4e2c8d914a952a649111a63cd6b9e2c2e16c9d9e069a1993b6c276e561'>;
 export type ProfileHash =
@@ -300,13 +300,13 @@ type ContractBase = Omit<
             readonly testByteId: {
               columns: {
                 readonly bytes: {
-                  readonly nativeType: 'bytea';
+                  readonly dataType: 'pg/bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;

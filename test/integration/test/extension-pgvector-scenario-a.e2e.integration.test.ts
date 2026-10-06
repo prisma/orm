@@ -26,8 +26,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
  * Drives the CLI aggregate `db init` flow (`executeDbInit`,
  * sub-spec § 6) against a real Postgres (PGlite via
  * `createDevDatabase`) with pgvector wired as an extension space and a
- * user `Doc` table that carries a `vector(N)` column. Three layers of
- * coverage:
+ * user `Doc` table. Three layers of coverage:
  *
  *   1. **Pinned `ops.json` byte-equivalence (disk).** Closes project
  *      AC10 / TC-15 at the on-disk shape level — the `CREATE EXTENSION
@@ -38,15 +37,16 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
  *   2. **Multi-space planning (real DDL).** `executeDbInit`
  *      with `mode: 'plan'` against the real descriptor produces a plan
  *      that includes the pgvector baseline op AND the app-space
- *      `CREATE TABLE Doc` op, ordered first per
- *      `concatenateSpaceApplyInputs` cross-space ordering.
+ *      `CREATE TABLE Doc` op with its `vector(N)` column, ordered first
+ *      per `concatenateSpaceApplyInputs` cross-space ordering.
  *
  *   3. **Multi-space apply (synthetic vector stub).** PGlite does not
  *      ship the `vector` extension; the synthetic-stub variant
  *      replaces the install op's SQL with a `CREATE DOMAIN vector AS
  *      text` stub so the framework + per-space wiring runs against a
- *      real DB. Asserts marker rows for both `app` and `pgvector`
- *      (project AC5 / AC10 / TC-16).
+ *      real DB. A domain takes no length, so the `Doc` table applied
+ *      here has only its `id` column. Asserts marker rows for both
+ *      `app` and `pgvector`, and writes and reads one `Doc` row.
  */
 
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -109,31 +109,18 @@ const APP_TABLE = 'Doc';
 const APP_FIELD = 'embedding';
 const VECTOR_LENGTH = 3;
 
-function buildAppContract(opts: { readonly withLength: boolean }): Contract<SqlStorage> {
+function buildAppContract(opts: { readonly withEmbedding: boolean }): Contract<SqlStorage> {
   return familyInstance.deserializeContract(buildAppContractPojo(opts)) as Contract<SqlStorage>;
 }
 
-function buildAppContractPojo(opts: { readonly withLength: boolean }): Contract<SqlStorage> {
-  const embeddingColumn: {
-    readonly codecId: string;
-    readonly nativeType: string;
-    readonly nullable: boolean;
-    readonly many: false;
-    readonly typeParams?: Record<string, unknown>;
-  } = opts.withLength
-    ? {
-        codecId: VECTOR_CODEC_ID,
-        nativeType: PGVECTOR_NATIVE_TYPE,
-        nullable: false,
-        many: false,
-        typeParams: { length: VECTOR_LENGTH },
-      }
-    : {
-        codecId: VECTOR_CODEC_ID,
-        nativeType: PGVECTOR_NATIVE_TYPE,
-        nullable: false,
-        many: false,
-      };
+function buildAppContractPojo(opts: { readonly withEmbedding: boolean }): Contract<SqlStorage> {
+  const embeddingColumn = {
+    codecId: VECTOR_CODEC_ID,
+    dataType: 'pgvector/vector',
+    nullable: false,
+    many: false as const,
+    typeParams: { length: VECTOR_LENGTH },
+  };
 
   return {
     target: 'postgres',
@@ -149,8 +136,8 @@ function buildAppContractPojo(opts: { readonly withLength: boolean }): Contract<
             table: {
               [APP_TABLE]: {
                 columns: {
-                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
-                  [APP_FIELD]: embeddingColumn,
+                  id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false, many: false },
+                  ...(opts.withEmbedding ? { [APP_FIELD]: embeddingColumn } : {}),
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -190,9 +177,8 @@ const frameworkComponents = [
 /**
  * Synthetic stand-in for `CREATE EXTENSION IF NOT EXISTS vector`.
  * PGlite does not ship the `vector` extension; this stub creates a
- * `vector` text-domain so the codec's `expandNativeType` hook resolves
- * `vector(N)` (which then degrades to `vector` here, ignoring the
- * parenthesised length — `text` accepts any string content).
+ * `vector` text-domain. A domain takes no type modifier, so the app
+ * contract planned against it has no `vector(N)` column.
  */
 function buildSyntheticVectorInstallSql(): string {
   return [
@@ -332,7 +318,7 @@ describe('pgvector Scenario A end-to-end (PGlite, T4.3)', {
       driver: driver!,
       adapter: controlAdapter,
       familyInstance,
-      contract: buildAppContract({ withLength: true }),
+      contract: buildAppContract({ withEmbedding: true }),
       mode: 'plan',
       migrations: postgresTargetDescriptor.migrations,
       frameworkComponents: [...frameworkComponents],
@@ -359,14 +345,14 @@ describe('pgvector Scenario A end-to-end (PGlite, T4.3)', {
     expect(appDocIdx).toBeGreaterThan(installIdx);
   });
 
-  it('synthetic vector stub: applies pgvector + app-space atomically; markers + round-trip OK', async () => {
+  it('synthetic vector stub: applies pgvector + app-space atomically; markers written, Doc row round-trips', async () => {
     project = await setupTestProject({ migration: buildSyntheticBaselineMigration() });
 
     const result = await executeDbInit({
       driver: driver!,
       adapter: controlAdapter,
       familyInstance,
-      contract: buildAppContract({ withLength: false }),
+      contract: buildAppContract({ withEmbedding: false }),
       mode: 'apply',
       migrations: postgresTargetDescriptor.migrations,
       frameworkComponents: [...frameworkComponents],
@@ -404,15 +390,8 @@ describe('pgvector Scenario A end-to-end (PGlite, T4.3)', {
     );
     expect(docTable.rows[0]?.exists).toBe(true);
 
-    await driver!.query(
-      `insert into public."${APP_TABLE}" ("id", "${APP_FIELD}") values ($1, $2)`,
-      ['doc-1', '[1,2,3]'],
-    );
-    const row = await driver!.query<{ id: string; embedding: string }>(
-      `select "id", "${APP_FIELD}" as embedding from public."${APP_TABLE}"`,
-    );
-    expect(row.rows.length).toBe(1);
-    expect(row.rows[0]?.id).toBe('doc-1');
-    expect(row.rows[0]?.embedding).toBe('[1,2,3]');
+    await driver!.query(`insert into public."${APP_TABLE}" ("id") values ($1)`, ['doc-1']);
+    const row = await driver!.query<{ id: string }>(`select "id" from public."${APP_TABLE}"`);
+    expect(row.rows).toEqual([{ id: 'doc-1' }]);
   });
 });

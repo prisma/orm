@@ -13,7 +13,7 @@ import {
   now,
 } from '@internal/postgres/contract-builder';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 
 const enums = {
   AccountStatus: enumType(

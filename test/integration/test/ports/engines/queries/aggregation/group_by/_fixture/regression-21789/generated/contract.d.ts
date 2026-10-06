@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'e0722f61a0cd0e1a8bb052ef89b230f9c5df0430b6ff18f6fa0807e296ee0e1c'>;
+  StorageHashBase<'e0da5b004fedaaa1baf7971e9bb282957feed3fe7f91e21df8c5b8029008879a'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -304,20 +304,20 @@ type ContractBase = Omit<
             readonly test: {
               columns: {
                 readonly color: {
-                  readonly nativeType: 'Color';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly typeName: 'Color' };
                   readonly many: false;
                 };
                 readonly group: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;

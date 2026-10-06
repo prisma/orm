@@ -5,6 +5,7 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 
@@ -63,6 +64,7 @@ function buildOneModelContract(args: Parameters<typeof defineContract>[0]) {
 describe('capability contribution at authoring time', () => {
   it('emits no capabilities when the target has none and the author declared none', () => {
     const contract = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: bareTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -73,6 +75,7 @@ describe('capability contribution at authoring time', () => {
 
   it('flows target-contributed capabilities through to the contract', () => {
     const contract = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: targetWithCapabilities,
       createNamespace: createTestSqlNamespace,
@@ -86,6 +89,7 @@ describe('capability contribution at authoring time', () => {
 
   it('merges extension pack capabilities on top of target capabilities', () => {
     const contract = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: targetWithCapabilities,
       extensions: { pgvector: extensionWithCapabilities },
@@ -100,6 +104,7 @@ describe('capability contribution at authoring time', () => {
 
   it('drops capability values that are not booleans', () => {
     const contract = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: {
         ...bareTargetPack,
@@ -126,6 +131,7 @@ describe('capability contribution at authoring time', () => {
     // component descriptors (target / extension packs at build time;
     // adapter / driver at CLI emit time). Passing the field is a TS error.
     buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: bareTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -139,11 +145,13 @@ describe('capability contribution at authoring time', () => {
     // `definition.capabilities`) collapses to the empty-input hash on every
     // contract regardless of which packs are wired in.
     const bare = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: bareTargetPack,
       createNamespace: createTestSqlNamespace,
     });
     const decorated = buildOneModelContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: targetWithCapabilities,
       extensions: { pgvector: extensionWithCapabilities },

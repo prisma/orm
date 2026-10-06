@@ -9,6 +9,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
+import { sqliteTestComponents } from '../sqlite-test-types';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: '', params: [] }),
@@ -19,7 +20,7 @@ const stubLowerer: ExecuteRequestLowerer = {
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
     many: false,
-    nativeType: 'text',
+    dataType: 'sqlite/text',
     nullable: true,
     codecId: 'sqlite/text@1',
     ...overrides,
@@ -92,8 +93,12 @@ function tightenedEmailContract() {
   return makeContract({
     users: makeTable({
       columns: {
-        id: makeColumn({ nativeType: 'integer', nullable: false }),
-        email: makeColumn({ nativeType: 'text', nullable: false }),
+        id: makeColumn({
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
+          nullable: false,
+        }),
+        email: makeColumn({ nullable: false }),
       },
       primaryKey: { columns: ['id'] },
     }),
@@ -109,7 +114,7 @@ describe('nullability-tightening backfill', async () => {
       schema: nullableEmailSchema(),
       policy: { allowedOperationClasses: ['additive', 'destructive'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -129,7 +134,7 @@ describe('nullability-tightening backfill', async () => {
       schema: nullableEmailSchema(),
       policy: { allowedOperationClasses: ['additive', 'destructive', 'data'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -184,8 +189,12 @@ describe('nullability-tightening backfill', async () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', nullable: false }),
-          email: makeColumn({ nativeType: 'text', nullable: true }),
+          id: makeColumn({
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          }),
+          email: makeColumn({ nullable: true }),
         },
         primaryKey: { columns: ['id'] },
       }),
@@ -196,7 +205,7 @@ describe('nullability-tightening backfill', async () => {
       schema,
       policy: { allowedOperationClasses: ['additive', 'widening', 'data'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

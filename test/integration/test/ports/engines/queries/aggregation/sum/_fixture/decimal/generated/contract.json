@@ -57,12 +57,12 @@
               "columns": {
                 "decimal": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "f0174d5b41008efc3a6e04be728aa6fe89904f051b84ac9d6c610e9d992b4d9b"
+    "storageHash": "3b385d86b7408bd4ed265bdbfcad65a1ecc96b5a3c76244fdb32cd50c702abe9"
   },
   "capabilities": {
     "postgres": {

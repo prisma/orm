@@ -3,10 +3,9 @@ import { geometry, geometryColumn } from '../src/exports/column-types';
 
 describe('postgis column-types', () => {
   describe('geometryColumn (static)', () => {
-    it('has correct codecId and nativeType', () => {
+    it('has correct codecId', () => {
       expect(geometryColumn).toMatchObject({
         codecId: 'pg/geometry@1',
-        nativeType: 'geometry',
       });
     });
 
@@ -19,7 +18,6 @@ describe('postgis column-types', () => {
     it('creates descriptor with typeParams.srid', () => {
       expect(geometry({ srid: 4326 })).toMatchObject({
         codecId: 'pg/geometry@1',
-        nativeType: 'geometry',
         typeParams: { srid: 4326 },
       });
     });
@@ -28,14 +26,6 @@ describe('postgis column-types', () => {
       expect(geometry({ srid: 3857 })).toMatchObject({
         typeParams: { srid: 3857 },
       });
-    });
-
-    it('rejects a non-integer SRID', () => {
-      expect(() => geometry({ srid: 1.5 })).toThrow('srid must be a non-negative integer');
-    });
-
-    it('rejects a negative SRID', () => {
-      expect(() => geometry({ srid: -1 })).toThrow('srid must be a non-negative integer');
     });
   });
 });

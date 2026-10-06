@@ -36,6 +36,7 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { type SqlTypeLookups, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import type { SqlStorage, StorageTable, StorageTypeInstance } from '@internal/sql-contract/types';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
 import {
@@ -44,6 +45,8 @@ import {
   type SqlSchemaIR,
 } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
+import { pgFloat4, pgFloat8, pgInt2, pgInt4, pgInt8 } from '../data-types';
 import { isPostgresSchema } from '../postgres-schema';
 import {
   renderColumnAlterType,
@@ -133,6 +136,8 @@ export interface StrategyContext {
   readonly fromContract: Contract<SqlStorage> | null;
   readonly schemaName: string;
   readonly codecHooks: ReadonlyMap<string, CodecControlHooks>;
+  /** The composed stack's codecs and data types, which write each column's type. */
+  readonly types: SqlTypeLookups;
   readonly storageTypes: Readonly<Record<string, StorageTypeInstance>>;
   readonly schema: SqlSchemaIR;
   readonly policy: MigrationOperationPolicy;
@@ -207,7 +212,7 @@ export const notNullBackfillCallStrategy: CallMigrationStrategy = (issues, ctx) 
     const schemaName = emissionSchemaName(ctx, ddlSchemaName);
 
     matched.push(issue);
-    const ddl = renderColumnDdl(expected.name, expected, ctx.codecHooks);
+    const ddl = renderColumnDdl(expected.name, expected, ctx.types);
     const nullableSpec = contractFree.col(ddl.name, ddl.type, {
       ...(ddl.codecRef !== undefined ? { codecRef: ddl.codecRef } : {}),
     });
@@ -231,7 +236,22 @@ export const notNullBackfillCallStrategy: CallMigrationStrategy = (issues, ctx) 
   };
 };
 
-const SAFE_WIDENINGS = new Set(['int2→int4', 'int2→int8', 'int4→int8', 'float4→float8']);
+const SAFE_WIDENINGS = new Set([
+  `${pgInt2.id}→${pgInt4.id}`,
+  `${pgInt2.id}→${pgInt8.id}`,
+  `${pgInt4.id}→${pgInt8.id}`,
+  `${pgFloat4.id}→${pgFloat8.id}`,
+]);
+
+/** The id of the data type a column node's codec represents. */
+function columnDataType(column: SqlColumnIR, types: SqlTypeLookups): string {
+  if (column.codecRef === undefined) {
+    throw new InternalError(
+      `Column "${column.name}" carries no codec, so its data type is unknown; a type change is planned only between columns built from contracts.`,
+    );
+  }
+  return sqlDataTypeOfCodec(column.codecRef.codecId, types).id;
+}
 
 /**
  * Handles `not-equal` column issues whose TYPE differs. `fromContract` is
@@ -263,8 +283,8 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
     const { expected, actual } = pair;
     if (!columnTypeChangedNativeOnly(expected, actual)) continue;
 
-    const fromType = actual.nativeType;
-    const toType = expected.nativeType;
+    const fromType = columnDataType(actual, ctx.types);
+    const toType = columnDataType(expected, ctx.types);
     const isSafeWidening = SAFE_WIDENINGS.has(`${fromType}→${toType}`);
     if (!isSafeWidening && !dataAllowed) continue;
 
@@ -274,10 +294,7 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
     const schemaName = emissionSchemaName(ctx, ddlSchemaName);
 
     matched.push(issue);
-    const { qualifiedTargetType, formatTypeExpected } = renderColumnAlterType(
-      expected,
-      ctx.codecHooks,
-    );
+    const { qualifiedTargetType, formatTypeExpected } = renderColumnAlterType(expected, ctx.types);
     const alterOpts = {
       qualifiedTargetType,
       formatTypeExpected,
@@ -459,10 +476,6 @@ export const notNullAddColumnCallStrategy: CallMigrationStrategy = (issues, ctx)
 
   const schemaLookups = buildSchemaLookupMap(ctx.schema);
 
-  const mutableCodecHooks = blindCast<
-    Map<string, CodecControlHooks>,
-    'strategy context owns a mutable codec hook map during planning'
-  >(ctx.codecHooks);
   const mutableStorageTypes = blindCast<
     Record<string, StorageTypeInstance>,
     'strategy context owns mutable storage type entries during planning'
@@ -491,7 +504,7 @@ export const notNullAddColumnCallStrategy: CallMigrationStrategy = (issues, ctx)
     const schemaTable = ctx.schema.tables[tableName];
     if (!schemaTable) continue;
 
-    const temporaryDefault = resolveColumnTemporaryDefault(expected, ctx.codecHooks);
+    const temporaryDefault = resolveColumnTemporaryDefault(expected, ctx.codecHooks, ctx.types);
     const schemaLookup = schemaLookups.get(tableName);
     const canUseSharedTempDefault =
       temporaryDefault !== null &&
@@ -511,7 +524,7 @@ export const notNullAddColumnCallStrategy: CallMigrationStrategy = (issues, ctx)
           tableName,
           columnName: expected.name,
           column,
-          codecHooks: mutableCodecHooks,
+          types: ctx.types,
           storageTypes: mutableStorageTypes,
           temporaryDefault,
         }),
@@ -524,7 +537,7 @@ export const notNullAddColumnCallStrategy: CallMigrationStrategy = (issues, ctx)
         schemaName,
         tableName,
         expected.name,
-        renderColumnDdl(expected.name, expected, ctx.codecHooks),
+        renderColumnDdl(expected.name, expected, ctx.types),
       ),
     );
   }

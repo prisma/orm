@@ -24,9 +24,6 @@ describe('createFixtureControlClient', () => {
     expect(schemaVerify.ok).toBe(true);
     expect(schemaVerify.schema.issues).toEqual([]);
 
-    const sign = await client.sign({ contract: {} });
-    expect(sign.marker).toEqual({ created: true, updated: false });
-
     const dbInit = await client.dbInit({
       contract: {},
       mode: 'apply',
@@ -52,6 +49,9 @@ describe('createFixtureControlClient', () => {
       skipMarker: false,
     });
     expect(dbVerify.assertOk().appSpaceId).toBe(APP_SPACE_ID);
+
+    const dbSign = await client.dbSign({ contract: {} as never, migrationsDir: 'migrations' });
+    expect(dbSign.assertOk().spaces).toMatchObject([{ space: APP_SPACE_ID, status: 'created' }]);
 
     const marker = await client.readMarker();
     expect(marker?.storageHash).toBe(FIXTURE_STORAGE_HASH);
@@ -153,7 +153,7 @@ describe('createFixtureControlClient', () => {
     > = [
       ['verify', (c) => c.verify({ contract: {} })],
       ['schemaVerify', (c) => c.schemaVerify({ contract: {} })],
-      ['sign', (c) => c.sign({ contract: {} })],
+      ['dbSign', (c) => c.dbSign({ contract: {} as never, migrationsDir: 'migrations' })],
       ['dbInit', (c) => c.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
       ['dbUpdate', (c) => c.dbUpdate({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
       [

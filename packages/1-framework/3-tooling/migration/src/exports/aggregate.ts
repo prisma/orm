@@ -3,6 +3,7 @@ export {
   createAggregateContractSpace,
   createContractSpaceAggregate,
   requireHeadRef,
+  spacesInApplyOrder,
 } from '../aggregate/aggregate';
 export { allStorageElementsExternal } from '../aggregate/all-external';
 export {

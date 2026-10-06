@@ -4,7 +4,7 @@ import { enumType as untypedEnumType } from '@internal/sql-contract-ts/contract-
 import { describe, expect, it } from 'vitest';
 import { defineContract, enumType, member } from '../../src/exports/contract-builder';
 
-const pgUuid = { codecId: 'pg/uuid@1' as const, nativeType: 'uuid' };
+const pgUuid = { codecId: 'pg/uuid@1' as const };
 
 describe('uuid-backed enum authoring against the real Postgres pack', () => {
   it('stores lower-case members as written, in the enum, the value set and the CHECK', () => {
@@ -69,11 +69,7 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   });
 
   it('refuses a number member on pg/numeric from the untyped builder as an enum error', () => {
-    const Ratio = untypedEnumType(
-      'Ratio',
-      { codecId: 'pg/numeric@1', nativeType: 'numeric' },
-      member('Half', 1.5),
-    );
+    const Ratio = untypedEnumType('Ratio', { codecId: 'pg/numeric@1' }, member('Half', 1.5));
     expect(() =>
       defineContract({ enums: { Ratio } }, ({ field, model }) => ({
         models: {

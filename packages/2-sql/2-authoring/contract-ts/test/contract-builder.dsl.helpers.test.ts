@@ -6,6 +6,10 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import {
+  testSqlTypeLookups,
+  testTypeLookups,
+} from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, rel } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
 import { documentScopedTypes } from './cross-ref-helpers';
@@ -29,11 +33,11 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'sql/text@1', nativeType: 'text' },
+        output: { codecId: 'sql/text@1' },
       },
       portableTimestamp: {
         kind: 'fieldPreset',
-        output: { codecId: 'test/timestamp@1', nativeType: 'timestamp' },
+        output: { codecId: 'test/timestamp@1' },
       },
       temporal: {
         // createdAt/updatedAt here are independent portable fixtures, NOT
@@ -46,7 +50,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'test/timestamp@1',
-            nativeType: 'timestamp',
             default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
           },
         },
@@ -54,7 +57,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'test/timestamp@1',
-            nativeType: 'timestamp',
             executionDefaults: {
               onCreate: { kind: 'generator', id: 'timestampNow' },
               onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -71,7 +73,6 @@ const sqlFamilyPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sql/char@1',
-          nativeType: 'character',
           typeParams: { length: 36 },
         },
       },
@@ -81,7 +82,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'sql/char@1',
-            nativeType: 'character',
             typeParams: { length: 36 },
             executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
             id: true,
@@ -91,7 +91,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'sql/char@1',
-            nativeType: 'character',
             typeParams: { length: 36 },
             executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
             id: true,
@@ -117,7 +116,6 @@ const postgresTargetPack = {
         args: [{ kind: 'string' }, { kind: 'stringArray' }],
         output: {
           codecId: 'app/test-enum@1',
-          nativeType: 'enum',
           typeParams: {
             name: { kind: 'arg', index: 0 },
             values: { kind: 'arg', index: 1 },
@@ -144,7 +142,6 @@ const pgvectorExtensionPack = {
           args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
           output: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
             typeParams: {
               length: { kind: 'arg', index: 0 },
             },
@@ -159,7 +156,6 @@ const roleTypes = {
   Role: {
     kind: 'codec-instance',
     codecId: 'app/test-enum@1',
-    nativeType: 'role',
     typeParams: { values: ['USER', 'ADMIN'] },
   },
 } as const;
@@ -198,6 +194,7 @@ describe('contract DSL helper vocabulary', () => {
   it('lowers portable scalar helpers and explicit uuidv4 primary keys via factory callback', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -233,24 +230,24 @@ describe('contract DSL helper vocabulary', () => {
     ]);
     expect(unboundTables(contract.storage)['audit_entry']!.columns['id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 36 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['email']).toMatchObject({
       codecId: 'sql/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['short_code']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 16 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']).toMatchObject({
       codecId: 'test/timestamp@1',
-      nativeType: 'timestamp',
+      dataType: 'test/timestamp',
       nullable: false,
       default: {
         kind: 'function',
@@ -259,7 +256,7 @@ describe('contract DSL helper vocabulary', () => {
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['reviewed_at']).toMatchObject({
       codecId: 'test/timestamp@1',
-      nativeType: 'timestamp',
+      dataType: 'test/timestamp',
       nullable: true,
     });
     expect(contract.execution?.mutations.defaults).toEqual([
@@ -283,6 +280,7 @@ describe('contract DSL helper vocabulary', () => {
   it('preserves literal codec ids for composed field helpers', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -341,6 +339,7 @@ describe('contract DSL helper vocabulary', () => {
   it('supports trailing inline primary-key names on generated id helpers', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -365,7 +364,6 @@ describe('contract DSL helper vocabulary', () => {
     });
     expect(unboundTables(contract.storage)['short_link']!.columns['id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 16 },
     });
     expect(contract.execution?.mutations.defaults).toEqual([
@@ -379,6 +377,7 @@ describe('contract DSL helper vocabulary', () => {
   it('accepts named storage type refs from the local types object', () => {
     const contract = defineContract(
       {
+        ...testSqlTypeLookups({ 'app/test-enum@1': 'role' }),
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -399,7 +398,7 @@ describe('contract DSL helper vocabulary', () => {
 
     expect(unboundTables(contract.storage)['app_user']!.columns['role']).toMatchObject({
       codecId: 'app/test-enum@1',
-      nativeType: 'role',
+      dataType: 'app/test-enum',
       nullable: false,
       typeRef: 'Role',
     });
@@ -411,6 +410,7 @@ describe('contract DSL helper vocabulary', () => {
       run: () =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -435,6 +435,7 @@ describe('contract DSL helper vocabulary', () => {
       run: () =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -476,6 +477,7 @@ describe('contract DSL helper vocabulary', () => {
       run: () =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -515,6 +517,7 @@ describe('contract DSL helper vocabulary', () => {
     expectNoTypedFallbackWarnings(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -538,6 +541,7 @@ describe('contract DSL helper vocabulary', () => {
   it('supports integrated contract callbacks with target-owned type helpers', () => {
     const contract = defineContract(
       {
+        ...testSqlTypeLookups({ 'app/test-enum@1': 'enum' }),
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -565,12 +569,11 @@ describe('contract DSL helper vocabulary', () => {
     expect(documentScopedTypes(contract)?.['Role']).toEqual({
       kind: 'codec-instance',
       codecId: 'app/test-enum@1',
-      nativeType: 'enum',
+      dataType: 'app/test-enum',
       typeParams: { name: 'role', values: ['USER', 'ADMIN'] },
     });
     expect(unboundTables(contract.storage)['app_user']!.columns['role']).toMatchObject({
       codecId: 'app/test-enum@1',
-      nativeType: 'enum',
       typeRef: 'Role',
     });
   });
@@ -578,6 +581,7 @@ describe('contract DSL helper vocabulary', () => {
   it('supports integrated contract callbacks with family-owned field presets', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -613,7 +617,6 @@ describe('contract DSL helper vocabulary', () => {
     ]);
     expect(unboundTables(contract.storage)['audit_entry']!.columns['actor_id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 36 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']!.default).toEqual({
@@ -625,6 +628,7 @@ describe('contract DSL helper vocabulary', () => {
   it('supports integrated contract callbacks with extension-owned type helpers', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -655,12 +659,11 @@ describe('contract DSL helper vocabulary', () => {
     expect(documentScopedTypes(contract)?.['Embedding1536']).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
+      dataType: 'pgvector/vector',
       typeParams: { length: 1536 },
     });
     expect(unboundTables(contract.storage)['document']!.columns['embedding']).toMatchObject({
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeRef: 'Embedding1536',
     });
   });
@@ -681,7 +684,6 @@ describe('contract DSL helper vocabulary', () => {
               args: [{ kind: 'string' }, { kind: 'stringArray' }],
               output: {
                 codecId: 'conflict/enum@1',
-                nativeType: 'enum',
                 typeParams: {
                   name: { kind: 'arg', index: 0 },
                   values: { kind: 'arg', index: 1 },
@@ -707,7 +709,6 @@ describe('contract DSL helper vocabulary', () => {
               kind: 'fieldPreset',
               output: {
                 codecId: 'conflict/text@1',
-                nativeType: 'text',
               },
             },
           },
@@ -719,6 +720,7 @@ describe('contract DSL helper vocabulary', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -740,8 +742,7 @@ describe('contract DSL helper vocabulary', () => {
           "polluted": {
             "kind": "fieldPreset",
             "output": {
-              "codecId": "conflict/text@1",
-              "nativeType": "text"
+              "codecId": "conflict/text@1"
             }
           }
         }
@@ -763,6 +764,7 @@ describe('contract DSL helper vocabulary', () => {
       expect(() =>
         defineContract(
           {
+            ...testTypeLookups,
             family: sqlFamilyPack,
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
@@ -783,6 +785,7 @@ describe('contract DSL helper vocabulary', () => {
   it('resolves temporal.timestamp precision and phase tokens, incl. zero-arg and undefined-hole calls', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -797,15 +800,11 @@ describe('contract DSL helper vocabulary', () => {
 
         expect(fullState.descriptor).toEqual({
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           typeParams: { precision: 3 },
         });
         expect(fullState.executionDefaults).toEqual({ onCreate: nowPhase, onUpdate: nowPhase });
 
-        expect(zeroArgState.descriptor).toEqual({
-          codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
-        });
+        expect(zeroArgState.descriptor).toEqual({ codecId: 'test/timestamp@1' });
         expect(zeroArgState.descriptor).not.toHaveProperty('typeParams');
         expect(zeroArgState.executionDefaults).toBeUndefined();
 
@@ -822,6 +821,7 @@ describe('contract DSL helper vocabulary', () => {
   it('resolves temporal.timestamp(3) to a precision column with no execution defaults', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -831,7 +831,6 @@ describe('contract DSL helper vocabulary', () => {
 
         expect(state.descriptor).toEqual({
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           typeParams: { precision: 3 },
         });
         expect(state.executionDefaults).toBeUndefined();
@@ -844,6 +843,7 @@ describe('contract DSL helper vocabulary', () => {
   it('regression: field.nanoid() is legal with zero args, resolving size to its declared default', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -859,6 +859,7 @@ describe('contract DSL helper vocabulary', () => {
   it('regression: field.id.nanoid({size}, {name}) still resolves via the named-constraint overload', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

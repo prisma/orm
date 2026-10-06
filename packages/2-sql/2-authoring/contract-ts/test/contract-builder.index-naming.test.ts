@@ -2,6 +2,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import { WIRE_NAME_PREFIX_MAX_BYTES } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { type ContractInput, defineContract, field, model, rel } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { testIndexPack } from './helpers/test-index-pack';
@@ -33,10 +34,11 @@ function defineTestContract<
 >(
   definition: Omit<
     ContractInput<typeof bareFamilyPack, typeof postgresTargetPack, Types, Models, Extensions>,
-    'family' | 'target' | 'createNamespace'
+    'family' | 'target' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
   >,
 ) {
   return defineContract({
+    ...testTypeLookups,
     family: bareFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -98,6 +100,7 @@ describe('index naming at TS lowering', () => {
   it('type and options participate in the wire hash', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         extensions: { testIndexes: testIndexPack },

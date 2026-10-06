@@ -12,12 +12,11 @@ import {
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
+import type { PrecisionParams } from './codec-helpers';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
-import { pgTimestamptz, pgTimestamptzCanonical } from './data-types';
+import { pgPrecisionParams, pgTimestamptz, pgTimestamptzCanonical } from './data-types';
 import {
   EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS,
-  PG_TIMESTAMPTZ_NATIVE_TYPE,
   utcTimestamptzText,
 } from './temporal-codec-helpers';
 
@@ -134,18 +133,13 @@ export class PgTimestamptzDateCodec extends CodecImpl<
 }
 
 export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_DATE_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(_params: PrecisionParams): string {
     return 'Date';
   }
@@ -159,12 +153,7 @@ export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<Precisi
 export const pgTimestamptzDateDescriptor = new PgTimestamptzDateDescriptor();
 
 export const pgTimestamptzDateColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestamptzDateDescriptor.factory(params),
-    pgTimestamptzDateDescriptor.codecId,
-    params,
-    'timestamptz',
-  );
+  column(pgTimestamptzDateDescriptor.factory(params), pgTimestamptzDateDescriptor.codecId, params);
 
 pgTimestamptzDateColumn satisfies ColumnHelperFor<PgTimestamptzDateDescriptor>;
 pgTimestamptzDateColumn satisfies ColumnHelperForStrict<PgTimestamptzDateDescriptor>;

@@ -9,11 +9,11 @@ import {
   sql,
 } from '@prisma/orm-postgres/contract-builder';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 
 const Priority = enumType(
   'Priority',
-  { codecId: 'pg/int4@1', nativeType: 'int4' },
+  { codecId: 'pg/int4@1' },
   member('Low', 0),
   member('High', 1),
   member('Urgent', 2),

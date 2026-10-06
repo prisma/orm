@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 
@@ -26,6 +27,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 describe('defineContract build output', () => {
   it('omits _generated', () => {
     const built = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

@@ -15,7 +15,6 @@ describe('field-preset misuse', () => {
           kind: 'fieldPreset',
           output: {
             codecId: 'pg/text@1',
-            nativeType: 'text',
             default: { kind: 'function', expression: "'synthetic-default'" },
           },
         },

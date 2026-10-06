@@ -10,7 +10,6 @@ const codecStub = (codecId: string, traits: readonly CodecTrait[]): AnyCodecDesc
   ({
     codecId,
     traits,
-    targetTypes: [],
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: codecId }) as never,

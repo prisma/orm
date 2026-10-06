@@ -143,6 +143,7 @@ export function prisma6Contract(
             binding: options.binding,
             authoringContributions: context.authoringContributions,
             codecLookup: context.codecLookup,
+            dataTypeLookup: context.dataTypeLookup,
           });
           if (!interpreted.ok) return interpreted;
           contract = applySpecifierDefaultControlPolicy(

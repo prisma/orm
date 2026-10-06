@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { ColumnRef } from '@internal/sql-relational-core/ast';
 import {
   createRawSql,
@@ -5,6 +6,7 @@ import {
   type ScopeField,
 } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import postgresTargetDescriptor from '@internal/target-postgres/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -13,6 +15,8 @@ import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../
 import { postgresRawCodecInferer } from '../src/core/adapter';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
@@ -31,8 +35,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             post: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -64,7 +68,12 @@ function lowerWhere(query: unknown) {
   const plan = rawSql`SELECT id FROM "post" WHERE ${fullTextMatches(query)}`
     .returnsRow({ id: 'pg/int4@1' })
     .build();
-  return renderLoweredSql(plan.ast, contract, postgresCodecDescriptorRegistry);
+  return renderLoweredSql(
+    plan.ast,
+    contract,
+    postgresCodecDescriptorRegistry,
+    postgresDataTypeLookup,
+  );
 }
 
 describe('full-text lowering', () => {

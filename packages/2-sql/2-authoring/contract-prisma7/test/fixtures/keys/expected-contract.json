@@ -112,7 +112,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "c5dbbd7ad232483113a86dc19f23bcea3de078c6d1f41c25b605ce294de4c982",
+    "storageHash": "994c376740cc6d08419ebb1c7423af34fe0938a118d898bb14bbaacb4e37a436",
     "namespaces": {
       "public": {
         "id": "public",
@@ -122,13 +122,13 @@
             "Composite": {
               "columns": {
                 "a": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "b_col": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
@@ -150,25 +150,25 @@
             "Single": {
               "columns": {
                 "pk": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
                 },
                 "code": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "x": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "y": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false

@@ -173,8 +173,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          value: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          value: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'alter-type-baseline',
@@ -184,8 +184,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          value: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          value: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
         }),
       },
       'alter-type-updated',
@@ -214,8 +214,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          label: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          label: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         }),
       },
       'set-default-baseline',
@@ -225,10 +225,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           label: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'untitled' },
@@ -255,11 +255,11 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
         extra: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
       },
       'drop-table-baseline',
@@ -269,8 +269,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'drop-table-updated',
@@ -288,9 +288,9 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
-          extra: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
+          extra: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'drop-column-baseline',
@@ -300,8 +300,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'drop-column-updated',
@@ -325,8 +325,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -341,8 +341,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'drop-index-updated',
@@ -361,8 +361,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            code: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            code: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [{ columns: ['code'], name: 'item_code_key' }],
@@ -377,8 +377,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          code: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          code: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         }),
       },
       'drop-unique-updated',
@@ -400,12 +400,12 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         parent: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -434,11 +434,11 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         parent: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
       },
       'drop-fk-updated',
@@ -462,8 +462,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -480,8 +480,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
           },
           uniques: [],
           indexes: [],
@@ -508,8 +508,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         }),
       },
       'drop-notnull-baseline',
@@ -519,8 +519,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'drop-notnull-updated',
@@ -542,8 +542,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'set-notnull-baseline',
@@ -553,8 +553,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         }),
       },
       'set-notnull-updated',
@@ -578,10 +578,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           status: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'draft' },
@@ -595,10 +595,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           status: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'active' },
@@ -632,10 +632,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           status: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'active' },
@@ -649,10 +649,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           status: {
             many: false,
-            nativeType: 'int4',
+            dataType: 'pg/int4',
             codecId: 'pg/int4@1',
             nullable: false,
             default: { kind: 'literal', value: 1 },
@@ -693,8 +693,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          label: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          label: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'compound-null-default-baseline',
@@ -704,10 +704,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           label: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'unknown' },
@@ -735,12 +735,12 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         parent: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -770,8 +770,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         child: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
       },
       'compound-fk-table-updated',
@@ -799,9 +799,9 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
-            extra: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
+            extra: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -817,8 +817,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          name: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'compound-col-index-updated',
@@ -848,9 +848,9 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          col_a: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-          col_b: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          col_a: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+          col_b: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'compound-mixed-null-baseline',
@@ -861,9 +861,9 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          col_a: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
-          col_b: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          col_a: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
+          col_b: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         }),
       },
       'compound-mixed-null-updated',
@@ -895,8 +895,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            value: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            value: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -913,8 +913,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         item: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            value: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            value: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -955,10 +955,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           uid: {
             many: false,
-            nativeType: 'uuid',
+            dataType: 'pg/uuid',
             codecId: 'pg/uuid@1',
             nullable: false,
             default: { kind: 'literal', value: '00000000-0000-0000-0000-000000000000' },
@@ -972,10 +972,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           uid: {
             many: false,
-            nativeType: 'uuid',
+            dataType: 'pg/uuid',
             codecId: 'pg/uuid@1',
             nullable: false,
             default: { kind: 'function', expression: 'gen_random_uuid()' },
@@ -1004,10 +1004,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           name: {
             many: false,
-            nativeType: 'character varying',
+            dataType: 'pg/varchar',
             codecId: 'pg/varchar@1',
             nullable: true,
             typeParams: { length: 64 },
@@ -1021,10 +1021,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         item: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           name: {
             many: false,
-            nativeType: 'character varying',
+            dataType: 'pg/varchar',
             codecId: 'pg/varchar@1',
             nullable: true,
             typeParams: { length: 255 },
@@ -1055,10 +1055,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           status: {
             many: false,
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             default: { kind: 'literal', value: 'active' },
@@ -1073,8 +1073,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         config: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          status: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          status: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'compound-widen-drop-default-updated',
@@ -1105,8 +1105,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          created_at: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          created_at: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'text-to-timestamp-baseline',
@@ -1116,10 +1116,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             many: false,
-            nativeType: 'timestamp',
+            dataType: 'pg/timestamp',
             codecId: 'pg/timestamp-temporal@1',
             nullable: true,
           },
@@ -1135,8 +1135,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          created_at: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          created_at: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         }),
       },
       'text-to-timestamptz-baseline',
@@ -1146,10 +1146,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             many: false,
-            nativeType: 'timestamptz',
+            dataType: 'pg/timestamptz',
             codecId: 'pg/timestamptz-temporal@1',
             nullable: true,
           },
@@ -1171,10 +1171,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             many: false,
-            nativeType: 'timestamptz',
+            dataType: 'pg/timestamptz',
             codecId: 'pg/timestamptz-temporal@1',
             nullable: false,
           },
@@ -1187,10 +1187,10 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         event: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             many: false,
-            nativeType: 'timestamptz',
+            dataType: 'pg/timestamptz',
             codecId: 'pg/timestamptz-temporal@1',
             nullable: false,
             default: { kind: 'literal', value: '2023-01-01T00:00:00.000Z' },
@@ -1228,12 +1228,12 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const baselineContract = makeContract(
       {
         parent: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child1: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -1256,8 +1256,8 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
         },
         child2: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -1287,16 +1287,16 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     const updatedContract = makeContract(
       {
         parent: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child1: makeTable({
-          id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         }),
         child2: {
           columns: {
-            id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-            parent_id: { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            parent_id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],

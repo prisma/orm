@@ -1,5 +1,6 @@
 import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
 import { SqlColumnDefaultIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import {
   pgBit,
@@ -253,7 +254,7 @@ describe('the canonical form of pg/int8', () => {
       new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value },
         nativeTypeContext: Array.isArray(value) ? 'int8[]' : 'int8',
-        dataType: pgInt8,
+        ...ifDefined('toCanonicalForm', pgInt8.toCanonicalForm),
       });
     const actual = (value: number | string | readonly number[]) =>
       new SqlColumnDefaultIR({ resolved: { kind: 'literal', value } });

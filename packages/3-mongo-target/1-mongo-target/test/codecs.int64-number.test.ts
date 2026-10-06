@@ -1,7 +1,10 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import { BSON, Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { MONGO_INT64_NUMBER_CODEC_ID } from '../src/core/codec-ids';
 import { buildStandardCodecRegistry, mongoDescriptorById } from '../src/core/codecs';
+import { mongoDataTypes } from '../src/core/data-types';
 
 const decodeFailed = expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' });
 const encodeFailed = expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' });
@@ -108,9 +111,14 @@ describe('mongo/int64Number@1', () => {
 
     expect(descriptor).toMatchObject({
       dataType: 'mongo/int64',
-      targetTypes: ['long'],
       traits: ['equality', 'order', 'numeric'],
     });
+    expect(
+      bsonTypesOfCodec(MONGO_INT64_NUMBER_CODEC_ID, {
+        codecLookup: { descriptorFor: mongoDescriptorById },
+        dataTypeLookup: createDataTypeLookup(mongoDataTypes),
+      }),
+    ).toEqual(['long']);
     expect(descriptor?.renderValueLiteral?.('123', 'output')).toBe('123');
     expect(descriptor?.renderValueLiteral?.(123, 'output')).toBeUndefined();
   });

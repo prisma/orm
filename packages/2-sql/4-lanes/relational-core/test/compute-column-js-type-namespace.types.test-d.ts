@@ -29,7 +29,7 @@ type FixtureVector<N extends number> = {
 };
 
 type Col<Codec extends string> = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: Codec;
   readonly nullable: false;
 };

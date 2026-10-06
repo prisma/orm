@@ -9,10 +9,10 @@ import type { ColumnTypeDescriptor } from '@internal/framework-components/codec'
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type { AuthoredIndexMethod } from '@internal/sql-contract/index-naming';
 import type {
+  AuthoredStorageTypeInstance,
   ReferentialAction,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type { CheckKind } from '@internal/sql-schema-ir/naming';
 import type { EnumTypeHandle } from './enum-type';
@@ -299,7 +299,7 @@ export interface ContractDefinition {
    */
   readonly storageHash?: string;
   readonly foreignKeyDefaults?: ForeignKeyDefaultsState;
-  readonly storageTypes?: Record<string, StorageTypeInstance>;
+  readonly storageTypes?: Record<string, AuthoredStorageTypeInstance>;
   /**
    * Declared namespace coordinates for this contract — populates
    * `SqlStorage.namespaces` together with `createNamespace`.

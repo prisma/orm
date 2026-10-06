@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 /**
  * The array lift's single-evaluation guarantee.
  *
@@ -24,10 +25,13 @@ import {
   SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createContract, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract: PostgresContract = {
   ...createContract<SqlStorage>({ target: 'postgres', targetFamily: 'sql' }),
@@ -79,7 +83,12 @@ describe('array lift evaluates its source once', { concurrent: false }, () => {
         ),
       ),
     ]);
-    const { sql } = renderLoweredSql(select, contract, postgresCodecDescriptorRegistry);
+    const { sql } = renderLoweredSql(
+      select,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresDataTypeLookup,
+    );
 
     await driver!.query(`DROP SEQUENCE IF EXISTS ${COUNTER}`);
     await driver!.query(`CREATE SEQUENCE ${COUNTER}`);
@@ -118,7 +127,12 @@ describe('array lift binds its source once in the rendered SQL', () => {
     const select = SelectAst.noFrom().withProjection([
       ProjectionItem.of('doc', new NativeJsonValueProjection(lifted).value),
     ]);
-    const { sql } = renderLoweredSql(select, contract, postgresCodecDescriptorRegistry);
+    const { sql } = renderLoweredSql(
+      select,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresDataTypeLookup,
+    );
 
     // The structural half of the same claim: the source text appears once, so a
     // reader of the SQL can see the binding rather than inferring it.

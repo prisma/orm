@@ -37,7 +37,7 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
-import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { SQLITE_NOW_EXPRESSION, type SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
@@ -130,7 +130,6 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
   }
 
   readonly normalizeDefault = parseSqliteDefault;
-  readonly normalizeNativeType = normalizeSqliteNativeType;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -442,9 +441,32 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
     return rows.length > 0;
   }
 
+  async withTransaction<T>(
+    driver: SqlControlDriverInstance<'sqlite'>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    await driver.query('BEGIN IMMEDIATE');
+    let result: T;
+    try {
+      result = await fn();
+    } catch (error) {
+      try {
+        await driver.query('ROLLBACK');
+      } catch (rollbackError) {
+        if (error instanceof Error && error.cause === undefined) {
+          error.cause = rollbackError;
+        }
+      }
+      throw error;
+    }
+    await driver.query('COMMIT');
+    return result;
+  }
+
+  async lockMarker(_driver: SqlControlDriverInstance<'sqlite'>): Promise<void> {}
+
   /**
-   * Appends a ledger entry for `space`. See the
-   * `SqlControlAdapter.writeLedgerEntry` contract.
+   * Appends a ledger entry for `space`. See the `SqlControlAdapter.writeLedgerEntry` contract.
    */
   async writeLedgerEntry(
     driver: SqlControlDriverInstance<'sqlite'>,
@@ -763,10 +785,7 @@ async function sqliteRenderDdlColumnDefault(
 ): Promise<string> {
   if (def.kind === 'function') {
     if (def.expression.text === 'autoincrement()') return '';
-    // SQLite has no `now()` function; the contract canonicalizes
-    // `CURRENT_TIMESTAMP` / `datetime('now')` to `now()`, so map it back to a
-    // valid SQLite expression on the way out.
-    if (def.expression.text === 'now()') return "DEFAULT (datetime('now'))";
+    if (def.expression.text === 'now()') return `DEFAULT (${SQLITE_NOW_EXPRESSION})`;
     if (checkSqlDefaultBody(def.expression.text) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',

@@ -5,16 +5,19 @@ import type {
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
+  MarkerHashes,
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
   SchemaViewCapable,
-  SignDatabaseResult,
+  SpaceSignature,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_TARGET_MISMATCH,
@@ -206,6 +209,47 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     return driver;
   }
 
+  async function signSpaceMarker(
+    driver: ControlDriverInstance<'mongo', 'mongo'>,
+    { space, contract, expected }: SpaceToSign,
+  ): Promise<SpaceSignature> {
+    const storageHash = contract.storage.storageHash;
+    const profileHash = contract.profileHash;
+    const signed = { space, contract: { storageHash, profileHash } };
+    const controlAdapter = getControlAdapter();
+
+    const readHashes = async (): Promise<MarkerHashes | null> => {
+      const marker = await controlAdapter.readMarker(driver, space);
+      return marker === null
+        ? null
+        : { storageHash: marker.storageHash, profileHash: marker.profileHash };
+    };
+    const existing = await readHashes();
+    if (!sameMarkerHashes(existing, expected)) {
+      return { ...signed, status: 'conflict', expected, found: existing };
+    }
+    if (existing === null) {
+      await controlAdapter.initMarker(driver, space, { storageHash, profileHash });
+      return { ...signed, status: 'created' };
+    }
+    if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
+      return { ...signed, status: 'unchanged' };
+    }
+    const updated = await controlAdapter.updateMarker(driver, space, existing.storageHash, {
+      storageHash,
+      profileHash,
+    });
+    if (!updated) {
+      return {
+        ...signed,
+        status: 'conflict',
+        expected,
+        found: await readHashes(),
+      };
+    }
+    return { ...signed, status: 'updated', previous: existing };
+  }
+
   return {
     familyId: 'mongo' as const,
 
@@ -303,91 +347,13 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       });
     },
 
-    async sign(options): Promise<SignDatabaseResult> {
-      const { driver, contract: rawContract, contractPath, configPath } = options;
-      const startTime = Date.now();
-
-      const contract = asValidatedMongoContract(rawContract);
-
-      const contractStorageHash = contract.storage.storageHash;
-      const contractProfileHash = contract.profileHash;
-
-      const controlAdapter = getControlAdapter();
-      const mongoDriver = asMongoDriver(driver);
-
-      const existingMarker = await controlAdapter.readMarker(mongoDriver, APP_SPACE_ID);
-
-      let markerCreated = false;
-      let markerUpdated = false;
-      let previousHashes: { storageHash?: string; profileHash?: string } | undefined;
-
-      if (!existingMarker) {
-        await controlAdapter.initMarker(mongoDriver, APP_SPACE_ID, {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        });
-        markerCreated = true;
-      } else {
-        const storageHashMatches = existingMarker.storageHash === contractStorageHash;
-        const profileHashMatches = existingMarker.profileHash === contractProfileHash;
-
-        if (!storageHashMatches || !profileHashMatches) {
-          previousHashes = {
-            storageHash: existingMarker.storageHash,
-            profileHash: existingMarker.profileHash,
-          };
-          const updated = await controlAdapter.updateMarker(
-            mongoDriver,
-            APP_SPACE_ID,
-            existingMarker.storageHash,
-            {
-              storageHash: contractStorageHash,
-              profileHash: contractProfileHash,
-            },
-          );
-          if (!updated) {
-            throw structuredError(
-              'MIGRATION.MARKER_CAS_FAILURE',
-              'CAS conflict: marker was modified by another process during sign',
-            );
-          }
-          markerUpdated = true;
-        }
+    async signSpaces(options): Promise<readonly SpaceSignature[]> {
+      const mongoDriver = asMongoDriver(options.driver);
+      const signatures: SpaceSignature[] = [];
+      for (const space of options.spaces) {
+        signatures.push(await signSpaceMarker(mongoDriver, space));
       }
-
-      let summary: string;
-      if (markerCreated) {
-        summary = 'Database signed (marker created)';
-      } else if (markerUpdated) {
-        summary = `Database signed (marker updated from ${previousHashes?.storageHash ?? 'unknown'})`;
-      } else {
-        summary = 'Database already signed with this contract';
-      }
-
-      return {
-        ok: true,
-        summary,
-        contract: {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        },
-        target: {
-          expected: contract.target,
-          actual: contract.target,
-        },
-        marker: {
-          created: markerCreated,
-          updated: markerUpdated,
-          ...ifDefined('previous', previousHashes),
-        },
-        meta: {
-          contractPath,
-          ...ifDefined('configPath', configPath),
-        },
-        timings: {
-          total: Date.now() - startTime,
-        },
-      };
+      return signatures;
     },
 
     async readMarker(options): Promise<ContractMarkerRecord | null> {

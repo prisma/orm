@@ -20,6 +20,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
+import { sqliteTestComponents } from '../sqlite-test-types';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => {
@@ -54,13 +55,13 @@ function contractWithTable(
             table: {
               [tableName]: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+                  email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                   ...(extraColumn === undefined
                     ? {}
                     : {
                         [extraColumn]: {
-                          nativeType: 'text',
+                          dataType: 'sqlite/text',
                           codecId: 'sqlite/text@1',
                           nullable: true,
                         },
@@ -117,7 +118,7 @@ function planFromLive(
       schema: liveSchema(previousTables),
       policy: DESTRUCTIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

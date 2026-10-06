@@ -4,11 +4,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { type ContractInput, defineContract, field, model, rel } from '../src/contract-builder';
 import { now } from '../src/default-functions';
 import { modelsMapForAssertions, modelsOf } from './contract-test-helpers';
 import { crossRef } from './cross-ref-helpers';
-
 import { columnDescriptor } from './helpers/column-descriptor';
 import { unboundTables } from './unbound-tables';
 
@@ -35,9 +35,13 @@ const textColumn = columnDescriptor('pg/text@1');
 const timestamptzTemporalColumn = columnDescriptor('pg/timestamptz-temporal@1');
 
 function defineTestContract<
-  const Definition extends Omit<ContractInput, 'target' | 'family' | 'createNamespace'>,
+  const Definition extends Omit<
+    ContractInput,
+    'target' | 'family' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
+  >,
 >(definition: Definition) {
   return defineContract({
+    ...testTypeLookups,
     family: bareFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -95,7 +99,6 @@ describe('contract DSL authoring surface', () => {
       Role: {
         kind: 'codec-instance',
         codecId: 'app/test-enum@1',
-        nativeType: 'role',
         typeParams: { values: ['USER', 'ADMIN'] },
       },
     } as const;

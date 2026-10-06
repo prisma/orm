@@ -56,7 +56,6 @@ describe('pgvector extension descriptor (contract-space package layout)', () => 
     expect(space!.contractJson.storage.types).toBeDefined();
     expect(space!.contractJson.storage.types?.[PGVECTOR_NATIVE_TYPE]).toMatchObject({
       codecId: VECTOR_CODEC_ID,
-      nativeType: PGVECTOR_NATIVE_TYPE,
     });
   });
 

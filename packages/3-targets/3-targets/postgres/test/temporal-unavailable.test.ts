@@ -41,9 +41,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
         resolvedById: postgresCodecDescriptorRegistry.descriptorFor(
           PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
         )?.codecId,
-        nativeType: pgTimestampTemporalDescriptor.nativeTypeFor({
-          codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-        }),
+        dataType: pgTimestampTemporalDescriptor.dataType,
         columnCodecId: pgDateTemporalColumn().codecId,
         instantiated: pgDateTemporalDescriptor.factory()(instanceCtx).id,
       };
@@ -53,7 +51,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
       temporalStillGone: false,
       registered: true,
       resolvedById: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-      nativeType: 'timestamp without time zone',
+      dataType: 'pg/timestamp',
       columnCodecId: PG_DATE_TEMPORAL_CODEC_ID,
       instantiated: PG_DATE_TEMPORAL_CODEC_ID,
     });

@@ -18,79 +18,68 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { printPslFromFlat } from './fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
-  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
-  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
+  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
+  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
   TimestampString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/timestamp-string@1',
-      nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   TimestamptzString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/timestamptz-string@1',
-      nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   DateString: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/date-string@1', nativeType: 'date' },
+    output: { codecId: 'pg/date-string@1' },
   },
   TimeString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/time-string@1',
-      nativeType: 'time',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   VarChar: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+    args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
     output: {
-      codecId: 'pg/text@1',
-      nativeType: 'varchar',
+      codecId: 'sql/varchar@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
   Numeric: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      {
-        kind: 'number',
-        name: 'scale',
-        integer: true,
-        minimum: -1000,
-        maximum: 1000,
-        optional: true,
-      },
+      { kind: 'number', name: 'precision', integer: true, optional: true },
+      { kind: 'number', name: 'scale', integer: true, optional: true },
     ],
     output: {
       codecId: 'pg/numeric@1',
-      nativeType: 'numeric',
       typeParams: {
         precision: { kind: 'arg', index: 0 },
         scale: { kind: 'arg', index: 1 },
       },
     },
   },
-  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1', nativeType: 'json' } },
-  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } },
+  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1' } },
+  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } },
 } as const satisfies AuthoringTypeNamespace;
 
 const assembled = assembleAuthoringContributions([
@@ -114,12 +103,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const codecLookup: CodecLookupWithDescriptors = {
-  get: () => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
+const codecLookup: CodecLookupWithDescriptors = createPostgresBuiltinCodecLookup();
 
 function parseAndEmit(source: string) {
   const bound = bindPslSchema(source, {
@@ -209,72 +193,72 @@ describe('Postgres PSL inference round trip', () => {
         table: {
           sample: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false, many: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false, many: false },
               uuid_value: {
                 codecId: 'pg/uuid@1',
-                nativeType: 'uuid',
+                dataType: 'pg/uuid',
                 nullable: false,
                 many: false,
               },
               ip_address: {
                 codecId: 'pg/inet@1',
-                nativeType: 'inet',
+                dataType: 'pg/inet',
                 nullable: false,
                 many: false,
               },
               amount: {
                 codecId: 'pg/numeric@1',
-                nativeType: 'numeric',
+                dataType: 'pg/numeric',
                 nullable: false,
                 many: false,
                 typeParams: { precision: 10, scale: 2 },
               },
               bare_amount: {
                 codecId: 'pg/numeric@1',
-                nativeType: 'numeric',
+                dataType: 'pg/numeric',
                 nullable: false,
                 many: false,
               },
               json_value: {
                 codecId: 'pg/json@1',
-                nativeType: 'json',
+                dataType: 'pg/json',
                 nullable: false,
                 many: false,
               },
               jsonb_value: {
                 codecId: 'pg/jsonb@1',
-                nativeType: 'jsonb',
+                dataType: 'pg/jsonb',
                 nullable: false,
                 many: false,
               },
               occurred_at: {
                 codecId: 'pg/timestamptz-string@1',
-                nativeType: 'timestamptz',
+                dataType: 'pg/timestamptz',
                 nullable: false,
                 many: false,
               },
               logged_at: {
                 codecId: 'pg/timestamp-string@1',
-                nativeType: 'timestamp',
+                dataType: 'pg/timestamp',
                 nullable: false,
                 many: false,
                 typeParams: { precision: 3 },
               },
               due_on: {
                 codecId: 'pg/date-string@1',
-                nativeType: 'date',
+                dataType: 'pg/date',
                 nullable: false,
                 many: false,
               },
               opens_at: {
                 codecId: 'pg/time-string@1',
-                nativeType: 'time',
+                dataType: 'pg/time',
                 nullable: false,
                 many: false,
               },
               label: {
-                codecId: 'pg/text@1',
-                nativeType: 'varchar',
+                codecId: 'sql/varchar@1',
+                dataType: 'pg/varchar',
                 nullable: false,
                 many: false,
                 typeParams: { length: 191 },

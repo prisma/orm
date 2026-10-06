@@ -12,6 +12,7 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import type { TargetFieldRef } from '../src/contract-dsl';
 import { ContractModelBuilder } from '../src/contract-dsl';
@@ -171,6 +172,7 @@ describe('cross-space FK via constraints.foreignKey in sql()', () => {
     }));
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -200,6 +202,7 @@ describe('cross-space FK via constraints.foreignKey in sql()', () => {
     }));
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -252,6 +255,7 @@ describe('cross-space FK to a handle with no statically readable table name', ()
     }));
 
     return defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -287,6 +291,7 @@ describe('missing-pack fail-fast diagnostic', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -297,6 +302,7 @@ describe('missing-pack fail-fast diagnostic', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -320,6 +326,7 @@ describe('missing-pack fail-fast diagnostic', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -348,6 +355,7 @@ describe('cascade on cross-space FK (AC4)', () => {
     }));
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -372,6 +380,7 @@ describe('local FK regression (NFR2 / AC9)', () => {
     const Post = buildLocalPostModel(User);
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -422,6 +431,7 @@ describe('F-col: cross-space FK target columns prefer physical column name', () 
     }));
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -501,6 +511,7 @@ describe('F-compound: normalizeTargetFieldRefInput rejects mixed-space compound 
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

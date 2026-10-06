@@ -125,17 +125,17 @@
               "columns": {
                 "childId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "dec": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 },
                 "parentId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 }
               },
@@ -178,7 +178,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -197,7 +197,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "fcbafcd0dd7504a7e243858020326d29fa1ed72380efa8e3a4ed4a71607cfa0e"
+    "storageHash": "3d1aeb95cca59d2c2faa656b36aee810a7b9f2e3a1a795ae6a1201e2cba72ab2"
   },
   "capabilities": {
     "postgres": {

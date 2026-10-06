@@ -10,7 +10,8 @@ import { createBinder } from '../src/binder';
 import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
-import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
+import { ArrayLiteralAst, type ExpressionAst, PathExprAst } from '../src/syntax/ast/expressions';
+import type { SyntaxNode } from '../src/syntax/red';
 import { binderContext } from './support';
 
 const modelRef = entityRef({ kind: 'model' });
@@ -20,6 +21,7 @@ const namespaces = [
   'model Top {}',
   'namespace auth {',
   ' model Account {}',
+  ' model User {}',
   ' role auditor {}',
   '}',
   'namespace reporting {',
@@ -38,7 +40,13 @@ function bind(source: string, rule: ArgType<unknown, AttributeCtx>) {
     sources,
     symbolTable,
     context: binderContext({
-      attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
+      attributeSpecs: {
+        model: {
+          refs: () => modelAttribute('refs', parameters),
+          extends: () => modelAttribute('extends', parameters),
+        },
+        field: {},
+      },
       pslBlockDescriptors: {
         policy: {
           kind: 'pslBlock',
@@ -75,6 +83,16 @@ function span(result: ReturnType<typeof bind>, expression: ExpressionAst) {
     start: file.positionAt(expression.syntax.offset),
     end: file.positionAt(expression.syntax.endOffset),
   };
+}
+
+function qualifierOf(expression: ExpressionAst): SyntaxNode {
+  const [qualifier] = PathExprAst.cast(expression.syntax)!.segments();
+  return qualifier!.syntax;
+}
+
+function firstModelArgument(result: ReturnType<typeof bind>, model: string): ExpressionAst {
+  const holder = result.symbolTable.topLevel.models[model]!;
+  return [...[...holder.node.attributes()][0]!.argList()!.args()][0]!.value()!;
 }
 
 describe('qualified entity references', () => {
@@ -172,4 +190,76 @@ describe('qualified entity references', () => {
       ]);
     }
   });
+});
+
+describe('qualifiers of qualified entity references', () => {
+  it('binds the qualifier in @@extends(auth.User) to the namespace', () => {
+    const result = bind('model Holder {\n @@extends(auth.User)\n}', modelRef);
+    const arg = firstModelArgument(result, 'Holder');
+    expect(result.diagnostics).toEqual([]);
+    expect(result.binder.symbolForNode(qualifierOf(arg))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.binder.symbolForNode(arg.syntax)).toEqual({
+      kind: 'model',
+      symbol: result.auth.models['User'],
+      namespace: result.auth,
+    });
+  });
+
+  it('binds the qualifier in a block value to the namespace', () => {
+    const result = bind('policy P {\n target = auth.Account\n}', modelRef);
+    expect(result.binder.symbolForNode(qualifierOf(entryValue(result, 'P')))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+  });
+
+  it('binds the qualifier when the member is missing', () => {
+    const result = bind('policy P {\n target = auth.Ghost\n}', modelRef);
+    const value = entryValue(result, 'P');
+    expect(result.binder.symbolForNode(qualifierOf(value))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.diagnostics.map(({ message }) => message)).toEqual([
+      'Cannot find entity "auth.Ghost"',
+    ]);
+  });
+
+  it('binds the qualifier when no alternative of a oneOf matches', () => {
+    const result = bind('policy P {\n roles = [auth.ghost]\n}', list(oneOf(roleRef, modelRef)));
+    const [element] = ArrayLiteralAst.cast(entryValue(result, 'P').syntax)!.elements();
+    expect(result.binder.symbolForNode(qualifierOf(element!))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.binder.symbolForNode(element!.syntax)).toEqual({
+      kind: 'unresolved',
+      name: 'auth.ghost',
+    });
+  });
+
+  it('binds the qualifier once when the second alternative of a oneOf matches', () => {
+    const result = bind('policy P {\n roles = [auth.auditor]\n}', list(oneOf(modelRef, roleRef)));
+    const [element] = ArrayLiteralAst.cast(entryValue(result, 'P').syntax)!.elements();
+    expect(result.binder.symbolForNode(qualifierOf(element!))).toEqual({
+      kind: 'namespace',
+      symbol: result.auth,
+    });
+    expect(result.binder.symbolForNode(element!.syntax)).toEqual({
+      kind: 'block',
+      symbol: result.auth.blocks['auditor'],
+      namespace: result.auth,
+    });
+  });
+
+  it.each(['Top.Account', 'nope.Account'])(
+    'records nothing on a qualifier that is not a namespace: %s',
+    (reference) => {
+      const result = bind(`policy P {\n target = ${reference}\n}`, modelRef);
+      expect(result.binder.symbolForNode(qualifierOf(entryValue(result, 'P')))).toBeUndefined();
+    },
+  );
 });

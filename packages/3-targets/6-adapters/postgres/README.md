@@ -139,7 +139,7 @@ flowchart TD
 
 **Column Types Export (`column-types.ts`)**
 
-- Exports column descriptors for built-in types and enum helpers (`enumType`, `enumColumn(typeRef, nativeType)`)
+- Exports column descriptors for built-in types; enums are declared with `enumType` from the contract builder
 - Parameterized helpers: `charColumn(length)`, `varcharColumn(length)`, `numericColumn(precision, scale?)`, `bitColumn(length)`, `varbitColumn(length)`, `timeColumn(precision?)`, `timetzColumn(precision?)`, `intervalColumn(precision?)`
 
 - Exports raw JSON helpers:
@@ -315,7 +315,7 @@ table('event', (t) =>
 
 - `./adapter`: Adapter implementation (`createPostgresAdapter`)
 - `./codec-types`: PostgreSQL codec types (`CodecTypes`, `JsonValue`)
-- `./column-types`: Column type descriptors and authoring helpers (`jsonColumn`, `jsonbColumn`, `enumType`, `enumColumn`, `textColumn`, `int4Column`, etc.)
+- `./column-types`: Column type descriptors and authoring helpers (`jsonColumn`, `jsonbColumn`, `textColumn`, `int4Column`, etc.)
 - `./types`: PostgreSQL-specific types
 - `./control`: Control-plane entry point (adapter descriptor)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

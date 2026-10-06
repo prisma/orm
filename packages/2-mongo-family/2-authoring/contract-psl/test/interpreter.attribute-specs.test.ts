@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
@@ -12,6 +13,8 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypeLookup: createDataTypeLookup([]),
     controlMutationDefaults: {
       dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),

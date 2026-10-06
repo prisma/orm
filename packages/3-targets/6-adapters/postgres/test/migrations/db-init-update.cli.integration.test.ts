@@ -66,10 +66,10 @@ function buildExtensionContract(version: 1 | 2): Contract<SqlStorage> {
             table: {
               _ext_helper: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   ...(version === 2
                     ? {
-                        note: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+                        note: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
                       }
                     : {}),
                 },

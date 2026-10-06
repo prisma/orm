@@ -33,6 +33,7 @@ import {
   type BuilderContext,
   buildQueryPlan,
   codecRefFor,
+  codecRefOf,
   combineWhereExprs,
 } from './builder-base';
 import { createFieldProxy } from './field-proxy';
@@ -98,10 +99,16 @@ function buildReturningProjections(
   tableName: string,
   columns: string[],
   rowFields: Record<string, ScopeField>,
+  ctx: BuilderContext,
 ): ProjectionItem[] {
-  return columns.map((col) =>
-    ProjectionItem.of(col, ColumnRef.of(tableName, col), rowFields[col]?.codec),
-  );
+  return columns.map((col) => {
+    const field = rowFields[col];
+    return ProjectionItem.of(
+      col,
+      ColumnRef.of(tableName, col),
+      field === undefined ? undefined : codecRefOf(field, ctx),
+    );
+  });
 }
 
 function evaluateWhere(
@@ -275,7 +282,12 @@ export class InsertQueryImpl<
 
     if (this.#returningColumns.length > 0) {
       ast = ast.withReturning(
-        buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields),
+        buildReturningProjections(
+          this.#tableName,
+          this.#returningColumns,
+          this.#rowFields,
+          this.ctx,
+        ),
       );
     }
 
@@ -397,7 +409,12 @@ export class UpdateQueryImpl<
 
     if (this.#returningColumns.length > 0) {
       ast = ast.withReturning(
-        buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields),
+        buildReturningProjections(
+          this.#tableName,
+          this.#returningColumns,
+          this.#rowFields,
+          this.ctx,
+        ),
       );
     }
 
@@ -513,7 +530,12 @@ export class DeleteQueryImpl<
 
     if (this.#returningColumns.length > 0) {
       ast = ast.withReturning(
-        buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields),
+        buildReturningProjections(
+          this.#tableName,
+          this.#returningColumns,
+          this.#rowFields,
+          this.ctx,
+        ),
       );
     }
 

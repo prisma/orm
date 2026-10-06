@@ -3,6 +3,7 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -33,18 +34,15 @@ const fieldPresets: AuthoringFieldNamespace = {
   temporal: {
     createdAt: {
       kind: 'fieldPreset',
-      output: { codecId: 'mongo/date@1', nativeType: 'date' },
+      output: { codecId: 'mongo/date@1' },
     },
   },
 };
 
 const mongoScalarAuthoringTypes: AuthoringTypeNamespace = {
-  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1', nativeType: 'string' } },
-  ObjectId: {
-    kind: 'typeConstructor',
-    output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
-  },
-  Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1', nativeType: 'int' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
+  ObjectId: { kind: 'typeConstructor', output: { codecId: 'mongo/objectId@1' } },
+  Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1' } },
 };
 
 function normalize(resolution: unknown): unknown {
@@ -75,7 +73,10 @@ function normalize(resolution: unknown): unknown {
     case 'namedType':
     case 'block':
     case 'namespace':
-    case 'field': {
+    case 'field':
+    case 'parameter':
+    case 'function':
+    case 'constant': {
       const symbol = r.symbol as { readonly name: string };
       return { kind: r.kind, name: symbol.name };
     }
@@ -120,14 +121,9 @@ describe('createBinder', () => {
         attributeSpecs: mongoAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
-      codecLookup: {
-        get: () => undefined,
-        targetTypesFor: () => undefined,
-        renderOutputTypeFor: () => undefined,
-        descriptorFor: () => undefined,
-      },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypeLookup: createDataTypeLookup([]),
       resolvedInputs: [],
       capabilities: {},
     };
@@ -164,6 +160,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'map', level: 'field' },
       { kind: 'field', name: 'createdAt' },
       { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'score' },
       { kind: 'contributedType', name: 'Points', path: ['Points'] },
       { kind: 'field', name: 'weird' },
@@ -175,7 +172,9 @@ describe('createBinder', () => {
       { kind: 'field', name: 'session' },
       { kind: 'model', name: 'Session' },
       { kind: 'attribute', name: 'relation', level: 'field' },
+      { kind: 'parameter', name: 'fields' },
       { kind: 'field', name: 'sessionId' },
+      { kind: 'parameter', name: 'references' },
       { kind: 'field', name: 'id' },
       { kind: 'attribute', name: 'index', level: 'model' },
       { kind: 'field', name: 'sessionId' },

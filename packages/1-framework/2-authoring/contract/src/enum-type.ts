@@ -73,9 +73,6 @@ export interface EnumTypeHandle<
   /** codecId from the codec passed to `enumType`. */
   readonly codecId: string;
 
-  /** nativeType from the codec passed to `enumType`. */
-  readonly nativeType: string;
-
   /** Ordered member list for lowering (name + value pairs). */
   readonly enumMembers: readonly { readonly name: string; readonly value: Values[number] }[];
 
@@ -127,10 +124,9 @@ export type CodecInput<
 /**
  * Declare a domain enum for use in TS-authoring contracts.
  *
- * - The codec is an explicit required argument — the `codecId` and
- *   `nativeType` are taken from the passed `ColumnTypeDescriptor` (e.g.
- *   `{ codecId: 'pg/text@1', nativeType: 'text' }` from a field preset
- *   output or a direct inline object).
+ * - The codec is an explicit required argument — the `codecId` is taken
+ *   from the passed `ColumnTypeDescriptor` (e.g. `{ codecId: 'pg/text@1' }`
+ *   from a field preset output or a direct inline object).
  * - `const` generics on the members spread preserve the ordered literal
  *   value tuple so `Role.values` is `readonly ['user','admin']`, not
  *   `string[]`.
@@ -142,7 +138,7 @@ export type CodecInput<
  *
  * @example
  * ```ts
- * const Role = enumType('Role', { codecId: 'pg/text@1', nativeType: 'text' },
+ * const Role = enumType('Role', { codecId: 'pg/text@1' },
  *   member('User', 'user'),
  *   member('Admin', 'admin'),
  * );
@@ -153,10 +149,7 @@ export type CodecInput<
 export function enumType<
   CodecTypes extends CodecTypeMap = Record<string, never>,
   const Name extends string = string,
-  const Codec extends Pick<ColumnTypeDescriptor, 'codecId' | 'nativeType'> = Pick<
-    ColumnTypeDescriptor,
-    'codecId' | 'nativeType'
-  >,
+  const Codec extends Pick<ColumnTypeDescriptor, 'codecId'> = Pick<ColumnTypeDescriptor, 'codecId'>,
   const Members extends readonly [
     EnumMember<string, CodecInput<CodecTypes, Codec>>,
     ...EnumMember<string, CodecInput<CodecTypes, Codec>>[],
@@ -173,12 +166,12 @@ export function enumType<
 >;
 export function enumType(
   name: string,
-  codec: Pick<ColumnTypeDescriptor, 'codecId' | 'nativeType'>,
+  codec: Pick<ColumnTypeDescriptor, 'codecId'>,
   ...members: EnumMember<string, unknown>[]
 ): EnumTypeHandle;
 export function enumType(
   name: string,
-  codec: Pick<ColumnTypeDescriptor, 'codecId' | 'nativeType'>,
+  codec: Pick<ColumnTypeDescriptor, 'codecId'>,
   ...members: EnumMember<string, unknown>[]
 ): EnumTypeHandle {
   if (members.length === 0) {
@@ -226,7 +219,6 @@ export function enumType(
     [ENUM_TYPE_HANDLE_BRAND]: true,
     enumName: name,
     codecId: codec.codecId,
-    nativeType: codec.nativeType,
     enumMembers,
     values,
     names,
@@ -246,7 +238,7 @@ export function enumType(
  */
 export type BoundEnumType<CodecTypes extends CodecTypeMap> = <
   const Name extends string,
-  const Codec extends Pick<ColumnTypeDescriptor, 'codecId' | 'nativeType'>,
+  const Codec extends Pick<ColumnTypeDescriptor, 'codecId'>,
   const Members extends readonly [
     EnumMember<string, CodecInput<CodecTypes, Codec>>,
     ...EnumMember<string, CodecInput<CodecTypes, Codec>>[],

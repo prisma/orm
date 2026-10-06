@@ -13,7 +13,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             document: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -24,12 +24,12 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             Vector1536: {
               codecId: 'pg/vector@1',
-              nativeType: 'vector',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
             Vector768: {
               codecId: 'pg/vector@1',
-              nativeType: 'vector',
+              dataType: 'pgvector/vector',
               typeParams: { length: 768 },
             },
           },
@@ -40,10 +40,10 @@ describe('sql-target-family-hook parameterized type emission', () => {
 
       expect(types).toContain('readonly types:');
       expect(types).toContain(
-        'readonly Vector1536: { readonly kind: "codec-instance"; readonly codecId: "pg/vector@1"; readonly nativeType: "vector"; readonly typeParams: { readonly length: 1536 } }',
+        'readonly Vector1536: { readonly kind: "codec-instance"; readonly codecId: "pg/vector@1"; readonly dataType: "pgvector/vector"; readonly typeParams: { readonly length: 1536 } }',
       );
       expect(types).toContain(
-        'readonly Vector768: { readonly kind: "codec-instance"; readonly codecId: "pg/vector@1"; readonly nativeType: "vector"; readonly typeParams: { readonly length: 768 } }',
+        'readonly Vector768: { readonly kind: "codec-instance"; readonly codecId: "pg/vector@1"; readonly dataType: "pgvector/vector"; readonly typeParams: { readonly length: 768 } }',
       );
     });
 
@@ -53,7 +53,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             user: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -77,7 +77,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             user: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -100,7 +100,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             data: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -111,7 +111,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             ComplexType: {
               codecId: 'custom/type@1',
-              nativeType: 'custom',
+              dataType: 'custom/type',
               typeParams: { a: 1, b: 'hello', c: true },
             },
           },
@@ -132,7 +132,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             data: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -143,7 +143,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             ArrayType: {
               codecId: 'custom/type@1',
-              nativeType: 'custom',
+              dataType: 'custom/type',
               typeParams: { items: [1, 2, 3] },
             },
           },
@@ -162,7 +162,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             data: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -173,7 +173,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             NestedType: {
               codecId: 'custom/type@1',
-              nativeType: 'custom',
+              dataType: 'custom/type',
               typeParams: { config: { depth: 5, enabled: true } },
             },
           },
@@ -194,7 +194,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             data: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -205,7 +205,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             NullableType: {
               codecId: 'custom/type@1',
-              nativeType: 'custom',
+              dataType: 'custom/type',
               typeParams: { value: null },
             },
           },
@@ -224,7 +224,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           tables: {
             data: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -235,7 +235,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
           types: {
             UndefinedType: {
               codecId: 'custom/type@1',
-              nativeType: 'custom',
+              dataType: 'custom/type',
               typeParams: { value: undefined },
             },
           },

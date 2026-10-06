@@ -18,7 +18,7 @@ import {
 } from './fixtures/runner-fixtures';
 
 const timestamptz = {
-  nativeType: 'timestamptz',
+  dataType: 'pg/timestamptz',
   codecId: 'pg/timestamptz-temporal@1',
   nullable: false,
   typeParams: { precision: 6 },
@@ -38,7 +38,7 @@ function stampsContract(): Contract<SqlStorage> {
             table: {
               Stamps: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   firstDay: {
                     ...timestamptz,
                     default: { kind: 'function', expression: "'0001-01-01 00:00:00+00'" },
@@ -52,10 +52,16 @@ function stampsContract(): Contract<SqlStorage> {
                     default: { kind: 'function', expression: "'0001-12-31 23:30:00+00 BC'" },
                   },
                   span: {
-                    nativeType: 'interval',
+                    dataType: 'pg/interval',
                     codecId: 'pg/interval@1',
                     nullable: false,
                     default: { kind: 'function', expression: "'1 day 02:00:00'::interval" },
+                  },
+                  blob: {
+                    dataType: 'pg/bytea',
+                    codecId: 'pg/bytea@1',
+                    nullable: false,
+                    default: { kind: 'literal', value: 'aGVsbG8=' },
                   },
                 },
                 primaryKey: { columns: ['id'] },
@@ -80,13 +86,15 @@ interface OutputSettings {
   readonly timeZone: string;
   readonly dateStyle: string;
   readonly intervalStyle: string;
+  readonly byteaOutput: string;
 }
 
 async function outputSettings(driver: PostgresControlDriver): Promise<OutputSettings | undefined> {
   const { rows } = await driver.query<OutputSettings>(
     `SELECT current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
-            current_setting('IntervalStyle') AS "intervalStyle"`,
+            current_setting('IntervalStyle') AS "intervalStyle",
+            current_setting('bytea_output') AS "byteaOutput"`,
   );
   return rows[0];
 }
@@ -95,18 +103,21 @@ const callerSettings: OutputSettings = {
   timeZone: 'America/New_York',
   dateStyle: 'SQL, DMY',
   intervalStyle: 'sql_standard',
+  byteaOutput: 'escape',
 };
 
 const localSettings: OutputSettings = {
   timeZone: 'Asia/Kathmandu',
   dateStyle: 'German, DMY',
   intervalStyle: 'iso_8601',
+  byteaOutput: 'escape',
 };
 
 async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
   await driver.query(`SET LOCAL TIME ZONE '${localSettings.timeZone}'`);
   await driver.query(`SET LOCAL DateStyle = '${localSettings.dateStyle}'`);
   await driver.query(`SET LOCAL IntervalStyle = '${localSettings.intervalStyle}'`);
+  await driver.query(`SET LOCAL bytea_output = '${localSettings.byteaOutput}'`);
 }
 
 const driverFailure = 'the driver failed while introspection read check constraints';
@@ -150,12 +161,14 @@ describe('introspection in a session with its own output settings', { concurrent
         "recent" TIMESTAMPTZ(6) NOT NULL DEFAULT '2024-06-01 12:00:00+00',
         "beforeYearOne" TIMESTAMPTZ(6) NOT NULL DEFAULT '0001-12-31 23:30:00+00 BC',
         "span" INTERVAL NOT NULL DEFAULT '1 day 02:00:00',
+        "blob" BYTEA NOT NULL DEFAULT '\\x68656c6c6f',
         CONSTRAINT "Stamps_pkey" PRIMARY KEY ("id")
       )`,
     );
     await driver.query("SET TIME ZONE 'America/New_York'");
     await driver.query("SET DateStyle = 'SQL, DMY'");
     await driver.query("SET IntervalStyle = 'sql_standard'");
+    await driver.query("SET bytea_output = 'escape'");
   }, testTimeout);
 
   afterEach(async () => {
@@ -165,7 +178,7 @@ describe('introspection in a session with its own output settings', { concurrent
     }
   }, testTimeout);
 
-  it('reads defaults in UTC, ISO and postgres styles, and a contract holding that text verifies', {
+  it('reads defaults in UTC, ISO, postgres and hex styles, and a contract holding that text verifies', {
     timeout: testTimeout,
   }, async () => {
     const contract = stampsContract();
@@ -179,11 +192,13 @@ describe('introspection in a session with its own output settings', { concurrent
       recent: columns?.['recent']?.default,
       beforeYearOne: columns?.['beforeYearOne']?.default,
       span: columns?.['span']?.default,
+      blob: columns?.['blob']?.default,
     }).toEqual({
       firstDay: "'0001-01-01 00:00:00+00'::timestamp with time zone",
       recent: "'2024-06-01 12:00:00+00'::timestamp with time zone",
       beforeYearOne: "'0001-12-31 23:30:00+00 BC'::timestamp with time zone",
       span: "'1 day 02:00:00'::interval",
+      blob: "'\\x68656c6c6f'::bytea",
     });
     const result = familyInstance.verifySchema({
       contract,

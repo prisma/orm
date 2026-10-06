@@ -14,7 +14,7 @@ function untyped(builder: unknown): { optional(): FieldBuilder; many(): FieldBui
   return builder as { optional(): FieldBuilder; many(): FieldBuilder };
 }
 
-const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
+const mongoDate = { codecId: 'mongo/date@1' } as const;
 
 const mongoFamilyPack = {
   kind: 'family',
