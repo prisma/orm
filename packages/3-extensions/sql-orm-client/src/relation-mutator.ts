@@ -6,6 +6,7 @@ import type {
   RelationMutationConnect,
   RelationMutationCreate,
   RelationMutationDisconnect,
+  RelationMutationResult,
   RelationMutator,
 } from './types';
 
@@ -50,7 +51,7 @@ export function createRelationMutator<
 export function isRelationMutationDescriptor(
   value: unknown,
 ): value is RelationMutation<Contract<SqlStorage>, string> {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
 
@@ -70,6 +71,6 @@ export function isRelationMutationCallback(
   value: unknown,
 ): value is (
   mutator: RelationMutator<Contract<SqlStorage>, string>,
-) => RelationMutation<Contract<SqlStorage>, string> {
+) => RelationMutationResult<Contract<SqlStorage>, string> {
   return typeof value === 'function';
 }

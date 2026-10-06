@@ -76,7 +76,7 @@ function hasThrough(relation: RelationDefinition): relation is JunctionRelationD
 
 interface ParsedRelationMutation {
   readonly relation: RelationDefinition;
-  readonly mutation: RelationMutation<Contract<SqlStorage>, string>;
+  readonly mutations: readonly RelationMutation<Contract<SqlStorage>, string>[];
 }
 
 interface ParsedMutationInput {
@@ -231,70 +231,78 @@ async function createGraph(
 
   const scalarData = { ...parsed.scalarData };
 
-  for (const relationMutation of parentOwned) {
-    if (relationMutation.mutation.kind === 'disconnect') {
-      throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
-        'disconnect() is only supported in update() nested mutations',
-        { meta: { kind: 'disconnect', relation: relationMutation.relation.relationName } },
+  for (const { relation, mutations } of parentOwned) {
+    for (const mutation of mutations) {
+      if (mutation.kind === 'disconnect') {
+        throw ormError(
+          'ORM.RELATION_MUTATION_UNSUPPORTED',
+          'disconnect() is only supported in update() nested mutations',
+          { meta: { kind: 'disconnect', relation: relation.relationName } },
+        );
+      }
+
+      await applyParentOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        scalarData,
+        relation,
+        mutation,
       );
     }
-
-    await applyParentOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      scalarData,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
   }
 
-  for (const relationMutation of junctionOwned) {
-    if (relationMutation.mutation.kind === 'disconnect') {
-      throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
-        'disconnect() is only supported in update() nested mutations',
-        { meta: { kind: 'disconnect', relation: relationMutation.relation.relationName } },
-      );
-    }
+  for (const { relation, mutations } of junctionOwned) {
+    for (const mutation of mutations) {
+      if (mutation.kind === 'disconnect') {
+        throw ormError(
+          'ORM.RELATION_MUTATION_UNSUPPORTED',
+          'disconnect() is only supported in update() nested mutations',
+          { meta: { kind: 'disconnect', relation: relation.relationName } },
+        );
+      }
 
-    await preflightJunctionOwnedCreateMutation(scope, context, relationMutation);
+      await preflightJunctionOwnedCreateMutation(scope, context, relation, mutation);
+    }
   }
 
   const parentRow = await insertSingleRow(scope, context, namespaceId, modelName, scalarData);
 
-  for (const relationMutation of childOwned) {
-    if (relationMutation.mutation.kind === 'disconnect') {
-      throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
-        'disconnect() is only supported in update() nested mutations',
-        { meta: { kind: 'disconnect', relation: relationMutation.relation.relationName } },
+  for (const { relation, mutations } of childOwned) {
+    for (const mutation of mutations) {
+      if (mutation.kind === 'disconnect') {
+        throw ormError(
+          'ORM.RELATION_MUTATION_UNSUPPORTED',
+          'disconnect() is only supported in update() nested mutations',
+          { meta: { kind: 'disconnect', relation: relation.relationName } },
+        );
+      }
+
+      await applyChildOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        parentRow,
+        relation,
+        mutation,
       );
     }
-
-    await applyChildOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      parentRow,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
   }
 
-  for (const relationMutation of junctionOwned) {
-    await applyJunctionOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      parentRow,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
+  for (const { relation, mutations } of junctionOwned) {
+    for (const mutation of mutations) {
+      await applyJunctionOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        parentRow,
+        relation,
+        mutation,
+      );
+    }
   }
 
   return parentRow;
@@ -319,20 +327,24 @@ async function updateFirstGraph(
 
   const scalarData = { ...parsed.scalarData };
 
-  for (const relationMutation of parentOwned) {
-    await applyParentOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      scalarData,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
+  for (const { relation, mutations } of parentOwned) {
+    for (const mutation of mutations) {
+      await applyParentOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        scalarData,
+        relation,
+        mutation,
+      );
+    }
   }
 
-  for (const relationMutation of junctionOwned) {
-    await preflightJunctionOwnedCreateMutation(scope, context, relationMutation);
+  for (const { relation, mutations } of junctionOwned) {
+    for (const mutation of mutations) {
+      await preflightJunctionOwnedCreateMutation(scope, context, relation, mutation);
+    }
   }
 
   let parentRow = existingRow;
@@ -381,28 +393,32 @@ async function updateFirstGraph(
     }
   }
 
-  for (const relationMutation of childOwned) {
-    await applyChildOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      parentRow,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
+  for (const { relation, mutations } of childOwned) {
+    for (const mutation of mutations) {
+      await applyChildOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        parentRow,
+        relation,
+        mutation,
+      );
+    }
   }
 
-  for (const relationMutation of junctionOwned) {
-    await applyJunctionOwnedMutation(
-      scope,
-      context,
-      namespaceId,
-      modelName,
-      parentRow,
-      relationMutation.relation,
-      relationMutation.mutation,
-    );
+  for (const { relation, mutations } of junctionOwned) {
+    for (const mutation of mutations) {
+      await applyJunctionOwnedMutation(
+        scope,
+        context,
+        namespaceId,
+        modelName,
+        parentRow,
+        relation,
+        mutation,
+      );
+    }
   }
 
   return parentRow;
@@ -442,18 +458,9 @@ function parseMutationInput(
     }
 
     const mutator = createRelationMutator<Contract<SqlStorage>, string>();
-    const mutation = value(mutator);
-    if (!isRelationMutationDescriptor(mutation)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor`,
-        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor' } },
-      );
-    }
-
     relationMutations.push({
       relation,
-      mutation,
+      mutations: toRelationMutationList(fieldName, modelName, value(mutator)),
     });
   }
 
@@ -461,6 +468,44 @@ function parseMutationInput(
     scalarData,
     relationMutations,
   };
+}
+
+function toRelationMutationList(
+  fieldName: string,
+  modelName: string,
+  result: unknown,
+): readonly RelationMutation<Contract<SqlStorage>, string>[] {
+  if (!Array.isArray(result)) {
+    if (!isRelationMutationDescriptor(result)) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_INVALID',
+        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor`,
+        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor' } },
+      );
+    }
+    return [result];
+  }
+
+  const elements: readonly unknown[] = result;
+  const mutations: RelationMutation<Contract<SqlStorage>, string>[] = [];
+  for (const [index, element] of elements.entries()) {
+    if (Array.isArray(element)) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_INVALID',
+        `Relation field "${fieldName}" on model "${modelName}" returned a nested array at index ${index}; return one flat array of mutations`,
+        { meta: { relation: fieldName, model: modelName, problem: 'nested-array', index } },
+      );
+    }
+    if (!isRelationMutationDescriptor(element)) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_INVALID',
+        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor at index ${index}`,
+        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor', index } },
+      );
+    }
+    mutations.push(element);
+  }
+  return mutations;
 }
 
 interface JunctionParsedRelationMutation extends ParsedRelationMutation {
@@ -480,7 +525,7 @@ function partitionByOwnership(relationMutations: readonly ParsedRelationMutation
     if (hasThrough(relationMutation.relation)) {
       junctionOwned.push({
         relation: relationMutation.relation,
-        mutation: relationMutation.mutation,
+        mutations: relationMutation.mutations,
       });
       continue;
     }
@@ -810,9 +855,9 @@ async function applyJunctionOwnedMutation(
 async function preflightJunctionOwnedCreateMutation(
   scope: RuntimeScope,
   context: ExecutionContext,
-  relationMutation: JunctionParsedRelationMutation,
+  relation: JunctionRelationDefinition,
+  mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): Promise<void> {
-  const { relation, mutation } = relationMutation;
   assertJunctionMetadataShape(relation);
   assertJunctionPayloadWritable(relation, mutation.kind);
 

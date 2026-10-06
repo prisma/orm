@@ -40,8 +40,13 @@ describe('relation-mutator', () => {
     expect(isRelationMutationDescriptor({ kind: 'create', data: [] })).toBe(true);
     expect(isRelationMutationDescriptor({ kind: 'connect', criteria: [] })).toBe(true);
     expect(isRelationMutationDescriptor({ kind: 'disconnect' })).toBe(true);
+    expect(isRelationMutationDescriptor([{ kind: 'disconnect' }])).toBe(false);
+    expect(
+      isRelationMutationDescriptor(Object.assign([{ kind: 'disconnect' }], { kind: 'disconnect' })),
+    ).toBe(false);
 
     expect(isRelationMutationCallback(() => ({ kind: 'disconnect' }))).toBe(true);
+    expect(isRelationMutationCallback(() => [{ kind: 'disconnect' }])).toBe(true);
     expect(isRelationMutationCallback({})).toBe(false);
   });
 });
