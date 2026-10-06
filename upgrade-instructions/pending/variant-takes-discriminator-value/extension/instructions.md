@@ -41,5 +41,3 @@ const tasks = db.orm.public.Task;
 const bugs = tasks.variant('bug');
 const features = tasks.variant('feature');
 ```
-
-`.variant()` also no longer removes a `where()` filter on the discriminator field. Such a filter now stays in the query next to the variant's own filter.
