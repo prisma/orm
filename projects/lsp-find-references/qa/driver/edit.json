@@ -1,0 +1,54 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "steps": [
+    {
+      "id": "7.1",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "includeDeclaration": false
+    },
+    {
+      "id": "7.2",
+      "kind": "change",
+      "file": "post.prisma",
+      "replace": "  @@index([authorId])\n}",
+      "with": "  @@index([authorId])\n}\n\nmodel Comment {\n  id     Int       @id\n  userId Int\n  writer auth.User @relation(fields: [userId], references: [id])\n}"
+    },
+    {
+      "id": "7.3",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "includeDeclaration": false
+    },
+    {
+      "id": "7.4",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "namespace au|th",
+      "includeDeclaration": false
+    },
+    {
+      "id": "7.5",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "i|d    Int    @id",
+      "includeDeclaration": false
+    },
+    {
+      "id": "7.6",
+      "kind": "change",
+      "file": "post.prisma",
+      "replace": "  author   auth.User @relation(fields: [authorId], references: [id])\n",
+      "with": ""
+    },
+    {
+      "id": "7.7",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "includeDeclaration": true
+    }
+  ]
+}

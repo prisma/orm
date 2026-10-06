@@ -104,7 +104,7 @@ describe('collection.scope', () => {
   test('refuses a collection narrowed to a variant', () => {
     expectTypeOf(tasks.apply(taskTitles)).toEqualTypeOf<ReturnType<typeof taskTitles>>();
     // @ts-expect-error the collection is narrowed to the Bug variant
-    tasks.variant('Bug').apply(taskTitles);
+    tasks.variant('bug').apply(taskTitles);
   });
 
   test('does not make a collection of one model unassignable to a collection of any model', () => {

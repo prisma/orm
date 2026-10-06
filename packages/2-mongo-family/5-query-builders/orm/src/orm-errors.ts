@@ -5,6 +5,7 @@ import {
 } from '@internal/utils/structured-error';
 
 type OrmSubcode =
+  | 'ARGUMENT_INVALID'
   | 'MODEL_UNKNOWN'
   | 'RELATION_UNKNOWN'
   | 'WHERE_MISSING'

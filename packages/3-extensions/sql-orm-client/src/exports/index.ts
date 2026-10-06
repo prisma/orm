@@ -3,6 +3,7 @@ export type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  HasNoVariant,
   HasOrderBy,
   HasRow,
   HasTypeState,

@@ -46,7 +46,8 @@ A brief may add gates specific to the work:
 ### Cadence
 
 - **Per-commit** (during the dispatch): typecheck and any grep gates the brief specifies.
-- **End-of-dispatch**: full conditional set + brief-specified gates.
+- **End-of-dispatch**: typecheck, the touched packages' tests and lint, `lint:deps`, and brief-specified gates. Workspace-wide `pnpm test:packages` and `pnpm test:integration` run once per slice, before the PR opens, not per dispatch (lsp-go-to-definition, 2026-09-30: per-dispatch full suites cost hours).
+- **The orchestrator picks the gate.** It does not ask the operator to confirm an inferred gate list; it writes the gate into the plan and states it.
 - **Orchestrator-side post-dispatch**: re-run the grep gates independently; spot-check the diff for spec compliance; run intent-validation.
 
 ## Dispatch-DoD overlay (beyond validation gates)

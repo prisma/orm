@@ -162,7 +162,7 @@ describe('client.scope', () => {
     // @ts-expect-error severity is a field of the Bug variant, not of Task
     tasks.apply(bySeverity);
     // @ts-expect-error severity is a field of the Bug variant, not of Task
-    tasks.variant('Bug').apply(bySeverity);
+    tasks.variant('bug').apply(bySeverity);
   });
 
   test('a body cannot claim a filter it may not have applied', () => {

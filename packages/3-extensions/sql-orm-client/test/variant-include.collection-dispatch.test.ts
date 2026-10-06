@@ -14,7 +14,7 @@ interface RuntimeRows {
 }
 
 interface RuntimeCollection {
-  variant(name: string): RuntimeCollection;
+  variant(value: string): RuntimeCollection;
   select(...fields: string[]): RuntimeCollection;
   include(
     relationName: string,
@@ -34,9 +34,9 @@ function createVariantTaskCollection(): {
   return { tasks: collection as unknown as RuntimeCollection, runtime };
 }
 
-function selectedTaskWithAssignee(tasks: RuntimeCollection, variantName: string): RuntimeRows {
+function selectedTaskWithAssignee(tasks: RuntimeCollection, variantValue: string): RuntimeRows {
   return tasks
-    .variant(variantName)
+    .variant(variantValue)
     .select('id', 'title', 'type')
     .include('assignee', (assignee) => assignee.select('id', 'name'))
     .all();
@@ -65,7 +65,7 @@ describe('variant-owned include dispatch', () => {
       ],
     ]);
 
-    const rows = await selectedTaskWithAssignee(tasks, 'Feature').toArray();
+    const rows = await selectedTaskWithAssignee(tasks, 'feature').toArray();
 
     expect(rows).toEqual([
       {
@@ -91,7 +91,7 @@ describe('variant-owned include dispatch', () => {
       ],
     ]);
 
-    const rows = await selectedTaskWithAssignee(tasks, 'Bug').toArray();
+    const rows = await selectedTaskWithAssignee(tasks, 'bug').toArray();
 
     expect(rows).toEqual([
       {

@@ -85,7 +85,7 @@ describe('a scope for any model checks what it is given and what its body return
       rows.where((r) => r.severity.eq('high')),
     );
     const tasks = client.public.Task;
-    for (const collection of [tasks, tasks.variant('Bug')]) {
+    for (const collection of [tasks, tasks.variant('bug')]) {
       expect(() => untyped(bySeverity)(collection)).toThrow(
         expect.objectContaining({
           code: 'ORM.FIELD_UNKNOWN',

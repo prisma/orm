@@ -68,11 +68,13 @@ An unqualified name is looked up in this order:
 2. the top level;
 3. the types the configured target and its extensions contribute (scalars, type constructors, field presets).
 
-Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it.
+Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
 
 The binder also resolves what attribute and block specifications describe: attribute names, argument keys, function names, fixed identifier values, and the references inside argument values. Where a specification offers alternatives, the binder picks the first alternative the written value fits by its syntactic shape. Checking the value itself, such as a number range or an allowed string, is left to interpretation.
 
 A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
+
+The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a field preset or a type constructor written without a call, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
 
 ### Attribute and block specifications
 

@@ -101,6 +101,16 @@ function createServerOn(connection: Connection): LanguageServer {
     return project?.definition(uri, position, clientCapabilities.definitionLinks) ?? null;
   }
 
+  async function referencesForDocument(
+    uri: string,
+    position: Position,
+    includeDeclaration: boolean,
+  ): Promise<Location[]> {
+    if (getOpenDocument(uri) === undefined) return [];
+    const project = await projects.nearestProject(uri);
+    return project?.references(uri, position, includeDeclaration) ?? [];
+  }
+
   connection.onInitialize(async (params): Promise<InitializeResult> => {
     rootPath = resolveRootPath(params);
     clientCapabilities = resolveClientCapabilities(params);
@@ -115,6 +125,7 @@ function createServerOn(connection: Connection): LanguageServer {
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
         hoverProvider: true,
         definitionProvider: true,
+        referencesProvider: true,
         ...(clientCapabilities.pullDiagnostics
           ? { diagnosticProvider: { interFileDependencies: true, workspaceDiagnostics: false } }
           : {}),
@@ -132,6 +143,13 @@ function createServerOn(connection: Connection): LanguageServer {
   );
   connection.onDefinition((params) =>
     definitionForDocument(params.textDocument.uri, params.position),
+  );
+  connection.onReferences((params) =>
+    referencesForDocument(
+      params.textDocument.uri,
+      params.position,
+      params.context.includeDeclaration,
+    ),
   );
   connection.onHover((params) => hoverForDocument(params.textDocument.uri, params.position));
   connection.languages.semanticTokens.on((params) =>

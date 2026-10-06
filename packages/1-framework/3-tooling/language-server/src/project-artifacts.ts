@@ -9,7 +9,7 @@ import {
   type SymbolTable,
   type SymbolTableResult,
 } from '@internal/psl-parser';
-import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
+import { PslSources, type SourceFile } from '@internal/psl-parser/syntax';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from './config-resolution';
 import {
@@ -67,6 +67,15 @@ export class ProjectArtifacts {
   }
 
   document = (uri: string): DocumentSnapshot | undefined => this.#readDocument(uri);
+
+  documents = (): readonly DocumentSnapshot[] => {
+    const snapshots: DocumentSnapshot[] = [];
+    for (const uri of this.#inputs.uris()) {
+      const snapshot = this.#readDocument(uri);
+      if (snapshot !== undefined) snapshots.push(snapshot);
+    }
+    return snapshots;
+  };
 
   diagnostics = (
     uri: string,
@@ -246,11 +255,7 @@ export class ProjectArtifacts {
   }
 
   #readSymbolTableResult(): SymbolTableResult {
-    const currentDocuments: DocumentAst[] = [];
-    for (const uri of this.#inputs.uris()) {
-      const snapshot = this.#readDocument(uri);
-      if (snapshot !== undefined) currentDocuments.push(snapshot.parse().document);
-    }
+    const currentDocuments = this.documents().map((snapshot) => snapshot.parse().document);
     this.#symbolTableResult ??= buildSymbolTable({
       documents: currentDocuments,
       sources: this.sources,

@@ -339,6 +339,10 @@ function bind(options: BindingInputs): BinderResult {
     for (const declaration of namespace.declarations) {
       declarations.set(declaration.node.syntax, namespace);
       scopes.set(declaration.node.syntax, scope);
+      const declaredName = declaration.node.name()?.syntax;
+      if (declaredName !== undefined) {
+        references.set(declaredName, { kind: 'namespace', symbol: namespace });
+      }
     }
     for (const symbol of Object.values(namespace.blocks)) {
       declarations.set(symbol.node.syntax, symbol);

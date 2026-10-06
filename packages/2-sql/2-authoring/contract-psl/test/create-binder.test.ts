@@ -176,6 +176,7 @@ describe('createBinder', () => {
       { kind: 'model', name: 'Session' },
       { kind: 'attribute', name: 'index', level: 'model' },
       { kind: 'field', name: 'id' },
+      { kind: 'namespace', name: 'auth' },
       { kind: 'model', name: 'Account' },
       { kind: 'field', name: 'id' },
       { kind: 'contributedType', name: 'Int', path: ['Int'] },
