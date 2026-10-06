@@ -51,7 +51,7 @@ const recent = await db.orm.posts
 
 For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a façade-completeness gap; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
 
-**Polymorphic roots.** When the contract declares variants on a model, narrow before querying. `.variant()` takes the discriminator value a variant declares (`"article"` from `@@base(Post, "article")`), not the variant's model name:
+**Polymorphic roots.** When the contract declares variants on a model, narrow before querying. `.variant()` takes the discriminator value a variant declares (`"article"` from `@@base(Post, "article")`), not the variant's model name. Call it once, on the base collection; a second `.variant()` on a variant collection is refused:
 
 ```typescript
 const articles = await db.orm.posts.variant('article').all();

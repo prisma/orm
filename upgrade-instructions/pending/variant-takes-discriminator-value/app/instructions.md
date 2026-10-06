@@ -2,7 +2,7 @@
 changes:
   - id: variant-takes-discriminator-value
     summary: |
-      `.variant()` on a polymorphic SQL or Mongo ORM collection takes the discriminator value a variant declares instead of the variant's model name: `db.orm.public.Task.variant('bug')` for `@@base(Task, "bug")`, where it used to be `.variant('Bug')`. A value the model does not declare, or a call on a model with no discriminator, now throws `ORM.ARGUMENT_INVALID` instead of returning the collection unchanged.
+      `.variant()` on a polymorphic SQL or Mongo ORM collection takes the discriminator value a variant declares instead of the variant's model name: `db.orm.public.Task.variant('bug')` for `@@base(Task, "bug")`, where it used to be `.variant('Bug')`. A value the model does not declare, or a call on a model with no discriminator, now throws `ORM.ARGUMENT_INVALID` instead of returning the collection unchanged. `.variant()` on a collection that already has a variant selected is now rejected: select the variant from the base collection.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -28,3 +28,18 @@ Custom collection methods that call `this.variant('<ModelName>')`, and helpers o
 The type checker catches most old call sites, because the parameter only accepts the base model's declared values. It does not catch a call whose model-name argument happens to equal a declared value, for example a variant model declared with `@@base(Base, "Admin")`. Such a call keeps compiling and now selects the variant declaring that value, so check every call site against the contract rather than relying on type errors.
 
 A call that passes a value through `as never` or another cast also escapes the type checker. At runtime, a value the base model does not declare, or a `variant()` call on a model without a discriminator, throws `ORM.ARGUMENT_INVALID`. The error names the model and lists its declared values. Previously the call returned the collection unchanged, so the query read every variant. Code that relied on that fallback must stop calling `variant()` in that case.
+
+A second `.variant()` call on a variant collection is rejected. It no longer replaces the first selection: it is a type error, and at runtime it throws `ORM.OPERATION_UNSUPPORTED` naming the model and the discriminator value already selected. Select each variant from the base collection instead, and keep a reference to the base collection where code needs more than one variant.
+
+```ts
+// before
+const bugs = db.orm.public.Task.variant('Bug');
+const features = bugs.variant('Feature');
+
+// after
+const tasks = db.orm.public.Task;
+const bugs = tasks.variant('bug');
+const features = tasks.variant('feature');
+```
+
+`.variant()` also no longer removes a `where()` filter on the discriminator field. Such a filter now stays in the query next to the variant's own filter.
