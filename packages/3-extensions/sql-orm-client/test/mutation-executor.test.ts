@@ -1,4 +1,4 @@
-import { textColumn } from '@internal/adapter-postgres/column-types';
+import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { SqlQueryError, UNIQUE_VIOLATION_SQLSTATE } from '@internal/sql-errors';
 import {
   type AnyExpression,
@@ -16,7 +16,7 @@ import {
   hasNestedMutationCallbacks,
   type JunctionRelationDefinition,
 } from '../src/mutation-executor';
-import { defineContract, field, model } from './contract-builder';
+import { defineContract, field, model, rel } from './contract-builder';
 import type { MockRuntime } from './helpers';
 import {
   buildCompositeForeignKeyContract,
@@ -1441,6 +1441,20 @@ describe('mutation-executor', () => {
     create(data: unknown): unknown;
     connect(criteria: unknown): unknown;
     disconnect(criteria?: unknown): unknown;
+    where(filter: unknown): LooseFilteredMutator;
+    updateAll(data: unknown): unknown;
+    deleteAll(): unknown;
+  }
+
+  interface LooseFilteredMutator {
+    where(filter: unknown): LooseFilteredMutator;
+    updateAll(data: unknown): unknown;
+    deleteAll(): unknown;
+  }
+
+  interface LoosePostAccessor {
+    views: { gt(value: number): AnyExpression };
+    title: { eq(value: string): AnyExpression };
   }
 
   function statementTrace(runtime: MockRuntime): string[] {
@@ -1831,5 +1845,425 @@ describe('mutation-executor', () => {
     expect(statementValues(single)[1]).toEqual({ params: [1], where: [11] });
     expect(statementTrace(wrapped)).toEqual(statementTrace(single));
     expect(statementValues(wrapped)).toEqual(statementValues(single));
+  });
+
+  const aliceRow = { id: 1, name: 'Alice', email: 'alice@example.com' };
+
+  async function updateAlicePosts(
+    posts: (mutator: LooseMutator) => unknown,
+    context = getTestContext(),
+  ): Promise<MockRuntime> {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow], [{ id: 20, title: 'New', user_id: 1, views: 0 }]]);
+    await executeNestedUpdateMutation({
+      context,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      filters: [userIdFilter],
+      data: { posts } as never,
+    });
+    return runtime;
+  }
+
+  function twoForeignKeyContract() {
+    const Owner = model('Owner', {
+      fields: { id: field.column(int4Column).id() },
+    }).sql({ table: 'owners' });
+    const Parent = model('Parent', {
+      fields: { id: field.column(int4Column).id() },
+    }).sql({ table: 'parents' });
+    const Child = model('Child', {
+      fields: {
+        id: field.column(int4Column).id(),
+        parentId: field.column(int4Column).column('parent_id'),
+        ownerId: field.column(int4Column).column('owner_id'),
+      },
+      relations: {
+        owner: rel.belongsTo(Owner, { from: 'ownerId', to: 'id' }),
+      },
+    }).sql({ table: 'children' });
+    return defineContract({
+      models: {
+        Owner,
+        Parent: Parent.relations({
+          children: rel.hasMany(() => Child, { by: 'parentId' }),
+        }).sql({ table: 'parents' }),
+        Child,
+      },
+    });
+  }
+
+  it('updateAll() with a shorthand where updates only matching rows of the parent', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where({ title: 'Draft' }).updateAll({ views: 5 }),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'update posts']);
+    expect(statementValues(runtime)[1]).toEqual({ params: [5, 'Draft'], where: [1] });
+  });
+
+  it('deleteAll() with a callback where deletes only matching rows of the parent', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where((post: LoosePostAccessor) => post.views.gt(10)).deleteAll(),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'delete posts']);
+    expect(statementValues(runtime)[1]).toEqual({ params: [10], where: [1] });
+  });
+
+  it('where() accepts a direct expression', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where(BinaryExpr.eq(ColumnRef.of('posts', 'views'), LiteralExpr.of(7))).deleteAll(),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'delete posts']);
+    expect(statementValues(runtime)[1]).toEqual({ params: [7], where: [1] });
+  });
+
+  it('chained where() calls combine with AND', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where({ title: 'Draft' }).where({ views: 3 }).updateAll({ title: 'Published' }),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'update posts']);
+    expect(statementValues(runtime)[1]).toEqual({
+      params: ['Published', 'Draft', 3],
+      where: [1],
+    });
+  });
+
+  it('updateAll() and deleteAll() without where apply to every row of the parent', async () => {
+    const runtime = await updateAlicePosts((posts) => [
+      posts.updateAll({ views: 0 }),
+      posts.deleteAll(),
+    ]);
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'update posts', 'delete posts']);
+    expect(statementValues(runtime).slice(1)).toEqual([
+      { params: [0], where: [1] },
+      { params: [], where: [1] },
+    ]);
+  });
+
+  it('updateAll() applies the update defaults of the related model', async () => {
+    const defaultCalls: unknown[] = [];
+    const context = {
+      ...getTestContext(),
+      applyMutationDefaults: (options: {
+        op: string;
+        entry: string;
+        namespace: string;
+        values: Record<string, unknown>;
+      }) => {
+        defaultCalls.push({ op: options.op, entry: options.entry, namespace: options.namespace });
+        return [{ field: 'views', value: 99 }];
+      },
+    } as ReturnType<typeof getTestContext>;
+
+    const runtime = await updateAlicePosts(
+      (posts) => posts.where({ title: 'Draft' }).updateAll({ title: 'Published' }),
+      context,
+    );
+
+    expect(defaultCalls).toEqual([{ op: 'update', entry: 'posts', namespace: 'public' }]);
+    expect(statementValues(runtime)[1]).toEqual({
+      params: ['Published', 99, 'Draft'],
+      where: [1],
+    });
+  });
+
+  it('updateAll() with empty data issues no statement', async () => {
+    const runtime = await updateAlicePosts((posts) => [
+      posts.updateAll({}),
+      posts.where({ title: 'Draft' }).updateAll({ views: undefined }),
+    ]);
+
+    expect(statementTrace(runtime)).toEqual(['select users']);
+  });
+
+  it('updateAll() and deleteAll() run in array order with create()', async () => {
+    const runtime = await updateAlicePosts((posts) => [
+      posts.deleteAll(),
+      posts.create({ id: 20, title: 'New', views: 0 }),
+      posts.where({ title: 'New' }).updateAll({ views: 1 }),
+    ]);
+
+    expect(statementTrace(runtime)).toEqual([
+      'select users',
+      'delete posts',
+      'insert posts',
+      'update posts',
+    ]);
+  });
+
+  it('updateAll() rejects data that sets the column linking the child to the parent', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        filters: [userIdFilter],
+        data: {
+          posts: (posts: LooseMutator) => posts.updateAll({ views: 1, userId: 2 }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_INVALID',
+      meta: {
+        kind: 'updateAll',
+        relation: 'posts',
+        problem: 'parent-link-column',
+        fields: ['userId'],
+      },
+    });
+    expect(statementTrace(runtime)).toEqual(['select users']);
+  });
+
+  it('updateAll() may set the foreign key of another relation', async () => {
+    const contract = twoForeignKeyContract();
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }]]);
+
+    await executeNestedUpdateMutation({
+      context: buildTestContextFromContract(contract),
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: {
+        children: (children: LooseMutator) => children.updateAll({ ownerId: 7 }),
+      } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'update children']);
+    expect(statementValues(runtime)[1]).toEqual({ params: [7], where: [1] });
+  });
+
+  it('a where() returned without updateAll() or deleteAll() is rejected as malformed', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        filters: [userIdFilter],
+        data: { posts: (posts: LooseMutator) => posts.where({ title: 'Draft' }) } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_INVALID',
+      meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor' },
+    });
+  });
+
+  it('executeNestedCreateMutation() rejects updateAll()', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await expect(
+      executeNestedCreateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        data: {
+          ...aliceRow,
+          posts: (posts: LooseMutator) => posts.where({ title: 'Draft' }).updateAll({ views: 1 }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message: 'updateAll() is only supported in update() nested mutations',
+      meta: { kind: 'updateAll', relation: 'posts' },
+    });
+  });
+
+  it('executeNestedCreateMutation() rejects deleteAll()', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await expect(
+      executeNestedCreateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        data: {
+          ...aliceRow,
+          posts: (posts: LooseMutator) => posts.deleteAll(),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message: 'deleteAll() is only supported in update() nested mutations',
+      meta: { kind: 'deleteAll', relation: 'posts' },
+    });
+  });
+
+  it('executeNestedCreateMutation() rejects updateAll() and deleteAll() on to-one and many-to-many relations as update-only', async () => {
+    const parentOwned = createMockRuntime();
+    await expect(
+      executeNestedCreateMutation({
+        context: getTestContext(),
+        runtime: parentOwned,
+        namespaceId: 'public',
+        modelName: 'Post',
+        data: {
+          id: 1,
+          title: 'Post',
+          views: 1,
+          author: (author: LooseMutator) => author.deleteAll(),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message: 'deleteAll() is only supported in update() nested mutations',
+    });
+    expect(parentOwned.executions).toEqual([]);
+
+    const junctionOwned = createMockRuntime();
+    await expect(
+      executeNestedCreateMutation({
+        context: { ...getTestContext(), contract: manyToManyContract() },
+        runtime: junctionOwned,
+        namespaceId: 'public',
+        modelName: 'Parent',
+        data: {
+          id: 1,
+          children: (children: LooseMutator) => children.updateAll({ id: 2 }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message: 'updateAll() is only supported in update() nested mutations',
+    });
+    expect(junctionOwned.executions).toEqual([]);
+  });
+
+  it('executeNestedUpdateMutation() rejects updateAll() and deleteAll() on a to-one relation the parent owns', async () => {
+    const postRow = { id: 1, title: 'Post', user_id: 5, views: 10 };
+
+    const updateAllRuntime = createMockRuntime();
+    updateAllRuntime.setNextResults([[postRow]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime: updateAllRuntime,
+        namespaceId: 'public',
+        modelName: 'Post',
+        filters: [postIdFilter],
+        data: { author: (author: LooseMutator) => author.updateAll({ name: 'Bob' }) } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
+    });
+    expect(statementTrace(updateAllRuntime)).toEqual(['select posts']);
+
+    const deleteAllRuntime = createMockRuntime();
+    deleteAllRuntime.setNextResults([[postRow]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime: deleteAllRuntime,
+        namespaceId: 'public',
+        modelName: 'Post',
+        filters: [postIdFilter],
+        data: {
+          author: (author: LooseMutator) => author.where({ id: 5 }).deleteAll(),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'deleteAll', relation: 'author', reason: 'to-one-relation' },
+    });
+    expect(statementTrace(deleteAllRuntime)).toEqual(['select posts']);
+  });
+
+  it('executeNestedUpdateMutation() rejects updateAll() and deleteAll() on a to-one relation the child owns', async () => {
+    const updateAllRuntime = createMockRuntime();
+    updateAllRuntime.setNextResults([[aliceRow]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime: updateAllRuntime,
+        namespaceId: 'public',
+        modelName: 'User',
+        filters: [userIdFilter],
+        data: {
+          profile: (profile: LooseMutator) => profile.updateAll({ bio: 'New' }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'updateAll', relation: 'profile', reason: 'to-one-relation' },
+    });
+    expect(statementTrace(updateAllRuntime)).toEqual(['select users']);
+
+    const deleteAllRuntime = createMockRuntime();
+    deleteAllRuntime.setNextResults([[aliceRow]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime: deleteAllRuntime,
+        namespaceId: 'public',
+        modelName: 'User',
+        filters: [userIdFilter],
+        data: { profile: (profile: LooseMutator) => profile.deleteAll() } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'deleteAll', relation: 'profile', reason: 'to-one-relation' },
+    });
+    expect(statementTrace(deleteAllRuntime)).toEqual(['select users']);
+  });
+
+  it('executeNestedUpdateMutation() rejects updateAll() and deleteAll() on a many-to-many relation before any write', async () => {
+    const updateAllRuntime = createMockRuntime();
+    updateAllRuntime.setNextResults([[{ id: 1 }]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: { ...getTestContext(), contract: manyToManyContract() },
+        runtime: updateAllRuntime,
+        namespaceId: 'public',
+        modelName: 'Parent',
+        filters: [parentIdFilter],
+        data: {
+          children: (children: LooseMutator) => children.where({ id: 10 }).updateAll({ id: 11 }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message:
+        'updateAll() nested mutation for relation "children" is not supported on many-to-many relations',
+      meta: { kind: 'updateAll', relation: 'children', reason: 'many-to-many-relation' },
+    });
+    expect(statementTrace(updateAllRuntime)).toEqual(['select parents']);
+
+    const deleteAllRuntime = createMockRuntime();
+    deleteAllRuntime.setNextResults([[{ id: 1 }]]);
+    await expect(
+      executeNestedUpdateMutation({
+        context: { ...getTestContext(), contract: manyToManyContract() },
+        runtime: deleteAllRuntime,
+        namespaceId: 'public',
+        modelName: 'Parent',
+        filters: [parentIdFilter],
+        data: { children: (children: LooseMutator) => children.deleteAll() } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      message:
+        'deleteAll() nested mutation for relation "children" is not supported on many-to-many relations',
+      meta: { kind: 'deleteAll', relation: 'children', reason: 'many-to-many-relation' },
+    });
+    expect(statementTrace(deleteAllRuntime)).toEqual(['select parents']);
   });
 });
