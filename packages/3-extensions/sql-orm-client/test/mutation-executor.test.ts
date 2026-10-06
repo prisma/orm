@@ -2226,49 +2226,10 @@ describe('mutation-executor', () => {
     expect(statementTrace(deleteAllRuntime)).toEqual(['select users']);
   });
 
-  it('executeNestedUpdateMutation() rejects updateAll() and deleteAll() on a many-to-many relation before any write', async () => {
-    const updateAllRuntime = createMockRuntime();
-    updateAllRuntime.setNextResults([[{ id: 1 }]]);
-    await expect(
-      executeNestedUpdateMutation({
-        context: { ...getTestContext(), contract: manyToManyContract() },
-        runtime: updateAllRuntime,
-        namespaceId: 'public',
-        modelName: 'Parent',
-        filters: [parentIdFilter],
-        data: {
-          children: (children: LooseMutator) => children.where({ id: 10 }).updateAll({ id: 11 }),
-        } as never,
-      }),
-    ).rejects.toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-      message:
-        'updateAll() nested mutation for relation "children" is not supported on many-to-many relations',
-      meta: { kind: 'updateAll', relation: 'children', reason: 'many-to-many-relation' },
-    });
-    expect(statementTrace(updateAllRuntime)).toEqual(['select parents']);
-
-    const deleteAllRuntime = createMockRuntime();
-    deleteAllRuntime.setNextResults([[{ id: 1 }]]);
-    await expect(
-      executeNestedUpdateMutation({
-        context: { ...getTestContext(), contract: manyToManyContract() },
-        runtime: deleteAllRuntime,
-        namespaceId: 'public',
-        modelName: 'Parent',
-        filters: [parentIdFilter],
-        data: { children: (children: LooseMutator) => children.deleteAll() } as never,
-      }),
-    ).rejects.toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-      message:
-        'deleteAll() nested mutation for relation "children" is not supported on many-to-many relations',
-      meta: { kind: 'deleteAll', relation: 'children', reason: 'many-to-many-relation' },
-    });
-    expect(statementTrace(deleteAllRuntime)).toEqual(['select parents']);
-  });
-
-  type WhereShape = string | { kind: string; exprs: WhereShape[] };
+  type WhereShape =
+    | string
+    | { kind: string; exprs: WhereShape[] }
+    | { kind: 'exists'; negated: boolean; from: string; where: WhereShape };
 
   function whereShape(node: unknown): WhereShape {
     const expr = node as {
@@ -2276,12 +2237,26 @@ describe('mutation-executor', () => {
       exprs?: readonly unknown[];
       op?: string;
       left?: { table: string; column: string };
-      right?: { value: unknown };
+      right?: { kind: string; value?: unknown; table?: string; column?: string };
+      notExists?: boolean;
+      subquery?: { from: { name: string }; where: unknown };
     };
+    if (expr.subquery) {
+      return {
+        kind: 'exists',
+        negated: expr.notExists === true,
+        from: expr.subquery.from.name,
+        where: whereShape(expr.subquery.where),
+      };
+    }
     if (expr.exprs) {
       return { kind: expr.kind, exprs: expr.exprs.map(whereShape) };
     }
-    return `${expr.left?.table}.${expr.left?.column} ${expr.op} ${String(expr.right?.value)}`;
+    const right =
+      expr.right?.kind === 'column-ref'
+        ? `${expr.right.table}.${expr.right.column}`
+        : String(expr.right?.value);
+    return `${expr.left?.table}.${expr.left?.column} ${expr.op} ${right}`;
   }
 
   function statementWhere(runtime: MockRuntime, index: number): WhereShape {
@@ -2328,5 +2303,205 @@ describe('mutation-executor', () => {
         'posts.title eq Kept',
       ],
     });
+  });
+
+  interface LooseChildAccessor {
+    id: { eq(value: number): AnyExpression; gt(value: number): AnyExpression };
+  }
+
+  async function updateParentChildren(
+    children: (mutator: LooseMutator) => unknown,
+    context: Parameters<typeof executeNestedUpdateMutation>[0]['context'] = {
+      ...getTestContext(),
+      contract: manyToManyContract(),
+    },
+    results: Record<string, unknown>[][] = [[{ id: 1 }]],
+  ): Promise<MockRuntime> {
+    const runtime = createMockRuntime();
+    runtime.setNextResults(results);
+    await executeNestedUpdateMutation({
+      context,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: { children } as never,
+    });
+    return runtime;
+  }
+
+  const linkedToParentOne: WhereShape = {
+    kind: 'exists',
+    negated: false,
+    from: 'parent_child',
+    where: {
+      kind: 'and',
+      exprs: ['parent_child.parent_id eq 1', 'parent_child.child_id eq children.id'],
+    },
+  };
+
+  it('many-to-many updateAll() without where is limited to targets linked to the parent', async () => {
+    const runtime = await updateParentChildren((children) => children.updateAll({ id: 11 }));
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'update children']);
+    expect(statementWhere(runtime, 1)).toEqual(linkedToParentOne);
+    expect(statementValues(runtime)[1]?.params).toEqual([11]);
+  });
+
+  it('many-to-many deleteAll() without where is limited to targets linked to the parent and issues no junction statement', async () => {
+    const runtime = await updateParentChildren((children) => children.deleteAll());
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'delete children']);
+    expect(statementWhere(runtime, 1)).toEqual(linkedToParentOne);
+  });
+
+  it('many-to-many updateAll() ANDs the junction condition with every chained where()', async () => {
+    const runtime = await updateParentChildren((children) =>
+      children
+        .where({ id: 10 })
+        .where((child: LooseChildAccessor) => child.id.gt(5))
+        .updateAll({ id: 11 }),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'update children']);
+    expect(statementWhere(runtime, 1)).toEqual({
+      kind: 'and',
+      exprs: [linkedToParentOne, 'children.id eq 10', 'children.id gt 5'],
+    });
+  });
+
+  it('many-to-many deleteAll() ANDs the junction condition with every chained where()', async () => {
+    const runtime = await updateParentChildren((children) =>
+      children
+        .where({ id: 10 })
+        .where((child: LooseChildAccessor) => child.id.gt(5))
+        .deleteAll(),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'delete children']);
+    expect(statementWhere(runtime, 1)).toEqual({
+      kind: 'and',
+      exprs: [linkedToParentOne, 'children.id eq 10', 'children.id gt 5'],
+    });
+  });
+
+  const tenOrAboveTwenty = (child: LooseChildAccessor) =>
+    OrExpr.of([child.id.eq(10), child.id.gt(20)]);
+
+  const linkedAndWholeOr: WhereShape = {
+    kind: 'and',
+    exprs: [linkedToParentOne, { kind: 'or', exprs: ['children.id eq 10', 'children.id gt 20'] }],
+  };
+
+  it('many-to-many updateAll() ANDs the junction condition with a whole OR filter', async () => {
+    const runtime = await updateParentChildren((children) =>
+      children.where(tenOrAboveTwenty).updateAll({ id: 11 }),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'update children']);
+    expect(statementWhere(runtime, 1)).toEqual(linkedAndWholeOr);
+  });
+
+  it('many-to-many deleteAll() ANDs the junction condition with a whole OR filter', async () => {
+    const runtime = await updateParentChildren((children) =>
+      children.where(tenOrAboveTwenty).deleteAll(),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'delete children']);
+    expect(statementWhere(runtime, 1)).toEqual(linkedAndWholeOr);
+  });
+
+  it('many-to-many deleteAll() matches every column of a composite junction key', async () => {
+    const contract = buildManyToManyContract({
+      junctionTable: 'parent_child',
+      parentColumns: ['tenant_id', 'parent_id'],
+      childColumns: ['tenant_id', 'child_id'],
+      targetColumns: ['tenant_id', 'id'],
+      localFields: ['tenant_id', 'id'],
+    });
+    const runtime = await updateParentChildren(
+      (children) => children.where({ id: 10 }).deleteAll(),
+      { ...getTestContext(), contract },
+      [[{ tenant_id: 7, id: 1 }]],
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select parents', 'delete children']);
+    expect(statementWhere(runtime, 1)).toEqual({
+      kind: 'and',
+      exprs: [
+        {
+          kind: 'exists',
+          negated: false,
+          from: 'parent_child',
+          where: {
+            kind: 'and',
+            exprs: [
+              'parent_child.tenant_id eq 7',
+              'parent_child.parent_id eq 1',
+              'parent_child.tenant_id eq children.tenant_id',
+              'parent_child.child_id eq children.id',
+            ],
+          },
+        },
+        'children.id eq 10',
+      ],
+    });
+  });
+
+  it('many-to-many updateAll() applies the update defaults of the target model', async () => {
+    const defaultCalls: unknown[] = [];
+    const context = {
+      ...getTestContext(),
+      applyMutationDefaults: (options: { op: string; entry: string; namespace: string }) => {
+        defaultCalls.push({ op: options.op, entry: options.entry, namespace: options.namespace });
+        return [{ field: 'name', value: 'Stamped' }];
+      },
+    };
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await executeNestedUpdateMutation({
+      context: context as never,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      filters: [userIdFilter],
+      data: {
+        tags: (tags: LooseMutator) => tags.where({ name: 'Rust' }).updateAll({ id: 'tag-1' }),
+      } as never,
+    });
+
+    expect(defaultCalls).toEqual([{ op: 'update', entry: 'tags', namespace: 'public' }]);
+    expect(statementTrace(runtime)).toEqual(['select users', 'update tags']);
+    expect(statementValues(runtime)[1]?.params).toEqual(['tag-1', 'Stamped', 'Rust']);
+  });
+
+  it('many-to-many updateAll() with empty data issues no statement', async () => {
+    const runtime = await updateParentChildren((children) => [
+      children.updateAll({}),
+      children.where({ id: 10 }).updateAll({ id: undefined }),
+    ]);
+
+    expect(statementTrace(runtime)).toEqual(['select parents']);
+  });
+
+  it('many-to-many updateAll() and deleteAll() run in array order with disconnect()', async () => {
+    const runtime = await updateParentChildren(
+      (children) => [
+        children.updateAll({ id: 11 }),
+        children.disconnect([{ id: 10 }]),
+        children.deleteAll(),
+      ],
+      undefined,
+      [[{ id: 1 }], [{ id: 10 }]],
+    );
+
+    expect(statementTrace(runtime)).toEqual([
+      'select parents',
+      'update children',
+      'select children',
+      'delete parent_child',
+      'delete children',
+    ]);
   });
 });

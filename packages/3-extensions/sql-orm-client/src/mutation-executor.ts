@@ -5,7 +5,10 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  ExistsExpr,
   LiteralExpr,
+  ProjectionItem,
+  SelectAst,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
@@ -36,6 +39,7 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
+import { tableSourceForContract } from './storage-resolution';
 import type {
   CollectionState,
   MutationCreateInput,
@@ -529,17 +533,6 @@ function toOneFilteredWriteError(
   );
 }
 
-function manyToManyFilteredWriteError(
-  relation: RelationDefinition,
-  kind: FilteredWriteMutation['kind'],
-) {
-  return ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
-    `${kind}() nested mutation for relation "${relation.relationName}" is not supported on many-to-many relations`,
-    { meta: { kind, relation: relation.relationName, reason: 'many-to-many-relation' } },
-  );
-}
-
 interface JunctionParsedRelationMutation extends ParsedRelationMutation {
   readonly relation: JunctionRelationDefinition;
 }
@@ -714,7 +707,14 @@ async function applyChildOwnedMutation(
     if (relation.cardinality === '1:1') {
       throw toOneFilteredWriteError(relation, mutation.kind);
     }
-    await applyChildOwnedFilteredWrite(scope, context, relation, parentValues, mutation);
+    await applyFilteredWrite(
+      scope,
+      context,
+      relation,
+      buildChildJoinWhere(relation, parentValues),
+      new Set(parentValues.keys()),
+      mutation,
+    );
     return;
   }
 
@@ -825,17 +825,18 @@ async function applyChildOwnedMutation(
   }
 }
 
-async function applyChildOwnedFilteredWrite(
+async function applyFilteredWrite(
   scope: RuntimeScope,
   context: ExecutionContext,
   relation: RelationDefinition,
-  parentValues: Map<string, unknown>,
+  relatedToParent: AnyExpression,
+  parentLinkColumns: ReadonlySet<string>,
   mutation: FilteredWriteMutation,
 ): Promise<void> {
   const contract = context.contract;
   const namespaceId = relation.relatedNamespaceId;
   const tableName = relation.relatedTableName;
-  const filters = [buildChildJoinWhere(relation, parentValues)];
+  const filters = [relatedToParent];
   for (const input of mutation.filters) {
     const filter = resolveRelationFilter(context, relation, input);
     if (filter) {
@@ -855,7 +856,7 @@ async function applyChildOwnedFilteredWrite(
     mutation.data,
   );
   const parentLinkFields = Object.keys(setValues)
-    .filter((column) => parentValues.has(column))
+    .filter((column) => parentLinkColumns.has(column))
     .map((column) => toFieldName(contract, namespaceId, relation.relatedModelName, column));
   if (parentLinkFields.length > 0) {
     throw ormError(
@@ -913,10 +914,6 @@ async function applyJunctionOwnedMutation(
   relation: JunctionRelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): Promise<void> {
-  if (isFilteredWrite(mutation)) {
-    throw manyToManyFilteredWriteError(relation, mutation.kind);
-  }
-
   const contract = context.contract;
   const parentPkValues = readJunctionParentValues(
     contract,
@@ -927,6 +924,18 @@ async function applyJunctionOwnedMutation(
   );
 
   assertJunctionPayloadWritable(relation, mutation.kind);
+
+  if (isFilteredWrite(mutation)) {
+    await applyFilteredWrite(
+      scope,
+      context,
+      relation,
+      buildJunctionMembershipWhere(contract, relation, parentPkValues),
+      new Set(),
+      mutation,
+    );
+    return;
+  }
 
   if (mutation.kind === 'create') {
     for (const childInput of mutation.data) {
@@ -985,10 +994,6 @@ async function preflightJunctionOwnedCreateMutation(
   relation: JunctionRelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): Promise<void> {
-  if (isFilteredWrite(mutation)) {
-    throw manyToManyFilteredWriteError(relation, mutation.kind);
-  }
-
   assertJunctionMetadataShape(relation);
   assertJunctionPayloadWritable(relation, mutation.kind);
 
@@ -1310,6 +1315,40 @@ function readParentColumnValues(
   }
 
   return values;
+}
+
+function buildJunctionMembershipWhere(
+  contract: Contract<SqlStorage>,
+  relation: JunctionRelationDefinition,
+  parentPkValues: Map<string, unknown>,
+): AnyExpression {
+  const through = relation.through;
+  const conditions: AnyExpression[] = [];
+  for (const [junctionColumn, parentValue] of parentPkValues.entries()) {
+    conditions.push(
+      BinaryExpr.eq(ColumnRef.of(through.table, junctionColumn), LiteralExpr.of(parentValue)),
+    );
+  }
+  through.childColumns.forEach((junctionColumn, index) => {
+    const targetColumn = through.targetColumns[index];
+    if (targetColumn === undefined) {
+      throw new InternalError(
+        `Relation "${relation.relationName}" has incomplete junction metadata for target columns`,
+      );
+    }
+    conditions.push(
+      BinaryExpr.eq(
+        ColumnRef.of(through.table, junctionColumn),
+        ColumnRef.of(relation.relatedTableName, targetColumn),
+      ),
+    );
+  });
+
+  return ExistsExpr.exists(
+    SelectAst.from(tableSourceForContract(contract, through.namespaceId, through.table))
+      .withProjection([ProjectionItem.of('_exists', LiteralExpr.of(1))])
+      .withWhere(and(...conditions)),
+  );
 }
 
 function buildChildJoinWhere(
