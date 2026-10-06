@@ -1,3 +1,4 @@
+import { or } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
 import {
   createReturningPostsCollection,
@@ -842,6 +843,67 @@ describe('integration/nested-mutations', () => {
           { id: 11, title: 'Kept', user_id: 1, views: 20 },
           { id: 20, title: 'Draft', user_id: 2, views: 3 },
         ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() where(or(...)).updateAll() leaves a post of another parent that matches a later branch unchanged',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithPosts(runtime);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title', 'views').orderBy((post) => post.id.asc()),
+          )
+          .update({
+            posts: (posts) =>
+              posts
+                .where((post) => or(post.views.gt(15), post.title.eq('Draft')))
+                .updateAll({ views: 100 }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Draft', views: 100 },
+            { id: 11, title: 'Kept', views: 100 },
+          ],
+        });
+        expect(await postRows(runtime)).toEqual([
+          { id: 10, title: 'Draft', user_id: 1, views: 100 },
+          { id: 11, title: 'Kept', user_id: 1, views: 100 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() where(or(...)).deleteAll() leaves a post of another parent that matches a later branch unchanged',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithPosts(runtime);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) => posts.select('id', 'title', 'views'))
+          .update({
+            posts: (posts) =>
+              posts.where((post) => or(post.views.gt(15), post.title.eq('Draft'))).deleteAll(),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', posts: [] });
+        expect(await postRows(runtime)).toEqual([{ id: 20, title: 'Draft', user_id: 2, views: 3 }]);
       });
     },
     timeouts.spinUpPpgDev,

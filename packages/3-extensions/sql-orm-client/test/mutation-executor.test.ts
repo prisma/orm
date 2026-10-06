@@ -5,6 +5,7 @@ import {
   BinaryExpr,
   ColumnRef,
   LiteralExpr,
+  OrExpr,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -2265,5 +2266,67 @@ describe('mutation-executor', () => {
       meta: { kind: 'deleteAll', relation: 'children', reason: 'many-to-many-relation' },
     });
     expect(statementTrace(deleteAllRuntime)).toEqual(['select parents']);
+  });
+
+  type WhereShape = string | { kind: string; exprs: WhereShape[] };
+
+  function whereShape(node: unknown): WhereShape {
+    const expr = node as {
+      kind: string;
+      exprs?: readonly unknown[];
+      op?: string;
+      left?: { table: string; column: string };
+      right?: { value: unknown };
+    };
+    if (expr.exprs) {
+      return { kind: expr.kind, exprs: expr.exprs.map(whereShape) };
+    }
+    return `${expr.left?.table}.${expr.left?.column} ${expr.op} ${String(expr.right?.value)}`;
+  }
+
+  function statementWhere(runtime: MockRuntime, index: number): WhereShape {
+    return whereShape((runtime.executions[index]!.plan as { ast: { where: unknown } }).ast.where);
+  }
+
+  const draftOrPopular = (post: LoosePostAccessor) =>
+    OrExpr.of([post.title.eq('Draft'), post.views.gt(10)]);
+
+  const parentAndWholeOr: WhereShape = {
+    kind: 'and',
+    exprs: [
+      'posts.user_id eq 1',
+      { kind: 'or', exprs: ['posts.title eq Draft', 'posts.views gt 10'] },
+    ],
+  };
+
+  it('updateAll() ANDs the parent condition with a whole OR filter', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where(draftOrPopular).updateAll({ views: 0 }),
+    );
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'update posts']);
+    expect(statementWhere(runtime, 1)).toEqual(parentAndWholeOr);
+  });
+
+  it('deleteAll() ANDs the parent condition with a whole OR filter', async () => {
+    const runtime = await updateAlicePosts((posts) => posts.where(draftOrPopular).deleteAll());
+
+    expect(statementTrace(runtime)).toEqual(['select users', 'delete posts']);
+    expect(statementWhere(runtime, 1)).toEqual(parentAndWholeOr);
+  });
+
+  it('an OR filter chained with another where() stays one operand of the AND', async () => {
+    const runtime = await updateAlicePosts((posts) =>
+      posts.where(draftOrPopular).where({ title: 'Kept' }).deleteAll(),
+    );
+
+    expect(statementWhere(runtime, 1)).toEqual({
+      kind: 'and',
+      exprs: [
+        'posts.user_id eq 1',
+        { kind: 'or', exprs: ['posts.title eq Draft', 'posts.views gt 10'] },
+        'posts.title eq Kept',
+      ],
+    });
   });
 });
