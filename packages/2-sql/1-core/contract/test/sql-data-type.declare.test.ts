@@ -77,7 +77,7 @@ describe('sqlDataType', () => {
     expect(() => sqlDataType('t/int4@1', {})).toThrow(/is not a data type id/);
   });
 
-  describe('rule 1: a text is lower case, single-spaced, literal characters and placeholders', () => {
+  describe('a text is lower case, single-spaced, literal characters and placeholders', () => {
     it.each([
       ['an upper-case letter', 'Integer'],
       ['two spaces in a row', 'double  precision'],
@@ -119,7 +119,7 @@ describe('sqlDataType', () => {
     });
   });
 
-  describe('rule 2: one written and one catalog text per placeholder set', () => {
+  describe('one written and one catalog text per placeholder set', () => {
     it('refuses two written texts with the same placeholders', () => {
       expect(() =>
         sqlDataType('t/bad', {
@@ -170,7 +170,7 @@ describe('sqlDataType', () => {
     });
   });
 
-  describe('rule 3: display differs from text in letter case only', () => {
+  describe('display differs from text in letter case only', () => {
     it('refuses a display that differs in more than case', () => {
       expect(() =>
         sqlDataType('t/bad', {
@@ -209,7 +209,7 @@ describe('sqlDataType', () => {
     });
   });
 
-  describe('rule 4: render and fromReported go with claimsKind, which excludes texts', () => {
+  describe('render and fromReported go with claimsKind, which excludes texts', () => {
     it('refuses render without claimsKind', () => {
       expect(() => sqlDataType('t/bad', { render: () => 'x' })).toThrow(InternalError);
     });
@@ -238,7 +238,7 @@ describe('sqlDataType', () => {
     });
   });
 
-  describe('rule 6: every normal form has a written text', () => {
+  describe('every normal form has a written text', () => {
     const lengthParams = type({ 'length?': 'number.integer >= 1' });
     const lengthOneWhenBare = (params: { readonly length?: number }) =>
       params.length === undefined ? { ...params, length: 1 } : params;

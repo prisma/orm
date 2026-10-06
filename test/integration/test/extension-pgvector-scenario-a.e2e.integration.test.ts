@@ -46,8 +46,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
  *      text` stub so the framework + per-space wiring runs against a
  *      real DB. A domain takes no length, so the `Doc` table applied
  *      here has only its `id` column. Asserts marker rows for both
- *      `app` and `pgvector` (project AC5 / AC10 / TC-16), and writes and
- *      reads one `Doc` row.
+ *      `app` and `pgvector`, and writes and reads one `Doc` row.
  */
 
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
