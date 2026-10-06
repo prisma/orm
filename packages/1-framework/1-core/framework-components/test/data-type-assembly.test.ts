@@ -1,17 +1,78 @@
+import { InternalError } from '@internal/utils/internal-error';
+import { type Type, type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import type { CreateControlStackInput } from '../src/control/control-stack';
 import {
   assembleAuthoringDataTypes,
-  assembleDataTypes,
+  type ContributedConstructor,
   createControlStack,
   enforceDataTypeInvariants,
 } from '../src/control/control-stack';
-import { type DataType, type DataTypeId, dataType, dataTypeId } from '../src/shared/data-type';
+import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
+import {
+  assembleDataTypes,
+  type DataType,
+  type DataTypeId,
+  dataType,
+  dataTypeId,
+} from '../src/shared/data-type';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 const int2 = dataType('demo/int2', {});
 const int8 = dataType('demo/int8', { casts: { [int2.id]: (value) => String(value) } });
 const text = dataType('demo/text', {});
+const sized = dataType('demo/sized', { params: type({ 'length?': 'number.integer >= 1' }) });
+
+const codecDescriptors: Readonly<
+  Record<
+    string,
+    Pick<AnyCodecDescriptor, 'dataType'> & { readonly paramsSchema?: Type<unknown> | undefined }
+  >
+> = {
+  'demo/text@1': { dataType: text.id },
+  'demo/also-text@1': { dataType: text.id },
+  'demo/sized@1': { dataType: sized.id, paramsSchema: sized.params },
+  'demo/sized-plain@1': { dataType: sized.id },
+  'demo/labelled@1': {
+    dataType: sized.id,
+    paramsSchema: type({ 'length?': 'number.integer >= 1', 'label?': 'string' }),
+  },
+};
+
+const codecDescriptorFor = (codecId: string) => {
+  const descriptor = codecDescriptors[codecId];
+  return descriptor === undefined
+    ? undefined
+    : { dataType: descriptor.dataType, paramsSchema: descriptor.paramsSchema };
+};
+
+const constructorNamed = (
+  path: string,
+  codecId: string,
+  options: { readonly inferred?: true; readonly typeParamKey?: string } = {},
+) => ({
+  path,
+  contributedBy: 'x-pack',
+  descriptor: {
+    kind: 'typeConstructor' as const,
+    ...(options.inferred === undefined ? {} : { inferred: options.inferred }),
+    ...(options.typeParamKey === undefined
+      ? { output: { codecId } }
+      : {
+          args: [{ kind: 'number' as const, name: 'n', optional: true }],
+          output: {
+            codecId,
+            typeParams: { [options.typeParamKey]: { kind: 'arg' as const, index: 0 } },
+          },
+        }),
+  },
+});
+
+const presetNamed = (path: string, codecId: string) => ({
+  path,
+  contributedBy: 'x-pack',
+  descriptor: { kind: 'fieldPreset' as const, output: { codecId } },
+});
 
 const contributor = (id: string, dataTypes: readonly DataType[]) => ({ id, dataTypes });
 
@@ -38,10 +99,12 @@ const codec = (codecId: string, type: DataType) => ({ codecId, dataType: type.id
 
 const invariants = (overrides: Partial<Parameters<typeof enforceDataTypeInvariants>[0]>) =>
   enforceDataTypeInvariants({
-    lookup: assembleDataTypes([contributor('demo', [int2, int8, text])]).lookup,
+    lookup: assembleDataTypes([contributor('demo', [int2, int8, text, sized])]).lookup,
     declaredTypes: [{ type: int2, contributedBy: 'demo' }],
     codecs: [],
     authoringEntries: [],
+    constructors: [],
+    codecDescriptorFor: () => undefined,
     ...overrides,
   });
 
@@ -52,6 +115,18 @@ describe('assembleDataTypes', () => {
       contributor('other', [text]),
     ]);
     expect([lookup.has(int2.id), lookup.has(text.id)]).toEqual([true, true]);
+  });
+
+  it('lists the types in assembly order: contributor by contributor, each in its own order', () => {
+    const { declared } = assembleDataTypes([
+      contributor('demo', [int8, int2]),
+      contributor('other', [text]),
+    ]);
+    expect(declared).toEqual([
+      { type: int8, contributedBy: 'demo' },
+      { type: int2, contributedBy: 'demo' },
+      { type: text, contributedBy: 'other' },
+    ]);
   });
 
   it('holds nothing when no contributor registers a type', () => {
@@ -168,6 +243,82 @@ describe('enforceDataTypeInvariants', () => {
     } catch (error) {
       expect(isRuntimeError(error) && error.code).toBe('CONTRACT.DATA_TYPE_UNREGISTERED');
     }
+  });
+});
+
+describe('enforceDataTypeInvariants on type constructors and field presets', () => {
+  const check = (constructors: readonly ContributedConstructor[]) => () =>
+    invariants({ constructors, codecDescriptorFor });
+
+  it('refuses a type constructor naming a codec nobody registered, naming the contributor and the id', () => {
+    expect(check([constructorNamed('Gone', 'demo/gone@1')])).toThrow(InternalError);
+    expect(check([constructorNamed('Gone', 'demo/gone@1')])).toThrow(
+      /x-pack.*demo\/gone@1|demo\/gone@1.*x-pack/s,
+    );
+  });
+
+  it('refuses a field preset naming a codec nobody registered', () => {
+    expect(check([presetNamed('id.gone', 'demo/gone@1')])).toThrow(
+      /x-pack.*demo\/gone@1|demo\/gone@1.*x-pack/s,
+    );
+  });
+
+  it('passes constructors and presets whose codecs are registered', () => {
+    expect(
+      check([constructorNamed('Text', 'demo/text@1'), presetNamed('id.text', 'demo/text@1')]),
+    ).not.toThrow();
+  });
+
+  it('refuses a constructor mapping an argument onto a key neither the data type nor the codec declares', () => {
+    expect(check([constructorNamed('Sized', 'demo/sized@1', { typeParamKey: 'width' })])).toThrow(
+      /Sized.*x-pack.*width/s,
+    );
+  });
+
+  it('refuses an argument mapped onto a key of a codec with no parameter schema and a data type without params', () => {
+    expect(check([constructorNamed('Text', 'demo/text@1', { typeParamKey: 'length' })])).toThrow(
+      /Text.*x-pack.*length/s,
+    );
+  });
+
+  it('checks a codec with no parameter schema against its data type’s params', () => {
+    expect(
+      check([constructorNamed('Sized', 'demo/sized-plain@1', { typeParamKey: 'length' })]),
+    ).not.toThrow();
+    expect(
+      check([constructorNamed('Sized', 'demo/sized-plain@1', { typeParamKey: 'width' })]),
+    ).toThrow(/width/);
+  });
+
+  it('passes a constructor mapping an argument onto a key of the data type', () => {
+    expect(
+      check([constructorNamed('Sized', 'demo/sized@1', { typeParamKey: 'length' })]),
+    ).not.toThrow();
+  });
+
+  it('passes a constructor mapping an argument onto a key only the codec declares', () => {
+    expect(
+      check([constructorNamed('Labelled', 'demo/labelled@1', { typeParamKey: 'label' })]),
+    ).not.toThrow();
+  });
+
+  it('refuses two constructors of one data type both marked inferred, naming the contributor and the id', () => {
+    expect(
+      check([
+        constructorNamed('Text', 'demo/text@1', { inferred: true }),
+        constructorNamed('AlsoText', 'demo/also-text@1', { inferred: true }),
+      ]),
+    ).toThrow(/x-pack.*demo\/text|demo\/text.*x-pack/s);
+  });
+
+  it('passes one inferred constructor per data type', () => {
+    expect(
+      check([
+        constructorNamed('Text', 'demo/text@1', { inferred: true }),
+        constructorNamed('AlsoText', 'demo/also-text@1'),
+        constructorNamed('Sized', 'demo/sized@1', { inferred: true }),
+      ]),
+    ).not.toThrow();
   });
 });
 

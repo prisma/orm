@@ -1,5 +1,7 @@
 # ADR 155 — Driver/Codec boundary value representation and responsibilities
 
+> **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
+
 Prisma Next executes parameterized query Plans:
 
 - lanes build an AST and a separate `params[]` array (no SQL literal concatenation)

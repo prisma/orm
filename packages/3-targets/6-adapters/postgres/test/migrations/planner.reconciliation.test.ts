@@ -6,6 +6,7 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -16,6 +17,7 @@ import {
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
+import { postgresComponents } from './fixtures/postgres-components';
 
 const RECONCILIATION_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
@@ -27,7 +29,10 @@ const WIDENING_POLICY: MigrationOperationPolicy = {
 
 describe('PostgresMigrationPlanner - reconciliation planning', () => {
   const planner = createPostgresMigrationPlanner(
-    new PostgresControlAdapter(createPostgresBuiltinCodecLookup()),
+    new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    ),
   );
 
   it('plans destructive drop for extra column when policy allows destructive', async () => {
@@ -76,7 +81,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
       schema,
       policy: RECONCILIATION_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -140,7 +145,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
       schema,
       policy: WIDENING_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -203,7 +208,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
       schema,
       policy: WIDENING_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

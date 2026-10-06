@@ -47,14 +47,9 @@ describe('pgvector column-types', () => {
       });
     });
 
-    it('throws CONTRACT.ARGUMENT_INVALID for invalid dimensions', () => {
-      const invalidInputs = [0, -1, 1.5, VECTOR_MAX_DIM + 1];
-
-      for (const value of invalidInputs) {
-        expect(() => vector(value as number)).toThrowError(
-          `pgvector: dimension must be an integer in [1, ${VECTOR_MAX_DIM}], got ${value}`,
-        );
-      }
+    it('accepts the bounds of the data type', () => {
+      expect(vector(1).typeParams).toEqual({ length: 1 });
+      expect(vector(VECTOR_MAX_DIM).typeParams).toEqual({ length: VECTOR_MAX_DIM });
     });
   });
 });

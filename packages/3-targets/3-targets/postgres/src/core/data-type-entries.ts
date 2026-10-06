@@ -1,7 +1,7 @@
 /**
  * How PSL writes a value of each of this target's data types, and how it reads the text back.
  *
- * One declaration serves both directions: the adapter contributes these to the assembled stack, so
+ * One declaration serves both directions: the target contributes these to the assembled stack, so
  * the interpreter reads a written default through them, and `contract infer` prints a stored value
  * back through the same ones. The `sql` tag is not here: it writes `sql/expression`, which the SQL
  * family defines and registers itself.
@@ -11,13 +11,13 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import { numeralText } from '@internal/sql-contract/data-type';
 import {
   createNumberClassifier,
-  numeralText,
   parseJsonBody,
   printJsonBody,
   signedRange,
-} from '@internal/sql-relational-core/ast';
+} from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
 import { pgBool, pgInt2, pgInt4, pgInt8, pgJson, pgNumeric, pgText } from './data-types';
 

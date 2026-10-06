@@ -15,6 +15,7 @@ import { instantiateAuthoringFieldPreset } from '@internal/framework-components/
 import type {
   CodecLookupWithDescriptors,
   ColumnTypeDescriptor,
+  DataTypeLookup,
   ScalarFieldDeclarationBuilder,
 } from '@internal/framework-components/codec';
 import type {
@@ -1996,7 +1997,10 @@ export type ContractInput<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookupWithDescriptors;
+  /** The codecs of the packs the contract is authored with; a column's database type is its codec's data type's. */
+  readonly codecLookup: CodecLookupWithDescriptors;
+  /** The data types of the packs the contract is authored with. */
+  readonly dataTypeLookup: DataTypeLookup;
   /**
    * Domain enum handles authored via `enumType()`. Each handle lowers to a
    * domain `enum` entry and a storage `valueSet` entry in the target's

@@ -8,10 +8,9 @@ describe('sql family pack authoring contributions', () => {
         String: {
           kind: 'typeConstructor',
           documentation: 'Variable-length text with a required maximum character length.',
-          args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 10485760 }],
+          args: [{ kind: 'number', name: 'length', integer: true }],
           output: {
             codecId: 'sql/varchar@1',
-            nativeType: 'character varying',
             typeParams: {
               length: {
                 kind: 'arg',
@@ -24,13 +23,8 @@ describe('sql family pack authoring contributions', () => {
     });
   });
 
-  it('bounds sql.String length to the Postgres varchar maximum', () => {
+  it('leaves the bounds of sql.String length to the data type', () => {
     const descriptor = sqlFamilyPack.authoring?.type.sql.String.args[0];
-    expect(descriptor).toMatchObject({
-      kind: 'number',
-      integer: true,
-      minimum: 1,
-      maximum: 10485760,
-    });
+    expect(descriptor).toEqual({ kind: 'number', name: 'length', integer: true });
   });
 });

@@ -1,5 +1,4 @@
 import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
-import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
   ControlMutationDefaultEntry,
   DefaultFunctionLoweringContext,
@@ -14,8 +13,6 @@ import { int, num, oneOf, optional } from '@internal/psl-parser';
 import {
   instantNowControlDescriptor,
   plainDateTimeNowControlDescriptor,
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
 } from '@internal/target-postgres/control';
 
 function executionGenerator(
@@ -137,11 +134,6 @@ const postgresDefaultFunctionRegistryEntries = [
     { signature: nanoidSig, lower: lowerNanoid, usageSignatures: ['nanoid()', 'nanoid(<2-255>)'] },
   ],
 ] satisfies ReadonlyArray<readonly [string, ControlMutationDefaultEntry]>;
-
-export const postgresAuthoringTypes = {
-  ...postgresScalarAuthoringTypes,
-  ...postgresNativeAuthoringTypes,
-} as const satisfies AuthoringTypeNamespace;
 
 export function createPostgresDefaultFunctionRegistry(): ReadonlyMap<
   string,

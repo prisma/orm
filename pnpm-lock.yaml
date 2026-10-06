@@ -4104,6 +4104,9 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: 0.5.4
+        version: 0.5.4
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/2-authoring/psl-printer
@@ -4176,6 +4179,9 @@ importers:
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
+      arktype:
+        specifier: ^2.2.2
+        version: 2.2.3
     devDependencies:
       '@internal/driver-sqlite':
         specifier: workspace:8.0.0-rc.14

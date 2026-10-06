@@ -24,7 +24,6 @@ describe('buildContractCodecRegistry — per-column codec instance context', () 
       codecId: 'test/captures-ctx@1',
       dataType: dataTypeId('test/captures-ctx'),
       traits: [],
-      targetTypes: ['captures'],
       paramsSchema: undefined,
       isParameterized: false,
       // Family-agnostic descriptor slot; SQL-side test consumer reads `usedAt` so the factory parameter is typed as the SQL-extended context. The cast through `unknown` mirrors what production SQL extensions do (see pgvector's family-agnostic factory cast).
@@ -132,7 +131,6 @@ describe('buildContractCodecRegistry — forCodecRef content-keyed cache', () =>
       codecId: 'pgvector/vector@1',
       dataType: dataTypeId('pgvector/vector'),
       traits: ['equality'],
-      targetTypes: ['vector'],
       paramsSchema: {
         '~standard': {
           version: 1,
@@ -389,7 +387,6 @@ describe('buildContractCodecRegistry — forColumn delegates to forCodecRef', ()
       codecId: 'test/shared@1',
       dataType: dataTypeId('test/shared'),
       traits: [],
-      targetTypes: ['shared'],
       paramsSchema: undefined,
       isParameterized: false,
       factory: ((_params: undefined) => (ctx: SqlCodecInstanceContext) => {

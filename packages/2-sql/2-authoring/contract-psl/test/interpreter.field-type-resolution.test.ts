@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -20,7 +20,7 @@ const authoringTypes = {
   db: {
     Text: {
       kind: 'typeConstructor',
-      output: { codecId: 'pg/text@1', nativeType: 'text' },
+      output: { codecId: 'pg/text@1' },
     },
   },
 } satisfies AuthoringTypeNamespace;
@@ -31,7 +31,7 @@ const authoringContributions = {
     db: {
       uuid: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/uuid@1', nativeType: 'uuid', id: true },
+        output: { codecId: 'pg/uuid@1', id: true },
       },
     },
   },
@@ -41,7 +41,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,

@@ -82,6 +82,7 @@
     "./family/schema-verify": "./dist/family__schema-verify.mjs",
     "./family-contract": "./dist/family-contract.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
+    "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",

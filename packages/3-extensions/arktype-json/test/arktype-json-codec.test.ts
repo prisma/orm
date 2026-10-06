@@ -9,7 +9,6 @@
  * - schema validation rejects malformed payloads at decode, while encode only enforces JSON representability.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import type { SqlCodecCallContext } from '@internal/sql-relational-core/ast';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -202,22 +201,10 @@ describe('arktypeJsonDescriptor.factory(params)', () => {
     expect(decoded).toEqual(value);
   });
 
-  it('descriptor metadata: traits, targetTypes, native type', () => {
-    const col = arktypeJsonColumn(productSchema);
+  it('descriptor metadata: traits and data type', () => {
     expect(arktypeJsonDescriptor.codecId).toBe(ARKTYPE_JSON_CODEC_ID);
     expect(arktypeJsonDescriptor.traits).toEqual(['equality']);
-    expect(arktypeJsonDescriptor.targetTypes).toEqual(['jsonb']);
-    // Parameterized, so the native type is asked for against a real ref: the
-    // descriptor validates params before answering.
-    expect(
-      arktypeJsonDescriptor.nativeTypeFor({
-        codecId: ARKTYPE_JSON_CODEC_ID,
-        typeParams: {
-          expression: col.typeParams.expression,
-          jsonIr: col.typeParams.jsonIr as JsonValue,
-        },
-      }),
-    ).toBe('jsonb');
+    expect(arktypeJsonDescriptor.dataType).toBe('pg/jsonb');
     expect(arktypeJsonDescriptor).not.toHaveProperty('encodeIsParamsIndependent');
   });
 

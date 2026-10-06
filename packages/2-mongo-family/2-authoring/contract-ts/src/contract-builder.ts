@@ -46,6 +46,7 @@ import {
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
+import { assembleDataTypes } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -1188,7 +1189,12 @@ function composeMongoAuthoringHelpers<
     'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
-      ctx: { family: family.familyId, target: target.targetId },
+      ctx: {
+        family: family.familyId,
+        target: target.targetId,
+        codecLookup: extractCodecLookup(components),
+        dataTypeLookup: assembleDataTypes(components).lookup,
+      },
     }),
     field: composeMongoFieldHelpers(fieldNamespace),
     index,

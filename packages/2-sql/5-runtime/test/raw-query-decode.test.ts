@@ -7,13 +7,11 @@ import { buildTestContractCodecs } from './utils';
 const contractCodecs = buildTestContractCodecs([
   defineTestCodec({
     typeId: 'test/int@1',
-    targetTypes: ['int4'],
     encode: (v: number) => v,
     decode: (w: number) => w * 10,
   }),
   defineTestCodec({
     typeId: 'test/text@1',
-    targetTypes: ['text'],
     encode: (v: string) => v,
     decode: (w: string) => `decoded:${w}`,
   }),

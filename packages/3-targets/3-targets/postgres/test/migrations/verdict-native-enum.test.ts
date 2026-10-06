@@ -13,6 +13,7 @@ import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-n
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresDiffSubjectGranularity } from '../../src/core/schema-ir/schema-node-kinds';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 /**
  * Enum drift visibility end-to-end: the expected projection turns
@@ -125,9 +126,11 @@ const STRAY = [
 ];
 
 function enumIssuesOf(contract: Contract<SqlStorageType>, actual: PostgresDatabaseSchemaNode) {
-  return diffPostgresSchema({ contract, schema: actual, frameworkComponents: [] }).issues.filter(
-    (issue) => issue.path.some((segment) => segment.startsWith('native_enum:')),
-  );
+  return diffPostgresSchema({
+    contract,
+    schema: actual,
+    frameworkComponents: postgresTypeComponents,
+  }).issues.filter((issue) => issue.path.some((segment) => segment.startsWith('native_enum:')));
 }
 
 function verify(
@@ -139,7 +142,7 @@ function verify(
     contract,
     schema: actual,
     strict,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
   });

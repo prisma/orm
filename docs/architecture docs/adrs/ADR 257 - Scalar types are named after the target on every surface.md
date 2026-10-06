@@ -20,25 +20,25 @@ export const mongoScalarAuthoringTypes = {
   Int32: {
     kind: 'typeConstructor',
     documentation: 'A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
+    output: { codecId: MONGO_INT32_CODEC_ID },
   },
   // …
   Json: {
     kind: 'typeConstructor',
     documentation:
       'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
-    output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
+    output: { codecId: MONGO_JSON_CODEC_ID },
   },
   Bson: {
     kind: 'typeConstructor',
     documentation:
       'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
-    output: { codecId: MONGO_BSON_CODEC_ID, nativeType: 'bson' },
+    output: { codecId: MONGO_BSON_CODEC_ID },
   },
   Int: {
     kind: 'typeConstructor',
     documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
+    output: { codecId: MONGO_INT32_CODEC_ID },
     deprecated: { replacement: 'Int32' },
   },
   // …
@@ -72,7 +72,7 @@ Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare P
 
 ## `Json` and `Bson`
 
-`Json` means a JSON value, no more. On MongoDB its codec `mongo/json@1` declares the JSON-representable BSON types (`object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`), so its collection validator lists them. Encode accepts exactly a plain JSON value and refuses anything else at any depth; decode accepts a stored value made only of those BSON types, with a `long` in the safe-integer range read as a `number`, and refuses the rest. Both name the value's path inside the field:
+`Json` means a JSON value, no more. On MongoDB its data type `mongo/json`, which the codec `mongo/json@1` represents, declares the JSON-representable BSON types (`object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`), so its collection validator lists them. Encode accepts exactly a plain JSON value and refuses anything else at any depth; decode accepts a stored value made only of those BSON types, with a `long` in the safe-integer range read as a `number`, and refuses the rest. Both name the value's path inside the field:
 
 ```text
 mongo/json@1 wire value contains a non-JSON BSON date at events.0.at
@@ -92,7 +92,7 @@ A codec id is never renamed under this decision. If one ever has to change, the 
 
 - Every target follows the same rule and the same deprecation path for a renamed PSL name. The current per-target names and the cross-target concept table are listed in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
 - Readers of Prisma 6 and Prisma 7 schemas map the old names to codec ids through their target bindings and are unaffected by PSL names.
-- An extension that contributes a codec names its PSL type and TypeScript helper after the codec id's token, and declares every BSON type its codec stores in `targetTypes`; the MongoDB validator derivation reads the whole list.
+- An extension that contributes a codec names its PSL type and TypeScript helper after the codec id's token, and declares every BSON type its codec stores in the `bsonTypes` of the codec's data type; the MongoDB validator derivation reads the whole list.
 
 ## Alternatives considered
 

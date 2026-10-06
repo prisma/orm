@@ -1,5 +1,9 @@
 import { instantiateAuthoringTypeConstructor } from '@internal/framework-components/authoring';
 import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
+import type {
   Binder,
   BlockSymbol,
   DiagnosticSource,
@@ -8,6 +12,7 @@ import type {
   Resolution,
 } from '@internal/psl-parser';
 import { diagnosticSource, typeReferenceNode } from '@internal/psl-parser';
+import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
 import type { StorageTypeInstance } from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
@@ -22,6 +27,8 @@ export interface ResolveNamedTypeDeclarationsInput {
   readonly source: DiagnosticSource;
   readonly binder: Binder;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly diagnostics: PslDiagnosticCollector;
 }
 
@@ -69,6 +76,18 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
 } {
   const storageTypeEntries: [string, StorageTypeInstance][] = [];
   const namedTypeDescriptors = new Map<NamedTypeSymbol, ColumnDescriptor>();
+  const storageTypeOf = (descriptor: {
+    readonly codecId: string;
+    readonly typeParams?: Record<string, unknown> | undefined;
+  }): StorageTypeInstance => {
+    const typeParams = descriptor.typeParams ?? {};
+    return {
+      kind: 'codec-instance',
+      codecId: descriptor.codecId,
+      nativeType: unquotedSqlBaseNameOfCodec(descriptor.codecId, typeParams, input),
+      typeParams,
+    };
+  };
 
   for (const declaration of input.declarations) {
     const source = diagnosticSource(input.source.sources, declaration.node.syntax);
@@ -111,6 +130,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       const storageType = instantiatePslTypeConstructor({
         call: typeConstructor,
         descriptor,
+        codecLookup: input.codecLookup,
         diagnostics: input.diagnostics,
         source,
         entityLabel: `Named type "${declaration.name}"`,
@@ -123,15 +143,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
         declaration,
         toNamedTypeFieldDescriptor(declaration.name, storageType),
       );
-      storageTypeEntries.push([
-        declaration.name,
-        {
-          kind: 'codec-instance',
-          codecId: storageType.codecId,
-          nativeType: storageType.nativeType,
-          typeParams: storageType.typeParams ?? {},
-        },
-      ]);
+      storageTypeEntries.push([declaration.name, storageTypeOf(storageType)]);
       continue;
     }
 
@@ -166,15 +178,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
 
     const descriptor = toNamedTypeFieldDescriptor(declaration.name, baseDescriptor);
     namedTypeDescriptors.set(declaration, descriptor);
-    storageTypeEntries.push([
-      declaration.name,
-      {
-        kind: 'codec-instance',
-        codecId: baseDescriptor.codecId,
-        nativeType: baseDescriptor.nativeType,
-        typeParams: baseDescriptor.typeParams ?? {},
-      },
-    ]);
+    storageTypeEntries.push([declaration.name, storageTypeOf(baseDescriptor)]);
   }
 
   return { storageTypes: Object.fromEntries(storageTypeEntries), namedTypeDescriptors };

@@ -12,7 +12,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { decodeJsonMatching, refuseJsonValue } from '@internal/framework-components/codec';
-import { canonicalDateTime, type DateTimeShape } from '@internal/sql-relational-core/ast';
+import { canonicalDateTime, type DateTimeShape } from '@internal/sql-contract/data-type-support';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { pgDate, pgTime, pgTimestamp, pgTimestamptz, pgTimetz } from './data-types';
 

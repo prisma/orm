@@ -37,6 +37,7 @@
     "postgres-array": "2.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.4",
     "@internal/psl-printer": "workspace:8.0.0-rc.14",
     "@internal/publish-surface": "workspace:8.0.0-rc.14",
     "@repo/test-utils": "workspace:8.0.0-rc.14",

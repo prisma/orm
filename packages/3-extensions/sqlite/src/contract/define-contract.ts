@@ -1,4 +1,9 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
+import {
+  assembleDataTypes,
+  type CodecLookupWithDescriptors,
+  type DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
@@ -34,6 +39,8 @@ type SqliteResult<
       readonly models?: Models;
       readonly extensions?: Extensions;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
+      readonly codecLookup: CodecLookupWithDescriptors;
+      readonly dataTypeLookup: DataTypeLookup;
     }
   >
 >;
@@ -42,8 +49,13 @@ type SqliteBaseScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = Omit<
   ContractInput<SqlFamily, SqlitePack, Record<never, never>, Record<never, never>, Extensions>,
-  'family' | 'target' | 'types' | 'models' | 'createNamespace'
->;
+  'family' | 'target' | 'types' | 'models' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
+> & {
+  /** Overrides the codecs of the target and the extensions. */
+  readonly codecLookup?: CodecLookupWithDescriptors;
+  /** Overrides the data types of the target and the extensions. */
+  readonly dataTypeLookup?: DataTypeLookup;
+};
 
 type SqliteDefinition<
   Types extends TypesConstraint,
@@ -87,12 +99,15 @@ export function defineContract(
     readonly models?: ModelsConstraint;
   },
 ): SqliteResult<TypesConstraint, ModelsConstraint, undefined> {
+  const extensionPacks: readonly ExtensionPackRef<'sql', string>[] = Object.values(
+    definition.extensions ?? {},
+  );
   const bound = {
     ...definition,
     createNamespace: sqliteCreateNamespace,
-    codecLookup:
-      definition.codecLookup ??
-      assembleSqliteCodecRegistry(target, Object.values(definition.extensions ?? {})),
+    codecLookup: definition.codecLookup ?? assembleSqliteCodecRegistry(target, extensionPacks),
+    dataTypeLookup:
+      definition.dataTypeLookup ?? assembleDataTypes([target, ...extensionPacks]).lookup,
   };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, sqlitePack, bound, factory);

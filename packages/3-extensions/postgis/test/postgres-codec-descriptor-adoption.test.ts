@@ -19,7 +19,7 @@ describe('PostGIS PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves unparameterized and required-SRID native type behavior without changing HEXEWKB JSON', () => {
+  it('preserves the geometry data type and unparameterized and required-SRID projection without changing HEXEWKB JSON', () => {
     const expression = ColumnRef.of('places', 'location');
     const unparameterizedRef = { codecId: postgisGeometryDescriptor.codecId };
     const constrainedRef = {
@@ -27,8 +27,7 @@ describe('PostGIS PostgreSQL codec descriptor adoption', () => {
       typeParams: { srid: 4326 },
     };
 
-    expect(postgisGeometryDescriptor.nativeTypeFor(unparameterizedRef)).toBe('geometry');
-    expect(postgisGeometryDescriptor.nativeTypeFor(constrainedRef)).toBe('geometry');
+    expect(postgisGeometryDescriptor.dataType).toBe('postgis/geometry');
     expect(postgisGeometryDescriptor.projectJson(expression, unparameterizedRef)).toBe(expression);
     expect(postgisGeometryDescriptor.projectJson(expression, constrainedRef)).toBe(expression);
 

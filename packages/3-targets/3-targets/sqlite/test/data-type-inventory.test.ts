@@ -4,8 +4,8 @@ import { codecDescriptors } from '../src/core/codecs';
 /** Every codec this target ships and the data type it represents. ADR 254, spec B4. */
 const EXPECTED: Readonly<Record<string, string>> = {
   'sqlite/text@1': 'sqlite/text',
-  'sql/char@1': 'sqlite/text',
-  'sql/varchar@1': 'sqlite/text',
+  'sql/char@1': 'sqlite/character',
+  'sql/varchar@1': 'sqlite/character-varying',
   'sqlite/datetime@1': 'sqlite/datetime',
   'sqlite/json@1': 'sqlite/json',
   'sqlite/blob@1': 'sqlite/blob',

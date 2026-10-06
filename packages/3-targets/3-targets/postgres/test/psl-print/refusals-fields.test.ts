@@ -177,7 +177,6 @@ describe('columns and fields', () => {
             args: [{ kind: 'string', name: 'shape' }],
             output: {
               codecId: 'pg/geometry@1',
-              nativeType: 'geometry',
               typeParams: { shape: { kind: 'arg', index: 0 } },
             },
           },

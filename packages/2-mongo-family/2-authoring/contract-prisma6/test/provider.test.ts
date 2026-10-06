@@ -22,7 +22,6 @@ function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookupWi
         },
       });
     },
-    targetTypesFor: (id) => base.targetTypesFor(id),
     renderOutputTypeFor: (id, params) => base.renderOutputTypeFor(id, params),
   };
 }

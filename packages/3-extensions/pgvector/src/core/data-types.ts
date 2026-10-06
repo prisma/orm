@@ -11,12 +11,14 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type DataType,
-  dataType,
   isNonFiniteText,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { pgInt2, pgInt4, pgInt8, pgNumeric } from '@internal/target-postgres/data-types';
 import { structuredError } from '@internal/utils/structured-error';
+import { type as arktype } from 'arktype';
+import { VECTOR_MAX_DIM } from './constants';
 
 function elementNumber(element: JsonValue): number {
   if (typeof element === 'number') return element;
@@ -64,7 +66,13 @@ const vectorCanonicalForm: ToCanonicalForm = (value) => {
   );
 };
 
-export const pgvectorVector: DataType = dataType('pgvector/vector', {
+export const pgvectorVectorParams = arktype({
+  length: `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
+});
+
+export const pgvectorVector = sqlDataType('pgvector/vector', {
+  params: pgvectorVectorParams,
+  texts: [{ text: 'vector({length})', written: true, catalog: true }],
   listCast: {
     of: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],
     cast: (elements) => elements.map(elementNumber),

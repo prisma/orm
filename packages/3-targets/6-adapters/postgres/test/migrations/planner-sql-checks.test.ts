@@ -1,3 +1,7 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
+import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   buildExpectedFormatType,
   qualifyTableName,
@@ -19,14 +23,17 @@ describe('qualifyTableName', () => {
 });
 
 describe('buildExpectedFormatType', () => {
-  const noHooks = new Map();
+  const types: SqlTypeLookups = {
+    codecLookup: postgresCodecDescriptorRegistry,
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+  };
 
   describe('FORMAT_TYPE_DISPLAY mappings', () => {
     it('maps int2 to smallint', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('smallint');
     });
@@ -35,7 +42,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('integer');
     });
@@ -44,7 +51,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('bigint');
     });
@@ -53,7 +60,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'float4', codecId: 'pg/float4@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('real');
     });
@@ -62,7 +69,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'float8', codecId: 'pg/float8@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('double precision');
     });
@@ -71,7 +78,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'bool', codecId: 'pg/bool@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('boolean');
     });
@@ -82,7 +89,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('text');
     });
@@ -91,150 +98,29 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          noHooks,
+          types,
         ),
       ).toBe('uuid');
     });
   });
 
-  describe('user-defined types (typeRef path)', () => {
-    it('returns simple lowercase UDT name unquoted', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'my_status',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'MyStatus',
-          },
-          noHooks,
-        ),
-      ).toBe('my_status');
-    });
-
-    it('quotes reserved word used as UDT name', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'user',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'User',
-          },
-          noHooks,
-        ),
-      ).toBe('"user"');
-    });
-
-    it('quotes another reserved word (select)', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'select',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'Select',
-          },
-          noHooks,
-        ),
-      ).toBe('"select"');
-    });
-
-    it('quotes mixed-case identifier', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'OrderStatus',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'OrderStatus',
-          },
-          noHooks,
-        ),
-      ).toBe('"OrderStatus"');
-    });
-
-    it('quotes identifier with hyphens', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'order-status',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'OrderStatus',
-          },
-          noHooks,
-        ),
-      ).toBe('"order-status"');
-    });
-
-    it('quotes identifier with spaces', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: 'order status',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'OrderStatus',
-          },
-          noHooks,
-        ),
-      ).toBe('"order status"');
-    });
-
-    it('quotes identifier starting with digit', () => {
-      expect(
-        buildExpectedFormatType(
-          {
-            many: false,
-            nativeType: '2fa_type',
-            codecId: 'app/udt@1',
-            nullable: false,
-            typeRef: 'TwoFaType',
-          },
-          noHooks,
-        ),
-      ).toBe('"2fa_type"');
-    });
-  });
-
-  describe('codec hook expansion', () => {
-    it('delegates to expandNativeType when typeParams and codec hook exist', () => {
-      const hooks = new Map([
-        [
-          'pg/decimal@1',
-          {
-            expandNativeType: ({
-              nativeType,
-              typeParams,
-            }: {
-              nativeType: string;
-              typeParams?: Record<string, unknown>;
-            }) => `${nativeType}(${typeParams?.['precision']},${typeParams?.['scale']})`,
-          },
-        ],
-      ]);
+  describe('parameterized data types', () => {
+    it('writes the data type with its parameters', () => {
       expect(
         buildExpectedFormatType(
           {
             many: false,
             nativeType: 'numeric',
-            codecId: 'pg/decimal@1',
+            codecId: 'pg/numeric@1',
             nullable: false,
             typeParams: { precision: 10, scale: 2 },
           },
-          hooks,
+          types,
         ),
       ).toBe('numeric(10,2)');
     });
 
-    it('falls back to display map when typeParams present but no hook', () => {
+    it('falls back to display map when the data type declares none of the typeParams', () => {
       expect(
         buildExpectedFormatType(
           {
@@ -244,7 +130,7 @@ describe('buildExpectedFormatType', () => {
             nullable: false,
             typeParams: { someParam: true },
           },
-          noHooks,
+          types,
         ),
       ).toBe('integer');
     });

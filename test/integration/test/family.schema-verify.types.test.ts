@@ -1,15 +1,13 @@
 /**
- * Type verification tests: type mismatch, nullability, type metadata registry.
+ * Type verification tests: type mismatch and nullability.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  createFamilyInstance,
   defineContract,
   field,
   int4Column,
   model,
-  pgvector,
   runSchemaVerify,
   textColumn,
   timeouts,
@@ -107,35 +105,6 @@ describe('family instance schemaVerify - types', () => {
         await client.query('DROP TABLE IF EXISTS "user"');
       });
     }, timeouts.spinUpPpgDev);
-
-    it('registry contains known type IDs with expected native types', () => {
-      const familyInstance = createFamilyInstance();
-      const registry = familyInstance.typeMetadataRegistry;
-
-      // Verify known Postgres types are present with expected metadata
-      expect(registry.get('pg/int4@1')).toMatchObject({
-        nativeType: 'int4',
-        familyId: 'sql',
-        targetId: 'postgres',
-      });
-      expect(registry.get('pg/text@1')).toMatchObject({ nativeType: 'text' });
-      expect(registry.get('pg/timestamptz-temporal@1')).toMatchObject({
-        nativeType: 'timestamptz',
-      });
-      expect(registry.get('pg/bool@1')).toMatchObject({ nativeType: 'bool' });
-    });
-
-    it('registry includes extension pack types', () => {
-      const familyInstance = createFamilyInstance([pgvector]);
-      const registry = familyInstance.typeMetadataRegistry;
-
-      // Verify pgvector type is present with expected metadata
-      expect(registry.get('pg/vector@1')).toMatchObject({
-        nativeType: 'vector',
-        familyId: 'sql',
-        targetId: 'postgres',
-      });
-    });
 
     it(
       'type mismatch with metadata present returns failure',

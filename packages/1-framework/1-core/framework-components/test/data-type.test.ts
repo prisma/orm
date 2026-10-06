@@ -1,5 +1,13 @@
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
-import { createDataTypeLookup, dataType, dataTypeId } from '../src/shared/data-type';
+import {
+  createDataTypeLookup,
+  dataType,
+  dataTypeId,
+  objectSchemaKeys,
+  requiredParamKeys,
+  requiredSchemaKeys,
+} from '../src/shared/data-type';
 
 describe('dataTypeId', () => {
   it.each(['pg/int8', 'sqlite/integer', 'postgis/geometry', 'pg/text-array', 'arktype/json'])(
@@ -70,6 +78,15 @@ describe('dataType', () => {
       }),
     ).toThrow();
   });
+
+  it('carries the parameter schema it is declared with', () => {
+    const params = type({ 'length?': 'number.integer > 0' });
+    expect(dataType('pg/varchar', { params }).params).toBe(params);
+  });
+
+  it('has no parameter schema unless one is declared', () => {
+    expect(dataType('pg/text', {})).not.toHaveProperty('params');
+  });
 });
 
 describe('createDataTypeLookup', () => {
@@ -88,5 +105,59 @@ describe('createDataTypeLookup', () => {
 
   it('says which ids it holds', () => {
     expect(lookup.has(int2.id)).toBe(true);
+  });
+});
+
+describe('requiredParamKeys', () => {
+  it('lists the parameters a data type requires', () => {
+    const vector = dataType('t/vector', { params: type({ length: 'number', 'scale?': 'number' }) });
+    expect(requiredParamKeys(vector)).toEqual(['length']);
+  });
+
+  it('is empty for a data type whose parameters are optional', () => {
+    expect(
+      requiredParamKeys(dataType('t/char', { params: type({ 'length?': 'number' }) })),
+    ).toEqual([]);
+  });
+
+  it('is empty for a data type without parameters', () => {
+    expect(requiredParamKeys(dataType('t/text', {}))).toEqual([]);
+  });
+});
+
+describe('arktype object schema keys', () => {
+  const shapes = [
+    ['a plain object', type({ length: 'number', 'scale?': 'number' })],
+    [
+      'an object with a narrow',
+      type({ length: 'number', 'scale?': 'number' }).narrow((params) => params.length > 0),
+    ],
+    ['the intersection of two objects', type({ length: 'number' }).and({ 'scale?': 'number' })],
+  ] as const;
+
+  it.each(shapes)('reads every key of %s', (_, schema) => {
+    expect(objectSchemaKeys(schema)).toEqual(['length', 'scale']);
+  });
+
+  it.each(shapes)('reads the required keys of %s', (_, schema) => {
+    expect(requiredSchemaKeys(schema)).toEqual(['length']);
+  });
+
+  it('reads no keys from a schema that does not describe objects', () => {
+    expect(objectSchemaKeys(type('string'))).toBeUndefined();
+    expect(requiredSchemaKeys(type('number.integer >= 1'))).toBeUndefined();
+  });
+
+  it.each([
+    ['a union of objects', type({ length: 'number' }).or({ scale: 'number' })],
+    ['a piped object', type({ length: 'number' }).pipe((params) => params)],
+  ] as const)('reads no keys from %s', (_, schema) => {
+    expect(objectSchemaKeys(schema)).toBeUndefined();
+    expect(requiredSchemaKeys(schema)).toBeUndefined();
+  });
+
+  it('reads no keys from a value that is not a schema', () => {
+    expect(objectSchemaKeys({ props: [] })).toBeUndefined();
+    expect(requiredSchemaKeys(undefined)).toBeUndefined();
   });
 });

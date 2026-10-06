@@ -6,6 +6,7 @@ import type {
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../src/contract-builder';
 
 /**
@@ -57,7 +58,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'sql/text@1', nativeType: 'text' },
+        output: { codecId: 'sql/text@1' },
       },
     },
   },
@@ -95,6 +96,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
   it('surfaces contributed entity helpers at the top level with type-narrowed input/output', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -123,6 +125,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
     let constructed: DemoEntity | undefined;
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -165,6 +168,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -189,6 +193,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
   it('omitting the contributing pack removes the helper from the helpers surface', () => {
     defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

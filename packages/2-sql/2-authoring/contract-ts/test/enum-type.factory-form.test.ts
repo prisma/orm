@@ -7,6 +7,7 @@ import type {
 } from '@internal/sql-contract/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
 
@@ -19,7 +20,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -50,6 +51,7 @@ const Priority = enumType('Priority', pgInt, member('Low', 1), member('High', 10
 // uses), not declared on the scaffold definition.
 const factoryContract = defineContract(
   {
+    ...testTypeLookups,
     family: sqlFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -70,6 +72,7 @@ const factoryContract = defineContract(
 
 // Definition form, identical enums + model, for parity comparison.
 const definitionContract = defineContract({
+  ...testTypeLookups,
   family: sqlFamilyPack,
   target: postgresTargetPack,
   createNamespace: createTestSqlNamespace,
@@ -144,6 +147,7 @@ describe('factory-form db.enums matches the definition form', () => {
 // the runtime must surface both — not overwrite the scaffold-authored one.
 const mixedContract = defineContract(
   {
+    ...testTypeLookups,
     family: sqlFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,

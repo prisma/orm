@@ -22,6 +22,7 @@ import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'items';
 const OTHER_TABLE = 'others';
@@ -150,7 +151,7 @@ async function planOpIds(
     schema,
     policy: { allowedOperationClasses: [...policy.allowedOperationClasses] },
     fromContract: null,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });

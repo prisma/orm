@@ -7,9 +7,11 @@ import {
   readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { isMongoDataType } from '@internal/mongo-contract/data-type';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
+import { InternalError } from '@internal/utils/internal-error';
 
 export function mongoFamilyEnumSpec() {
   return mapBlock({
@@ -40,8 +42,8 @@ export const mongoFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const bsonTypes = ctx.codecLookup?.targetTypesFor(codecId);
-      if (bsonTypes === undefined) {
+      const descriptor = ctx.codecLookup.descriptorFor(codecId);
+      if (descriptor === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
@@ -50,6 +52,20 @@ export const mongoFamilyEnumEntityDescriptor = {
         });
         return undefined;
       }
+      const dataType = ctx.dataTypeLookup.get(descriptor.dataType);
+      if (dataType === undefined) {
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" @@type codec "${codecId}" represents data type "${descriptor.dataType}", which no component registers`,
+          sourceId,
+          span: codecSpan,
+        });
+        return undefined;
+      }
+      if (!isMongoDataType(dataType)) {
+        throw new InternalError(`Data type ${dataType.id} is not a Mongo data type.`);
+      }
+      const { bsonTypes } = dataType.mongo;
       const [bsonType, ...otherBsonTypes] = bsonTypes;
       if (bsonType === undefined || otherBsonTypes.length > 0) {
         diagnostics?.push({
@@ -61,11 +77,11 @@ export const mongoFamilyEnumEntityDescriptor = {
         return undefined;
       }
 
-      const codec = ctx.codecLookup?.get(codecId);
+      const codec = ctx.codecLookup.get(codecId);
       if (codec === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" @@type codec "${codecId}" resolves in targetTypesFor but is absent from codecLookup.get`,
+          message: `enum "${block.name}" @@type codec "${codecId}" is registered but codecLookup.get has no codec for it`,
           sourceId,
           span: codecSpan,
         });

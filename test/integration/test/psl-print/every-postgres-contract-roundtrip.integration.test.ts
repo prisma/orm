@@ -181,13 +181,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     },
   ],
   [
-    'packages/3-extensions/postgis/src/contract.json',
-    {
-      reason: 'no PSL type in the configured stack',
-      meta: { coordinate: 'types.geometry', nativeType: 'geometry', codecId: 'pg/geometry@1' },
-    },
-  ],
-  [
     'packages/3-extensions/postgres/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
   ],
@@ -257,6 +250,13 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     {
       reason: 'is declared in more than one namespace',
       meta: { modelName: 'Note', namespaces: ['auth', 'public'] },
+    },
+  ],
+  [
+    'test/integration/test/planner-golden/fixtures/postgres/generated/contract.json',
+    {
+      reason: 'no PSL type in the configured stack',
+      meta: { coordinate: '"public"."list"."bit"', nativeType: 'bit', codecId: 'pg/bit@1' },
     },
   ],
   [

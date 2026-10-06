@@ -134,7 +134,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async-a@1',
-        targetTypes: ['text'],
         encode: (value: string) => {
           callOrder.push('encode-a-start');
           return dA.promise.then((wire) => `${value}:${wire}`);
@@ -143,7 +142,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
       }),
       defineTestCodec({
         typeId: 'test/async-b@1',
-        targetTypes: ['text'],
         encode: (value: string) => {
           callOrder.push('encode-b-start');
           return dB.promise.then((wire) => `${value}:${wire}`);
@@ -152,7 +150,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
       }),
       defineTestCodec({
         typeId: 'test/sync@1',
-        targetTypes: ['int4'],
         encode: (value: number) => {
           callOrder.push('encode-sync');
           return value + 1;
@@ -184,7 +181,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async@1',
-        targetTypes: ['text'],
         encode: async (value: string) => `wire:${value}`,
         decode: async (wire: string) => wire,
       }),
@@ -205,7 +201,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        targetTypes: ['text'],
         encode: () => {
           throw cause;
         },
@@ -234,7 +229,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        targetTypes: ['text'],
         encode: () => {
           throw new Error('boom');
         },
@@ -256,7 +250,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/sync@1',
-        targetTypes: ['text'],
         encode: () => {
           throw new Error('codec must not be invoked for null/undefined');
         },
@@ -289,7 +282,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        targetTypes: ['text'],
         encode: () => {
           throw new Error('raw plans must skip codec encoding');
         },
@@ -306,7 +298,6 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/passthrough@1',
-        targetTypes: ['text'],
         encode: (value: string) => `wire:${value}`,
         decode: (wire: string) => wire,
       }),
@@ -335,7 +326,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/slow-a@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: (w: string) => {
           callOrder.push('decode-a-start');
@@ -344,7 +334,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
       }),
       defineTestCodec({
         typeId: 'test/slow-b@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: (w: string) => {
           callOrder.push('decode-b-start');
@@ -353,7 +342,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
       }),
       defineTestCodec({
         typeId: 'test/sync@1',
-        targetTypes: ['int4'],
         encode: (v: number) => v,
         decode: (w: number) => {
           callOrder.push('decode-sync');
@@ -390,7 +378,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: async (w: string) => `decoded:${w}`,
       }),
@@ -414,7 +401,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec<'pg/inline-validating-json@1', readonly [], string, JsonValue>({
         typeId: 'pg/inline-validating-json@1',
-        targetTypes: ['jsonb'],
         encode: (v: JsonValue) => JSON.stringify(v),
         decode: async (w: string) => {
           const parsed = JSON.parse(w) as Record<string, unknown>;
@@ -464,7 +450,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: () => {
           throw cause;
@@ -505,7 +490,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: () => {
           throw new Error('raw plans must skip codec decoding');
@@ -544,7 +528,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        targetTypes: ['text'],
         encode: (v: string) => v,
         decode: () => {
           throw new Error('codec must not be invoked for null wire values');
@@ -571,7 +554,6 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     ): Codec<string> =>
       defineTestCodec<string, readonly [], string, string>({
         typeId: id,
-        targetTypes: ['text'],
         encode,
         decode,
       });

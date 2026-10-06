@@ -57,7 +57,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     });
   });
 
-  describe('on a column whose type parameters the codec does not accept', () => {
+  describe('on a column whose type parameters the data type does not accept', () => {
     it('reports the type parameters, not the default', () => {
       expect(() =>
         defineContract({ extensions: { pgvector } }, ({ field, model }) => ({
@@ -74,16 +74,15 @@ describe('literal defaults on a codec contributed through extensions', () => {
         })),
       ).toThrow(
         expect.objectContaining({
-          code: 'CONTRACT.ARGUMENT_INVALID',
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
           message:
-            'Field "Doc.embedding" has type parameters that its codec does not accept: Invalid typeParams for codec \'pg/vector@1\': length must be a number (was missing)',
+            'Field "Doc.embedding" has type parameters that its data type does not accept: pgvector/vector: length must be a number (was missing)',
           meta: {
+            dataType: 'pgvector/vector',
+            parameters: ['length'],
             modelName: 'Doc',
             fieldName: 'embedding',
-            codecId: 'pg/vector@1',
-            reason: 'type-params-invalid',
           },
-          cause: expect.objectContaining({ code: 'RUNTIME.TYPE_PARAMS_INVALID' }),
         }),
       );
     });

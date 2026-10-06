@@ -184,7 +184,7 @@ describe('enrichContract', () => {
     const extension = makeExtension({
       types: {
         codecTypes: {
-          controlPlaneHooks: { 'pg/vector@1': { expandNativeType: () => 'vector' } },
+          controlPlaneHooks: { 'pg/vector@1': { resolveIdentityValue: () => null } },
           import: {
             package: '@ext/pgvector',
             named: 'PgvectorCodecTypes',

@@ -45,9 +45,13 @@ export type {
   ToCanonicalForm,
 } from '../shared/data-type';
 export {
+  assembleDataTypes,
   createDataTypeLookup,
   dataType,
   dataTypeId,
+  objectSchemaKeys,
+  requiredParamKeys,
+  requiredSchemaKeys,
 } from '../shared/data-type';
 export type { BigIntRange, IntegerRange } from '../shared/decode-json';
 export {

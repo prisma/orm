@@ -42,7 +42,8 @@ function typeArgumentText(value: unknown, coordinate: string): string {
 
 function typeCall(path: readonly string[], args: readonly string[]): PslColumnType {
   const name = path.join('.');
-  if (args.length === 0) {
+  const isNamespaced = path.length > 1;
+  if (args.length === 0 && !isNamespaced) {
     return { typeName: name };
   }
   return {

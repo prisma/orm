@@ -35,7 +35,6 @@ export const nanoidPresetMirror = {
   args: [nanoidOptionsArgumentMirror],
   output: {
     codecId: 'sql/char@1',
-    nativeType: 'character',
     typeParams: { length: { kind: 'arg', index: 0, path: ['size'], default: 21 } },
   },
 } as const;
@@ -45,7 +44,6 @@ export const nanoidIdPresetMirror = {
   args: [nanoidOptionsArgumentMirror],
   output: {
     codecId: 'sql/char@1',
-    nativeType: 'character',
     typeParams: { length: { kind: 'arg', index: 0, path: ['size'], default: 21 } },
     executionDefaults: {
       onCreate: {

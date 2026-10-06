@@ -7,6 +7,7 @@ import {
   readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { requiredParamKeys } from '@internal/framework-components/codec';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
@@ -40,8 +41,9 @@ export const sqlFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const nativeType = ctx.codecLookup?.targetTypesFor(codecId)?.[0];
-      if (nativeType === undefined) {
+      const descriptor = ctx.codecLookup.descriptorFor(codecId);
+      const codec = ctx.codecLookup.get(codecId);
+      if (descriptor === undefined || codec === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
@@ -50,12 +52,22 @@ export const sqlFamilyEnumEntityDescriptor = {
         });
         return undefined;
       }
-
-      const codec = ctx.codecLookup?.get(codecId);
-      if (codec === undefined) {
+      const dataType = ctx.dataTypeLookup.get(descriptor.dataType);
+      if (dataType === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" @@type codec "${codecId}" resolves in targetTypesFor but is absent from codecLookup.get`,
+          message: `enum "${block.name}" @@type codec "${codecId}" represents data type "${descriptor.dataType}", which no component registers`,
+          sourceId,
+          span: codecSpan,
+        });
+        return undefined;
+      }
+
+      const [requiredParam] = requiredParamKeys(dataType);
+      if (requiredParam !== undefined) {
+        diagnostics?.push({
+          code: 'PSL_ENUM_TYPE_NEEDS_PARAMETERS',
+          message: `enum "${block.name}" @@type codec "${codecId}" represents data type "${dataType.id}", which requires the parameter "${requiredParam}"; an enum block gives it none`,
           sourceId,
           span: codecSpan,
         });
@@ -65,7 +77,7 @@ export const sqlFamilyEnumEntityDescriptor = {
       const members = readEnumBlockMembers(block, codecId, codec, ctx);
       if (members === undefined) return undefined;
 
-      return enumType(block.name, { codecId, nativeType }, ...members);
+      return enumType(block.name, { codecId }, ...members);
     },
   },
 } satisfies AuthoringEntityTypeDescriptor;

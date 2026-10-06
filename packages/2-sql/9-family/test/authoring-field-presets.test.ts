@@ -12,7 +12,6 @@ describe('sqlFamilyAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: 36 },
       },
     });
@@ -27,7 +26,6 @@ describe('sqlFamilyAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: 36 },
         executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
         id: true,
@@ -40,7 +38,6 @@ describe('sqlFamilyAuthoringFieldPresets', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: 36 },
         executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
         id: true,

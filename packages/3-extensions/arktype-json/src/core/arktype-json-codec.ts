@@ -178,16 +178,12 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
-  protected override nativeType(): string {
-    return ARKTYPE_JSON_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
   override readonly dataType = pgJsonb.id;
   override readonly codecId = ARKTYPE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = [ARKTYPE_JSON_NATIVE_TYPE] as const;
   override readonly paramsSchema: StandardSchemaV1<ArktypeJsonTypeParams> = arktypeJsonParamsSchema;
   override renderOutputType(params: ArktypeJsonTypeParams): string {
     return renderArktypeJsonOutputType(params);

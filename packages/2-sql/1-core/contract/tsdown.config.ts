@@ -4,6 +4,8 @@ export default defineConfig({
   entry: [
     'src/exports/authored-check-naming.ts',
     'src/exports/contract-view.ts',
+    'src/exports/data-type.ts',
+    'src/exports/data-type-support.ts',
     'src/exports/entity-kinds.ts',
     'src/exports/foreign-key-materialization.ts',
     'src/exports/index-naming.ts',

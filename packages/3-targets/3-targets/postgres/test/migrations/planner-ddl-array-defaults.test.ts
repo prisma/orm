@@ -2,16 +2,13 @@ import type { StorageColumn } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import {
   buildColumnTypeSql,
+  type DefaultColumn,
   renderDefaultLiteral,
 } from '../../src/core/migrations/planner-ddl-builders';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
-function arrayColumn(nativeType: string): StorageColumn {
-  return {
-    nativeType,
-    codecId: 'pg/text@1',
-    nullable: false,
-    many: { elementNullable: false },
-  } as StorageColumn;
+function arrayColumn(nativeType: string): DefaultColumn {
+  return { nativeType, dataTypeId: 'pg/text', many: { elementNullable: false } };
 }
 
 describe('renderDefaultLiteral array columns', () => {
@@ -71,12 +68,13 @@ describe('renderDefaultLiteral array columns', () => {
         many: { elementNullable: false },
         typeParams: { typeName },
       } as StorageColumn;
-      const columnTypeSql = buildColumnTypeSql(enumList, new Map(), {}, false);
+      const columnTypeSql = buildColumnTypeSql(enumList, postgresTypeLookups, {}, false);
 
       expect(
         renderDefaultLiteral(['asc'], {
           many: { elementNullable: false },
           nativeType: columnTypeSql,
+          dataTypeId: 'pg/enum',
         }),
       ).toBe(`ARRAY['asc']::${cast}`);
     },

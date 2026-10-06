@@ -87,7 +87,7 @@ export interface SqlCodecInstanceContext extends CodecInstanceContext {
 /**
  * SQL codec — extends the framework codec base by narrowing the per-call context to the SQL-family {@link SqlCodecCallContext} (adds `column?: SqlColumnRef`). TypeScript treats method-syntax declarations bivariantly, so the SQL narrowing is structurally compatible with the framework {@link BaseCodec} super-interface.
  *
- * Codec-id-keyed static metadata (`traits`, `targetTypes`, `paramsSchema`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor} — the codec instance itself only carries `id` plus the four conversion methods.
+ * Codec-id-keyed static metadata (`traits`, `paramsSchema`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor} — the codec instance itself only carries `id` plus the four conversion methods.
  *
  * See `Codec` in `@internal/framework-components/codec` for the codec contract that this interface extends.
  */

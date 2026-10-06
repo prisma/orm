@@ -62,7 +62,7 @@ import { inferBuildContext, inferPslAstFromFlat } from '../fixtures';
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
 } as const satisfies AuthoringTypeNamespace;
 
 const assembled = assembleAuthoringContributions([

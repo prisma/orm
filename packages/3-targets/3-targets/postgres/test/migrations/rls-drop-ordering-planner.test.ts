@@ -23,15 +23,17 @@ import {
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { PostgresRlsEnablement } from '../../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
-import { PostgresSchema } from '../../src/core/postgres-schema';
+import { type PostgresContract, PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: 'stub', params: [] }),
@@ -71,7 +73,7 @@ function buildContract(
   tables: Tables,
   policies: readonly PostgresRlsPolicy[],
   types: Readonly<Record<string, StorageTypeInstance>> = {},
-): Contract<SqlStorage> {
+): PostgresContract {
   const tableEntries: Record<string, StorageTable> = {};
   const rlsEntries: Record<string, PostgresRlsEnablement> = {};
   for (const [tableName, shape] of Object.entries(tables)) {
@@ -251,7 +253,7 @@ async function planOpIds(
     schema,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract,
-    frameworkComponents,
+    frameworkComponents: [...postgresTypeComponents, ...frameworkComponents],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -337,7 +339,12 @@ describe('policy drops run before structural DDL that the policy blocks', () => 
     });
 
     it('is dropped before the type change in a migration plan', async () => {
-      expect(await planOpIds(contract, schema, { fromContract })).toEqual(expected);
+      const fromSchema = contractToPostgresDatabaseSchemaNode(fromContract, {
+        annotationNamespace: 'pg',
+        dataTypeLookup: postgresTypeLookups.dataTypeLookup,
+        codecLookup: postgresTypeLookups.codecLookup,
+      });
+      expect(await planOpIds(contract, fromSchema, { fromContract })).toEqual(expected);
     });
   });
 

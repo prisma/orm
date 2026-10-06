@@ -1,6 +1,7 @@
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -28,7 +29,7 @@ function interpret(
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
     authoringContributions: { ...pgvectorAuthoringContributions, dataTypes },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },

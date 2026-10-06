@@ -4,18 +4,14 @@ import { temporalCodecPresetWithPrecision } from '../src/core/timestamp-now-gene
 
 const withPrecision = temporalCodecPresetWithPrecision({
   codecId: 'pg/timestamp-temporal@1',
-  nativeType: 'timestamp',
 });
 const withoutPrecision = temporalCodecPreset({
   codecId: 'sqlite/datetime@1',
-  nativeType: 'text',
 });
 
-test('codec id and native type survive as literals, not widened to string', () => {
+test('codec id survives as a literal, not widened to string', () => {
   expectTypeOf(withPrecision.output.codecId).toEqualTypeOf<'pg/timestamp-temporal@1'>();
-  expectTypeOf(withPrecision.output.nativeType).toEqualTypeOf<'timestamp'>();
   expectTypeOf(withoutPrecision.output.codecId).toEqualTypeOf<'sqlite/datetime@1'>();
-  expectTypeOf(withoutPrecision.output.nativeType).toEqualTypeOf<'text'>();
 });
 
 test('option arg values survive as the literal union that types the TS surface', () => {

@@ -1,7 +1,7 @@
 import type { ContractReferenceRelation, ContractRelation } from '@internal/contract/types';
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { ForeignKey, ReferentialAction } from '@internal/sql-contract/types';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';

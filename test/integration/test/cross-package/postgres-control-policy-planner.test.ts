@@ -1,12 +1,13 @@
-import {
+import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
   PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
+import postgresTargetControl from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -16,6 +17,8 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+
+const frameworkComponents = [postgresTargetControl, postgresAdapterControl];
 
 function makeContract(
   tables: Record<string, StorageTableInput>,
@@ -49,7 +52,10 @@ const RECONCILIATION_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const planner = createPostgresMigrationPlanner(testAdapter);
 
 const emptySchema = new PostgresDatabaseSchemaNode({
@@ -96,7 +102,7 @@ async function planAgainst(contract: Contract<SqlStorage>, schema: PostgresDatab
     schema,
     policy: RECONCILIATION_POLICY,
     fromContract: null,
-    frameworkComponents: [],
+    frameworkComponents,
     spaceId: 'app',
     snapshotsImportPath: '../../snapshots',
   });
@@ -288,7 +294,7 @@ describe('PostgresMigrationPlanner.plan tolerated vs managed add-column', async 
       schema: liveSchemaWithUsersIdOnly,
       policy: RECONCILIATION_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents,
       spaceId: 'app',
       snapshotsImportPath: '../../snapshots',
     });

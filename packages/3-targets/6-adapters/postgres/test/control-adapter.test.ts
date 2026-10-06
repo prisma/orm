@@ -7,6 +7,7 @@ import {
   SqlUniqueIR,
 } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 import type {
   PostgresDatabaseSchemaNode,
@@ -62,14 +63,20 @@ function createMockDriver(
 
 describe('PostgresControlAdapter', () => {
   it('has correct familyId and targetId', () => {
-    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
     expect(adapter.familyId).toBe('sql');
     expect(adapter.targetId).toBe('postgres');
   });
 
   describe('introspect', () => {
     it('introspects empty schema', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -86,7 +93,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('issues introspection queries sequentially on the single connection', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       let inFlight = 0;
       let maxInFlight = 0;
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
@@ -111,7 +121,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('introspects schema with tables and columns', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       let _queryCallCount = 0;
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
@@ -197,7 +210,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles character varying without length', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -252,7 +268,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles numeric with precision and scale', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -307,7 +326,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles numeric with precision only', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -362,7 +384,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles numeric without precision', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -417,7 +442,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('maps json and jsonb columns to native types', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -483,7 +511,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('uses formatted_type for bit length', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -516,7 +547,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('normalizes formatted_type variants', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -621,7 +655,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles foreign keys', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'post' }] },
         {
@@ -709,7 +746,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles multi-column foreign keys', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'order' }] },
         {
@@ -796,7 +836,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles unique constraints', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -860,7 +903,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles multi-column unique constraints', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -923,7 +969,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles indexes', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -998,7 +1047,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles multi-column indexes', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -1073,7 +1125,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('captures an index with a null-attname key as an expression node (whole element list)', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1175,7 +1230,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('preserves both siblings when a unique and a plain index share one column tuple', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1285,7 +1343,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles custom schema name', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1315,7 +1376,10 @@ describe('PostgresControlAdapter', () => {
     it(
       'handles version string without match',
       async () => {
-        const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+        const adapter = new PostgresControlAdapter(
+          createPostgresBuiltinCodecLookup(),
+          createPostgresBuiltinDataTypeLookup(),
+        );
         const mockDriver: SqlControlDriverInstance<'postgres'> = {
           familyId: 'sql',
           targetId: 'postgres',
@@ -1344,7 +1408,10 @@ describe('PostgresControlAdapter', () => {
     );
 
     it('handles missing version result', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1369,7 +1436,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles table without primary key', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1424,7 +1494,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('handles primary key without constraint name', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -1489,7 +1562,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('normalizes integer/float/bool formatted types', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'metrics' }] },
         {
@@ -1582,7 +1658,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('sorts multi-column primary key by ordinal position and skips PK from uniques', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -1653,7 +1732,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('stamps normalized resolvedNativeType and parsed resolvedDefault on columns', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'doc' }] },
         {
@@ -1726,7 +1808,10 @@ describe('PostgresControlAdapter', () => {
 
   describe('introspect - USER-DEFINED enum types', () => {
     it('strips surrounding double quotes from mixed-case enum formatted_type', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'Organization' }] },
         {
@@ -1763,7 +1848,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('preserves lowercase enum formatted_type (no quotes from format_type)', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const mockDriver = createMockDriver([
         { match: includes('information_schema.tables'), rows: [{ table_name: 'user' }] },
         {
@@ -1909,7 +1997,10 @@ describe('PostgresControlAdapter', () => {
     };
 
     it('returns null when marker table is absent', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [] },
       ]);
@@ -1917,7 +2008,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('returns null when marker table exists but row is absent', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -1929,7 +2023,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('rejects native array invariants with a structured marker error', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -1957,7 +2054,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('reads canonical_version integer text as a number', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -1975,7 +2075,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('rejects canonical_version text that is not an integer as a corrupt marker row', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -1998,7 +2101,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('rejects SQL NULL invariants as a corrupt marker row', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -2030,7 +2136,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('throws CONTRACT.MARKER_READ_FAILED when marker read query fails', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
@@ -2054,7 +2163,10 @@ describe('PostgresControlAdapter', () => {
 
   describe('readAllMarkers', () => {
     it('decodes invariants array text before marker validation', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {
@@ -2080,7 +2192,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('throws CONTRACT.MARKER_ROW_CORRUPT on first corrupt row', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {

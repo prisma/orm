@@ -1,57 +1,60 @@
 import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
+import { postgresTypeLookups } from './postgres-type-lookups';
 
-const DDL_TYPES: Readonly<Record<string, string>> = {
-  'sql/char@1': 'character',
-  'sql/varchar@1': 'character varying',
-  'sql/int@1': 'int4',
-  'sql/float@1': 'float8',
-  'sql/text@1': 'text',
-  'pg/text@1': 'text',
-  'pg/char@1': 'character',
-  'pg/varchar@1': 'character varying',
-  'pg/int@1': 'integer',
-  'pg/float@1': 'double precision',
-  'pg/int4@1': 'integer',
-  'pg/int2@1': 'smallint',
-  'pg/int8@1': 'bigint',
-  'pg/int8number@1': 'bigint',
-  'pg/float4@1': 'real',
-  'pg/float8@1': 'double precision',
-  'pg/numeric@1': 'numeric',
-  'pg/unboundedint@1': 'numeric',
-  'pg/date-temporal@1': 'date',
-  'pg/timestamp-temporal@1': 'timestamp without time zone',
-  'pg/timestamptz-temporal@1': 'timestamp with time zone',
-  'pg/time-temporal@1': 'time',
-  'pg/date-string@1': 'date',
-  'pg/timestamp-string@1': 'timestamp without time zone',
-  'pg/timestamptz-string@1': 'timestamp with time zone',
-  'pg/timestamptz-date@1': 'timestamp with time zone',
-  'pg/time-string@1': 'time',
-  'pg/timetz@1': 'timetz',
-  'pg/bool@1': 'boolean',
-  'pg/bit@1': 'bit',
-  'pg/varbit@1': 'bit varying',
-  'pg/bytea@1': 'bytea',
-  'pg/uuid@1': 'uuid',
-  'pg/inet@1': 'inet',
-  'pg/interval@1': 'interval',
-  'pg/json@1': 'json',
-  'pg/jsonb@1': 'jsonb',
-  'pg/text-array@1': 'text[]',
-  'pg/tsquery@1': 'tsquery',
-};
+const postgresDataTypeLookup = postgresTypeLookups.dataTypeLookup;
+
+const PARAMETERLESS_CODEC_IDS: readonly string[] = [
+  'sql/char@1',
+  'sql/varchar@1',
+  'sql/int@1',
+  'sql/float@1',
+  'sql/text@1',
+  'pg/text@1',
+  'pg/char@1',
+  'pg/varchar@1',
+  'pg/int@1',
+  'pg/float@1',
+  'pg/int4@1',
+  'pg/int2@1',
+  'pg/int8@1',
+  'pg/int8number@1',
+  'pg/float4@1',
+  'pg/float8@1',
+  'pg/numeric@1',
+  'pg/unboundedint@1',
+  'pg/date-temporal@1',
+  'pg/timestamp-temporal@1',
+  'pg/timestamptz-temporal@1',
+  'pg/time-temporal@1',
+  'pg/date-string@1',
+  'pg/timestamp-string@1',
+  'pg/timestamptz-string@1',
+  'pg/timestamptz-date@1',
+  'pg/time-string@1',
+  'pg/timetz@1',
+  'pg/bool@1',
+  'pg/bit@1',
+  'pg/varbit@1',
+  'pg/bytea@1',
+  'pg/uuid@1',
+  'pg/inet@1',
+  'pg/interval@1',
+  'pg/json@1',
+  'pg/jsonb@1',
+  'pg/text-array@1',
+  'pg/tsquery@1',
+];
 
 const NEEDS_PARAMS = new Set(['pg/enum@1']);
 
 const parameterless = codecDescriptors.filter((d) => !NEEDS_PARAMS.has(d.codecId));
 const source = ColumnRef.of('t', 'c');
 
-describe('every shipped codec declares a PostgreSQL type', () => {
+describe('every shipped codec represents a Postgres data type', () => {
   it('the table covers exactly the parameterless codecs this package ships', () => {
-    expect(parameterless.map((d) => d.codecId).sort()).toEqual(Object.keys(DDL_TYPES).sort());
+    expect(parameterless.map((d) => d.codecId).sort()).toEqual([...PARAMETERLESS_CODEC_IDS].sort());
   });
 
   it('ships no duplicate codec id', () => {
@@ -59,9 +62,12 @@ describe('every shipped codec declares a PostgreSQL type', () => {
     expect(ids).toHaveLength(new Set(ids).size);
   });
 
-  it.each(parameterless.map((d) => [d.codecId, d] as const))('%s renders its type', (id, d) => {
-    expect(d.nativeTypeFor({ codecId: id })).toBe(DDL_TYPES[id]);
-  });
+  it.each(parameterless.map((d) => [d.codecId, d] as const))(
+    '%s represents a registered data type',
+    (_id, d) => {
+      expect(postgresDataTypeLookup.get(d.dataType)).toBeDefined();
+    },
+  );
 });
 
 describe('every shipped codec projects a scalar read and lifts an array read', () => {
