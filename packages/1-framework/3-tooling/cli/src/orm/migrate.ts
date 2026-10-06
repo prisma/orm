@@ -31,7 +31,6 @@ import {
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
 import {
-  liveMarkerUse,
   type RefResolutionContext,
   resolveContractRef,
 } from '../control-api/operations/ref-resolution';
@@ -296,7 +295,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               runList: migrateShowRunListRows(plan.migrations, rendering, paint),
               migrationsDir: migrationsRelative,
               database:
-                liveMarkerUse(args.flags).needsDatabase && typeof dbConnection === 'string'
+                plan.databaseMarkerHashBySpace !== undefined && typeof dbConnection === 'string'
                   ? maskConnectionUrl(dbConnection)
                   : undefined,
               from: args.flags.from,

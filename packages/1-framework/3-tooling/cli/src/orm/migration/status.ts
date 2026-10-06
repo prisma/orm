@@ -473,7 +473,7 @@ export const migrationStatusCommand = defineOrmCommand({
         styler,
         palette: TONE_MIGRATION_GRAPH_PALETTE,
         isAppSpace,
-        ...(liveOrigin && markerHash !== undefined ? { dbHash: markerHash } : {}),
+        ...ifDefined('dbHash', readMarker?.storageHash),
       });
     }
 

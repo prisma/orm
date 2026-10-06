@@ -13,6 +13,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import type { Refs } from '@internal/migration-tools/refs';
 import { readRefs } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   type CliStructuredError,
@@ -69,10 +70,8 @@ export interface MigrateShowPlanSuccess {
   readonly contractHash: string;
   readonly migrations: readonly MigrateShowMigration[];
   readonly summary: string;
-  /** Each space's database marker hash for the tree's `@db` label; the empty sentinel when the space has no marker or the database was not read. */
-  readonly renderMarkerHashBySpace: ReadonlyMap<string, string>;
-  /** True when the preview read the database markers; only then does the tree mark `@db`. */
-  readonly databaseMarkersRead: boolean;
+  /** Present when the preview read the database: the marker hash, or the empty contract, of each space whose plan uses the marker. */
+  readonly databaseMarkerHashBySpace?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -312,16 +311,22 @@ export async function executeMigrateShowPlan(
       ? 'Already up to date — nothing to run'
       : `${count} migration${count === 1 ? '' : 's'} will run`;
 
-  const renderMarkerHashBySpace = new Map(
-    allSpaces.map((s) => [s.spaceId, contractHashAtMarker(databaseMarkers?.get(s.spaceId))]),
-  );
+  const spacesUsingMarker = liveOrigin ? allSpaces : [aggregate.app];
+  const databaseMarkerHashBySpace =
+    databaseMarkers === undefined
+      ? undefined
+      : new Map(
+          spacesUsingMarker.map((space) => [
+            space.spaceId,
+            contractHashAtMarker(databaseMarkers.get(space.spaceId)),
+          ]),
+        );
 
   return ok({
     aggregate,
     contractHash,
     migrations: orderedMigrations,
     summary,
-    renderMarkerHashBySpace,
-    databaseMarkersRead: databaseMarkers !== undefined,
+    ...ifDefined('databaseMarkerHashBySpace', databaseMarkerHashBySpace),
   });
 }

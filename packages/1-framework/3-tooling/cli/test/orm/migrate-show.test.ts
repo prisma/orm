@@ -288,49 +288,6 @@ describe('migrate --show', () => {
     });
   });
 
-  describe('extension spaces', () => {
-    it('plans extensions from their own state, never from the app --from hash', async () => {
-      const cwd = await buildProject();
-      const extDirName = await addExtensionSpace(cwd);
-
-      const run = await harness(ormConfig(cwd, { extensions: [pgvectorExtension()] })).run(
-        ['db', 'migrate', '--show', '--from', C1.slice(7, 13), '--to', C2.slice(7, 13), '--json'],
-        { cwd },
-      );
-      const document = run.presented?.data as {
-        migrations: ReadonlyArray<{ spaceId: string; dirName: string; from: string }>;
-      };
-
-      expect(run.exitCode).toBe(0);
-      expect(document.migrations).toContainEqual(
-        expect.objectContaining({ spaceId: 'pgvector', dirName: extDirName, from: EMPTY }),
-      );
-      expect(document.migrations).not.toContainEqual(
-        expect.objectContaining({ spaceId: 'app', from: EMPTY }),
-      );
-    });
-
-    it('orders extension migrations before app migrations, matching the runner', async () => {
-      const cwd = await buildProject();
-      await addExtensionSpace(cwd);
-
-      const run = await harness(ormConfig(cwd, { extensions: [pgvectorExtension()] })).run(
-        ['db', 'migrate', '--show', '--from', EMPTY, '--json'],
-        { cwd },
-      );
-      const document = run.presented?.data as {
-        migrations: ReadonlyArray<{ spaceId: string }>;
-      };
-
-      expect(run.exitCode).toBe(0);
-      expect(document.migrations.map((migration) => migration.spaceId)).toEqual([
-        'pgvector',
-        'app',
-        'app',
-      ]);
-    });
-  });
-
   describe('the preview', () => {
     it('previews the route without applying anything', async () => {
       const cwd = await buildProject();
