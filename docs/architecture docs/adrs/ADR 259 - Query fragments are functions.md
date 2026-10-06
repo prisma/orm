@@ -127,7 +127,7 @@ Measured as type instantiations on an application of about 730,000 instantiation
 ## Consequences
 
 - **Any function is a fragment.** Control flow stays in the language. The query API gains no combinators.
-- **A package can offer a scope for any model.** A scope declared with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a scope built from the index definition (ADR 260).
+- **A package can offer a scope for any model.** A scope declared with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a scope built from the index definition.
 - **A scope declared with a field map sees only those fields.** Its body cannot filter or order on a field it did not declare.
 - **A single-model scope takes its model from the collection it is called on**, not from a type parameter, because TypeScript cannot tell one model name from a union of names.
 
