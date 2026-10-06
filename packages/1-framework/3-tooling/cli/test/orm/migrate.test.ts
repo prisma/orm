@@ -541,6 +541,22 @@ describe('migrate', () => {
       expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.migrate).not.toHaveBeenCalled();
     });
+
+    it('reports a missing driver for @db as a missing driver', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd, { driver: undefined })).run(
+        ['db', 'migrate', '--to', '@db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFIG.DRIVER_REQUIRED' },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+    });
   });
 
   describe('a close that fails on the way out', () => {

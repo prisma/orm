@@ -3,6 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import { isLiveMarkerRef, LIVE_MARKER_REF } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -32,7 +33,6 @@ import {
 import {
   liveMarkerUse,
   type RefResolutionContext,
-  requireDatabaseForLiveMarkerUse,
   resolveContractRef,
 } from '../control-api/operations/ref-resolution';
 import type {
@@ -306,21 +306,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         );
       }
 
-      const use = liveMarkerUse({ from: undefined, to: args.flags.to });
-      if (use.liveTarget) {
-        const missingDb = requireDatabaseForLiveMarkerUse({
-          use,
-          dbConnection: args.flags.db ?? ctx.config.db?.connection,
-          hasDriver: ctx.config.driver !== undefined,
-          commandName: 'db migrate',
-          from: undefined,
-          to: args.flags.to,
-        });
-        if (missingDb !== null) {
-          return notOk(normalizeError(missingDb));
-        }
-      }
-
+      const liveTarget = isLiveMarkerRef(args.flags.to);
       const startedAt = Date.now();
       const prepared = await prepareMigrationRun({
         config: ctx.config,
@@ -328,6 +314,10 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db migrate',
         createClient,
+        ...ifDefined(
+          'retryCommand',
+          liveTarget ? `{bin} db migrate --to ${LIVE_MARKER_REF} --db $DATABASE_URL` : undefined,
+        ),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);
@@ -376,7 +366,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(integrityFailure));
       }
 
-      const offlineTarget = use.liveTarget
+      const offlineTarget = liveTarget
         ? undefined
         : resolveRequestedTarget(args.flags.to, {
             graph: aggregate.app.graph(),
