@@ -59,28 +59,28 @@ function emit(schema: string = REPRESENTATIVE_SCHEMA) {
 
 // The legacy scalar-type map channel (name-to-codecId, retired in TML-2985) is gone; the pinned literals
 // below carry the parity claim forward — they are the exact
-// {codecId, nativeType} pairs the retired map + codecLookup derivation produced.
+// {codecId} pairs the retired map + codecLookup derivation produced.
 describe('mongo scalar types derived from the unified namespace', () => {
-  it('pins every base scalar to its {codecId, nativeType}', () => {
+  it('pins every base scalar to its {codecId}', () => {
     const derived = collectScalarTypeConstructors(stack.authoringContributions.type);
 
     expect(Object.fromEntries(derived)).toEqual({
-      String: { codecId: 'mongo/string@1', nativeType: 'string' },
-      Int32: { codecId: 'mongo/int32@1', nativeType: 'int' },
-      Bool: { codecId: 'mongo/bool@1', nativeType: 'bool' },
-      Date: { codecId: 'mongo/date@1', nativeType: 'date' },
-      ObjectId: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
-      Double: { codecId: 'mongo/double@1', nativeType: 'double' },
-      Int64: { codecId: 'mongo/int64@1', nativeType: 'long' },
-      Int64Number: { codecId: 'mongo/int64Number@1', nativeType: 'long' },
-      Decimal128: { codecId: 'mongo/decimal128@1', nativeType: 'decimal' },
-      Binary: { codecId: 'mongo/binary@1', nativeType: 'binData' },
-      Json: { codecId: 'mongo/json@1', nativeType: 'json' },
-      Bson: { codecId: 'mongo/bson@1', nativeType: 'bson' },
-      Int: { codecId: 'mongo/int32@1', nativeType: 'int' },
-      Float: { codecId: 'mongo/double@1', nativeType: 'double' },
-      Boolean: { codecId: 'mongo/bool@1', nativeType: 'bool' },
-      DateTime: { codecId: 'mongo/date@1', nativeType: 'date' },
+      String: { codecId: 'mongo/string@1' },
+      Int32: { codecId: 'mongo/int32@1' },
+      Bool: { codecId: 'mongo/bool@1' },
+      Date: { codecId: 'mongo/date@1' },
+      ObjectId: { codecId: 'mongo/objectId@1' },
+      Double: { codecId: 'mongo/double@1' },
+      Int64: { codecId: 'mongo/int64@1' },
+      Int64Number: { codecId: 'mongo/int64Number@1' },
+      Decimal128: { codecId: 'mongo/decimal128@1' },
+      Binary: { codecId: 'mongo/binary@1' },
+      Json: { codecId: 'mongo/json@1' },
+      Bson: { codecId: 'mongo/bson@1' },
+      Int: { codecId: 'mongo/int32@1' },
+      Float: { codecId: 'mongo/double@1' },
+      Boolean: { codecId: 'mongo/bool@1' },
+      DateTime: { codecId: 'mongo/date@1' },
     });
   });
 

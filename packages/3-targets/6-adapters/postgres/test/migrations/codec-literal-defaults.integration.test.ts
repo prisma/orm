@@ -14,6 +14,7 @@ import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/type
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -250,7 +251,10 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
   it('stores the codec values of defaults written by CREATE TABLE', {
     timeout: testTimeout,
   }, async () => {
-    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
     const ddl = await adapter.lowerToExecuteRequest(createTable());
     await driver!.query(ddl.sql);
 

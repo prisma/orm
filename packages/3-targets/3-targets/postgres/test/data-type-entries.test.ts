@@ -1,6 +1,7 @@
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { postgresDataTypeEntries } from '../src/core/data-type-entries';
+import postgresTargetPack from '../src/exports/pack';
 
 const entries = postgresDataTypeEntries();
 
@@ -123,5 +124,17 @@ describe('what each entry reads and writes', () => {
     ['a word as it stands', 'NaN', 'NaN'],
   ])('writes %s', (_name, value, text) => {
     expect(entry('pg/numeric').print(value)).toBe(text);
+  });
+});
+
+describe('the target descriptor', () => {
+  it('contributes these entries, with json as the only tag', () => {
+    const contributed = postgresTargetPack.authoring.dataTypes;
+    expect(Object.keys(contributed)).toEqual(Object.keys(entries));
+    expect(
+      Object.values(contributed).flatMap((entry) =>
+        entry.written.kind === 'tag' ? [entry.written.tag] : [],
+      ),
+    ).toEqual(['json']);
   });
 });

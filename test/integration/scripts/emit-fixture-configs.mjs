@@ -21,6 +21,7 @@ const fixtureRoots = [
   'test/ports',
   'test/enum-order-by',
   'test/sql-builder/fixtures',
+  'test/planner-golden/fixtures',
   'test/mongo/bson-scalars',
   'test/mongo/temporal-presets',
   'test/mongo/prisma6-source',

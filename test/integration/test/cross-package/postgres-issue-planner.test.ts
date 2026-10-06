@@ -1,15 +1,17 @@
-import {
+import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
   PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { sqlTypeLookupsOf } from '@internal/family-sql/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   SqlStorage,
   type SqlStorageInput,
   type StorageTableInput,
 } from '@internal/sql-contract/types';
+import postgresTargetControl from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { buildPostgresPlanDiff } from '@internal/target-postgres/diff-database-schema';
 import { coalesceSubtreeIssues, planIssues } from '@internal/target-postgres/issue-planner';
 import type { CreateTableCall } from '@internal/target-postgres/op-factory-call';
@@ -26,7 +28,11 @@ import {
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+const frameworkComponents = [postgresTargetControl, postgresAdapterControl];
 
 function makeContract(
   overrides: {
@@ -81,7 +87,7 @@ function planAgainst(
   const { issues } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
-    frameworkComponents: [],
+    frameworkComponents,
   });
   const coalesced = coalesceSubtreeIssues(issues);
   return planIssues({
@@ -90,6 +96,7 @@ function planAgainst(
     fromContract: options.fromContract ?? null,
     schemaName: 'public',
     codecHooks: new Map(),
+    types: sqlTypeLookupsOf(frameworkComponents),
     storageTypes: contract.storage.types ?? {},
     ...(options.strategies !== undefined ? { strategies: options.strategies } : {}),
   });
@@ -271,7 +278,7 @@ describe('planIssues', () => {
   });
 
   describe('typeChange call strategy', () => {
-    function actualWithAge(nativeType: string): PostgresDatabaseSchemaNode {
+    function actualWithAge(nativeType: string, codecId: string): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
@@ -286,7 +293,13 @@ describe('planIssues', () => {
                     nullable: false,
                     resolvedNativeType: 'uuid',
                   },
-                  age: { name: 'age', nativeType, nullable: false, resolvedNativeType: nativeType },
+                  age: {
+                    name: 'age',
+                    nativeType,
+                    nullable: false,
+                    resolvedNativeType: nativeType,
+                    codecRef: { codecId },
+                  },
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -325,7 +338,9 @@ describe('planIssues', () => {
       // `typeChangeCallStrategy` only fires when the planner has a prior
       // contract (`migration plan`); any non-null contract satisfies the
       // gate, it is never otherwise read by this strategy.
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const result = planAgainst(toContract, actualWithAge('int4', 'pg/int4@1'), {
+        fromContract: toContract,
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
@@ -352,7 +367,9 @@ describe('planIssues', () => {
         },
       });
 
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const result = planAgainst(toContract, actualWithAge('int4', 'pg/int4@1'), {
+        fromContract: toContract,
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
@@ -683,7 +700,7 @@ describe('planIssues', () => {
         schema: actual,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
         fromContract: null,
-        frameworkComponents: [],
+        frameworkComponents,
         spaceId: 'app',
         snapshotsImportPath: '../../snapshots',
       });

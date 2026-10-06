@@ -238,7 +238,7 @@ const authoringContributions = assembleAuthoringContributions([
         vendor: {
           Text: {
             kind: 'typeConstructor',
-            output: { codecId: 'fixture/text', nativeType: 'text' },
+            output: { codecId: 'fixture/text' },
           },
         },
       },

@@ -49,7 +49,7 @@ export interface FieldEventContext {
 }
 
 export interface CodecControlHooks<TTargetDetails = unknown> {
-  // … existing hooks (expandNativeType, resolveIdentityValue, etc.) …
+  // … existing hooks (resolveIdentityValue, etc.) …
   readonly onFieldEvent?: (
     event: FieldEvent,
     ctx: FieldEventContext,
@@ -124,8 +124,6 @@ This mirrors the broader `migrate` (persist) vs `db init`/`db update` (apply-and
 
 ```ts
 const cipherstashStringCodecHooks: CodecControlHooks = {
-  expandNativeType: ({ nativeType }) => nativeType,
-
   onFieldEvent: (event, { tableName, fieldName, newField, priorField }) => {
     const searchable = newField?.typeParams?.['searchable'] === true;
     const wasSearchable = priorField?.typeParams?.['searchable'] === true;

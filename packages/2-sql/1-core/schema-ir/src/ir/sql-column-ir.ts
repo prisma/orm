@@ -72,14 +72,6 @@ export interface SqlColumnIRInput {
    */
   readonly codecBaseNativeType?: string;
   /**
-   * True when the contract column declared its type via a named
-   * `storage.types` reference (`typeRef`) rather than inline fields — the
-   * migration planner quotes the base native type as an identifier in this
-   * case (e.g. a native enum's type name), matching the pre-`plan(start,
-   * end)` rendering exactly.
-   */
-  readonly codecNamedType?: boolean;
-  /**
    * The data type the column's codec represents, from the assembled stack (ADR 254). A literal
    * default compares through its canonical form, so two forms of one value are equal, and DDL
    * writes the canonical form. Stamped on the contract-derived column; absent on introspected
@@ -122,8 +114,6 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   declare readonly codecRef?: CodecRef;
   /** See {@link SqlColumnIRInput.codecBaseNativeType}. Non-enumerable, same reason as {@link codecRef}. */
   declare readonly codecBaseNativeType?: string;
-  /** See {@link SqlColumnIRInput.codecNamedType}. Non-enumerable, same reason as {@link codecRef}. */
-  declare readonly codecNamedType?: boolean;
   /** See {@link SqlColumnIRInput.dataType}. Non-enumerable, same reason as {@link codecRef}. */
   declare readonly dataType?: DataType;
 
@@ -140,7 +130,6 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
     defineNonEnumerable(this, 'authoredDefault', input.authoredDefault);
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
-    defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
     defineNonEnumerable(this, 'dataType', input.dataType);
     freezeNode(this);
   }
@@ -174,7 +163,6 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
         ...ifDefined('many', this.many ?? this.codecRef?.many),
         ...ifDefined('codecRef', this.codecRef),
         ...ifDefined('codecBaseNativeType', this.codecBaseNativeType),
-        ...ifDefined('codecNamedType', this.codecNamedType),
         ...ifDefined('dataType', this.dataType),
       }),
     ];

@@ -1,12 +1,13 @@
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import type { PostgresContract } from '../src/core/types';
 
 const lookup = createPostgresBuiltinCodecLookup();
-const adapter = new PostgresControlAdapter(lookup);
+const adapter = new PostgresControlAdapter(lookup, createPostgresBuiltinDataTypeLookup());
 
 async function defaultClause(codecId: string, nativeType: string, value: number): Promise<string> {
   const stored = lookup.get(codecId)!.encodeJson(value);

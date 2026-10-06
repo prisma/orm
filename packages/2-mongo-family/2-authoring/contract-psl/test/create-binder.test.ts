@@ -3,6 +3,7 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -33,18 +34,15 @@ const fieldPresets: AuthoringFieldNamespace = {
   temporal: {
     createdAt: {
       kind: 'fieldPreset',
-      output: { codecId: 'mongo/date@1', nativeType: 'date' },
+      output: { codecId: 'mongo/date@1' },
     },
   },
 };
 
 const mongoScalarAuthoringTypes: AuthoringTypeNamespace = {
-  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1', nativeType: 'string' } },
-  ObjectId: {
-    kind: 'typeConstructor',
-    output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
-  },
-  Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1', nativeType: 'int' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
+  ObjectId: { kind: 'typeConstructor', output: { codecId: 'mongo/objectId@1' } },
+  Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1' } },
 };
 
 function normalize(resolution: unknown): unknown {
@@ -120,14 +118,9 @@ describe('createBinder', () => {
         attributeSpecs: mongoAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
-      codecLookup: {
-        get: () => undefined,
-        targetTypesFor: () => undefined,
-        renderOutputTypeFor: () => undefined,
-        descriptorFor: () => undefined,
-      },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypeLookup: createDataTypeLookup([]),
       resolvedInputs: [],
       capabilities: {},
     };

@@ -7,7 +7,7 @@ changes:
       contains:
         - "new SelectAst("
   - id: render-lowered-sql-takes-capabilities
-    summary: "renderLoweredSql from @internal/adapter-postgres/sql-renderer takes a required fourth argument, the capability matrix to check locking clauses against; pass postgresAdapterCapabilities from @internal/adapter-postgres/adapter."
+    summary: "renderLoweredSql from @internal/adapter-postgres/sql-renderer takes a required fifth argument after the data type lookup, the capability matrix to check locking clauses against; pass postgresAdapterCapabilities from @internal/adapter-postgres/adapter."
     detection:
       glob: "**/*.ts"
       contains:
@@ -20,11 +20,11 @@ changes:
 
 ## `render-lowered-sql-takes-capabilities`
 
-`renderLoweredSql(ast, contract, codecDescriptorRegistry)` is now `renderLoweredSql(ast, contract, codecDescriptorRegistry, capabilities)`. The renderer refuses a locking clause whose strength or option the given capabilities do not report. To render as the Postgres adapter does, pass its capabilities:
+`renderLoweredSql(ast, contract, codecDescriptorRegistry, dataTypeLookup)` is now `renderLoweredSql(ast, contract, codecDescriptorRegistry, dataTypeLookup, capabilities)`. The renderer refuses a locking clause whose strength or option the given capabilities do not report. To render as the Postgres adapter does, pass its capabilities:
 
 ```ts
 import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { renderLoweredSql } from '@internal/adapter-postgres/sql-renderer';
 
-renderLoweredSql(ast, contract, codecDescriptorRegistry, postgresAdapterCapabilities);
+renderLoweredSql(ast, contract, codecDescriptorRegistry, dataTypeLookup, postgresAdapterCapabilities);
 ```

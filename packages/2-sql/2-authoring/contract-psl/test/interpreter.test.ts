@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -41,6 +41,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'createNamespace'
       | 'capabilities'
       | 'dataTypeLookup'
+      | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -51,7 +52,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       ...input,
     });
 
@@ -70,7 +71,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         composedExtensionContracts: new Map(),
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -133,7 +134,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -157,7 +158,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         controlMutationDefaults: {
           defaultFunctionRegistry: new Map([
             [

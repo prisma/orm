@@ -2,6 +2,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import type { ExtractFieldInputTypes, ExtractFieldOutputTypes } from '@internal/sql-contract/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
 import { defineContract } from '../src/contract-builder';
 
@@ -28,11 +29,11 @@ const postgresTargetPackBase = {
     type: {
       BigIntNumber: {
         kind: 'typeConstructor',
-        output: { codecId: 'pg/int8number@1', nativeType: 'int8' },
+        output: { codecId: 'pg/int8number@1' },
       },
       UnboundedInt: {
         kind: 'typeConstructor',
-        output: { codecId: 'pg/unboundedint@1', nativeType: 'numeric' },
+        output: { codecId: 'pg/unboundedint@1' },
       },
     },
   },
@@ -57,7 +58,7 @@ const sqliteTargetPackBase = {
     type: {
       BigIntNumber: {
         kind: 'typeConstructor',
-        output: { codecId: 'sqlite/bigintnumber@1', nativeType: 'integer' },
+        output: { codecId: 'sqlite/bigintnumber@1' },
       },
     },
   },
@@ -69,6 +70,7 @@ const sqliteTargetPack: typeof sqliteTargetPackBase & {
 
 const postgresContract = defineContract(
   {
+    ...testTypeLookups,
     family: sqlFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -95,6 +97,7 @@ const postgresContract = defineContract(
 
 const sqliteContract = defineContract(
   {
+    ...testTypeLookups,
     family: sqlFamilyPack,
     target: sqliteTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -120,11 +123,13 @@ const sqliteContract = defineContract(
 describe('integer representation type helpers', () => {
   it('composes only the constructors contributed by the active target', () => {
     const postgresHelpers = createComposedAuthoringHelpers({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       extensions: {},
     });
     const sqliteHelpers = createComposedAuthoringHelpers({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: sqliteTargetPack,
       extensions: {},

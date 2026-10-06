@@ -92,7 +92,6 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
 class TestGenericDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = undefined;
 
   constructor(
@@ -121,7 +120,7 @@ function sqliteDescriptor(options: {
     options.transform,
   );
   return sqliteCodec(descriptor, {
-    dataType: fixtureTypeId(options.codecId),
+    dataType: dataType(fixtureTypeId(options.codecId), {}),
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       options.onProjection?.();
       return expression;
@@ -271,12 +270,11 @@ describe('SQLite adapter codec registry composition', () => {
       (descriptor) => descriptor.codecId,
     );
     const expectedIds = ['app/target@1', ...builtinIds, 'app/first@1', 'app/second@1'];
-    const filteredMetadataIds = sqliteAdapterDescriptorMeta.types.codecTypes.codecDescriptors.map(
+    const metadataIds = sqliteAdapterDescriptorMeta.types.codecTypes.codecDescriptors.map(
       (descriptor) => descriptor.codecId,
     );
 
-    expect(filteredMetadataIds).not.toContain(SQL_CHAR_CODEC_ID);
-    expect(filteredMetadataIds).not.toContain(SQL_VARCHAR_CODEC_ID);
+    expect(metadataIds).toEqual(builtinIds);
     expect(Object.isFrozen(runtimeRegistry)).toBe(true);
     expect(Object.isFrozen(controlRegistry)).toBe(true);
     expect(Array.from(runtimeRegistry.values(), (descriptor) => descriptor.codecId)).toEqual(
@@ -365,12 +363,10 @@ describe('SQLite adapter codec registry composition', () => {
       ...raw,
       codecId: 'app/wrong-target@1',
       traits: raw.traits,
-      targetTypes: raw.targetTypes,
       paramsSchema: raw.paramsSchema,
       isParameterized: raw.isParameterized,
       factory: raw.factory.bind(raw),
       descriptorKind: 'postgres-codec',
-      nativeTypeFor: () => 'text',
       projectJson: (expression: ProjectionExpr) => expression,
     } as const;
     const malformed = {
@@ -397,7 +393,7 @@ describe('SQLite adapter codec registry composition', () => {
       /Duplicate SQLite codec descriptor id.*sql\/char@1/,
     );
     expect(() => createComposedControlAdapter([duplicate])).toThrow(
-      /Duplicate SQLite codec descriptor id.*sql\/char@1/,
+      /Duplicate codec descriptor for codecId "sql\/char@1"/,
     );
   });
 

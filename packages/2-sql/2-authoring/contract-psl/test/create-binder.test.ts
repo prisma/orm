@@ -5,11 +5,11 @@ import { SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   buildSymbolTableInput,
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
   postgresScalarAuthoringTypes,
 } from './fixtures';
 
@@ -42,14 +42,14 @@ const fieldPresets: AuthoringFieldNamespace = {
   temporal: {
     createdAt: {
       kind: 'fieldPreset',
-      output: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' },
+      output: { codecId: 'pg/timestamptz@1' },
     },
   },
 };
 
 const authoringType = {
   ...postgresScalarAuthoringTypes,
-  Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1', nativeType: 'numeric' } },
+  Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1' } },
 } as const;
 
 function normalize(resolution: unknown): unknown {
@@ -123,9 +123,8 @@ describe('createBinder', () => {
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: postgresCodecLookup,
       controlMutationDefaults: controlMutationDefaultsBase,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     };

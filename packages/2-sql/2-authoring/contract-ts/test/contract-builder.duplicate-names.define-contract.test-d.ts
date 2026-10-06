@@ -7,6 +7,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { test } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model, rel } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 
@@ -26,7 +27,7 @@ const target: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const base = { family, target, createNamespace: createTestSqlNamespace };
+const base = { ...testTypeLookups, family, target, createNamespace: createTestSqlNamespace };
 
 const textColumn = columnDescriptor('pg/text@1');
 const fields = {
@@ -94,26 +95,26 @@ test('a model with distinct names is accepted', () => {
 
 test('a duplicate name in sql() is rejected', () => {
   // @ts-expect-error the sql() stage resolved to never
-  defineContract({ ...base, models: { User: duplicateInSql } });
+  defineContract({ ...testTypeLookups, ...base, models: { User: duplicateInSql } });
   // @ts-expect-error the sql() stage resolved to never
   defineContract(base, () => ({ models: { User: duplicateInSql } }));
 });
 
 test('a duplicate name in attributes() is rejected', () => {
   // @ts-expect-error the attributes() stage resolved to never
-  defineContract({ ...base, models: { User: duplicateInAttributes } });
+  defineContract({ ...testTypeLookups, ...base, models: { User: duplicateInAttributes } });
   // @ts-expect-error the attributes() stage resolved to never
   defineContract(base, () => ({ models: { User: duplicateInAttributes } }));
 });
 
 test('two inline uniques with the same name are rejected without any stage call', () => {
   // @ts-expect-error two fields declare the unique name user_key
-  defineContract({ ...base, models: { User: duplicateInlineUniques } });
+  defineContract({ ...testTypeLookups, ...base, models: { User: duplicateInlineUniques } });
   // @ts-expect-error two fields declare the unique name user_key
   defineContract(base, () => ({ models: { User: duplicateInlineUniques } }));
 });
 
 test('a relation foreign key added after sql() and reusing an index name is rejected', () => {
   // @ts-expect-error the relation foreign key reuses the index name post_author
-  defineContract({ ...base, models: { Post: relationAddedAfterSql } });
+  defineContract({ ...testTypeLookups, ...base, models: { Post: relationAddedAfterSql } });
 });

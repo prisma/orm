@@ -19,11 +19,10 @@ describe('pgvector PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves vector native type and projects a JSON numeric array', () => {
+  it('projects a JSON numeric array', () => {
     const ref = { codecId: pgVectorDescriptor.codecId, typeParams: { length: 3 } };
     const expression = ColumnRef.of('records', 'embedding');
 
-    expect(pgVectorDescriptor.nativeTypeFor(ref)).toBe('vector');
     // Elements widen to float8 before the array is built, so the exact value a
     // `real` denotes survives rather than its shortest text form.
     expect(pgVectorDescriptor.projectJson(expression, ref)).toEqual(

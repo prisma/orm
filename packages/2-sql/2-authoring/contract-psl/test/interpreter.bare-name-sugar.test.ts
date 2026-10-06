@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -23,7 +23,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -32,7 +31,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
     },
   },
@@ -41,7 +39,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
     output: {
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -61,7 +58,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,

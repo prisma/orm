@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
 import {
@@ -15,6 +16,7 @@ import {
   type ProjectionExpr,
 } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
   buildSqliteCodecDescriptorRegistry,
@@ -82,7 +84,6 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['vector'] as const;
   override readonly paramsSchema = vectorParamsSchema;
   readonly extensionOnly = 'wrapped-only' as const;
 
@@ -113,7 +114,6 @@ class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['vector'] as const;
   override readonly paramsSchema = vectorParamsSchema;
   readonly jsonProjectionParams: VectorParams[] = [];
 
@@ -180,10 +180,14 @@ describe('SqliteCodecDescriptor', () => {
   });
 });
 
+const fixtureVectorType = dataType('demo/fixture', {
+  params: arktype({ length: 'number.integer >= 1' }),
+});
+
 describe('sqliteCodec', () => {
   it('preserves the wrapped descriptor contract and materialization behavior', () => {
     const descriptor = sqliteCodec(genericVectorDescriptor, {
-      dataType: dataTypeId('demo/fixture'),
+      dataType: fixtureVectorType,
       jsonProjection: (expression, params) =>
         FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(params.length)]),
     });
@@ -191,8 +195,7 @@ describe('sqliteCodec', () => {
     expect(descriptor.descriptorKind).toBe('sqlite-codec');
     expect(descriptor.codecId).toBe(genericVectorDescriptor.codecId);
     expect(descriptor.traits).toBe(genericVectorDescriptor.traits);
-    expect(descriptor.targetTypes).toBe(genericVectorDescriptor.targetTypes);
-    expect(descriptor.paramsSchema).toBe(genericVectorDescriptor.paramsSchema);
+    expect(descriptor.dataType).toBe(fixtureVectorType.id);
     expect(descriptor.isParameterized).toBe(genericVectorDescriptor.isParameterized);
     expect(descriptor.renderOutputType?.({ length: 6 })).toBe('Vector<6>');
     expect(descriptor.renderInputType?.({ length: 6 })).toBe(
@@ -212,6 +215,34 @@ describe('sqliteCodec', () => {
       FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(6)]),
     );
   });
+
+  it('takes its parameter schema from the data type, not the template', () => {
+    const descriptor = sqliteCodec(genericVectorDescriptor, {
+      dataType: fixtureVectorType,
+      jsonProjection: (expression) => expression,
+    });
+    const withoutParams = sqliteCodec(genericVectorDescriptor, {
+      dataType: dataType('demo/plain', {}),
+      jsonProjection: (expression) => expression,
+    });
+
+    expect(descriptor.paramsSchema).toBe(fixtureVectorType.params);
+    expect(descriptor.paramsSchema).not.toBe(genericVectorDescriptor.paramsSchema);
+    expect(withoutParams.paramsSchema).toBeUndefined();
+    expect(withoutParams.isParameterized).toBe(false);
+  });
+
+  it('leaves out the template type renderers when asked to', () => {
+    const descriptor = sqliteCodec(genericVectorDescriptor, {
+      dataType: fixtureVectorType,
+      jsonProjection: (expression) => expression,
+      renderTypes: false,
+    });
+
+    expect(descriptor.renderOutputType).toBeUndefined();
+    expect(descriptor.renderInputType).toBeUndefined();
+    expect(descriptor.renderValueLiteral?.('value', 'input')).toBe('input:value');
+  });
 });
 
 describe('SQLite codec descriptor registry', () => {
@@ -221,7 +252,6 @@ describe('SQLite codec descriptor registry', () => {
       descriptorKind: descriptor.descriptorKind,
       codecId: descriptor.codecId,
       traits: descriptor.traits,
-      targetTypes: descriptor.targetTypes,
       paramsSchema: descriptor.paramsSchema,
       isParameterized: descriptor.isParameterized,
       factory: descriptor.factory.bind(descriptor),
@@ -243,7 +273,6 @@ describe('SQLite codec descriptor registry', () => {
       descriptorKind: descriptor.descriptorKind,
       codecId: descriptor.codecId,
       traits: descriptor.traits,
-      targetTypes: descriptor.targetTypes,
       paramsSchema: descriptor.paramsSchema,
       isParameterized: descriptor.isParameterized,
       factory: descriptor.factory.bind(descriptor),

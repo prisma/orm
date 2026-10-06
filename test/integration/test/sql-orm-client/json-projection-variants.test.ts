@@ -66,6 +66,7 @@ describe('JSON projection variants', () => {
   // column — the same stack a pgvector application assembles.
   const postgresAdapter = createPostgresAdapter({
     codecDescriptors: pgvectorCodecDescriptors,
+    dataTypes: pgvectorRuntime.dataTypes ?? [],
   });
   const sqliteAdapter = createSqliteAdapter();
 

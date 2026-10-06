@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { ColumnRef } from '@internal/sql-relational-core/ast';
 import {
   createRawSql,
@@ -5,6 +6,7 @@ import {
   type ScopeField,
 } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import postgresTargetDescriptor from '@internal/target-postgres/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -14,6 +16,8 @@ import { postgresRawCodecInferer } from '../src/core/adapter';
 import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
@@ -69,6 +73,7 @@ function lowerWhere(query: unknown) {
     plan.ast,
     contract,
     postgresCodecDescriptorRegistry,
+    postgresDataTypeLookup,
     postgresAdapterCapabilities,
   );
 }

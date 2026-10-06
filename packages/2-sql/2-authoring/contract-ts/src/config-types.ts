@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import type { ContractConfig } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
@@ -43,12 +44,16 @@ export function emptyContract(options: {
     source: {
       format: 'typescript',
       load: async () => {
-        const built = buildSqlContractFromDefinition({
-          warnings: undefined,
-          target: options.target,
-          createNamespace: options.createNamespace,
-          models: [],
-        });
+        const built = buildSqlContractFromDefinition(
+          {
+            warnings: undefined,
+            target: options.target,
+            createNamespace: options.createNamespace,
+            models: [],
+          },
+          { ...emptyCodecLookup, descriptorFor: () => undefined },
+          createDataTypeLookup([]),
+        );
         return ok(
           applySqlSpecifierControlPolicy(
             built,

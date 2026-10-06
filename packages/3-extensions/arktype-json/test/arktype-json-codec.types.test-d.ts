@@ -48,7 +48,7 @@ test('arktypeJsonColumn: typeParams shape is ArktypeJsonTypeParams', () => {
 test('arktypeJsonColumn: bare nativeType "jsonb" + codecId literal', () => {
   const ProductSchema = type({ name: 'string', price: 'number' });
   const col = arktypeJsonColumn(ProductSchema);
-  expectTypeOf(col.nativeType).toEqualTypeOf<string>();
+  expectTypeOf(col.nativeType).toEqualTypeOf<string | undefined>();
   expectTypeOf(col.codecId).toEqualTypeOf<string>();
   if (col.nativeType !== 'jsonb' || col.codecId !== 'arktype/json@1') {
     throw new Error(`nativeType / codecId mismatch: ${col.nativeType} / ${col.codecId}`);

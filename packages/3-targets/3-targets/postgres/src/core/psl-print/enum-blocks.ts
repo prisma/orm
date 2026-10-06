@@ -3,8 +3,8 @@ import type {
   PslExtensionBlock,
   PslExtensionBlockPrintEntry,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { StorageColumn } from '@internal/sql-contract/types';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import { buildNativeEnumBlock } from '../psl-build/native-enum-block';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';

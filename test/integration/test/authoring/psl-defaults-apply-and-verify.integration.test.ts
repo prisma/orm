@@ -345,3 +345,30 @@ model Flag {
     timeouts.spinUpPpgDev,
   );
 });
+
+describe('a numeric column written with a precision and no scale', () => {
+  it(
+    'applies, verifies strictly and plans no change, though the database reports numeric(10,0)',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Amount {
+  id     Int            @id
+  whole  Numeric(10)
+  scaled Numeric(10, 2)
+}
+`,
+          ['whole', 'scaled'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [undefined, undefined],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});

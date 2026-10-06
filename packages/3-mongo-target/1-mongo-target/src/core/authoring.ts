@@ -5,7 +5,7 @@ import {
 } from '@internal/framework-components/authoring';
 import { MONGO_DATE_CODEC_ID } from './codec-ids';
 
-const mongoDateStorage = { codecId: MONGO_DATE_CODEC_ID, nativeType: 'date' } as const;
+const mongoDateStorage = { codecId: MONGO_DATE_CODEC_ID } as const;
 
 export const mongoAuthoringFieldPresets = {
   temporal: {

@@ -4,12 +4,25 @@ import type {
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
+  instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeConstructor,
   isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeParams,
 } from '@internal/framework-components/authoring';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
+import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
 import { type StorageTypeInstance, toStorageTypeInstance } from '@internal/sql-contract/types';
 import { contractError } from './contract-errors';
+
+/** The codecs and data types of the packs a contract is authored with. */
+export interface AuthoringTypeLookups {
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
+}
 
 export type RuntimeNamedConstraintSpec = {
   readonly name?: string;
@@ -31,6 +44,7 @@ export function isNamedConstraintOptionsLike(value: unknown): value is RuntimeNa
 
 export function createTypeHelpersFromNamespace(
   namespace: AuthoringTypeNamespace,
+  lookups: AuthoringTypeLookups,
   path: readonly string[] = [],
 ): Record<string, unknown> {
   const helpers: Record<string, unknown> = {};
@@ -43,17 +57,23 @@ export function createTypeHelpersFromNamespace(
       const helperPath = currentPath.join('.');
       helpers[key] = (...args: readonly unknown[]): StorageTypeInstance => {
         validateAuthoringHelperArguments(helperPath, value.args, args);
-        const triple = instantiateAuthoringTypeConstructor(value, args);
+        const output = instantiateAuthoringTypeConstructor(value, args);
+        validateAuthoringTypeParams(
+          helperPath,
+          value.output,
+          output.typeParams,
+          lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
+        );
         return toStorageTypeInstance({
-          codecId: triple.codecId,
-          nativeType: triple.nativeType,
-          typeParams: triple.typeParams ?? {},
+          codecId: output.codecId,
+          nativeType: unquotedSqlBaseNameOfCodec(output.codecId, output.typeParams, lookups),
+          typeParams: output.typeParams ?? {},
         });
       };
       continue;
     }
 
-    helpers[key] = createTypeHelpersFromNamespace(value, currentPath);
+    helpers[key] = createTypeHelpersFromNamespace(value, lookups, currentPath);
   }
 
   return helpers;
@@ -62,6 +82,7 @@ export function createTypeHelpersFromNamespace(
 export function createFieldPresetHelper<Result>(options: {
   readonly helperPath: string;
   readonly descriptor: AuthoringFieldPresetDescriptor;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly build: (options: {
     readonly args: readonly unknown[];
     readonly namedConstraintOptions?: RuntimeNamedConstraintSpec;
@@ -103,6 +124,13 @@ export function createFieldPresetHelper<Result>(options: {
     }
 
     validateAuthoringHelperArguments(options.helperPath, options.descriptor.args, args);
+    const output = options.descriptor.output;
+    validateAuthoringTypeParams(
+      options.helperPath,
+      output,
+      instantiateAuthoringFieldPreset(options.descriptor, args).descriptor.typeParams,
+      options.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
+    );
 
     return options.build({
       args,

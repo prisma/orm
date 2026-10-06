@@ -8,6 +8,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
@@ -164,6 +165,7 @@ describe('Postgres adapter row locking', () => {
           base.withLocking([clause]),
           contract,
           postgresCodecDescriptorRegistry,
+          createPostgresBuiltinDataTypeLookup(),
           withoutFlag(group, flag),
         ),
       ).toThrow(

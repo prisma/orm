@@ -34,15 +34,16 @@ import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
 import { binderContext } from './support';
 
-function scalar(nativeType: string): AuthoringTypeConstructorDescriptor {
-  return { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType } };
-}
+const scalar: AuthoringTypeConstructorDescriptor = {
+  kind: 'typeConstructor',
+  output: { codecId: 'fixture/scalar@1' },
+};
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
-  String: scalar('text'),
-  Int: scalar('integer'),
-  Uuid: scalar('uuid'),
-  pgvector: { Vector: scalar('vector') },
+  String: scalar,
+  Int: scalar,
+  Uuid: scalar,
+  pgvector: { Vector: scalar },
 };
 
 const fieldListParam = (key: string) => ({

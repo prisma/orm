@@ -3,6 +3,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
 
@@ -19,7 +20,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -181,6 +182,7 @@ describe('enumType() authoring → contract structure', () => {
 
   it('emits domain enum entry', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -200,6 +202,7 @@ describe('enumType() authoring → contract structure', () => {
 
   it('emits storage valueSet entry', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -215,6 +218,7 @@ describe('enumType() authoring → contract structure', () => {
 
   it('field.namedType(handle) sets valueSet on domain field', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -241,6 +245,7 @@ describe('enumType() authoring → contract structure', () => {
 
   it('field.namedType(handle) sets valueSet on storage column', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -267,6 +272,7 @@ describe('enumType() authoring → contract structure', () => {
 
   it('field.namedType(handle) does not set typeRef on storage column', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -301,6 +307,7 @@ describe('enumType() — valueSet ref namespace (non-default model namespace)', 
     const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       enums: { Role },
@@ -355,6 +362,7 @@ describe('enumType() — declaration key must match enumType name', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -365,6 +373,7 @@ describe('enumType() — declaration key must match enumType name', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -390,6 +399,7 @@ describe('enumType() — full integration via defineContract factory', () => {
 
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

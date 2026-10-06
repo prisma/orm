@@ -13,7 +13,6 @@ describe('cross-family codec parity (T4.1)', () => {
   // A single codec instance — used on the SQL side directly and registered in the Mongo registry.
   const objectIdLikeCodec = defineTestCodec({
     typeId: 'shared/object-id-like@1',
-    targetTypes: ['objectIdLike'],
     encode: (value: string) => `wire:${value}`,
     decode: (wire: string) => wire.replace(/^wire:/, ''),
   });

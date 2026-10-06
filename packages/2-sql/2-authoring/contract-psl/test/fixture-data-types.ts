@@ -12,15 +12,16 @@ import {
   type Cast,
   createDataTypeLookup,
   type DataType,
-  dataType,
   isNonFiniteText,
 } from '@internal/framework-components/codec';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   sqlExpressionAuthoringEntry,
   sqlExpressionDataType,
 } from '@internal/sql-contract/sql-expression';
 import { structuredError } from '@internal/utils/structured-error';
+import { type } from 'arktype';
 import type { DataTypeSupport } from '../src/data-type-default';
 
 const unchanged: Cast = (value) => value;
@@ -48,15 +49,35 @@ function canonicalNumeral(text: string): string {
   return /^[0.]+$/.test(digits) ? digits : `${sign}${digits}`;
 }
 
-export const pgText: DataType = dataType('pg/text', {});
-export const pgBool: DataType = dataType('pg/bool', {});
-export const pgJson: DataType = dataType('pg/json', {});
-export const pgInt2: DataType = dataType('pg/int2', {});
-export const pgInt4: DataType = dataType('pg/int4', { casts: { [pgInt2.id]: unchanged } });
-export const pgInt8: DataType = dataType('pg/int8', {
+const written = (text: string) => [{ text, written: true as const }];
+const precision = type({ 'precision?': 'number.integer >= 0 & number.integer <= 6' });
+const temporalTexts = (name: string) => [
+  { text: name, written: true as const },
+  { text: `${name}({precision})`, written: true as const },
+];
+
+export const pgText: DataType = sqlDataType('pg/text', { texts: written('text') });
+export const pgBool: DataType = sqlDataType('pg/bool', { texts: written('bool') });
+export const pgJson: DataType = sqlDataType('pg/json', { texts: written('json') });
+export const pgInt2: DataType = sqlDataType('pg/int2', { texts: written('int2') });
+export const pgInt4: DataType = sqlDataType('pg/int4', {
+  texts: written('int4'),
+  casts: { [pgInt2.id]: unchanged },
+});
+export const pgInt8: DataType = sqlDataType('pg/int8', {
+  texts: written('int8'),
   casts: { [pgInt2.id]: asText, [pgInt4.id]: asText },
 });
-export const pgNumeric: DataType = dataType('pg/numeric', {
+export const pgNumeric: DataType = sqlDataType('pg/numeric', {
+  params: type({
+    'precision?': 'number.integer >= 1 & number.integer <= 1000',
+    'scale?': 'number.integer >= -1000 & number.integer <= 1000',
+  }),
+  texts: [
+    { text: 'numeric', written: true },
+    { text: 'numeric({precision})', written: true },
+    { text: 'numeric({precision},{scale})', written: true },
+  ],
   casts: { [pgInt2.id]: asText, [pgInt4.id]: asText, [pgInt8.id]: unchanged },
 });
 const floatCasts: Readonly<Record<string, Cast>> = {
@@ -65,22 +86,72 @@ const floatCasts: Readonly<Record<string, Cast>> = {
   [pgInt8.id]: asNumber,
   [pgNumeric.id]: asNumber,
 };
-export const pgFloat4: DataType = dataType('pg/float4', { casts: floatCasts });
-export const pgFloat8: DataType = dataType('pg/float8', { casts: floatCasts });
-export const pgJsonb: DataType = dataType('pg/jsonb', { casts: { [pgJson.id]: unchanged } });
+export const pgFloat4: DataType = sqlDataType('pg/float4', {
+  texts: written('float4'),
+  casts: floatCasts,
+});
+export const pgFloat8: DataType = sqlDataType('pg/float8', {
+  texts: written('float8'),
+  casts: floatCasts,
+});
+export const pgJsonb: DataType = sqlDataType('pg/jsonb', {
+  texts: written('jsonb'),
+  casts: { [pgJson.id]: unchanged },
+});
 
 const fromText: Readonly<Record<string, Cast>> = { [pgText.id]: unchanged };
-export const pgChar: DataType = dataType('pg/char', { casts: fromText });
-export const pgVarchar: DataType = dataType('pg/varchar', { casts: fromText });
-export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
-export const pgDate: DataType = dataType('pg/date', { casts: fromText });
-export const pgTime: DataType = dataType('pg/time', { casts: fromText });
-export const pgTimetz: DataType = dataType('pg/timetz', { casts: fromText });
-export const pgTimestamp: DataType = dataType('pg/timestamp', { casts: fromText });
-export const pgTimestamptz: DataType = dataType('pg/timestamptz', { casts: fromText });
-export const pgEnum: DataType = dataType('pg/enum', {});
+const length = type({ 'length?': 'number.integer >= 1 & number.integer <= 10485760' });
+export const pgChar: DataType = sqlDataType('pg/char', {
+  params: length,
+  texts: [
+    { text: 'character', written: true },
+    { text: 'character({length})', written: true },
+  ],
+  casts: fromText,
+});
+export const pgVarchar: DataType = sqlDataType('pg/varchar', {
+  params: length,
+  texts: [
+    { text: 'character varying', written: true },
+    { text: 'character varying({length})', written: true },
+  ],
+  casts: fromText,
+});
+export const pgBytea: DataType = sqlDataType('pg/bytea', {
+  texts: written('bytea'),
+  casts: fromText,
+});
+export const pgDate: DataType = sqlDataType('pg/date', { texts: written('date'), casts: fromText });
+export const pgTime: DataType = sqlDataType('pg/time', {
+  params: precision,
+  texts: temporalTexts('time'),
+  casts: fromText,
+});
+export const pgTimetz: DataType = sqlDataType('pg/timetz', {
+  params: precision,
+  texts: temporalTexts('timetz'),
+  casts: fromText,
+});
+export const pgTimestamp: DataType = sqlDataType('pg/timestamp', {
+  params: precision,
+  texts: temporalTexts('timestamp'),
+  casts: fromText,
+});
+export const pgTimestamptz: DataType = sqlDataType('pg/timestamptz', {
+  params: precision,
+  texts: temporalTexts('timestamptz'),
+  casts: fromText,
+});
+export const pgEnum: DataType = sqlDataType('pg/enum', {
+  params: type({ typeName: 'string > 0' }),
+  claimsKind: 'enum',
+  render: ({ typeName }) => `"${typeName}"`,
+});
 
-export const pgvectorVector: DataType = dataType('pgvector/vector', {
+/** Bounded at 2000, not pgvector's 16000, so interpreter tests stay isolated from the real pack. */
+export const pgvectorVector: DataType = sqlDataType('pgvector/vector', {
+  params: type({ length: 'number.integer >= 1 & number.integer <= 2000' }),
+  texts: [{ text: 'vector({length})', written: true }],
   listCast: {
     of: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],
     cast: (elements) => elements.map((element) => Number(asNumber(element))),

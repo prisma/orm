@@ -50,7 +50,6 @@ function createTestExtensionDescriptor(options?: {
     ? [
         defineTestCodec({
           typeId: 'test/ext@1',
-          targetTypes: ['ext'],
           encode: (v: string) => v,
           decode: (w: string) => w,
         }),
@@ -157,7 +156,6 @@ describe('comprehensive descriptor-based derivation', () => {
     const targetCodecRegistry: ReadonlyArray<Codec<string>> = [
       defineTestCodec({
         typeId: 'target/special@1',
-        targetTypes: ['special'],
         encode: (v: string) => v,
         decode: (w: string) => w,
       }),

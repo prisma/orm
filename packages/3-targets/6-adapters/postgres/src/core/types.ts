@@ -1,3 +1,4 @@
+import type { DataType } from '@internal/framework-components/codec';
 import type { StorageColumn, StorageTable } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -25,6 +26,8 @@ export interface PostgresAdapterOptions {
    * single source for both codec materialization and target-specific lowering.
    */
   readonly codecDescriptors?: readonly AnyPostgresCodecDescriptor[];
+  /** The data types `codecDescriptors` represent, beyond the target's own. */
+  readonly dataTypes?: readonly DataType[];
 }
 
 export type { PostgresContract } from '@internal/target-postgres/types';

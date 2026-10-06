@@ -19,7 +19,8 @@ import type { CodecInstanceContext } from './codec-types';
  */
 export type ColumnTypeDescriptor<TCodecId extends string = string> = {
   readonly codecId: TCodecId;
-  readonly nativeType: string;
+  /** Ignored: the contract names the database type from the codec's data type. */
+  readonly nativeType?: string;
   readonly typeParams?: Record<string, unknown> | undefined;
   readonly typeRef?: string;
   /**
@@ -61,7 +62,7 @@ export interface ColumnSpec<R, P extends Record<string, unknown> | undefined>
 /**
  * Trivial column packager. Per-codec helpers call this directly with the result of `descriptor.factory(params)` — direct method invocation binds the descriptor's method-level generic at the call site and the literal flows through `R`.
  *
- * `nativeType` is the column's database-native type spelling — the value the postgres adapter's migration planner, the SQL renderer's cast policy, and the emitted contract's column `nativeType` slot read. Per-codec helpers pass the literal native-type string for their codec (e.g. `'text'`, `'int4'`, `'character varying'`); for codecs whose native-type spelling depends on parameters (none today; reserved for future shapes), the helper computes the rendered string before calling `column`. The framework does not derive the value from `codecId` — that mapping is target-specific and lives at the helper.
+ * `nativeType` is ignored: the contract names the column's database type from the data type the codec represents.
  */
 export function column<R, P extends Record<string, unknown> | undefined>(
   codecFactory: (ctx: CodecInstanceContext) => R,

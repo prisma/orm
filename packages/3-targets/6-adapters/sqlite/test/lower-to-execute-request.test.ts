@@ -1,5 +1,5 @@
 import type { Codec } from '@internal/framework-components/codec';
-import { CodecDescriptorImpl, dataTypeId } from '@internal/framework-components/codec';
+import { CodecDescriptorImpl, dataType, dataTypeId } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry } from '@internal/sql-relational-core/ast';
@@ -42,7 +42,6 @@ const transformingDescriptor: AnySqliteCodecDescriptor = {
   codecId: 'test/transform@1',
   dataType: dataTypeId('test/transform'),
   traits: [],
-  targetTypes: ['TEXT'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => transformingCodec,
@@ -147,15 +146,15 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
     );
   });
 
-  it("maps the canonical now() function default to SQLite's datetime('now')", async () => {
+  it('maps the canonical now() function default to the expression that stores the datetime codec text', async () => {
     const ast = new SqliteCreateTable({
       table: 't',
       columns: [col('created_at', 'TEXT', { default: fn('now()') })],
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
-    // SQLite has no now(); the contract canonicalizes CURRENT_TIMESTAMP to
-    // now(), which must map back to a valid SQLite expression at apply time.
-    expect(result.sql).toContain(`"created_at" TEXT DEFAULT (datetime('now'))`);
+    expect(result.sql).toContain(
+      `"created_at" TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    );
     expect(result.sql).not.toContain('(now())');
     expect(result.params).toEqual([]);
   });
@@ -328,7 +327,6 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = EXT_CODEC_ID;
   override readonly traits = [] as const;
-  override readonly targetTypes = ['TEXT'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: object) => Codec {
     return () =>
@@ -343,7 +341,7 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
 }
 
 const extTransformDescriptor = sqliteCodec(new ExtTransformDescriptor(), {
-  dataType: dataTypeId('demo/fixture'),
+  dataType: dataType('demo/fixture', {}),
   jsonProjection: (expression) => expression,
 });
 

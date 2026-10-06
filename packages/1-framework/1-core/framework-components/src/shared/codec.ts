@@ -22,7 +22,7 @@ import type { CodecCallContext, CodecTrait } from './codec-types';
  * - **Wire** (`TWire`): the format exchanged with the database driver.
  * - **JSON** (`JsonValue`): the target-defined JSON-safe form used in contract artifacts. It uses the exact scalar shape the target produces inside JSON values, which can differ from the ordinary wire format.
  *
- * The runtime instance carries only its `id` (the descriptor's `codecId`, set by the factory) and the four conversion methods. Static metadata (`traits`, `targetTypes`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId` — the read-surface single source of truth. Consumers that need them resolve through `descriptorFor(codecId)`.
+ * The runtime instance carries only its `id` (the descriptor's `codecId`, set by the factory) and the four conversion methods. Static metadata (`traits`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId` — the read-surface single source of truth. Consumers that need them resolve through `descriptorFor(codecId)`.
  *
  * Codec methods split into two groups:
  *

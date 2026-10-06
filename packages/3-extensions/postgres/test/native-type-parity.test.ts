@@ -391,7 +391,7 @@ describe('native types as bare scalar types — parity with the live bare-type p
     expect(column).not.toHaveProperty('default');
   });
 
-  it('rejects VarChar(0) in field position via the declarative minimum', () => {
+  it('rejects VarChar(0) in field position via its data type’s bound', () => {
     const result = emit(`model sample {
   id Int @id
   name VarChar(0)
@@ -403,13 +403,13 @@ describe('native types as bare scalar types — parity with the live bare-type p
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: expect.stringContaining('must be >= 1'),
+          message: expect.stringContaining('must be at least 1 (was 0)'),
         }),
       ]),
     );
   });
 
-  it('rejects VarChar(0) in named-type position via the declarative minimum', () => {
+  it('rejects VarChar(0) in named-type position via its data type’s bound', () => {
     const result = emit(`types {
   Bad = VarChar(0)
 }
@@ -425,7 +425,7 @@ model sample {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: expect.stringContaining('must be >= 1'),
+          message: expect.stringContaining('must be at least 1 (was 0)'),
         }),
       ]),
     );
@@ -443,7 +443,7 @@ model sample {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: expect.stringContaining('must be >= 1'),
+          message: expect.stringContaining('must be at least 1 (was 0)'),
         }),
       ]),
     );
@@ -465,7 +465,7 @@ model sample {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: expect.stringContaining('must be >= 1'),
+          message: expect.stringContaining('must be at least 1 (was 0)'),
         }),
       ]),
     );

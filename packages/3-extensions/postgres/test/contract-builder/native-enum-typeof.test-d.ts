@@ -32,7 +32,7 @@ expectTypeOf(AalLevel.members).toEqualTypeOf<readonly ['aal1', 'aal2', 'aal3']>(
 // handle's PostgresNativeEnum<Members>, not `unknown`.
 const columnDescriptor = pg.enum(AalLevel);
 expectTypeOf(columnDescriptor.codecId).toEqualTypeOf<'pg/enum@1'>();
-expectTypeOf(columnDescriptor.nativeType).toEqualTypeOf<string>();
+expectTypeOf(columnDescriptor.nativeType).toEqualTypeOf<string | undefined>();
 expectTypeOf(columnDescriptor.entityRef.entity.members).toEqualTypeOf<
   readonly ['aal1', 'aal2', 'aal3']
 >();

@@ -8,7 +8,7 @@ Given an arktype `Type`, `arktypeJson(schema)` produces a column descriptor that
 
 - Stores values as `jsonb` on Postgres.
 - Eagerly serializes `schema.expression` (TypeScript-source-like rendering) and `schema.json` (arktype's internal IR) into `typeParams`. The IR is the lossless rehydration source; the expression is the emit-path renderer's input.
-- At runtime, the framework's unified codec descriptor map rehydrates the schema via `ark.schema(typeParams.jsonIr)` and returns a `Codec` whose `decode` validates wire payloads via the rehydrated schema. Validation failures throw `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED`.
+- At runtime, the framework's unified codec descriptor map rehydrates the schema via `ark.schema(typeParams.jsonIr)` and returns a `Codec` whose `decode` parses the wire as JSON text and validates the parsed value via the rehydrated schema. Wire text that is not JSON fails with `RUNTIME.DECODE_FAILED`, which names the table and column and carries the `SyntaxError` as its cause. Validation failures throw `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED`.
 - `encode` is schema-independent and only checks JSON representability; validation runs on `decode` and `decodeJson`.
 - The emitted `contract.d.ts` renders the column's TS type as the schema's `expression` (e.g. `{ name: string; price: number }`). No-emit contracts currently fall back to the base codec output type (`unknown`).
 

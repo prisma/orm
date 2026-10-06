@@ -23,6 +23,7 @@ import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-n
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresDiffSubjectGranularity } from '../../src/core/schema-ir/schema-node-kinds';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'profiles';
 
@@ -140,7 +141,7 @@ function verdictOk(contract: Contract<SqlStorage>, actual: PostgresDatabaseSchem
     contract,
     schema: actual,
     strict: true,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
   });

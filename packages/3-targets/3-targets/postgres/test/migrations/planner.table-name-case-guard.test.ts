@@ -23,13 +23,14 @@ import { describe, expect, it } from 'vitest';
 import { postgresResolveDefault } from '../../src/core/default-normalizer';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
+import { postgresRenderDefault } from '../../src/core/migrations/postgres-contract-to-schema';
 import { PostgresMigration } from '../../src/core/migrations/postgres-migration';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { type PostgresContract, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { postgresRenderDefault } from '../../src/exports/control';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower(_ast, _ctx) {
@@ -155,7 +156,7 @@ function planFromLive(
       schema: liveSchema(previousTables, options.schemaName),
       policy: DESTRUCTIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -290,12 +291,13 @@ function planMigration(from: PostgresContract, to: PostgresContract) {
     contract: to,
     schema: contractToPostgresDatabaseSchemaNode(from, {
       annotationNamespace: 'pg',
+      ...postgresTypeLookups,
       renderDefault: postgresRenderDefault,
       resolveDefault: postgresResolveDefault,
     }),
     policy: DESTRUCTIVE_POLICY,
     fromContract: from,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -305,7 +307,10 @@ type ContractJson = { readonly storage: { readonly storageHash: string } };
 type RenameTableOptions = { readonly schema?: string; readonly table: string; readonly to: string };
 
 const stack = {
-  adapter: { create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'> },
+  adapter: {
+    ...postgresTypeComponents[0],
+    create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'>,
+  },
   target: { kind: 'target', familyId: 'sql', targetId: 'postgres' },
   extensions: [],
 } as unknown as ControlStack<'sql', 'postgres'>;

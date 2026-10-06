@@ -105,7 +105,6 @@ export {
   assembleAuthoringContributions,
   assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
-  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,

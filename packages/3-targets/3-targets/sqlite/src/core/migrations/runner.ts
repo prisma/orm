@@ -102,7 +102,6 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         contract: options.destinationContract,
         actualSchema: schemaNode,
         strict: options.strictVerification ?? true,
-        typeMetadataRegistry: this.family.typeMetadataRegistry,
         frameworkComponents: options.frameworkComponents,
       });
       if (!schemaVerifyResult.ok) {

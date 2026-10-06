@@ -1,6 +1,7 @@
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
 import { valueObjectsOf } from './contract-test-helpers';
@@ -26,39 +27,43 @@ const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable:
 describe('value-object members and value-object fields in the domain', () => {
   it('types a model field by its value object, optional and list', () => {
     const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            idField,
-            {
-              fieldName: 'home',
-              columnName: 'home',
-              valueObjectName: 'Address',
-              descriptor: jsonb,
-              nullable: true,
-            },
-            {
-              fieldName: 'addresses',
-              columnName: 'addresses',
-              valueObjectName: 'Address',
-              descriptor: jsonb,
-              nullable: false,
-              many: true,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        { name: 'Address', fields: [{ fieldName: 'street', descriptor: text, nullable: false }] },
-      ],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'User',
+            tableName: 'user',
+            fields: [
+              idField,
+              {
+                fieldName: 'home',
+                columnName: 'home',
+                valueObjectName: 'Address',
+                descriptor: jsonb,
+                nullable: true,
+              },
+              {
+                fieldName: 'addresses',
+                columnName: 'addresses',
+                valueObjectName: 'Address',
+                descriptor: jsonb,
+                nullable: false,
+                many: true,
+              },
+            ],
+            id: { columns: ['id'] },
+          },
+        ],
+        valueObjects: [
+          { name: 'Address', fields: [{ fieldName: 'street', descriptor: text, nullable: false }] },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
     const { id: _id, ...fields } =
       contract.domain.namespaces['public']?.models['User']?.fields ?? {};
@@ -97,49 +102,53 @@ describe('value-object members and value-object fields in the domain', () => {
         enumTypeHandle: Country,
       },
     ] as const;
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      enums: { Country },
-      models: [
-        {
-          modelName: 'Order',
-          tableName: 'order',
-          fields: [
-            idField,
-            ...scalarFields.map((member) => ({ ...member, columnName: member.fieldName })),
-            {
-              fieldName: 'shipping',
-              columnName: 'shipping',
-              valueObjectName: 'Shipping',
-              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
-              nullable: false,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Shipping',
-          fields: [
-            ...scalarFields,
-            {
-              fieldName: 'stops',
-              valueObjectName: 'Stop',
-              nullable: false,
-              many: true,
-              elementNullable: true,
-            },
-          ],
-        },
-        {
-          name: 'Stop',
-          fields: [{ fieldName: 'city', descriptor: text, nullable: false }],
-        },
-      ],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        enums: { Country },
+        models: [
+          {
+            modelName: 'Order',
+            tableName: 'order',
+            fields: [
+              idField,
+              ...scalarFields.map((member) => ({ ...member, columnName: member.fieldName })),
+              {
+                fieldName: 'shipping',
+                columnName: 'shipping',
+                valueObjectName: 'Shipping',
+                descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
+                nullable: false,
+              },
+            ],
+            id: { columns: ['id'] },
+          },
+        ],
+        valueObjects: [
+          {
+            name: 'Shipping',
+            fields: [
+              ...scalarFields,
+              {
+                fieldName: 'stops',
+                valueObjectName: 'Stop',
+                nullable: false,
+                many: true,
+                elementNullable: true,
+              },
+            ],
+          },
+          {
+            name: 'Stop',
+            fields: [{ fieldName: 'city', descriptor: text, nullable: false }],
+          },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
     const namespace = contract.domain.namespaces['public'];
     const {
@@ -193,27 +202,36 @@ describe('value-object members and value-object fields in the domain', () => {
   });
 
   it('types a member by a nested value object, and keeps the members of the nested value object', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        { modelName: 'Company', tableName: 'company', fields: [idField], id: { columns: ['id'] } },
-      ],
-      valueObjects: [
-        {
-          name: 'GeoLocation',
-          fields: [{ fieldName: 'lat', descriptor: { codecId: 'pg/float8@1' }, nullable: false }],
-        },
-        {
-          name: 'CompanyAddress',
-          fields: [
-            { fieldName: 'street', descriptor: text, nullable: false },
-            { fieldName: 'location', valueObjectName: 'GeoLocation', nullable: true },
-          ],
-        },
-      ],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Company',
+            tableName: 'company',
+            fields: [idField],
+            id: { columns: ['id'] },
+          },
+        ],
+        valueObjects: [
+          {
+            name: 'GeoLocation',
+            fields: [{ fieldName: 'lat', descriptor: { codecId: 'pg/float8@1' }, nullable: false }],
+          },
+          {
+            name: 'CompanyAddress',
+            fields: [
+              { fieldName: 'street', descriptor: text, nullable: false },
+              { fieldName: 'location', valueObjectName: 'GeoLocation', nullable: true },
+            ],
+          },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
     expect(valueObjectsOf(contract)).toEqual({
       GeoLocation: {
@@ -235,14 +253,18 @@ describe('value-object members and value-object fields in the domain', () => {
   });
 
   it('omits valueObjects from the contract when none are defined', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        { modelName: 'User', tableName: 'user', fields: [idField], id: { columns: ['id'] } },
-      ],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          { modelName: 'User', tableName: 'user', fields: [idField], id: { columns: ['id'] } },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
     expect(valueObjectsOf(contract)).toBeUndefined();
   });

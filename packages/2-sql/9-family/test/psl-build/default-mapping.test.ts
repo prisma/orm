@@ -6,18 +6,18 @@ import {
   dataType,
   isNonFiniteText,
 } from '@internal/framework-components/codec';
+import { numeralText } from '@internal/sql-contract/data-type';
+import {
+  createNumberClassifier,
+  parseJsonBody,
+  printJsonBody,
+  signedRange,
+} from '@internal/sql-contract/data-type-support';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   sqlExpressionAuthoringEntry,
   sqlExpressionDataType,
 } from '@internal/sql-contract/sql-expression';
-import {
-  createNumberClassifier,
-  numeralText,
-  parseJsonBody,
-  printJsonBody,
-  signedRange,
-} from '@internal/sql-relational-core/ast';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type DefaultMappingOptions,
@@ -131,7 +131,7 @@ function forColumn(
 ): DefaultMappingOptions {
   return {
     dataTypeEntries: entries,
-    dataTypes: createDataTypeLookup(types),
+    dataTypeLookup: createDataTypeLookup(types),
     columnDataType: columnDataType.id,
     ...(shape.list === true ? { list: true } : {}),
   };

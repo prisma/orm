@@ -51,6 +51,7 @@ import {
 import { renderCallsToTypeScript } from '../../src/core/migrations/render-typescript';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import * as migrationFacade from '../../src/exports/migration';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
 const FROM_HASH = 'a'.repeat(64);
@@ -219,7 +220,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       tableName: 'note',
       columnName: 'title',
       column: storageColumn,
-      codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     }),

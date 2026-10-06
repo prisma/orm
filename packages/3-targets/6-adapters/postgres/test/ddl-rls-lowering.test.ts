@@ -1,5 +1,6 @@
 import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import {
   PostgresAlterPolicyRename,
   PostgresCreatePolicy,
@@ -10,7 +11,10 @@ import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import type { PostgresContract } from '../src/core/types';
 
-const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const adapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const ctx = { contract: {} as PostgresContract };
 
 describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {

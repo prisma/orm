@@ -12,7 +12,10 @@ import {
 import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -82,10 +85,7 @@ import type {
 } from '@internal/target-postgres/ddl';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
-import {
-  introspectedNativeType,
-  normalizeSchemaNativeType,
-} from '@internal/target-postgres/native-type-normalizer';
+import { introspectedNativeType } from '@internal/target-postgres/native-type-normalizer';
 import {
   isPostgresDateTimeDataType,
   postgresDateTimeDdlText,
@@ -125,6 +125,13 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
+function decodeMarkerInteger(value: string): number {
+  if (!/^-?\d+$/.test(value)) {
+    throw new TypeError(`expected integer text, got ${JSON.stringify(value)}`);
+  }
+  return Number(value);
+}
+
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
@@ -136,12 +143,15 @@ function decodePostgresMarkerRow(row: unknown, space: string): Record<string, un
     });
   }
   const record = blindCast<
-    { readonly invariants: unknown } & Record<string, unknown>,
+    { readonly invariants: unknown; readonly canonical_version: unknown } & Record<string, unknown>,
     'Postgres marker rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
+      ...(typeof record.canonical_version === 'string'
+        ? { canonical_version: decodeMarkerInteger(record.canonical_version) }
+        : {}),
       invariants: parsePostgresListText(record.invariants),
     };
   } catch (error) {
@@ -173,20 +183,16 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   readonly familyId = 'sql' as const;
   readonly targetId = 'postgres' as const;
 
-  constructor(private readonly codecRegistry: PostgresCodecRegistry) {}
+  constructor(
+    private readonly codecRegistry: PostgresCodecRegistry,
+    private readonly dataTypeLookup: DataTypeLookup,
+  ) {}
 
   /**
    * Target-specific normalizer for raw Postgres default expressions.
    * Used by schema verification to normalize raw defaults before comparison.
    */
   readonly normalizeDefault = parsePostgresDefault;
-
-  /**
-   * Target-specific normalizer for Postgres schema native type names.
-   * Used by schema verification to normalize introspected type names
-   * before comparison with contract native types.
-   */
-  readonly normalizeNativeType = normalizeSchemaNativeType;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -218,6 +224,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         context.contract,
       ),
       this.codecRegistry,
+      this.dataTypeLookup,
       postgresAdapterCapabilities,
     );
   }
@@ -260,6 +267,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       ast,
       contract,
       this.codecRegistry,
+      this.dataTypeLookup,
       postgresAdapterCapabilities,
     );
     const codecRegistry = blindCast<

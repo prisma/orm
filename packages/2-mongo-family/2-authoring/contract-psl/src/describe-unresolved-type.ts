@@ -40,10 +40,9 @@ export function describeUnresolvedMongoType(
       return undefined;
     }
     const replacement = EARLIER_MONGO_SCALAR_NAMES[written];
-    const replacementOutput = replacement === undefined ? undefined : scalars.get(replacement);
-    if (replacement === undefined || replacementOutput === undefined) {
+    if (replacement === undefined || !scalars.has(replacement)) {
       return `Field "${owner.name}.${field.name}" has type "${written}", which is not a scalar type, an enum, a composite type or a model. ${scalarTypesSentence(types)}`;
     }
-    return `Field "${owner.name}.${field.name}" has type "${written}", which is not a Mongo scalar type; use "${replacement}" (stored as BSON ${replacementOutput.nativeType}).`;
+    return `Field "${owner.name}.${field.name}" has type "${written}", which is not a Mongo scalar type; use "${replacement}".`;
   };
 }

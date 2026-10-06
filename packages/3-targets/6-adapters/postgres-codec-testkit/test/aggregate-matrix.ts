@@ -13,13 +13,19 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecRef } from '@internal/framework-components/codec';
+import { type CodecRef, createDataTypeLookup } from '@internal/framework-components/codec';
+import {
+  dataTypeParams,
+  renderSqlTypeName,
+  sqlDataTypeOfCodec,
+} from '@internal/sql-contract/data-type';
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { postgresAggregateDescriptors } from '@internal/target-postgres/aggregates';
 import {
   postgresCodecDescriptorRegistry,
   postgresCodecRegistry,
 } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { ifDefined } from '@internal/utils/defined';
 
 export const registry = buildSqlAggregateDescriptorRegistry(
@@ -192,12 +198,21 @@ export function refOf(fixture: AggregateFixture): CodecRef {
   return { codecId: fixture.codecId, ...ifDefined('typeParams', fixture.typeParams) };
 }
 
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+
+const UNWRITTEN_COLUMN_TYPES: Readonly<Record<string, string>> = { 'pg/text-array@1': 'text[]' };
+
 export function nativeTypeOf(ref: CodecRef): string {
-  const descriptor = postgresCodecDescriptorRegistry.descriptorFor(ref.codecId);
-  if (descriptor === undefined) {
-    throw new Error(`No PostgreSQL codec descriptor for '${ref.codecId}'.`);
-  }
-  return descriptor.nativeTypeFor(ref);
+  const unwritten = UNWRITTEN_COLUMN_TYPES[ref.codecId];
+  if (unwritten !== undefined) return unwritten;
+  const type = sqlDataTypeOfCodec(ref.codecId, {
+    codecLookup: postgresCodecDescriptorRegistry,
+    dataTypeLookup: postgresDataTypeLookup,
+  });
+  return renderSqlTypeName(
+    type,
+    dataTypeParams(type, ref.typeParams as Readonly<Record<string, unknown>> | undefined),
+  );
 }
 
 /** The codecs the bare `sum` totals into an integer result — the integer inputs, read off the matrix rather than listed beside it. */

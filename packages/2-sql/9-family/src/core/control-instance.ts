@@ -32,7 +32,6 @@ import { isPlainRecord } from '@internal/framework-components/ir';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
-import { assertNothingCastsFromSqlExpression } from '@internal/sql-contract/sql-expression';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -46,6 +45,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { JsonObject } from '@internal/utils/json';
 import type { StructuredError } from '@internal/utils/structured-error';
+import { enforceSqlDataTypeInvariants } from './assembly';
 import type { SqlControlAdapter } from './control-adapter';
 import type {
   SqlControlTargetDescriptor,
@@ -192,19 +192,9 @@ function createVerifyResult(options: {
   };
 }
 
-interface SqlTypeMetadata {
-  readonly typeId: string;
-  readonly familyId: 'sql';
-  readonly targetId: string;
-  readonly nativeType?: string;
-}
-
-type SqlTypeMetadataRegistry = Map<string, SqlTypeMetadata>;
-
 interface SqlFamilyInstanceState {
   readonly codecTypeImports: ReadonlyArray<TypesImportSpec>;
   readonly extensionIds: ReadonlyArray<string>;
-  readonly typeMetadataRegistry: SqlTypeMetadataRegistry;
 }
 
 export interface SqlControlFamilyInstance
@@ -342,55 +332,6 @@ export interface SqlControlFamilyInstance
 
 export type SqlFamilyInstance = SqlControlFamilyInstance;
 
-interface DescriptorWithStorageTypes {
-  readonly targetId?: string | undefined;
-  readonly types?:
-    | {
-        readonly storage?:
-          | ReadonlyArray<{
-              readonly typeId: string;
-              readonly familyId: string;
-              readonly targetId: string;
-              readonly nativeType?: string | undefined;
-            }>
-          | undefined;
-      }
-    | undefined;
-}
-
-function buildSqlTypeMetadataRegistry(options: {
-  readonly target: DescriptorWithStorageTypes;
-  readonly adapter: DescriptorWithStorageTypes & { readonly targetId: string };
-  readonly extensions: readonly DescriptorWithStorageTypes[];
-}): SqlTypeMetadataRegistry {
-  const { target, adapter, extensions } = options;
-  const registry = new Map<string, SqlTypeMetadata>();
-  const targetId = adapter.targetId;
-  const descriptors = [target, adapter, ...extensions];
-
-  for (const descriptor of descriptors) {
-    const types = descriptor.types;
-    const storageTypes = types?.storage;
-
-    if (!storageTypes) {
-      continue;
-    }
-
-    for (const storageType of storageTypes) {
-      if (storageType.familyId === 'sql' && storageType.targetId === targetId) {
-        registry.set(storageType.typeId, {
-          typeId: storageType.typeId,
-          familyId: 'sql',
-          targetId: storageType.targetId,
-          ...(storageType.nativeType !== undefined ? { nativeType: storageType.nativeType } : {}),
-        });
-      }
-    }
-  }
-
-  return registry;
-}
-
 interface CrossSpaceFkView {
   readonly id: string;
   readonly contractSpace?: {
@@ -507,22 +448,22 @@ export function assertNoCrossSpaceFkReverseReferences(
 export function createSqlFamilyInstance<TTargetId extends string>(
   stack: ControlStack<'sql', TTargetId>,
 ): SqlFamilyInstance {
+  enforceSqlDataTypeInvariants(stack.declaredDataTypes, stack.codecDescriptors);
   if (!stack.adapter) {
     throw new InternalError('SQL family requires an adapter descriptor in ControlStack');
   }
-  assertNothingCastsFromSqlExpression(stack.declaredDataTypes);
 
   const target = blindCast<
-    TargetDescriptor<'sql', TTargetId> & DescriptorWithStorageTypes,
-    'ControlStack is parameterized by this SQL target id; storage type metadata is optional and probed by the family'
+    TargetDescriptor<'sql', TTargetId>,
+    'ControlStack is parameterized by this SQL target id'
   >(stack.target);
   const adapter = blindCast<
-    SqlControlAdapterDescriptor<TTargetId> & DescriptorWithStorageTypes,
-    'adapter descriptor comes from the same SQL control stack target id; storage type metadata is optional and probed by the family'
+    SqlControlAdapterDescriptor<TTargetId>,
+    'adapter descriptor comes from the same SQL control stack target id'
   >(stack.adapter);
   const extensions = blindCast<
-    readonly (SqlControlExtensionDescriptor<TTargetId> & DescriptorWithStorageTypes)[],
-    'extension descriptors come from the same SQL control stack target id; storage type metadata is optional and probed by the family'
+    readonly SqlControlExtensionDescriptor<TTargetId>[],
+    'extension descriptors come from the same SQL control stack target id'
   >(stack.extensions);
 
   // Descriptor self-consistency check.
@@ -552,12 +493,6 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   assertNoCrossSpaceFkReverseReferences(extensions);
 
   const { codecTypeImports, extensionIds } = stack;
-
-  const typeMetadataRegistry = buildSqlTypeMetadataRegistry({
-    target,
-    adapter,
-    extensions: extensions,
-  });
 
   // Lazily construct the control adapter on first use, then memoize it.
   // Merely building a family instance must not instantiate the adapter —
@@ -656,7 +591,6 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     familyId: 'sql',
     codecTypeImports,
     extensionIds,
-    typeMetadataRegistry,
 
     deserializeContract(contractJson: unknown): Contract {
       return deserializeWithTargetSerializer(contractJson);
