@@ -753,3 +753,43 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** A slice is not closed until its QA report exists. The orchestrator runs manual QA after each slice merges, against a build of `main`, as a real user following the docs and upgrade guide, before starting the next slice. Where the QA skills are not installed, the runner writes the script and reports by hand where [`drive/qa/README.md`](../qa/README.md) puts them: `projects/<x>/manual-qa.md` and `projects/<x>/manual-qa-reports/<YYYY-MM-DD>-<runner>.md` for a slice in a project, or the PR description for a slice with no project.
 
 **Reference incident.** 2026-09-29, the Mongo defaults, codecs and Prisma 6 source project: six slices merged with no manual QA. The close-out QA found that Mongo `db update` could not confirm any destructive change, a `Double` field refused whole numbers, `include()` returned related documents undecoded, a `Bson` filter on an `ObjectId` matched nothing, and `orm init` sent Prisma 6 Mongo users down the Prisma 7 path. Twelve bugs and about thirty points of friction were fixed in follow-up PRs before the project closed.
+
+### F39. A rebase squashes or rewrites history the operator has already reviewed, so they can no longer see what changed since their last review
+
+**Symptom.** The operator asks "what changed since I last looked?" and the answer is a single squashed commit, or force-pushed SHAs that no longer contain the reviewed states.
+
+**Root cause.** Squashing was chosen to avoid replaying conflicts commit by commit, without asking. The operator reviews by commit range, so the squash removed the boundary between reviewed and unreviewed work.
+
+**Mitigation.**
+
+- Never squash, amend or reorder commits on a branch the operator has reviewed without asking first. Review fixes go in as new commits on top.
+- A requested rebase replays the commits as they are (`git rebase origin/main`, or `git rebase --onto origin/main <old-base>` after a squash-merged parent). Keep a backup branch before force-pushing.
+- If a commit-by-commit replay looks too costly, ask; do not substitute a squash.
+
+**Reference incident.** 2026-10-01, lsp-go-to-definition slice 1 (#30563): a rebase onto a Mongo binder change squashed 35 commits into one; later rounds were amended into it. The intermediate states were recovered from push SHAs as a four-commit series, but the rebase step itself could only be shown as a range-diff.
+
+### F40. A rebase or merge is pushed without re-running the gates, and the pushed head does not typecheck
+
+**Symptom.** CI on a just-rebased PR fails on typecheck or a test the branch never touched; the cause is new code on `main` calling an API the branch changed.
+
+**Mitigation.** After every rebase or merge of `main`, run the slice's per-dispatch gate (build, typecheck of changed packages and their dependents, the touched packages' tests) on the final head before `git push --force-with-lease`. A clean `git rebase` says nothing about whether the result compiles.
+
+**Reference incident.** 2026-10-05, lsp-go-to-definition slice 2 (#30578): a rebase picked up a new `resolveEntity` call to `qualifiedMember`, whose signature the branch had changed; two pushed heads did not typecheck until a later dispatch noticed.
+
+### F41. Test filters after `--` are dropped, so a "targeted" run executes the whole suite
+
+**Symptom.** A dispatch meant to run three integration files runs for 30+ minutes, sometimes twice in parallel, and reports failures in files it never touched.
+
+**Mitigation.** Pass file paths directly: `pnpm test <file>`, `pnpm --filter <pkg> test <file>`. Never `pnpm test -- <file>`. Briefs that ask for targeted runs say so explicitly; the orchestrator checks running processes when a targeted run takes more than a few minutes.
+
+**Reference incident.** 2026-09-30 and 2026-10-01, lsp-go-to-definition: three separate runs of `vitest run -- test/...` executed the full integration suite; one stalled a dispatch for 40 minutes, another ran it twice concurrently.
+
+### F42. An implementer fans a mechanical migration out to parallel helpers without a decided shape, and each helper writes its own copy
+
+**Symptom.** A dispatch that changes a widely called API comes back green but adds thousands of lines: each of ~30 call sites hand-assembles the same setup. A follow-up round consolidates it.
+
+**Root cause.** The brief named the call sites to migrate but not the single helper they should go through, and the implementer split the work across parallel sub-agents, each of which made its own choice.
+
+**Mitigation.** When a dispatch changes an API with many callers, the brief names the helper or entry point the callers move onto, or makes deciding it the first step. The implementer applies the decided shape itself or hands helpers a reference implementation to copy exactly. Sizing pattern: "mechanical fan-out + design judgment in one dispatch".
+
+**Reference incident.** 2026-09-30, lsp-go-to-definition slice 1 dispatch 4: four parallel helpers migrated ~33 test files to build a binder; the diff grew by ~2,500 lines and a second round introduced one shared function.
