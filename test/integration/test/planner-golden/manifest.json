@@ -116,6 +116,7 @@
   "packages/3-extensions/postgres/test/fixtures/generated/contract.json": "1df360a3f145db41d36927c11767d922f6836628081960b9baa43fe724f4b1ae",
   "packages/3-extensions/sql-orm-client/test/fixtures/generated/contract.json": "962ef63c9676fe57aa9758311071bf8a4a887963858634bf3a80f0b40318cee6",
   "packages/3-extensions/sql-orm-client/test/fixtures/junction-namespaces/generated/contract.json": "4dc3854cce34a2c3b64cfe360b9e619d975d0b9bf95edd0cd2143169fb7ed796",
+  "packages/3-extensions/sql-orm-client/test/fixtures/polymorphism/generated/contract.json": "0758092d039f370d332d9114a2637e5c4c019cf92342d7785a5b833c190759c4",
   "packages/3-extensions/supabase/src/contract/contract.json": "a543a0e20b3b829ade8af2bad7eb9fd5a1fdd2fd65b0a16306daff73032031f0",
   "packages/3-extensions/supabase/test/fixtures/example-app/contract.json": "5172d1b4395238d26a914584892c9ba91595d153ea68d7496c62b64159b56e11",
   "packages/3-extensions/supabase/test/fixtures/no-policy/contract.json": "da13e2deeea721c6bd4a90eb5a54abad55393a588db5ed7006035e7a6df0dffc",
