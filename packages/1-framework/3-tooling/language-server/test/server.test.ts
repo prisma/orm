@@ -69,6 +69,7 @@ import {
   type Position,
   PublishDiagnosticsNotification,
   type Range,
+  ReferencesRequest,
   type RegistrationParams,
   RegistrationRequest,
   type SemanticTokens,
@@ -773,6 +774,19 @@ function requestDefinition(harness: Harness, uri: string, position: Position) {
   });
 }
 
+function requestReferences(
+  harness: Harness,
+  uri: string,
+  position: Position,
+  includeDeclaration: boolean,
+) {
+  return harness.client.sendRequest(ReferencesRequest.type, {
+    textDocument: { uri },
+    position,
+    context: { includeDeclaration },
+  });
+}
+
 function requestFoldingRanges(harness: Harness, uri: string): Promise<FoldingRange[] | null> {
   return harness.client.sendRequest(FoldingRangeRequest.type, {
     textDocument: { uri },
@@ -1070,6 +1084,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
     expect(result.capabilities.hoverProvider).toBe(true);
     expect(result.capabilities.definitionProvider).toBe(true);
+    expect(result.capabilities.referencesProvider).toBe(true);
   });
 
   it('serves hover content through the server for an opened document', async () => {
@@ -2202,6 +2217,120 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       {
         uri: schemaUri,
         range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+    ]);
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns the usages of the symbol at the cursor', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestReferences(harness, schemaUri, position, false)).resolves.toEqual([
+      {
+        uri: schemaUri,
+        range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+      },
+    ]);
+  });
+
+  it('adds the declaration to the usages when the client asks for it', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestReferences(harness, schemaUri, position, true)).resolves.toEqual([
+      {
+        uri: schemaUri,
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+      {
+        uri: schemaUri,
+        range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+      },
+    ]);
+  });
+
+  it('returns no references for a document outside the project', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const outsideUri = pathToFileURL(join(root, 'outside.prisma')).href;
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, outsideUri, source);
+
+    await expect(requestReferences(harness, outsideUri, position, true)).resolves.toEqual([]);
+  });
+
+  it('returns no references for a document that is not open', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+
+    await expect(
+      requestReferences(harness, schemaUri, { line: 1, character: 7 }, true),
+    ).resolves.toEqual([]);
+  });
+
+  it('returns no references when resolving an attribute argument throws and serves the next references request', async () => {
+    const extendsAttribute = modelAttribute('extends', {
+      documentation: 'Extends another model.',
+      positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
+    });
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken references factory');
+      })
+      .mockReturnValue(extendsAttribute);
+    const resolution = await resolveToSchemaWithAttributeContributions(configPath);
+    const brokenAuthoringContributions = assembleAuthoringContributions([
+      {
+        id: 'broken-references',
+        authoring: {
+          type: testTypeConstructors(scalarTypes),
+          attributeSpecs: { field: {}, model: { extends: factory } },
+        },
+      },
+    ]);
+    if (resolution.interpretation === undefined) throw new Error('expected interpretation');
+    const interpretation = resolution.interpretation;
+    harness = startHarness(
+      async () => ({
+        ...resolution,
+        controlStack: {
+          ...resolution.controlStack,
+          authoringContributions: brokenAuthoringContributions,
+        },
+        interpretation: {
+          ...interpretation,
+          context: {
+            ...interpretation.context,
+            authoringContributions: brokenAuthoringContributions,
+          },
+        },
+      }),
+      pullDiagnosticsCapabilities,
+    );
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  id Int\n  @@extends(Us|er)\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    expect(await requestReferences(harness, schemaUri, position, false)).toEqual([]);
+    await expect(requestReferences(harness, schemaUri, position, false)).resolves.toEqual([
+      {
+        uri: schemaUri,
+        range: { start: { line: 6, character: 12 }, end: { line: 6, character: 16 } },
       },
     ]);
     expect(factory).toHaveBeenCalledTimes(2);
@@ -4339,6 +4468,42 @@ describe('language server whole-project push and freshness', {
       expect(harness.publishCount(alias)).toBe(0);
     },
   );
+
+  it('returns references from project files that are not open, in input order', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel Post {\n  id Int @id\n  author Us|er\n}\n',
+    );
+    await writeFile(memberAPath, '// use prisma-8\nmodel User {\n  id Int @id\n  best Post\n}\n');
+    await writeFile(memberBPath, source);
+    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
+    await harness.initialize();
+    openDocument(harness, memberBUri, source);
+    await harness.waitForDiagnostics(memberBUri);
+
+    await expect(requestReferences(harness, memberBUri, position, true)).resolves.toEqual([
+      {
+        uri: memberAUri,
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+      {
+        uri: memberBUri,
+        range: { start: { line: 3, character: 9 }, end: { line: 3, character: 13 } },
+      },
+    ]);
+    await expect(
+      requestReferences(harness, memberBUri, { line: 1, character: 7 }, false),
+    ).resolves.toEqual([
+      {
+        uri: memberAUri,
+        range: { start: { line: 3, character: 7 }, end: { line: 3, character: 11 } },
+      },
+    ]);
+  });
 
   it.each(['delete', 'directive', 'config', 'replace-config'] as const)(
     'clears previously related members after %s even when the excluded member is pulled first',

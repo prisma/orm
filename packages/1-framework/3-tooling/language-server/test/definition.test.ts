@@ -327,16 +327,40 @@ describe('provideDefinition — cursor boundaries', () => {
   it('returns null on an attribute argument key', () => {
     expect(linksAt(postUri, '@relation(fie|lds:')).toBeNull();
   });
+});
 
-  it("returns null on a namespace declaration's own name", () => {
-    expect(linksAt(postUri, 'namespace au|th {')).toBeNull();
+describe('provideDefinition — declaration names', () => {
+  it('returns the model from its own name', () => {
+    expect(linksAt(postUri, 'model Ta|g')).toEqual([
+      { uri: postUri, target: 'model Tag {\n  id Int @id\n}', name: 'Tag', origin: 'Tag' },
+    ]);
+  });
+
+  it('returns the field from its own name', () => {
+    expect(linksAt(postUri, 'auth|orId  Int')).toEqual([
+      { uri: postUri, target: 'authorId  Int', name: 'authorId', origin: 'authorId' },
+    ]);
+  });
+
+  it('returns every block of the namespace from a namespace block name', () => {
+    expect(linksAt(postUri, 'namespace au|th {')).toEqual(authNamespaceLinks);
+    expect(linksAt(authUri, 'namespace au|th {')).toEqual(authNamespaceLinks);
+  });
+
+  it('returns the location of the name the cursor is on when the client does not support links', () => {
+    const { result } = definitionAt(postUri, 'model Ta|g', false);
+
+    expect(result).toEqual<Location[]>([
+      {
+        uri: postUri,
+        range: { start: { line: 20, character: 6 }, end: { line: 20, character: 9 } },
+      },
+    ]);
   });
 });
 
 describe('provideDefinition — no target', () => {
   it.each([
-    ['a declaration name', 'model Ta|g'],
-    ['a field declaration name', 'auth|orId  Int'],
     ['a contributed type', 'embedding pgvector.Vec|tor'],
     ['a contributed namespace', 'embedding pgve|ctor.Vector'],
     ['a cross-space reference', 'supabase:auth.Us|er'],

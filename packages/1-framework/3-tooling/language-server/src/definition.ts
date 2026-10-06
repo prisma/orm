@@ -5,10 +5,9 @@ import type {
   PslSources,
   SourceFile,
   SyntaxNode,
-  SyntaxToken,
 } from '@internal/psl-parser/syntax';
 import type { Location, LocationLink, Position, Range } from 'vscode-languageserver';
-import { resolvedNodeAt } from './cursor-resolution';
+import { resolvedNodeAt, tokenAtCursor } from './cursor-resolution';
 
 export interface DefinitionSource {
   readonly document: DocumentAst;
@@ -27,12 +26,11 @@ export function provideDefinition(
   position: Position,
   linkSupport: boolean,
 ): LocationLink[] | Location[] | null {
-  const token = tokenAt(source, source.sourceFile.offsetAt(position));
+  const token = tokenAtCursor(source.document, source.sourceFile.offsetAt(position));
   const reference = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
   if (reference === undefined) return null;
   const declarations = declarationsOf(reference.resolution);
   if (declarations.length === 0) return null;
-  if (declarations.some((declaration) => declaration.name?.syntax === reference.node)) return null;
   if (!linkSupport) {
     return declarations.map((declaration) => {
       const target = source.sources.sourceFileFor(declaration.node);
@@ -49,12 +47,6 @@ export function provideDefinition(
       targetSelectionRange: rangeOf(target, nameNode(declaration)),
     };
   });
-}
-
-function tokenAt(source: DefinitionSource, offset: number): SyntaxToken | undefined {
-  const at = source.document.syntax.tokenAtOffset(offset);
-  const right = at.rightBiased();
-  return right?.kind === 'Ident' ? right : at.leftBiased();
 }
 
 function declarationsOf(resolution: Resolution): readonly Declaration[] {

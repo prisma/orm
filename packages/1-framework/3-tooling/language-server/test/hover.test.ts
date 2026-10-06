@@ -377,6 +377,14 @@ describe('providePslHover', () => {
     });
   });
 
+  it('shows the namespace at a namespace block name', () => {
+    const result = hover('namespace bil|ling {\n  model Invoice {\n    id Int\n  }\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace billing\n```' },
+      range: { start: { line: 0, character: 10 }, end: { line: 0, character: 17 } },
+    });
+  });
+
   it('shows the namespace at the qualifier of a type reference', () => {
     const result = hover('model Post {\n  author au|th.User\n}', [
       'namespace auth {\n  /// A user.\n  model User {\n    id Int\n  }\n}',
