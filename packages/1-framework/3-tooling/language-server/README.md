@@ -69,18 +69,6 @@ A declaration, attribute, contributed type, parameter, function, or constant wit
 
 ## Go to definition
 
-In a configured PSL input, clients can request the definition of a name that refers to a declaration in the project's schema. The server follows these references:
+In an open, configured PSL input, clients can jump from a name to the declaration it refers to. A type reference leads to the model, composite type, named type, or generic block it names. A field or entity reference in an attribute argument or a generic block's value leads to that field or declaration. The qualifier of a qualified name, such as `auth` in `auth.User`, leads to every `namespace auth { … }` block, including those in other files of the project.
 
-- a type reference, such as a field's type, to the model, composite type, named type, or generic block it names;
-- the qualifier of a qualified name, such as `auth` in `auth.User`, to every `namespace auth { … }` block, across files;
-- a field or entity reference in an attribute argument or a generic block's value, to the field or declaration it names.
-
-The result selects the declaration's name. Clients that declare `textDocument.definition.linkSupport` receive `LocationLink` results, which also carry the range of the reference and the range of the whole declaration; other clients receive `Location` results.
-
-The server returns nothing for:
-
-- a declaration's own name;
-- a contributed type or contributed namespace, which has no declaration in the schema;
-- a cross-space reference;
-- an attribute name, a named argument's key, a function name, or a fixed-identifier constant;
-- a name that does not resolve.
+A name with no declaration in the schema has no definition: a contributed type or namespace, a cross-space reference, an attribute name, a named argument's key, a function name, or a fixed-identifier constant. A declaration's own name and a name that does not resolve have none either.

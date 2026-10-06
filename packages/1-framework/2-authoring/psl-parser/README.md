@@ -68,13 +68,13 @@ An unqualified name is looked up in this order:
 2. the top level;
 3. the types the configured target and its extensions contribute (scalars, type constructors, field presets).
 
-Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The qualifier `ns` has a resolution of its own, so tooling can tell the namespace from the member. The base of a named type (`Uuid = Uuid` in a `types` block) is looked up without the named types in scope, so a named type can refine the contributed type it shares a name with.
+Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
 
 The binder also resolves what attribute and block specifications describe: attribute names, argument keys, function names, fixed identifier values, and the references inside argument values. Where a specification offers alternatives, the binder picks the first alternative the written value fits by its syntactic shape. Checking the value itself, such as a number range or an allowed string, is left to interpretation.
 
 A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
 
-The caller builds the binder, reports its diagnostics and passes the binder to the interpreter (`PslInterpretInput.binder`); an interpreter never builds one and never filters what the binder reported. The binder only binds. It does not check that a resolved name is used correctly, such as a field preset or a type constructor written without a call, or a type the family cannot store; interpretation reports those. A family words the binder's unsupported-attribute and unresolved-type messages through `pslDiagnostics` in the binder's context.
+The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a field preset or a type constructor written without a call, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
 
 ### Attribute and block specifications
 
