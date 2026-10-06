@@ -5,7 +5,7 @@ import {
   type ContractMarkerRecordLike,
   contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
-import { isGraphNode } from '@internal/migration-tools/migration-graph';
+import { isInSpaceHistory } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -415,8 +415,11 @@ export const migrationStatusCommand = defineOrmCommand({
           : undefined;
       const markerDiverged =
         readMarker !== undefined &&
-        !isGraphNode(readMarker.storageHash, graph) &&
-        !(graph.nodes.size === 0 && readMarker.storageHash === space.headRef?.hash);
+        !isInSpaceHistory(readMarker.storageHash, {
+          graph,
+          headHash: space.headRef?.hash,
+          isExtension: !isAppSpace,
+        });
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };

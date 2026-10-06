@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CONTRACT_HASH } from '../src/constants';
 import { MigrationToolsError } from '../src/errors';
-import { assertHashIsGraphNode, isGraphNode } from '../src/graph-membership';
+import { assertHashIsGraphNode, isGraphNode, isInSpaceHistory } from '../src/graph-membership';
 import { computeMigrationHash } from '../src/hash';
 import { reconstructGraph } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
@@ -52,6 +52,28 @@ describe('isGraphNode', () => {
   it('returns true for a hash that is a node in the graph', () => {
     const graph = reconstructGraph(chain([E, 'aaa', 'm1'], ['aaa', 'bbb', 'm2']));
     expect(isGraphNode('bbb', graph)).toBe(true);
+  });
+});
+
+describe('isInSpaceHistory', () => {
+  it('counts a node of the space graph', () => {
+    const graph = reconstructGraph(chain([E, 'aaa', 'm1']));
+    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: false })).toBe(true);
+  });
+
+  it('counts the head of an extension space that ships no migrations', () => {
+    const graph = reconstructGraph([]);
+    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: true })).toBe(true);
+  });
+
+  it('does not count the head of an app space that has no migrations', () => {
+    const graph = reconstructGraph([]);
+    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: false })).toBe(false);
+  });
+
+  it('does not count a head that is not a node when the extension space has migrations', () => {
+    const graph = reconstructGraph(chain([E, 'aaa', 'm1']));
+    expect(isInSpaceHistory('bbb', { graph, headHash: 'bbb', isExtension: true })).toBe(false);
   });
 });
 

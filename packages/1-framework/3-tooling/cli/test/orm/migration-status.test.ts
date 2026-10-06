@@ -272,6 +272,20 @@ describe('migration status', () => {
     });
   });
 
+  it('warns about an app marker when the app space has no migrations', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(codesAndSeverities(run.presented?.diagnostics ?? [])).toEqual([
+      { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn' },
+    ]);
+  });
+
   it('stays quiet about an all-external extension space whose marker is at its head', async () => {
     const project = await projectWithOneMigration();
     await addAllExternalSpace(project);
