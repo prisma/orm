@@ -405,6 +405,12 @@ describe('mongo contract builder — discriminator values', () => {
         code: 'CONTRACT.ARGUMENT_INVALID',
         message:
           'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task".',
+        meta: {
+          modelName: 'Task',
+          value: 'bug',
+          variants: ['Bug', 'OtherBug'],
+          reason: 'discriminator-value-duplicate',
+        },
       }),
     );
   });
