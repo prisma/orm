@@ -25,6 +25,7 @@ export type {
   DefaultModelRow,
   IncludeExpr,
   ModelAccessor,
+  MutationUpdateInput,
   NumericFieldNames,
   Orderable,
   OrderOptions,
