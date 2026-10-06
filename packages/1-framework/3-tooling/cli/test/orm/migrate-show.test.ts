@@ -240,7 +240,7 @@ describe('migrate --show', () => {
     });
   });
 
-  it('errors structurally for --from @db without a connection', async () => {
+  it('requires a connection for --from @db and repeats --from @db in the retry', async () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd, { db: undefined })).run(
@@ -248,11 +248,22 @@ describe('migrate --show', () => {
       { cwd },
     );
 
-    expect(run.exitCode).not.toBe(0);
-    const terminal = run.json.at(-1) as
-      | { kind: string; envelope?: { ok: boolean; error?: { code: string } } }
-      | undefined;
-    expect(terminal?.envelope?.error?.code).toMatch(/^[A-Z]+\.[A-Z_]+$/);
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.DB_CONNECTION_REQUIRED',
+          meta: { missingFlags: ['--db'] },
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining('db migrate --show --from @db --db $DATABASE_URL'),
+            }),
+          ],
+        },
+      },
+    });
   });
 
   it('previews a ref target whose invariants ride the ref, not the contract head', async () => {

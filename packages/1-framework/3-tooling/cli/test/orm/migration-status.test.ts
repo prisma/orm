@@ -598,12 +598,18 @@ describe('migration status', () => {
         ledger: [{ migrationHash: project.migrationHash }],
       });
 
-      const run = await harness(withAllExternalExtension(driverConfig(project, db))).run(
+      const config = withAllExternalExtension(driverConfig(project, db));
+
+      const implicit = await harness(config).run(['migration', 'status', '--json'], {
+        cwd: project.dir,
+      });
+      const run = await harness(config).run(
         ['migration', 'status', '--to', '@contract', '--json'],
         { cwd: project.dir },
       );
 
       expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toEqual(implicit.presented?.data);
       expect(run.presented?.data).toMatchObject({
         summary: 'Up to date',
         diagnostics: [],
@@ -695,24 +701,20 @@ describe('migration status', () => {
         ['migration', 'status', '--from', HASH_BASE, '--to', '@db', '--json'],
         { cwd: project.dir },
       );
-      const document = run.presented?.data as {
-        spaces: ReadonlyArray<{
-          currentContract: string | null;
-          targetContract: string;
-          migrations: ReadonlyArray<{ status: string }>;
-        }>;
-      };
 
       expect(run.exitCode).toBe(0);
       expect(db.counters.connections).toBe(1);
-      expect(document.spaces).toHaveLength(1);
-      expect(document.spaces[0]).toMatchObject({
-        currentContract: HASH_BASE,
-        targetContract: HASH_HEAD,
+      expect(run.presented?.data).toMatchObject({
+        spaces: [
+          {
+            currentContract: HASH_BASE,
+            targetContract: HASH_HEAD,
+            migrations: expect.not.arrayContaining([
+              expect.objectContaining({ status: 'applied' }),
+            ]),
+          },
+        ],
       });
-      expect(document.spaces[0]?.migrations.map((migration) => migration.status)).not.toContain(
-        'applied',
-      );
     });
 
     it('reports no path when --from @contract is ahead of the database named by --to @db', async () => {

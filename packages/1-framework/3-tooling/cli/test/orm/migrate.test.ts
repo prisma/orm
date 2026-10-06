@@ -8,6 +8,7 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
@@ -509,12 +510,45 @@ describe('migrate', () => {
           }),
         }),
       );
+      expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('refName');
       expect(run.presented?.data).toMatchObject({
         ok: true,
         migrationsApplied: 0,
         markerHash: C1,
         summary: 'Already up to date',
       });
+    });
+
+    it.each([
+      { to: '@db', reason: 'a database with no marker' },
+      { to: '@empty', reason: 'the empty contract' },
+    ])('hands the runner the empty contract for --to $to ($reason)', async ({ to }) => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', to, '--json'], {
+        cwd,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(mocks.migrate).toHaveBeenCalledWith(expect.objectContaining({ refHash: EMPTY }));
+    });
+
+    it('passes the resolved ref name for a ref target', async () => {
+      const cwd = await buildProject();
+      await writeSnapshot(cwd, C1);
+      await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'prod', {
+        hash: C1,
+        invariants: [],
+      });
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', 'prod', '--json'], {
+        cwd,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(mocks.migrate).toHaveBeenCalledWith(
+        expect.objectContaining({ refHash: C1, refName: 'prod' }),
+      );
     });
 
     it('errors with the connection-required envelope for @db without a connection', async () => {
