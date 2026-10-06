@@ -1,4 +1,4 @@
-# ADR 207 — A serverless Postgres connection has the same query interface as a `postgres()` client
+# ADR 263 — A serverless Postgres connection has the same query interface as a `postgres()` client
 
 **Status:** Implemented
 **Domain:** Adapters / Targets, Runtime

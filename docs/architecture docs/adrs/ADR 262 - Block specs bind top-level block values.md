@@ -1,4 +1,4 @@
-# ADR 255 — Block specs bind top-level block values
+# ADR 262 — Block specs bind top-level block values
 
 **Status:** Accepted
 **Date:** 2026-09-22

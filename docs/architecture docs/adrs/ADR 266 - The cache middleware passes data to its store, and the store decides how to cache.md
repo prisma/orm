@@ -1,4 +1,4 @@
-# ADR 259 — The cache middleware passes data to its store, and the store decides how to cache
+# ADR 266 — The cache middleware passes data to its store, and the store decides how to cache
 
 Status: **Accepted**
 

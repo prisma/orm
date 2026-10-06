@@ -1,4 +1,4 @@
-# ADR 258 — A collection keeps its class through the chain
+# ADR 265 — A collection keeps its class through the chain
 
 **Status:** Accepted
 **Date:** 2026-09-30
