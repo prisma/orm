@@ -283,6 +283,31 @@ describe('update and delete change the row first() returns', () => {
     expect(runtime.executions).toEqual([]);
   });
 
+  it.each([
+    [
+      'limit',
+      'limit must be an integer from 0 to 9007199254740991, got -1',
+      (plain: PlainPublic) => viewed(plain).limit(-1),
+    ],
+    [
+      'limit',
+      'limit must be an integer from 0 to 9007199254740991, got 1.5',
+      (plain: PlainPublic) => viewed(plain).limit(1.5),
+    ],
+    [
+      'offset',
+      'offset must be an integer from 0 to 9007199254740991, got -2',
+      (plain: PlainPublic) => viewed(plain).offset(-2),
+    ],
+  ])('update and delete refuse a %s that a read refuses', async (_, message, chain) => {
+    const { plain, runtime } = createScopesOrm();
+    const refused = expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID', message });
+    expect(() => chain(plain).all()).toThrow(refused);
+    await expect(chain(plain).update({ title: 'x' })).rejects.toThrow(refused);
+    await expect(chain(plain).delete()).rejects.toThrow(refused);
+    expect(runtime.executions).toEqual([]);
+  });
+
   it('delete with an include reads the row it deletes without the offset', async () => {
     const { plain, runtime } = createScopesOrm();
     runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x', user: null }]]);

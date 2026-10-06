@@ -10,6 +10,7 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
   type OrderByItem,
@@ -2841,6 +2842,7 @@ export class CollectionBase<
         { meta: { model: this.modelName, table: this.tableName } },
       );
     }
+    checkLimitOffset('limit', this.state.limit);
     if (this.state.limit === 0) {
       return null;
     }
