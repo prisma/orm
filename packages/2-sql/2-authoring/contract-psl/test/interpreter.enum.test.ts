@@ -1,5 +1,10 @@
 import type { Contract } from '@internal/contract/types';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  dataTypeId,
+} from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -47,7 +52,26 @@ function stubCodec(id: string, jsonType: 'string' | 'number'): Codec {
 
 const sqliteCodecsById: Record<string, Codec> = {
   'sqlite/text@1': stubCodec('sqlite/text@1', 'string'),
-  'sqlite/integer@1': stubCodec('sqlite/integer@1', 'number'),
+  'sqlite/integer@1': stubCodec('sqlite/integer@1', 'string'),
+};
+
+const sqliteDataTypeEntries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
+  'sqlite/text': {
+    written: { kind: 'plain', syntax: 'string', parse: (text) => text },
+    print: (value) => String(value),
+    documentation: 'Text.',
+  },
+  'sqlite/integer': {
+    written: {
+      kind: 'plain',
+      syntax: 'number',
+      types: [dataTypeId('sqlite/integer')],
+      classify: (text) =>
+        /^-?\d+$/.test(text) ? { type: dataTypeId('sqlite/integer'), value: text } : undefined,
+    },
+    print: (value) => String(value),
+    documentation: 'A whole number, stored as digit text.',
+  },
 };
 
 const testCodecLookup: CodecLookupWithDescriptors = testSqlTypeLookups(
@@ -144,7 +168,7 @@ model Post {
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
 
-    const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' as const };
+    const pgText = { codecId: 'pg/text@1' as const };
     const PriorityHandle = enumType(
       'Priority',
       pgText,
@@ -180,7 +204,7 @@ model Post {
       models: {
         Post: model('Post', {
           fields: {
-            id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
+            id: field.column({ codecId: 'pg/int4@1' }).id(),
             priority: field.namedType(PriorityHandle),
           },
         }).sql({ table: 'Post' }),
@@ -233,7 +257,7 @@ model Post {
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
 
-    const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' as const };
+    const pgText = { codecId: 'pg/text@1' as const };
     const PriorityHandle = enumType(
       'Priority',
       pgText,
@@ -269,7 +293,7 @@ model Post {
       models: {
         Post: model('Post', {
           fields: {
-            id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
+            id: field.column({ codecId: 'pg/int4@1' }).id(),
             priority: field.namedType(PriorityHandle).default(PriorityHandle.members.Low),
           },
         }).sql({ table: 'Post' }),
@@ -639,16 +663,21 @@ describe.each([
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
+    dataTypes: fixtureDataTypeSupport.entries,
+    integerValues: [1, 2],
   },
   {
     targetName: 'sqlite',
     target: sqliteTarget,
     scalarColumnDescriptors: sqliteScalarColumnDescriptors,
     enumInferenceCodecs: sqliteEnumInferenceCodecs,
+    dataTypes: sqliteDataTypeEntries,
+    integerValues: ['1', '2'],
   },
 ])(
   'enum @@type inference ($targetName)',
-  ({ target, scalarColumnDescriptors, enumInferenceCodecs }) => {
+  ({ target, scalarColumnDescriptors, enumInferenceCodecs, dataTypes, integerValues }) => {
+    const authoringContributionsFor = { ...authoringContributions, dataTypes };
     const namespaceId = target.defaultNamespaceId;
 
     it('no @@type, all-bare members infers the target text codec', () => {
@@ -663,7 +692,12 @@ model Post {
   role Role
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -689,7 +723,12 @@ model Post {
   role Role
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -715,7 +754,12 @@ model Post {
   priority Priority
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -725,7 +769,7 @@ model Post {
       const ns = (result.value.storage as unknown as SqlStorage).namespaces[namespaceId];
       expect(ns?.entries.valueSet?.['Priority']).toMatchObject({
         kind: 'valueSet',
-        values: [1, 2],
+        values: integerValues,
       });
     });
 
@@ -742,7 +786,12 @@ model Post {
   priority Priority
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -763,7 +812,12 @@ model Post {
   mixed Mixed
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(false);
@@ -792,7 +846,12 @@ model Post {
   priority Priority
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(false);
@@ -813,7 +872,12 @@ model Post {
   flag Flag
 }
 `,
-        { target, scalarColumnDescriptors, enumInferenceCodecs },
+        {
+          target,
+          scalarColumnDescriptors,
+          enumInferenceCodecs,
+          authoringContributions: authoringContributionsFor,
+        },
       );
 
       expect(result.ok).toBe(false);
@@ -1031,7 +1095,7 @@ model Post {
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
     expect(ns?.entries.table?.['Post']?.columns?.['priorities']).toEqual({
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
       many: { elementNullable: true },

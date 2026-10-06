@@ -15,7 +15,6 @@ import { describe, expect, it } from 'vitest';
 
 const int4Column = {
   codecId: 'pg/int4@1',
-  nativeType: 'int4',
 } as const;
 
 const stack = createControlStack({

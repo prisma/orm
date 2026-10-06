@@ -1,5 +1,5 @@
 import type { ColumnDefault, Contract, JsonValue } from '@internal/contract/types';
-import type { CodecRef } from '@internal/framework-components/codec';
+import { type CodecRef, canonicalFormOf } from '@internal/framework-components/codec';
 import type {
   MigrationPlannerConflict,
   SchemaNodeRef,
@@ -46,13 +46,13 @@ import { sqlFamilyError } from '../errors';
  *
  * Default value serialization is target-specific (quoting, casting, type syntax vary
  * between Postgres, MySQL, SQLite, …). The target provides its renderer when calling
- * `contractToSchemaIR`, keeping the family layer target-agnostic. `dataType` is the id of the
- * data type the column's codec represents.
+ * `contractToSchemaIR`, keeping the family layer target-agnostic. `type.dataType` is the id of
+ * the data type the column's codec represents, and `type.baseTypeName` its base name.
  */
 export type DefaultRenderer = (
   def: ColumnDefault,
   column: StorageColumn,
-  dataType: string,
+  type: { readonly dataType: string; readonly baseTypeName: string },
 ) => string;
 
 /**
@@ -78,6 +78,8 @@ function convertColumn(
   // `storage.types` entry's codec and parameters.
   const resolved = resolveColumnTypeMetadata(column, storageTypes);
   const dataType = sqlDataTypeOfCodec(resolved.codecId, types);
+  const codec = types.codecLookup.descriptorFor(resolved.codecId);
+  const baseTypeName = unquotedSqlBaseName(dataType, dataTypeParams(dataType, resolved.typeParams));
   const baseNativeType = schemaTypeText(dataType, resolved.typeParams);
   // `many: true` columns keep `nativeType` as the bare element type (matching
   // how the introspected/"actual" side reports it — see the postgres control
@@ -106,7 +108,7 @@ function convertColumn(
     ...ifDefined(
       'default',
       column.default != null && renderDefault
-        ? renderDefault(column.default, column, dataType.id)
+        ? renderDefault(column.default, column, { dataType: dataType.id, baseTypeName })
         : undefined,
     ),
     // Contract-derived columns are resolved by construction: the computed
@@ -124,8 +126,9 @@ function convertColumn(
     // resolve DDL rendering from this at plan time (Decision 5), instead of
     // reading a derivation-precomputed render payload.
     codecRef: buildColumnCodecRef(resolved, many ? true : undefined),
-    codecBaseNativeType: resolved.nativeType,
+    codecBaseNativeType: baseTypeName,
     dataType,
+    ...ifDefined('toCanonicalForm', codec && canonicalFormOf(codec, types.dataTypeLookup)),
   };
 }
 
@@ -149,7 +152,7 @@ function schemaTypeText(
  * renderer already use (TML-2456, TML-2918).
  */
 function buildColumnCodecRef(
-  resolved: Pick<StorageColumn, 'codecId' | 'nativeType' | 'typeParams'>,
+  resolved: Pick<StorageColumn, 'codecId' | 'typeParams'>,
   many: boolean | undefined,
 ): CodecRef {
   return {
@@ -172,7 +175,7 @@ type ResolvedStorageTypes = Readonly<Record<string, StorageTypeInstance>>;
 function resolveColumnTypeMetadata(
   column: StorageColumn,
   storageTypes: ResolvedStorageTypes,
-): Pick<StorageColumn, 'codecId' | 'nativeType' | 'typeParams'> {
+): Pick<StorageColumn, 'codecId' | 'typeParams'> {
   if (!column.typeRef) {
     return column;
   }
@@ -191,7 +194,6 @@ function resolveColumnTypeMetadata(
   if (isStorageTypeInstance(referenced)) {
     return {
       codecId: referenced.codecId,
-      nativeType: referenced.nativeType,
       typeParams: referenced.typeParams,
     };
   }

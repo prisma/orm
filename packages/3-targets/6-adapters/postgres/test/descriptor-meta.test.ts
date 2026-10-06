@@ -4,8 +4,6 @@ import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import postgresAdapterDescriptor from '../src/exports/control';
 import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 
-const storage = postgresAdapterDescriptorMeta.types.storage;
-
 describe('postgresAdapterDescriptorMeta data types', () => {
   it('registers none, because the target registers them', () => {
     expect(postgresAdapterDescriptorMeta).not.toHaveProperty('dataTypes');
@@ -24,29 +22,9 @@ describe('postgresAdapterDescriptorMeta capabilities', () => {
   });
 });
 
-describe('storage entries', () => {
-  it('includes pg/uuid@1 with nativeType uuid', () => {
-    expect(storage).toEqual(
-      expect.arrayContaining([
-        { typeId: 'pg/uuid@1', familyId: 'sql', targetId: 'postgres', nativeType: 'uuid' },
-      ]),
-    );
-  });
-
-  it('includes pg/inet@1 with nativeType inet', () => {
-    expect(storage).toEqual(
-      expect.arrayContaining([
-        { typeId: 'pg/inet@1', familyId: 'sql', targetId: 'postgres', nativeType: 'inet' },
-      ]),
-    );
-  });
-
-  it('includes pg/bytea@1 with nativeType bytea', () => {
-    expect(storage).toEqual(
-      expect.arrayContaining([
-        { typeId: 'pg/bytea@1', familyId: 'sql', targetId: 'postgres', nativeType: 'bytea' },
-      ]),
-    );
+describe('pack metadata types', () => {
+  it('declares no storage list, because nothing reads one', () => {
+    expect(postgresAdapterDescriptorMeta.types).not.toHaveProperty('storage');
   });
 });
 

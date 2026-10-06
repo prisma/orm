@@ -15,9 +15,10 @@ This package provides TypeScript type definitions, Arktype validators, and facto
 
 ## StorageColumn Structure
 
-Each `StorageColumn` in SQL contracts includes both:
-- **`nativeType`** (required): the base name of the column's database type (e.g., `'int4'`, `'text'`, `'vector'`), written from the data type the column's codec represents. Migration planning and verification write the full type name from that data type and `typeParams`, not from this field
+Each `StorageColumn` in SQL contracts includes:
 - **`codecId`** (required): Codec identifier (e.g., `'pg/int4@1'`, `'pg/text@1'`, `'pg/vector@1'`) - used for query builders and runtime codecs
+- **`dataType`** (required): the id of the data type the codec represents (e.g., `'pg/int4'`, `'pg/text'`, `'pgvector/vector'`). The contract build writes it from the codec. Migration planning and verification write the column's type name from this data type and `typeParams`; the contract stores no type name
+- **`typeParams`** (optional): the type's parameters, for example `{ length: 1536 }` for `vector(1536)`
 - **`nullable`** (required): Whether the column is nullable
 - **`default`** (optional): Uses the shared `ColumnDefault` type from `@internal/contract` for db-agnostic defaults (literal or function). Client-generated defaults live in `execution.mutations.defaults`.
 
@@ -137,14 +138,14 @@ Use factory functions to construct contract IR structures in tests:
 ```typescript
 import { col, table, storage, model, contract, pk, unique, index, fk } from '@internal/sql-contract/factories';
 
-// Create a column (nativeType, codecId, nullable)
-const idColumn = col('int4', 'pg/int4@1', false);
+// Create a column (dataType, codecId, nullable)
+const idColumn = col('pg/int4', 'pg/int4@1', false);
 
 // Create a table
 const userTable = table(
   {
-    id: col('int4', 'pg/int4@1'),
-    email: col('text', 'pg/text@1'),
+    id: col('pg/int4', 'pg/int4@1'),
+    email: col('pg/text', 'pg/text@1'),
   },
   {
     pk: pk('id'),

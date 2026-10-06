@@ -36,7 +36,7 @@ const postgresTargetPack = {
   defaultNamespaceId: 'public',
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
 
 // ---------------------------------------------------------------------------
 // Serializer round-trip: domain enum + storage value-set survive JSON ↔ IR

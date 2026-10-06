@@ -85,8 +85,8 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-            email: { codecId: 'pg/text@1', nativeType: 'text', nullable: true },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+            email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: true },
           },
         },
       }),
@@ -111,13 +111,13 @@ describe('canonicalization', () => {
           columns: {
             created_at: {
               codecId: 'pg/timestamptz-temporal@1',
-              nativeType: 'timestamptz',
+              dataType: 'pg/timestamptz',
               nullable: false,
               default: { kind: 'function', expression: 'now()' },
             },
             updated_at: {
               codecId: 'pg/timestamptz-temporal@1',
-              nativeType: 'timestamptz',
+              dataType: 'pg/timestamptz',
               nullable: true,
             },
           },
@@ -144,7 +144,7 @@ describe('canonicalization', () => {
           columns: {
             bio: {
               codecId: 'pg/text@1',
-              nativeType: 'text',
+              dataType: 'pg/text',
               nullable: true,
               default: { kind: 'literal', value: '' },
             },
@@ -208,8 +208,8 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            first: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            second: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            first: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            second: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: {
             columns: ['second', 'first'],
@@ -224,8 +224,8 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            first: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            second: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            first: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            second: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: {
             columns: ['first', 'second'],
@@ -244,7 +244,7 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
           },
           indexes: [
             { columns: ['id'], name: 'user_email_idx' },
@@ -269,9 +269,9 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-            email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            username: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+            email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            username: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           uniques: [
             { columns: ['username'], name: 'user_username_key' },
@@ -296,9 +296,9 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-            first_name: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            last_name: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+            first_name: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            last_name: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           uniques: [{ columns: ['last_name', 'first_name'], name: 'user_name_key' }],
         },
@@ -319,9 +319,9 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            z_field: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            a_field: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            m_field: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            z_field: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            a_field: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            m_field: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
         },
       }),
@@ -432,7 +432,7 @@ describe('canonicalization', () => {
       storage: {
         namespaces: {},
         types: {
-          U: { codecId: 'x', nativeType: 'y', typeParams: {} },
+          U: { codecId: 'x', typeParams: {} },
         },
       },
     });
@@ -442,7 +442,7 @@ describe('canonicalization', () => {
     const storage = parsed['storage'] as Record<string, unknown>;
     const types = storage['types'] as Record<string, unknown>;
     const u = types['U'] as Record<string, unknown>;
-    expect(u).toEqual({ codecId: 'x', nativeType: 'y' });
+    expect(u).toEqual({ codecId: 'x' });
   });
 
   it('omits generated false', () => {
@@ -450,7 +450,7 @@ describe('canonicalization', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false, generated: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false, generated: false },
           },
         },
       }),

@@ -32,26 +32,26 @@ interface DefaultCase {
   readonly differentLiteral: ColumnDefaultLiteralInputValue;
 }
 
-const int2 = { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false } as const;
-const int4 = { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-const int8 = { many: false, nativeType: 'int8', codecId: 'pg/int8@1', nullable: false } as const;
+const int2 = { many: false, dataType: 'pg/int2', codecId: 'pg/int2@1', nullable: false } as const;
+const int4 = { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } as const;
+const int8 = { many: false, dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false } as const;
 const float8 = {
   many: false,
-  nativeType: 'float8',
+  dataType: 'pg/float8',
   codecId: 'pg/float8@1',
   nullable: false,
 } as const;
-const text = { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+const text = { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as const;
 const decimal = {
   many: false,
-  nativeType: 'numeric',
+  dataType: 'pg/numeric',
   codecId: 'pg/numeric@1',
   nullable: false,
   typeParams: { precision: 65, scale: 30 },
 } as const;
 const unscaledDecimal = {
   many: false,
-  nativeType: 'numeric',
+  dataType: 'pg/numeric',
   codecId: 'pg/numeric@1',
   nullable: false,
 } as const;
@@ -137,7 +137,7 @@ const cases: readonly DefaultCase[] = [
     ddl: '"negVarchar" VARCHAR(10) NOT NULL DEFAULT -1.5',
     type: {
       many: false,
-      nativeType: 'character varying',
+      dataType: 'pg/varchar',
       codecId: 'sql/varchar@1',
       nullable: false,
       typeParams: { length: 10 },
@@ -191,7 +191,7 @@ const cases: readonly DefaultCase[] = [
     column: 'timestamps',
     ddl: `"timestamps" TIMESTAMP(3)[] DEFAULT ARRAY['2024-01-01 00:00:00 +00:00']::TIMESTAMP(3)[]`,
     type: {
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       typeParams: { precision: 3 },
       ...list,
@@ -203,7 +203,7 @@ const cases: readonly DefaultCase[] = [
     column: 'emptyVarchars',
     ddl: '"emptyVarchars" VARCHAR(32)[] DEFAULT ARRAY[]::VARCHAR(32)[]',
     type: {
-      nativeType: 'character varying',
+      dataType: 'pg/varchar',
       codecId: 'sql/varchar@1',
       typeParams: { length: 32 },
       ...list,

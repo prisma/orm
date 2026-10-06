@@ -7,43 +7,43 @@ interface PolyStorage {
       columns: {
         readonly id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly title: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
         readonly type: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
         readonly severity: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: true;
         };
         readonly project_id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
         readonly parent_id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
         readonly assignee_id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
@@ -57,19 +57,19 @@ interface PolyStorage {
       columns: {
         readonly id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly priority: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly assignee_id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
@@ -83,13 +83,13 @@ interface PolyStorage {
       columns: {
         readonly id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
@@ -103,13 +103,13 @@ interface PolyStorage {
       columns: {
         readonly id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
@@ -123,13 +123,13 @@ interface PolyStorage {
       columns: {
         readonly id: {
           readonly many: false;
-          readonly nativeType: 'int4';
+          readonly dataType: 'pg/int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
           readonly many: false;
-          readonly nativeType: 'text';
+          readonly dataType: 'pg/text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };

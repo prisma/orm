@@ -76,7 +76,7 @@ This is intentionally not a general-purpose SQL expression system in the contrac
         "columns": {
           "status": {
             "codecId": "pg/text@1",
-            "nativeType": "text",
+            "dataType": "pg/text",
             "nullable": false
           }
         },

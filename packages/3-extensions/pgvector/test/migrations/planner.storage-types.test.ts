@@ -106,7 +106,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Role: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'role',
+            dataType: 'app/test-type',
             typeParams: { typeName: 'role', values: ['USER'] },
           },
         },
@@ -117,9 +117,9 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     role: {
-                      nativeType: 'role',
+                      dataType: 'app/test-type',
                       codecId: 'app/test-type@1',
                       nullable: false,
                       typeRef: 'Role',
@@ -189,7 +189,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Role: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'role',
+            dataType: 'app/test-type',
             typeParams: { typeName: 'role', values: ['USER'] },
           },
         },
@@ -254,7 +254,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           UserKind: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'UserKind',
+            dataType: 'app/test-type',
             typeParams: { typeName: 'UserKind', values: ['ADMIN', 'USER'] },
           },
         },
@@ -265,9 +265,9 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     kind: {
-                      nativeType: 'UserKind',
+                      dataType: 'app/test-type',
                       codecId: 'app/test-type@1',
                       nullable: false,
                       typeRef: 'UserKind',
@@ -325,7 +325,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Embedding1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -336,9 +336,9 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 document: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeRef: 'Embedding1536',
@@ -396,7 +396,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Embedding1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -407,9 +407,9 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 document: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeRef: 'Embedding1536',

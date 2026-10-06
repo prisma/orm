@@ -11,7 +11,7 @@ import type { CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecInstanceContext } from './codec-types';
 
 /**
- * Authored column-type descriptor — the data shape an authoring site (PSL or TypeScript builders) attaches to a column to identify its codec and its native database type.
+ * Authored column-type descriptor — the data shape an authoring site (PSL or TypeScript builders) attaches to a column to identify its codec.
  *
  * Lives at the framework-components layer alongside the codec types so codec-author packages (e.g. column-spec / `column()` packagers) can extend it directly without crossing layer boundaries.
  *
@@ -19,8 +19,6 @@ import type { CodecInstanceContext } from './codec-types';
  */
 export type ColumnTypeDescriptor<TCodecId extends string = string> = {
   readonly codecId: TCodecId;
-  /** Ignored: the contract names the database type from the codec's data type. */
-  readonly nativeType?: string;
   readonly typeParams?: Record<string, unknown> | undefined;
   readonly typeRef?: string;
   /**
@@ -86,20 +84,16 @@ export interface ColumnSpec<R, P extends Record<string, unknown> | undefined>
 
 /**
  * Trivial column packager. Per-codec helpers call this directly with the result of `descriptor.factory(params)` — direct method invocation binds the descriptor's method-level generic at the call site and the literal flows through `R`.
- *
- * `nativeType` is ignored: the contract names the column's database type from the data type the codec represents.
  */
 export function column<R, P extends Record<string, unknown> | undefined>(
   codecFactory: (ctx: CodecInstanceContext) => R,
   codecId: string,
   typeParams: P,
-  nativeType: string,
 ): ColumnSpec<R, P> {
   return {
     codecFactory,
     codecId,
     typeParams,
-    nativeType,
   };
 }
 

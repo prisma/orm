@@ -44,8 +44,8 @@ function createFkTestContract(fkConfig: {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -54,9 +54,9 @@ function createFkTestContract(fkConfig: {
               },
               post: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -244,10 +244,10 @@ function createWorkflowStateContract(options: {
   includeStateColumn: boolean;
 }): PostgresContract {
   const workflowStateColumns = {
-    workflow_id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-    team_id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+    workflow_id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+    team_id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
     ...(options.includeStateColumn
-      ? { state: { nativeType: 'jsonb', codecId: 'pg/json@1', nullable: true } }
+      ? { state: { dataType: 'pg/json', codecId: 'pg/json@1', nullable: true } }
       : {}),
   };
 
@@ -264,7 +264,7 @@ function createWorkflowStateContract(options: {
             table: {
               teams: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -273,8 +273,8 @@ function createWorkflowStateContract(options: {
               },
               workflows: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  team_id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  team_id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id', 'team_id'] },
                 uniques: [],

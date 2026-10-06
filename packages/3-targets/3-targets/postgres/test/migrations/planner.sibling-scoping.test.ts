@@ -46,7 +46,7 @@ function buildContract(): Contract<SqlStorage> {
     entries: {
       table: {
         app_user: new StorageTable({
-          columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
           foreignKeys: [],
           uniques: [],
           indexes: [],
@@ -127,7 +127,7 @@ function buildContractWithSecondNamespace(): Contract<SqlStorage> {
     entries: {
       table: {
         app_user: new StorageTable({
-          columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
           foreignKeys: [],
           uniques: [],
           indexes: [],
@@ -141,7 +141,7 @@ function buildContractWithSecondNamespace(): Contract<SqlStorage> {
     entries: {
       table: {
         tenant_meta: new StorageTable({
-          columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
           foreignKeys: [],
           uniques: [],
           indexes: [],

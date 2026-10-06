@@ -80,7 +80,6 @@ type StorageTypeFromDescriptor<
 > = {
   readonly kind: 'codec-instance';
   readonly codecId: ResolveTemplateValue<Descriptor['output']['codecId'], Args>;
-  readonly nativeType: string;
 } & (Descriptor['output'] extends {
   readonly typeParams: infer TypeParams extends Record<string, unknown>;
 }

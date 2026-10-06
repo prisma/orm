@@ -3,8 +3,8 @@
  *
  *  1. A field `pg.enum(<native_enum ref>)` resolves the ref against the
  *     `native_enum` block declared in the same document (and namespace),
- *     lowering to a column `{ codecId: 'pg/enum@1', valueSet ref, nativeType,
- *     no CHECK }` — the production factory chain, no test-side hand-lowering.
+ *     lowering to a column `{ codecId: 'pg/enum@1', dataType: 'pg/enum', valueSet ref,
+ *     typeParams.typeName, no CHECK }` — the production factory chain, no test-side hand-lowering.
  *
  *  2. Negatives: an unresolvable ref, and a ref naming something that is not
  *     a `native_enum` block.
@@ -137,7 +137,7 @@ namespace auth {
 `;
 
 describe('PSL pg.enum(Ref) field resolution', () => {
-  it('lowers to a column with codecId pg/enum@1, a valueSet ref, and the enum typeName as nativeType', () => {
+  it('lowers to a column with codecId pg/enum@1, a valueSet ref, and the enum typeName as typeParams.typeName', () => {
     const result = interpret(aalLevelSource);
 
     expect(result.ok).toBe(true);
@@ -149,7 +149,7 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     const aalColumn = authTable?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
+      dataType: 'pg/enum',
       typeParams: { typeName: 'auth.aal_level' },
       nullable: false,
       valueSet: {
@@ -214,7 +214,7 @@ namespace auth {
     const aalsColumn = ns.table['AuthSession']?.columns['aals'];
     expect(aalsColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
+      dataType: 'pg/enum',
       nullable: false,
       valueSet: {
         plane: 'storage',
@@ -379,7 +379,6 @@ namespace public {
     const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'aal_level',
       typeParams: { typeName: 'aal_level' },
       valueSet: {
         plane: 'storage',

@@ -42,7 +42,7 @@ const postgresTypeLookups = {
   dataTypeLookup: createDataTypeLookup(postgresDataTypes),
 };
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' };
+const pgText = { codecId: 'pg/text@1' as const };
 
 // Declaration order: low → high → medium. Lexical order would be high, low, medium.
 const Priority = enumType(

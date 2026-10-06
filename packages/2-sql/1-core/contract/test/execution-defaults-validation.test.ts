@@ -19,7 +19,7 @@ function readingContract(updatedAt: StorageColumn, defaults: readonly ExecutionM
           id: UNBOUND_NAMESPACE_ID,
           kind: 'test-sql-namespace',
           entries: {
-            table: { reading: table({ id: col('int4', 'pg/int4@1'), updatedAt }) },
+            table: { reading: table({ id: col('pg/int4', 'pg/int4@1'), updatedAt }) },
           },
         },
       },
@@ -38,7 +38,7 @@ const updatedAtRef = { namespace: UNBOUND_NAMESPACE_ID, entry: 'reading', field:
 describe('validateSqlContractFully and execution defaults', () => {
   it('accepts a column with a storage default and generators on create and update', () => {
     const column = new StorageColumn({
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
       default: { kind: 'function', expression: 'now()' },
@@ -56,7 +56,7 @@ describe('validateSqlContractFully and execution defaults', () => {
   });
 
   it('accepts generators on create and update for a nullable column', () => {
-    const column = col('timestamp', 'pg/timestamp-temporal@1', true);
+    const column = col('pg/timestamp', 'pg/timestamp-temporal@1', true);
     const defaults = [{ ref: updatedAtRef, onCreate: instantNow, onUpdate: instantNow }];
 
     const validated = validateSqlContractFully(readingContract(column, defaults));
@@ -65,7 +65,7 @@ describe('validateSqlContractFully and execution defaults', () => {
   });
 
   it('rejects a generator whose kind is not "generator", so the section is checked rather than ignored', () => {
-    const column = col('timestamp', 'pg/timestamp-temporal@1', true);
+    const column = col('pg/timestamp', 'pg/timestamp-temporal@1', true);
     const defaults = [
       blindCast<ExecutionMutationDefault, 'deliberately malformed generator kind'>({
         ref: updatedAtRef,
@@ -79,7 +79,7 @@ describe('validateSqlContractFully and execution defaults', () => {
   });
 
   it('rejects a ref that still names a table and a column', () => {
-    const column = col('timestamp', 'pg/timestamp-temporal@1', true);
+    const column = col('pg/timestamp', 'pg/timestamp-temporal@1', true);
     const defaults = [
       blindCast<ExecutionMutationDefault, 'the ref shape before entry and field'>({
         ref: { namespace: UNBOUND_NAMESPACE_ID, table: 'reading', column: 'updatedAt' },

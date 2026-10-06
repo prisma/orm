@@ -11,6 +11,19 @@ import { createTestSqlNamespace } from '../../1-core/contract/test/test-support'
 import type { SqlRuntimeExtensionDescriptor } from '../src/sql-context';
 import { createStubAdapter, createTestContext } from './utils';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'async/vector@1': 'async/vector',
+  'nope/missing@1': 'nope/missing',
+  'pgvector/vector@1': 'pgvector/vector',
+  'test/scalar@1': 'test/scalar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 /**
  * Build-time integrity check that surfaces (codecId, isParameterized, typeParams) mismatches in `storage.tables[t].columns[c]` before any AST-bound codec resolution can mask them. The legacy "tolerate codec references without params" patterns silently skipped malformed columns; the integrity check throws explicit envelope codes instead.
  */
@@ -114,7 +127,6 @@ describe('createExecutionContext — column codec integrity', () => {
 
   function contractWithColumn(column: {
     readonly codecId: string;
-    readonly nativeType: string;
     readonly typeParams?: Record<string, unknown>;
     readonly typeRef?: string;
   }): Contract<SqlStorage> {
@@ -128,7 +140,7 @@ describe('createExecutionContext — column codec integrity', () => {
               Doc: {
                 columns: {
                   field: {
-                    nativeType: column.nativeType,
+                    dataType: dataTypeOf(column.codecId),
                     codecId: column.codecId,
                     nullable: false,
                     ...(column.typeParams ? { typeParams: column.typeParams } : {}),
@@ -161,7 +173,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('throws CODEC_DESCRIPTOR_MISSING when a column references an unregistered codecId', () => {
     const contract = contractWithColumn({
       codecId: 'nope/missing@1',
-      nativeType: 'vector',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -173,7 +184,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('throws CODEC_PARAMETERIZATION_MISMATCH when a parameterized codec column lacks typeParams', () => {
     const contract = contractWithColumn({
       codecId: 'pgvector/vector@1',
-      nativeType: 'vector',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -185,7 +195,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('throws CODEC_PARAMETERIZATION_MISMATCH when a non-parameterized codec column carries typeParams', () => {
     const contract = contractWithColumn({
       codecId: 'test/scalar@1',
-      nativeType: 'scalar',
       typeParams: { unexpected: 1 },
     });
     expect(() =>
@@ -198,7 +207,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('accepts a non-parameterized codec column whose typeParams is an empty object (equivalent to missing)', () => {
     const contract = contractWithColumn({
       codecId: 'test/scalar@1',
-      nativeType: 'scalar',
       typeParams: {},
     });
     expect(() =>
@@ -219,7 +227,7 @@ describe('createExecutionContext — column codec integrity', () => {
               Doc: {
                 columns: {
                   uuidCol: {
-                    nativeType: 'uuid',
+                    dataType: 'test/scalar',
                     codecId: 'test/scalar@1',
                     nullable: false,
                     typeRef: 'Uuid',
@@ -238,7 +246,7 @@ describe('createExecutionContext — column codec integrity', () => {
         Uuid: {
           kind: 'codec-instance',
           codecId: 'test/scalar@1',
-          nativeType: 'uuid',
+          dataType: 'test/scalar',
           typeParams: {},
         },
       },
@@ -264,7 +272,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('error message names the (table, column) site for missing codec', () => {
     const contract = contractWithColumn({
       codecId: 'nope/missing@1',
-      nativeType: 'vector',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -276,7 +283,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('error message names the (table, column) site for parameterization mismatch', () => {
     const contract = contractWithColumn({
       codecId: 'pgvector/vector@1',
-      nativeType: 'vector',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -288,7 +294,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('accepts a parameterized column with typeParams', () => {
     const contract = contractWithColumn({
       codecId: 'pgvector/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     });
     expect(() =>
@@ -301,7 +306,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('accepts a non-parameterized column without typeParams', () => {
     const contract = contractWithColumn({
       codecId: 'test/scalar@1',
-      nativeType: 'scalar',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -313,7 +317,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('throws TYPE_PARAMS_INVALID when a parameterized column probes an async paramsSchema at the integrity check', () => {
     const contract = contractWithColumn({
       codecId: 'async/vector@1',
-      nativeType: 'vector',
     });
     expect(() =>
       createTestContext(contract, createStubAdapter(), {
@@ -325,7 +328,6 @@ describe('createExecutionContext — column codec integrity', () => {
   it('throws TYPE_PARAMS_INVALID when validateTypeParams encounters an async paramsSchema for a column with typeParams', () => {
     const contract = contractWithColumn({
       codecId: 'async/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     });
     expect(() =>
@@ -346,7 +348,7 @@ describe('createExecutionContext — column codec integrity', () => {
               Doc: {
                 columns: {
                   embedding: {
-                    nativeType: 'vector',
+                    dataType: 'pgvector/vector',
                     codecId: 'pgvector/vector@1',
                     nullable: false,
                     typeRef: 'V1536',
@@ -365,7 +367,7 @@ describe('createExecutionContext — column codec integrity', () => {
         V1536: {
           kind: 'codec-instance',
           codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       },

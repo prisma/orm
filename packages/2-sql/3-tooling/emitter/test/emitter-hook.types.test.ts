@@ -11,7 +11,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
             },
           },
         },
@@ -35,7 +35,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'unknown/type@1', nullable: false },
+              id: { dataType: 'unknown/type', codecId: 'unknown/type@1', nullable: false },
             },
           },
         },
@@ -58,7 +58,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'invalid-format', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'invalid-format', nullable: false },
             },
           },
         },
@@ -78,7 +78,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'postgres/int4@1', nullable: false },
+              id: { dataType: 'postgres/int4', codecId: 'postgres/int4@1', nullable: false },
             },
           },
         },
@@ -120,7 +120,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'invalid@format', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'invalid@format', nullable: false },
             },
           },
         },
@@ -178,7 +178,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
             },
           },
         },

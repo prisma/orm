@@ -309,7 +309,7 @@ describe('contract/stack validation errors', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -363,7 +363,11 @@ describe('contract/stack validation errors', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'text', codecId: 'test/unregistered@1', nullable: false },
+                    id: {
+                      dataType: 'test/unregistered',
+                      codecId: 'test/unregistered@1',
+                      nullable: false,
+                    },
                   },
                   uniques: [],
                   indexes: [],
@@ -405,9 +409,9 @@ describe('context.applyMutationDefaults', () => {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                  slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                  slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                  email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 uniques: [],
                 indexes: [],

@@ -3,7 +3,7 @@ changes:
   - id: consume-nested-list-cardinality
     summary: Update contract producers and consumers for explicit cardinality and nested element nullability.
   - id: reemit-extension-list-contracts
-    summary: Re-emit bundled extension contracts and reconcile changed snapshot hashes and references.
+    summary: Re-emit bundled extension contracts and reconcile changed snapshot hashes and references; for SQL contract spaces, `contract-stores-data-type` rewrites the historical snapshots.
 ---
 
 ## Update contract producers and consumers
@@ -24,4 +24,6 @@ Regenerate bundled `contract.json` and `contract.d.ts` together from the extensi
 
 Preserve existing strict-element declarations and explicit `elementNotNull` waivers. In particular, a Supabase native-array column with `noCheck: ['elementNotNull']` remains `many: { elementNullable: false }`, not a nullable-element list. Scalar domain JSON continues to omit `many: false`; list descriptors change, and generated contract hashes may change. Retaining old hash literals is not a valid regeneration. Scalar domain JSON and declarations omit `many: false`; SQL storage-column declarations retain required cardinality.
 
-For extension-owned migration snapshots, regenerate each historical state from its own source, not the latest extension schema. Write the JSON/declaration pair through the snapshot store and regenerate dependent migration metadata in dependency order. If a snapshot hash changes, preserve the old entry while it is referenced, create the new content-addressed entry, and update both JSON/type imports, start/end contract hashes, and derived migration identifiers and parent references consistently. Preserve recorded operations unless intentionally changing the schema. Do not blanket-rename hash paths, drop migration references, or rewrite applied history. Coordinate already-applied migration identities and database contract markers through the consumer project's supported migration procedure and verify the transition on a disposable database. Stop if historical sources or the reference mapping cannot be recovered.
+For SQL contract spaces, the `contract-stores-data-type` script of the same release already writes the list form and refreshes hashes and snapshot names, so historical SQL snapshots need no re-emission; MongoDB contract spaces still do.
+
+For extension-owned MongoDB migration snapshots, regenerate each historical state from its own source, not the latest extension schema. Write the JSON/declaration pair through the snapshot store and regenerate dependent migration metadata in dependency order. If a snapshot hash changes, preserve the old entry while it is referenced, create the new content-addressed entry, and update both JSON/type imports, start/end contract hashes, and derived migration identifiers and parent references consistently. Preserve recorded operations unless intentionally changing the schema. Do not blanket-rename hash paths, drop migration references, or rewrite applied history. Coordinate already-applied migration identities and database contract markers through the consumer project's supported migration procedure and verify the transition on a disposable database. Stop if historical sources or the reference mapping cannot be recovered.

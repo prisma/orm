@@ -153,12 +153,7 @@ export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<Precisi
 export const pgTimestamptzDateDescriptor = new PgTimestamptzDateDescriptor();
 
 export const pgTimestamptzDateColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestamptzDateDescriptor.factory(params),
-    pgTimestamptzDateDescriptor.codecId,
-    params,
-    'timestamptz',
-  );
+  column(pgTimestamptzDateDescriptor.factory(params), pgTimestamptzDateDescriptor.codecId, params);
 
 pgTimestamptzDateColumn satisfies ColumnHelperFor<PgTimestamptzDateDescriptor>;
 pgTimestamptzDateColumn satisfies ColumnHelperForStrict<PgTimestamptzDateDescriptor>;

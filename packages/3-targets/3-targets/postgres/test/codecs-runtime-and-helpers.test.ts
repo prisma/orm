@@ -79,11 +79,10 @@ describe('pg/enum@1 codec runtime', () => {
 });
 
 describe('PgEnumDescriptor.columnFromEntity', () => {
-  it('derives typeParams and nativeType from a PostgresNativeEnum entity', () => {
+  it('derives typeParams from a PostgresNativeEnum entity', () => {
     const entity = new PostgresNativeEnum({ typeName: 'aal_level', members: ['aal1', 'aal2'] });
     expect(pgEnumDescriptor.columnFromEntity(entity)).toEqual({
       typeParams: { typeName: 'aal_level' },
-      nativeType: 'aal_level',
     });
   });
 
@@ -242,7 +241,6 @@ describe('column helpers', () => {
   it('pgBitColumn packages a ColumnSpec for pg/bit@1', () => {
     const spec = pgBitColumn({ length: 8 });
     expect(spec.codecId).toBe(PG_BIT_CODEC_ID);
-    expect(spec.nativeType).toBe('bit');
     expect(spec.typeParams).toEqual({ length: 8 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_BIT_CODEC_ID);
   });
@@ -255,7 +253,6 @@ describe('column helpers', () => {
   it('pgBoolColumn packages a ColumnSpec for pg/bool@1', () => {
     const spec = pgBoolColumn();
     expect(spec.codecId).toBe(PG_BOOL_CODEC_ID);
-    expect(spec.nativeType).toBe('bool');
     expect(spec.typeParams).toBeUndefined();
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_BOOL_CODEC_ID);
   });
@@ -263,14 +260,12 @@ describe('column helpers', () => {
   it('pgByteaColumn packages a ColumnSpec for pg/bytea@1', () => {
     const spec = pgByteaColumn();
     expect(spec.codecId).toBe(PG_BYTEA_CODEC_ID);
-    expect(spec.nativeType).toBe('bytea');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_BYTEA_CODEC_ID);
   });
 
   it('pgCharColumn packages a ColumnSpec for pg/char@1', () => {
     const spec = pgCharColumn({ length: 10 });
     expect(spec.codecId).toBe(PG_CHAR_CODEC_ID);
-    expect(spec.nativeType).toBe('character');
     expect(spec.typeParams).toEqual({ length: 10 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_CHAR_CODEC_ID);
   });
@@ -278,56 +273,48 @@ describe('column helpers', () => {
   it('pgFloat4Column packages a ColumnSpec for pg/float4@1', () => {
     const spec = pgFloat4Column();
     expect(spec.codecId).toBe(PG_FLOAT4_CODEC_ID);
-    expect(spec.nativeType).toBe('float4');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_FLOAT4_CODEC_ID);
   });
 
   it('pgFloat8Column packages a ColumnSpec for pg/float8@1', () => {
     const spec = pgFloat8Column();
     expect(spec.codecId).toBe(PG_FLOAT8_CODEC_ID);
-    expect(spec.nativeType).toBe('float8');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_FLOAT8_CODEC_ID);
   });
 
   it('pgFloatColumn packages a ColumnSpec for pg/float@1', () => {
     const spec = pgFloatColumn();
     expect(spec.codecId).toBe(PG_FLOAT_CODEC_ID);
-    expect(spec.nativeType).toBe('float8');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_FLOAT_CODEC_ID);
   });
 
   it('pgInt2Column packages a ColumnSpec for pg/int2@1', () => {
     const spec = pgInt2Column();
     expect(spec.codecId).toBe(PG_INT2_CODEC_ID);
-    expect(spec.nativeType).toBe('int2');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_INT2_CODEC_ID);
   });
 
   it('pgInt4Column packages a ColumnSpec for pg/int4@1', () => {
     const spec = pgInt4Column();
     expect(spec.codecId).toBe(PG_INT4_CODEC_ID);
-    expect(spec.nativeType).toBe('int4');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_INT4_CODEC_ID);
   });
 
   it('pgInt8Column packages a ColumnSpec for pg/int8@1', () => {
     const spec = pgInt8Column();
     expect(spec.codecId).toBe(PG_INT8_CODEC_ID);
-    expect(spec.nativeType).toBe('int8');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_INT8_CODEC_ID);
   });
 
   it('pgIntColumn packages a ColumnSpec for pg/int@1', () => {
     const spec = pgIntColumn();
     expect(spec.codecId).toBe(PG_INT_CODEC_ID);
-    expect(spec.nativeType).toBe('int4');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_INT_CODEC_ID);
   });
 
   it('pgIntervalColumn packages a ColumnSpec for pg/interval@1', () => {
     const spec = pgIntervalColumn({ precision: 3 });
     expect(spec.codecId).toBe(PG_INTERVAL_CODEC_ID);
-    expect(spec.nativeType).toBe('interval');
     expect(spec.typeParams).toEqual({ precision: 3 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_INTERVAL_CODEC_ID);
   });
@@ -335,21 +322,18 @@ describe('column helpers', () => {
   it('pgJsonColumn packages a ColumnSpec for pg/json@1', () => {
     const spec = pgJsonColumn();
     expect(spec.codecId).toBe(PG_JSON_CODEC_ID);
-    expect(spec.nativeType).toBe('json');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_JSON_CODEC_ID);
   });
 
   it('pgJsonbColumn packages a ColumnSpec for pg/jsonb@1', () => {
     const spec = pgJsonbColumn();
     expect(spec.codecId).toBe(PG_JSONB_CODEC_ID);
-    expect(spec.nativeType).toBe('jsonb');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_JSONB_CODEC_ID);
   });
 
   it('pgNumericColumn packages a ColumnSpec for pg/numeric@1', () => {
     const spec = pgNumericColumn({ precision: 10, scale: 2 });
     expect(spec.codecId).toBe(PG_NUMERIC_CODEC_ID);
-    expect(spec.nativeType).toBe('numeric');
     expect(spec.typeParams).toEqual({ precision: 10, scale: 2 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_NUMERIC_CODEC_ID);
   });
@@ -362,28 +346,24 @@ describe('column helpers', () => {
   it('pgTextColumn packages a ColumnSpec for pg/text@1', () => {
     const spec = pgTextColumn();
     expect(spec.codecId).toBe(PG_TEXT_CODEC_ID);
-    expect(spec.nativeType).toBe('text');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_TEXT_CODEC_ID);
   });
 
   it('pgTimetzColumn packages a ColumnSpec for pg/timetz@1', () => {
     const spec = pgTimetzColumn();
     expect(spec.codecId).toBe(PG_TIMETZ_CODEC_ID);
-    expect(spec.nativeType).toBe('timetz');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_TIMETZ_CODEC_ID);
   });
 
   it('pgUuidColumn packages a ColumnSpec for pg/uuid@1', () => {
     const spec = pgUuidColumn();
     expect(spec.codecId).toBe(PG_UUID_CODEC_ID);
-    expect(spec.nativeType).toBe('uuid');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_UUID_CODEC_ID);
   });
 
   it('pgVarbitColumn packages a ColumnSpec for pg/varbit@1', () => {
     const spec = pgVarbitColumn({ length: 16 });
     expect(spec.codecId).toBe(PG_VARBIT_CODEC_ID);
-    expect(spec.nativeType).toBe('bit varying');
     expect(spec.typeParams).toEqual({ length: 16 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_VARBIT_CODEC_ID);
   });
@@ -391,7 +371,6 @@ describe('column helpers', () => {
   it('pgVarcharColumn packages a ColumnSpec for pg/varchar@1', () => {
     const spec = pgVarcharColumn({ length: 255 });
     expect(spec.codecId).toBe(PG_VARCHAR_CODEC_ID);
-    expect(spec.nativeType).toBe('character varying');
     expect(spec.typeParams).toEqual({ length: 255 });
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_VARCHAR_CODEC_ID);
   });

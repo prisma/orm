@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defineContract, enumType, member } from '../../src/exports/contract-builder';
 
-const pgInt = { codecId: 'pg/int4@1' as const, nativeType: 'int4' };
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' };
+const pgInt = { codecId: 'pg/int4@1' as const };
+const pgText = { codecId: 'pg/text@1' as const };
 
 describe('int-backed enum authoring against the real Postgres pack', () => {
   it('emits numeric membership checks for scalar and array enum columns', () => {

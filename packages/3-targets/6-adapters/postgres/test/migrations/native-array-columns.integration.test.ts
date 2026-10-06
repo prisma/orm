@@ -71,27 +71,27 @@ function buildArrayContract(): Contract<SqlStorage> {
             table: {
               ArrayTest: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   tags: {
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     codecId: 'pg/text@1',
                     nullable: false,
                     many: { elementNullable: false },
                   },
                   labels: {
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     codecId: 'pg/text@1',
                     nullable: true,
                     many: { elementNullable: false },
                   },
                   scores: {
-                    nativeType: 'int4',
+                    dataType: 'pg/int4',
                     codecId: 'pg/int4@1',
                     nullable: false,
                     many: { elementNullable: false },
                   },
                   tagsWithDefault: {
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     codecId: 'pg/text@1',
                     nullable: false,
                     many: { elementNullable: false },

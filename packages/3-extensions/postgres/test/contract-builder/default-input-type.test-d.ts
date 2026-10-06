@@ -17,17 +17,13 @@ import {
 
 const Level = enumType(
   'Level',
-  { codecId: 'pg/int4@1' as const, nativeType: 'int4' },
+  { codecId: 'pg/int4@1' as const },
   member('Low', 1),
   member('High', 10),
 );
-const BigLevel = enumType(
-  'BigLevel',
-  { codecId: 'pg/int8@1' as const, nativeType: 'int8' },
-  member('Low', 1n),
-);
+const BigLevel = enumType('BigLevel', { codecId: 'pg/int8@1' as const }, member('Low', 1n));
 
-const handWritten = { codecId: 'app/custom@1', nativeType: 'text' } as const;
+const handWritten = { codecId: 'app/custom@1' } as const;
 
 test('.default() takes the input type of the field codec', () => {
   defineContract({ enums: { Level, BigLevel } }, ({ field, model }) => {
@@ -35,7 +31,7 @@ test('.default() takes the input type of the field codec', () => {
       Counter: {
         kind: 'codec-instance',
         codecId: 'pg/int8@1',
-        nativeType: 'int8',
+        dataType: 'pg/int8',
         typeParams: {},
       },
     } as const;

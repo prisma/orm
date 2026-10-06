@@ -21,7 +21,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7e0fbcfc4cc5178d89ab0cda93756513a0a823a3dea3708476207b0527c2e423'>;
+  StorageHashBase<'44d4d2f54a9d0fe736aa5eb026f74e493e17e4953f0a463736c5183fb2f411d1'>;
 export type ExecutionHash =
   ExecutionHashBase<'76ee8948067fff39e1b787eafdf2c9319ebe5e0f5029f71536b4f58b92d7790e'>;
 export type ProfileHash =
@@ -415,13 +415,13 @@ type ContractBase = Omit<
             readonly _PostToTag: {
               columns: {
                 readonly A: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly B: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -466,19 +466,19 @@ type ContractBase = Omit<
             readonly Post: {
               columns: {
                 readonly authorId: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly content: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -488,7 +488,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly published: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                   readonly default: {
@@ -498,13 +498,13 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly viewCount: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -535,7 +535,7 @@ type ContractBase = Omit<
             readonly Tag: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -545,7 +545,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -565,7 +565,7 @@ type ContractBase = Omit<
             readonly User: {
               columns: {
                 readonly createdAt: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-string@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
@@ -573,13 +573,13 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -589,13 +589,13 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly role: {
-                  readonly nativeType: 'Role';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
@@ -606,7 +606,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly updatedAt: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-string@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };

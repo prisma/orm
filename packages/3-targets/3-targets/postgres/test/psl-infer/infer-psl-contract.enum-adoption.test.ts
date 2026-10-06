@@ -566,7 +566,7 @@ describe('adopted output lowers through the production interpret chain', () => {
     const aalColumn = ns.table['sessions']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'aal_level',
+      dataType: 'pg/enum',
       nullable: true,
       valueSet: {
         plane: 'storage',
@@ -588,7 +588,6 @@ describe('adopted output lowers through the production interpret chain', () => {
     const aalColumn = ns.table['sessions']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
       typeParams: { typeName: 'auth.aal_level' },
     });
   });
@@ -660,7 +659,6 @@ describe('mixed-case enum type names (Prisma-ORM-created types)', () => {
     expect(ns.valueSet?.['HoldType']).toMatchObject({ values: ['active', 'released'] });
     expect(ns.table['orders']?.columns['hold']).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'HoldType',
       typeParams: { typeName: 'HoldType' },
     });
   });

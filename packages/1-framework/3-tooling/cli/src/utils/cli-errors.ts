@@ -145,6 +145,86 @@ export function errorAdvanceRefArgConflict(options: {
   );
 }
 
+/** A ref `db sign` meant to advance, and why writing it or its snapshot failed. */
+export interface UnwrittenRef {
+  readonly space: string;
+  readonly name: string;
+  readonly hash: string;
+  readonly reason: string;
+}
+
+function quotedSpaces(spaces: readonly string[]): string {
+  return spaces.map((space) => `"${space}"`).join(', ');
+}
+
+function notSignedSentence(
+  spaces: readonly string[],
+  because: string,
+  becausePlural: string,
+): string {
+  if (spaces.length === 0) return '';
+  return spaces.length === 1
+    ? ` Space ${quotedSpaces(spaces)} was not signed, because ${because}.`
+    : ` Spaces ${quotedSpaces(spaces)} were not signed, because ${becausePlural}.`;
+}
+
+/**
+ * `db sign` wrote the markers, then failed to write one or more refs or their snapshots. The database is signed; running the command again writes the refs. The error also names the spaces it did not sign: those whose schema failed verification, and those whose marker changed while it ran.
+ */
+export function errorSignRefsNotWritten(options: {
+  readonly signedSpaces: readonly string[];
+  readonly failedSpaces: readonly string[];
+  readonly conflictSpaces: readonly string[];
+  readonly unwrittenRefs: readonly UnwrittenRef[];
+  readonly advancedRefs: readonly {
+    readonly space: string;
+    readonly name: string;
+    readonly hash: string;
+  }[];
+  readonly rerunCommand: string;
+  readonly cause: unknown;
+}): ActionableCliError {
+  const { signedSpaces, failedSpaces, conflictSpaces, unwrittenRefs, rerunCommand } = options;
+  const markers =
+    signedSpaces.length === 1
+      ? `the marker of space ${quotedSpaces(signedSpaces)} holds its contract`
+      : `the markers of spaces ${quotedSpaces(signedSpaces)} hold their contracts`;
+  const notSigned =
+    notSignedSentence(
+      failedSpaces,
+      'its schema does not satisfy its contract',
+      'their schemas do not satisfy their contracts',
+    ) +
+    notSignedSentence(
+      conflictSpaces,
+      'its marker changed while db sign ran',
+      'their markers changed while db sign ran',
+    );
+  const refs = unwrittenRefs
+    .map((ref) => `ref "${ref.name}" of space "${ref.space}" (${ref.reason})`)
+    .join('; ');
+  const count = unwrittenRefs.length;
+  return new ActionableCliError(
+    'MIGRATION.SIGN_REFS_NOT_WRITTEN',
+    `Database signed, but ${count} ${count === 1 ? 'ref was' : 'refs were'} not written`,
+    {
+      why: `The database was signed: ${markers}.${notSigned} These refs were not written: ${refs}.`,
+      fix: `Fix what stopped the write, then run \`${rerunCommand}\` again: the markers already hold the contracts, so it writes only the refs.`,
+      nextActions: [
+        runCommandAction('Sign again to write the refs that were not written', rerunCommand),
+      ],
+      meta: {
+        signedSpaces,
+        failedSpaces,
+        conflictSpaces,
+        unwrittenRefs,
+        advancedRefs: options.advancedRefs,
+      },
+      cause: options.cause,
+    },
+  );
+}
+
 export function errorRefSetHashNotInGraph(
   resolvedHash: string,
   reachableHashes: readonly string[],
@@ -492,17 +572,24 @@ export function errorMarkerMismatch(
   const planFromFix =
     'Run `{bin} migration plan --from <contract>`, naming the graph node the database was migrated from, if the live marker is canonical and the on-disk graph needs catching up.';
   const planCommand = '{bin} migration plan --from <contract>';
+  const signFix =
+    'Run `{bin} db sign` to overwrite the marker if the database already matches the contract.';
   return new ActionableCliError(
     'MIGRATION.MARKER_MISMATCH',
     'Database marker is not reachable in the on-disk migration graph',
     {
       why: `DB marker is ${markerHash}, but the on-disk migration graph reaches: ${reachableList}.`,
       fix: [
+        signFix,
         planFromFix,
         `Run \`{bin} migration ref set db ${markerHash}\` if the on-disk graph is canonical and the local \`db\` ref drifted.`,
         'Investigate whether the database was migrated by an out-of-band process.',
       ].join('\n'),
       nextActions: [
+        runCommandAction(
+          'Overwrite the marker if the database already matches the contract',
+          '{bin} db sign',
+        ),
         runCommandAction('Catch the on-disk graph up to the live marker', planCommand),
         runCommandAction(
           'Point the local db ref at the live marker',

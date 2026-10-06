@@ -50,7 +50,7 @@ For each project whose `prisma.config.ts` uses `prisma7Schema(...)`:
 
 3. If no other code in the application uses `Temporal`, remove the `import 'temporal-polyfill/full/global'` it had for these fields, and remove `temporal-polyfill` from the application's `dependencies`. Keep the dependency in a project that installs with Yarn: `@prisma/orm-postgres` declares it as a peer dependency, and Yarn does not install peers on its own.
 
-4. Run `prisma db sign` against every database the application uses. The storage hash changed with the column types. Until a database is signed, `prisma db verify` reports a mismatch and the application logs a marker warning on its first query; queries still run. The database itself needs no migration.
+4. Run `prisma db sign` against every database the application uses. The storage hash changed with the column types. Until a database is signed, `prisma db verify --db "$DATABASE_URL"` exits with code 4 and reports `CONTRACT.MARKER_MISMATCH`. The running application does not report the mismatch: it keeps answering queries and logs nothing, because the `postgres()` client has no logger for the marker check. The database itself needs no migration.
 
 `prisma7Schema(...)` has no option to keep the `Temporal` types. A project that wants them writes a Prisma 8 contract, for example with `prisma contract print --output prisma/contract.prisma`, and changes the types there.
 

@@ -62,13 +62,13 @@ interface TwoNamespaceContract extends Omit<TestContract, 'domain' | 'storage'> 
               readonly columns: {
                 readonly id: {
                   readonly many: false;
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly token: {
                   readonly many: false;
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -116,7 +116,7 @@ test('the auth-namespace User facet read row carries its unique field `token`', 
  */
 type DefaultedPk = {
   readonly many: false;
-  readonly nativeType: 'int4';
+  readonly dataType: 'pg/int4';
   readonly codecId: 'pg/int4@1';
   readonly nullable: false;
   readonly default: { readonly kind: 'function'; readonly expression: 'nextval' };
@@ -193,7 +193,7 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
                 readonly id: DefaultedPk;
                 readonly email: {
                   readonly many: false;
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -217,7 +217,7 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
                 readonly id: DefaultedPk;
                 readonly token: {
                   readonly many: false;
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };

@@ -21,7 +21,7 @@ import { defineContract, extensionModel, field, model } from '../src/contract-bu
  * entity kind, so this test stands up a synthetic `gadget` kind.
  */
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
 
 const sqlFamilyPack = {
   kind: 'family',

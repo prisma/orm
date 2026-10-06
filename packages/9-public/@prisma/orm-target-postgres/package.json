@@ -73,6 +73,7 @@
     "./target/errors": "./dist/target__errors.mjs",
     "./target/full-text": "./dist/target__full-text.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
+    "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",
     "./target/op-factory-call": "./dist/target__op-factory-call.mjs",

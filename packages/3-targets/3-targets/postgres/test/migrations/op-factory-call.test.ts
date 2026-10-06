@@ -279,7 +279,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
     const { lowerer, received } = recordingCheckLowerer();
     const storageColumn = {
       many: false,
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
     } as const;
@@ -310,7 +310,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
-      column: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      column: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",

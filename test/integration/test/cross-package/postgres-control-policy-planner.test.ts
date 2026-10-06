@@ -45,8 +45,8 @@ function makeContract(
   };
 }
 
-const baseColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
-const nullableColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: true };
+const baseColumn = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
+const nullableColumn = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true };
 
 const RECONCILIATION_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],

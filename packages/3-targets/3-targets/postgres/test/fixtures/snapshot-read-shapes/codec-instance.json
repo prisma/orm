@@ -12,17 +12,15 @@
     }
   },
   "storage": {
-    "storageHash": "fixture-codec-instance",
     "namespaces": {
       "__unbound__": {
-        "id": "__unbound__",
         "entries": {
           "table": {
             "embeddings": {
               "columns": {
                 "vec": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": false,
                   "typeRef": "Embedding1536"
                 }
@@ -35,14 +33,16 @@
               "uniques": []
             }
           }
-        }
+        },
+        "id": "__unbound__"
       }
     },
+    "storageHash": "dfafdd7513008245df6caa1e85b110f53d7c4b178f81f4d633e9502576028113",
     "types": {
       "Embedding1536": {
-        "kind": "codec-instance",
         "codecId": "pg/vector@1",
-        "nativeType": "vector",
+        "dataType": "pgvector/vector",
+        "kind": "codec-instance",
         "typeParams": {
           "length": 1536
         }

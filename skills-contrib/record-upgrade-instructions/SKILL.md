@@ -62,8 +62,10 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 
    No "consumers need not do anything" body prose. Both audiences declare independently, including real-change/no-op combinations.
 
-4. **Author optional colocated scripts/assets.** TypeScript (`pnpm exec tsx`), shell, or codemods are appropriate. Require no network, environment variables, or input beyond the consumer filesystem and bundled assets. Keep relative references inside the fragment's audience directory. For cross-audience changes, copy scripts into both audience directories; do not symlink or import from the other audience. The published clusters remain independently installable.
-5. **Validate by execution** using the unchanged concrete procedure below. An entry updates consumer code, not the example or extension tests. Do not introduce a separate testing system.
+4. **Author optional colocated scripts/assets.** TypeScript that Node runs directly (`node <script>.ts`, so only syntax Node's type stripping accepts; a project made by `orm init` has no `tsx`), shell, or codemods are appropriate. Require no network, environment variables, or input beyond the consumer filesystem and bundled assets. Keep relative references inside the fragment's audience directory. For cross-audience changes, copy scripts into both audience directories; do not symlink or import from the other audience. The published clusters remain independently installable.
+
+   **Test a script outside the fragment.** A script's tests and fixtures live in `test/integration/test/upgrade-instructions/<fragment-name>/`, where tests can import `@internal/*` and CI runs them with the integration suite. One constant in that folder, `SCRIPT_PATHS`, names the path of each audience's copy of the script, so the tests run the files that ship; while the fragment is pending it points into `upgrade-instructions/pending/<fragment-name>/`. Put fixture projects under the folder's `fixtures/`. Every `test/integration/test/upgrade-instructions/*/fixtures` folder is left out of the integration TypeScript project, the single-import-root lint and the scans for the repository's own contracts, so a fixture may hold old-format files and import either root. A test that checks the script against live framework code, such as one that recomputes fixture hashes with `@internal/*` functions, and a generator that writes fixtures with them, hold only while the fragment is pending: the published script is frozen at its release, and a later framework change would fail them. At release, the release step points `SCRIPT_PATHS` at the published copy, keeps the before-and-after tests, and freezes the live-code tests and the generator (records what they compute) or deletes them.
+5. **Validate by execution** using the unchanged concrete procedure below. An entry updates consumer code, not the example or extension tests. Do not introduce a separate testing system: a script's own tests (step 4) are ordinary integration tests, and the validation by execution below is still required beside them.
 6. **Include the fragment and updated example or extension code in the PR.** Commit working changes before running the Git-ref check:
 
    ```bash
@@ -102,7 +104,7 @@ Use a disposable checkout for the restoration steps so unrelated working changes
    git ls-files --others --exclude-standard -- 'examples/*/test/**'
    ```
 
-   The first command must exit 0 and the second print nothing. An entry must not mutate or create tests to make the next step pass.
+   The first command must exit 0 and the second print nothing. An entry must not mutate or create tests to make the next step pass. A file under a test directory that the entry's own script wrote passes when it equals `<head>` byte for byte.
 6. Run `pnpm --filter <example-package> test` for each touched example. The repo-wide `pnpm test:examples` also runs examples needing a database and `.env` (`pnpm db:up`, then copy `.env.example`); run it only with those in place.
 
 ### Extension entry (against `packages/3-extensions/`)
@@ -124,7 +126,7 @@ Use a disposable checkout for the restoration steps so unrelated working changes
    git ls-files --others --exclude-standard -- 'packages/3-extensions/*/test/**'
    ```
 
-   The first command must exit 0; the second must print nothing.
+   The first command must exit 0; the second must print nothing. A file under a test directory that the entry's own script wrote passes when it equals `<head>` byte for byte.
 6. Verify the matching test suite is green: `pnpm test --filter='./packages/3-extensions/*'`.
 
 If any check fails, iterate on the entry; do not merge. Classify failures before changing anything, per [CI failure classification](../../.agents/rules/ci-failure-classification.mdc). A timeout or connection error makes the environment a candidate cause, not a verdict.

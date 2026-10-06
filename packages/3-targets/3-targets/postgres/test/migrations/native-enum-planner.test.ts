@@ -79,11 +79,11 @@ function makeContract(options: { readonly withEnum: boolean }): Contract<SqlStor
       table: {
         orders: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
             ...(options.withEnum
               ? {
                   status: {
-                    nativeType: 'order_status',
+                    dataType: 'pg/enum',
                     codecId: 'pg/enum@1',
                     nullable: false,
                     typeParams: { typeName: 'order_status' },
@@ -484,7 +484,7 @@ describe('D2-F1: enum drop-safety resolves ownership by physical type name', () 
       entries: {
         table: {
           orders: new StorageTable({
-            columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+            columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
             primaryKey: { columns: ['id'] },
             foreignKeys: [],
             uniques: [],

@@ -171,7 +171,6 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
     expect(documentScopedTypes(result.value)).toMatchObject({
       Email: {
         codecId: 'pg/text@1',
-        nativeType: 'text',
       },
     });
   });
@@ -524,7 +523,7 @@ model Bug {
       const tasks = tablesOf(result.value)['tasks'];
       expect(tasks?.columns['severity']).toMatchObject({
         codecId: 'pg/text@1',
-        nativeType: 'text',
+        dataType: 'pg/text',
         nullable: true,
       });
 

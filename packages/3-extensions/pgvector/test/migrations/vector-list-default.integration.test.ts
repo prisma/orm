@@ -61,7 +61,7 @@ const embeddings: ColumnDefaultLiteralInputValue = [
 
 function buildContract(withDefault: boolean): Contract<SqlStorage> {
   const column: StorageColumnInput = {
-    nativeType: 'vector',
+    dataType: 'pgvector/vector',
     codecId: 'pg/vector@1',
     typeParams: { length: 3 },
     nullable: true,
@@ -83,7 +83,7 @@ function buildContract(withDefault: boolean): Contract<SqlStorage> {
             table: {
               doc: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   embeddings: column,
                 },
                 primaryKey: { columns: ['id'] },

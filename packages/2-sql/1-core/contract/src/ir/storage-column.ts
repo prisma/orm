@@ -17,7 +17,8 @@ import { SqlNode } from './sql-node';
 export type StorageColumnMultiplicity = false | { readonly elementNullable: boolean };
 
 export type StorageColumnInput = {
-  readonly nativeType: string;
+  /** The id of the data type the column stores, which its codec represents. */
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
   readonly typeParams?: Record<string, unknown>;
@@ -44,7 +45,7 @@ export type StorageColumnInput = {
  * map, so a `name` field would be redundant with the key.
  */
 export class StorageColumn extends SqlNode {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
   readonly many: StorageColumnMultiplicity;
@@ -65,7 +66,7 @@ export class StorageColumn extends SqlNode {
         { meta: { reason: 'sibling-elementNullable' } },
       );
     }
-    this.nativeType = input.nativeType;
+    this.dataType = input.dataType;
     this.codecId = input.codecId;
     this.nullable = input.nullable;
     this.many = input.many ?? false;

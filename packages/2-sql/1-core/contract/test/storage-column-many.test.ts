@@ -22,7 +22,7 @@ describe('StorageColumn many', () => {
   describe('contract.json round-trip', () => {
     it('round-trips a many:true column through serialize → parse → deep-equal', () => {
       const postTable = table({
-        tags: col('text', 'pg/text@1', false, { many: true }),
+        tags: col('pg/text', 'pg/text@1', false, { many: true }),
       });
 
       const s = createContract<SqlStorage>({
@@ -39,7 +39,7 @@ describe('StorageColumn many', () => {
 
       expect(tagsColumn).toBeDefined();
       expect(tagsColumn).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: false },
@@ -48,7 +48,7 @@ describe('StorageColumn many', () => {
 
     it('round-trips elementNullable:true only on a many column', () => {
       const postTable = table({
-        tags: col('text', 'pg/text@1', false, { many: true, elementNullable: true }),
+        tags: col('pg/text', 'pg/text@1', false, { many: true, elementNullable: true }),
       });
 
       const storage = createContract<SqlStorage>({
@@ -64,7 +64,7 @@ describe('StorageColumn many', () => {
       ]?.columns['tags'] as StorageColumn | undefined;
 
       expect(tagsColumn).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: true },
@@ -73,7 +73,7 @@ describe('StorageColumn many', () => {
 
     it('scalar column (no many key) stays byte-identical — no optional markers emitted', () => {
       const postTable = table({
-        title: col('text', 'pg/text@1'),
+        title: col('pg/text', 'pg/text@1'),
       });
 
       const s = createContract<SqlStorage>({
@@ -92,7 +92,7 @@ describe('StorageColumn many', () => {
       expect(titleColumn?.many).toBe(false);
       expect(titleColumn).not.toHaveProperty('elementNullable');
       expect(titleColumn).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: false,
@@ -102,9 +102,9 @@ describe('StorageColumn many', () => {
 
   describe('col() factory', () => {
     it('creates a many:true column when many option is set', () => {
-      const column = col('text', 'pg/text@1', false, { many: true });
+      const column = col('pg/text', 'pg/text@1', false, { many: true });
       expect(column).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: false },
@@ -112,14 +112,14 @@ describe('StorageColumn many', () => {
     });
 
     it('creates an element-nullable many column', () => {
-      const column = col('text', 'pg/text@1', false, { many: true, elementNullable: true });
+      const column = col('pg/text', 'pg/text@1', false, { many: true, elementNullable: true });
       expect(column).toMatchObject({ many: { elementNullable: true } });
     });
 
     it('rejects elementNullable without many:true when the options type is bypassed', () => {
       const invalidOptions = { elementNullable: true } as unknown as Parameters<typeof col>[3];
 
-      expect(() => col('text', 'pg/text@1', false, invalidOptions)).toThrow(
+      expect(() => col('pg/text', 'pg/text@1', false, invalidOptions)).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ARGUMENT_INVALID',
           message: 'StorageColumn elementNullable must be nested under many.',
@@ -128,7 +128,7 @@ describe('StorageColumn many', () => {
     });
 
     it('omits optional markers from scalar column', () => {
-      const column = col('text', 'pg/text@1');
+      const column = col('pg/text', 'pg/text@1');
       expect(column.many).toBe(false);
       expect(column).not.toHaveProperty('elementNullable');
     });
@@ -137,7 +137,7 @@ describe('StorageColumn many', () => {
   describe('StorageColumn IR', () => {
     it('accepts many:true in constructor and sets the flag', () => {
       const column = new StorageColumn({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: false },
@@ -147,7 +147,7 @@ describe('StorageColumn many', () => {
 
     it('accepts elementNullable:true with many:true', () => {
       const column = new StorageColumn({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: true },
@@ -157,7 +157,7 @@ describe('StorageColumn many', () => {
 
     it('rejects elementNullable without many:true when the input type is bypassed', () => {
       const invalidInput = {
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         elementNullable: true,
@@ -173,7 +173,7 @@ describe('StorageColumn many', () => {
 
     it('rejects elementNullable:false when the input type is bypassed', () => {
       const invalidInput = {
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: { elementNullable: false },
@@ -190,7 +190,7 @@ describe('StorageColumn many', () => {
 
     it('leaves optional markers undefined for scalar columns', () => {
       const column = new StorageColumn({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: false,
@@ -213,7 +213,7 @@ describe('StorageColumn many', () => {
                 post: {
                   columns: {
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: false },
@@ -243,7 +243,7 @@ describe('StorageColumn many', () => {
                 post: {
                   columns: {
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       elementNullable: true,
@@ -273,7 +273,7 @@ describe('StorageColumn many', () => {
                 post: {
                   columns: {
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: false },
@@ -303,7 +303,7 @@ describe('StorageColumn many', () => {
               table: {
                 post: {
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: 42 },
+                    tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: 42 },
                   },
                   uniques: [],
                   indexes: [],

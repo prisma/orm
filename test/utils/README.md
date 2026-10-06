@@ -127,7 +127,7 @@ import type { ColumnBuilder, OperationsForTypeId } from '@internal/sql-relationa
 // Use in type-level tests
 type TestColumnBuilder = ColumnBuilder<
   'vector',
-  { nativeType: 'vector'; codecId: 'pg/vector@1'; nullable: false },
+  { dataType: 'pgvector/vector'; codecId: 'pg/vector@1'; nullable: false },
   unknown,
   PgVectorOperations
 >;

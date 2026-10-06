@@ -7,7 +7,7 @@ import type { IdGeneratorOptionsById } from './generators';
 
 export { builtinGeneratorIds };
 
-const GENERATED_CHAR_TYPE = { codecId: 'sql/char@1', nativeType: 'character' } as const;
+const GENERATED_CHAR_TYPE = { codecId: 'sql/char@1' } as const;
 
 /**
  * The explicit storage a generator's TS spec helper bundles: a `character(N)`

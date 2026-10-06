@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
-const idColumn = { id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false } };
+const idColumn = { id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false } };
 const userTable = { columns: idColumn, uniques: [], indexes: [], foreignKeys: [] };
 
 function contractWithModelStorage(storage: Record<string, unknown>) {
@@ -30,7 +30,7 @@ describe('validateTypes', () => {
 
   it('rejects a column with no codec id', () => {
     const contract = createContract({
-      storage: { tables: { user: { columns: { id: { nativeType: 'uuid' } } } } },
+      storage: { tables: { user: { columns: { id: { dataType: 'pg/uuid' } } } } },
     });
 
     expect(() => sqlEmission.validateTypes(contract, {})).toThrow(
@@ -40,7 +40,7 @@ describe('validateTypes', () => {
 
   it('rejects a codec id outside the ns/name@version shape', () => {
     const contract = createContract({
-      storage: { tables: { user: { columns: { id: { nativeType: 'uuid', codecId: 'uuid' } } } } },
+      storage: { tables: { user: { columns: { id: { dataType: 'pg/uuid', codecId: 'uuid' } } } } },
     });
 
     expect(() => sqlEmission.validateTypes(contract, {})).toThrow(
@@ -198,7 +198,7 @@ describe('getStorageTypeExports', () => {
                   user: {
                     columns: {
                       role: {
-                        nativeType: 'text',
+                        dataType: 'pg/text',
                         codecId: 'pg/text@1',
                         nullable: false,
                         valueSet: {

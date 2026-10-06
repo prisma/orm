@@ -24,9 +24,9 @@ import type {
   TargetPackRef,
 } from '@internal/framework-components/components';
 import type {
+  AuthoredStorageTypeInstance,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -43,7 +43,7 @@ export type NamingConfig = {
   readonly columns?: NamingStrategy;
 };
 
-type NamedStorageTypeRef = string | StorageTypeInstance | EnumTypeHandle;
+type NamedStorageTypeRef = string | AuthoredStorageTypeInstance | EnumTypeHandle;
 
 type NamedConstraintNameSpec<Name extends string = string> = {
   readonly name: Name;
@@ -591,7 +591,7 @@ export type NamedTypeFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfN
   <TypeRef extends string>(
     typeRef: TypeRef,
   ): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
-  <TypeRef extends StorageTypeInstance>(
+  <TypeRef extends AuthoredStorageTypeInstance>(
     typeRef: TypeRef,
   ): ScalarFieldBuilder<
     ScalarFieldState<
@@ -1936,7 +1936,7 @@ function normalizeRelationModelSource(
 export type ContractInput<
   Family extends FamilyPackRef<string> = FamilyPackRef<string>,
   Target extends TargetPackRef<'sql', string> = TargetPackRef<'sql', string>,
-  Types extends Record<string, StorageTypeInstance> = Record<never, never>,
+  Types extends Record<string, AuthoredStorageTypeInstance> = Record<never, never>,
   Models extends Record<
     string,
     ContractModelBuilder<

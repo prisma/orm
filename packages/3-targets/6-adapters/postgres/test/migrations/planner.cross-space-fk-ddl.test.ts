@@ -62,8 +62,8 @@ function buildCrossSpaceFkContract(targetNamespaceId: string): Contract<SqlStora
             table: {
               profile: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  user_id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  user_id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -117,7 +117,7 @@ function buildLocalFkContract(): Contract<SqlStorage> {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -126,8 +126,8 @@ function buildLocalFkContract(): Contract<SqlStorage> {
               },
               post: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  user_id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  user_id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

@@ -45,9 +45,9 @@ function buildWidgetContract(): Contract<SqlStorage> {
             table: {
               widget: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                  parent_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                  parent_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [{ columns: ['name'] }],

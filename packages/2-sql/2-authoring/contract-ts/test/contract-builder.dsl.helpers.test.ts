@@ -156,7 +156,6 @@ const roleTypes = {
   Role: {
     kind: 'codec-instance',
     codecId: 'app/test-enum@1',
-    nativeType: 'role',
     typeParams: { values: ['USER', 'ADMIN'] },
   },
 } as const;
@@ -231,24 +230,24 @@ describe('contract DSL helper vocabulary', () => {
     ]);
     expect(unboundTables(contract.storage)['audit_entry']!.columns['id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 36 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['email']).toMatchObject({
       codecId: 'sql/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['short_code']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 16 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']).toMatchObject({
       codecId: 'test/timestamp@1',
-      nativeType: 'timestamp',
+      dataType: 'test/timestamp',
       nullable: false,
       default: {
         kind: 'function',
@@ -257,7 +256,7 @@ describe('contract DSL helper vocabulary', () => {
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['reviewed_at']).toMatchObject({
       codecId: 'test/timestamp@1',
-      nativeType: 'timestamp',
+      dataType: 'test/timestamp',
       nullable: true,
     });
     expect(contract.execution?.mutations.defaults).toEqual([
@@ -365,7 +364,6 @@ describe('contract DSL helper vocabulary', () => {
     });
     expect(unboundTables(contract.storage)['short_link']!.columns['id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 16 },
     });
     expect(contract.execution?.mutations.defaults).toEqual([
@@ -400,7 +398,7 @@ describe('contract DSL helper vocabulary', () => {
 
     expect(unboundTables(contract.storage)['app_user']!.columns['role']).toMatchObject({
       codecId: 'app/test-enum@1',
-      nativeType: 'role',
+      dataType: 'app/test-enum',
       nullable: false,
       typeRef: 'Role',
     });
@@ -571,12 +569,11 @@ describe('contract DSL helper vocabulary', () => {
     expect(documentScopedTypes(contract)?.['Role']).toEqual({
       kind: 'codec-instance',
       codecId: 'app/test-enum@1',
-      nativeType: 'enum',
+      dataType: 'app/test-enum',
       typeParams: { name: 'role', values: ['USER', 'ADMIN'] },
     });
     expect(unboundTables(contract.storage)['app_user']!.columns['role']).toMatchObject({
       codecId: 'app/test-enum@1',
-      nativeType: 'enum',
       typeRef: 'Role',
     });
   });
@@ -620,7 +617,6 @@ describe('contract DSL helper vocabulary', () => {
     ]);
     expect(unboundTables(contract.storage)['audit_entry']!.columns['actor_id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 36 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']!.default).toEqual({
@@ -663,12 +659,11 @@ describe('contract DSL helper vocabulary', () => {
     expect(documentScopedTypes(contract)?.['Embedding1536']).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
+      dataType: 'pgvector/vector',
       typeParams: { length: 1536 },
     });
     expect(unboundTables(contract.storage)['document']!.columns['embedding']).toMatchObject({
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeRef: 'Embedding1536',
     });
   });
@@ -747,8 +742,7 @@ describe('contract DSL helper vocabulary', () => {
           "polluted": {
             "kind": "fieldPreset",
             "output": {
-              "codecId": "conflict/text@1",
-              "nativeType": "text"
+              "codecId": "conflict/text@1"
             }
           }
         }

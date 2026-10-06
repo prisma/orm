@@ -21,7 +21,7 @@ import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mon
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -30,7 +30,7 @@ const Role = enumType(
 // ordinalOf() returns declaration order, not lexical order.
 const Status = enumType(
   'Status',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('Pending', 'pending'),
   member('Active', 'active'),
   member('Inactive', 'inactive'),

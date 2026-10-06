@@ -46,7 +46,7 @@ Finally: we explicitly do **not** solve this by inlining SQL literals. Parameter
 
 - **Parameterized Plans**: we execute `sql + params`, not “SQL with values substituted”.
 - **Lowering must be value-independent**: adapters must not call `encode(value)` or otherwise depend on runtime values to decide SQL shape. Plans and lowering should be stable across different parameter values.
-  - Lowering can use type metadata (for example `codecId`, `nativeType`, and column references), but not the runtime value in `params[]`.
+  - Lowering can use type metadata (for example `codecId`, `dataType`, and column references), but not the runtime value in `params[]`.
 - **Codecs are component-provided**: adapters, targets, and extension packs can contribute codecs; codecs are not owned by drivers.
 - **Drivers are swappable**: a Prisma Next driver is a wrapper around an underlying library (e.g. `pg`); swapping that wrapper should not require rewriting codecs.
 - **No SQL literal codecs**: codecs do not generate SQL fragments; SQL text is produced by lowering.
@@ -144,7 +144,7 @@ Adapters do **not** serialize JS values into SQL literals.
 Adapters also do **not** inspect codec implementations or encoded parameter values to decide casts. Cast decisions are based on:
 
 - **SQL context** (is the parameter already typed by a target column? is it an operator/function argument?)
-- **type intent** available from the contract/plan (e.g. `ParamDescriptor.nativeType`, column refs)
+- **type intent** available from the contract/plan (e.g. the parameter's codec id and the data type it represents, column refs)
 
 #### Encoding/decoding (codec responsibility)
 
@@ -215,9 +215,9 @@ Plans already have a place to carry type information separately from values (e.g
 
 We expect users (via PSL/TS authoring) to select codecs for columns. To keep adapters and drivers generic, codec↔column compatibility is validated when building/emitting/validating the contract:
 
-- a column chooses a `codecId` and a target-native type name (`nativeType`)
-- a codec declares which target-native type names it supports (e.g. `targetTypes`)
-- contract authoring/validation rejects incompatible combinations early
+- a column chooses a `codecId`; the contract stores the data type that codec represents (`dataType`, [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md))
+- a codec declares the one data type it represents
+- contract authoring/validation rejects a column whose stored `dataType` is not its codec's
 
 This avoids pushing codec-specific logic into adapters at lowering time and prevents late, driver-specific failures at runtime.
 
@@ -269,7 +269,7 @@ This example mirrors the current pgvector codec behavior (pgvector text format l
 
 ### Scenario
 
-- column: `embedding` with `codecId: 'pg/vector@1'`, `nativeType: 'vector'`
+- column: `embedding` with `codecId: 'pg/vector@1'`, `dataType: 'pgvector/vector'`
 - query: insert a row with `embedding`
 - JS value: `[0.1, 1, 42]` (the exact domain type can vary; the boundary stays the same)
 

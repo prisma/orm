@@ -243,7 +243,6 @@ export function arktypeJsonColumn<S extends Type<unknown>>(
       new ArktypeJsonCodecClass<S['infer']>(arktypeJsonDescriptor, schema),
     arktypeJsonDescriptor.codecId,
     params,
-    ARKTYPE_JSON_NATIVE_TYPE,
   );
 }
 
