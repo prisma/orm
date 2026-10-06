@@ -155,27 +155,27 @@
               "columns": {
                 "b_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -218,12 +218,12 @@
               "columns": {
                 "field": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -242,7 +242,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4dc0649f72e6fbda9c44f6c6dd64c3ef8fdb9a4ea3ac06920ea3ba8554f5486d"
+    "storageHash": "2d2ea1b0b12f28683da00b4fe1a751451781a13aa55f280163c06d2ee296c979"
   },
   "capabilities": {
     "postgres": {

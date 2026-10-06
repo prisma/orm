@@ -79,9 +79,9 @@ function buildContract(
   for (const [tableName, shape] of Object.entries(tables)) {
     tableEntries[tableName] = new StorageTable({
       columns: Object.fromEntries(
-        Object.entries(shape.columns).map(([name, nativeType]) => [
+        Object.entries(shape.columns).map(([name, typeName]) => [
           name,
-          { nativeType, codecId: `pg/${nativeType}@1`, nullable: false },
+          { dataType: `pg/${typeName}`, codecId: `pg/${typeName}@1`, nullable: false },
         ]),
       ),
       primaryKey: { columns: ['id'] },
@@ -198,7 +198,7 @@ const APP_ROLE_TYPES: Readonly<Record<string, StorageTypeInstance>> = {
   app_role: {
     kind: 'codec-instance',
     codecId: APP_ROLE_CODEC_ID,
-    nativeType: 'app_role',
+    dataType: 'app/role',
     typeParams: { values: ['owner', 'member'] },
   },
 };

@@ -73,7 +73,7 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
 export const pgDateStringDescriptor = new PgDateStringDescriptor();
 
 export const pgDateStringColumn = () =>
-  column(pgDateStringDescriptor.factory(), pgDateStringDescriptor.codecId, undefined, 'date');
+  column(pgDateStringDescriptor.factory(), pgDateStringDescriptor.codecId, undefined);
 
 pgDateStringColumn satisfies ColumnHelperFor<PgDateStringDescriptor>;
 pgDateStringColumn satisfies ColumnHelperForStrict<PgDateStringDescriptor>;
@@ -122,12 +122,7 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
 export const pgTimestampStringDescriptor = new PgTimestampStringDescriptor();
 
 export const pgTimestampStringColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestampStringDescriptor.factory(params),
-    pgTimestampStringDescriptor.codecId,
-    params,
-    'timestamp',
-  );
+  column(pgTimestampStringDescriptor.factory(params), pgTimestampStringDescriptor.codecId, params);
 
 pgTimestampStringColumn satisfies ColumnHelperFor<PgTimestampStringDescriptor>;
 pgTimestampStringColumn satisfies ColumnHelperForStrict<PgTimestampStringDescriptor>;
@@ -180,7 +175,6 @@ export const pgTimestamptzStringColumn = (params: PrecisionParams = {}) =>
     pgTimestamptzStringDescriptor.factory(params),
     pgTimestamptzStringDescriptor.codecId,
     params,
-    'timestamptz',
   );
 
 pgTimestamptzStringColumn satisfies ColumnHelperFor<PgTimestamptzStringDescriptor>;
@@ -225,7 +219,7 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
 export const pgTimeStringDescriptor = new PgTimeStringDescriptor();
 
 export const pgTimeStringColumn = (params: PrecisionParams = {}) =>
-  column(pgTimeStringDescriptor.factory(params), pgTimeStringDescriptor.codecId, params, 'time');
+  column(pgTimeStringDescriptor.factory(params), pgTimeStringDescriptor.codecId, params);
 
 pgTimeStringColumn satisfies ColumnHelperFor<PgTimeStringDescriptor>;
 pgTimeStringColumn satisfies ColumnHelperForStrict<PgTimeStringDescriptor>;

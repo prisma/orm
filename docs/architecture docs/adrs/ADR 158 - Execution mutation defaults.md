@@ -80,7 +80,7 @@ Generators must be registered with:
 - a static descriptor used for validation, for example:
   - JS/domain output shape (must be accepted by the backing column codec’s `encode`)
   - optional constraints (maxLength, etc.)
-  - supported column codecs (or a predicate over `{ codecId, nativeType, typeParams, ... }`)
+  - supported column codecs (or a predicate over `{ codecId, dataType, typeParams, ... }`)
 
 The contract stores only generator references (for example `{ kind: "generator", id: "cuid" }`), not executable code. Implementations live in the generator registry provided by the execution plane (built-ins and extension packs).
 
@@ -140,8 +140,8 @@ The database marker verifies only what the database must satisfy:
     "tables": {
       "user": {
         "columns": {
-          "id": { "nativeType": "text", "codecId": "pg/text@1", "nullable": false },
-          "email": { "nativeType": "text", "codecId": "pg/text@1", "nullable": false }
+          "id": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false },
+          "email": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false }
         },
         "primaryKey": { "columns": ["id"] },
         "uniques": [],

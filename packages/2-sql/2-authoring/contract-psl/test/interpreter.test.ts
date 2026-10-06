@@ -65,8 +65,8 @@ describe('interpretPslDocumentToSqlContract', () => {
       {
         target: postgresTarget,
         scalarColumnDescriptors: new Map([
-          ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-          ['String', { codecId: 'custom/text@1', nativeType: 'custom_text' }],
+          ['Int', { codecId: 'pg/int4@1' }],
+          ['String', { codecId: 'custom/text@1' }],
         ]),
         composedExtensionContracts: new Map(),
         controlMutationDefaults: builtinControlMutationDefaults,
@@ -87,7 +87,6 @@ describe('interpretPslDocumentToSqlContract', () => {
                 columns: {
                   email: {
                     codecId: 'custom/text@1',
-                    nativeType: 'custom_text',
                   },
                 },
               },
@@ -196,7 +195,6 @@ describe('interpretPslDocumentToSqlContract', () => {
                 columns: {
                   slug: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                 },
               },
@@ -268,8 +266,8 @@ model Comment {
             table: {
               User: {
                 columns: {
-                  id: { codecId: 'pg/int4@1', nativeType: 'int4' },
-                  email: { codecId: 'pg/text@1', nativeType: 'text' },
+                  id: { codecId: 'pg/int4@1' },
+                  email: { codecId: 'pg/text@1' },
                 },
                 primaryKey: { columns: ['id'] },
               },
@@ -314,8 +312,8 @@ model Comment {
             table: {
               IdlessThing: {
                 columns: {
-                  email: { codecId: 'pg/text@1', nativeType: 'text' },
-                  token: { codecId: 'pg/text@1', nativeType: 'text' },
+                  email: { codecId: 'pg/text@1' },
+                  token: { codecId: 'pg/text@1' },
                 },
                 uniques: [{ columns: ['email'] }],
               },
@@ -465,14 +463,14 @@ model Member {
             table: {
               org_team: {
                 columns: {
-                  team_id: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  team_id: { codecId: 'pg/int4@1' },
                 },
                 primaryKey: { columns: ['team_id'] },
               },
               team_member: {
                 columns: {
-                  member_id: { codecId: 'pg/int4@1', nativeType: 'int4' },
-                  team_ref: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  member_id: { codecId: 'pg/int4@1' },
+                  team_ref: { codecId: 'pg/int4@1' },
                 },
                 primaryKey: { columns: ['member_id'] },
                 indexes: [{ columns: ['team_ref'] }],

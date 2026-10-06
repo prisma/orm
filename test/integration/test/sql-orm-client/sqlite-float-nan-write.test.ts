@@ -15,7 +15,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'real' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const Point = model('Point', {
   fields: {

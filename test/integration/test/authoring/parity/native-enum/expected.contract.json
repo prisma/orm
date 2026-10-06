@@ -109,7 +109,7 @@
               "columns": {
                 "aal": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "auth.aal_level",
+                  "dataType": "pg/enum",
                   "nullable": true,
                   "typeParams": {
                     "typeName": "auth.aal_level"
@@ -123,11 +123,11 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 }
               },
@@ -162,16 +162,16 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "role": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "Role",
+                  "dataType": "pg/enum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Role"
@@ -202,7 +202,7 @@
         "id": "public"
       }
     },
-    "storageHash": "7da969b579ae676751a71e50afb346a40d6fdd5f11a92591a1f8c9eb5bd07b1f"
+    "storageHash": "4fa2d7631db1de2fa73a4e34db338958080cd8f05e0c277d784b02bd49cb1a54"
   },
   "capabilities": {
     "postgres": {

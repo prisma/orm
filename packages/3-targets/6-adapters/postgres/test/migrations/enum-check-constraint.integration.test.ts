@@ -41,7 +41,7 @@ const FULL_POLICY: MigrationOperationPolicy = {
 // Contract factories
 // ---------------------------------------------------------------------------
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' };
+const pgText = { codecId: 'pg/text@1' as const };
 
 function buildEnumType(members: { name: string; value: string }[]) {
   const [first, ...rest] = members;

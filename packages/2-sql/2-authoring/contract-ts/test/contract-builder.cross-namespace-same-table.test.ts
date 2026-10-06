@@ -25,8 +25,8 @@ const sqliteTargetPack: TargetPackRef<'sql', 'sqlite'> = {
   defaultNamespaceId: '__unbound__',
 };
 
-const idDescriptor = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textDescriptor = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const idDescriptor = { codecId: 'pg/int4@1' } as const;
+const textDescriptor = { codecId: 'pg/text@1' } as const;
 
 const publicUser: ModelNode = {
   modelName: 'User',

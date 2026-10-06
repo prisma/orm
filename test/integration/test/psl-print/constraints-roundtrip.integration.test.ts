@@ -12,8 +12,8 @@ import { createSqlContract, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { printContract, readPsl } from './print-and-read-back';
 
-const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+const INT_COLUMN = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } as const;
+const TEXT_COLUMN = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as const;
 
 const INT_FIELD: ContractField = {
   nullable: false,

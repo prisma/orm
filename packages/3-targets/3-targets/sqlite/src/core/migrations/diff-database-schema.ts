@@ -38,7 +38,7 @@ export function sqliteRenderDefault(def: ColumnDefault, column: StorageColumn): 
     }
     return def.expression;
   }
-  return renderDefaultLiteral(def.value, column.codecId);
+  return renderDefaultLiteral(def.value, column);
 }
 
 /**
@@ -123,10 +123,8 @@ export function diffSqliteSchema(input: {
   readonly schema: SqlSchemaIRNode;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
 }): SqlSchemaDiffResult {
-  const expected = sqliteContractToSchema(
-    input.contract,
-    sqlTypeLookupsOf(input.frameworkComponents),
-  );
+  const types = sqlTypeLookupsOf(input.frameworkComponents);
+  const expected = sqliteContractToSchema(input.contract, types);
   const actual =
     input.schema instanceof SqlSchemaIR
       ? input.schema
@@ -165,10 +163,8 @@ export function buildSqlitePlanDiff(input: {
   readonly actualSchema: SqlSchemaIRNode;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
 }): SqlitePlanDiff {
-  const expected = sqliteContractToSchema(
-    input.contract,
-    sqlTypeLookupsOf(input.frameworkComponents),
-  );
+  const types = sqlTypeLookupsOf(input.frameworkComponents);
+  const expected = sqliteContractToSchema(input.contract, types);
   // The differ dispatches polymorphically (`.isEqualTo()` / `.children()`), so
   // the actual tree must be genuine `SqlSchemaIR`/`SqlTableIR`/`SqlColumnIR`
   // instances, not plain data shaped like them. `new SqlSchemaIR(...)`

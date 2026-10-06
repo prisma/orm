@@ -91,7 +91,7 @@ export const mongoFamilyEnumEntityDescriptor = {
       const members = readEnumBlockMembers(block, codecId, codec, ctx);
       if (members === undefined) return undefined;
 
-      return enumType(block.name, { codecId, nativeType: bsonType }, ...members);
+      return enumType(block.name, { codecId }, ...members);
     },
   },
 } satisfies AuthoringEntityTypeDescriptor;

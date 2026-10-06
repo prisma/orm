@@ -48,7 +48,7 @@ describe('diffSqliteSchema resolves authored function defaults like introspected
       columns: {
         at: {
           many: false,
-          nativeType: 'text',
+          dataType: 'sqlite/text',
           nullable: false,
           codecId: 'sqlite/text@1',
           default: columnDefault,

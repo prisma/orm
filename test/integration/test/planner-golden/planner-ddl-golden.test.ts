@@ -1,30 +1,27 @@
 /**
- * Plans every committed SQL contract from an empty database and compares the
- * planner's output with the output recorded for it. A change in the DDL
- * either planner writes fails here.
+ * Plans every committed SQL contract from an empty database and compares the planner's output with
+ * the output recorded for it. A change in the DDL either planner writes fails here.
  *
- * A contract is any tracked JSON file whose top level names the SQL family and
- * the Postgres or SQLite target, whatever the file is called.
+ * A contract is any file `trackedContractCandidateFiles` lists whose top level names the SQL family
+ * and the Postgres or SQLite target, whatever the file is called.
  *
- * A contract in a format today's validator refuses (old migration snapshots),
- * or one the planner refuses with a structured error, cannot be planned; its
- * recording holds the refusal instead. Extension packs that live inside an
- * example and cannot be imported here are listed under `extensionsNotLoaded`.
+ * A contract in a format today's validator refuses (old migration snapshots), or one the planner
+ * refuses with a structured error, cannot be planned; its recording holds the refusal instead.
+ * Extension packs that live inside an example and cannot be imported here are listed under
+ * `extensionsNotLoaded`.
  *
- * `manifest.json` holds, for each contract, the SHA-256 of its recording: the
- * exact text `JSON.stringify(recording, null, 2)` plus a newline. The two
- * fixture contracts also keep their full recording in
- * `fixtures/<target>/planned.golden.json`.
+ * `manifest.json` holds, for each contract, the SHA-256 of its recording: the exact text
+ * `JSON.stringify(recording, null, 2)` plus a newline. The two fixture contracts also keep their
+ * full recording in `fixtures/<target>/planned.golden.json`.
  *
- * On a mismatch the test names the contract, prints the output it computed and
- * writes it to `wip/planner-golden/` at the repository root. To see the output
- * of the base commit, check out that commit and run
- * `PLANNER_GOLDEN_WRITE=1 pnpm --filter integration-tests test test/planner-golden`:
- * it rewrites the manifest and the two fixture recordings, and writes every
- * contract's full recording to `wip/planner-golden/` for diffing.
+ * On a mismatch the test names the contract, prints the output it computed and writes it to
+ * `wip/planner-golden/` at the repository root. To see the output of the base commit, check out
+ * that commit and run
+ * `PLANNER_GOLDEN_WRITE=1 pnpm --filter integration-tests test test/planner-golden`: it rewrites
+ * the manifest and the two fixture recordings, and writes every contract's full recording to
+ * `wip/planner-golden/` for diffing.
  */
 
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import postgresAdapterControl from '@internal/adapter-postgres/control';
@@ -47,6 +44,7 @@ import sqliteTargetControl from '@internal/target-sqlite/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { join, relative, resolve } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
+import { trackedContractCandidateFiles } from '../utils/tracked-contract-files';
 
 const writeRecordings = process.env['PLANNER_GOLDEN_WRITE'] === '1';
 const repoRoot = resolve(import.meta.dirname, '../../../..');
@@ -93,12 +91,8 @@ function parseJson(path: string): unknown {
 }
 
 function listCommittedSqlContracts(): readonly CommittedContract[] {
-  const files = execFileSync('git', ['ls-files', '*.json'], { cwd: repoRoot, encoding: 'utf8' })
-    .split('\n')
-    .filter((line) => line !== '')
-    .sort();
   const contracts: CommittedContract[] = [];
-  for (const path of files) {
+  for (const path of trackedContractCandidateFiles(repoRoot)) {
     const json = parseJson(path);
     if (typeof json !== 'object' || json === null) continue;
     const { target, targetFamily, extensions } = json as {

@@ -212,8 +212,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             records: {
               columns: {
-                id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
-                value: { codecId: 'app/transform@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer', nullable: false },
+                value: { codecId: 'app/transform@1', dataType: 'app/transform', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -432,7 +432,7 @@ describe('SQLite adapter codec registry composition', () => {
     expect(projectionCalls).toBe(4);
   });
 
-  it('preserves built-in BLOB, bigint, and structured JSON representations', () => {
+  it('preserves built-in BLOB and bigint representations, and stores JSON as its text', () => {
     const registry = createSqliteBuiltinCodecLookup();
     const blob = registry.get(SQLITE_BLOB_CODEC_ID);
     const bigint = registry.get(SQLITE_BIGINT_CODEC_ID);
@@ -442,6 +442,6 @@ describe('SQLite adapter codec registry composition', () => {
     expect(blob?.encodeJson(new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
     expect(bigint?.encodeJson(42n)).toBe('42');
     expect(bigint?.encodeJson(9007199254740993n)).toBe('9007199254740993');
-    expect(json?.encodeJson(document)).toEqual(document);
+    expect(json?.encodeJson(document)).toBe('{"nested":["value",1,true,null]}');
   });
 });

@@ -311,13 +311,13 @@ describe('value objects: end-to-end SQL pipeline', () => {
     const storage = contract.storage as unknown as {
       namespaces: Record<
         string,
-        { entries: { table: Record<string, { columns: Record<string, { nativeType: string }> }> } }
+        { entries: { table: Record<string, { columns: Record<string, { dataType: string }> }> } }
       >;
     };
     const userTable = storage.namespaces['public']!.entries.table['User'];
     expect(userTable).toBeDefined();
     expect(userTable!.columns['homeAddress']).toBeDefined();
-    expect(userTable!.columns['homeAddress']!.nativeType).toBe('jsonb');
+    expect(userTable!.columns['homeAddress']!.dataType).toBe('pg/jsonb');
   });
 });
 

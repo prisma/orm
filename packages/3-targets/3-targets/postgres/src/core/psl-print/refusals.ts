@@ -62,10 +62,10 @@ function sameValues(left: readonly unknown[], right: readonly unknown[]): boolea
 
 export function refuseColumnWithoutPslType(column: StorageColumn, coordinate: string): never {
   throw unsupported(
-    `column ${coordinate} has native type "${column.nativeType}" with codec "${column.codecId}", and no PSL type in the configured stack produces that pair.`,
-    'A column is written as a PSL type that reads back with its codec and native type, and none of the types the target, adapter and extensions contribute does.',
+    `column ${coordinate} has data type "${column.dataType}" with codec "${column.codecId}", and no PSL type in the configured stack produces that pair.`,
+    'A column is written as a PSL type that reads back with its codec and data type, and none of the types the target, adapter and extensions contribute does.',
     'Add the extension that contributes this type to the config, or keep authoring this contract in its current source.',
-    { coordinate, nativeType: column.nativeType, codecId: column.codecId },
+    { coordinate, dataType: column.dataType, codecId: column.codecId },
   );
 }
 
@@ -369,22 +369,22 @@ export function refuseStorageOfUndeclaredField(input: {
 
 /**
  * Refuses a column typed by a named type when the contract declares no such type, or when the
- * column's native type or codec is not the named type's. PSL writes the column as the name of the
+ * column's data type or codec is not the named type's. PSL writes the column as the name of the
  * type, and the PSL source copies both from the named type.
  */
 export function refuseColumnDifferingFromNamedType(input: {
   readonly column: StorageColumn;
   readonly typeRef: string;
-  readonly namedType: { readonly nativeType: string; readonly codecId: string } | undefined;
+  readonly namedType: { readonly dataType: string; readonly codecId: string } | undefined;
   readonly coordinate: string;
 }): void {
   const { column, typeRef, namedType, coordinate } = input;
-  if (namedType?.nativeType === column.nativeType && namedType.codecId === column.codecId) return;
+  if (namedType?.dataType === column.dataType && namedType.codecId === column.codecId) return;
   throw unsupported(
     namedType === undefined
       ? `column ${coordinate} is typed by the named type "${typeRef}", which the contract does not declare, so it cannot be written in Prisma 8 PSL.`
-      : `column ${coordinate} is typed by the named type "${typeRef}" but has a different native type or codec from it, which cannot be written in Prisma 8 PSL.`,
-    'PSL writes such a column as the name of its named type, and the PSL source gives the column the native type and codec of that named type.',
+      : `column ${coordinate} is typed by the named type "${typeRef}" but has a different data type or codec from it, which cannot be written in Prisma 8 PSL.`,
+    'PSL writes such a column as the name of its named type, and the PSL source gives the column the data type and codec of that named type.',
     'Make the column and its named type agree, or keep authoring this contract in its current source.',
     { coordinate, typeRef },
   );
@@ -466,7 +466,7 @@ export function refuseUnderivedVariantLink(entry: ModelWithTable, variant: Varia
       base === undefined
         ? undefined
         : new StorageColumn({
-            nativeType: base.nativeType,
+            dataType: base.dataType,
             codecId: base.codecId,
             nullable: false,
             ...ifDefined('typeParams', base.typeParams),

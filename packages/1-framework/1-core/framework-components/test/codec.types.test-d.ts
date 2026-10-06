@@ -53,7 +53,7 @@ class Int4FixtureDescriptor extends CodecDescriptorImpl<void> implements CodecDe
 const int4FixtureDescriptor = new Int4FixtureDescriptor();
 
 const int4Fixture = () =>
-  column(int4FixtureDescriptor.factory(), int4FixtureDescriptor.codecId, undefined, 'int4');
+  column(int4FixtureDescriptor.factory(), int4FixtureDescriptor.codecId, undefined);
 
 int4Fixture satisfies ColumnHelperFor<Int4FixtureDescriptor>;
 int4Fixture satisfies ColumnHelperForStrict<Int4FixtureDescriptor>;
@@ -111,12 +111,7 @@ class VectorFixtureDescriptor
 const vectorFixtureDescriptor = new VectorFixtureDescriptor();
 
 const vectorFixture = <N extends number>(length: N) =>
-  column(
-    vectorFixtureDescriptor.factory({ length }),
-    vectorFixtureDescriptor.codecId,
-    { length },
-    'vector',
-  );
+  column(vectorFixtureDescriptor.factory({ length }), vectorFixtureDescriptor.codecId, { length });
 
 vectorFixture satisfies ColumnHelperFor<VectorFixtureDescriptor>;
 vectorFixture satisfies ColumnHelperForStrict<VectorFixtureDescriptor>;
@@ -165,12 +160,9 @@ test('ColumnInputType extracts the codec TInput', () => {
 
 test('coarse satisfies catches wrong typeParams shape', () => {
   const brokenTypeParamsHelper = <N extends number>(length: N) =>
-    column(
-      vectorFixtureDescriptor.factory({ length }),
-      vectorFixtureDescriptor.codecId,
-      { wrongKey: length },
-      'vector',
-    );
+    column(vectorFixtureDescriptor.factory({ length }), vectorFixtureDescriptor.codecId, {
+      wrongKey: length,
+    });
   // @ts-expect-error -- typeParams shape doesn't satisfy ColumnHelperFor<VectorFixtureDescriptor> (missing `length`)
   brokenTypeParamsHelper satisfies ColumnHelperFor<VectorFixtureDescriptor>;
   // @ts-expect-error -- strict shape catches the same mismatch
@@ -180,27 +172,17 @@ test('coarse satisfies catches wrong typeParams shape', () => {
 test('strict satisfies catches wrong codec wired in', () => {
   // A helper that wires the int4 fixture's factory into VectorFixtureDescriptor's codec id slot. Coarse satisfies passes (typeParams shape is correct); strict satisfies fails because the codec types differ.
   const wrongCodecHelper = <N extends number>(length: N) =>
-    column(int4FixtureDescriptor.factory(), vectorFixtureDescriptor.codecId, { length }, 'vector');
+    column(int4FixtureDescriptor.factory(), vectorFixtureDescriptor.codecId, { length });
   wrongCodecHelper satisfies ColumnHelperFor<VectorFixtureDescriptor>;
   // @ts-expect-error -- codec is Int4FixtureCodec, not VectorFixtureCodec<number>
   wrongCodecHelper satisfies ColumnHelperForStrict<VectorFixtureDescriptor>;
 });
 
-test('column packs the helper-supplied nativeType (non-parameterized)', () => {
-  const col = int4Fixture();
-  expectTypeOf(col.nativeType).toEqualTypeOf<string | undefined>();
-  expectTypeOf(col.codecId).toEqualTypeOf<string>();
-  // Runtime confirms the helper's nativeType reaches the spec, distinct from codecId.
-  if (col.nativeType !== 'int4' || col.codecId !== 'demo/int4@1') {
-    throw new Error(`nativeType / codecId mismatch: ${col.nativeType} / ${col.codecId}`);
-  }
-});
-
-test('column packs the helper-supplied nativeType (parameterized)', () => {
+test('column packs the codec id and parameters, and no database type name', () => {
   const col = vectorFixture(1536);
-  expectTypeOf(col.nativeType).toEqualTypeOf<string | undefined>();
-  if (col.nativeType !== 'vector' || col.codecId !== 'demo/vector@1') {
-    throw new Error(`nativeType / codecId mismatch: ${col.nativeType} / ${col.codecId}`);
+  expectTypeOf(col).not.toHaveProperty('nativeType');
+  if (col.codecId !== 'demo/vector@1' || col.typeParams.length !== 1536 || 'nativeType' in col) {
+    throw new Error(`unexpected column spec: ${JSON.stringify(col)}`);
   }
 });
 

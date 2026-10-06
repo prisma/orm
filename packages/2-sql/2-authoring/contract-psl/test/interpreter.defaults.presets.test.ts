@@ -93,7 +93,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(unboundTables(storage)['Timestamped']?.columns['updatedAt']).toMatchObject({
       codecId: 'sqlite/datetime@1',
-      nativeType: 'text',
+      dataType: 'sqlite/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -201,7 +201,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     nullable: false,
                     default: {
                       kind: 'function',
@@ -257,7 +257,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   maybe: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     nullable: true,
                   },
                 },
@@ -314,7 +314,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                 },
               },

@@ -9,8 +9,8 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '[''"]@prisma/orm-extension-(?:pgvector|postgis|arktype-json)/column-types[''"]'
-        - '\bcodecId\s*:\s*[''"](?:pg/vector|pg/geometry|arktype/json)@\d+[''"]'
+        - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)(?=[\s\S]*(?<![\w$])defineContract(?![\w$]))[\s\S]*[''"]@prisma/orm-extension-(?:pgvector|postgis|arktype-json)/column-types[''"]'
+        - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)(?=[\s\S]*(?<![\w$])defineContract(?![\w$]))[\s\S]*(?<![\w$])codecId\s*:\s*[''"](?:pg/vector|pg/geometry|arktype/json)@\d+[''"]'
   - id: sqlite-contract-d-ts-char-aggregates
     summary: |
       On SQLite, `sql/char@1` and `sql/varchar@1` are registered codecs. Re-emit the contract:

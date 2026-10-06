@@ -159,25 +159,25 @@ model User {
       },
       storage: {
         requiredElements: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: false },
           nullable: false,
         },
         nullableElementValues: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: true },
           nullable: false,
         },
         nullableList: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: false },
           nullable: true,
         },
         nullableElementValuesAndList: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: true },
           nullable: true,
@@ -219,7 +219,7 @@ model User {
       many: { elementNullable: true },
     });
     expect(addressesColumn).toEqual({
-      nativeType: 'jsonb',
+      dataType: 'pg/jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
       many: false,

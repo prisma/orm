@@ -3,7 +3,7 @@ changes:
   - id: reemit-explicit-list-cardinality
     summary: Re-emit list contracts with nested element nullability while preserving scalar JSON.
   - id: refresh-historical-list-contracts
-    summary: Refresh historical contract snapshots and their migration references together.
+    summary: Refresh historical MongoDB contract snapshots and their migration references together; for SQL contracts, `contract-stores-data-type` rewrites them.
 ---
 
 ## Re-emit contracts with nested list cardinality
@@ -18,7 +18,9 @@ Keep explicit `.noCheck('elementNotNull')` / `@noCheck(elementNotNull)` waivers 
 
 ## Refresh historical snapshots consistently
 
-Inventory every stored contract pair, not only the current application contract: include migration snapshots, fixture migration chains, composed-space snapshots, and any generated contracts imported by application tooling. Re-emit each historical state from its own authoring source and configuration, preserving that state's extensions, storage mappings, defaults, and explicit waivers. Do not emit today's schema over every historical snapshot.
+For SQL contracts, the `contract-stores-data-type` script of the same release rewrites stored list columns and fields to this form and refreshes hashes and snapshot names, so historical SQL snapshots need no re-emission; MongoDB contracts still do. On PostgreSQL, the script keeps the membership check of an enum list column as the database holds it; run `prisma db sign` before you emit the contract again, and the next `prisma contract emit` writes the new check under a new name, which `prisma migration plan` and `prisma db migrate` then apply.
+
+For MongoDB contracts, inventory every stored contract pair, not only the current application contract: include migration snapshots, fixture migration chains, composed-space snapshots, and any generated contracts imported by application tooling. Re-emit each historical state from its own authoring source and configuration, preserving that state's extensions, storage mappings, defaults, and explicit waivers. Do not emit today's schema over every historical snapshot.
 
 Use the project's snapshot-store and migration-generation tooling to write each emitted JSON/declaration pair and update its references. The new native-list representation can change contract hashes even when existing strict-list DDL is unchanged. When a hash changes, create the corresponding content-addressed snapshot entry and update imports of both JSON and declarations, migration start/end contract hashes, and dependent migration metadata consistently. Process predecessor states before successors, including all branches and composed-space dependencies; regenerate derived migration identifiers and parent references where the tooling requires it. Preserve the recorded operations unless a separate reviewed schema change is intended.
 

@@ -72,10 +72,10 @@ function buildExtensionContract(version: 1 | 2): Contract<SqlStorage> {
             table: {
               _ext_helper: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
                   ...(version === 2
                     ? {
-                        note: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: true },
+                        note: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: true },
                       }
                     : {}),
                 },
@@ -463,7 +463,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                    id: {
+                      dataType: 'sqlite/integer',
+                      codecId: 'sqlite/integer@1',
+                      nullable: false,
+                    },
                     email: {
                       nativeType: 'text',
                       codecId: HOOKED_CODEC,

@@ -84,7 +84,7 @@ const authoringTargetPack = {
 } as const;
 
 type ColumnSpec = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
   readonly many?: false | { readonly elementNullable: boolean };
@@ -203,7 +203,7 @@ function twoNamespaceContractOf(
   };
 }
 
-const idColumn: ColumnSpec = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
+const idColumn: ColumnSpec = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
 
 function declaredCheckNames(contract: Contract<SqlStorage>): readonly string[] {
   const table = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['Item'];
@@ -412,7 +412,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: true,
           many: { elementNullable: false },
@@ -445,7 +445,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         attrs: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: true,
           many: { elementNullable: false },
@@ -477,7 +477,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -524,9 +524,9 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -559,7 +559,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       memberValues: ['user', 'admin'],
     });
     const contract = contractOf(
-      { id: idColumn, role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+      { id: idColumn, role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
       checks,
     );
 
@@ -603,7 +603,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         roles: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -655,7 +655,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         roles: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: true },
@@ -695,7 +695,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         roles: {
-          nativeType: 'character varying',
+          dataType: 'pg/varchar',
           codecId: 'pg/varchar@1',
           nullable: false,
           many: { elementNullable: false },
@@ -736,7 +736,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        [columnName]: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        [columnName]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       checks,
     );
@@ -764,7 +764,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     });
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     } as const;
     const v1 = contractOf(columns, before);
     await migrate(v1);
@@ -812,7 +812,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'character varying', codecId: 'pg/varchar@1', nullable: false },
+        role: { dataType: 'pg/varchar', codecId: 'pg/varchar@1', nullable: false },
       },
       checks,
     );
@@ -838,7 +838,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   }, async () => {
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
     };
     const twoMembers = checksForColumn('Item', 'role', {
       many: false,
@@ -950,7 +950,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -967,7 +967,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -994,7 +994,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },
@@ -1011,7 +1011,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         tags: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           nullable: false,
           many: { elementNullable: false },

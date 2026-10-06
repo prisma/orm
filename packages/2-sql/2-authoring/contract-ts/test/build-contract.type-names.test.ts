@@ -101,15 +101,15 @@ function columnsOf(definition: ContractDefinition) {
   return unboundTables(contract.storage)['item']?.columns;
 }
 
-describe('the type name a built contract stores', () => {
-  it('is the base name of the codec’s data type, whatever name the descriptor carries', () => {
+describe('the data type a built contract stores', () => {
+  it('is the id of the data type the codec represents', () => {
     expect(
       columnsOf(
         definitionWith([
           {
             fieldName: 'count',
             columnName: 'count',
-            descriptor: { codecId: 't/int4@1', nativeType: 'wrong' },
+            descriptor: { codecId: 't/int4@1' },
             nullable: false,
           },
           {
@@ -121,13 +121,13 @@ describe('the type name a built contract stores', () => {
         ]),
       ),
     ).toMatchObject({
-      id: { nativeType: 'int4' },
-      count: { nativeType: 'int4' },
-      name: { nativeType: 'character varying', typeParams: { length: 255 } },
+      id: { dataType: 't/int4' },
+      count: { dataType: 't/int4' },
+      name: { dataType: 't/varchar', typeParams: { length: 255 } },
     });
   });
 
-  it('is the unquoted type name of a type that claims a kind', () => {
+  it('is the id of a type that claims a kind, with the type name in the parameters', () => {
     expect(
       columnsOf(
         definitionWith([
@@ -139,10 +139,10 @@ describe('the type name a built contract stores', () => {
           },
         ]),
       )?.['status'],
-    ).toMatchObject({ nativeType: 'app.status' });
+    ).toMatchObject({ dataType: 't/enum', typeParams: { typeName: 'app.status' } });
   });
 
-  it('names a column that references a storage type from the storage type’s codec', () => {
+  it('names the data type of a column that references a storage type from the storage type’s codec', () => {
     expect(
       columnsOf(
         definitionWith(
@@ -158,22 +158,20 @@ describe('the type name a built contract stores', () => {
             Code: {
               kind: 'codec-instance',
               codecId: 't/varchar@1',
-              nativeType: 'wrong',
               typeParams: { length: 8 },
             },
           },
         ),
       )?.['code'],
-    ).toMatchObject({ nativeType: 'character varying', typeRef: 'Code' });
+    ).toMatchObject({ dataType: 't/varchar', typeRef: 'Code' });
   });
 
-  it('names each storage type from its codec’s data type', () => {
+  it('adds to each storage type the data type its codec represents', () => {
     const contract = buildSqlContractFromDefinition(
       definitionWith([], {
         Code: {
           kind: 'codec-instance',
           codecId: 't/varchar@1',
-          nativeType: 'wrong',
           typeParams: { length: 8 },
         },
       }),
@@ -183,7 +181,7 @@ describe('the type name a built contract stores', () => {
     expect(documentScopedTypes(contract)?.['Code']).toEqual({
       kind: 'codec-instance',
       codecId: 't/varchar@1',
-      nativeType: 'character varying',
+      dataType: 't/varchar',
       typeParams: { length: 8 },
     });
   });
@@ -230,7 +228,6 @@ describe('the type name a built contract stores', () => {
             Code: {
               kind: 'codec-instance',
               codecId: 't/varchar@1',
-              nativeType: 'character varying',
               typeParams: { length: 0 },
             },
           },
@@ -246,7 +243,6 @@ describe('the type name a built contract stores', () => {
           Code: {
             kind: 'codec-instance',
             codecId: 't/varchar@1',
-            nativeType: 'character varying',
             typeParams: { length: 0 },
           },
         }),

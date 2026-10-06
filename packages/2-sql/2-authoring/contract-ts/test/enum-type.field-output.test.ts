@@ -34,8 +34,8 @@ const postgresTargetPack = {
   defaultNamespaceId: 'public',
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
-const pgInt = { codecId: 'pg/int4@1' as const, nativeType: 'int4' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
+const pgInt = { codecId: 'pg/int4@1' as const } as const;
 
 // ---------------------------------------------------------------------------
 // Fixture: enum + model using enumType field

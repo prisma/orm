@@ -131,7 +131,7 @@ describe('uuid native presets', () => {
   });
 
   describe('emit-then-consume', () => {
-    it('uuidNative emits pg/uuid@1 with nativeType uuid in contract JSON', () => {
+    it('uuidNative emits pg/uuid@1 with data type pg/uuid in contract JSON', () => {
       const contract = defineContract(
         {
           ...testTypeLookups,
@@ -154,7 +154,7 @@ describe('uuid native presets', () => {
       const col = unboundTables(json.storage)['widget']!.columns['externalId']!;
 
       expect(col.codecId).toBe('pg/uuid@1');
-      expect(col.nativeType).toBe('uuid');
+      expect(col.dataType).toBe('pg/uuid');
     });
 
     it('id.uuidv4Native emits pg/uuid@1 with uuidv4 onCreate generator in contract JSON', () => {
@@ -180,7 +180,7 @@ describe('uuid native presets', () => {
       const col = unboundTables(json.storage)['widget']!.columns['id']!;
 
       expect(col.codecId).toBe('pg/uuid@1');
-      expect(col.nativeType).toBe('uuid');
+      expect(col.dataType).toBe('pg/uuid');
 
       const defaults = json.execution?.mutations.defaults ?? [];
       const idDefault = defaults.find((d) => d.ref.entry === 'widget' && d.ref.field === 'id');

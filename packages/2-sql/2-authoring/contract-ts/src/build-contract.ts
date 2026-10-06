@@ -48,8 +48,6 @@ import {
   dataTypeParams,
   type SqlDataType,
   sqlDataTypeOfCodec,
-  unquotedSqlBaseName,
-  unquotedSqlBaseNameOfCodec,
   validateSqlTypeParams,
 } from '@internal/sql-contract/data-type';
 import { tableEntityKind, valueSetEntityKind } from '@internal/sql-contract/entity-kinds';
@@ -65,6 +63,7 @@ import {
   type IndexTypeRegistration,
 } from '@internal/sql-contract/index-types';
 import {
+  type AuthoredStorageTypeInstance,
   applyFkDefaults,
   CheckConstraint,
   Index,
@@ -940,7 +939,7 @@ function buildStorageColumn(
   field: FieldNode | ValueObjectFieldNode,
   enumRefs: EnumValueSetRefs | undefined,
   modelName: string,
-  storageTypes: Record<string, StorageTypeInstance>,
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
   lookups: TypeLookups,
 ): StorageColumn {
   const { codecLookup } = lookups;
@@ -973,7 +972,7 @@ function buildStorageColumn(
   const valueSet = enumRefs?.storage ?? descriptor.valueSet;
 
   return {
-    nativeType: unquotedSqlBaseName(dataType, dataTypeParams(dataType, typeParams)),
+    dataType: dataType.id,
     codecId,
     nullable: field.nullable,
     many: isListColumn ? { elementNullable: field.elementNullable === true } : false,
@@ -1008,7 +1007,7 @@ function enumValueSetRefs(
 function buildDomainField(
   field: ScalarMemberNode | ValueObjectMemberNode,
   defaultNamespaceId: string,
-  storageTypes: Record<string, StorageTypeInstance>,
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
 ): ContractField {
   if (isValueObjectMember(field)) {
     return {
@@ -1720,21 +1719,18 @@ export function buildSqlContractFromDefinition(
   // Normalise raw codec-triple inputs to the `kind: 'codec-instance'`
   // discriminator shape before hashing so the storageHash matches the
   // persisted JSON envelope produced from the SqlStorage class instance
-  // (which always carries the discriminator). Each entry's type name is its
-  // codec's data type's.
+  // (which always carries the discriminator). Each entry stores the data type
+  // its codec represents.
   const rawStorageTypes = definition.storageTypes ?? {};
   const documentTypes: Record<string, StorageTypeInstance> = Object.fromEntries(
-    Object.entries(rawStorageTypes).map(([name, entry]) => {
-      const typeParams = ('typeParams' in entry ? entry.typeParams : undefined) ?? {};
-      return [
-        name,
-        toStorageTypeInstance({
-          codecId: entry.codecId,
-          nativeType: unquotedSqlBaseNameOfCodec(entry.codecId, typeParams, lookups),
-          typeParams,
-        }),
-      ];
-    }),
+    Object.entries(rawStorageTypes).map(([name, entry]) => [
+      name,
+      toStorageTypeInstance({
+        codecId: entry.codecId,
+        dataType: sqlDataTypeOfCodec(entry.codecId, lookups).id,
+        typeParams: entry.typeParams,
+      }),
+    ]),
   );
   const namespaceCoordinateIds = collectStorageNamespaceCoordinateIds(definition);
 

@@ -54,7 +54,7 @@ describe('generated values', () => {
     expect(
       withGenerator(
         {
-          nativeType: 'timestamp',
+          dataType: 'pg/timestamp',
           codecId: 'pg/timestamp-temporal@1',
           nullable: false,
           typeParams: { precision: 3 },
@@ -69,7 +69,7 @@ describe('generated values', () => {
 
   it('refuses a column that pairs the wall-clock-now generator with a different one', () => {
     const timestamp = {
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
     };

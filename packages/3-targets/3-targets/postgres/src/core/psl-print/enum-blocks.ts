@@ -86,8 +86,9 @@ export function buildNativeEnumBlocksForNamespace(input: {
   const valueSetNamesByTypeName = new Map<string, string>();
   for (const column of input.columns) {
     const valueSetName = column.valueSet?.entityName;
-    if (valueSetName === undefined) continue;
-    valueSetNamesByTypeName.set(column.nativeType, valueSetName);
+    const typeName = column.typeParams?.['typeName'];
+    if (valueSetName === undefined || typeof typeName !== 'string') continue;
+    valueSetNamesByTypeName.set(typeName, valueSetName);
   }
   const claimed = new Set(valueSetNamesByTypeName.values());
 

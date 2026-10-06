@@ -100,13 +100,13 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
         targetId: 'postgres',
         familyId: 'sql',
         kind: 'target',
-        types: { storage: [] },
+        types: {},
       },
       adapter: {
         targetId: 'postgres',
         familyId: 'sql',
         kind: 'adapter',
-        types: { storage: [] },
+        types: {},
         // biome-ignore lint/suspicious/noExplicitAny: minimal stub for capability test
         create: () => ({ introspect: () => ({}), readMarker: () => null }) as any,
       },

@@ -178,10 +178,9 @@ describe('postgis codecs', () => {
   });
 
   describe('pgGeometryColumn helper', () => {
-    it('produces a ColumnSpec with the codec id, geometry nativeType, and srid typeParams', () => {
+    it('produces a ColumnSpec with the codec id and srid typeParams', () => {
       const spec = pgGeometryColumn({ srid: 4326 });
       expect(spec.codecId).toBe('pg/geometry@1');
-      expect(spec.nativeType).toBe('geometry');
       expect(spec.typeParams).toEqual({ srid: 4326 });
     });
   });

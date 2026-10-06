@@ -61,7 +61,7 @@ describe('postgresError sites', () => {
 
   it('buildColumnTypeSql without a codecId for typeParams throws CONTRACT.CODEC_DESCRIPTOR_MISSING', () => {
     const column = {
-      nativeType: 'varchar',
+      dataType: 'pg/varchar',
       nullable: false,
       typeParams: { length: 10 },
     } as unknown as StorageColumn;

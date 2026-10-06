@@ -57,12 +57,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "money": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "712b2a01fc4cfd804bf764a3b77a33a6b1a34a814a8836f616f2685b16be4a35"
+    "storageHash": "64d0f1896896e08c941c482abd55a76cf6429a7bb24b02853473e70597fbf3a7"
   },
   "execution": {
     "executionHash": "e18dbda8332f8974e92016590064ce897aa2fb8f1ca059429e3460e668f4e488",

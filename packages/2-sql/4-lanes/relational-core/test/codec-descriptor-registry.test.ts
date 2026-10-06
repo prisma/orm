@@ -11,6 +11,24 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import type { AnyCodecDescriptor } from '../src/ast/codec-types';
 import { buildCodecDescriptorRegistry } from '../src/codec-descriptor-registry';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'lib/a@1': 'lib/a',
+  'lib/b@1': 'lib/b',
+  'lib/c@1': 'lib/c',
+  'lib/dup@1': 'lib/dup',
+  'lib/missing@1': 'lib/missing',
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+  'pg/varchar@1': 'pg/varchar',
+  'pg/vector@1': 'pgvector/vector',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 const stub = (codecId: string): AnyCodecDescriptor =>
   ({
     codecId,
@@ -83,7 +101,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
         Doc: {
           columns: {
             embedding: {
-              nativeType: 'vector',
+              dataType: 'pgvector/vector',
               codecId: 'pg/vector@1',
               nullable: false,
               typeRef: 'Vector1536',
@@ -99,7 +117,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
         Vector1536: {
           kind: 'codec-instance',
           codecId: 'pg/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       },
@@ -118,7 +136,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
         Doc: {
           columns: {
             embedding: {
-              nativeType: 'vector',
+              dataType: 'pgvector/vector',
               codecId: 'pg/vector@1',
               nullable: false,
               typeParams: { length: 768 },
@@ -145,7 +163,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
         User: {
           columns: {
             email: {
-              nativeType: 'text',
+              dataType: 'pg/text',
               codecId: 'pg/text@1',
               nullable: false,
             },
@@ -169,7 +187,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
       tables: {
         User: {
           columns: {
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
           },
           primaryKey: { columns: ['email'] },
           uniques: [],
@@ -192,7 +210,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
         Doc: {
           columns: {
             embedding: {
-              nativeType: 'vector',
+              dataType: 'pgvector/vector',
               codecId: 'pg/vector@1',
               nullable: false,
               typeRef: 'Missing',
@@ -219,7 +237,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn namespace coordinat
       columns: Object.fromEntries(
         Object.entries(columns).map(([name, codecId]) => [
           name,
-          { nativeType: codecId, codecId, nullable: false },
+          { dataType: dataTypeOf(codecId), codecId, nullable: false },
         ]),
       ),
       primaryKey: { columns: ['id'] },

@@ -1,32 +1,24 @@
 /**
  * How PSL writes a value of each of this target's data types, and how it reads the text back.
  *
- * SQLite holds whole numbers in two types and has none at all for a number past 64 bits or for a
- * non-finite one, so its classifier returns nothing for those and the value is refused. ADR 254.
+ * SQLite stores every whole number of up to 64 bits as an `integer` and has no type at all for a
+ * wider one or for a non-finite number, so its classifier returns nothing for those and the value is
+ * refused. A JSON document is stored as text, so the `json` tag yields `sqlite/text`. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
-import { SAFE_INTEGER_BIGINT_RANGE } from '@internal/framework-components/codec';
+import { type DataTypeAuthoringEntry, tagEntryKey } from '@internal/framework-components/authoring';
+import { canonicalizeJson } from '@internal/framework-components/utils';
 import { numeralText } from '@internal/sql-contract/data-type';
 import {
   createNumberClassifier,
   parseJsonBody,
-  printJsonBody,
   signedRange,
 } from '@internal/sql-contract/data-type-support';
-import { sqliteBigint, sqliteInteger, sqliteJson, sqliteReal, sqliteText } from './data-types';
+import { sqliteInteger, sqliteReal, sqliteText } from './data-types';
 
-/**
- * A whole number within the range a double holds exactly is an `integer`, a wider one up to 64 bits
- * is a `bigint`, and a number with a fraction is a `real`. Anything else — a whole number past 64
- * bits, or one of the three words — has no SQLite type, so it is refused.
- */
 const classifySqliteNumber = createNumberClassifier({
-  integers: [
-    { type: sqliteInteger.id, form: 'number', ...SAFE_INTEGER_BIGINT_RANGE },
-    { type: sqliteBigint.id, form: 'text', ...signedRange(64) },
-  ],
+  integers: [{ type: sqliteInteger.id, form: 'text', ...signedRange(64) }],
   fraction: { type: sqliteReal.id, form: 'number' },
 });
 
@@ -45,16 +37,22 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
       written: {
         kind: 'plain',
         syntax: 'number',
-        types: [sqliteInteger.id, sqliteBigint.id, sqliteReal.id],
+        types: [sqliteInteger.id, sqliteReal.id],
         classify: classifySqliteNumber,
       },
       print: printNumber,
       documentation: 'A number, whose type comes from its own size and precision.',
     },
-    [sqliteJson.id]: {
-      written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-      print: printJsonBody,
-      documentation: 'Reads the text as a JSON document and stores it as the default value.',
+    [tagEntryKey('json')]: {
+      written: {
+        kind: 'tag',
+        tag: 'json',
+        type: sqliteText.id,
+        parse: (text) => canonicalizeJson(parseJsonBody(text)),
+      },
+      print: (value) => String(value),
+      documentation:
+        'Reads the body as a JSON document and stores its JSON text as the default value.',
     },
   };
 }

@@ -18,7 +18,7 @@ import {
 } from './fixtures/runner-fixtures';
 
 const timestamptz = {
-  nativeType: 'timestamptz',
+  dataType: 'pg/timestamptz',
   codecId: 'pg/timestamptz-temporal@1',
   nullable: false,
   typeParams: { precision: 6 },
@@ -38,7 +38,7 @@ function stampsContract(): Contract<SqlStorage> {
             table: {
               Stamps: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   firstDay: {
                     ...timestamptz,
                     default: { kind: 'function', expression: "'0001-01-01 00:00:00+00'" },
@@ -52,13 +52,13 @@ function stampsContract(): Contract<SqlStorage> {
                     default: { kind: 'function', expression: "'0001-12-31 23:30:00+00 BC'" },
                   },
                   span: {
-                    nativeType: 'interval',
+                    dataType: 'pg/interval',
                     codecId: 'pg/interval@1',
                     nullable: false,
                     default: { kind: 'function', expression: "'1 day 02:00:00'::interval" },
                   },
                   blob: {
-                    nativeType: 'bytea',
+                    dataType: 'pg/bytea',
                     codecId: 'pg/bytea@1',
                     nullable: false,
                     default: { kind: 'literal', value: 'aGVsbG8=' },

@@ -44,7 +44,7 @@ function createMemoryDriver() {
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
     many: false,
-    nativeType: 'text',
+    dataType: 'sqlite/text',
     nullable: true,
     codecId: 'sqlite/text@1',
     ...overrides,
@@ -107,17 +107,17 @@ describe('SQLite planner + introspection round-trip', () => {
         users: makeTable({
           columns: {
             id: makeColumn({
-              nativeType: 'integer',
+              dataType: 'sqlite/integer',
               codecId: 'sqlite/integer@1',
               nullable: false,
               default: { kind: 'function', expression: 'autoincrement()' },
             }),
-            email: makeColumn({ nativeType: 'text', nullable: false }),
+            email: makeColumn({ nullable: false }),
             active: makeColumn({
-              nativeType: 'integer',
+              dataType: 'sqlite/integer',
               codecId: 'sqlite/integer@1',
               nullable: false,
-              default: { kind: 'literal', value: 1 },
+              default: { kind: 'literal', value: '1' },
             }),
           },
           primaryKey: { columns: ['id'] },
@@ -180,12 +180,12 @@ describe('SQLite planner + introspection round-trip', () => {
         items: makeTable({
           columns: {
             id: makeColumn({
-              nativeType: 'integer',
+              dataType: 'sqlite/integer',
               codecId: 'sqlite/integer@1',
               nullable: false,
               default: { kind: 'function', expression: 'autoincrement()' },
             }),
-            value: makeColumn({ nativeType: 'text', nullable: true }),
+            value: makeColumn({ nullable: true }),
           },
           primaryKey: { columns: ['id'] },
         }),
@@ -232,15 +232,23 @@ describe('SQLite planner + introspection round-trip', () => {
       const contract = makeContract({
         authors: makeTable({
           columns: {
-            id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
+            id: makeColumn({
+              dataType: 'sqlite/integer',
+              codecId: 'sqlite/integer@1',
+              nullable: false,
+            }),
           },
           primaryKey: { columns: ['id'] },
         }),
         posts: makeTable({
           columns: {
-            id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
+            id: makeColumn({
+              dataType: 'sqlite/integer',
+              codecId: 'sqlite/integer@1',
+              nullable: false,
+            }),
             author_id: makeColumn({
-              nativeType: 'integer',
+              dataType: 'sqlite/integer',
               codecId: 'sqlite/integer@1',
               nullable: false,
             }),

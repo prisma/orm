@@ -96,7 +96,7 @@ The framework CLI uses this descriptor to:
 1. Create family instances for control-plane operations (via `create()`)
 
 Family instances implement domain actions:
-- **`deserializeContract(contractJson)`**: Validates and normalizes contract, returns `Contract` without mappings
+- **`deserializeContract(contractJson)`**: Validates the contract, hydrates it, and checks it against the stack: each column's codec represents its data type, and each value-object column uses the stack's value-object storage type. `verify()` and `schemaVerify()` read contract JSON the same way.
 - **`verify()`**: Verifies database marker against contract (compares target, storageHash, profileHash)
 - **`schemaVerify()`**: Verifies database schema against contract (compares contract requirements vs live schema)
 - **`introspect()`**: Introspects database schema and returns `SqlSchemaIR`

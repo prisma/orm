@@ -60,11 +60,11 @@ function storageTable(
 ) {
   return new StorageTable({
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       ...(extraColumn === undefined
         ? {}
-        : { [extraColumn]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true } }),
+        : { [extraColumn]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true } }),
     },
     primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
     foreignKeys: [],

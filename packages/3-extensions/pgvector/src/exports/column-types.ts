@@ -11,7 +11,7 @@ import { VECTOR_CODEC_ID } from '../core/constants';
  * @example
  * ```typescript
  * .column('embedding', { type: vector(1536), nullable: false })
- * // Produces: nativeType: 'vector', typeParams: { length: 1536 }
+ * // Produces: codecId: 'pg/vector@1', typeParams: { length: 1536 }
  * ```
  * @param length - The dimension of the vector (e.g., 1536 for OpenAI embeddings)
  * @returns A column type descriptor with `typeParams.length` set
@@ -21,7 +21,6 @@ export function vector<N extends number>(
 ): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: { readonly length: N } } {
   return {
     codecId: VECTOR_CODEC_ID,
-    nativeType: 'vector',
     typeParams: { length },
   } as const;
 }

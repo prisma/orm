@@ -48,7 +48,7 @@ function createRefActionContract(
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -57,8 +57,8 @@ function createRefActionContract(
               },
               post: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

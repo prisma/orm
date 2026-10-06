@@ -118,7 +118,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "962e352b7ccbec44dc8f5096aa18e626b0659ec73a5cbd3c097dbee1ac6a1aeb",
+    "storageHash": "110a9c16e5f6190230cf4b64cca1b85e9fade6a40622063bc3ced2f0744701bc",
     "namespaces": {
       "public": {
         "id": "public",
@@ -128,13 +128,13 @@
             "User": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "role": {
-                  "nativeType": "Role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": false,
                   "many": false,
@@ -159,13 +159,13 @@
             "Post": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "authorId": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false

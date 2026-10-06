@@ -1,5 +1,6 @@
 import { SqlColumnDefaultIR } from '@internal/sql-schema-ir/types';
 import { pgInt2, pgInt4, pgInt8, pgNumeric, pgText } from '@internal/target-postgres/data-types';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { pgvectorDataTypes, pgvectorVector } from '../src/core/data-types';
 
@@ -87,7 +88,7 @@ describe('the canonical form of pgvector/vector', () => {
       new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value },
         nativeTypeContext: 'vector(3)[]',
-        dataType: pgvectorVector,
+        ...ifDefined('toCanonicalForm', pgvectorVector.toCanonicalForm),
       });
     const actual = (value: readonly string[]) =>
       new SqlColumnDefaultIR({

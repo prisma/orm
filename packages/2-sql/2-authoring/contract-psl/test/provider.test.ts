@@ -595,7 +595,6 @@ model Document {
           columns: {
             embedding: {
               codecId: 'pg/vector@1',
-              nativeType: 'vector',
               typeParams: { length: 1536 },
             },
           },
@@ -876,8 +875,8 @@ model User {
       expect(unboundTables(storage)).toMatchObject({
         User: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4' },
-            name: { codecId: 'pg/text@1', nativeType: 'text' },
+            id: { codecId: 'pg/int4@1' },
+            name: { codecId: 'pg/text@1' },
           },
         },
       });

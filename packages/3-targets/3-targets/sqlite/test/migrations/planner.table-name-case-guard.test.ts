@@ -55,13 +55,13 @@ function contractWithTable(
             table: {
               [tableName]: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+                  email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                   ...(extraColumn === undefined
                     ? {}
                     : {
                         [extraColumn]: {
-                          nativeType: 'text',
+                          dataType: 'sqlite/text',
                           codecId: 'sqlite/text@1',
                           nullable: true,
                         },

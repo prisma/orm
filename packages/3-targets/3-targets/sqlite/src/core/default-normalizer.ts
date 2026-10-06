@@ -75,18 +75,18 @@ export function parseSqliteDefault(
     return { kind: 'literal', value: null };
   }
 
-  // SQLite integers are 64-bit, so values outside the JS safe-integer range can't
-  // be faithfully represented as `number`. Mirror `parsePostgresDefault`'s bigint
-  // handling: parse as JS `number` when safe, fall back to the raw text otherwise.
+  // An `integer` column's default is read in `sqlite/integer`'s stored form, digit text, which
+  // keeps every 64-bit value exact.
+  if (nativeType?.toLowerCase() === 'integer' && INTEGER_PATTERN.test(trimmed)) {
+    return { kind: 'literal', value: BigInt(trimmed).toString() };
+  }
+
   if (isNumericLiteral(trimmed)) {
     const num = Number(trimmed);
     // A number no double holds reads as an infinity, which is how SQLite stores it and how the
     // float codecs write an infinite default: `9e999` in DDL, the text `Infinity` in the contract.
     if (!Number.isFinite(num)) {
       return { kind: 'literal', value: num > 0 ? 'Infinity' : '-Infinity' };
-    }
-    if (nativeType?.toLowerCase() === 'integer' && !Number.isSafeInteger(num)) {
-      return { kind: 'literal', value: trimmed };
     }
     return { kind: 'literal', value: num };
   }

@@ -57,7 +57,7 @@ model User {
 }`;
 
 const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false };
-const idColumn = { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const idColumn = { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 const addressFields = {
   home: { nullable: true, type: { kind: 'valueObject', name: 'Address' }, many: false },
   addresses: {
@@ -78,8 +78,8 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         fields: { id: idField, ...addressFields },
         columns: {
           id: idColumn,
-          home: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
-          addresses: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+          home: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: true },
+          addresses: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
         },
       });
     });
@@ -111,9 +111,19 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
           ...addressFields,
         },
         columns: {
-          id: { many: false, nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-          home: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-          addresses: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+          id: {
+            many: false,
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          },
+          home: { many: false, dataType: 'sqlite/text', codecId: 'sqlite/json@1', nullable: true },
+          addresses: {
+            many: false,
+            dataType: 'sqlite/text',
+            codecId: 'sqlite/json@1',
+            nullable: false,
+          },
         },
       });
     });
@@ -139,7 +149,7 @@ model User {
           id: idColumn,
           home: {
             many: false,
-            nativeType: 'jsonb',
+            dataType: 'pg/jsonb',
             codecId: 'pg/jsonb@1',
             nullable: false,
             default: { kind: 'function', expression: "'{}'::jsonb" },
@@ -166,7 +176,7 @@ model User {
     if (!result.ok) return;
     const jsonbWithDefault = (value: unknown) => ({
       many: false,
-      nativeType: 'jsonb',
+      dataType: 'pg/jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
       default: { kind: 'literal', value },
@@ -230,8 +240,8 @@ model Child {
     const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
     expect(tables?.['child']).toEqual({
       columns: {
-        key: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
-        extra: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        key: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        extra: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['key'] },
       uniques: [],

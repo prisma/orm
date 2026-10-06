@@ -213,6 +213,11 @@ describe('typed next actions on the CLI factories', () => {
     expect(error.nextActions).toEqual([
       {
         kind: 'run-command',
+        label: 'Overwrite the marker if the database already matches the contract',
+        command: '{bin} db sign',
+      },
+      {
+        kind: 'run-command',
         label: 'Catch the on-disk graph up to the live marker',
         command: '{bin} migration plan --from <contract>',
       },
@@ -226,6 +231,14 @@ describe('typed next actions on the CLI factories', () => {
         label: 'Investigate whether the database was migrated by an out-of-band process',
       },
     ]);
+  });
+
+  it('names db sign as the first fix of a marker mismatch', () => {
+    const error = errorMarkerMismatch('c'.repeat(64), []);
+
+    expect(error.toEnvelope().fix?.split('\n')[0]).toBe(
+      'Run `{bin} db sign` to overwrite the marker if the database already matches the contract.',
+    );
   });
 
   it('keeps the plan-then-apply sequence in order as two run-command actions', () => {

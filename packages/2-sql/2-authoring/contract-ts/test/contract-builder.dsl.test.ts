@@ -99,7 +99,6 @@ describe('contract DSL authoring surface', () => {
       Role: {
         kind: 'codec-instance',
         codecId: 'app/test-enum@1',
-        nativeType: 'role',
         typeParams: { values: ['USER', 'ADMIN'] },
       },
     } as const;

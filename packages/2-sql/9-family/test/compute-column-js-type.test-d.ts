@@ -22,7 +22,7 @@ type TestCodecTypes = {
 };
 
 type Col<Codec extends string, Nullable extends boolean = false> = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: Codec;
   readonly nullable: Nullable;
   readonly many: false;

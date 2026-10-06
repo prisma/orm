@@ -14,11 +14,7 @@ import type {
   PslNamedTypeDeclaration,
   PslTypesBlock,
 } from '@internal/framework-components/psl-ast';
-import {
-  dataTypeParams,
-  isSqlDataType,
-  unquotedSqlBaseName,
-} from '@internal/sql-contract/data-type';
+import { isSqlDataType } from '@internal/sql-contract/data-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { resolvedTypeParams, StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
@@ -35,10 +31,10 @@ import {
 } from './refusals';
 
 /**
- * The type name a value-object member's codec stores, from the data type the codec represents and
- * the member's type parameters. A member has no column of its own.
+ * The data type a value-object member's codec represents, after checking the member's type
+ * parameters against it. A member has no column of its own.
  */
-function nativeTypeOfMember(
+function dataTypeOfMember(
   type: ScalarFieldType,
   coordinate: string,
   context: SqlPslBuildContext,
@@ -55,13 +51,13 @@ function nativeTypeOfMember(
     if (requiredParamKeys(dataType).length > 0) {
       refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
     }
-    return unquotedSqlBaseName(dataType, {});
+    return dataType.id;
   }
   validateCodecTypeParams(descriptor, {
     codecId,
     typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
   });
-  return unquotedSqlBaseName(dataType, dataTypeParams(dataType, typeParams));
+  return dataType.id;
 }
 
 /** The PSL type position of a value-object member: a value object or an enum by name, or a scalar as a column would print. */
@@ -90,7 +86,7 @@ function buildMemberType(input: {
   }
   return buildColumnType({
     column: new StorageColumn({
-      nativeType: nativeTypeOfMember(type, coordinate, input.context),
+      dataType: dataTypeOfMember(type, coordinate, input.context),
       codecId: type.codecId,
       nullable: field.nullable,
       ...ifDefined('many', field.many),
@@ -98,6 +94,7 @@ function buildMemberType(input: {
     }),
     typeMap: input.typeMap,
     authoringTypes: input.context.authoringContributions.type,
+    dataTypeLookup: input.context.dataTypeLookup,
     enumBlockNames: input.enumBlockNames,
     coordinate,
   });
@@ -158,13 +155,14 @@ export function buildTypesBlock(
     refuseUnwritableName('named type', name);
     const { typeName, typeConstructor } = buildColumnType({
       column: new StorageColumn({
-        nativeType: instance.nativeType,
+        dataType: instance.dataType,
         codecId: instance.codecId,
         nullable: false,
         ...ifDefined('typeParams', instance.typeParams),
       }),
       typeMap,
       authoringTypes: context.authoringContributions.type,
+      dataTypeLookup: context.dataTypeLookup,
       enumBlockNames: new Map(),
       coordinate: `types.${name}`,
     });

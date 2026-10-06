@@ -19,8 +19,8 @@ export const stubLowerer: ExecuteRequestLowerer = {
   renderColumnDefault: async () => '',
 };
 
-const text = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
-const int4 = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const text = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
+const int4 = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 export const NICKNAME_CHECK = 'length(nickname) > 0';
 
 export interface ProfileSpec {

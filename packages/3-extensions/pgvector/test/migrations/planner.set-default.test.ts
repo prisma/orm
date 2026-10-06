@@ -37,9 +37,9 @@ function contractWithEmbeddingDefault(value: number[]): Contract<SqlStorage> {
             table: {
               doc: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                   embedding: {
-                    nativeType: 'vector',
+                    dataType: 'pgvector/vector',
                     codecId: 'pg/vector@1',
                     nullable: true,
                     typeParams: { length: 3 },
