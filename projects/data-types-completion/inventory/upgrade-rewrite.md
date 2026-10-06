@@ -1,6 +1,6 @@
 # Upgrade rewrite: facts needed to specify the script
 
-Made on branch `data-types-completion` on 2026-09-29. It collects what the user-facing upgrade script must read, rewrite and recompute when a SQL contract replaces `nativeType` with `dataType`. `CLI/` stands for `packages/1-framework/3-tooling/cli/src/`, and `MIG/` for `packages/1-framework/3-tooling/migration/src/`. Open points are marked DECISION NEEDED and continue the numbering of [`change-list.md`](change-list.md).
+Made on 2026-09-29 for planning pull request #30518; the raw outputs were not kept. It collects what the user-facing upgrade script must read, rewrite and recompute when a SQL contract replaces `nativeType` with `dataType`. `CLI/` stands for `packages/1-framework/3-tooling/cli/src/`, and `MIG/` for `packages/1-framework/3-tooling/migration/src/`. Open points are marked DECISION NEEDED and continue the numbering of [`change-list.md`](change-list.md).
 
 ## 1. Files in a user's project that hold a hash or a type name
 

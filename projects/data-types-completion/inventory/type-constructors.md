@@ -1,6 +1,6 @@
 # Inventory: everything that names a column type
 
-Read from branch `data-types-completion` at commit `bf96e11eec` on 2026-09-29. Every row gives `file:line`. Paths are relative to the repository root. Short path prefixes used in tables:
+Made on 2026-09-29 for planning pull request #30518; the raw outputs were not kept. Every row gives `file:line`. Paths are relative to the repository root. Short path prefixes used in tables:
 
 | Prefix | Full path |
 | --- | --- |

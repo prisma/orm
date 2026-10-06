@@ -1,6 +1,6 @@
 # Slice 1 plan: each SQL data type declares its facts (TML-3386)
 
-Contract: [`../../design.md`](../../design.md) sections 1 to 6. Project plan: [`../../plan.md`](../../plan.md). Branch `tml-3386-data-types-declare-names`, which targets `main` and carries the project documents that planning pull request #30518 proposed; `main` is merged in, never rebased. One implementer (Fable) and one reviewer (Opus), resumed across every dispatch. The review artefacts are gitignored, under `projects/data-types-completion/reviews/`.
+Contract: [`../../design.md`](../../design.md) sections 1 to 6. Project plan: [`../../plan.md`](../../plan.md). Branch `tml-3386-data-types-declare-names`, which targets `main` and carries the project documents that planning pull request #30518 proposed; `main` is merged in, never rebased. One implementer (Fable) and one reviewer (Opus), resumed across every dispatch. The review artefacts are local and not committed.
 
 Every dispatch: tests first and red before the change; commands through `mise exec --`; commits staged explicitly and signed off with `git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`; no AI attribution lines anywhere; the branch tip typechecks and the touched packages' tests pass at the end of the dispatch.
 

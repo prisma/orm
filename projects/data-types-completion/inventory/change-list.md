@@ -1,6 +1,6 @@
 # Change list: production code that replaces `nativeType` with `dataType`
 
-Made on branch `data-types-completion` on 2026-09-29. It lists every production file that contains one of the symbols named in the brief, and the files the symbol search misses. Tests, fixtures, `dist/` and `node_modules/` are excluded and only counted in list (d). The decisions referred to as "decision N" are the numbered engineering decisions in [`../design-notes.md`](../design-notes.md); "settled Q…" refers to the sections settled with Will.
+Made on 2026-09-29 for planning pull request #30518; the raw outputs were not kept. It lists every production file that contains one of the symbols named in the brief, and the files the symbol search misses. Tests, fixtures, `dist/` and `node_modules/` are excluded and only counted in list (d). The decisions referred to as "decision N" are the numbered engineering decisions in [`../design-notes.md`](../design-notes.md); "settled Q…" refers to the sections settled with Will.
 
 ## How the list was made
 
