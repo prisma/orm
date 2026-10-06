@@ -19,7 +19,7 @@ To run the suite on a branch before queueing it, start the on-demand workflow ([
 gh workflow run integration.yml --ref <branch>
 ```
 
-It runs the same steps as the merge-queue shards ([`.github/actions/integration-tests`](../../.github/actions/integration-tests/action.yml)) on the branch's head commit, not merged with `main`, and its results appear as checks on that commit. GitHub runs the workflow file from the branch, so a branch created before this workflow existed must merge `main` first. It cannot run on a fork's branch. The init journey matrix (`pnpm test:init-journey`) is slower still and runs on `main` every night ([`.github/workflows/init-journey-nightly.yml`](../../.github/workflows/init-journey-nightly.yml)).
+It runs the same steps as the merge-queue shards ([`.github/actions/integration-tests`](../../.github/actions/integration-tests/action.yml)) on the branch's head commit, not merged with `main`, and its results appear as checks on that commit. GitHub runs the workflow file from the branch, so a branch created before this workflow existed must merge `main` first. It cannot run on a fork's branch. The init journey matrix (`pnpm test:init-journey`) is slower still and runs on `main` every night ([`.github/workflows/init-journey-nightly.yml`](../../.github/workflows/init-journey-nightly.yml)). A failed nightly run posts a link to the run to Slack, through the webhook in the `NIGHTLY_SLACK_WEBHOOK_URL` repository secret.
 
 ## Build once per run, and across runs
 
