@@ -20,7 +20,7 @@ A pure function next to `provideDefinition`, returning `Location[]`:
 2. **Candidates.** For every project document, find each occurrence of the symbol's name in the document text. For each occurrence take the token at that offset and keep it only if it is an `Ident` token that starts at that offset and whose text equals the name.
 3. **Confirm.** Resolve the candidate with `resolvedNodeAt`. It is a usage when the resolution's `symbol` is the target object.
 4. **Declarations.** A usage is the declaration when the resolved node is the name node of the symbol's declaration. It is dropped unless `includeDeclaration` is set. For a `namespace` target nothing is dropped.
-5. **Result.** One `Location` per kept token: the document's URI and the token's range. Order: project documents in input order, then by offset.
+5. **Result.** One `Location` per kept token: the document's URI and the token's range. Order: project documents in the order the project lists its schema inputs (sorted file paths today), then by offset.
 
 A rule that a candidate inside a wider resolved node must be its last identifier token was specified first and removed after Dispatch 1: with the binder as it is, every qualifier that lets the whole name resolve carries its own resolution, so the rule never rejected anything and no test could fail without it.
 
