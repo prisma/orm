@@ -103,7 +103,6 @@ export {
 export {
   appliedHashesFromLedger,
   deriveStatusEdgeAnnotations,
-  originHashForStatus,
   statusForMigrationHash,
 } from '../control-api/operations/migration-status-overlay';
 export {

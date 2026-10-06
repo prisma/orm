@@ -245,7 +245,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - On success writes or updates the marker: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
   - Then writes the signed contract into the snapshot store and advances the `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON carries `advancedRef: { name, hash }` or `null`.
   - No migration package is written.
-  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, `<dir>^`, or `./path`; the positional accepts only the first four; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, or `<dir>^`; both accept the same forms; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
   - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification refused.
 
 ## Init Flow

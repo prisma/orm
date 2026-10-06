@@ -17,6 +17,7 @@ import type { CreateControlClient, DestructivePlanOperation } from '../../contro
 import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS } from '../contract-ref-forms';
 import { destructiveOperationList, errorConsentOperationsMissing } from '../db/consent';
 import { defineOrmCommand } from '../define-command';
 import { consentToken } from '../init-inputs';
@@ -280,8 +281,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
       flags: {
         name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
         from: flag.string({
-          brief:
-            'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, or @empty)',
+          brief: `Starting contract reference (${ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         to: flag.string({

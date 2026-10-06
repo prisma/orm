@@ -530,7 +530,15 @@ describe('migrate', () => {
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run.json)).toMatchObject({
         ok: false,
-        error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
+        error: {
+          code: 'CONFIG.DB_CONNECTION_REQUIRED',
+          meta: { missingFlags: ['--db'] },
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining('db migrate --to @db --db $DATABASE_URL'),
+            }),
+          ],
+        },
       });
       expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.migrate).not.toHaveBeenCalled();

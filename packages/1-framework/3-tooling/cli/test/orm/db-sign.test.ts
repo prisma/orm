@@ -299,6 +299,27 @@ describe('db sign', () => {
       expect(mocks.schemaVerify).not.toHaveBeenCalled();
     });
 
+    it.each(['@empty', '@contract', '@db'])(
+      'refuses the reserved reference %s with the wrong-grammar envelope',
+      async (input) => {
+        const dir = await projectDir();
+
+        const run = await harness(ormConfig()).run(['db', 'sign', input, '--json'], { cwd: dir });
+
+        expect(run.exitCode).toBe(2);
+        expect(envelopeOf(run)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'MIGRATION.REF_WRONG_GRAMMAR',
+            why: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by hash, prefix, ref name, migration directory name, or \`<dir>^\``,
+            meta: { input, expectedGrammar: 'contract' },
+          },
+        });
+        expect(mocks.connect).not.toHaveBeenCalled();
+        expect(mocks.sign).not.toHaveBeenCalled();
+      },
+    );
+
     it('reports a refused connection as every command does, with its driver code', async () => {
       const dir = await projectDir();
       mocks.schemaVerify.mockRejectedValue(refusedConnection());

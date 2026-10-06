@@ -124,23 +124,6 @@ export function errorContractArgConflict(options: {
   );
 }
 
-const UPDATE_TARGET_FORMS = 'a hash, a prefix, a ref name, a migration directory name, or `<dir>^`';
-
-/** `db update --to` was given `@contract`, `@db`, or `@empty`, which name state rather than a contract on disk. */
-export function errorUpdateTargetReservedRef(input: string): ActionableCliError {
-  const fix = `Pass ${UPDATE_TARGET_FORMS}, or omit --to to update to the emitted contract.`;
-  return new ActionableCliError(
-    'MIGRATION.REF_WRONG_GRAMMAR',
-    `Not a contract \`db update --to\` accepts: "${input}"`,
-    {
-      why: `\`db update --to\` takes ${UPDATE_TARGET_FORMS}; without \`--to\` it updates to the emitted contract. "${input}" is a reserved reference for working, live, or empty state, not a contract on disk.`,
-      fix,
-      nextActions: [chooseAction(fix)],
-      meta: { input, expectedGrammar: 'contract' },
-    },
-  );
-}
-
 /**
  * A command was told both which ref to advance and not to advance any ref.
  * Same envelope as the positional/flag contract conflict, so a script sees

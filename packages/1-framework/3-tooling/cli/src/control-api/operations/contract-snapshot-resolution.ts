@@ -12,7 +12,11 @@ import {
   errorContractDeserializationFailed,
   MigrationToolsError,
 } from '@internal/migration-tools/errors';
-import { parseContractRef } from '@internal/migration-tools/ref-resolution';
+import {
+  isReservedContractRef,
+  parseContractRef,
+  type RefResolutionWrongGrammar,
+} from '@internal/migration-tools/ref-resolution';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
@@ -62,9 +66,35 @@ export interface ResolveContractRefToSnapshotSuccess {
   readonly source: 'snapshot' | 'emitted';
 }
 
+const ON_DISK_FORMS = 'hash, prefix, ref name, migration directory name, or `<dir>^`';
+
+function reservedRefRefusal(
+  options: ResolveContractRefToSnapshotOptions,
+): RefResolutionWrongGrammar {
+  const input = options.refInput;
+  return options.fallbackToEmitted
+    ? {
+        kind: 'wrong-grammar',
+        input,
+        expectedGrammar: 'contract',
+        message: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by ${ON_DISK_FORMS}`,
+        fix: `Pass a ${ON_DISK_FORMS}, or omit the contract to sign the emitted contract.`,
+      }
+    : {
+        kind: 'wrong-grammar',
+        input,
+        expectedGrammar: 'contract',
+        message: `"${input}" is a reserved reference; \`db update ${options.missingBundleFlag}\` names a migration destination on disk`,
+        fix: `Pass the ${ON_DISK_FORMS} of a migration destination, or omit ${options.missingBundleFlag} to update to the emitted contract.`,
+      };
+}
+
 export async function resolveContractRefToSnapshot(
   options: ResolveContractRefToSnapshotOptions,
 ): Promise<Result<ResolveContractRefToSnapshotSuccess, CliStructuredError>> {
+  if (isReservedContractRef(options.refInput)) {
+    return notOk(mapRefResolutionError(reservedRefRefusal(options)));
+  }
   try {
     const loaded = await buildReadAggregate(options.config, {
       migrationsDir: options.migrationsDir,

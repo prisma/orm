@@ -3,7 +3,11 @@ import { EMPTY_CONTRACT_HASH } from '../../src/constants';
 import { reconstructGraph } from '../../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../../src/package';
 import type { Refs } from '../../src/refs';
-import { parseContractRef } from '../../src/refs/contract-ref';
+import {
+  isLiveMarkerRef,
+  isReservedContractRef,
+  parseContractRef,
+} from '../../src/refs/contract-ref';
 import type { RefResolutionContext, RefResolutionError } from '../../src/refs/types';
 
 const HASH_A = `${'a'.repeat(64)}`;
@@ -314,5 +318,24 @@ describe('parseContractRef', () => {
       const byCaret = parseContractRef('20260102-add-posts^', ctx);
       expect(byCaret.ok && byCaret.value.hash).toBe(byCaretTarget);
     });
+  });
+});
+
+describe('reserved contract references', () => {
+  it.each(['@contract', '@db', '@empty'])('%s is reserved', (input) => {
+    expect(isReservedContractRef(input)).toBe(true);
+  });
+
+  it.each(['contract', 'db', '@other', HASH_A])('%s is not reserved', (input) => {
+    expect(isReservedContractRef(input)).toBe(false);
+  });
+
+  it('only @db names the live marker', () => {
+    expect([undefined, '@contract', '@db', '@empty'].map(isLiveMarkerRef)).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ]);
   });
 });

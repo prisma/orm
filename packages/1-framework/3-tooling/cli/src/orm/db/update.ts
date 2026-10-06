@@ -18,16 +18,12 @@ import {
   NO_REF_ADVANCEMENT,
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
-import { isReservedContractRef } from '../../control-api/operations/ref-resolution';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorUpdateTargetReservedRef,
-} from '../../utils/cli-errors';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
+import { ON_DISK_CONTRACT_REF_FORMS } from '../contract-ref-forms';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { baseDirFor } from '../migration/paths';
@@ -141,7 +137,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         db: dbFlag,
         dryRun: flag.boolean({ brief: 'Preview the planned operations without applying them' }),
         to: flag.string({
-          brief: 'Contract to update to (hash, prefix, ref name, migration dir name, or <dir>^)',
+          brief: `Contract to update to (${ON_DISK_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -152,9 +148,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      if (args.flags.to !== undefined && isReservedContractRef(args.flags.to)) {
-        return notOk(normalizeError(errorUpdateTargetReservedRef(args.flags.to)));
-      }
       const startedAt = Date.now();
       const prepared = await prepareMigrationRun({
         config: ctx.config,

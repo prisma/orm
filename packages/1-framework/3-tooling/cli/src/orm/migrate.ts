@@ -1,6 +1,7 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
+import { contractHashAtMarker } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
@@ -29,9 +30,9 @@ import {
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
 import {
-  isLiveMarkerRef,
-  liveMarkerRefHash,
+  liveMarkerUse,
   type RefResolutionContext,
+  requireDatabaseForLiveMarkerUse,
   resolveContractRef,
 } from '../control-api/operations/ref-resolution';
 import type {
@@ -52,6 +53,7 @@ import { toneDrawing } from '../utils/formatters/tone-markup';
 import { mapMigrateFailure } from '../utils/migrate-failure';
 import { runCommandAction } from '../utils/next-actions';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
+import { ALL_CONTRACT_REF_FORMS } from './contract-ref-forms';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
@@ -209,7 +211,7 @@ function resolveRequestedTarget(
 }
 
 function liveMarkerTarget(appMarker: { readonly storageHash: string } | null): RequestedTarget {
-  return { entry: { hash: liveMarkerRefHash(appMarker), invariants: [] }, refName: undefined };
+  return { entry: { hash: contractHashAtMarker(appMarker), invariants: [] }, refName: undefined };
 }
 
 export function createMigrateCommand(createClient: CreateControlClient) {
@@ -234,8 +236,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       flags: {
         db: dbFlag,
         to: flag.string({
-          brief:
-            'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, @contract, @db, or @empty)',
+          brief: `Target contract reference (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -244,8 +245,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         }),
         show: flag.boolean({ brief: 'Preview the migration route without applying (read-only)' }),
         from: flag.string({
-          brief:
-            'From-state for the --show preview (hash, prefix, ref name, migration dir name, <dir>^, @contract, @db, or @empty)',
+          brief: `From-state for the --show preview (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
       },
@@ -291,7 +291,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               runList: migrateShowRunListRows(plan.migrations, rendering, paint),
               migrationsDir: migrationsRelative,
               database:
-                args.flags.from === undefined && typeof dbConnection === 'string'
+                liveMarkerUse(args.flags).needsDatabase && typeof dbConnection === 'string'
                   ? maskConnectionUrl(dbConnection)
                   : undefined,
               from: args.flags.from,
@@ -299,6 +299,21 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             }),
           ),
         );
+      }
+
+      const use = liveMarkerUse({ from: undefined, to: args.flags.to });
+      if (use.liveTarget) {
+        const missingDb = requireDatabaseForLiveMarkerUse({
+          use,
+          dbConnection: args.flags.db ?? ctx.config.db?.connection,
+          hasDriver: ctx.config.driver !== undefined,
+          commandName: 'db migrate',
+          from: undefined,
+          to: args.flags.to,
+        });
+        if (missingDb !== null) {
+          return notOk(normalizeError(missingDb));
+        }
       }
 
       const startedAt = Date.now();
@@ -356,7 +371,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(integrityFailure));
       }
 
-      const offlineTarget = isLiveMarkerRef(args.flags.to)
+      const offlineTarget = use.liveTarget
         ? undefined
         : resolveRequestedTarget(args.flags.to, {
             graph: aggregate.app.graph(),
@@ -391,7 +406,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             graph: appGraph,
             markerInvariants: appMarker?.invariants ?? [],
             refInvariants: refEntry.invariants,
-            ...ifDefined('refName', args.flags.to),
+            ...ifDefined('refName', target.refName),
           });
           if (invariantRefusal) {
             return notOk(normalizeError(invariantRefusal));
@@ -454,7 +469,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('refHash', refEntry?.hash),
           ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),
-          ...(refEntry === undefined ? {} : ifDefined('refName', args.flags.to)),
+          ...ifDefined('refName', target.refName),
         });
         if (!applied.ok) {
           return notOk(normalizeError(mapMigrateFailure(applied.failure)));

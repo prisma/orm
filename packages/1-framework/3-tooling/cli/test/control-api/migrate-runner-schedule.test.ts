@@ -1,7 +1,6 @@
 import { rm } from 'node:fs/promises';
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import type {
-  ContractMarkerRecord,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,

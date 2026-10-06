@@ -155,13 +155,12 @@ describe('db update --to bundle resolution', () => {
           ok: false,
           error: {
             code: 'MIGRATION.REF_WRONG_GRAMMAR',
-            why: expect.stringContaining(
-              '`db update --to` takes a hash, a prefix, a ref name, a migration directory name, or `<dir>^`; without `--to` it updates to the emitted contract',
-            ),
+            why: `"${input}" is a reserved reference; \`db update --to\` names a migration destination on disk`,
             meta: { input, expectedGrammar: 'contract' },
           },
         },
       });
+      expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.dbUpdate).not.toHaveBeenCalled();
     },
   );

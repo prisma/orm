@@ -554,19 +554,25 @@ describe('migration status', () => {
         markers: markersWithExternalAtHead(HASH_HEAD),
         ledger: [{ migrationHash: project.migrationHash }],
       });
-      const config = withAllExternalExtension(driverConfig(project, db));
 
-      const implicit = await harness(config).run(['migration', 'status', '--json'], {
-        cwd: project.dir,
-      });
-      const explicit = await harness(config).run(
+      const run = await harness(withAllExternalExtension(driverConfig(project, db))).run(
         ['migration', 'status', '--to', '@contract', '--json'],
         { cwd: project.dir },
       );
 
-      expect(explicit.exitCode).toBe(0);
-      expect(explicit.presented?.data).toEqual(implicit.presented?.data);
-      expect(explicit.presented?.data).toMatchObject({ summary: 'Up to date' });
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        summary: 'Up to date',
+        diagnostics: [],
+        spaces: expect.arrayContaining([
+          expect.objectContaining({ space: 'app', targetContract: HASH_HEAD }),
+          expect.objectContaining({
+            space: EXTERNAL_SPACE,
+            currentContract: HASH_EXTERNAL_HEAD,
+            targetContract: HASH_EXTERNAL_HEAD,
+          }),
+        ]),
+      });
     });
 
     it('resolves --from @contract offline', async () => {
@@ -635,6 +641,37 @@ describe('migration status', () => {
       });
     });
 
+    it('reads the database only for the target when --from is a hash and --to is @db', async () => {
+      const project = await projectWithTwoMigrations();
+      const db = fakeDatabase({
+        markers: markersAt(HASH_HEAD),
+        ledger: [{ migrationHash: project.baseMigrationHash }],
+      });
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--from', HASH_BASE, '--to', '@db', '--json'],
+        { cwd: project.dir },
+      );
+      const document = run.presented?.data as {
+        spaces: ReadonlyArray<{
+          currentContract: string | null;
+          targetContract: string;
+          migrations: ReadonlyArray<{ status: string }>;
+        }>;
+      };
+
+      expect(run.exitCode).toBe(0);
+      expect(db.counters.connections).toBe(1);
+      expect(document.spaces).toHaveLength(1);
+      expect(document.spaces[0]).toMatchObject({
+        currentContract: HASH_BASE,
+        targetContract: HASH_HEAD,
+      });
+      expect(document.spaces[0]?.migrations.map((migration) => migration.status)).not.toContain(
+        'applied',
+      );
+    });
+
     it('errors with the connection-required envelope for --to @db without a connection', async () => {
       const project = await projectWithOneMigration();
       const config = driverConfig(project);
@@ -653,6 +690,13 @@ describe('migration status', () => {
             code: 'CONFIG.DB_CONNECTION_REQUIRED',
             why: expect.stringContaining('@db'),
             meta: { missingFlags: ['--db'] },
+            nextActions: [
+              expect.objectContaining({
+                label: expect.stringContaining(
+                  `migration status --from ${HASH_HEAD} --to @db --db $DATABASE_URL`,
+                ),
+              }),
+            ],
           },
         },
       });

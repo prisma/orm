@@ -10,6 +10,26 @@ import type {
 } from './types';
 import { findEdgeByDirName, isFullHash, isHexPrefix } from './types';
 
+export const WORKING_CONTRACT_REF = '@contract';
+export const LIVE_MARKER_REF = '@db';
+export const EMPTY_CONTRACT_REF = '@empty';
+
+const RESERVED_CONTRACT_REFS: ReadonlySet<string> = new Set([
+  WORKING_CONTRACT_REF,
+  LIVE_MARKER_REF,
+  EMPTY_CONTRACT_REF,
+]);
+
+/** True for `@contract`, `@db`, and `@empty`, which name a state rather than a contract on disk. */
+export function isReservedContractRef(input: string): boolean {
+  return RESERVED_CONTRACT_REFS.has(input);
+}
+
+/** True for `@db`, the only reserved token that needs a database read to resolve. */
+export function isLiveMarkerRef(input: string | undefined): boolean {
+  return input === LIVE_MARKER_REF;
+}
+
 /**
  * Resolve a user-supplied string to a contract hash using the unified
  * contract-reference grammar.
@@ -36,7 +56,7 @@ export function parseContractRef(
     return notOk({ kind: 'invalid-format', input, reason: 'Reference cannot be empty' });
   }
 
-  if (input === '@contract') {
+  if (input === WORKING_CONTRACT_REF) {
     if (ctx.contractHash === undefined) {
       return notOk({
         kind: 'not-found',
@@ -47,7 +67,7 @@ export function parseContractRef(
     return ok({ hash: ctx.contractHash, provenance: { kind: 'reserved-contract' } });
   }
 
-  if (input === '@db') {
+  if (input === LIVE_MARKER_REF) {
     // The live DB marker is not available offline. Return a sentinel result with
     // a `reserved-db` provenance; callers must resolve the actual hash via
     // `readAllMarkers()`. The `hash` placeholder is intentionally empty — it
@@ -56,7 +76,7 @@ export function parseContractRef(
     return ok({ hash: '', provenance: { kind: 'reserved-db' } });
   }
 
-  if (input === '@empty') {
+  if (input === EMPTY_CONTRACT_REF) {
     return ok({ hash: EMPTY_CONTRACT_HASH, provenance: { kind: 'reserved-empty' } });
   }
 

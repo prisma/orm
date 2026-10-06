@@ -353,6 +353,29 @@ describe('migrate --show', () => {
       expect(run.presented?.data).toMatchObject({ ok: true, migrations: [] });
     });
 
+    it.each([
+      { argv: ['--from', '@db'], named: true },
+      { argv: ['--from', EMPTY, '--to', '@db'], named: true },
+      { argv: ['--from', EMPTY], named: false },
+    ])(
+      'names the database in the header only when the preview reads it: $argv',
+      async ({ argv, named }) => {
+        const cwd = await buildProject();
+        mocks.readAllMarkers.mockResolvedValue(
+          new Map([['app', { storageHash: C1, invariants: [] }]]),
+        );
+
+        const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show', ...argv], {
+          cwd,
+          isTty: { stdout: true },
+        });
+        const header = run.presented?.presentation.human.find((block) => block.kind === 'fields');
+        const labels = header?.kind === 'fields' ? header.rows.map((row) => row.label) : [];
+
+        expect(labels.includes('database')).toBe(named);
+      },
+    );
+
     it('errors structurally for --to @db without a connection', async () => {
       const cwd = await buildProject();
 
@@ -364,7 +387,20 @@ describe('migrate --show', () => {
       expect(run.exitCode).not.toBe(0);
       expect(run.json.at(-1)).toMatchObject({
         kind: 'result',
-        envelope: { ok: false, error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' } },
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CONFIG.DB_CONNECTION_REQUIRED',
+            meta: { missingFlags: ['--db'] },
+            nextActions: [
+              expect.objectContaining({
+                label: expect.stringContaining(
+                  `db migrate --show --from ${EMPTY} --to @db --db $DATABASE_URL`,
+                ),
+              }),
+            ],
+          },
+        },
       });
     });
   });

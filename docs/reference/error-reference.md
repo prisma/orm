@@ -1602,7 +1602,7 @@ A ref name resolves to nothing: no pointer file with that name exists, and the f
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
-A reference parsed, but as the wrong kind for the argument position, e.g. a migration-only reference where a contract reference is required (raised by the shared ref-resolution mapper). The message and fix come from the resolver's own diagnosis. Also raised by `db update --to` for the reserved references `@contract`, `@db`, and `@empty`, which name working, live, or empty state rather than a contract on disk; `db update --to` takes a hash, a prefix, a ref name, a migration directory name, or `<dir>^`. Payload: `input`, `expectedGrammar`.
+A reference parsed, but as the wrong kind for the argument position, e.g. a migration-only reference where a contract reference is required (raised by the shared ref-resolution mapper). The message and fix come from the resolver's own diagnosis. `db sign` and `db update --to` raise it for the reserved references `@contract`, `@db`, and `@empty`, which they do not accept. Payload: `input`, `expectedGrammar`.
 
 ### MIGRATION.RUNNER_FAILED
 

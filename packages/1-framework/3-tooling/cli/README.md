@@ -1090,7 +1090,7 @@ prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--t
 **Options:**
 - `--config <path>`: Path to `prisma.config.ts`
 - `--name <slug>`: Name slug for the migration directory (default: `migration`)
-- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@empty`, or filesystem path). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
+- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or `@empty`). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
 - `--to <contract>`: Destination contract reference (same grammar as `--from`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
@@ -1174,7 +1174,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v]
 
 **Options:**
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection`)
-- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or filesystem path). When omitted, applies toward the emitted `contract.json`. When `--to` resolves to an on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source.
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@contract`, `@db`, or `@empty`). When omitted, applies toward the emitted `contract.json`. When `--to` resolves to an on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source.
 - `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
