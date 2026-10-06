@@ -382,7 +382,7 @@ describe('db sign', () => {
           },
         });
         expect(mocks.connect).not.toHaveBeenCalled();
-        expect(mocks.sign).not.toHaveBeenCalled();
+        expect(mocks.dbSign).not.toHaveBeenCalled();
       },
     );
 
