@@ -323,7 +323,7 @@ describe('coverage config', () => {
     assert.match(testJob, /^ {4}name: Test$/m);
     assert.match(
       testJob,
-      /^ {4}needs: \[build, changes, test-packages, test-examples, coverage\]$/m,
+      /^ {4}needs: \[build, changes, test-packages, test-examples, coverage, test-integration\]$/m,
     );
     assert.match(testJob, /needs\.test-packages\.result != 'success'/);
     assert.match(testJob, /needs\.test-examples\.result != 'success'/);
@@ -335,5 +335,30 @@ describe('coverage config', () => {
     assert.equal(workflow.match(/run: pnpm coverage:packages:merge/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm coverage:report/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm test:examples/g)?.length, 1);
+  });
+
+  it('runs the integration shards only in the merge queue, where Test requires them', async () => {
+    const repositoryRoot = join(import.meta.dirname, '..');
+    const workflow = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+    const integrationJob = workflow.match(
+      /\n {2}test-integration:\n(?<body>[\s\S]*?)(?=\n {2}\S|\n {2}# )/,
+    )?.groups?.body;
+    const testJob = workflow.match(/\n {2}test:\n(?<body>[\s\S]*?)(?=\n {2}test-e2e:\n)/)?.groups
+      ?.body;
+
+    assert.ok(integrationJob);
+    assert.match(
+      integrationJob,
+      /^ {4}if: github\.event_name == 'merge_group' && needs\.changes\.outputs\.inert != 'true'$/m,
+    );
+    assert.match(integrationJob, /shard: \['1\/4', '2\/4', '3\/4', '4\/4'\]/);
+    assert.match(integrationJob, /uses: \.\/\.github\/actions\/integration-tests/);
+
+    assert.ok(testJob);
+    assert.match(testJob, /^ {4}needs: \[[^\]]*\btest-integration\b[^\]]*\]$/m);
+    assert.match(
+      testJob,
+      /- name: Require integration tests in the merge queue\n {8}if: \$\{\{ github\.event_name == 'merge_group' && needs\.changes\.outputs\.inert != 'true' && needs\.test-integration\.result != 'success' \}\}\n {8}run: exit 1/,
+    );
   });
 });

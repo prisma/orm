@@ -5,8 +5,9 @@ name: Integration
 #
 #   gh workflow run integration.yml --ref <branch>
 #
-# The results appear as checks on the branch's head commit. GitHub lists this
-# workflow only once it is on main, and it cannot run on a fork's branch.
+# The results appear as checks on the branch's head commit. GitHub runs the
+# workflow as it is on that branch, so a branch older than this file must
+# merge main first. It cannot run on a fork's branch.
 
 on:
   workflow_dispatch:
