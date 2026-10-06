@@ -753,30 +753,3 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** A slice is not closed until its QA report exists. The orchestrator runs manual QA after each slice merges, against a build of `main`, as a real user following the docs and upgrade guide, before starting the next slice. Where the QA skills are not installed, the runner writes the script and reports by hand where [`drive/qa/README.md`](../qa/README.md) puts them: `projects/<x>/manual-qa.md` and `projects/<x>/manual-qa-reports/<YYYY-MM-DD>-<runner>.md` for a slice in a project, or the PR description for a slice with no project.
 
 **Reference incident.** 2026-09-29, the Mongo defaults, codecs and Prisma 6 source project: six slices merged with no manual QA. The close-out QA found that Mongo `db update` could not confirm any destructive change, a `Double` field refused whole numbers, `include()` returned related documents undecoded, a `Bson` filter on an `ObjectId` matched nothing, and `orm init` sent Prisma 6 Mongo users down the Prisma 7 path. Twelve bugs and about thirty points of friction were fixed in follow-up PRs before the project closed.
-
-### F39. Tests of a spec consumer build their own specs, so a matching rule that depends on how production specs are arranged passes every unit test
-
-**Symptom.** Code that walks attribute or block specs (binder, hover, completion, signature help) passes its unit tests and a reviewer's reading. Against a real control stack it then does nothing for a common construct, because production specs combine combinators in an order or mix the test fixtures never used.
-
-**Root cause.** The fixtures are hand-built specs chosen to show the new feature in isolation, for example `oneOf(identifier('Cascade'), identifier('Restrict'))` or `oneOf(funcCall('known'))`. The behaviour that breaks depends on a production spec's arrangement, for example SQL's `oneOf(str(), numLiteral(), bool(), nullLiteral(), ...funcCalls)` for `@default`, where a leaf earlier in the list decides the match. No fixture reproduced that arrangement, so nothing failed.
-
-**Mitigation.**
-- For every rule that depends on a combinator's position or neighbours (`oneOf` choice, list or record nesting, optional wrapping), add at least one test that uses the production spec itself: import it from the SQL, Mongo or target package, or copy its exact arm order with a reference to where it comes from.
-- When a slice changes how a spec is walked, the brief asks the implementer to grep the production specs (`sql-attribute-specs.ts`, `mongo-attribute-specs.ts`, target `authoring.ts`) for every `oneOf` that contains the affected kinds, and to list them in the report.
-- Manual QA against a real control stack is what catches the rest. Do not mark it N/A for a spec-walking feature.
-
-**Reference incident.** 2026-10-02, lsp-hover slice `hover-arguments`. In the binder, fixed identifiers and then scalar leaves counted as matched whatever was written, so `Cascade` (third in `referentialActionArgument`) and every `@default(autoincrement())` (functions after `str()`) got no hover. Both passed unit tests and review. The implementer found the first while writing a test. Manual QA against the postgres stack found the second.
-
-### F40. A QA script marks a row N/A or covered from memory, and the report claims coverage the run never had
-
-**Symptom.** A manual-QA script lists a row as N/A, giving a reason such as "no real position exists in the stack", or credits a row to a scenario whose steps never touch it. The run report repeats the claim, and the slice DoD is marked met.
-
-**Root cause.** Neither the coverage map nor the N/A reasons were checked against the code or the script's own steps when they were written. The run report copied the coverage map instead of building it from the steps it ran.
-
-**Mitigation.**
-- Every N/A row in a QA script cites the search that shows there is no position: the file and the grep, for example "no `structBlock(` in `postgres/src/core/authoring.ts`".
-- The run report builds its coverage table from the steps it executed, listing each row with the step IDs and actual output that cover it, instead of copying the script's table.
-- The reviewer checks one N/A reason and one coverage claim against the code before accepting the QA artefact.
-
-**Reference incident.** 2026-10-05, lsp-hover slice `hover-arguments`. The script marked struct-block entry keys N/A, but bare postgres registers five struct-mode `policy_*` blocks. It also credited named-type hover to a scenario that never hovered a named type. The reviewer found both. The re-run covered both with real-server output.
-

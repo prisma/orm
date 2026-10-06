@@ -11,7 +11,7 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 ## Responsibilities
 
 - Parse PSL source text with a required explicit filename and deterministic ordering.
-- Return AST nodes with source spans for models, fields, enums, and `types { ... }`. Models, composite types, fields, named types and blocks additionally implement `HasDocComment`: `docComment()` returns the contiguous run of `///` lines directly above the declaration — stopped by a blank line or a non-`///` comment, each line's `///` marker and one following space stripped — computed fresh from the syntax tree on every call; parsing itself extracts and stores nothing.
+- Return AST nodes with source spans for models, fields, enums, and `types { ... }`.
 - Preserve raw PSL relation action tokens (for example `Cascade`) without semantic normalization.
 - Return PSL-owned parser, symbol, attribute-kit, and SQL/Mongo semantic diagnostics as `{ filename, code, message, range }`, with optional `data`, zero-based file-local ranges, and filenames derived from the owning syntax node through `PslSources`. No source object is retained in emitted diagnostics. `PslDiagnosticCollector.toExternal()` translates them at interpreter output boundaries, preserving order alongside untouched external contribution diagnostics. Existing unlocated public errors retain their envelope through `pushUnlocated`, while still carrying an owned range internally. Provider seeding uses the same `mapPslDiagnostics` conversion.
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
@@ -113,7 +113,7 @@ A qualified reference's resolution is recorded on the whole `QualifiedName` node
 
 | Kind | Denotes |
 | --- | --- |
-| `model` / `compositeType` / `namedType` / `block` | a user declaration, with its declaring namespace when present; answers at a reference and at the declaration's own name identifier alike; the reference site's selector determines which declaration kinds are accepted |
+| `model` / `compositeType` / `namedType` / `block` | a user declaration, with its declaring namespace when present; the reference site's selector determines which declaration kinds are accepted |
 | `namespace` / `contributedNamespace` | a user or configured namespace; lookup finds it without considering the required reference kind |
 | `contributedType` | a scalar, type constructor or field preset from the injected registry |
 | `field` | a field, named by an attribute argument (`@@index([a])`, `@relation(fields:, references:)`) or by its own declaration's name identifier |
