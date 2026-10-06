@@ -132,20 +132,32 @@ function describeOrigin(origin: NoPathOrigin): string {
     : 'the database state';
 }
 
+/** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
+export type NoPathTarget =
+  | {
+      readonly space: 'app';
+      readonly explicitTarget: boolean;
+      readonly refName: string | undefined;
+    }
+  | { readonly space: 'extension'; readonly spaceId: string };
+
 export function buildNoPathSummary(args: {
   readonly origin: NoPathOrigin;
   readonly targetHash: string;
-  readonly explicitTarget: boolean;
-  readonly refName: string | undefined;
+  readonly target: NoPathTarget;
 }): string {
   const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
-  if (!args.explicitTarget) {
+  const { target } = args;
+  if (target.space === 'extension') {
+    return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
+  }
+  if (!target.explicitTarget) {
     return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
   }
   const targetLabel =
-    args.refName !== undefined
-      ? `the target (${targetShort} via \`${args.refName}\`)`
+    target.refName !== undefined
+      ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
   return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
 }
@@ -383,7 +395,13 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath: { readonly origin: NoPathOrigin; readonly targetHash: string } | undefined;
+    let noPath:
+      | {
+          readonly origin: NoPathOrigin;
+          readonly targetHash: string;
+          readonly target: NoPathTarget;
+        }
+      | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -432,7 +450,13 @@ export const migrationStatusCommand = defineOrmCommand({
         noPath === undefined &&
         !hasMigrationPath(graph, originHash, targetHash)
       ) {
-        noPath = { origin, targetHash };
+        noPath = {
+          origin,
+          targetHash,
+          target: isAppSpace
+            ? { space: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            : { space: 'extension', spaceId: entry.space },
+        };
       }
 
       const ledger = database.ledgersBySpace.get(entry.space) ?? [];
@@ -515,12 +539,7 @@ export const migrationStatusCommand = defineOrmCommand({
     const summary = everySpaceEmpty
       ? 'No migrations found'
       : noPath !== undefined
-        ? buildNoPathSummary({
-            origin: noPath.origin,
-            targetHash: noPath.targetHash,
-            explicitTarget: args.flags.to !== undefined,
-            refName: activeRefName,
-          })
+        ? buildNoPathSummary(noPath)
         : buildStatusHeadline({
             pendingCount: totalPending,
             targetHash: headlineTargetHash,

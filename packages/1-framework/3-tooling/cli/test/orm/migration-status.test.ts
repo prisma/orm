@@ -173,6 +173,25 @@ describe('migration status', () => {
     });
   });
 
+  it('names the extension head, not the app --to, when an extension space has no path', async () => {
+    const project = await projectWithOneMigration();
+    await addAllExternalSpace(project);
+    const db = fakeDatabase({
+      markers: markersAt(HASH_HEAD),
+      ledger: [{ migrationHash: project.migrationHash }],
+    });
+
+    const run = await harness(withAllExternalExtension(driverConfig(project, db))).run(
+      ['migration', 'status', '--to', HASH_HEAD, '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({
+      summary: `No migration path from the database state to the head of extension space \`${EXTERNAL_SPACE}\` (${HASH_EXTERNAL_HEAD.slice(0, 12)}).`,
+    });
+  });
+
   it('records invariants the marker is missing as a warn diagnostic and still exits 0', async () => {
     const project = await createOfflineProject({ storageHash: HASH_HEAD });
     await seedMigrationPackage({
