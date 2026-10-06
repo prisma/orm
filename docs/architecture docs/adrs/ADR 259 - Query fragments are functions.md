@@ -131,12 +131,12 @@ Post.orderBy(orderByField(Post, input.sort, input.direction, ['title', 'createdA
 
 Measured as type instantiations with TypeScript 5.9.3. Every count was measured twice with the same result.
 
-On the `prisma-8-demo` example, which checks at about 730,000 instantiations without these helpers. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline.
+On the `prisma-8-demo` example, which checks at 693,649 instantiations without these helpers. The unused cost is measured with `pnpm typecheck --extendedDiagnostics` after a fresh build, on the demo files that existed before ADR 258. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline.
 
 | Feature | Present but unused | Definition | Ten uses, over the same code written inline |
 | --- | --- | --- | --- |
 | A conditional inside `apply` | none | — | 10,000 to 14,000 once per pair of collection types, then under 10 |
-| `db.orm.scope` and `Post.scope` together | +342 (+0.05%) | | |
+| `db.orm.scope` and `Post.scope` together | +308 (+0.04%) | | |
 | `db.orm.scope` | | 211 | +2,888 with the definition: 3,657 for the definition and ten uses, against 769 for the same ten sites written inline |
 | `Post.scope` | | 21 | −7,109: the body is typed once instead of at each site |
 | `orderByField` | none | — | about 550 once, then under 20 |
@@ -162,7 +162,7 @@ Each use checks the declared fields against the receiver's model only, and compu
 - **A single-model scope takes its model from the collection it is called on**, not from a type parameter, because TypeScript cannot tell one model name from a union of names.
 - **`scope` is a member of every collection and of the client.** A custom collection class cannot declare its own `scope` with another signature, an aggregate operation cannot be named `scope`, and a contract namespace named `scope` hides the client method.
 - **The `field` that `@prisma/orm-postgres/contract-builder` exports has the Postgres presets.** It is the callback's `field` without extension helpers. Its `field.column(...).default(...)` checks the value against the Postgres target's column types, as the callback's does; it does not know the column types an extension adds, such as pgvector's `vector`, so it does not check those. Importing it at run time brings the SQL family and Postgres target packs into the application's bundle; the client itself reads builders through a structural `build()` interface and does not import the entry.
-- **Public names added** to the `orm-client` entry: `orderByField`, `OrderableFieldNames`, `CodecField`, `FieldScope`, `DeclaredField` and `ScopeFacts`; to the framework components' `codec` entry, `ScalarFieldDeclaration` and `ScalarFieldDeclarationBuilder`. The last three are what declaration output needs for an exported scope for any model. The type a single-model scope accepts is printed in terms of names already public (`HasRow`, `HasTypeState`, `DefaultModelRow`). The `contract-builder` entry's `field` gains the presets.
+- **Public names added** to the `orm-client` entry: `orderByField`, `OrderableFieldNames`, `CodecField`, `FieldScope`, `DeclaredField` and `ScopeFacts`, the last three because declaration output needs them for an exported scope for any model; to the framework components' `codec` entry, `CodecDescriptorRef`, `ScalarFieldDeclaration` and `ScalarFieldDeclarationBuilder`, the builder type the DSL and the client share. The type a single-model scope accepts is printed in terms of names already public (`HasRow`, `HasTypeState`, `DefaultModelRow`). The `contract-builder` entry's `field` gains the presets.
 
 ## Non-goals
 
