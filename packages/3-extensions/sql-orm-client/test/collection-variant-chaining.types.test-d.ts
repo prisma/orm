@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { CollectionTypeStateOf, Ordered } from '../src/collection-types';
+import type { CollectionRowOf, CollectionTypeStateOf, Ordered } from '../src/collection-types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 
 class TaskCollection extends Collection<PolyContract, 'Task'> {
@@ -59,5 +59,27 @@ describe('variant', () => {
 
   test('the class survives cursor', () => {
     expectTypeOf(tasks.newestFirst().cursor({ id: 1 })).toEqualTypeOf<Ordered<TaskCollection>>();
+  });
+});
+
+describe('a write on a polymorphic base', () => {
+  test('returns the variant union, with what include added', async () => {
+    type TaskRow = CollectionRowOf<TaskCollection>;
+    expectTypeOf<Extract<TaskRow, { type: 'bug' }>['severity']>().toEqualTypeOf<string>();
+    const titled = tasks.titled('x');
+    expectTypeOf(await titled.update({ title: 'y' })).toEqualTypeOf<TaskRow | null>();
+    expectTypeOf(await titled.deleteAll().toArray()).toEqualTypeOf<TaskRow[]>();
+    expectTypeOf<Awaited<ReturnType<TaskCollection['update']>>>().toEqualTypeOf<TaskRow | null>();
+
+    const withProject = titled.include('project');
+    type TaskWithProjectRow = CollectionRowOf<typeof withProject>;
+    expectTypeOf<Extract<TaskWithProjectRow, { type: 'bug' }>>().toHaveProperty('project');
+    expectTypeOf<
+      Extract<TaskWithProjectRow, { type: 'bug' }>['severity']
+    >().toEqualTypeOf<string>();
+    expectTypeOf(
+      await withProject.update({ title: 'y' }),
+    ).toEqualTypeOf<TaskWithProjectRow | null>();
+    expectTypeOf(await withProject.deleteAll().toArray()).toEqualTypeOf<TaskWithProjectRow[]>();
   });
 });
