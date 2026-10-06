@@ -178,7 +178,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
           to: args.flags.to,
           advanceRef: args.flags.advanceRef,
-          offline: false,
+          canRunOffline: false,
         }),
       });
       if (!prepared.ok) {

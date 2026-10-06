@@ -141,23 +141,23 @@ function describeOrigin(origin: StatusOrigin): string {
 }
 
 /** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
-export type NoPathTarget =
+export type StatusTarget =
   | {
-      readonly space: 'app';
+      readonly kind: 'app';
       readonly explicitTarget: boolean;
       readonly refName: string | undefined;
     }
-  | { readonly space: 'extension'; readonly spaceId: string };
+  | { readonly kind: 'extension'; readonly spaceId: string };
 
 export function buildNoPathSummary(args: {
   readonly origin: StatusOrigin;
   readonly targetHash: string;
-  readonly target: NoPathTarget;
+  readonly target: StatusTarget;
 }): string {
   const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
   const { target } = args;
-  if (target.space === 'extension') {
+  if (target.kind === 'extension') {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
@@ -407,7 +407,7 @@ export const migrationStatusCommand = defineOrmCommand({
       | {
           readonly origin: StatusOrigin;
           readonly targetHash: string;
-          readonly target: NoPathTarget;
+          readonly target: StatusTarget;
         }
       | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
@@ -432,12 +432,9 @@ export const migrationStatusCommand = defineOrmCommand({
           ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
       const originHash = originHashOf(origin);
+      const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
       const readMarker =
-        origin?.kind === 'database'
-          ? origin.marker
-          : isAppSpace && liveTarget
-            ? appMarker
-            : undefined;
+        origin?.kind === 'database' ? origin.marker : markerRead ? appMarker : undefined;
       const markerDiverged =
         readMarker !== undefined &&
         !isInSpaceHistory(readMarker.storageHash, { graph, headHash: space.headRef?.hash });
@@ -457,8 +454,8 @@ export const migrationStatusCommand = defineOrmCommand({
           origin,
           targetHash,
           target: isAppSpace
-            ? { space: 'app', explicitTarget: to !== undefined, refName: activeRefName }
-            : { space: 'extension', spaceId: entry.space },
+            ? { kind: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            : { kind: 'extension', spaceId: entry.space },
         };
       }
 
@@ -499,7 +496,7 @@ export const migrationStatusCommand = defineOrmCommand({
         styler,
         palette: TONE_MIGRATION_GRAPH_PALETTE,
         isAppSpace,
-        ...ifDefined('dbHash', readMarker?.storageHash),
+        ...(markerRead ? { dbHash: contractHashAtMarker(readMarker) } : {}),
       });
     }
 

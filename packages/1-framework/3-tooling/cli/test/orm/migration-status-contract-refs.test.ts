@@ -189,6 +189,26 @@ describe('migration status with reserved contract references', () => {
     expect(dbLines[0]).toContain(HASH_BASE.slice(0, 7));
   });
 
+  it('labels the empty node @db when --to @db reads a database with no marker', async () => {
+    const project = await projectWithTwoMigrations();
+    const db = fakeDatabase();
+
+    const run = await harness(driverConfig(project, db)).run(
+      ['migration', 'status', '--to', '@db'],
+      {
+        cwd: project.dir,
+        isTty: { stdout: true, stderr: true },
+      },
+    );
+    const dbLines = stripAnsi(run.stderr)
+      .split('\n')
+      .filter((line) => line.includes('@db'));
+
+    expect(run.exitCode).toBe(0);
+    expect(dbLines).toHaveLength(1);
+    expect(dbLines[0]).toContain('∅');
+  });
+
   it('reports no path when --from @contract is ahead of the database named by --to @db', async () => {
     const project = await projectWithTwoMigrations();
     const db = fakeDatabase({

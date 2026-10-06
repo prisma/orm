@@ -664,7 +664,7 @@ prisma db sign [<contract> | --contract <contract>] [--db <url>] [--advance-ref 
 ```
 
 Options:
-- `<contract>` / `--contract <contract>`: Optional. The application contract to sign with: a hash, hash prefix, ref name, migration directory name, `<dir>^`, or `./path`. Defaults to the emitted `contract.json`
+- `<contract>` / `--contract <contract>`: Optional. The application contract to sign with: a hash, hash prefix, ref name, migration directory name, or `<dir>^`. Defaults to the emitted `contract.json`
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection` if set)
 - `--advance-ref <name>`: Advance the named ref of every signed space instead of `db`
 - `--no-advance-ref`: Sign without writing any ref or snapshot
@@ -1093,7 +1093,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show]
 - `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@contract`, `@db`, or `@empty`). When omitted, applies toward the emitted `contract.json`; `--to @contract` does the same. When `--to` resolves to another on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source. A ref name is a `--to` form; refs live in `migrations/<space>/refs/<name>.json`.
 - `--advance-ref <name>`: After a successful apply, advance the named ref to the new marker
 - `--show`: Preview the migration route without applying anything (read-only)
-- `--from <contract>`: The origin for the `--show` preview, with the same forms as `--to`. Defaults to the database marker. A contract other than `@db` makes the preview run offline.
+- `--from <contract>`: The origin for the `--show` preview, with the same forms as `--to`. Defaults to the database marker. A contract other than `@db` makes the preview start offline; it still reads the database when `--to` is `@db`.
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)

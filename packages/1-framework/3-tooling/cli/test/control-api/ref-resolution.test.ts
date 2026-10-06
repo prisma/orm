@@ -82,8 +82,8 @@ describe('resolveMigrationRef', () => {
 });
 
 describe('retryCommandFor', () => {
-  const status = { commandName: 'migration status', offline: true };
-  const migrate = { commandName: 'db migrate', from: undefined, offline: false };
+  const status = { commandName: 'migration status', canRunOffline: true };
+  const migrate = { commandName: 'db migrate', from: undefined, canRunOffline: false };
 
   it.each([
     {

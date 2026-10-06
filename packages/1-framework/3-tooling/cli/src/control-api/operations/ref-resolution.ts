@@ -63,11 +63,11 @@ export function retryCommandFor(args: {
   readonly to: string | undefined;
   readonly advanceRef?: string | undefined;
   /** The command runs without a database when `--from` names a contract. */
-  readonly offline: boolean;
+  readonly canRunOffline: boolean;
 }): string {
   const namesLiveMarker = isLiveMarkerRef(args.from) || isLiveMarkerRef(args.to);
-  const suggestsOffline = args.offline && args.from === undefined && !namesLiveMarker;
-  const needsConnection = !args.offline || namesLiveMarker;
+  const suggestsOffline = args.canRunOffline && args.from === undefined && !namesLiveMarker;
+  const needsConnection = !args.canRunOffline || namesLiveMarker;
   return [
     `{bin} ${args.commandName}`,
     ...(args.from === undefined ? [] : [`--from ${args.from}`]),
@@ -101,7 +101,7 @@ export function requireDatabaseForLiveMarkerUse(args: {
       commandName: args.commandName,
       from: args.from,
       to: args.to,
-      offline: true,
+      canRunOffline: true,
     }),
   });
 }
