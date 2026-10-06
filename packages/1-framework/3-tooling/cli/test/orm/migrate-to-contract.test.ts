@@ -7,6 +7,7 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -119,7 +120,7 @@ async function buildAppliedProject(): Promise<string> {
   return cwd;
 }
 
-function ormConfig(cwd: string): Record<string, unknown> {
+function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     family: {
       kind: 'family',
@@ -160,7 +161,12 @@ function ormConfig(cwd: string): Record<string, unknown> {
       output: join(cwd, 'contract.json'),
     },
     migrations: { dir: 'migrations' },
+    ...overrides,
   };
+}
+
+function markerAt(storageHash: string): Map<string, { storageHash: string; invariants: string[] }> {
+  return new Map([['app', { storageHash, invariants: [] }]]);
 }
 
 function harness(config: Record<string, unknown>) {
@@ -252,5 +258,135 @@ describe('migrate --to resolves the apply contract', () => {
     expect(error?.code).toBe('CONTRACT.VALIDATION_FAILED');
     expect(error?.where?.path).toContain('contract.json');
     expect(mocks.migrate).not.toHaveBeenCalled();
+  });
+});
+
+describe('migrate --to reserved references and refs', () => {
+  it('treats @contract like an omitted --to and applies the emitted contract', async () => {
+    const cwd = await buildAppliedProject();
+    const emitted = { ...contractEnvelope(C2), models: { onlyInContractJson: {} } };
+    await writeFile(join(cwd, 'contract.json'), JSON.stringify(emitted));
+    mocks.readAllMarkers.mockResolvedValue(markerAt(C1));
+
+    const run = await harness(ormConfig(cwd)).run(
+      ['db', 'migrate', '--to', '@contract', '--json'],
+      { cwd },
+    );
+
+    expect(run.exitCode).toBe(0);
+    const migrateOptions = mocks.migrate.mock.calls[0]?.[0];
+    expect(migrateOptions).toMatchObject({ contract: emitted });
+    expect(migrateOptions).not.toHaveProperty('refHash');
+    expect(migrateOptions).not.toHaveProperty('refInvariants');
+    expect(migrateOptions).not.toHaveProperty('refName');
+  });
+
+  it('resolves @db to the live marker so there is nothing to run', async () => {
+    const cwd = await buildAppliedProject();
+    mocks.readAllMarkers.mockResolvedValue(markerAt(C1));
+    mocks.migrate.mockResolvedValue(
+      ok({
+        migrationsApplied: 0,
+        markerHash: C1,
+        applied: [],
+        summary: 'Already up to date',
+        perSpace: [],
+      }),
+    );
+
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', '@db', '--json'], {
+      cwd,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        refHash: C1,
+        refInvariants: [],
+        contract: expect.objectContaining({
+          storage: expect.objectContaining({ storageHash: C1 }),
+        }),
+      }),
+    );
+    expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('refName');
+    expect(run.presented?.data).toMatchObject({
+      ok: true,
+      migrationsApplied: 0,
+      markerHash: C1,
+      summary: 'Already up to date',
+    });
+  });
+
+  it.each([
+    { to: '@db', reason: 'a database with no marker' },
+    { to: '@empty', reason: 'the empty contract' },
+  ])('hands the runner the empty contract for --to $to ($reason)', async ({ to }) => {
+    const cwd = await buildAppliedProject();
+    mocks.readAllMarkers.mockResolvedValue(new Map());
+
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', to, '--json'], {
+      cwd,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.migrate).toHaveBeenCalledWith(expect.objectContaining({ refHash: EMPTY }));
+  });
+
+  it('passes the resolved ref name for a ref target', async () => {
+    const cwd = await buildAppliedProject();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'prod', { hash: C1, invariants: [] });
+
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', 'prod', '--json'], {
+      cwd,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({ refHash: C1, refName: 'prod' }),
+    );
+  });
+
+  it('errors with the connection-required envelope for @db without a connection', async () => {
+    const cwd = await buildAppliedProject();
+
+    const run = await harness(ormConfig(cwd, { db: undefined })).run(
+      ['db', 'migrate', '--to', '@db', '--json'],
+      { cwd },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.DB_CONNECTION_REQUIRED',
+          meta: { missingFlags: ['--db'] },
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining('db migrate --to @db --db $DATABASE_URL'),
+            }),
+          ],
+        },
+      },
+    });
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect(mocks.migrate).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing driver for @db as a missing driver', async () => {
+    const cwd = await buildAppliedProject();
+
+    const run = await harness(ormConfig(cwd, { driver: undefined })).run(
+      ['db', 'migrate', '--to', '@db', '--json'],
+      { cwd },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'CONFIG.DRIVER_REQUIRED' } },
+    });
+    expect(mocks.connect).not.toHaveBeenCalled();
   });
 });
