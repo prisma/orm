@@ -2115,7 +2115,7 @@ function assertUniqueDiscriminatorValues(modelBuilder: AnyModelBuilder): void {
             modelName: modelBuilder.__name,
             value,
             variants: [existingVariant, variantName],
-            reason: 'discriminator-value-duplicate',
+            reason: 'duplicate-discriminator-value',
           },
         },
       );

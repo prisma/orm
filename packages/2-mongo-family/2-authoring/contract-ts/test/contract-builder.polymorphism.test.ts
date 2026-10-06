@@ -409,7 +409,7 @@ describe('mongo contract builder — discriminator values', () => {
           modelName: 'Task',
           value: 'bug',
           variants: ['Bug', 'OtherBug'],
-          reason: 'discriminator-value-duplicate',
+          reason: 'duplicate-discriminator-value',
         },
       }),
     );
