@@ -227,8 +227,8 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'Walks every contract space (app + extensions) and applies pending on-disk\n' +
         'migrations in canonical order (extensions alphabetically, then app). It\n' +
         'replays the on-disk migration graph and never invents an edge. Use --to to\n' +
-        'target a specific contract (hash, ref name, or migration directory) and\n' +
-        '--show for a read-only preview of the route it would take.',
+        'target a specific contract and --show for a read-only preview of the route\n' +
+        'it would take.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',

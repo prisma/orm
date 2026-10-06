@@ -247,10 +247,10 @@ export const migrationStatusCommand = defineOrmCommand({
     summary: 'Show migration path and pending status',
     description:
       'Shows which migrations are pending between the database marker and the\n' +
-      'target contract. Requires a database connection. Pass --from for an\n' +
-      'offline path preview without a database. Use `migration graph` for\n' +
-      'topology, `migration log` for history, and `migration list` for on-disk\n' +
-      'enumeration.',
+      'target contract. Reads the database marker by default. --from names the\n' +
+      'origin instead and runs offline, unless --from or --to is @db, which reads\n' +
+      'the database. Use `migration graph` for topology, `migration log` for\n' +
+      'history, and `migration list` for on-disk enumeration.',
     examples: [
       'migration status',
       'migration status --db $DATABASE_URL',
