@@ -3,13 +3,13 @@ import {
   AsyncIterableResult,
   checkAborted,
   checkMiddlewareCompatibility,
-  executeWithAfterTransaction,
   onQueryEndOutsideTransaction,
-  queryWithAfterTransaction,
   RuntimeCore,
   type RuntimeExecuteOptions,
   type RuntimeMiddlewareContext,
   type RuntimeStatementStats,
+  reportExecuteEnding,
+  reportQueryEnding,
   runBeforeExecuteChain,
   runBeforeQueryChain,
   runExecuteWithMiddleware,
@@ -246,7 +246,7 @@ class MongoRuntimeImpl
       const onQueryEnd = onQueryEndOutsideTransaction(
         self.afterTransactionStageFor(exec, middlewareCtx),
       );
-      yield* queryWithAfterTransaction(onQueryEnd, () =>
+      yield* reportQueryEnding(onQueryEnd, () =>
         self.#decodedRows<Row>(exec, codecCtx, middlewareCtx),
       );
     };
@@ -292,7 +292,7 @@ class MongoRuntimeImpl
     const onQueryEnd = onQueryEndOutsideTransaction(
       this.afterTransactionStageFor(exec, middlewareCtx),
     );
-    return executeWithAfterTransaction(onQueryEnd, async () => {
+    return reportExecuteEnding(onQueryEnd, async () => {
       checkAborted(codecCtx, 'stream');
       return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
         this.runExecute(exec),

@@ -256,7 +256,7 @@ export function onQueryEndOutsideTransaction(
 /**
  * Streams `rows()` and then calls `onQueryEnd` exactly once with how the query ended: `completed` when the stream completes, `failed` when an error comes out of it, and `stopped` when the caller stops reading, calls `return()` or throws into the iterator, before or after the first row. Returns `rows()` itself when `onQueryEnd` is `undefined`.
  */
-export function queryWithAfterTransaction<Row>(
+export function reportQueryEnding<Row>(
   onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
   rows: () => AsyncIterable<Row>,
 ): AsyncIterable<Row> {
@@ -320,7 +320,7 @@ async function* streamThenQueryEnd<Row>(
 /**
  * Runs `execute()` and then calls `onQueryEnd` exactly once: with `completed` when it resolves, and with `failed` when it rejects.
  */
-export async function executeWithAfterTransaction<T>(
+export async function reportExecuteEnding<T>(
   onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
   execute: () => Promise<T>,
 ): Promise<T> {

@@ -2,10 +2,10 @@ import type { PlanMeta } from '@internal/contract/types';
 import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionPlan } from '../src/execution/query-plan';
 import {
-  executeWithAfterTransaction,
   onQueryEndOutsideTransaction,
   type QueryEnding,
-  queryWithAfterTransaction,
+  reportExecuteEnding,
+  reportQueryEnding,
   runAfterTransaction,
 } from '../src/execution/run-with-middleware';
 import type {
@@ -129,7 +129,7 @@ function recordEnding(events: string[]) {
   };
 }
 
-describe('queryWithAfterTransaction', () => {
+describe('reportQueryEnding', () => {
   async function* rows(events: string[], failure?: Error): AsyncGenerator<number> {
     events.push('row 1');
     yield 1;
@@ -153,7 +153,7 @@ describe('queryWithAfterTransaction', () => {
     const events: string[] = [];
 
     const read = await collect(
-      delegate(queryWithAfterTransaction(recordEnding(events), () => rows(events))),
+      delegate(reportQueryEnding(recordEnding(events), () => rows(events))),
     );
 
     expect({ read, events }).toEqual({
@@ -167,9 +167,7 @@ describe('queryWithAfterTransaction', () => {
     const failure = new Error('rows failed');
 
     await expect(
-      collect(
-        delegate(queryWithAfterTransaction(recordEnding(events), () => rows(events, failure))),
-      ),
+      collect(delegate(reportQueryEnding(recordEnding(events), () => rows(events, failure)))),
     ).rejects.toBe(failure);
 
     expect(events).toEqual(['row 1', 'ended:failed']);
@@ -179,7 +177,7 @@ describe('queryWithAfterTransaction', () => {
     const events: string[] = [];
 
     for await (const _row of delegate(
-      queryWithAfterTransaction(recordEnding(events), () => rows(events)),
+      reportQueryEnding(recordEnding(events), () => rows(events)),
     )) {
       break;
     }
@@ -189,7 +187,7 @@ describe('queryWithAfterTransaction', () => {
 
   it('reports stopped once when the caller stops before reading a row, without delegating', async () => {
     const events: string[] = [];
-    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
+    const iterator = reportQueryEnding(recordEnding(events), () => rows(events))[
       Symbol.asyncIterator
     ]();
 
@@ -203,7 +201,7 @@ describe('queryWithAfterTransaction', () => {
   it('reports stopped once and rethrows when the caller throws into it before reading a row', async () => {
     const events: string[] = [];
     const failure = new Error('caller failed');
-    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
+    const iterator = reportQueryEnding(recordEnding(events), () => rows(events))[
       Symbol.asyncIterator
     ]();
 
@@ -216,7 +214,7 @@ describe('queryWithAfterTransaction', () => {
   it('reports stopped once and rethrows when the caller throws into it after the first row', async () => {
     const events: string[] = [];
     const failure = new Error('caller failed');
-    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
+    const iterator = reportQueryEnding(recordEnding(events), () => rows(events))[
       Symbol.asyncIterator
     ]();
 
@@ -241,7 +239,7 @@ describe('queryWithAfterTransaction', () => {
         },
       }),
     });
-    const iterator = queryWithAfterTransaction(recordEnding(events), rowsThatFailWhenThrownInto)[
+    const iterator = reportQueryEnding(recordEnding(events), rowsThatFailWhenThrownInto)[
       Symbol.asyncIterator
     ]();
 
@@ -255,15 +253,15 @@ describe('queryWithAfterTransaction', () => {
     const events: string[] = [];
     const source = rows(events);
 
-    expect(queryWithAfterTransaction(undefined, () => source)).toBe(source);
+    expect(reportQueryEnding(undefined, () => source)).toBe(source);
   });
 });
 
-describe('executeWithAfterTransaction', () => {
+describe('reportExecuteEnding', () => {
   it('reports completed once after the operation resolves', async () => {
     const events: string[] = [];
 
-    const result = await executeWithAfterTransaction(recordEnding(events), async () => {
+    const result = await reportExecuteEnding(recordEnding(events), async () => {
       events.push('executed');
       return 3;
     });
@@ -279,7 +277,7 @@ describe('executeWithAfterTransaction', () => {
     const failure = new Error('execute failed');
 
     await expect(
-      executeWithAfterTransaction(recordEnding(events), async () => {
+      reportExecuteEnding(recordEnding(events), async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
@@ -288,7 +286,7 @@ describe('executeWithAfterTransaction', () => {
   });
 
   it('runs the operation alone when there is nothing to report to', async () => {
-    await expect(executeWithAfterTransaction(undefined, async () => 3)).resolves.toBe(3);
+    await expect(reportExecuteEnding(undefined, async () => 3)).resolves.toBe(3);
   });
 });
 

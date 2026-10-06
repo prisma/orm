@@ -29,9 +29,9 @@ export type { ExecutionPlan, QueryPlan, ResultType } from '../execution/query-pl
 export { checkAborted, raceAgainstAbort } from '../execution/race-against-abort';
 export type { QueryEnding } from '../execution/run-with-middleware';
 export {
-  executeWithAfterTransaction,
   onQueryEndOutsideTransaction,
-  queryWithAfterTransaction,
+  reportExecuteEnding,
+  reportQueryEnding,
   runAfterTransaction,
   runExecuteWithMiddleware,
   runQueryWithMiddleware,
