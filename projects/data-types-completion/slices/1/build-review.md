@@ -31,6 +31,7 @@ Reviewer-maintained. Contract: `projects/data-types-completion/design.md` sectio
 | review fixes 3 | 2 (`a8e36d4744`) | SATISFIED: S1-rf3-R1-1 closed, no new finding |
 | review fixes 4 | 1 (`7835641a20..a5550c2793`, merge of `main` first) | ANOTHER ROUND NEEDED: 2 must-fix, 2 low |
 | review fixes 4 | 2 (`336baecdf3..946d0bbe50`) | SATISFIED: S1-rf4-R1-1 to S1-rf4-R1-4 closed, no new finding |
+| review fixes 5 | 1 (`d824808cff..61fd037501`, merge of `main` first) | SATISFIED: no finding |
 
 ## Findings log
 
@@ -300,6 +301,22 @@ All 19 items of `wip/briefs/review-fixes-1.md` are built as written. Code review
 Every commit carries both sign-offs and no AI attribution. Checks at `946d0bbe50`, logs under `wip/rv/r2/`: typecheck passes in contract-ts and sql-contract. `sql-data-type.declare.test.ts` passes (38). The contract-ts suite, run alone, passes (569). `lint:deps` finds no violation, and `lint:docs` and `check:upgrade-coverage --mode pr --prev bot/main` exit 0. The golden planner test passes (694), and the scenario A integration test passes (6).
 
 ## Round notes
+
+### Review fixes 5, round 1
+
+Scope: `d824808cff..61fd037501`, the merge of `main` (`3fbca42dc3`: TML-3409 and TML-3443) and 9 commits, against `wip/briefs/s1-fixes-r5.md` and the round 5 findings (SD F01 to F05 and Deferred, CR F01). No finding.
+
+The merge: `git show --remerge-diff 3fbca42dc3` shows one conflict, the import block of the SQLite `diff-database-schema.ts`. The result keeps slice 1's imports and adds `main`'s `SQLITE_NOW_EXPRESSION`; `ifDefined` is gone because neither side's code uses it now. Five test files changed on both sides since the last merge. In each, every `expect` count is slice plus `main` minus base, and every title is kept, or renamed or deleted by the side that changed it. `main`'s new and changed tests are otherwise `main`'s text, except `90296e4bae`, which passes the SQLite test components and the Postgres data type lookup to three of them and changes no assertion. TML-3409 changes the planned DDL of `examples/prisma-8-demo-sqlite` only. Its new manifest entry is the hash of the tip's recording, which writes `main`'s `strftime('%Y-%m-%dT%H:%M:%fZ','now')` default. The implementer's comparison of every recording with a checkout of `main` (`wip/logs/m5-golden-main-vs-tip.diff`) differs in the three known contracts only. I did not reproduce it: the manifest changes in one entry, and the evidence covers all 344 recordings.
+
+Item by item:
+- 1 (`9d05a0fbda`): design 13.8 states the rule for the whole Prisma 7 table, and its claim that every entry names the marked constructor holds: each of the 20 names in `prisma7-type-map.ts` is marked `inferred`. Plan item c and the `deferred.md` line are as asked.
+- 2 (`ef94972793`): both names leave the slice 3 grep row. The `deferred.md` line gives the reason.
+- 3 (`d59802126e`): the Temporal guard is in the target and imports from `../src/core/`. The precision-bounds block is in the target's `type-constructors.test.ts`, and the authoring-contribution tests are in the adapter's `descriptor-meta.test.ts`. The six unions are `postgresPslTypeConstructors`. Across the nine files, the 83 test declarations and 101 `expect` calls are the same before and after. No test the slice adds or moves imports another package's source. Six fixture and test files import `@internal/sql-contract`'s test helper `test-type-lookups` by relative path, which `main` does elsewhere 157 times.
+- 4 (`fada8b88f2`): the inventory headers, the slice plan, and design 3.1 and 3.2 are as asked. The Postgres runtime adapter's `create(stack)` in `packages/3-targets/6-adapters/postgres/src/exports/runtime.ts` builds the lookup with `assembleDataTypes`, as 3.2 now says. No `wip/` path or `bf96e11eec` is left in the project documents.
+- 5 (`d90b3fa2b0`): renamed. The one link follows, and no `assembly-is-strict` anchor is left outside this log.
+- 6 (`5f637cd351`): both deferrals recorded.
+
+Every commit carries both sign-offs and no AI attribution. Checks at `61fd037501`, logs under `wip/rv/r5/`: typecheck passes in the 11 touched packages, `test/e2e/framework` and `test/integration`. Touched test files, one package at a time: sql-builder 60, arktype-json 36, postgres extension 8, target-postgres 593 (with `test/psl-print` and `test/psl-infer`, whose helpers changed), target-sqlite 35, the codec testkit 2, adapter-postgres 98, adapter-sqlite 50, driver-postgres 90, and the e2e widening test 8. The golden planner test with `main`'s three touched integration files passes (720). `lint:deps` finds no violation, and `lint:docs` and `check:upgrade-coverage --mode pr --prev bot/main` exit 0. The slice 1 grep check prints nothing. Only the two golden fixture `contract.json` files differ from `bot/main`.
 
 ### Review fixes 4, round 1
 
