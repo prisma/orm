@@ -165,6 +165,7 @@ import {
   type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
+import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
@@ -2335,7 +2336,7 @@ export class CollectionBase<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
-   * The row is the one `first()` returns, so an order and an offset choose it. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit or an offset.
+   * The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row changes and the result is `null`. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit, an offset, a cursor, `distinct` or `distinctOn`.
    *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
@@ -2392,7 +2393,7 @@ export class CollectionBase<
         >(data),
       )
     ) {
-      this.#assertNestedUpdateHasNoOrderLimitOrOffset();
+      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
         runtime: this.ctx.runtime,
@@ -2437,7 +2438,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: update every matching row and stream the updated
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams updated
@@ -2469,7 +2470,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<unknown> {
-    this.#assertNoLimitOrOffset('updateAll');
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     return this.#updateAllWithAnnotations(
       data,
       this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
@@ -2526,7 +2527,7 @@ export class CollectionBase<
   /**
    * Write terminal: update every matching row without returning them,
    * resolving to the count of rows that were updated. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `updateAll(...)` when you need the updated rows; prefer
    * this when you only need the affected-row count.
@@ -2546,7 +2547,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
-    this.#assertNoLimitOrOffset('updateAndCount');
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2581,7 +2582,7 @@ export class CollectionBase<
    * Write terminal: delete a single matching row — the first one the
    * filter matches — and return it (or `null` when no row matched).
    * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error. The row is the one `first()` returns, so an order and an offset choose it.
+   * unfiltered collection is a type error. The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row is deleted and the result is `null`.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2616,7 +2617,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: delete every matching row and stream the deleted
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams deleted
@@ -2642,42 +2643,9 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
-    this.#assertNoLimitOrOffset('deleteAll');
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
-    );
-  }
-
-  #assertNoLimitOrOffset(method: string): void {
-    const { limit, offset } = this.state;
-    if (limit === undefined && offset === undefined) {
-      return;
-    }
-    throw ormError(
-      'ORM.ARGUMENT_INVALID',
-      `Cannot ${method} ${this.modelName}: the collection has a limit or an offset`,
-      {
-        why: `${method} changes every row that matches the filter. The statement it runs cannot apply a limit or an offset, so they would be ignored and more rows would change than the chain asks for. A scope applied with apply can add them without showing them at the call site.`,
-        fix: `Remove limit() and offset() before ${method}, or read the rows first and change them by their ids.`,
-        meta: { model: this.modelName, method, limit, offset },
-      },
-    );
-  }
-
-  #assertNestedUpdateHasNoOrderLimitOrOffset(): void {
-    const { orderBy, limit, offset } = this.state;
-    const ordered = orderBy !== undefined && orderBy.length > 0;
-    if (!ordered && limit === undefined && offset === undefined) {
-      return;
-    }
-    throw ormError(
-      'ORM.ARGUMENT_INVALID',
-      `Cannot update ${this.modelName} with a relation mutation: the collection has an order, a limit or an offset`,
-      {
-        why: 'An update that changes a relation finds its row by the filter alone. It would ignore the order, the limit and the offset, and could change another row than first() returns. A scope applied with apply can add them without showing them at the call site.',
-        fix: 'Remove orderBy(), limit() and offset() before update, or filter to the one row, such as by its id.',
-        meta: { model: this.modelName, method: 'update', ordered, limit, offset },
-      },
     );
   }
 
@@ -2773,7 +2741,7 @@ export class CollectionBase<
   /**
    * Write terminal: delete every matching row without returning them,
    * resolving to the count of rows that were deleted. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `deleteAll(...)` when you need the deleted rows; prefer
    * this when you only need the affected-row count.
@@ -2787,7 +2755,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number>;
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
-    this.#assertNoLimitOrOffset('deleteAndCount');
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
     const compiled = mergeAnnotations(
@@ -2872,6 +2840,9 @@ export class CollectionBase<
         `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
         { meta: { model: this.modelName, table: this.tableName } },
       );
+    }
+    if (this.state.limit === 0) {
+      return null;
     }
     const firstRow = await this.#clone({
       selectedFields: [...identityColumns],

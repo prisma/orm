@@ -126,7 +126,20 @@ describe('a scope for one model checks the collection it is applied to', () => {
   });
 });
 
-describe('writes refuse a limit or an offset they would ignore', () => {
+type PlainPublic = ReturnType<typeof createScopesOrm>['plain'];
+
+const viewed = (plain: PlainPublic) => plain.Post.where((p) => p.views.gte(1));
+const afterCursor = (plain: PlainPublic) =>
+  viewed(plain)
+    .orderBy((p) => p.id.asc())
+    .cursor({ id: 5 });
+const distinctTitles = (plain: PlainPublic) => viewed(plain).distinct('title');
+const distinctOnUser = (plain: PlainPublic) =>
+  viewed(plain)
+    .orderBy((p) => p.userId.asc())
+    .distinctOn('userId');
+
+describe('bulk writes refuse what they would ignore', () => {
   const recentTen = () =>
     createScopesOrm().client.scope(
       { deletedAt: field.column(timestamptzTemporalColumn).optional() },
@@ -138,8 +151,10 @@ describe('writes refuse a limit or an offset they would ignore', () => {
     expect(() => plain.Post.apply(recentTen()).deleteAll()).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
-        message: 'Cannot deleteAll Post: the collection has a limit or an offset',
-        meta: { model: 'Post', method: 'deleteAll', limit: 10, offset: undefined },
+        message: 'Cannot deleteAll Post: the collection has a limit',
+        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.',
+        fix: 'Remove limit() before deleteAll, or read the rows first and change them by their ids.',
+        meta: { model: 'Post', method: 'deleteAll', limit: 10 },
       }),
     );
     expect(runtime.executions).toEqual([]);
@@ -147,50 +162,80 @@ describe('writes refuse a limit or an offset they would ignore', () => {
 
   it('refuses deleteAll and updateAll after a limit or offset written inline', () => {
     const { plain } = createScopesOrm();
-    expect(() =>
-      plain.Post.where((p) => p.views.gte(1))
-        .limit(10)
-        .deleteAll(),
-    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
-    expect(() =>
-      plain.Post.where((p) => p.views.gte(1))
-        .offset(5)
-        .updateAll({ title: 'x' }),
-    ).toThrow(
+    expect(() => viewed(plain).limit(10).deleteAll()).toThrow(
+      expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),
+    );
+    expect(() => viewed(plain).offset(5).updateAll({ title: 'x' })).toThrow(
       expect.objectContaining({
-        message: 'Cannot updateAll Post: the collection has a limit or an offset',
+        message: 'Cannot updateAll Post: the collection has an offset',
       }),
     );
   });
 
   it('refuses updateAndCount and deleteAndCount after a limit', async () => {
     const { plain, runtime } = createScopesOrm();
-    const limited = plain.Post.where((p) => p.views.gte(1)).limit(3);
+    const limited = viewed(plain).limit(3);
     await expect(limited.updateAndCount({ title: 'x' })).rejects.toMatchObject({
       code: 'ORM.ARGUMENT_INVALID',
-      message: 'Cannot updateAndCount Post: the collection has a limit or an offset',
+      message: 'Cannot updateAndCount Post: the collection has a limit',
     });
     await expect(limited.deleteAndCount()).rejects.toMatchObject({
-      message: 'Cannot deleteAndCount Post: the collection has a limit or an offset',
+      message: 'Cannot deleteAndCount Post: the collection has a limit',
     });
     expect(runtime.executions).toEqual([]);
+  });
+
+  it.each([
+    ['a cursor', 'cursor()', afterCursor, { cursor: { id: 5 } }],
+    ['a distinct selection', 'distinct()', distinctTitles, { distinct: ['title'] }],
+    ['a distinctOn selection', 'distinctOn()', distinctOnUser, { distinctOn: ['user_id'] }],
+  ])(
+    'refuses each bulk write after %s, before any statement runs',
+    async (noun, call, chain, meta) => {
+      const { plain, runtime } = createScopesOrm();
+      const writes = {
+        updateAll: () => chain(plain).updateAll({ title: 'x' }),
+        updateAndCount: () => chain(plain).updateAndCount({ title: 'x' }),
+        deleteAll: () => chain(plain).deleteAll(),
+        deleteAndCount: () => chain(plain).deleteAndCount(),
+      };
+      for (const [method, write] of Object.entries(writes)) {
+        await expect((async () => write())()).rejects.toMatchObject({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: `Cannot ${method} Post: the collection has ${noun}`,
+          why: `${method} changes every row that matches the filter. The statement it runs cannot apply ${noun}, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.`,
+          fix: `Remove ${call} before ${method}, or read the rows first and change them by their ids.`,
+          meta: { model: 'Post', method, ...meta },
+        });
+      }
+      expect(runtime.executions).toEqual([]);
+    },
+  );
+
+  it('names everything the collection has that the write would ignore', () => {
+    const { plain } = createScopesOrm();
+    expect(() => afterCursor(plain).limit(3).offset(2).deleteAll()).toThrow(
+      expect.objectContaining({
+        message: 'Cannot deleteAll Post: the collection has a limit, an offset and a cursor',
+        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, an offset or a cursor, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.',
+        fix: 'Remove limit(), offset() and cursor() before deleteAll, or read the rows first and change them by their ids.',
+      }),
+    );
   });
 
   it('still allows writes after an order alone', () => {
     const { plain } = createScopesOrm();
     expect(() =>
-      plain.Post.where((p) => p.views.gte(1))
+      viewed(plain)
         .orderBy((p) => p.views.desc())
         .deleteAll(),
     ).not.toThrow();
   });
 });
 
-type PlainPublic = ReturnType<typeof createScopesOrm>['plain'];
-
 describe('update and delete change the row first() returns', () => {
   const thirdByViews = (plain: PlainPublic) =>
-    plain.Post.where((p) => p.views.gte(1))
+    viewed(plain)
       .orderBy((p) => p.views.desc())
       .offset(2);
 
@@ -214,6 +259,30 @@ describe('update and delete change the row first() returns', () => {
     expect(lookup?.plan.ast).toEqual(first?.plan.ast);
   });
 
+  it.each([
+    ['a cursor', afterCursor],
+    ['a distinct selection', distinctTitles],
+    ['a distinctOn selection', distinctOnUser],
+  ])('update and delete find their row with %s, as first() does', async (_, chain) => {
+    const { plain, runtime } = createScopesOrm();
+    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x' }], [{ id: 7 }], [{ id: 7 }]]);
+    await chain(plain).update({ title: 'x' });
+    await chain(plain).delete();
+    await chain(plain).select('id').first();
+    const [updateLookup, , deleteLookup, , first] = runtime.executions;
+    expect(first?.plan.ast).toBeDefined();
+    expect(updateLookup?.plan.ast).toEqual(first?.plan.ast);
+    expect(deleteLookup?.plan.ast).toEqual(first?.plan.ast);
+  });
+
+  it('update and delete after limit(0) change nothing and return null', async () => {
+    const { plain, runtime } = createScopesOrm();
+    const none = viewed(plain).limit(0);
+    expect(await none.update({ title: 'x' })).toBeNull();
+    expect(await none.delete()).toBeNull();
+    expect(runtime.executions).toEqual([]);
+  });
+
   it('delete with an include reads the row it deletes without the offset', async () => {
     const { plain, runtime } = createScopesOrm();
     runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x', user: null }]]);
@@ -229,14 +298,17 @@ describe('update and delete change the row first() returns', () => {
     ],
     ['a limit', (plain: PlainPublic) => plain.Post.where({ userId: 1 }).limit(1)],
     ['an offset', (plain: PlainPublic) => plain.Post.where({ userId: 1 }).offset(2)],
-  ])('refuses an update that changes a relation after %s', async (_, chain) => {
+    ['an order and a cursor', afterCursor],
+    ['a distinct selection', distinctTitles],
+    ['an order and a distinctOn selection', distinctOnUser],
+  ])('refuses an update that changes a relation after %s', async (noun, chain) => {
     const { plain, runtime } = createScopesOrm();
     await expect(
       chain(plain).update({ comments: (comments) => comments.connect([{ id: 1 }]) }),
     ).rejects.toMatchObject({
       code: 'ORM.ARGUMENT_INVALID',
-      message:
-        'Cannot update Post with a relation mutation: the collection has an order, a limit or an offset',
+      message: `Cannot update Post with a relation mutation: the collection has ${noun}`,
+      why: `An update that changes a relation finds its row by the filter alone. It would ignore ${noun}, and could change another row than first() returns. A scope applied with apply can add one without showing it at the call site.`,
     });
     expect(runtime.executions).toEqual([]);
   });
