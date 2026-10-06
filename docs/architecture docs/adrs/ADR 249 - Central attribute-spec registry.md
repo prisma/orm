@@ -2,7 +2,6 @@
 
 **Status:** Accepted
 **Date:** 2026-09-09
-**Amended by:** [ADR 260 — The PSL binder binds, the caller builds it, and interpreters read its resolutions](ADR%20260%20-%20The%20PSL%20binder%20binds%2C%20the%20caller%20builds%20it%2C%20and%20interpreters%20read%20its%20resolutions.md) — `FieldAttributeSpecContext` carries the binder's `typeResolution` for the field's type, and the caller builds the snapshot's binder.
 **Builds on:** [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 236 — Target-contributed model attributes](ADR%20236%20-%20Target-contributed%20model%20attributes.md)
 
 ---
@@ -100,7 +99,7 @@ export type FieldAttributeSpecFactory = (
 ) => AttributeSpec<never, FieldAttributeCtx>;
 ```
 
-These facts are exactly what the dynamic specs consume. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `controlMutationDefaults` to pin one `funcCall` arm per registered mutation-default function, and reads `typeResolution` — the binder's resolution of the field's type reference — to take the enum block the type resolves to and pin one `identifier` arm per member. It never looks the type's name up itself ([ADR 260](ADR%20260%20-%20The%20PSL%20binder%20binds%2C%20the%20caller%20builds%20it%2C%20and%20interpreters%20read%20its%20resolutions.md)). Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
+These facts are exactly what the dynamic specs consume. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `controlMutationDefaults` to pin one `funcCall` arm per registered mutation-default function, and reads `typeResolution` — the binder's resolution of the field's type reference — to take the enum block the type resolves to and pin one `identifier` arm per member. It never looks the type's name up itself. Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
 
 Uniformity is what makes the registry consumable at all. A factory whose signature is specific to its family — one taking a list flag and a registry, another taking a list of enum member names — can only be called by the interpreter that owns it. Any other consumer would have to know, per attribute, what arguments to assemble, which is the opacity that declarative specs exist to remove ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). A single context type both consumers can construct replaces that per-attribute knowledge with one contract: the interpreter builds it from the document it is lowering and the snapshot's binder, the language server from its symbol table, its binder, and the mutation defaults of its context.
 
@@ -192,7 +191,7 @@ export const sqlFamilyPslBlockDescriptors = {
 
 A block's legal attributes are its descriptor's keys, so scoping is structural, and the language server needs no new plumbing: it already receives `pslBlockDescriptors` from the composed stack.
 
-Symbol-table construction collects declarations without interpreting blocks. After collection, the caller builds the snapshot's binder, whose context carries the block descriptors, reports its diagnostics, and passes it to the interpreter ([ADR 260](ADR%20260%20-%20The%20PSL%20binder%20binds%2C%20the%20caller%20builds%20it%2C%20and%20interpreters%20read%20its%20resolutions.md)). The interpreter calls `interpretExtensionBlocks` with that binder to interpret those attributes together with the block's values and attach the typed results to the block's envelope as plain data:
+Symbol-table construction collects declarations without interpreting blocks. After collection, the caller builds the snapshot's binder, whose context carries the block descriptors, reports its diagnostics, and passes it to the interpreter ([psl-parser README § Binder](../../../packages/1-framework/2-authoring/psl-parser/README.md#binder)). The interpreter calls `interpretExtensionBlocks` with that binder to interpret those attributes together with the block's values and attach the typed results to the block's envelope as plain data:
 
 ```ts
 export interface PslExtensionBlockParsedAttribute {
@@ -253,4 +252,3 @@ Two boundaries stay open by design. Field-level entries are the family's own bui
 - [ADR 236 — Target-contributed model attributes](ADR%20236%20-%20Target-contributed%20model%20attributes.md) — the model-attribute descriptor channel and `requiresModelAttribute`
 - [ADR 126 — PSL top-level block SPI](ADR%20126%20-%20PSL%20top-level%20block%20SPI.md) — the block descriptors that carry block attributes
 - [ADR 225 — Three-layer extensibility for pack-contributed entity kinds](ADR%20225%20-%20Three-layer%20extensibility%20for%20pack-contributed%20entity%20kinds.md) — the contribution model the authoring surface follows
-- [ADR 260 — The PSL binder binds, the caller builds it, and interpreters read its resolutions](ADR%20260%20-%20The%20PSL%20binder%20binds%2C%20the%20caller%20builds%20it%2C%20and%20interpreters%20read%20its%20resolutions.md) — who builds the binder, and why specs read resolutions instead of looking names up
