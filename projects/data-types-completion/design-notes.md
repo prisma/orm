@@ -319,7 +319,7 @@ Sources: [`inventory/type-constructors.md`](inventory/type-constructors.md), [`i
 
 ## Decisions from the design review (orchestrator, 2026-09-30)
 
-Source: [`reviews/design-verification.md`](reviews/design-verification.md), 54 findings, all verified against the code. Every blocker and gap is applied in `design.md`; the three that change the plan's shape:
+A verification of the design against the code ran and found 54 issues, and every finding was applied in `design.md`. The three that change the plan's shape:
 
 1. **Slice order.** The contract-format slice (TML-3388) comes before the verify slice (TML-3387). If verify moved to exact comparison first, every SQLite column would report drift until SQLite's data types were corrected. The new order also gives TML-3253 more time. `resolveReportedSqlType` is written in slice 1 as a plain function, so TML-3253's lookup can use it whenever TML-3253 lands.
 2. **The upgrade script rehashes contracts whose stored hash does not recompute**, instead of refusing them. The repository's own `apps/telemetry-backend` has two such snapshots in its migration history, written under older rules; any project of that age has the same, and refusing them would leave those users no upgrade path. This replaces upgrade decision 12 above.

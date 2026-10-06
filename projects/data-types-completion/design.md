@@ -1,6 +1,6 @@
 # Design: data types own column types
 
-This document is the contract for implementers. Where it and an inventory file disagree, this document wins. Where it is silent, stop and ask the orchestrator; do not choose. Snippets are illustrative until re-verified against the code, as `drive/spec/README.md` requires. `reviews/design-verification.md` holds the evidence for many rules below.
+This document is the contract for implementers. Where it and an inventory file disagree, this document wins. Where it is silent, stop and ask the orchestrator; do not choose. Snippets are illustrative until re-verified against the code, as `drive/spec/README.md` requires. A verification of this design against the code ran, and every finding was applied here.
 
 The work is four slices, in this order: slice 1 (TML-3386, sections 2 to 6), slice 2 (TML-3388, sections 7 to 10), slice 3 (TML-3387, sections 11 to 13), slice 4 (TML-3389, section 14).
 
