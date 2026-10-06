@@ -17,6 +17,7 @@ import {
   DropCheckConstraintCall,
   DropConstraintCall,
 } from '../../src/core/migrations/op-factory-call';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: unknown[] } {
   const received: unknown[] = [];
@@ -278,7 +279,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
     const { lowerer, received } = recordingCheckLowerer();
     const storageColumn = {
       many: false,
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
     } as const;
@@ -287,7 +288,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       tableName: 'user',
       columnName: 'name',
       column: storageColumn,
-      codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     });
@@ -309,8 +310,8 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
-      column: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      codecHooks: new Map(),
+      column: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     });

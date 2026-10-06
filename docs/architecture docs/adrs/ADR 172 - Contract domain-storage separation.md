@@ -31,9 +31,9 @@ A User model in both families, showing the domain/storage separation. Note how `
     "tables": {
       "users": {
         "columns": {
-          "id": { "nativeType": "int4", "nullable": false, "default": "autoincrement" },
-          "email": { "nativeType": "text", "nullable": false },
-          "display_name": { "nativeType": "text", "nullable": true }
+          "id": { "dataType": "pg/int4", "nullable": false, "default": "autoincrement" },
+          "email": { "dataType": "pg/text", "nullable": false },
+          "display_name": { "dataType": "pg/text", "nullable": true }
         },
         "primaryKey": ["id"],
         "indexes": [],
@@ -147,7 +147,7 @@ The three levels describe the same data from different perspectives:
 | --------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
 | **Field name**  | `"name"` — the application's vocabulary                                      | `"name": { "column": "display_name" }` — maps to storage | `"display_name"` — the column name                           |
 | **Nullability** | `"nullable": true` — can the domain field be absent? Drives TypeScript types | —                                                        | `"nullable": true` — does the column accept NULL? Drives DDL |
-| **Type**        | `"codecId": "pg/text@1"` — the framework's type abstraction                  | —                                                        | `"nativeType": "text"` — the database's native type          |
+| **Type**        | `"codecId": "pg/text@1"` — the framework's type abstraction                  | —                                                        | `"dataType": "pg/text"` — the database type the codec represents |
 
 
 These look redundant, but they answer different questions and serve different consumers. Domain nullability ("can a User have no name?") drives `string | null` in TypeScript. Storage nullability ("does the `display_name` column accept NULL?") drives `ALTER TABLE` statements. They usually agree, but they don't have to — a migration might change the column constraint while the domain model hasn't caught up yet. The emitter is responsible for keeping them consistent in normal operation.

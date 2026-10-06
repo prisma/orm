@@ -27,7 +27,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'36c2557fc1c8e38328d6515c94c66a20ca4843d34209dd1a4b68ea914b050355'>;
+  StorageHashBase<'8334dda9271ee13d092ca25003aed6d6507dbad3e83de89f994a48661d16bbf4'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -109,25 +109,25 @@ type ContractBase = Omit<
               columns: {
                 readonly id: {
                   readonly many: false;
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly name: {
                   readonly many: false;
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly location: {
                   readonly many: false;
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
                 readonly notes: {
                   readonly many: false;
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: true;
                 };

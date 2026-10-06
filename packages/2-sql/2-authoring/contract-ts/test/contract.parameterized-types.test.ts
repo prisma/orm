@@ -20,7 +20,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
       tables: {
         User: {
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -40,9 +40,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             Embedding: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 vector: {
-                  nativeType: 'vector(1536)',
+                  dataType: 'pgvector/vector',
                   codecId: 'pg/vector@1',
                   nullable: false,
                   typeParams: { length: 1536 },
@@ -71,7 +71,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             User: {
               columns: {
                 id: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   typeParams: {},
@@ -104,7 +104,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             User: {
               columns: {
                 id: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   typeParams: 'invalid',
@@ -131,7 +131,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             User: {
               columns: {
                 id: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   typeParams: [1, 2, 3],
@@ -157,9 +157,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             Embedding: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 vector: {
-                  nativeType: 'vector(1536)',
+                  dataType: 'pgvector/vector',
                   codecId: 'pg/vector@1',
                   nullable: false,
                   typeParams: { length: 1536 },
@@ -176,7 +176,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
           },
@@ -198,9 +198,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             Embedding: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 vector: {
-                  nativeType: 'vector(1536)',
+                  dataType: 'pgvector/vector',
                   codecId: 'pg/vector@1',
                   nullable: false,
                   typeRef: 'Vector1536',
@@ -216,7 +216,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
           },
@@ -237,7 +237,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             User: {
               columns: {
                 id: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   typeRef: 123,
@@ -263,9 +263,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             Embedding: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 vector: {
-                  nativeType: 'vector(1536)',
+                  dataType: 'pgvector/vector',
                   codecId: 'pg/vector@1',
                   nullable: false,
                   typeRef: 'NonExistent',
@@ -281,7 +281,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
           },
@@ -299,9 +299,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             Embedding: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 vector: {
-                  nativeType: 'vector(1536)',
+                  dataType: 'pgvector/vector',
                   codecId: 'pg/vector@1',
                   nullable: false,
                   typeRef: 'Vector1536',
@@ -330,7 +330,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
           },
@@ -342,7 +342,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
         Vector1536: {
           kind: 'codec-instance',
           codecId: 'pg/vector@1',
-          nativeType: 'vector(1536)',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       });
@@ -357,13 +357,13 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
             Vector768: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(768)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 768 },
             },
           },
@@ -387,7 +387,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
           types: {
             Vector1536: {
               kind: 'codec-instance',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: { length: 1536 },
             },
           },
@@ -397,7 +397,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
       expect(() => validateSqlContractFully<TestContract>(input)).toThrow(/codecId/);
     });
 
-    it('rejects type instance missing nativeType', () => {
+    it('rejects type instance missing dataType', () => {
       const input = {
         ...baseContractInput,
         storage: {
@@ -412,7 +412,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
         },
       };
 
-      expect(() => validateSqlContractFully<TestContract>(input)).toThrow(/nativeType/);
+      expect(() => validateSqlContractFully<TestContract>(input)).toThrow(/dataType/);
     });
 
     it('accepts type instance with omitted typeParams (canonical form for empty)', () => {
@@ -424,7 +424,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
             },
           },
         },
@@ -454,7 +454,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Vector1536: {
               kind: 'codec-instance',
               codecId: 'pg/vector@1',
-              nativeType: 'vector(1536)',
+              dataType: 'pgvector/vector',
               typeParams: [1536],
             },
           },
@@ -474,9 +474,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             User: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 role: {
-                  nativeType: 'role',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   typeRef: 'Role',
@@ -492,7 +492,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Role: {
               kind: 'codec-instance',
               codecId: 'app/test-enum@1',
-              nativeType: 'role',
+              dataType: 'app/test-enum',
               typeParams: { values: ['USER'] },
             },
           },
@@ -502,7 +502,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
       expect(() => validateSqlContractFully<TestContract>(input)).not.toThrow();
     });
 
-    it('accepts column with typeRef when nativeType mismatches (cross-ref validated by emitter)', () => {
+    it('accepts column with typeRef when its data type differs from the referenced type (cross-ref validated by emitter)', () => {
       const input = {
         ...baseContractInput,
         storage: storageWithNamespacedTables({
@@ -510,9 +510,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             User: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 role: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'app/test-enum@1',
                   nullable: false,
                   typeRef: 'Role',
@@ -528,7 +528,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Role: {
               kind: 'codec-instance',
               codecId: 'app/test-enum@1',
-              nativeType: 'role',
+              dataType: 'app/test-enum',
               typeParams: { values: ['USER'] },
             },
           },
@@ -538,7 +538,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
       expect(() => validateSqlContractFully<TestContract>(input)).not.toThrow();
     });
 
-    it('accepts column with typeRef when codecId and nativeType both match', () => {
+    it('accepts column with typeRef when codecId and data type both match', () => {
       const input = {
         ...baseContractInput,
         storage: storageWithNamespacedTables({
@@ -546,9 +546,9 @@ describe('SqlContractSerializer parameterized type fields', () => {
           tables: {
             User: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 role: {
-                  nativeType: 'role',
+                  dataType: 'app/test-enum',
                   codecId: 'app/test-enum@1',
                   nullable: false,
                   typeRef: 'Role',
@@ -564,7 +564,7 @@ describe('SqlContractSerializer parameterized type fields', () => {
             Role: {
               kind: 'codec-instance',
               codecId: 'app/test-enum@1',
-              nativeType: 'role',
+              dataType: 'app/test-enum',
               typeParams: { values: ['USER'] },
             },
           },

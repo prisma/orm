@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "94dac0adf8f5b9adad54928d81a5662faa9e2d0396672a5207c83e3f988de985",
+    "storageHash": "e665381cf5ccf0f80798e6578db5e7443f72fe630b01178f91fee7c108e3161b",
     "namespaces": {
       "public": {
         "id": "public",
@@ -264,7 +264,7 @@
             "Defaults": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false,
@@ -274,7 +274,7 @@
                   }
                 },
                 "bigSequence": {
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
                   "many": false,
@@ -284,7 +284,7 @@
                   }
                 },
                 "createdAt": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -297,7 +297,7 @@
                   }
                 },
                 "createdAtTz": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
@@ -310,7 +310,7 @@
                   }
                 },
                 "generated": {
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "codecId": "pg/uuid@1",
                   "nullable": false,
                   "many": false,
@@ -320,7 +320,7 @@
                   }
                 },
                 "stringLiteral": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false,
@@ -330,7 +330,7 @@
                   }
                 },
                 "intLiteral": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false,
@@ -340,7 +340,7 @@
                   }
                 },
                 "bigIntLiteral": {
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
                   "many": false,
@@ -350,7 +350,7 @@
                   }
                 },
                 "floatLiteral": {
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "codecId": "pg/float8@1",
                   "nullable": false,
                   "many": false,
@@ -360,7 +360,7 @@
                   }
                 },
                 "decimalLiteral": {
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
                   "many": false,
@@ -374,7 +374,7 @@
                   }
                 },
                 "booleanLiteral": {
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "codecId": "pg/bool@1",
                   "nullable": false,
                   "many": false,
@@ -384,7 +384,7 @@
                   }
                 },
                 "dateTimeLiteral": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -397,7 +397,7 @@
                   }
                 },
                 "jsonLiteral": {
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "codecId": "pg/jsonb@1",
                   "nullable": false,
                   "many": false,
@@ -409,7 +409,7 @@
                   }
                 },
                 "bytesLiteral": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": false,
                   "many": false,
@@ -419,7 +419,7 @@
                   }
                 },
                 "stringList": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": true,
                   "many": {
@@ -432,7 +432,7 @@
                   }
                 },
                 "intList": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": true,
                   "many": {
@@ -445,7 +445,7 @@
                   }
                 },
                 "enumMember": {
-                  "nativeType": "user_role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": false,
                   "many": false,
@@ -464,7 +464,7 @@
                   }
                 },
                 "enumList": {
-                  "nativeType": "user_role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": true,
                   "many": {

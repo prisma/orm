@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a2ace90303c53e51b8dfcc934ec89027d15993a98c8d4df21155125d0ea5386f'>;
+  StorageHashBase<'a3de0e95bb70b3a6106b3f84c9f7162b697f7f18d34c390e26200f08d60c159f'>;
 export type ExecutionHash =
   ExecutionHashBase<'75fabf32f466f30de3808c2f1f8b7a60d87724063dfb332b032468a6621ad80a'>;
 export type ProfileHash =
@@ -310,26 +310,26 @@ type ContractBase = Omit<
             readonly stamp: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly updatedAt: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                   readonly many: false;
                 };
                 readonly updatedAtTz: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };

@@ -39,6 +39,7 @@ export {
 export { StorageColumn, type StorageColumnInput } from './ir/storage-column';
 export { StorageTable, type StorageTableInput } from './ir/storage-table';
 export {
+  type AuthoredStorageTypeInstance,
   CODEC_INSTANCE_KIND,
   isStorageTypeInstance,
   resolvedTypeParams,

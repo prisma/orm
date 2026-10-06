@@ -19,6 +19,7 @@ import {
   type PerSpacePlan,
   requireHeadRef,
   resolveRecordedPath,
+  spacesInApplyOrder,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
@@ -233,7 +234,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     perSpacePlans.set(space.spaceId, outcome.plan);
   }
 
-  const canonicalOrder = [...aggregate.extensions.map((m) => m.spaceId), aggregate.app.spaceId];
+  const canonicalOrder = spacesInApplyOrder(aggregate).map((space) => space.spaceId);
   const applyOrder = canonicalOrder.filter((spaceId) => perSpacePlans.has(spaceId));
 
   // Short-circuit: nothing pending across any space (no runner-bound

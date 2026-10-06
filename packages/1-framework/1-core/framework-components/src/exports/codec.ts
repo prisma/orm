@@ -14,7 +14,11 @@ export type {
   CodecDescriptor,
   CodecDescriptorTemplate,
 } from '../shared/codec-descriptor';
-export { CodecDescriptorImpl, CodecDescriptorTemplateImpl } from '../shared/codec-descriptor';
+export {
+  CodecDescriptorImpl,
+  CodecDescriptorTemplateImpl,
+  canonicalFormOf,
+} from '../shared/codec-descriptor';
 export type {
   CodecCallContext,
   CodecInstanceContext,
@@ -42,9 +46,14 @@ export type {
   ToCanonicalForm,
 } from '../shared/data-type';
 export {
+  assembleDataTypes,
   createDataTypeLookup,
+  DATA_TYPE_ID_PATTERN,
   dataType,
   dataTypeId,
+  objectSchemaKeys,
+  requiredParamKeys,
+  requiredSchemaKeys,
 } from '../shared/data-type';
 export type { BigIntRange, IntegerRange } from '../shared/decode-json';
 export {

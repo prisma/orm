@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'d06c331eb9179216875b990e9e801a741b2d2f86b00bb348f180890b7964fdd0'>;
+  StorageHashBase<'5d9bf11c889c9d192dbae04cee224431704fca1f87925ae1c9bac8c38b047c79'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -299,14 +299,14 @@ type ContractBase = Omit<
             readonly testModel: {
               columns: {
                 readonly decimal: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: true;
                   readonly typeRef: 'Decimal65_30';
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -325,7 +325,7 @@ type ContractBase = Omit<
       readonly Decimal65_30: {
         readonly kind: 'codec-instance';
         readonly codecId: 'pg/numeric@1';
-        readonly nativeType: 'numeric';
+        readonly dataType: 'pg/numeric';
         readonly typeParams: { readonly precision: 65; readonly scale: 30 };
       };
     };

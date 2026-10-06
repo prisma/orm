@@ -2,6 +2,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import type { ExtractFieldInputTypes, ExtractFieldOutputTypes } from '@internal/sql-contract/types';
 import { describe, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
 
@@ -18,7 +19,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -33,8 +34,8 @@ const postgresTargetPack = {
   defaultNamespaceId: 'public',
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
-const pgInt = { codecId: 'pg/int4@1' as const, nativeType: 'int4' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
+const pgInt = { codecId: 'pg/int4@1' as const } as const;
 
 // ---------------------------------------------------------------------------
 // Fixture: enum + model using enumType field
@@ -50,6 +51,7 @@ const Status = enumType(
 const Priority = enumType('Priority', pgInt, member('Low', 1), member('High', 10));
 
 const enumContract = defineContract({
+  ...testTypeLookups,
   family: sqlFamilyPack,
   target: postgresTargetPack,
   createNamespace: createTestSqlNamespace,

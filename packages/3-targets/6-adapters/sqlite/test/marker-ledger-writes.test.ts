@@ -54,7 +54,7 @@ describe('SqliteControlAdapter marker/ledger write lowering', () => {
     expect(sql).toBe(
       'INSERT INTO "_prisma_marker" ("space", "core_hash", "profile_hash", "contract_json", ' +
         '"canonical_version", "updated_at", "app_tag", "meta", "invariants") ' +
-        "VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?)",
     );
     expect(sql).not.toContain('ON CONFLICT');
     expect(params[0]).toBe('app');
@@ -74,11 +74,11 @@ describe('SqliteControlAdapter marker/ledger write lowering', () => {
     expect(sql).toBe(
       'INSERT INTO "_prisma_marker" ("space", "core_hash", "profile_hash", "contract_json", ' +
         '"canonical_version", "updated_at", "app_tag", "meta", "invariants") ' +
-        "VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?) " +
+        "VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?) " +
         'ON CONFLICT ("space") DO UPDATE SET "core_hash" = excluded."core_hash", ' +
         '"profile_hash" = excluded."profile_hash", "contract_json" = excluded."contract_json", ' +
         '"canonical_version" = excluded."canonical_version", ' +
-        '"updated_at" = datetime(\'now\'), "app_tag" = excluded."app_tag", ' +
+        '"updated_at" = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\'), "app_tag" = excluded."app_tag", ' +
         '"meta" = excluded."meta", "invariants" = excluded."invariants"',
     );
     expect(params[0]).toBe('app');
@@ -103,7 +103,7 @@ describe('SqliteControlAdapter marker/ledger write lowering', () => {
     const update = driver.calls.at(-1)!;
     expect(update.sql).toBe(
       'UPDATE "_prisma_marker" SET "core_hash" = ?, "profile_hash" = ?, ' +
-        '"updated_at" = datetime(\'now\'), "invariants" = ? ' +
+        '"updated_at" = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\'), "invariants" = ? ' +
         'WHERE ("_prisma_marker"."space" = ? AND "_prisma_marker"."core_hash" = ?) ' +
         'RETURNING "_prisma_marker"."space"',
     );
@@ -122,7 +122,7 @@ describe('SqliteControlAdapter marker/ledger write lowering', () => {
     const { sql, params } = driver.calls[0]!;
     expect(sql).toBe(
       'UPDATE "_prisma_marker" SET "core_hash" = ?, "profile_hash" = ?, ' +
-        '"updated_at" = datetime(\'now\') ' +
+        "\"updated_at\" = strftime('%Y-%m-%dT%H:%M:%fZ','now') " +
         'WHERE ("_prisma_marker"."space" = ? AND "_prisma_marker"."core_hash" = ?) ' +
         'RETURNING "_prisma_marker"."space"',
     );

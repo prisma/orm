@@ -95,7 +95,7 @@
               "columns": {
                 "team_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -110,12 +110,12 @@
               "columns": {
                 "member_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "team_ref": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -158,7 +158,7 @@
         "id": "public"
       }
     },
-    "storageHash": "79956063a45496197760e927b15dc94e848a753280a630e0660c7c95362ea07f"
+    "storageHash": "8b69c0da82fc8904d442bd6167d53392c52ef51fb6df702687fc84787f12592e"
   },
   "capabilities": {
     "postgres": {

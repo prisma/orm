@@ -24,10 +24,10 @@ const originalCwd = process.cwd();
 const tempDirs: string[] = [];
 
 const mongoScalarAuthoringTypes = {
-  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1', nativeType: 'string' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
   ObjectId: {
     kind: 'typeConstructor',
-    output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
+    output: { codecId: 'mongo/objectId@1' },
   },
 } as const;
 
@@ -57,7 +57,7 @@ const enumEntityType = {
     factory: (block: ParsedPslExtensionBlock) =>
       enumType(
         block.name,
-        { codecId: stringCodec.id, nativeType: 'string' },
+        { codecId: stringCodec.id },
         ...Object.keys(block.values).map((name) => member(name)),
       ),
   },

@@ -8,6 +8,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
@@ -33,7 +34,7 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             job: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -41,7 +42,7 @@ const contract = new SqlContractSerializer().deserializeContract({
             },
             worker: {
               columns: {
-                jobId: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                jobId: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -164,6 +165,7 @@ describe('Postgres adapter row locking', () => {
           base.withLocking([clause]),
           contract,
           postgresCodecDescriptorRegistry,
+          createPostgresBuiltinDataTypeLookup(),
           withoutFlag(group, flag),
         ),
       ).toThrow(

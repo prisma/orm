@@ -33,7 +33,7 @@ function makeContract(): Contract<SqlStorage> {
     entries: {
       table: {
         orders: new StorageTable({
-          columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
           uniques: [],

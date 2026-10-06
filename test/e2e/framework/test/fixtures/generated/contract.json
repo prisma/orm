@@ -665,35 +665,35 @@
               "columns": {
                 "content": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "postId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "update_at": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 }
               },
@@ -710,7 +710,7 @@
               "columns": {
                 "embedding": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": false,
                   "typeParams": {
                     "length": 1536
@@ -718,16 +718,16 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "profile": {
                   "codecId": "arktype/json@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": false,
                   "typeParams": {
                     "expression": "{ age: number, name: string }",
@@ -760,16 +760,16 @@
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -777,16 +777,16 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "scheduled_at": {
                   "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-15T10:30:00Z"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 }
               },
@@ -803,71 +803,72 @@
               "columns": {
                 "active": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "default": {
                     "kind": "literal",
                     "value": true
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "big_count": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "default": {
                     "kind": "literal",
                     "value": "9007199254740991"
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "label": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "kind": "literal",
                     "value": "draft"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "metadata": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": {
                       "key": "default"
                     }
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "rating": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "default": {
                     "kind": "literal",
                     "value": 3.14
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "score": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": 0
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "tags": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": [
@@ -875,7 +876,6 @@
                       "beta"
                     ]
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 }
               },
@@ -892,7 +892,7 @@
               "columns": {
                 "bits": {
                   "codecId": "pg/varbit@1",
-                  "nativeType": "bit varying",
+                  "dataType": "pg/varbit",
                   "nullable": true,
                   "typeParams": {
                     "length": 12
@@ -900,7 +900,7 @@
                 },
                 "code": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": true,
                   "typeParams": {
                     "length": 16
@@ -908,7 +908,7 @@
                 },
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true,
                   "typeParams": {
                     "precision": 3
@@ -916,7 +916,7 @@
                 },
                 "duration": {
                   "codecId": "pg/interval@1",
-                  "nativeType": "interval",
+                  "dataType": "pg/interval",
                   "nullable": true,
                   "typeParams": {
                     "precision": 6
@@ -924,7 +924,7 @@
                 },
                 "flags": {
                   "codecId": "pg/bit@1",
-                  "nativeType": "bit",
+                  "dataType": "pg/bit",
                   "nullable": true,
                   "typeParams": {
                     "length": 8
@@ -932,16 +932,16 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": true,
                   "typeParams": {
                     "length": 255
@@ -949,7 +949,7 @@
                 },
                 "price": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true,
                   "typeParams": {
                     "precision": 10,
@@ -958,7 +958,7 @@
                 },
                 "starts_at": {
                   "codecId": "pg/time-temporal@1",
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "nullable": true,
                   "typeParams": {
                     "precision": 2
@@ -966,7 +966,7 @@
                 },
                 "starts_at_tz": {
                   "codecId": "pg/timetz@1",
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "nullable": true,
                   "typeParams": {
                     "precision": 2
@@ -986,45 +986,45 @@
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "meta": {
                   "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "dataType": "pg/json",
                   "nullable": true
                 },
                 "published": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "update_at": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 },
                 "userId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -1041,16 +1041,16 @@
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "email": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 255
@@ -1058,21 +1058,21 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "profile": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "update_at": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 }
               },
@@ -1098,7 +1098,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7cbc5dc7fc12771baa682acc74bd2a89e90e55b8717b28fa255b8dc8ea0377b9"
+    "storageHash": "2c6ca48d2b9fa1ca4e493d7033088ccdb3509d1f2f440914f8e30d8a82dd71db"
   },
   "execution": {
     "executionHash": "ea437be9a5579f915d397cc5e3df495136323e0a43ec0df5da760b862c22489b",
@@ -1159,15 +1159,7 @@
             "named": "CodecTypes",
             "package": "@internal/extension-arktype-json/codec-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "jsonb",
-            "targetId": "postgres",
-            "typeId": "arktype/json@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     },
@@ -1209,15 +1201,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-pgvector/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "vector",
-            "targetId": "postgres",
-            "typeId": "pg/vector@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

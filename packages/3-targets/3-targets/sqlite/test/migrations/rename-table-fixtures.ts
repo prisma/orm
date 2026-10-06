@@ -18,8 +18,8 @@ export const stubLowerer: ExecuteRequestLowerer = {
   renderColumnDefault: async () => '',
 };
 
-const integer = { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false };
-const text = { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false };
+const integer = { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false };
+const text = { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false };
 
 export interface ProfileSpec {
   readonly uniques?: readonly UniqueConstraintInput[];

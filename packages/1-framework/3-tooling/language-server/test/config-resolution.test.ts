@@ -57,7 +57,7 @@ function stubStackWithContext(): ControlStack {
     authoringContributions: {
       field: {},
       type: {
-        Int: { kind: 'typeConstructor', output: { codecId: 'demo/int@1', nativeType: 'int' } },
+        Int: { kind: 'typeConstructor', output: { codecId: 'demo/int@1' } },
       },
       entityTypes: {},
       pslBlockDescriptors: {},

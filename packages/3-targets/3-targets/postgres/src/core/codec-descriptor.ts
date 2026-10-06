@@ -9,6 +9,7 @@ import {
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
+  type DataType,
   type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
@@ -29,6 +30,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { structuredError } from '@internal/utils/structured-error';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 const POSTGRES_CODEC_DESCRIPTOR_KIND = 'postgres-codec' as const;
 const ARRAY_INPUT_ALIAS = 'array_input';
@@ -38,7 +40,6 @@ const ARRAY_ORDINALITY_COLUMN = 'ordinality';
 
 export interface AnyPostgresCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof POSTGRES_CODEC_DESCRIPTOR_KIND;
-  nativeTypeFor(ref: CodecRef): string;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
 }
 
@@ -48,7 +49,6 @@ export abstract class PostgresCodecDescriptor<P = void>
 {
   readonly descriptorKind = POSTGRES_CODEC_DESCRIPTOR_KIND;
 
-  protected abstract nativeType(params: P): string;
   protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
 
   protected jsonArrayProjection(expression: ProjectionExpr, params: P): ProjectionExpr {
@@ -85,10 +85,6 @@ export abstract class PostgresCodecDescriptor<P = void>
     );
   }
 
-  nativeTypeFor(ref: CodecRef): string {
-    return this.nativeType(this.validateParams(ref));
-  }
-
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
     const params = this.validateParams(ref);
     return ref.many === true
@@ -119,9 +115,11 @@ export interface PostgresCodecOptions<
     unknown
   >,
 > {
-  /** The data type the adapted codec represents here. A template names none; this target does. */
-  readonly dataType: DataTypeId;
-  readonly nativeType: (params: P) => string;
+  /**
+   * The data type the adapted codec represents here. A template names none; this target does. The
+   * adapted codec's parameter schema is this data type's, not the template's.
+   */
+  readonly dataType: DataType;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   readonly jsonArrayProjection?: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   /**
@@ -138,7 +136,7 @@ export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptorTemplate>
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'nativeTypeFor' | 'projectJson'>;
+  Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'projectJson'>;
 
 class PostgresCodecDescriptorAdapter<
   D extends AnyCodecDescriptorTemplate,
@@ -146,8 +144,7 @@ class PostgresCodecDescriptorAdapter<
   override readonly dataType: DataTypeId;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
-  override readonly targetTypes: readonly string[];
-  override readonly paramsSchema: D['paramsSchema'];
+  override readonly paramsSchema: StandardSchemaV1<DescriptorParams<D>> | undefined;
   override readonly renderOutputType?: (params: DescriptorParams<D>) => string | undefined;
   override readonly renderInputType?: (params: DescriptorParams<D>) => string | undefined;
   override readonly renderValueLiteral?: (
@@ -159,15 +156,17 @@ class PostgresCodecDescriptorAdapter<
   ) => (ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>;
 
   constructor(
-    private readonly descriptor: D,
+    descriptor: D,
     private readonly options: PostgresCodecOptions<DescriptorParams<D>>,
   ) {
     super();
-    this.dataType = options.dataType;
+    this.dataType = options.dataType.id;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
-    this.targetTypes = descriptor.targetTypes;
-    this.paramsSchema = descriptor.paramsSchema;
+    this.paramsSchema = blindCast<
+      StandardSchemaV1<DescriptorParams<D>> | undefined,
+      'the data type the codec represents declares the parameters the codec takes'
+    >(options.dataType.params);
     const factory = options.factory;
     this.factory =
       factory === undefined
@@ -188,14 +187,6 @@ class PostgresCodecDescriptorAdapter<
     if (renderValueLiteral !== undefined) {
       this.renderValueLiteral = (value, side) => renderValueLiteral.call(descriptor, value, side);
     }
-  }
-
-  override get isParameterized(): boolean {
-    return this.descriptor.isParameterized;
-  }
-
-  protected override nativeType(params: DescriptorParams<D>): string {
-    return this.options.nativeType(params);
   }
 
   protected override jsonProjection(
@@ -241,9 +232,6 @@ export function isPostgresCodecDescriptor(value: unknown): value is AnyPostgresC
     typeof value.codecId === 'string' &&
     'traits' in value &&
     Array.isArray(value.traits) &&
-    'targetTypes' in value &&
-    Array.isArray(value.targetTypes) &&
-    value.targetTypes.every((targetType) => typeof targetType === 'string') &&
     'paramsSchema' in value &&
     (value.paramsSchema === undefined ||
       (isObjectLike(value.paramsSchema) &&
@@ -255,8 +243,6 @@ export function isPostgresCodecDescriptor(value: unknown): value is AnyPostgresC
     typeof value.isParameterized === 'boolean' &&
     'factory' in value &&
     typeof value.factory === 'function' &&
-    'nativeTypeFor' in value &&
-    typeof value.nativeTypeFor === 'function' &&
     'projectJson' in value &&
     typeof value.projectJson === 'function'
   );

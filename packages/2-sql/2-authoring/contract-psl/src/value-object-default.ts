@@ -7,13 +7,19 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  codecForRef,
+  type DataTypeLookup,
+} from '@internal/framework-components/codec';
 import {
   isValueObjectMember,
   type ScalarMemberNode,
   type ValueObjectMemberNode,
   type ValueObjectNode,
 } from '@internal/sql-contract-ts/contract-builder';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   PSL_INVALID_DEFAULT_LITERAL,
@@ -42,7 +48,38 @@ export interface ValueObjectDefaultInput {
   readonly nullable: boolean;
   readonly valueObjectName: string;
   readonly types: ValueObjectTypes;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
+}
+
+/**
+ * The value-object column's default as the document it holds, and in the form the column stores. A
+ * column may store the document's JSON text, as `sqlite/json@1` does, so its codec reads the stored
+ * value into the document the composite type describes. A list literal on a list of value objects
+ * is read element by element; the column stores the list's document in its own form.
+ */
+export function valueObjectDefaultDocument(input: {
+  readonly stored: JsonValue;
+  readonly elementwise: boolean;
+  readonly codecId: string;
+  readonly codecLookup: CodecLookupWithDescriptors;
+}): { readonly document: JsonValue; readonly stored: JsonValue } {
+  const codec = codecForRef(input.codecLookup, { codecId: input.codecId });
+  if (codec === undefined) return { document: input.stored, stored: input.stored };
+  if (input.elementwise && Array.isArray(input.stored)) {
+    const document = input.stored.map((element) => readDocument(codec, element));
+    return { document, stored: codec.encodeJson(document) };
+  }
+  return { document: readDocument(codec, input.stored), stored: input.stored };
+}
+
+/** The column's codec has already read `stored` while the default was lowered, so it reads again. */
+function readDocument(codec: Codec, stored: JsonValue): JsonValue {
+  if (stored === null) return null;
+  return blindCast<
+    JsonValue,
+    'a value-object column codec reads its stored form into a JSON document'
+  >(codec.decodeJson(stored));
 }
 
 /** Each way the default does not match the composite type. */
@@ -115,6 +152,7 @@ export function valueObjectDefaultMismatches(
       value,
       column: member.descriptor,
       codecLookup: input.codecLookup,
+      dataTypeLookup: input.dataTypeLookup,
       fieldPath: path,
     });
     if (!reading.ok) {
@@ -168,11 +206,11 @@ function enumValueMismatch(
   value: JsonValue,
   member: ScalarMemberNode,
   path: string,
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
 ): ValueObjectDefaultMismatch | undefined {
   const handle = member.enumTypeHandle;
   if (handle === undefined) return undefined;
-  const codec = codecLookup?.get(handle.codecId);
+  const codec = codecLookup.get(handle.codecId);
   const stored = handle.values.map((enumValue) =>
     codec === undefined ? enumValue : codec.encodeJson(enumValue),
   );

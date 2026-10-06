@@ -214,17 +214,17 @@
               "columns": {
                 "enabled_AtMap": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "id_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "userId_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -266,17 +266,17 @@
               "columns": {
                 "enabled_AtMap": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "userId_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
@@ -318,12 +318,12 @@
               "columns": {
                 "enabled_AtMap": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "id_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -342,7 +342,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2beb04d9eba4f6aa17864a8fa1303e45536be9093ab1e9c01a58b4b2285536dc"
+    "storageHash": "54def18807cfd9574d9ea04be48a11a2cd18a92e231422c30d442eb19a24a96b"
   },
   "capabilities": {
     "postgres": {

@@ -67,15 +67,15 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "words": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -94,7 +94,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5c0baa131866139cb38390f049f646699217645d3248a1d38fb50144a8348aee"
+    "storageHash": "35117f0f68a695a7d3b15caa2d2441be98ccfc079a8e16735a8141a5c9068420"
   },
   "execution": {
     "executionHash": "d37d6cdcd69355911c95feb313e24897fe99136ac9e816c500b26e18f71a8d57",

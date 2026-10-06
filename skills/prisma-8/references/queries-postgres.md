@@ -160,7 +160,7 @@ await db.orm.public.Post
   .all();
 ```
 
-**Cursor pagination.** Call `.cursor({ field: lastValue })` after `.orderBy(...)` to resume from a known position. The cursor requires a prior `orderBy` — the type system enforces this. Direction (forward or backward) follows the sort: ascending order means "greater than the cursor value", descending means "less than".
+**Cursor pagination.** Call `.cursor({ field: lastValue })` after `.orderBy(...)` to resume from a known position. `.cursor(...)` and `.distinctOn(...)` require a prior `orderBy` — the type system enforces this on the collection they are called on, so a cast on the argument does not get past it. Direction (forward or backward) follows the sort: ascending order means "greater than the cursor value", descending means "less than".
 
 ```typescript
 const page1 = await db.orm.public.Post
@@ -284,6 +284,77 @@ await db.orm.public.User
 ```
 
 The ORM returns inserted / updated rows by default. The `.returning(...)` selector lives on the SQL builder (next section), where you build a plan and execute it explicitly.
+
+**A write needs a filter on every code path.** `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` compile only on a collection that is known to be filtered. A collection that is filtered on one path and not on another is not:
+
+```typescript
+const posts = search ? db.orm.public.Post.where({ title: search }) : db.orm.public.Post;
+await posts.deleteAll(); // error: The 'this' context of type '...' is not assignable to method's 'this' of type 'HasWhere'
+```
+
+Make the write only where the filter was applied, or filter on every path:
+
+```typescript
+if (search) {
+  await db.orm.public.Post.where({ title: search }).deleteAll();
+}
+```
+
+The same holds for an `if` with an early return, a `switch`, a loop and a reassigned `let`.
+
+## Workflow — Custom collection classes
+
+A custom collection class gives a model its own named queries. Extend `Collection`, register the class with `orm({ collections })`, and build that client inside the request from `db.runtime()` and `db.context`:
+
+```typescript
+import { Collection, type Filtered, type Ordered, orm, type Scope } from '@prisma/orm-postgres/orm-client';
+import type { Contract } from './prisma/contract.d';
+
+class PostCollection extends Collection<Contract, 'Post'> {
+  byAuthor(userId: string) {
+    return this.where({ userId });
+  }
+
+  newestFirst() {
+    return this.orderBy((p) => p.createdAt.desc());
+  }
+}
+
+const { Post } = orm({
+  runtime: db.runtime(),
+  context: db.context,
+  collections: { Post: PostCollection },
+}).public;
+```
+
+Class methods chain with each other and with the built-in methods, in any order, and after `.include(...)`:
+
+```typescript
+await Post.byAuthor(userId).newestFirst().limit(20).all();
+await Post.where({ title }).byAuthor(userId).all();
+await Post.include('user').newestFirst().all();
+```
+
+After `.select(...)` or `.variant(...)` the class methods are gone: those return the base `Collection` type. Call class methods before them. Inside an include refinement, the related collection is the base `Collection` type, not its registered class.
+
+Inside a class body, a class method called on the result of another call loses what that call established. So a class method whose body chains two class methods loses the first call's facts for every caller: with `latest() { return this.byAuthor(id).newestFirst(); }`, `Post.latest()` is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
+
+`apply(fn)` calls a function with the collection and returns its result. A function from a collection to a collection is a scope, of type `Scope<In, Out>`, so a query can be written once and applied to any collection of that class:
+
+```typescript
+const newest: Scope<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
+await Post.apply(newest).limit(20).all();
+```
+
+What a chain has established is part of its type. Write a filtered collection as `Filtered<C>` and an ordered one as `Ordered<C>`; `Filtered<C>` is `C & HasWhere`, the name error messages print. A function that takes `Filtered<PostCollection>` accepts only a collection that is filtered:
+
+```typescript
+function deleteMatching(posts: Filtered<PostCollection>) {
+  return posts.deleteAll();
+}
+
+await deleteMatching(Post.byAuthor(userId)).toArray();
+```
 
 ## Workflow — Aggregates
 

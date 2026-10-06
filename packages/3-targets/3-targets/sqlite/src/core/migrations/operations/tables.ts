@@ -269,7 +269,7 @@ function renderSpecDefaults(
 /**
  * Checks the column's default is the text of its `DEFAULT …` clause. SQLite's
  * `pragma_table_info.dflt_value` strips the outer parentheses of an expression
- * default, so `(datetime('now'))` is stored as `datetime('now')`; they are
+ * default, so `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))` is stored as `strftime('%Y-%m-%dT%H:%M:%fZ','now')`; they are
  * stripped here too.
  */
 function defaultPostcheck(

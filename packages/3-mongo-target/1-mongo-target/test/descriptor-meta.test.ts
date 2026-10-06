@@ -35,7 +35,7 @@ describe('mongoTargetDescriptorMeta', () => {
 
 describe('mongo temporal field presets', () => {
   const temporal = mongoTargetDescriptorMeta.authoring.field.temporal;
-  const storage = { codecId: 'mongo/date@1', nativeType: 'date' };
+  const storage = { codecId: 'mongo/date@1' };
   const timestampNow = { kind: 'generator', id: 'timestampNow' };
 
   it('createdAt fills a date on create', () => {

@@ -3,7 +3,7 @@ import type { StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -30,6 +30,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       | 'createNamespace'
       | 'capabilities'
       | 'dataTypeLookup'
+      | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -42,7 +43,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
@@ -158,25 +159,25 @@ model User {
       },
       storage: {
         requiredElements: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: false },
           nullable: false,
         },
         nullableElementValues: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: true },
           nullable: false,
         },
         nullableList: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: false },
           nullable: true,
         },
         nullableElementValuesAndList: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           codecId: 'pg/text@1',
           many: { elementNullable: true },
           nullable: true,
@@ -218,7 +219,7 @@ model User {
       many: { elementNullable: true },
     });
     expect(addressesColumn).toEqual({
-      nativeType: 'jsonb',
+      dataType: 'pg/jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
       many: false,

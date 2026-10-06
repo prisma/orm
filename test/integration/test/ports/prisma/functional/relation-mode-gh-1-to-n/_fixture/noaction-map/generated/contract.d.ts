@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a6478c3d74972e76450e183f179fe0c88f088ffdfa5b835df1e5d80a7e08b2bc'>;
+  StorageHashBase<'1ba4f12147e20de173c0c6f84effbf214560549d6ffd937ecb3a65a7ac369bd5'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -347,13 +347,13 @@ type ContractBase = Omit<
             readonly PostOneToMany_AtAtMap: {
               columns: {
                 readonly authorId_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -387,13 +387,13 @@ type ContractBase = Omit<
             readonly PostOptionalOneToMany_AtAtMap: {
               columns: {
                 readonly authorId_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -427,13 +427,13 @@ type ContractBase = Omit<
             readonly UserOneToMany_AtAtMap: {
               columns: {
                 readonly enabledAtMap: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly id_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;

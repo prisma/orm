@@ -33,14 +33,11 @@ import { parsePostgresDefault } from '../../src/core/default-normalizer';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { INFERRED_PSL_TYPE_NAMES } from '../../src/core/psl-build/postgres-type-map';
 import { postgresCodecRegistry } from '../../src/core/registry';
-import {
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
-} from '../../src/core/type-constructors';
+import { postgresPslTypeConstructors } from '../../src/core/type-constructors';
 import { printPslFromFlat } from './fixtures';
 
-/** The type constructors the printed schema names, as the adapter contributes them. */
-const authoringTypes = { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes };
+/** The type constructors the printed schema names, as the target contributes them. */
+const authoringTypes = postgresPslTypeConstructors;
 
 const assembled = assembleAuthoringContributions([
   {
@@ -67,7 +64,6 @@ const target = {
 const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => postgresCodecRegistry.descriptorFor(id)?.factory({})({ name: id }),
   descriptorFor: (id) => postgresCodecRegistry.descriptorFor(id),
-  targetTypesFor: (id) => postgresCodecRegistry.descriptorFor(id)?.targetTypes,
   renderOutputTypeFor: () => undefined,
 };
 

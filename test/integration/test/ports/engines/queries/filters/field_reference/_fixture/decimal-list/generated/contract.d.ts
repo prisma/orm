@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'466d3bad0c9f3f406d938f9e1d37ff22517428c0b9aa770a339d2c9d319f1d9e'>;
+  StorageHashBase<'e38b87c5f5a2f0aaa202bc78d9e2e7d753da77830ea5729e90d105c428d8b415'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -309,25 +309,25 @@ type ContractBase = Omit<
             readonly testModel: {
               columns: {
                 readonly dec: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly dec_list: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly dec_list2: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;

@@ -7,7 +7,6 @@ import { defineContract, field, model } from '../../src/exports/contract-builder
 
 const textColumn = {
   codecId: 'sql/char@1' as const,
-  nativeType: 'character varying' as const,
   typeParams: {},
 };
 
@@ -50,11 +49,11 @@ describe('postgres defineContract wrap', () => {
             table: {
               Event: {
                 columns: {
-                  at: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
+                  at: { codecId: 'pg/timestamptz-date@1', dataType: 'pg/timestamptz' },
                   precise: { codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } },
                   created: {
                     codecId: 'pg/timestamptz-date@1',
-                    nativeType: 'timestamptz',
+                    dataType: 'pg/timestamptz',
                   },
                   updated: { codecId: 'pg/timestamptz-date@1' },
                 },
@@ -78,7 +77,7 @@ describe('postgres defineContract wrap', () => {
       models: {
         Event: m('Event', {
           fields: {
-            id: f.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
+            id: f.column({ codecId: 'pg/int4@1' }).id(),
             at: f.temporal.timestamptzJsDate(),
             maybe: f.temporal.timestamptzJsDate(6).optional(),
           },

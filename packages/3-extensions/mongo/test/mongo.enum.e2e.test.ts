@@ -1,9 +1,16 @@
 import { generateContractDts } from '@internal/emitter';
-import { type CodecLookup, renderTsLiteral } from '@internal/framework-components/codec';
+import {
+  type CodecLookup,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+  renderTsLiteral,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ExtractMongoFieldOutputTypes } from '@internal/mongo-contract';
 import { deriveJsonSchema, type FieldValueSets } from '@internal/mongo-contract-psl';
 import { mongoEmission } from '@internal/mongo-emitter';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { blindCast } from '@internal/utils/casts';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
@@ -14,7 +21,7 @@ import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mon
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -23,7 +30,7 @@ const Role = enumType(
 // ordinalOf() returns declaration order, not lexical order.
 const Status = enumType(
   'Status',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('Pending', 'pending'),
   member('Active', 'active'),
   member('Inactive', 'inactive'),
@@ -44,15 +51,11 @@ const contract = defineContract({
   models: { Account },
 });
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/objectId@1': ['objectId'],
-};
+const knownCodecIds = new Set(['mongo/string@1', 'mongo/objectId@1']);
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id: string) => {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
+    if (!knownCodecIds.has(id)) return undefined;
     return {
       id,
       encode: async (v: unknown) => v,
@@ -61,7 +64,7 @@ const codecLookup: CodecLookup = {
       decodeJson: (j: unknown) => j,
     } as ReturnType<CodecLookup['get']>;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (knownCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
   // Enum field types are produced through the codec seam (TML-2952): the emitter
   // renders each value-set value via `renderValueLiteralFor`. `mongo/string@1` is an
@@ -85,7 +88,12 @@ const storageValueSets = blindCast<
   (contract.storage as { namespaces: Record<string, { entries: { valueSet?: unknown } }> })
     .namespaces[UNBOUND_NAMESPACE_ID]?.entries.valueSet ?? {},
 );
-const ACCOUNT_VALIDATOR = deriveJsonSchema(accountFields, undefined, codecLookup, storageValueSets);
+const ACCOUNT_VALIDATOR = deriveJsonSchema(
+  accountFields,
+  { codecLookup, dataTypeLookup: createDataTypeLookup(mongoDataTypes) },
+  undefined,
+  storageValueSets,
+);
 
 describe('mongo enum — end-to-end (replica set)', {
   timeout: timeouts.spinUpMongoMemoryServer,

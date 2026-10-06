@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { interpretSqlContract, sqliteScalarColumnDescriptors, sqliteTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
@@ -82,7 +82,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
         controlMutationDefaults: builtinControlMutationDefaults,
         authoringContributions: sqliteTemporalContributions,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -93,7 +93,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(unboundTables(storage)['Timestamped']?.columns['updatedAt']).toMatchObject({
       codecId: 'sqlite/datetime@1',
-      nativeType: 'text',
+      dataType: 'sqlite/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -180,7 +180,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 kind: 'fieldPreset',
                 output: {
                   codecId: 'pg/text@1',
-                  nativeType: 'text',
                   default: { kind: 'function', expression: "'synthetic-default'" },
                 },
               },
@@ -202,7 +201,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     nullable: false,
                     default: {
                       kind: 'function',
@@ -237,7 +236,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 kind: 'fieldPreset',
                 output: {
                   codecId: 'pg/text@1',
-                  nativeType: 'text',
                   nullable: true,
                 },
               },
@@ -259,7 +257,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   maybe: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     nullable: true,
                   },
                 },
@@ -286,7 +284,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 kind: 'fieldPreset',
                 output: {
                   codecId: 'pg/timestamptz-temporal@1',
-                  nativeType: 'timestamptz',
                 },
               },
             },
@@ -297,7 +294,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 kind: 'typeConstructor',
                 output: {
                   codecId: 'pg/text@1',
-                  nativeType: 'text',
                 },
               },
             },
@@ -318,7 +314,6 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                 },
               },

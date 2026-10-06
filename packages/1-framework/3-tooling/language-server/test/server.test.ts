@@ -42,6 +42,7 @@ import {
   CompletionRequest,
   type ConnectionOptions,
   createConnection,
+  DefinitionRequest,
   type Diagnostic,
   DiagnosticRefreshRequest,
   DiagnosticSeverity,
@@ -765,6 +766,13 @@ function requestSemanticTokens(harness: Harness, uri: string): Promise<SemanticT
   });
 }
 
+function requestDefinition(harness: Harness, uri: string, position: Position) {
+  return harness.client.sendRequest(DefinitionRequest.type, {
+    textDocument: { uri },
+    position,
+  });
+}
+
 function requestFoldingRanges(harness: Harness, uri: string): Promise<FoldingRange[] | null> {
   return harness.client.sendRequest(FoldingRangeRequest.type, {
     textDocument: { uri },
@@ -1061,6 +1069,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       triggerCharacters: ['(', ','],
     });
     expect(result.capabilities.hoverProvider).toBe(true);
+    expect(result.capabilities.definitionProvider).toBe(true);
   });
 
   it('serves hover content through the server for an opened document', async () => {
@@ -2097,6 +2106,105 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         newText: '// use prisma-8\r\nmodel User {\r\n\tid Int\r\n}\r\n',
       },
     ]);
+  });
+
+  it('returns a definition link when the client supports links', async () => {
+    harness = startHarness(resolveToSchema, {
+      textDocument: { definition: { linkSupport: true } },
+    });
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestDefinition(harness, schemaUri, position)).resolves.toEqual([
+      {
+        originSelectionRange: {
+          start: { line: 5, character: 9 },
+          end: { line: 5, character: 13 },
+        },
+        targetUri: schemaUri,
+        targetRange: { start: { line: 1, character: 0 }, end: { line: 3, character: 1 } },
+        targetSelectionRange: {
+          start: { line: 1, character: 6 },
+          end: { line: 1, character: 10 },
+        },
+      },
+    ]);
+  });
+
+  it('returns a definition location when the client does not support links', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestDefinition(harness, schemaUri, position)).resolves.toEqual([
+      {
+        uri: schemaUri,
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+    ]);
+  });
+
+  it('returns null when resolving an attribute argument throws and serves the next definition request', async () => {
+    const extendsAttribute = modelAttribute('extends', {
+      documentation: 'Extends another model.',
+      positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
+    });
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken definition factory');
+      })
+      .mockReturnValue(extendsAttribute);
+    const resolution = await resolveToSchemaWithAttributeContributions(configPath);
+    const brokenAuthoringContributions = assembleAuthoringContributions([
+      {
+        id: 'broken-definition',
+        authoring: {
+          type: testTypeConstructors(scalarTypes),
+          attributeSpecs: { field: {}, model: { extends: factory } },
+        },
+      },
+    ]);
+    if (resolution.interpretation === undefined) throw new Error('expected interpretation');
+    const interpretation = resolution.interpretation;
+    harness = startHarness(
+      async () => ({
+        ...resolution,
+        controlStack: {
+          ...resolution.controlStack,
+          authoringContributions: brokenAuthoringContributions,
+        },
+        interpretation: {
+          ...interpretation,
+          context: {
+            ...interpretation.context,
+            authoringContributions: brokenAuthoringContributions,
+          },
+        },
+      }),
+      pullDiagnosticsCapabilities,
+    );
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  id Int\n  @@extends(Us|er)\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    expect(await requestDefinition(harness, schemaUri, position)).toBeNull();
+    await expect(requestDefinition(harness, schemaUri, position)).resolves.toEqual([
+      {
+        uri: schemaUri,
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+    ]);
+    expect(factory).toHaveBeenCalledTimes(2);
   });
 
   it('returns full semantic tokens for a configured open PSL input', async () => {

@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 /**
  * The array lift's single-evaluation guarantee.
  *
@@ -24,11 +25,14 @@ import {
   SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createContract, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract: PostgresContract = {
   ...createContract<SqlStorage>({ target: 'postgres', targetFamily: 'sql' }),
@@ -84,6 +88,7 @@ describe('array lift evaluates its source once', { concurrent: false }, () => {
       select,
       contract,
       postgresCodecDescriptorRegistry,
+      postgresDataTypeLookup,
       postgresAdapterCapabilities,
     );
 
@@ -128,6 +133,7 @@ describe('array lift binds its source once in the rendered SQL', () => {
       select,
       contract,
       postgresCodecDescriptorRegistry,
+      postgresDataTypeLookup,
       postgresAdapterCapabilities,
     );
 

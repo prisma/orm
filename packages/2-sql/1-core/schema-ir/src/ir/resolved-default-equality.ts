@@ -13,8 +13,8 @@ import { defaultInCanonicalForm } from './default-in-canonical-form';
  * canonical string form); function expressions compare case- and whitespace-insensitively.
  *
  * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
- * comparison). `toCanonicalForm` is the column data type's canonical-form function (ADR 254), from the
- * assembled stack; a value it refuses compares as it is. A target that reads a raw
+ * comparison). `toCanonicalForm` is the canonical form of the column's values (ADR 254), from
+ * `canonicalFormOf`; a value it refuses compares as it is. A target that reads a raw
  * expression as a literal does so before this comparison, through its `resolveDefault` hook.
  */
 export function resolvedDefaultsEqual(

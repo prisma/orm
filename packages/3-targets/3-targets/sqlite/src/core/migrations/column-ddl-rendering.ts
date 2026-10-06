@@ -1,3 +1,4 @@
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import {
   DdlColumn,
@@ -22,27 +23,24 @@ import { buildColumnTypeSql } from './planner-ddl-builders';
  * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql`
  * expects, from a column node's own stamped codec
  * identity (`codecRef` / `codecBaseNativeType`, Decision 5) — never the
- * contract. SQLite's type renderer only uppercases the resolved base type
- * (no parameterized expansion, no named-type quoting), so `typeRef` is
- * deliberately left unset here: setting it would send `buildColumnTypeSql`
- * back through a live `storageTypes` lookup the node's fields have already
- * resolved past, which throws for an unrecognized reference (unlike
- * Postgres's lenient fallback).
+ * contract. `typeRef` is deliberately left unset here: setting it would send
+ * `buildColumnTypeSql` back through a live `storageTypes` lookup the node's
+ * fields have already resolved past, which throws for an unrecognized
+ * reference.
  */
 function columnLike(
   column: SqlColumnIR,
-): Pick<StorageColumn, 'nativeType' | 'codecId' | 'nullable' | 'many' | 'typeParams' | 'default'> {
+): Pick<StorageColumn, 'codecId' | 'nullable' | 'many' | 'typeParams' | 'default'> {
   if (column.codecRef === undefined || column.codecBaseNativeType === undefined) {
     throw new InternalError(
       `columnLike: expected column "${column.name}" carries no codec identity — the expected tree must be derived via contractToSchemaIR for planning`,
     );
   }
   return {
-    nativeType: column.codecBaseNativeType,
     codecId: column.codecRef.codecId,
     nullable: column.nullable,
     // `column.many` is unset on contract-derived columns (array-ness rides
-    // on the `nativeType` `[]` suffix there instead) — `codecRef.many`
+    // on the type text's `[]` suffix there instead) — `codecRef.many`
     // carries it. Hand-built/introspected columns set `column.many` directly.
     many: (column.many ?? column.codecRef.many) ? { elementNullable: false } : false,
     ...(column.codecRef.typeParams !== undefined
@@ -59,14 +57,14 @@ function columnLike(
 }
 
 /**
- * The default DDL writes. A contract default the column's data type refuses, which a contract
- * emitted by an earlier version can hold, is refused rather than written.
+ * The default DDL writes. A contract default the canonical form of the column's values refuses,
+ * which a contract emitted by an earlier version can hold, is refused rather than written.
  */
 function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
   const columnDefault = column.authoredDefault ?? column.resolvedDefault;
   const refusal = contractDefaultRefusal(
     columnDefault,
-    column.dataType?.toCanonicalForm,
+    column.toCanonicalForm,
     (column.many ?? column.codecRef?.many) === true,
   );
   if (refusal !== undefined) {
@@ -102,9 +100,13 @@ export function isInlineAutoincrementPrimaryKeyNode(
  * the pre-`plan(start, end)` op-path called, so the output is
  * byte-identical.
  */
-export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): SqliteColumnSpec {
+export function columnSpecFromNode(
+  column: SqlColumnIR,
+  inline: boolean,
+  types: SqlTypeLookups,
+): SqliteColumnSpec {
   const like = columnLike(column);
-  const typeSql = buildColumnTypeSql(like, {});
+  const typeSql = buildColumnTypeSql(like, types);
   return {
     name: column.name,
     typeSql,
@@ -120,9 +122,13 @@ export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): Sqlite
  * Builds the `DdlColumn` the `CreateTableCall` path needs, resolved from the
  * column node's codec identity.
  */
-export function ddlColumnFromNode(column: SqlColumnIR, inline: boolean): DdlColumn {
+export function ddlColumnFromNode(
+  column: SqlColumnIR,
+  inline: boolean,
+  types: SqlTypeLookups,
+): DdlColumn {
   const like = columnLike(column);
-  const typeSql = buildColumnTypeSql(like, {});
+  const typeSql = buildColumnTypeSql(like, types);
   if (inline) {
     // `DdlColumn` has no SQLite-specific autoincrement flag, so the full
     // `PRIMARY KEY AUTOINCREMENT` clause is embedded in the `type` string.

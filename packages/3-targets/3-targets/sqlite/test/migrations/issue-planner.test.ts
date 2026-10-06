@@ -7,6 +7,7 @@ import {
   planIssues,
 } from '../../src/core/migrations/issue-planner';
 import type { StrategyContext } from '../../src/core/migrations/planner-strategies';
+import { sqliteTestComponents, sqliteTestTypes } from '../sqlite-test-types';
 import {
   actualColumn,
   checkConstraint,
@@ -24,7 +25,8 @@ const emptyCtx: StrategyContext = {
   expected: new SqlSchemaIR({ tables: {} }),
   actual: new SqlSchemaIR({ tables: {} }),
   policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
-  frameworkComponents: [],
+  frameworkComponents: sqliteTestComponents,
+  types: sqliteTestTypes,
 };
 
 describe('mapNodeIssueToCall — table', () => {
@@ -275,7 +277,11 @@ describe('columnTypeChanged', () => {
 
 describe('planIssues — dependency-graph ordering', () => {
   function factoryNames(issues: readonly ReturnType<typeof issue>[]): readonly string[] {
-    const result = planIssues({ issues, strategies: [] });
+    const result = planIssues({
+      issues,
+      strategies: [],
+      frameworkComponents: sqliteTestComponents,
+    });
     if (!result.ok) throw new Error(`expected ok, got ${JSON.stringify(result.failure)}`);
     return result.value.calls.map((c) => c.factoryName);
   }

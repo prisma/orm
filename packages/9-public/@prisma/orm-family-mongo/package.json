@@ -53,6 +53,7 @@
     "./codec": "./dist/codec.mjs",
     "./contract": "./dist/contract.mjs",
     "./contract/canonicalization-hooks": "./dist/contract__canonicalization-hooks.mjs",
+    "./contract/data-type": "./dist/contract__data-type.mjs",
     "./contract/entity-kinds": "./dist/contract__entity-kinds.mjs",
     "./contract-prisma6/provider": "./dist/contract-prisma6__provider.mjs",
     "./contract-psl": "./dist/contract-psl.mjs",

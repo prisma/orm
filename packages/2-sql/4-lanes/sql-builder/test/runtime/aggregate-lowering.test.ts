@@ -54,7 +54,6 @@ function loweringAggregateRegistry() {
       {
         codecId: 'pg/int4@1',
         traits: ['numeric', 'order', 'equality'],
-        targetTypes: [],
         isParameterized: false,
         paramsSchema: undefined,
         factory: () => () => ({ id: 'pg/int4@1' }),
@@ -62,7 +61,6 @@ function loweringAggregateRegistry() {
       {
         codecId: 'lib/int8@1',
         traits: ['numeric', 'order', 'equality'],
-        targetTypes: [],
         isParameterized: false,
         paramsSchema: undefined,
         factory: () => () => ({ id: 'lib/int8@1' }),

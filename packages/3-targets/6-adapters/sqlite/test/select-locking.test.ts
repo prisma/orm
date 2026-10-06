@@ -29,7 +29,7 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             job: {
               columns: {
-                id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
+                id: { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer', nullable: false },
               },
               uniques: [],
               indexes: [],

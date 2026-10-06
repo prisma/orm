@@ -25,12 +25,12 @@ import {
 import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
-import type { RowSelection } from './collection-internal-types';
+import type { HasRow } from './collection-types';
 import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 
-export interface IncludeScalar<Result> extends RowSelection<Result> {
+export interface IncludeScalar<Result> extends HasRow<Result> {
   readonly kind: 'includeScalar';
   /** An operation name from the contract's emitted aggregate map — an open vocabulary. */
   readonly fn: string;
@@ -51,7 +51,7 @@ export interface IncludeScalarBranch {
 export type IncludeCombineBranch = IncludeRowsBranch | IncludeScalarBranch;
 
 export interface IncludeCombine<ResultShape extends Record<string, unknown>>
-  extends RowSelection<ResultShape> {
+  extends HasRow<ResultShape> {
   readonly kind: 'includeCombine';
   readonly branches: Readonly<Record<string, IncludeCombineBranch>>;
 }
@@ -163,9 +163,9 @@ export interface CollectionTypeState {
 export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
 
 export type DefaultCollectionTypeState = {
-  readonly hasOrderBy: false;
-  readonly hasWhere: false;
-  readonly hasUniqueFilter: false;
+  readonly hasOrderBy: boolean;
+  readonly hasWhere: boolean;
+  readonly hasUniqueFilter: boolean;
   readonly variantName: undefined;
   readonly nsId: never;
 };

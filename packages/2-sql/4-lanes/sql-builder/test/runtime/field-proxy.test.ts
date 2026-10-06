@@ -67,7 +67,7 @@ describe('createFieldProxy', () => {
         embedding: {
           many: false,
           codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           nullable: false,
           typeRef: 'Embedding1536',
         },
@@ -91,7 +91,7 @@ describe('createFieldProxy', () => {
         Embedding1536: {
           kind: 'codec-instance',
           codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       },

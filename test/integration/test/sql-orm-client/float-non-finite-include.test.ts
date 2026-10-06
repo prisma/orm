@@ -7,8 +7,8 @@ import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
-const pgFloat = { codecId: 'pg/float@1', nativeType: 'float8' } as const;
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'float8' } as const;
+const pgFloat = { codecId: 'pg/float@1' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const PointBase = model('Point', {
   fields: {

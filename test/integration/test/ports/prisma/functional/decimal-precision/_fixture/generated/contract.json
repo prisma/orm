@@ -89,25 +89,25 @@
               "columns": {
                 "d10_0": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true,
                   "typeRef": "Decimal10_0"
                 },
                 "d20_10": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true,
                   "typeRef": "Decimal20_10"
                 },
                 "d38_30": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true,
                   "typeRef": "Decimal38_30"
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -126,12 +126,12 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3455e6b16fe7280401f66594d492b43d51a2938ae3d5e8f6bf9a129b09d1262e",
+    "storageHash": "8a61748a8475b31d2bf4f2dc9ff6060d8f4920dc60720ef04d629a799eb51327",
     "types": {
       "Decimal10_0": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 10,
           "scale": 0
@@ -139,8 +139,8 @@
       },
       "Decimal20_10": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 20,
           "scale": 10
@@ -148,8 +148,8 @@
       },
       "Decimal38_30": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 38,
           "scale": 30

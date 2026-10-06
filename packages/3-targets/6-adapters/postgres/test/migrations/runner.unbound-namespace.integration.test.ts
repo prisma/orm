@@ -54,8 +54,8 @@ function buildUnboundContract(): Contract<SqlStorage> {
             table: {
               tenant: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  label: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  label: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

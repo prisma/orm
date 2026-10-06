@@ -29,7 +29,7 @@ const testContract: Contract<SqlStorage> = {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               uniques: [],
               indexes: [],

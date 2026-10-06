@@ -12,11 +12,23 @@ import type {
   SqlMigrationPlanOperation,
 } from '../src/core/migrations/types';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'cs/string@1': 'cs/string',
+  'pg/text@1': 'pg/text',
+  'pg/varchar@1': 'pg/varchar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 type Op = SqlMigrationPlanOperation<unknown>;
 
 function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
   return {
-    nativeType: 'text',
+    dataType: dataTypeOf(overrides.codecId),
     nullable: false,
     many: false,
     ...overrides,

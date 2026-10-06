@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4f233828207b7f822a1028a226bf309ba1397a49ddac2d07b202642e1747d89c'>;
+  StorageHashBase<'3bfb26bf7ebfad7379feac71cd8caf638595620811fbeac9cd555aa5500a4655'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -329,49 +329,49 @@ type ContractBase = Omit<
             readonly testModel: {
               columns: {
                 readonly bInt: {
-                  readonly nativeType: 'int8';
+                  readonly dataType: 'pg/int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly bool: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly bytes: {
-                  readonly nativeType: 'bytea';
+                  readonly dataType: 'pg/bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly dt: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly float: {
-                  readonly nativeType: 'float8';
+                  readonly dataType: 'pg/float8';
                   readonly codecId: 'pg/float8@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly int: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
                 };
                 readonly string: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };

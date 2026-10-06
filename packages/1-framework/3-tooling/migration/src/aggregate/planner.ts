@@ -1,11 +1,10 @@
 import { notOk, ok } from '@internal/utils/result';
-import { requireHeadRef } from './aggregate';
+import { requireHeadRef, spacesInApplyOrder } from './aggregate';
 import { allStorageElementsExternal } from './all-external';
 import { buildFabricatedMigrationEdge } from './fabricated-migration-edge';
 import type { PerSpacePlan, PlannerError, PlannerInput, PlannerOutput } from './planner-types';
 import { planFromDiff } from './strategies/plan-from-diff';
 import { resolveRecordedPath } from './strategies/resolve-recorded-path';
-import type { AggregateContractSpace } from './types';
 
 export type {
   AggregateCurrentDBState,
@@ -39,9 +38,7 @@ export type {
  * 5. Else → `extensionPathUnsatisfiable` (an empty graph cannot satisfy
  *    non-empty invariants).
  *
- * Output `applyOrder` is `[...aggregate.extensions.map(spaceId), aggregate.app.spaceId]`
- * — extensions alphabetical, then app — matching today's
- * `concatenateSpaceApplyInputs` ordering. This preserves
+ * Output `applyOrder` is {@link spacesInApplyOrder}: extensions alphabetical, then app. This preserves
  * `MigrationRunnerFailure.failingSpace` attribution byte-for-byte.
  *
  * Every emitted `MigrationPlan` has `targetId = aggregate.targetId`.
@@ -54,14 +51,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 
   const perSpace = new Map<string, PerSpacePlan>();
 
-  // Iterate in apply order so a per-space error short-circuits the
-  // walk in the same order the runner would walk inputs.
-  const orderedSpaces: ReadonlyArray<AggregateContractSpace> = [
-    ...aggregate.extensions,
-    aggregate.app,
-  ];
-
-  for (const space of orderedSpaces) {
+  for (const space of spacesInApplyOrder(aggregate)) {
     const currentMarker = currentDBState.markersBySpaceId.get(space.spaceId) ?? null;
     const headRef = requireHeadRef(space);
 
@@ -180,6 +170,6 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 
   return ok({
     perSpace,
-    applyOrder: [...aggregate.extensions.map((m) => m.spaceId), aggregate.app.spaceId],
+    applyOrder: spacesInApplyOrder(aggregate).map((space) => space.spaceId),
   });
 }

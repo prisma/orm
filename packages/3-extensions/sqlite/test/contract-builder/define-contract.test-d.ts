@@ -14,7 +14,6 @@ expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();
 
 const textColumn = {
   codecId: 'sql/char@1' as const,
-  nativeType: 'character varying' as const,
   typeParams: {},
 };
 const withModel = defineContract({

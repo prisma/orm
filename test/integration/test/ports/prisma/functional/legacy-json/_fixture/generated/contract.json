@@ -67,17 +67,17 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "optionalJson": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "requiredJson": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": false
                 }
               },
@@ -96,7 +96,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "475b3d55191a7aad98ece2965b664900f8bb805dbeb59a39bda1b45975f8a024"
+    "storageHash": "d6adec26873577a60899f2cb74c9b713f76ece518dd1f2978feb2646a5968475"
   },
   "capabilities": {
     "postgres": {

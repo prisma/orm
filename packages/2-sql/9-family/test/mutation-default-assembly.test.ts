@@ -23,7 +23,6 @@ describe('assembleAuthoringContributions', () => {
             kind: 'fieldPreset',
             output: {
               codecId: 'sql/text@1',
-              nativeType: 'text',
             },
           },
         },
@@ -33,7 +32,6 @@ describe('assembleAuthoringContributions', () => {
             args: [{ kind: 'string' }, { kind: 'stringArray' }],
             output: {
               codecId: 'app/test-type@1',
-              nativeType: 'enum',
               typeParams: {
                 values: { kind: 'arg', index: 1 },
               },
@@ -51,7 +49,6 @@ describe('assembleAuthoringContributions', () => {
               args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
               output: {
                 codecId: 'pg/vector@1',
-                nativeType: 'vector',
                 typeParams: {
                   length: { kind: 'arg', index: 0 },
                 },
@@ -90,7 +87,6 @@ describe('assembleAuthoringContributions', () => {
             args: [{ kind: 'string' }, { kind: 'stringArray' }],
             output: {
               codecId: 'app/test-type@1',
-              nativeType: 'enum',
             },
           },
         },
@@ -104,7 +100,6 @@ describe('assembleAuthoringContributions', () => {
             args: [{ kind: 'string' }, { kind: 'stringArray' }],
             output: {
               codecId: 'conflict/enum@1',
-              nativeType: 'enum',
             },
           },
         },
@@ -124,7 +119,6 @@ describe('assembleAuthoringContributions', () => {
             kind: 'fieldPreset',
             output: {
               codecId: 'sql/text@1',
-              nativeType: 'text',
             },
           },
         },
@@ -137,7 +131,6 @@ describe('assembleAuthoringContributions', () => {
             kind: 'fieldPreset',
             output: {
               codecId: 'conflict/text@1',
-              nativeType: 'text',
             },
           },
         },
@@ -156,8 +149,7 @@ describe('assembleAuthoringContributions', () => {
           "polluted": {
             "kind": "fieldPreset",
             "output": {
-              "codecId": "conflict/text@1",
-              "nativeType": "text"
+              "codecId": "conflict/text@1"
             }
           }
         }

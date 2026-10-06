@@ -21,7 +21,7 @@ import type { DefaultModelRow } from '@internal/sql-orm-client';
 import { expectTypeOf } from 'vitest';
 import { defineContract, field, model, nativeEnum, pg } from '../../src/exports/contract-builder';
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
 
 const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
@@ -32,7 +32,6 @@ expectTypeOf(AalLevel.members).toEqualTypeOf<readonly ['aal1', 'aal2', 'aal3']>(
 // handle's PostgresNativeEnum<Members>, not `unknown`.
 const columnDescriptor = pg.enum(AalLevel);
 expectTypeOf(columnDescriptor.codecId).toEqualTypeOf<'pg/enum@1'>();
-expectTypeOf(columnDescriptor.nativeType).toEqualTypeOf<string>();
 expectTypeOf(columnDescriptor.entityRef.entity.members).toEqualTypeOf<
   readonly ['aal1', 'aal2', 'aal3']
 >();
@@ -72,14 +71,10 @@ type SessionsColumns = PublicEntries['table']['sessions']['columns'];
 type AalStorageColumn = SessionsColumns['aal'];
 expectTypeOf<AalStorageColumn['codecId']>().toEqualTypeOf<'pg/enum@1'>();
 
-// Probe 5 — the approved narrowing ride-along: threading the full descriptor
-// type through `ScalarFieldState` (Option A) also stops widening
-// `nativeType`/`typeParams` for descriptors that carry them as literals.
-// `intColumn`'s `as const` nativeType `'int4'` now survives into the built
-// column type instead of widening to `string`.
+// Probe 5 — threading the full descriptor type through `ScalarFieldState`
+// (Option A) keeps `intColumn`'s literal codec id in the built column type.
 type IdStorageColumn = SessionsColumns['id'];
 expectTypeOf<IdStorageColumn['codecId']>().toEqualTypeOf<'pg/int4@1'>();
-expectTypeOf<IdStorageColumn['nativeType']>().toEqualTypeOf<'int4'>();
 
 // Probe 6 — the union reaches the ORM read surface on the no-emit path: a
 // `DefaultModelRow` derived straight from `typeof contract` (no emit/`.d.ts`

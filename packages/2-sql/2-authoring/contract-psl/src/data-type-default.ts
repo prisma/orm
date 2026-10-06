@@ -1,21 +1,27 @@
 /**
  * Reading a `@default(...)` value: a written value is read by the authoring entry for the syntax it
  * is written in, which gives it a data type; the column's type takes it directly or through a cast;
- * and the column's codec, built with the column's type parameters, reads the canonical form with
- * `decodeJson`, which refuses a value the column would not store, before it is stored.
+ * the column's codec, built with the column's type parameters, reads it with `decodeJson`, which
+ * refuses a value the column would not store; and it is stored in the canonical form of the
+ * column's values, which `canonicalFormOf` gives.
  *
  * No per-type code and no per-codec branch live here. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import { authoringEntryType } from '@internal/framework-components/authoring';
 import type {
   AnyCodecDescriptor,
   CodecLookupWithDescriptors,
   DataTypeId,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { codecForRef } from '@internal/framework-components/codec';
+import {
+  canonicalFormOf,
+  codecForRef,
+  type ToCanonicalForm,
+} from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -182,7 +188,9 @@ export function readValue(
     return {
       ok: true,
       typed: {
-        type: blindCast<DataTypeId, 'an entry key is the id of the type it reads'>(found.key),
+        type: blindCast<DataTypeId, 'an entry reads its key’s type, or the type its tag names'>(
+          authoringEntryType(found.key, found.entry),
+        ),
         value: form.parse(text),
       },
     };
@@ -240,22 +248,33 @@ function codecRefTypeParams(
       );
 }
 
+/** A value in the canonical form of the column's values, when they have one. */
+function inCanonicalForm(
+  toCanonicalForm: ToCanonicalForm | undefined,
+  value: JsonValue,
+  elementIndex: number | undefined,
+): ReadDefaultResult {
+  if (toCanonicalForm === undefined) return { ok: true, value };
+  try {
+    return { ok: true, value: toCanonicalForm(value) };
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return { ok: false, refusal: { kind: 'unreadable', message: messageOf(error), elementIndex } };
+  }
+}
+
 /**
- * The column's codec descriptor, and `read`, which reads a value in its stored JSON form with the column's codec, built with the column's type parameters.
+ * The column's codec descriptor, and `read`, which reads a value in its stored JSON form with the column's codec, built with the column's type parameters, and gives it the canonical form of the column's values.
  */
 function storedValueReader(input: {
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly fieldPath: string;
 }): {
   readonly descriptor: AnyCodecDescriptor;
   readonly read: (value: JsonValue, elementIndex: number | undefined) => ReadDefaultResult;
 } {
-  if (input.codecLookup === undefined) {
-    throw new InternalError(
-      `Field "${input.fieldPath}": no codec lookup was given, but the column was resolved from a codec descriptor.`,
-    );
-  }
   const descriptor = input.codecLookup.descriptorFor(input.column.codecId);
   const codec = codecForRef(input.codecLookup, {
     codecId: input.column.codecId,
@@ -266,10 +285,10 @@ function storedValueReader(input: {
       `Field "${input.fieldPath}": no codec descriptor is registered for "${input.column.codecId}", but the column was resolved from one.`,
     );
   }
-  const read = (value: JsonValue, elementIndex: number | undefined): ReadDefaultResult => {
+  const toCanonicalForm = canonicalFormOf(descriptor, input.dataTypeLookup);
+  const read = (written: JsonValue, elementIndex: number | undefined): ReadDefaultResult => {
     try {
-      codec.decodeJson(value);
-      return { ok: true, value };
+      codec.decodeJson(written);
     } catch (error) {
       if (isInternalError(error)) throw error;
       return {
@@ -282,6 +301,7 @@ function storedValueReader(input: {
         },
       };
     }
+    return inCanonicalForm(toCanonicalForm, written, elementIndex);
   };
   return { descriptor, read };
 }
@@ -292,11 +312,12 @@ function storedValueReader(input: {
 export function readStoredValue(input: {
   readonly value: JsonValue;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly fieldPath: string;
 }): DefaultDiagnosticResult {
   const reading = storedValueReader(input).read(input.value, undefined);
-  return reading.ok ? reading : refusalDiagnostic(reading.refusal, input.fieldPath);
+  return reading.ok ? reading : refusalDiagnostic(reading.refusal, `Field "${input.fieldPath}"`);
 }
 
 /**
@@ -309,11 +330,14 @@ export function readDataTypeDefault(input: {
   readonly written: WrittenValue;
   readonly isList: boolean;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly support: DataTypeSupport;
   readonly fieldPath: string;
 }): ReadDefaultResult {
-  const { descriptor, read: readStored } = storedValueReader(input);
+  const { descriptor, read: readStored } = storedValueReader({
+    ...input,
+    dataTypeLookup: input.support.lookup,
+  });
   const columnType = descriptor.dataType;
 
   const readOne = (
@@ -432,20 +456,41 @@ export function lowerDataTypeDefault(input: {
   readonly written: WrittenValue;
   readonly isList: boolean;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly support: DataTypeSupport;
   readonly fieldPath: string;
 }): DefaultDiagnosticResult {
   const read = readDataTypeDefault(input);
-  return read.ok ? read : refusalDiagnostic(read.refusal, input.fieldPath);
+  return read.ok ? read : refusalDiagnostic(read.refusal, `Field "${input.fieldPath}"`);
+}
+
+/**
+ * Reads one number literal written in a contract source outside a default, such as an enum member's value, from its source text for a codec, as {@link lowerDataTypeDefault} reads a default: the number's entry gives it a data type, the codec's data type takes it directly or through a cast, and the codec checks it. A refusal is worded for `subject`.
+ */
+export function readWrittenNumberForCodec(input: {
+  readonly text: string;
+  readonly codecId: string;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly support: DataTypeSupport;
+  readonly subject: string;
+}): DefaultDiagnosticResult {
+  const read = readDataTypeDefault({
+    written: { kind: 'number', text: input.text },
+    isList: false,
+    column: { codecId: input.codecId },
+    codecLookup: input.codecLookup,
+    support: input.support,
+    fieldPath: input.subject,
+  });
+  return read.ok ? read : refusalDiagnostic(read.refusal, input.subject);
 }
 
 /** A refusal worded as a PSL diagnostic's code and message. */
 function refusalDiagnostic(
   refusal: DefaultRefusal,
-  fieldPath: string,
+  subject: string,
 ): Extract<DefaultDiagnosticResult, { readonly ok: false }> {
-  const where = `Field "${fieldPath}"${at(refusal.elementIndex)}`;
+  const where = `${subject}${at(refusal.elementIndex)}`;
   switch (refusal.kind) {
     case 'unreadable':
       return {

@@ -6,7 +6,6 @@ import {
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../src/core/codec-ids';
-import { postgresCodecRegistry } from '../src/core/registry';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
@@ -237,31 +236,17 @@ describe('Temporal-backed temporal codecs', () => {
 
   describe('descriptor metadata', () => {
     it.each([
-      [PG_DATE_TEMPORAL_CODEC_ID, pgDateTemporalDescriptor, ['date'], 'date'],
-      [
-        PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-        pgTimestampTemporalDescriptor,
-        ['timestamp'],
-        'timestamp without time zone',
-      ],
-      [
-        PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-        pgTimestamptzTemporalDescriptor,
-        ['timestamptz'],
-        'timestamp with time zone',
-      ],
-      [PG_TIME_TEMPORAL_CODEC_ID, pgTimeTemporalDescriptor, ['time'], 'time'],
-    ])(
-      '%s keeps the target types and native type of the column it serves',
-      (id, descriptor, targetTypes, nativeType) => {
-        expect({
-          codecId: descriptor.codecId,
-          traits: descriptor.traits,
-          targetTypes: descriptor.targetTypes,
-          nativeType: descriptor.nativeTypeFor({ codecId: id }),
-        }).toEqual({ codecId: id, traits: ['equality', 'order'], targetTypes, nativeType });
-      },
-    );
+      [PG_DATE_TEMPORAL_CODEC_ID, pgDateTemporalDescriptor, 'pg/date'],
+      [PG_TIMESTAMP_TEMPORAL_CODEC_ID, pgTimestampTemporalDescriptor, 'pg/timestamp'],
+      [PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, pgTimestamptzTemporalDescriptor, 'pg/timestamptz'],
+      [PG_TIME_TEMPORAL_CODEC_ID, pgTimeTemporalDescriptor, 'pg/time'],
+    ])('%s represents the data type of the column it serves', (id, descriptor, dataType) => {
+      expect({
+        codecId: descriptor.codecId,
+        traits: descriptor.traits,
+        dataType: descriptor.dataType,
+      }).toEqual({ codecId: id, traits: ['equality', 'order'], dataType });
+    });
 
     it('carries no output-type renderer, because TInput is what reaches the declaration', () => {
       expect([
@@ -271,25 +256,6 @@ describe('Temporal-backed temporal codecs', () => {
         pgTimeTemporalDescriptor.renderOutputType,
       ]).toEqual([undefined, undefined, undefined, undefined]);
     });
-  });
-});
-
-describe('one claimant per temporal target type', () => {
-  it.each([
-    ['date', pgDateTemporalDescriptor],
-    ['timestamp', pgTimestampTemporalDescriptor],
-    ['timestamptz', pgTimestamptzTemporalDescriptor],
-    ['time', pgTimeTemporalDescriptor],
-  ])('%s resolves to exactly one descriptor', (targetType, descriptor) => {
-    expect(postgresCodecRegistry.byTargetType(targetType)).toEqual([descriptor]);
-  });
-
-  it('leaves the representation-explicit string codecs out of target-type resolution entirely', () => {
-    const claimed = ['date', 'timestamp', 'timestamptz', 'time'].flatMap((t) =>
-      postgresCodecRegistry.byTargetType(t).map((d) => d.codecId),
-    );
-
-    expect(claimed.filter((id) => id.endsWith('-string@1'))).toEqual([]);
   });
 });
 

@@ -14,7 +14,11 @@ import {
   instantiateAuthoringTypeConstructor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import { type CodecRef, codecForRef, type DataTypeId } from '@internal/framework-components/codec';
+import {
+  type AnyCodecDescriptor,
+  type CodecRef,
+  codecForRef,
+} from '@internal/framework-components/codec';
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -29,8 +33,8 @@ export interface InferredPslType {
 
 /** What `contract infer` asks about a column's literal default. */
 export interface InferredColumnDefaults {
-  /** The data type the column's codec represents, which a default is written in. */
-  dataTypeOf(pslType: InferredPslType, isEnum: boolean): DataTypeId | undefined;
+  /** The column's codec, whose data type a default is written in. */
+  codecOf(pslType: InferredPslType, isEnum: boolean): AnyCodecDescriptor | undefined;
   /** Whether the column's codec, built with the column's type parameters, reads the default back. */
   readsBack(
     value: ColumnDefaultLiteralInputValue,
@@ -82,12 +86,10 @@ function inferredCodecRef(
  */
 export function inferredColumnDefaults(context: SqlPslBuildContext): InferredColumnDefaults {
   return {
-    dataTypeOf(pslType, isEnum) {
+    codecOf(pslType, isEnum) {
       try {
         const ref = inferredCodecRef(context, pslType, isEnum);
-        return ref === undefined
-          ? undefined
-          : context.codecLookup.descriptorFor(ref.codecId)?.dataType;
+        return ref === undefined ? undefined : context.codecLookup.descriptorFor(ref.codecId);
       } catch (error) {
         if (isInternalError(error)) throw error;
         return undefined;
@@ -113,6 +115,6 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
 
 /** For a table whose columns have no literal default, such as a many-to-many junction table. */
 export const noColumnDefaults: InferredColumnDefaults = {
-  dataTypeOf: () => undefined,
+  codecOf: () => undefined,
   readsBack: () => false,
 };

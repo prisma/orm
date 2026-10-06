@@ -39,7 +39,7 @@ import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mo
 // Synthetic app contract — Profile model with cross-space FK to auth.users.id
 // ---------------------------------------------------------------------------
 
-const pgUuid = { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
+const pgUuid = { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false } as const;
 
 /**
  * Build the app contract that exercises the cross-space FK path.

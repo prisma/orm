@@ -4,7 +4,7 @@ import type {
   PslExtensionBlockPrintEntry,
 } from '@internal/framework-components/psl-ast';
 import { NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
-import { escapePslString } from '@internal/sql-relational-core/ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import { SYNTHETIC_SPAN } from './psl-literals';
 import { createUniqueFieldName } from './unique-name';
 

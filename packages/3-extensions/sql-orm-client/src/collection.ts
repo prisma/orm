@@ -72,11 +72,7 @@ import type {
   IncludeRefinementResult,
   IncludeRefinementValue,
   IsToManyRelation,
-  RowSelection,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
-  RowType,
   WhereInput,
-  WithOrderByState,
   WithVariantState,
   WithWhereState,
 } from './collection-internal-types';
@@ -86,6 +82,20 @@ import {
   executeMutationReturningSingleRow,
 } from './collection-mutation-dispatch';
 import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
+import type {
+  CollectionRowOf,
+  CollectionTypeStateOf,
+  Filtered,
+  HasOrderBy,
+  HasRow,
+  HasTypeState,
+  HasWhere,
+  Including,
+  Ordered,
+  // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
+  RowType,
+  TypeState,
+} from './collection-types';
 import { shorthandToWhereExpr } from './filters';
 import { GroupedCollection } from './grouped-collection';
 import {
@@ -271,15 +281,16 @@ interface MtiCreateContext {
   pkColumns: readonly string[];
 }
 
-class CollectionImpl<
+export class CollectionBase<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
-> implements RowSelection<Row>
+> implements HasRow<Row>, HasTypeState<State>
 {
+  declare readonly [TypeState]: State;
   declare readonly [RowType]: Row;
-  declare readonly _row?: Row;
+  declare readonly _row?: CollectionRowOf<this>;
   /** @internal */
   readonly ctx: CollectionContext<TContract>;
   /** @internal */
@@ -322,7 +333,7 @@ class CollectionImpl<
    * because their names are the registry's, not the class declaration's.
    *
    * A name the collection already carries is skipped, and which member holds
-   * it decides what the skip means. A `CollectionImpl` member is rejected at
+   * it decides what the skip means. A `CollectionBase` member is rejected at
    * ORM composition with `ORM.AGGREGATE_OPERATION_RESERVED`, since
    * {@link reservedCollectionMemberNames} scans this class. A member declared
    * by a custom collection class registered through `orm({ collections })`
@@ -382,20 +393,23 @@ class CollectionImpl<
    * const adults = await db.orm.User.where({ active: true }).where((u) => u.age.gt(18)).all();
    * ```
    */
-  where(
+  where<Self>(
+    this: Self,
     fn: (
       model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
     ) => WhereDirectInput,
-  ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
-  where(input: WhereDirectInput): Collection<TContract, ModelName, Row, WithWhereState<State>>;
-  where(
+  ): Filtered<Self>;
+  where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
+  where<Self>(
+    this: Self,
     fn: (
       model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
     ) => WhereArg,
-  ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
-  where(
+  ): Filtered<Self>;
+  where<Self>(
+    this: Self,
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-  ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
+  ): Filtered<Self>;
   where(
     input:
       | WhereDirectInput
@@ -416,7 +430,7 @@ class CollectionImpl<
           >,
         ) => WhereArg)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-  ): Collection<TContract, ModelName, Row, WithWhereState<State>> {
+  ): Filtered<this> {
     const whereArg =
       typeof input === 'function'
         ? input(
@@ -437,14 +451,21 @@ class CollectionImpl<
 
     if (!filter) {
       return blindCast<
-        Collection<TContract, ModelName, Row, WithWhereState<State>>,
+        Filtered<this>,
         'where() records its static state even when normalization produces no filter'
       >(this);
     }
 
-    return this.#clone<WithWhereState<State>>({
+    return this.#cloneSelf<HasWhere>({
       filters: [...this.state.filters, filter],
     });
+  }
+
+  /**
+   * Call `fn` with this collection and return its result.
+   */
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+    return fn(this);
   }
 
   /**
@@ -466,6 +487,23 @@ class CollectionImpl<
    * await db.orm.User.variant('Admin').create({ name: 'Ada', role: 'super' });
    * ```
    */
+  variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
+    this: HasTypeState<S>,
+    variantName: V,
+  ): Collection<
+    TContract,
+    ModelName,
+    VariantModelRow<TContract, ModelName, V>,
+    WithVariantState<WithWhereState<S>, V>
+  >;
+  variant<V extends VariantNames<TContract, ModelName>>(
+    variantName: V,
+  ): Collection<
+    TContract,
+    ModelName,
+    VariantModelRow<TContract, ModelName, V>,
+    WithVariantState<WithWhereState<State>, V>
+  >;
   variant<V extends VariantNames<TContract, ModelName>>(
     variantName: V,
   ): Collection<
@@ -574,23 +612,21 @@ class CollectionImpl<
       RelName,
       State['nsId']
     >,
+    Self extends HasRow = never,
   >(
+    this: Self,
     relationName: RelName,
-  ): Collection<
-    TContract,
-    ModelName,
-    SimplifyDeep<
-      Row & {
-        [K in RelName]: IncludeRelationValue<
-          TContract,
-          RelationOwner,
-          K,
-          SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-          State['nsId']
-        >;
-      }
-    >,
-    State
+  ): Including<
+    Self,
+    {
+      [K in RelName]: IncludeRelationValue<
+        TContract,
+        RelationOwner,
+        K,
+        SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+        State['nsId']
+      >;
+    }
   >;
   include<
     RelName extends VariantAwareIncludeRelationNames<
@@ -627,7 +663,9 @@ class CollectionImpl<
       CollectionTypeState,
       IsToMany
     >,
+    Self extends HasRow = never,
   >(
+    this: Self,
     relationName: RelName,
     refineFn: (
       collection: IncludeRefinementCollection<
@@ -638,22 +676,18 @@ class CollectionImpl<
         IsToMany
       >,
     ) => RefinedResult,
-  ): Collection<
-    TContract,
-    ModelName,
-    SimplifyDeep<
-      Row & {
-        [K in RelName]: IncludeRefinementValue<
-          TContract,
-          RelationOwner,
-          K,
-          SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-          RefinedResult,
-          State['nsId']
-        >;
-      }
-    >,
-    State
+  ): Including<
+    Self,
+    {
+      [K in RelName]: IncludeRefinementValue<
+        TContract,
+        RelationOwner,
+        K,
+        SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+        RefinedResult,
+        State['nsId']
+      >;
+    }
   >;
   include<
     RelName extends VariantAwareIncludeRelationNames<
@@ -716,7 +750,7 @@ class CollectionImpl<
         >;
       }
     >,
-    State
+    CollectionTypeStateOf<this>
   > {
     const relation = resolveIncludeRelation(
       this.contract,
@@ -806,7 +840,7 @@ class CollectionImpl<
           >;
         }
       >,
-      State
+      CollectionTypeStateOf<this>
     >({
       includes: [...this.state.includes, includeExpr],
     });
@@ -826,6 +860,41 @@ class CollectionImpl<
    * }
    * ```
    */
+  select<
+    Fields extends readonly [
+      keyof DefaultModelRow<TContract, ModelName> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+    ],
+    S extends CollectionTypeState = State,
+    R = Row,
+  >(
+    this: HasTypeState<S> & HasRow<R>,
+    ...fields: Fields
+  ): Collection<
+    TContract,
+    ModelName,
+    SimplifyDeep<
+      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, R>
+    >,
+    S
+  >;
+  select<
+    Fields extends readonly [
+      keyof DefaultModelRow<TContract, ModelName> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+    ],
+  >(
+    ...fields: Fields
+  ): Collection<
+    TContract,
+    ModelName,
+    SimplifyDeep<
+      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, Row>
+    >,
+    State
+  >;
   select<
     Fields extends readonly [
       keyof DefaultModelRow<TContract, ModelName> & string,
@@ -877,6 +946,28 @@ class CollectionImpl<
    *   .all();
    * ```
    */
+  orderBy<Self>(
+    this: Self,
+    selection:
+      | ((
+          model: VariantAwareModelAccessor<
+            TContract,
+            ModelName,
+            State['variantName'],
+            State['nsId']
+          >,
+        ) => OrderByItem)
+      | ReadonlyArray<
+          (
+            model: VariantAwareModelAccessor<
+              TContract,
+              ModelName,
+              State['variantName'],
+              State['nsId']
+            >,
+          ) => OrderByItem
+        >,
+  ): Ordered<Self>;
   orderBy(
     selection:
       | ((
@@ -897,7 +988,7 @@ class CollectionImpl<
             >,
           ) => OrderByItem
         >,
-  ): Collection<TContract, ModelName, Row, WithOrderByState<State>> {
+  ): Ordered<this> {
     const accessor = createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
       this.ctx.context,
       this.namespaceId,
@@ -907,7 +998,7 @@ class CollectionImpl<
     const selectors = Array.isArray(selection) ? selection : [selection];
     const nextOrders = selectors.map((selector) => selector(accessor));
     const existing = this.state.orderBy ?? [];
-    return this.#clone<WithOrderByState<State>>({
+    return this.#cloneSelf<HasOrderBy>({
       orderBy: [...existing, ...nextOrders],
     });
   }
@@ -974,15 +1065,16 @@ class CollectionImpl<
   combine<
     Spec extends Record<
       string,
-      CollectionImpl<TContract, ModelName, unknown, CollectionTypeState> | IncludeScalar<unknown>
+      | IncludeRefinementCollection<TContract, ModelName, unknown, CollectionTypeState, true>
+      | IncludeScalar<unknown>
     >,
   >(
     spec: Spec,
   ): IncludeCombine<{
     [K in keyof Spec]: Spec[K] extends IncludeScalar<infer ScalarResult>
       ? ScalarResult
-      : Spec[K] extends CollectionImpl<TContract, ModelName, infer BranchRow, CollectionTypeState>
-        ? BranchRow[]
+      : Spec[K] extends HasRow
+        ? CollectionRowOf<Spec[K]>[]
         : never;
   }> {
     this.#assertIncludeRefinementMode('combine()');
@@ -1013,8 +1105,8 @@ class CollectionImpl<
     return createIncludeCombine<{
       [K in keyof Spec]: Spec[K] extends IncludeScalar<infer ScalarResult>
         ? ScalarResult
-        : Spec[K] extends CollectionImpl<TContract, ModelName, infer BranchRow, CollectionTypeState>
-          ? BranchRow[]
+        : Spec[K] extends HasRow
+          ? CollectionRowOf<Spec[K]>[]
           : never;
     }>(branches);
   }
@@ -1039,11 +1131,13 @@ class CollectionImpl<
    *   .all();
    * ```
    */
+  cursor<Self extends HasOrderBy>(
+    this: Self,
+    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+  ): Self;
   cursor(
-    cursorValues: State['hasOrderBy'] extends true
-      ? Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>
-      : never,
-  ): Collection<TContract, ModelName, Row, State> {
+    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+  ): this {
     assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
       this.contract,
@@ -1053,13 +1147,10 @@ class CollectionImpl<
     );
 
     if (Object.keys(mappedCursor).length === 0) {
-      return blindCast<
-        Collection<TContract, ModelName, Row, State>,
-        'the constructor installed the reducer members the surface type declares'
-      >(this);
+      return this;
     }
 
-    return this.#clone({
+    return this.#cloneSelf({
       cursor: mappedCursor,
     });
   }
@@ -1077,7 +1168,14 @@ class CollectionImpl<
       keyof DefaultModelRow<TContract, ModelName> & string,
       ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
     ],
-  >(...fields: Fields): Collection<TContract, ModelName, Row, State> {
+    Self,
+  >(this: Self, ...fields: Fields): Self;
+  distinct<
+    Fields extends readonly [
+      keyof DefaultModelRow<TContract, ModelName> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+    ],
+  >(...fields: Fields): this {
     const distinctFields = mapFieldsToColumns(
       this.contract,
       this.namespaceId,
@@ -1085,7 +1183,7 @@ class CollectionImpl<
       fields,
     );
 
-    return this.#clone({
+    return this.#cloneSelf({
       distinct: distinctFields,
       distinctOn: undefined,
     });
@@ -1112,13 +1210,19 @@ class CollectionImpl<
       keyof DefaultModelRow<TContract, ModelName> & string,
       ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
     ],
+    Self extends HasOrderBy,
   >(
-    ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } }
-      ? State['hasOrderBy'] extends true
-        ? Fields
-        : never
-      : never
-  ): Collection<TContract, ModelName, Row, State> {
+    this: Self,
+    ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
+  ): Self;
+  distinctOn<
+    Fields extends readonly [
+      keyof DefaultModelRow<TContract, ModelName> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+    ],
+  >(
+    ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
+  ): this {
     assertDistinctOnCapability(this.contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(this.state.orderBy, fields.length);
     const distinctOnFields = mapFieldsToColumns(
@@ -1128,7 +1232,7 @@ class CollectionImpl<
       fields,
     );
 
-    return this.#clone({
+    return this.#cloneSelf({
       distinct: undefined,
       distinctOn: distinctOnFields,
     });
@@ -1189,10 +1293,14 @@ class CollectionImpl<
    * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
    * ```
    */
+  limit<Self>(
+    this: Self,
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Self;
   limit(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ limit: typeof n === 'number' ? n : toExpr(n) });
+  ): this {
+    return this.#cloneSelf({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1206,10 +1314,14 @@ class CollectionImpl<
    *   .all();
    * ```
    */
+  offset<Self>(
+    this: Self,
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Self;
   offset(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ offset: typeof n === 'number' ? n : toExpr(n) });
+  ): this {
+    return this.#cloneSelf({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1247,12 +1359,22 @@ class CollectionImpl<
    * await db.orm.User.all((meta) => meta.annotate(cacheAnnotation({ key: 'users' })));
    * ```
    */
-  all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<Row> {
+  all<Self extends this>(
+    this: Self,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): AsyncIterableResult<CollectionRowOf<Self>>;
+  all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<CollectionRowOf<this>>;
+  all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
   }
 
-  get prepared(): PreparedCollection<TContract, ModelName, Row, State> {
-    return {
+  get prepared(): PreparedCollection<
+    TContract,
+    ModelName,
+    CollectionRowOf<this>,
+    CollectionTypeStateOf<this>
+  > {
+    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>> = {
       aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
       all: (configure) => {
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
@@ -1266,6 +1388,10 @@ class CollectionImpl<
         return describeCollectionFirst<Row>(selected.#descriptionOptions());
       },
     };
+    return blindCast<
+      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionTypeStateOf<this>>,
+      'the row this collection reads is the row its type carries'
+    >(prepared);
   }
 
   #descriptionOptions() {
@@ -1315,19 +1441,30 @@ class CollectionImpl<
    * );
    * ```
    */
-  async first(): Promise<Row | null>;
+  async first<Self extends this>(this: Self): Promise<CollectionRowOf<Self> | null>;
+  async first<Self extends this>(
+    this: Self,
+    filter: undefined,
+    configure: (meta: MetaBuilder<'read'>) => void,
+  ): Promise<CollectionRowOf<Self> | null>;
+  async first<Self extends this>(
+    this: Self,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Promise<CollectionRowOf<Self> | null>;
+  async first(): Promise<CollectionRowOf<this> | null>;
   async first(
     filter: undefined,
     configure: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null>;
+  ): Promise<CollectionRowOf<this> | null>;
   async first(
     filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null>;
+  ): Promise<CollectionRowOf<this> | null>;
   async first(
     filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null> {
+  ): Promise<unknown> {
     return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());
   }
 
@@ -1489,20 +1626,26 @@ class CollectionImpl<
    * validation applies, but the recorded annotations are discarded: neither the nested
    * statements nor the read-back query carry them.
    */
-  async create(
+  async create<Self extends this>(
+    this: Self,
     data: ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row>;
+  ): Promise<CollectionRowOf<Self>>;
+  async create<Self extends this>(
+    this: Self,
+    data: MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): Promise<CollectionRowOf<Self>>;
   async create(
     data: MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row>;
+  ): Promise<CollectionRowOf<this>>;
   async create(
     data:
       | ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row> {
+  ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'create()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
@@ -1602,6 +1745,17 @@ class CollectionImpl<
    * compiled insert plan. It may be passed in second position when
    * there are no options.
    */
+  createAll<Self extends this>(
+    this: Self,
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
+    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    configure?: WriteConfigure,
+  ): AsyncIterableResult<CollectionRowOf<Self>>;
   createAll(
     data: readonly ResolvedScalarCreateInput<
       TContract,
@@ -1611,7 +1765,17 @@ class CollectionImpl<
     >[],
     optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
     configure?: WriteConfigure,
-  ): AsyncIterableResult<Row> {
+  ): AsyncIterableResult<CollectionRowOf<this>>;
+  createAll(
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
+    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    configure?: WriteConfigure,
+  ): AsyncIterableResult<unknown> {
     assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAll()');
@@ -2072,6 +2236,15 @@ class CollectionImpl<
    *
    * Not supported on MTI variants.
    */
+  async upsert<Self extends this>(
+    this: Self,
+    input: {
+      create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
+      update: Partial<DefaultModelRow<TContract, ModelName>>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+    },
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): Promise<CollectionRowOf<Self>>;
   async upsert(
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
@@ -2079,7 +2252,15 @@ class CollectionImpl<
       conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row> {
+  ): Promise<CollectionRowOf<this>>;
+  async upsert(
+    input: {
+      create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
+      update: Partial<DefaultModelRow<TContract, ModelName>>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+    },
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'upsert()');
     this.#assertNotMtiVariant('upsert()');
@@ -2209,12 +2390,15 @@ class CollectionImpl<
    * validation applies, but the recorded annotations are discarded: neither the nested
    * statements nor the read-back query carry them.
    */
-  async update(
-    data: State['hasWhere'] extends true
-      ? MutationUpdateInput<TContract, ModelName, State['nsId']>
-      : never,
+  async update<Self extends HasWhere>(
+    this: Self,
+    data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row | null> {
+  ): Promise<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>> | null>;
+  async update(
+    data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'update()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
@@ -2263,9 +2447,7 @@ class CollectionImpl<
       const narrowed = scoped.#clone({ filters: [identityWhere] });
       const rows = await narrowed.#updateAllWithAnnotations(
         blindCast<
-          State['hasWhere'] extends true
-            ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
-            : never,
+          Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
           'absence of nested callbacks selects the scalar update input'
         >(data),
         annotationsMap,
@@ -2299,12 +2481,15 @@ class CollectionImpl<
    * Accepts an optional `configure` callback that receives a
    * `MetaBuilder<'write'>` for attaching typed annotations.
    */
-  updateAll(
-    data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
-      : never,
+  updateAll<Self extends HasWhere>(
+    this: Self,
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<Row> {
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
+  updateAll(
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): AsyncIterableResult<unknown> {
     assertLockCompatible(this.state, 'mutation');
     return this.#updateAllWithAnnotations(
       data,
@@ -2313,9 +2498,7 @@ class CollectionImpl<
   }
 
   #updateAllWithAnnotations(
-    data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
-      : never,
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
   ): AsyncIterableResult<Row> {
     assertReturningCapability(this.contract, 'updateAll()');
@@ -2375,10 +2558,13 @@ class CollectionImpl<
    *   .updateAndCount({ published: true });
    * ```
    */
+  async updateAndCount<Self extends HasWhere>(
+    this: Self,
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): Promise<number>;
   async updateAndCount(
-    data: State['hasWhere'] extends true
-      ? Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>
-      : never,
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
     assertLockCompatible(this.state, 'mutation');
@@ -2426,10 +2612,11 @@ class CollectionImpl<
    * Accepts an optional `configure` callback that receives a
    * `MetaBuilder<'write'>` for attaching typed annotations.
    */
-  async delete(
-    this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
+  async delete<Self extends HasWhere>(
+    this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<Row | null> {
+  ): Promise<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>> | null>;
+  async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
@@ -2468,15 +2655,13 @@ class CollectionImpl<
    * Accepts an optional `configure` callback that receives a
    * `MetaBuilder<'write'>` for attaching typed annotations.
    */
-  deleteAll(
-    this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
+  deleteAll<Self extends HasWhere>(
+    this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<Row> {
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
+  deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
     assertLockCompatible(this.state, 'mutation');
-    return blindCast<
-      Collection<TContract, ModelName, Row, State>,
-      'deleteAll() conditional this parameter is a filtered collection at runtime'
-    >(this).#deleteAllWithAnnotations(
+    return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
     );
   }
@@ -2582,10 +2767,11 @@ class CollectionImpl<
    * const removed = await db.orm.Post.where({ archived: true }).deleteAndCount();
    * ```
    */
-  async deleteAndCount(
-    this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
+  async deleteAndCount<Self extends HasWhere>(
+    this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<number> {
+  ): Promise<number>;
+  async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
@@ -2793,13 +2979,20 @@ class CollectionImpl<
     });
   }
 
-  #withRuntime(runtime: RuntimeQueryable): CollectionImpl<TContract, ModelName, Row, State> {
+  #cloneSelf<Flags = unknown>(overrides: Partial<CollectionState>): this & Flags {
+    return blindCast<
+      this & Flags,
+      'the clone is built by this constructor, so it is an instance of the same class'
+    >(this.#createSelf<Row, State>({ ...this.state, ...overrides }));
+  }
+
+  #withRuntime(runtime: RuntimeQueryable): CollectionBase<TContract, ModelName, Row, State> {
     const Ctor = blindCast<
       CollectionConstructor<TContract>,
       'runtime collection subclasses preserve the Collection constructor contract'
     >(this.constructor);
     return blindCast<
-      CollectionImpl<TContract, ModelName, Row, State>,
+      CollectionBase<TContract, ModelName, Row, State>,
       'runtime collection construction erases model row and state generics'
     >(
       new Ctor({ ...this.ctx, runtime }, this.modelName, {
@@ -2855,7 +3048,7 @@ class CollectionImpl<
       blindCast<
         CollectionConstructor<TContract>,
         'base Collection constructor is generic over the runtime contract'
-      >(CollectionImpl);
+      >(CollectionBase);
     return blindCast<
       Collection<TContract, ModelNameInner, RowInner, StateInner>,
       'runtime related collection construction erases model row and state generics'
@@ -2960,7 +3153,7 @@ const collectionInstanceMemberNames = [
  */
 export function reservedCollectionMemberNames(): ReadonlySet<string> {
   return new Set([
-    ...Object.getOwnPropertyNames(CollectionImpl.prototype),
+    ...Object.getOwnPropertyNames(CollectionBase.prototype),
     ...collectionInstanceMemberNames,
   ]);
 }
@@ -2978,7 +3171,7 @@ export type Collection<
   ModelName extends string,
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
-> = CollectionImpl<TContract, ModelName, Row, State> &
+> = CollectionBase<TContract, ModelName, Row, State> &
   AggregateIncludeReducers<TContract, ModelName, State['nsId']>;
 
 /**
@@ -3003,13 +3196,4 @@ interface CollectionSurfaceConstructor {
 export const Collection = blindCast<
   CollectionSurfaceConstructor,
   'the constructor installs one reducer per aggregate operation the registry contributes'
->(CollectionImpl);
-
-/**
- * The class behind {@link Collection}, for package-internal prototype-chain
- * checks (`instanceof`) and default construction. The public constructor
- * surface carries a single construct signature returning the intersection,
- * which heritage clauses require; the raw class keeps the `Function` shape
- * those checks need.
- */
-export const CollectionBase = CollectionImpl;
+>(CollectionBase);

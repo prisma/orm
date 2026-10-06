@@ -146,7 +146,6 @@ describe('filters', () => {
         descriptorFor: () => ({
           codecId: 'pg/text@1' as const,
           traits: [] as const,
-          targetTypes: ['text'] as const,
           paramsSchema: {
             '~standard': {
               version: 1 as const,

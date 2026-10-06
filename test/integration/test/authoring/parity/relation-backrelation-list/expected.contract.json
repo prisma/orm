@@ -107,12 +107,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -149,7 +149,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -165,7 +165,7 @@
         "id": "public"
       }
     },
-    "storageHash": "144d67e29abb2d894fd71d0b2c212075f38ddf1f6cdbf093f553742e9a8ea6f6"
+    "storageHash": "b0eb0bbcdc8a5b3e90ffdaf9d105dd8eec30270214919f40e0aef6cd9e8a9f2f"
   },
   "capabilities": {
     "postgres": {

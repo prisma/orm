@@ -115,6 +115,10 @@ export interface BuilderContext {
    * Aggregate result identity, resolved from the descriptors the composed stack contributes. The lane asks it what an aggregate's result carries rather than assuming the input's codec or naming a target's codec id.
    */
   readonly aggregates: SqlAggregateDescriptorRegistry;
+  /**
+   * Whether the composed stack can build the codec from its id alone: a descriptor is registered and needs no type parameters. A computed result names its codec id but no codec ref; the lane stamps a ref from that id only when the runtime can resolve it.
+   */
+  readonly materializesWithoutTypeParams: (codecId: string) => boolean;
 }
 
 /**
@@ -342,6 +346,11 @@ export function assertCapability(
   }
 }
 
+export function codecRefOf(field: ScopeField, ctx: BuilderContext): CodecRef | undefined {
+  if (field.codec !== undefined) return field.codec;
+  return ctx.materializesWithoutTypeParams(field.codecId) ? { codecId: field.codecId } : undefined;
+}
+
 export function resolveSelectArgs(
   args: unknown[],
   scope: Scope,
@@ -359,7 +368,9 @@ export function resolveSelectArgs(
         throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${colName}" not found in scope`, {
           meta: { column: colName },
         });
-      projections.push(ProjectionItem.of(colName, IdentifierRef.of(colName), field.codec));
+      projections.push(
+        ProjectionItem.of(colName, IdentifierRef.of(colName), codecRefOf(field, ctx)),
+      );
       newRowFields[colName] = field;
     }
     return { projections, newRowFields };
@@ -378,7 +389,7 @@ export function resolveSelectArgs(
     );
     const result = exprFn(createFieldProxy(scope), fns);
     const field = result.returnType;
-    projections.push(ProjectionItem.of(alias, projectionAstOf(result), field.codec));
+    projections.push(ProjectionItem.of(alias, projectionAstOf(result), codecRefOf(field, ctx)));
     newRowFields[alias] = field;
     return { projections, newRowFields };
   }
@@ -396,7 +407,7 @@ export function resolveSelectArgs(
     const record = callbackFn(createFieldProxy(scope), fns);
     for (const [key, expr] of Object.entries(record)) {
       const field = expr.returnType;
-      projections.push(ProjectionItem.of(key, projectionAstOf(expr), field.codec));
+      projections.push(ProjectionItem.of(key, projectionAstOf(expr), codecRefOf(field, ctx)));
       newRowFields[key] = field;
     }
     return { projections, newRowFields };

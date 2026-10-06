@@ -11,6 +11,7 @@ import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-n
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresDiffSubjectGranularity } from '../../src/core/schema-ir/schema-node-kinds';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 /**
  * Table-less contract namespaces (e.g. an enums-only schema) are invisible
@@ -32,7 +33,7 @@ function makeContract(): Contract<SqlStorage> {
       table: {
         profiles: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
@@ -133,7 +134,7 @@ function assertVerdict(
       contract,
       schema: actual,
       strict,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       diffSchema: diffPostgresSchema,
       granularityOf: postgresDiffSubjectGranularity,
     });
