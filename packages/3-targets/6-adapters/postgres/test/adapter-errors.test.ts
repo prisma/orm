@@ -23,6 +23,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresAdapter, postgresRawCodecInferer } from '../src/core/adapter';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { PostgresControlAdapter, parsePgReloptions } from '../src/core/control-adapter';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
@@ -106,7 +107,13 @@ describe('adapter-postgres structured error codes', () => {
     );
     expect(
       structuredCodeOf(() =>
-        renderLoweredSql(ast, contract, codecLookup, createPostgresBuiltinDataTypeLookup()),
+        renderLoweredSql(
+          ast,
+          contract,
+          codecLookup,
+          createPostgresBuiltinDataTypeLookup(),
+          postgresAdapterCapabilities,
+        ),
       ),
     ).toBe('RUNTIME.PARAM_REF_MISSING_CODEC');
   });
@@ -117,7 +124,13 @@ describe('adapter-postgres structured error codes', () => {
     ]);
     const error = (() => {
       try {
-        renderLoweredSql(ast, contract, codecLookup, createPostgresBuiltinDataTypeLookup());
+        renderLoweredSql(
+          ast,
+          contract,
+          codecLookup,
+          createPostgresBuiltinDataTypeLookup(),
+          postgresAdapterCapabilities,
+        );
       } catch (e) {
         return e;
       }
@@ -134,7 +147,13 @@ describe('adapter-postgres structured error codes', () => {
     const ast = UpdateAst.table(TableSource.named('user', undefined, 'public')).withSet({});
     expect(
       structuredCodeOf(() =>
-        renderLoweredSql(ast, contract, codecLookup, createPostgresBuiltinDataTypeLookup()),
+        renderLoweredSql(
+          ast,
+          contract,
+          codecLookup,
+          createPostgresBuiltinDataTypeLookup(),
+          postgresAdapterCapabilities,
+        ),
       ),
     ).toBe('RUNTIME.AST_INVALID');
   });
@@ -143,7 +162,13 @@ describe('adapter-postgres structured error codes', () => {
     const ast = InsertAst.into(TableSource.named('user', undefined, 'public')).withRows([]);
     expect(
       structuredCodeOf(() =>
-        renderLoweredSql(ast, contract, codecLookup, createPostgresBuiltinDataTypeLookup()),
+        renderLoweredSql(
+          ast,
+          contract,
+          codecLookup,
+          createPostgresBuiltinDataTypeLookup(),
+          postgresAdapterCapabilities,
+        ),
       ),
     ).toBe('RUNTIME.AST_INVALID');
   });
@@ -161,7 +186,13 @@ describe('adapter-postgres structured error codes', () => {
       .withWhere(NullCheckExpr.isNull(op));
     expect(
       structuredCodeOf(() =>
-        renderLoweredSql(ast, contract, codecLookup, createPostgresBuiltinDataTypeLookup()),
+        renderLoweredSql(
+          ast,
+          contract,
+          codecLookup,
+          createPostgresBuiltinDataTypeLookup(),
+          postgresAdapterCapabilities,
+        ),
       ),
     ).toBe('CONTRACT.PACK_CONTRIBUTION_INVALID');
   });

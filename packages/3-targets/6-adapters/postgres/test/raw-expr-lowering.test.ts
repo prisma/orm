@@ -13,6 +13,7 @@ import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -69,6 +70,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain('now()');
@@ -88,6 +90,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain('score > $1');
@@ -109,6 +112,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain('id BETWEEN $1 AND $2');
@@ -131,6 +135,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain('$1$2');
@@ -150,6 +155,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain('LENGTH("user"."id") > 0');
@@ -168,6 +174,7 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     );
 
     expect(lowered.sql).toContain("status = 'active'");

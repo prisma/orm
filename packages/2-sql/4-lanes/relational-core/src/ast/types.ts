@@ -1583,6 +1583,38 @@ export function checkLimitOffset(
   }
 }
 
+export type LockStrength = 'forUpdate' | 'forNoKeyUpdate' | 'forShare' | 'forKeyShare';
+export type LockWaitPolicy = 'nowait' | 'skipLocked';
+
+export interface LockingClauseOptions {
+  readonly strength: LockStrength;
+  readonly of: ReadonlyArray<string> | undefined;
+  readonly waitPolicy: LockWaitPolicy | undefined;
+}
+
+/** A row-locking clause on a select. `of` holds unqualified table names or aliases as written in FROM. */
+export class LockingClause extends AstNode {
+  readonly kind = 'locking-clause' as const;
+  readonly strength: LockStrength;
+  readonly of: ReadonlyArray<string> | undefined;
+  readonly waitPolicy: LockWaitPolicy | undefined;
+
+  constructor(options: LockingClauseOptions) {
+    super();
+    this.strength = options.strength;
+    this.of = options.of && options.of.length > 0 ? frozenArrayCopy(options.of) : undefined;
+    this.waitPolicy = options.waitPolicy;
+    this.freeze();
+  }
+
+  static of(
+    strength: LockStrength,
+    options?: { readonly of?: ReadonlyArray<string>; readonly waitPolicy?: LockWaitPolicy },
+  ): LockingClause {
+    return new LockingClause({ strength, of: options?.of, waitPolicy: options?.waitPolicy });
+  }
+}
+
 export interface SelectAstOptions {
   readonly from?: AnyFromSource;
   readonly joins: ReadonlyArray<JoinAst> | undefined;
@@ -1595,6 +1627,7 @@ export interface SelectAstOptions {
   readonly having: AnyExpression | undefined;
   readonly limit: LimitOffsetValue | undefined;
   readonly offset: LimitOffsetValue | undefined;
+  readonly locking: ReadonlyArray<LockingClause> | undefined;
   readonly selectAllIntent: { readonly table?: string } | undefined;
 }
 
@@ -1611,6 +1644,7 @@ export class SelectAst extends QueryAst {
   readonly having: AnyExpression | undefined;
   readonly limit: LimitOffsetValue | undefined;
   readonly offset: LimitOffsetValue | undefined;
+  readonly locking: ReadonlyArray<LockingClause> | undefined;
   readonly selectAllIntent: { readonly table?: string } | undefined;
 
   constructor(options: SelectAstOptions) {
@@ -1634,6 +1668,8 @@ export class SelectAst extends QueryAst {
     this.having = options.having;
     this.limit = options.limit;
     this.offset = options.offset;
+    this.locking =
+      options.locking && options.locking.length > 0 ? frozenArrayCopy(options.locking) : undefined;
     this.selectAllIntent = frozenOptionalRecordCopy(options.selectAllIntent);
     this.freeze();
   }
@@ -1651,6 +1687,7 @@ export class SelectAst extends QueryAst {
       having: undefined,
       limit: undefined,
       offset: undefined,
+      locking: undefined,
       selectAllIntent: undefined,
     });
   }
@@ -1667,6 +1704,7 @@ export class SelectAst extends QueryAst {
       having: undefined,
       limit: undefined,
       offset: undefined,
+      locking: undefined,
       selectAllIntent: undefined,
     });
   }
@@ -1684,6 +1722,7 @@ export class SelectAst extends QueryAst {
       having: this.having,
       limit: this.limit,
       offset: this.offset,
+      locking: this.locking,
       selectAllIntent: this.selectAllIntent,
     };
   }
@@ -1735,6 +1774,13 @@ export class SelectAst extends QueryAst {
     });
   }
 
+  withLocking(locking: ReadonlyArray<LockingClause>): SelectAst {
+    return new SelectAst({
+      ...this.toOptions(),
+      locking: locking.length > 0 ? locking : undefined,
+    });
+  }
+
   withGroupBy(groupBy: ReadonlyArray<AnyExpression>): SelectAst {
     return new SelectAst({
       ...this.toOptions(),
@@ -1783,6 +1829,7 @@ export class SelectAst extends QueryAst {
       having: this.having?.rewrite(rewriter),
       limit: rewriteLimitOffset(this.limit, rewriter),
       offset: rewriteLimitOffset(this.offset, rewriter),
+      locking: this.locking,
       selectAllIntent: this.selectAllIntent,
     });
 

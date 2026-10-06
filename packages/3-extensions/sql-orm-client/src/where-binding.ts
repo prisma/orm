@@ -232,6 +232,7 @@ function bindSelectAst(contract: Contract<SqlStorage>, ast: SelectAst): SelectAs
     having: ast.having ? bindWhereExpr(contract, ast.having, namespaceId) : undefined,
     limit: ast.limit,
     offset: ast.offset,
+    locking: ast.locking,
     selectAllIntent: ast.selectAllIntent,
   });
 }

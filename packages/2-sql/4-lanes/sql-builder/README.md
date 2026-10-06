@@ -52,6 +52,37 @@ const counts = await db.posts
   .all();
 ```
 
+### Row locking
+
+`forUpdate()`, `forNoKeyUpdate()`, `forShare()` and `forKeyShare()` render the matching locking clause after `LIMIT`/`OFFSET`. Each exists only when the adapter reports its capability, and so does each option. The lock lasts until the enclosing transaction ends, so use it inside a transaction.
+
+```typescript
+// FOR NO KEY UPDATE: does not block foreign-key checks on the row
+await tx.sql.public.contact.select('id').where((f, fns) => fns.eq(f.id, id)).forNoKeyUpdate().first();
+
+// FOR UPDATE SKIP LOCKED: the work-queue pattern
+await tx.sql.public.job
+  .select('id')
+  .where((f, fns) => fns.eq(f.state, 'queued'))
+  .orderBy('id')
+  .limit(1)
+  .forUpdate({ skipLocked: true })
+  .first();
+
+// FOR SHARE OF "c" NOWAIT: lock one table of a join, fail at once if a row is locked
+await tx.sql.public.contact
+  .as('c')
+  .innerJoin(tx.sql.public.identity.as('i'), (f, fns) => fns.eq(f.c.id, f.i.contact_id))
+  .select('name')
+  .forShare({ of: ['c'], nowait: true })
+  .all();
+
+// FOR KEY SHARE: blocks only deletes and key changes
+await tx.sql.public.contact.select('id').forKeyShare().all();
+```
+
+`nowait` and `skipLocked` exclude each other. `build()` refuses a lock together with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection. A locked select cannot be used as a subquery. `groupBy()` returns a query without the locking methods.
+
 ## Architecture
 
 - **Domain:** SQL

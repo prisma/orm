@@ -15,6 +15,7 @@ import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -59,6 +60,7 @@ describe('renderLoweredSql namespace qualification', () => {
       publicContract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     ).sql;
     expect(selectSql).toBe('SELECT "user"."id" AS "id" FROM "public"."user"');
 
@@ -67,6 +69,7 @@ describe('renderLoweredSql namespace qualification', () => {
       publicContract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
+      postgresAdapterCapabilities,
     ).sql;
     expect(deleteSql).toContain('DELETE FROM "public"."user"');
   });
