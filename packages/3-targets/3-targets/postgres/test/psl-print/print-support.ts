@@ -14,8 +14,18 @@ import { PostgresContractSerializer } from '../../src/core/postgres-contract-ser
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
 
-export const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-export const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+export const INT_COLUMN = {
+  many: false,
+  nativeType: 'int4',
+  codecId: 'pg/int4@1',
+  nullable: false,
+} as const;
+export const TEXT_COLUMN = {
+  many: false,
+  nativeType: 'text',
+  codecId: 'pg/text@1',
+  nullable: false,
+} as const;
 
 export function attributeText(attribute: PslAttribute): string {
   const prefix = attribute.target === 'model' ? '@@' : '@';
@@ -44,6 +54,7 @@ interface ModelInput {
 }
 
 const INT_FIELD: ContractField = {
+  many: false,
   nullable: false,
   type: { kind: 'scalar', codecId: 'pg/int4@1' },
 };
@@ -53,7 +64,7 @@ export interface ColumnShape {
   readonly nativeType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  readonly many?: boolean;
+  readonly many?: ContractField['many'];
   readonly typeParams?: Record<string, unknown>;
 }
 
@@ -72,7 +83,7 @@ export function domainFieldOf(column: ColumnShape | undefined): ContractField {
       codecId: column.codecId,
       ...(column.typeParams === undefined ? {} : { typeParams: column.typeParams }),
     },
-    ...(column.many === true ? { many: true } : {}),
+    many: column.many ?? false,
   };
 }
 

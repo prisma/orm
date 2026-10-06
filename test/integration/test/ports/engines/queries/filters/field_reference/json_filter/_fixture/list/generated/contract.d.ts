@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2e67372f379c2785af7c65a09d4abb5cddad7150a53666ce736fe6d8bc56f671'>;
+  StorageHashBase<'94da78f8dcb9bc6ca653282a89157284290ec310863cabb852c6ca8b7954d826'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -312,21 +312,25 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly json: {
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly json_list: {
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly json_list2: {
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -364,12 +368,12 @@ type ContractBase = Omit<
               readonly json_list: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly json_list2: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;

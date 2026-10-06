@@ -1,4 +1,5 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import { rlsEnabledAst, rlsPolicyExistsAst } from '../../src/contract-free/checks';
@@ -119,7 +120,7 @@ describe('createRlsPolicy op', () => {
     expect(ddlNode.permissive).toBe(true);
     expect(ddlNode.operation).toBe('select');
     expect(ddlNode.roles).toEqual(['authenticated']);
-    expect(ddlNode.using).toBe('(auth.uid() = user_id)');
+    expect(ddlNode.using).toEqual(opaqueSql('(auth.uid() = user_id)'));
     expect(ddlNode.withCheck).toBeUndefined();
   });
 
@@ -138,7 +139,7 @@ describe('createRlsPolicy op', () => {
     await createRlsPolicy('public', 'profiles', policy, lowerer);
     const ddlNode = received.find((n) => n instanceof PostgresCreatePolicy) as PostgresCreatePolicy;
     expect(ddlNode).toBeDefined();
-    expect(ddlNode.withCheck).toBe('(auth.uid() = user_id)');
+    expect(ddlNode.withCheck).toEqual(opaqueSql('(auth.uid() = user_id)'));
     expect(ddlNode.using).toBeUndefined();
   });
 

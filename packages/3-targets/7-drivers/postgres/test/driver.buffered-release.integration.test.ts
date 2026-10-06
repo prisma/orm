@@ -62,11 +62,11 @@ describe('buffered pool release', () => {
         })
         [Symbol.asyncIterator]();
       try {
-        expect(await iterator.next()).toEqual({ done: false, value: { id: 1 } });
+        expect(await iterator.next()).toEqual({ done: false, value: { id: '1' } });
         expect(pool.idleCount).toBe(1);
         expect(release).toHaveBeenCalledTimes(1);
-        expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: 3 }]);
-        expect(await iterator.next()).toEqual({ done: false, value: { id: 2 } });
+        expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: '3' }]);
+        expect(await iterator.next()).toEqual({ done: false, value: { id: '2' } });
         expect(await iterator.next()).toEqual({ done: true, value: undefined });
         expect(release).toHaveBeenCalledTimes(2);
       } finally {
@@ -109,7 +109,7 @@ describe('buffered pool release', () => {
       expect(release).toHaveBeenCalledTimes(1);
       await expect(queryRows(driver, 'select * from missing_table')).rejects.toThrow();
       expect(release).toHaveBeenCalledTimes(2);
-      expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: 3 }]);
+      expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: '3' }]);
       expect(release).toHaveBeenCalledTimes(3);
     },
     timeouts.spinUpPpgDev,
@@ -122,7 +122,7 @@ describe('buffered pool release', () => {
       const connection = await driver.acquireConnection();
       const transaction = transactional ? await connection.beginTransaction() : undefined;
       try {
-        expect(await queryRows(transaction ?? connection, 'select 1 as id')).toEqual([{ id: 1 }]);
+        expect(await queryRows(transaction ?? connection, 'select 1 as id')).toEqual([{ id: '1' }]);
         expect(pool.idleCount).toBe(0);
         expect(release).not.toHaveBeenCalled();
       } finally {
@@ -142,14 +142,14 @@ describe('buffered pool release', () => {
         .query({ sql: 'select generate_series(1, 2) as id' })
         [Symbol.asyncIterator]();
       try {
-        expect(await iterator.next()).toEqual({ done: false, value: { id: 1 } });
+        expect(await iterator.next()).toEqual({ done: false, value: { id: '1' } });
         expect(pool.idleCount).toBe(0);
         expect(release).not.toHaveBeenCalled();
       } finally {
         await iterator.return?.();
       }
       expect(release).toHaveBeenCalledTimes(1);
-      expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: 3 }]);
+      expect(await queryRows(driver, 'select 3 as id')).toEqual([{ id: '3' }]);
     },
     timeouts.spinUpPpgDev,
   );

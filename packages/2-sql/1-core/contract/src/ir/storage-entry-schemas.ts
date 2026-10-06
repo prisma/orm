@@ -39,7 +39,7 @@ const StorageColumnSchema = type({
   nativeType: 'string',
   codecId: 'string',
   nullable: 'boolean',
-  'many?': 'boolean',
+  'many?': type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
   'typeParams?': 'Record<string, unknown>',
   'typeRef?': 'string',
   'default?': ColumnDefaultSchema,
@@ -52,6 +52,7 @@ const StorageColumnSchema = type({
   if (col.typeParams !== undefined && col.typeRef !== undefined) {
     return ctx.mustBe('a column with either typeParams or typeRef, not both');
   }
+
   if (col.noCheck !== undefined) {
     if (col.noCheck.length === 0) {
       return ctx.mustBe('a column whose noCheck array is non-empty (omit the key when enforced)');

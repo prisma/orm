@@ -8,7 +8,7 @@ import type {
   AuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
 import {
-  collectScalarTypeConstructors,
+  getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
 import type {
@@ -31,6 +31,7 @@ import type {
 import {
   buildSymbolTable,
   createPslDiagnosticCollector,
+  diagnosticSource,
   keywordPslSpan,
   nodePslSpan,
   readResolvedAttribute,
@@ -47,8 +48,7 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
   buildEntityTypesByDiscriminator,
-  type ColumnDescriptor,
-  resolveFieldTypeDescriptor,
+  instantiateFieldTypeConstructor,
 } from '@internal/sql-contract-psl/resolution';
 import {
   buildSqlContractFromDefinition,
@@ -90,7 +90,6 @@ export interface InterpretPrisma7DocumentsInput {
 }
 
 const SUMMARY = 'Prisma 7 schema interpretation failed';
-const EMPTY_DESCRIPTORS: ReadonlyMap<string, ColumnDescriptor> = new Map();
 
 interface SourceBlock {
   readonly block: BlockSymbol;
@@ -334,7 +333,6 @@ export function interpretPrisma7Documents(
   const namespaceEntities = lowerNativeEnums(enums, input, diagnostics);
 
   const modelNames = new Set([...models.map((model) => model.symbol.name), ...ignoredModels]);
-  const scalarColumnDescriptors = collectScalarTypeConstructors(input.authoringContributions.type);
   const composedExtensions = new Set(input.composedExtensions);
   const builds = new Map<string, ModelBuild>();
   for (const declaration of models) {
@@ -357,7 +355,6 @@ export function interpretPrisma7Documents(
         ignoredModels,
         enums,
         namespaceEntities,
-        scalarColumnDescriptors,
         composedExtensions,
         input,
         diagnostics,
@@ -891,7 +888,6 @@ interface ReadFieldArgs {
   readonly ignoredModels: ReadonlySet<string>;
   readonly enums: ReadonlyMap<string, EnumDeclaration>;
   readonly namespaceEntities: NamespaceEntities;
-  readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly input: InterpretPrisma7DocumentsInput;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -1077,36 +1073,31 @@ function readField(args: ReadFieldArgs): void {
     };
   }
 
-  const namespaceExtensionEntities = args.namespaceEntities.get(model.namespaceId);
+  const typeConstructor = getAuthoringTypeConstructor(input.authoringContributions, call.path);
+  if (typeConstructor === undefined) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UNSUPPORTED_TYPE',
+        `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
+        sourceId,
+        field.span,
+      ),
+    );
+    return;
+  }
   const typeDiagnostics = createPslDiagnosticCollector(model.sources);
-  const resolved = resolveFieldTypeDescriptor({
-    field: { ...field, typeConstructor: call },
-    enumTypeDescriptors: EMPTY_DESCRIPTORS,
-    namedTypeDescriptors: EMPTY_DESCRIPTORS,
-    scalarColumnDescriptors: args.scalarColumnDescriptors,
-    authoringContributions: input.authoringContributions,
-    composedExtensions: args.composedExtensions,
-    familyId: binding.target.familyId,
-    targetId: binding.target.targetId,
+  const resolved = instantiateFieldTypeConstructor({
+    call,
+    descriptor: typeConstructor,
     diagnostics: typeDiagnostics,
-    sources: model.sources,
+    source: diagnosticSource(model.sources, field.node.syntax),
     entityLabel: label,
     namespaceId: model.namespaceId,
-    ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
+    namespaceExtensionEntities: args.namespaceEntities.get(model.namespaceId),
     codecLookup: input.codecLookup,
   });
   diagnostics.push(...typeDiagnostics.toExternal());
   if (!resolved.ok) {
-    if (!resolved.alreadyReported) {
-      diagnostics.push(
-        prisma7Diagnostic(
-          'PSL.PRISMA7_UNSUPPORTED_TYPE',
-          `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
-          sourceId,
-          field.span,
-        ),
-      );
-    }
     return;
   }
   const updatedAtGeneratorId =
@@ -1194,7 +1185,8 @@ function readField(args: ReadFieldArgs): void {
     descriptor: resolved.descriptor,
     nullable: field.optional || field.list,
     // Prisma 7 creates no CHECK constraint on list columns; Prisma 8 would derive one.
-    ...(field.list ? { many: true, noCheck: ['elementNotNull' as const] } : {}),
+    many: field.list,
+    ...(field.list ? { elementNullable: false, noCheck: ['elementNotNull' as const] } : {}),
     ...ifDefined('default', lowered?.storage),
     ...ifDefined('executionDefaults', executionDefaults),
   });

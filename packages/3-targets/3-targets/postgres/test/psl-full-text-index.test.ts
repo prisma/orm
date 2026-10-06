@@ -6,12 +6,20 @@
  * anything this attribute does not cover.
  */
 
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -65,27 +73,52 @@ const codecLookup: CodecLookupWithDescriptors = {
   descriptorFor: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumDescriptor : undefined),
 };
 
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...scalarTypeDescriptors].map(([name, output]) => [
+      name,
+      { kind: 'typeConstructor' as const, output },
+    ]),
+  );
+
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-full-text-index.test.psl');
-  const { symbolTable, diagnostics } = buildSymbolTable({
+  const { diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
   });
   expect(diagnostics).toEqual([]);
 
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    target: postgresTarget,
-    dataTypeLookup: postgresDataTypeLookup,
-    scalarColumnDescriptors: scalarTypeDescriptors,
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    capabilities: { sql: { scalarList: true } },
-    codecLookup,
+  const bound = bindPslSchema(source, {
+    sourceId: 'psl-full-text-index.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
+    },
   });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresTarget,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 function indexesOf(source: string) {

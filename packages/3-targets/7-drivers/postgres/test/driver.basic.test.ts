@@ -318,17 +318,17 @@ describe('@internal/driver-postgres', () => {
         'c',
       ]);
 
-      const rows: Array<{ id: number; name: string }> = [];
-      for await (const row of driver.query<{ id: number; name: string }>({
+      const rows: Array<{ id: string; name: string }> = [];
+      for await (const row of driver.query<{ id: string; name: string }>({
         sql: 'select id, name from cursor_items order by id asc',
       })) {
         rows.push(row);
       }
 
       expect(rows).toEqual([
-        { id: 1, name: 'a' },
-        { id: 2, name: 'b' },
-        { id: 3, name: 'c' },
+        { id: '1', name: 'a' },
+        { id: '2', name: 'b' },
+        { id: '3', name: 'c' },
       ]);
     },
     timeouts.spinUpPpgDev,
@@ -628,8 +628,8 @@ describe('@internal/driver-postgres', () => {
         const connection = await driver.acquireConnection();
         const transaction = await connection.beginTransaction();
 
-        const rows: Array<{ id: number; name: string }> = [];
-        for await (const row of transaction.query<{ id: number; name: string }>({
+        const rows: Array<{ id: string; name: string }> = [];
+        for await (const row of transaction.query<{ id: string; name: string }>({
           sql: 'select id, name from tx_stream_items where name like $1 order by id asc',
           params: ['tx-%'],
         })) {
@@ -637,8 +637,8 @@ describe('@internal/driver-postgres', () => {
         }
 
         expect(rows).toEqual([
-          { id: 1, name: 'tx-a' },
-          { id: 2, name: 'tx-b' },
+          { id: '1', name: 'tx-a' },
+          { id: '2', name: 'tx-b' },
         ]);
 
         await transaction.commit();

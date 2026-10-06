@@ -371,9 +371,28 @@ describe('adapter-postgres codecs', () => {
       expect(await codec.decode('P13M', {})).toEqual(fields({ months: 13 }));
     });
 
-    it('rejects a text wire value that is not an ISO-8601 duration', async () => {
-      await expect(codec.decode('1 day', {})).rejects.toThrow(
-        'pg/interval@1 value must be an ISO-8601 duration, got 1 day',
+    it('reads the interval text PostgreSQL prints into the three fields', async () => {
+      expect(await codec.decode('1 day 02:03:04', {})).toEqual(
+        fields({ days: 1, micros: 7_384_000_000n }),
+      );
+      expect(await codec.decode('-1 years -2 mons +3 days -04:00:00', {})).toEqual(
+        fields({ months: -14, days: 3, micros: -14_400_000_000n }),
+      );
+    });
+
+    it('rounds interval text past six fractional digits to microseconds as ISO-8601 text does', async () => {
+      expect(await codec.decode('00:00:00.1234567', {})).toEqual(
+        await codec.decode('PT0.1234567S', {}),
+      );
+      expect(await codec.decode('00:00:00.1234567', {})).toEqual(fields({ micros: 123_457n }));
+      expect(await codec.decode('-00:00:00.1234565', {})).toEqual(
+        await codec.decode('PT-0.1234565S', {}),
+      );
+    });
+
+    it('rejects a text wire value that is neither an ISO-8601 duration nor interval text', async () => {
+      await expect(codec.decode('one day', {})).rejects.toThrow(
+        'pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got one day',
       );
     });
 

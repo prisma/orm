@@ -29,6 +29,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
@@ -43,12 +44,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }
@@ -67,25 +63,22 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
   const { binder } = createBinder({
     sources: registry,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: {
-      model: {},
-      field: {
-        [attribute]: () =>
-          fieldAttribute(attribute, {
-            documentation: 'fixture',
-            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
-            named: {
-              fields: { type: list(fieldRef()), documentation: 'fixture' },
-              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
-            },
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          [attribute]: () =>
+            fieldAttribute(attribute, {
+              documentation: 'fixture',
+              positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+              named: {
+                fields: { type: list(fieldRef()), documentation: 'fixture' },
+                references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+              },
+            }),
+        },
       },
-    },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    }),
   });
   for (const node of field.node.attributes()) {
     if (node.name()?.path().join('.') !== attribute) continue;
@@ -764,20 +757,20 @@ describe('entityRef', () => {
     const { binder } = createBinder({
       sources,
       symbolTable,
-      typeConstructors: {},
-      attributeSpecs: {
-        model: {},
-        field: {
-          x: () =>
-            fieldAttribute('x', {
-              documentation: 'fixture',
-              positional: [
-                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
-              ],
-            }),
+      context: binderContext({
+        attributeSpecs: {
+          model: {},
+          field: {
+            x: () =>
+              fieldAttribute('x', {
+                documentation: 'fixture',
+                positional: [
+                  { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+                ],
+              }),
+          },
         },
-      },
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      }),
     });
     return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
   }

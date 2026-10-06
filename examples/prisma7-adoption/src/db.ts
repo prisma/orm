@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import 'temporal-polyfill/full/global';
 import { PrismaPg } from '@prisma/adapter-pg';
 import postgres from '@prisma/orm-postgres/runtime';
 import { PrismaClient } from '../generated/prisma7/client';

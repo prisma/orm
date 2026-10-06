@@ -275,6 +275,7 @@ export async function loadContractSourceWithStack(inputs: {
     composedExtensions: stack.extensions.map((p) => p.id),
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
+    ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     dataTypeLookup: stack.dataTypeLookup,

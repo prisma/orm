@@ -23,7 +23,7 @@ describe('domain type compatibility', () => {
       type FieldsFromModel = ContractModel['fields'];
 
       const fields: FieldsFromModel = {
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false },
       };
       const idField = fields['id']!;
       expect(idField.nullable).toBe(false);

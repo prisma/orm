@@ -62,7 +62,9 @@
                 }
               },
               "enumList": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -76,7 +78,9 @@
                 }
               },
               "list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

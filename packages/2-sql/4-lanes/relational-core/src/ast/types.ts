@@ -264,7 +264,7 @@ function rewriteInsertValue(value: InsertValue, rewriter: AstRewriter): InsertVa
     case 'default-value':
       return value;
     // RawExpr insert values are opaque DB-side expressions (e.g. `now()` /
-    // `datetime('now')`) carried in value position; they are not a rewrite
+    // `strftime('%Y-%m-%dT%H:%M:%fZ','now')`) carried in value position; they are not a rewrite
     // target on the insert path.
     case 'raw-expr':
       return value;

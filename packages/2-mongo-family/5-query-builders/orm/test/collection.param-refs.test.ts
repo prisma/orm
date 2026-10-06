@@ -213,9 +213,12 @@ describe('null in the Mongo ORM', () => {
       { name: 'email', collection: 'users', codecId: string },
       { name: 'loginCount', collection: 'users', codecId: 'mongo/int32@1' },
       { name: 'tags.0', collection: 'users', codecId: string },
-      withoutCodec,
-      withoutCodec,
-      withoutCodec,
     ]);
+    expect(plans[0]?.command).toMatchObject({ document: { homeAddress: null } });
+    for (const plan of plans.slice(1)) {
+      expect(plan.command).toMatchObject({
+        pipeline: [{ filter: { field: 'loginCount', value: null } }],
+      });
+    }
   });
 });

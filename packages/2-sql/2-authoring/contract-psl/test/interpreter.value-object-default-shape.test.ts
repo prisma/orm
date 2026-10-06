@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresCodecLookup,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
 } from './fixtures';
@@ -66,7 +65,7 @@ model User {
   id Int @id
 ${fields}
 }`;
-  const result = interpretPslDocumentToSqlContract({
+  const result = interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     authoringContributions: {
@@ -81,7 +80,6 @@ ${fields}
     createNamespace: createTestSqlNamespace,
     dataTypeLookup: fixtureDataTypeSupport.lookup,
     capabilities: { sql: { scalarList: true } },
-    ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
   const lines = schema.split('\n');
@@ -118,6 +116,33 @@ describe('a default on a value-object field matches its composite type', () => {
   outer Outer     @default(json\`{"inner": {"street": "x", "tags": []}, "count": 1}\`)`)
         .diagnostics,
     ).toEqual([]);
+  });
+
+  it('accepts nullable list elements in literal and JSON value-object defaults', () => {
+    expect(
+      scenario(
+        `  homes Address?[] @default([null, json\`{"street":"x","tags":[]}\`, null])
+  jsonHomes Address?[] @default(json\`[null,{"street":"x","tags":[]}]\`)
+  nested NullableMembers @default(json\`{"texts":[null,"x"],"addresses":[null,{"street":"x","tags":[]}]}\`)`,
+        `type NullableMembers {
+  texts String?[]
+  addresses Address?[]
+}
+`,
+      ).diagnostics,
+    ).toEqual([]);
+  });
+
+  it('checks non-null elements after restoring null positions in a list default', () => {
+    const { diagnostics, incompatible } = scenario(
+      '  homes Address?[] @default([null, json`{"tags":[]}`])',
+    );
+    expect(diagnostics).toEqual([
+      incompatible(
+        'homes',
+        'Field "User.homes[1].street": the member is required, and the default has no value for it',
+      ),
+    ]);
   });
 
   it('refuses a JSON object or string as the default of a list of value objects', () => {

@@ -11,13 +11,12 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const supabaseExtensionPackRef = {
@@ -33,8 +32,9 @@ const int4Column = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
 describe('PSL ↔ TS namespace parity', () => {
   it('produces structurally equivalent Contract IR from PSL and TS builder for a 2-namespace schema with a cross-namespace FK', () => {
     // PSL authoring
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `namespace auth {
+
+    const pslResult = interpretSqlContract(
+      `namespace auth {
   model User {
     id Int @id
     posts public.Post[]
@@ -51,19 +51,16 @@ namespace public {
   }
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslResult = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
@@ -170,28 +167,26 @@ namespace public {
     // PSL: supabase:auth.User cross-space reference.
     // With composedExtensionContracts provided, the interpreter resolves tableName = 'users'
     // directly from the extension contract — the same value the TS builder produces.
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model Profile {
+
+    const pslResult = interpretSqlContract(
+      `model Profile {
   id    Int @id
   userId Int
   user  supabase:auth.User @relation(fields: [userId], references: [id])
   @@map("profile")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslResult = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      composedExtensions: ['supabase'],
-      composedExtensionContracts: new Map([['supabase', syntheticExtensionContract]]),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        composedExtensions: ['supabase'],
+        composedExtensionContracts: new Map([['supabase', syntheticExtensionContract]]),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
@@ -244,26 +239,24 @@ namespace public {
 
   it('emits PSL_UNKNOWN_CONTRACT_SPACE when the extension contract is absent from composedExtensionContracts', () => {
     // No contract for 'supabase' in the map — the interpreter must fail fast, not fall back to 'user'.
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model Profile {
+
+    const result = interpretSqlContract(
+      `model Profile {
   id    Int @id
   userId Int
   user  supabase:auth.User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      composedExtensions: ['supabase'],
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensions: ['supabase'],
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

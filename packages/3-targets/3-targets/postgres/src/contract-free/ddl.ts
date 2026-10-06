@@ -1,8 +1,13 @@
-import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import {
+  type DdlColumn,
+  type DdlTableConstraint,
+  opaqueSql,
+} from '@internal/sql-relational-core/ast';
+import { ifDefined } from '@internal/utils/defined';
 import {
   AddColumnAction,
   type AnyAlterTableAction,
-  type DdlIndexElements,
+  type CreateIndexElements,
   DropDefaultAction,
   PostgresAlterIndexRename,
   PostgresAlterPolicyRename,
@@ -125,7 +130,12 @@ export function createPolicy(options: {
   readonly using?: string;
   readonly withCheck?: string;
 }): PostgresCreatePolicy {
-  return new PostgresCreatePolicy(options);
+  const { using, withCheck, ...rest } = options;
+  return new PostgresCreatePolicy({
+    ...rest,
+    ...ifDefined('using', using === undefined ? undefined : opaqueSql(using)),
+    ...ifDefined('withCheck', withCheck === undefined ? undefined : opaqueSql(withCheck)),
+  });
 }
 
 /**
@@ -165,12 +175,20 @@ export function createIndex(options: {
   readonly table: string;
   readonly name: string;
   readonly unique: boolean;
-  readonly elements: DdlIndexElements;
+  readonly elements: CreateIndexElements;
   readonly type: string | undefined;
   readonly options: Record<string, unknown> | undefined;
   readonly where: string | undefined;
 }): PostgresCreateIndex {
-  return new PostgresCreateIndex(options);
+  const { elements, where, ...rest } = options;
+  return new PostgresCreateIndex({
+    ...rest,
+    elements:
+      'columns' in elements
+        ? { columns: elements.columns }
+        : { expression: opaqueSql(elements.expression) },
+    where: where === undefined ? undefined : opaqueSql(where),
+  });
 }
 
 /**

@@ -27,10 +27,12 @@ interface TwoNamespaceContract extends Omit<TestContract, 'domain' | 'storage'> 
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly token: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -59,11 +61,13 @@ interface TwoNamespaceContract extends Omit<TestContract, 'domain' | 'storage'> 
             readonly auth_users: {
               readonly columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly token: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -111,6 +115,7 @@ test('the auth-namespace User facet read row carries its unique field `token`', 
  * focused on the field that distinguishes the two namespaces.
  */
 type DefaultedPk = {
+  readonly many: false;
   readonly nativeType: 'int4';
   readonly codecId: 'pg/int4@1';
   readonly nullable: false;
@@ -125,10 +130,12 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly email: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -150,10 +157,12 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly token: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -183,6 +192,7 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
               readonly columns: {
                 readonly id: DefaultedPk;
                 readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -206,6 +216,7 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
               readonly columns: {
                 readonly id: DefaultedPk;
                 readonly token: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;

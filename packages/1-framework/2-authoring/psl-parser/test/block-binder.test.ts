@@ -21,6 +21,7 @@ import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ArrayLiteralAst, FunctionCallAst } from '../src/syntax/ast/expressions';
+import { binderContext } from './support';
 
 const reference = entityRef({ kind: 'model' });
 
@@ -41,19 +42,19 @@ function bind(
     ...createBinder({
       sources,
       symbolTable,
-      typeConstructors: {},
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-      attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
-      pslBlockDescriptors: {
-        policy: {
-          kind: 'pslBlock',
-          keyword: 'policy',
-          discriminator: 'policy',
-          name: { required: true },
-          spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
-          attributes: { refs: () => blockAttribute('refs', parameters) },
+      context: binderContext({
+        attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
+        pslBlockDescriptors: {
+          policy: {
+            kind: 'pslBlock',
+            keyword: 'policy',
+            discriminator: 'policy',
+            name: { required: true },
+            spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
+            attributes: { refs: () => blockAttribute('refs', parameters) },
+          },
         },
-      },
+      }),
     }),
   };
 }
@@ -68,12 +69,15 @@ it('shares forward entity binding and silent identifier fallback across entries 
       'model Later {',
       ' @@refs(External, targets: [Later])',
       '}',
+      'namespace app {}',
       'namespace app {',
       ' policy Local {',
       '  target = Later',
       '  fallback = Global',
       '  @@refs(Later, targets: [Global, External])',
       ' }',
+      '}',
+      'namespace app {',
       ' model Later {}',
       '}',
       'model Global {}',
@@ -82,6 +86,11 @@ it('shares forward entity binding and silent identifier fallback across entries 
   expect(diagnostics).toEqual([]);
   const root = symbolTable.topLevel.blocks['Root']!;
   const local = symbolTable.topLevel.namespaces['app']!;
+  const scope = binder.scopeAt(local.models['Later']!.node.syntax);
+  expect(binder.scopeAt(local.blocks['Local']!.node.syntax)).toBe(scope);
+  for (const declaration of local.declarations) {
+    expect(binder.scopeAt(declaration.node.syntax)).toBe(scope);
+  }
   const resolutions = [...local.blocks['Local']!.node.entries()].map((entry) =>
     binder.symbolForNode(entry.value()!.syntax),
   );
@@ -350,18 +359,18 @@ it('resolves a field after an entity lookup fails', () => {
   const result = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    attributeSpecs: {
-      model: {},
-      field: {
-        pick: () =>
-          fieldAttribute('pick', {
-            documentation: 'pick',
-            positional: [{ key: 'value', type: rule, documentation: 'value' }],
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          pick: () =>
+            fieldAttribute('pick', {
+              documentation: 'pick',
+              positional: [{ key: 'value', type: rule, documentation: 'value' }],
+            }),
+        },
       },
-    },
+    }),
   });
   const selfModel = symbolTable.topLevel.models['M']!;
   const field = selfModel.fields['value']!;

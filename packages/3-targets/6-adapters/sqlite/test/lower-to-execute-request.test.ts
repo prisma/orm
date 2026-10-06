@@ -134,15 +134,28 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
     expect(result.sql).not.toContain('autoincrement');
   });
 
-  it("maps the canonical now() function default to SQLite's datetime('now')", async () => {
+  it('refuses a function default containing a line comment', async () => {
+    const ast = new SqliteCreateTable({
+      table: 't',
+      columns: [col('n', 'INTEGER', { default: fn('1 -- c') })],
+    });
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: { expression: '1 -- c' },
+      }),
+    );
+  });
+
+  it('maps the canonical now() function default to the expression that stores the datetime codec text', async () => {
     const ast = new SqliteCreateTable({
       table: 't',
       columns: [col('created_at', 'TEXT', { default: fn('now()') })],
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
-    // SQLite has no now(); the contract canonicalizes CURRENT_TIMESTAMP to
-    // now(), which must map back to a valid SQLite expression at apply time.
-    expect(result.sql).toContain(`"created_at" TEXT DEFAULT (datetime('now'))`);
+    expect(result.sql).toContain(
+      `"created_at" TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    );
     expect(result.sql).not.toContain('(now())');
     expect(result.params).toEqual([]);
   });

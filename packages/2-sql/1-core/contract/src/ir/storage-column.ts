@@ -1,6 +1,7 @@
 import type { ColumnDefault, ControlPolicy, ValueSetRef } from '@internal/contract/types';
 import { freezeNode } from '@internal/framework-components/ir';
 import type { CheckKind } from '@internal/sql-schema-ir/naming';
+import { contractError } from '../contract-errors';
 import { SqlNode } from './sql-node';
 
 /**
@@ -13,11 +14,12 @@ import { SqlNode } from './sql-node';
  * other, not both); the constructor preserves whichever caller-side
  * choice the input encodes.
  */
-export interface StorageColumnInput {
+export type StorageColumnMultiplicity = false | { readonly elementNullable: boolean };
+
+export type StorageColumnInput = {
   readonly nativeType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  readonly many?: boolean;
   readonly typeParams?: Record<string, unknown>;
   readonly typeRef?: string;
   readonly default?: ColumnDefault;
@@ -25,7 +27,8 @@ export interface StorageColumnInput {
   readonly valueSet?: ValueSetRef;
   /** Generated-check kinds the author declined for this column. Presence means opted out; never an empty array. */
   readonly noCheck?: readonly CheckKind[];
-}
+  readonly many?: StorageColumnMultiplicity;
+};
 
 /**
  * SQL Contract IR node for a single column entry in `StorageTable.columns`.
@@ -44,7 +47,7 @@ export class StorageColumn extends SqlNode {
   readonly nativeType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  declare readonly many?: boolean;
+  readonly many: StorageColumnMultiplicity;
   declare readonly typeParams?: Record<string, unknown>;
   declare readonly typeRef?: string;
   declare readonly default?: ColumnDefault;
@@ -55,10 +58,17 @@ export class StorageColumn extends SqlNode {
 
   constructor(input: StorageColumnInput) {
     super();
+    if (Object.hasOwn(input, 'elementNullable')) {
+      throw contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        'StorageColumn elementNullable must be nested under many.',
+        { meta: { reason: 'sibling-elementNullable' } },
+      );
+    }
     this.nativeType = input.nativeType;
     this.codecId = input.codecId;
     this.nullable = input.nullable;
-    if (input.many !== undefined) this.many = input.many;
+    this.many = input.many ?? false;
     if (input.noCheck !== undefined) this.noCheck = input.noCheck;
     if (input.typeParams !== undefined) this.typeParams = input.typeParams;
     if (input.typeRef !== undefined) this.typeRef = input.typeRef;

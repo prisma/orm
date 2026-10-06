@@ -8,12 +8,22 @@
  */
 
 import type { ColumnDefault } from '@internal/contract/types';
+import { SQLITE_DATETIME_TEXT_FORMAT } from './datetime-text';
 
 const NULL_PATTERN = /^NULL$/i;
 const INTEGER_PATTERN = /^-?\d+$/;
 const REAL_PATTERN = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 const HEX_PATTERN = /^0[xX][\dA-Fa-f]+$/;
 const STRING_LITERAL_PATTERN = /^'((?:[^']|'')*)'$/;
+const STRFTIME_NOW_PATTERN = /^strftime\s*\(\s*(['"])([^'"]*)\1\s*,\s*(['"])now\3\s*\)$/i;
+
+function isCurrentTimestamp(expression: string): boolean {
+  const lower = expression.toLowerCase();
+  if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
+    return true;
+  }
+  return expression.match(STRFTIME_NOW_PATTERN)?.[2] === SQLITE_DATETIME_TEXT_FORMAT;
+}
 
 function isNumericLiteral(value: string): boolean {
   return INTEGER_PATTERN.test(value) || REAL_PATTERN.test(value) || HEX_PATTERN.test(value);
@@ -54,14 +64,10 @@ export function parseSqliteDefault(
     trimmed = stripped;
   }
 
-  // SQLite has several spellings for "current timestamp" — `CURRENT_TIMESTAMP`
-  // (keyword) and `datetime('now')` / `datetime("now")` (function call). A
-  // named `now()` default in the contract is rendered as one of them, so they
-  // read back as `now()` here and the named default verifies against the
-  // database's text. `sqliteResolveDefault` applies the same rule to the
-  // contract side, so a raw sql`CURRENT_TIMESTAMP` default compares equal too.
-  const lower = trimmed.toLowerCase();
-  if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
+  // A named `now()` default is rendered as `SQLITE_NOW_EXPRESSION`; databases created earlier hold
+  // `datetime('now')` or `CURRENT_TIMESTAMP`. All of them read back as `now()`, and
+  // `sqliteResolveDefault` applies the same rule to the contract side.
+  if (isCurrentTimestamp(trimmed)) {
     return { kind: 'function', expression: 'now()' };
   }
 

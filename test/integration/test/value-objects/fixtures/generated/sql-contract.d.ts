@@ -17,10 +17,7 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type {
-  ContractWithTypeMaps,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
+import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -111,21 +108,25 @@ type ContractBase = Omit<
             readonly shop: {
               columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly location: {
+                  readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
                 readonly notes: {
+                  readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: true;

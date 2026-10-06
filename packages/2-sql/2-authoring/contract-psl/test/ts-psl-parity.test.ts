@@ -12,11 +12,10 @@ import { countSemanticLines } from '@repo/test-utils/semantic-lines';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  symbolTableInputFromParseArgs,
+  interpretSqlContract,
   temporalCodecPresetMirrors,
   temporalConvenienceMirrors,
   testEnumEntityContributions,
@@ -343,13 +342,8 @@ describe('TS and PSL authoring parity', () => {
     readonly authoringContributions: AuthoringContributions;
   }): void {
     const tsContract = target.buildTsContract();
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: timestampParityPslSchema,
-      sourceId: 'schema.prisma',
-    });
 
-    const interpreted = interpretPslDocumentToSqlContract({
-      ...pslDocument,
+    const interpreted = interpretSqlContract(timestampParityPslSchema, {
       target: target.targetPack,
       scalarColumnDescriptors: target.scalarColumnDescriptors,
       composedExtensionContracts: new Map(),
@@ -384,8 +378,8 @@ describe('TS and PSL authoring parity', () => {
   });
 
   it('PSL and TS lower the same cross-namespace FK shape to identical contract IR', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `namespace auth {
+    const pslContract = interpretSqlContract(
+      `namespace auth {
   model User {
     id Int @id
     posts Post[]
@@ -400,20 +394,17 @@ model Post {
   @@map("post")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
@@ -469,27 +460,25 @@ model Post {
   });
 
   it('PSL and TS lower the same expression index to identical wire-named IR (wire name pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index(expression: "lower(email)", name: "users_email_eq")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
@@ -535,29 +524,27 @@ model Post {
       indexTypes: defineIndexTypes().add('bm25', { options: type('object') }),
     } as const;
 
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index(expression: "eql_v3.eq_term(email)", where: "(deleted_at IS NULL)", unique: true, name: "users_email_eq", type: "bm25", options: {})
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensions: [indexTypesPack.id],
-      composedExtensionPackRefs: [indexTypesPack],
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensions: [indexTypesPack.id],
+        composedExtensionPackRefs: [indexTypesPack],
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
@@ -611,27 +598,25 @@ model Post {
   });
 
   it('PSL map: and TS map: lower the same exact fields index', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index([email], map: "users_email_adopted")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
@@ -663,27 +648,25 @@ model Post {
   });
 
   it('PSL name: and TS name: lower the same wire-named fields index (wire name pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index([email], name: "user_email_lookup")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
@@ -720,28 +703,25 @@ model Post {
   });
 
   it('PSL and TS lower the same unnamed index to identical wire-named IR (wire names pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id Int @id
   email String @map("email")
   @@index([email])
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+      },
+    );
 
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
@@ -786,25 +766,23 @@ model Post {
   // equal.
   describe('temporal.updatedAt() three-way byte-identity', () => {
     const interpretTemporalPsl = (field: string) => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `model User {
+      const result = interpretSqlContract(
+        `model User {
   id Int @id
   stamped ${field}
   @@map("user")
 }`,
-        sourceId: 'schema.prisma',
-      });
-      const result = interpretPslDocumentToSqlContract({
-        ...document,
-        target: postgresTimestampTargetPack,
-        scalarColumnDescriptors: postgresTimestampScalarTypeDescriptors,
-        composedExtensionContracts: new Map(),
-        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-        authoringContributions: postgresTimestampAuthoringContributions,
-        createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          target: postgresTimestampTargetPack,
+          scalarColumnDescriptors: postgresTimestampScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+          authoringContributions: postgresTimestampAuthoringContributions,
+          createNamespace: createTestSqlNamespace,
+          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('interpretation failed');
       return result.value;

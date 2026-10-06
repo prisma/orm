@@ -6,16 +6,20 @@
  * a literal that prints but does not read back fails here rather than in a user's terminal.
  */
 
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import {
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
 } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
@@ -106,28 +110,36 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
       },
     }),
   );
-  const { document, sources } = parse(printed, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const emitted = interpretPslDocumentToSqlContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    capabilities: { sql: { scalarList: true } },
-    target,
-    scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    codecLookup,
-    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      generatorDescriptors: [],
+  const bound = bindPslSchema(printed, {
+    sourceId: 'schema.prisma',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...authoringTypes, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
     },
   });
+  const emitted = withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
   if (!emitted.ok) {
     throw new Error(`${printed}\n\n${JSON.stringify(emitted.failure.diagnostics, null, 2)}`);
   }
@@ -178,6 +190,51 @@ two lines é'::text`,
       scores: { kind: 'literal', value: [1, 2] },
       docs: { kind: 'literal', value: [{}, []] },
     });
+  });
+
+  it.each([
+    ['timestamp', "'2024-01-01 00:00:00'::timestamp without time zone", '2024-01-01T00:00:00'],
+    [
+      'timestamp(3)',
+      "'2024-01-01 00:00:00.5'::timestamp(3) without time zone",
+      '2024-01-01T00:00:00.5',
+    ],
+    ['timestamptz', "'2024-01-01 01:00:00+00'::timestamp with time zone", '2024-01-01T01:00:00Z'],
+    [
+      'timestamptz(6)',
+      "'2024-01-01 01:00:00.123456+00'::timestamp(6) with time zone",
+      '2024-01-01T01:00:00.123456Z',
+    ],
+    [
+      'timestamptz',
+      "'0044-03-15 00:00:00+00 BC'::timestamp with time zone",
+      '-000043-03-15T00:00:00Z',
+    ],
+    ['date', "'2024-01-01'::date", '2024-01-01'],
+    ['date', "'0044-03-15 BC'::date", '-000043-03-15'],
+    ['time', "'12:34:56.5'::time without time zone", '12:34:56.5'],
+    ['time(3)', "'12:34:56.123'::time(3) without time zone", '12:34:56.123'],
+    ['timetz', "'12:34:56+02'::time with time zone", '12:34:56+02:00'],
+    ['timestamp', "'infinity'::timestamp without time zone", 'infinity'],
+    ['timestamptz', "'-infinity'::timestamp with time zone", '-infinity'],
+    ['date', "'infinity'::date", 'infinity'],
+  ])('round-trips a %s default of %s', (nativeType, rawDefault, value) => {
+    expect(roundTrippedDefaults([introspected('stamp', nativeType, rawDefault)])).toEqual({
+      stamp: { kind: 'literal', value },
+    });
+  });
+
+  it('round-trips a list of timestamps', () => {
+    expect(
+      roundTrippedDefaults([
+        introspected(
+          'stamps',
+          'timestamp(3)',
+          "ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]",
+          { many: true },
+        ),
+      ]),
+    ).toEqual({ stamps: { kind: 'literal', value: ['2024-01-01T00:00:00'] } });
   });
 
   it('round-trips a default of every parameterized type the type map writes', () => {

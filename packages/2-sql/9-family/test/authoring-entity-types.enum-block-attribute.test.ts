@@ -1,3 +1,4 @@
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -9,10 +10,13 @@ function build(source: string) {
   const { binder } = createBinder({
     sources,
     symbolTable: result.symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    },
   });
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable: result.symbolTable,

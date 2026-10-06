@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { symbolTableInputFromParseArgs } from './fixtures';
 import {
   builtinControlMutationDefaults,
-  interpretPslDocumentToSqlContract,
+  interpretPostgresSchema,
 } from './interpreter-defaults-support';
 
 // Field-preset misuse cases. The preset is a complete field declaration —
@@ -24,20 +23,40 @@ describe('field-preset misuse', () => {
     },
   } as const;
 
+  it('rejects a field preset written without a call with PSL_PRESET_NOT_CALLED', () => {
+    const result = interpretPostgresSchema(
+      `model Bad {
+id Int @id
+example temporal.exampleField
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_PRESET_NOT_CALLED',
+        message:
+          'Field "Bad.example" uses field preset "temporal.exampleField" without calling it. Write temporal.exampleField().',
+      },
+    ]);
+  });
+
   it('rejects optional field-preset call with PSL_PRESET_NOT_OPTIONAL', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.exampleField()?
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: syntheticPresetContributions,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -52,19 +71,16 @@ example temporal.exampleField()?
   });
 
   it('rejects field-preset call combined with @default(...) with PSL_PRESET_AND_DEFAULT_CONFLICT', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.exampleField() @default(now())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: syntheticPresetContributions,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -79,19 +95,16 @@ example temporal.exampleField() @default(now())
   });
 
   it('rejects field-preset call combined with @id when preset does not contribute id', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.exampleField() @id
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: syntheticPresetContributions,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -105,47 +118,41 @@ example temporal.exampleField() @id
     );
   });
 
-  it('rejects an unknown extension namespace in field-position with PSL_EXTENSION_NAMESPACE_NOT_COMPOSED (AC5c)', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+  it('rejects a field-preset call with an unregistered namespace with PSL_UNRESOLVED_REFERENCE', () => {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 ts weather.updatedAt()
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+          code: 'PSL_UNRESOLVED_REFERENCE',
           sourceId: 'schema.prisma',
-          data: { namespace: 'weather', suggestedPack: 'weather' },
+          message: 'Cannot find type "weather.updatedAt"',
         }),
       ]),
     );
   });
 
   it('rejects extra positional argument to a zero-arg preset (AC5a)', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.exampleField(123)
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: syntheticPresetContributions,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -161,19 +168,16 @@ example temporal.exampleField(123)
   });
 
   it('rejects list-of preset call with PSL_PRESET_NOT_LIST (AC5f)', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.exampleField()[]
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: syntheticPresetContributions,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -190,18 +194,16 @@ example temporal.exampleField()[]
   it('rejects @default(temporal.updatedAt()) as invalid attribute syntax (AC5g)', () => {
     // A namespaced callee fails the funcCall spec before reaching the registry, so the rejection
     // is a syntax error rather than a generator-applicability error.
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 ts DateTime @default(temporal.updatedAt())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -220,70 +222,57 @@ ts DateTime @default(temporal.updatedAt())
     // second one is a parser-level reject. This test locks in the
     // failure mode so a future parser refactor can't silently accept the
     // ambiguous form and let the interpreter pick one.
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example temporal.updatedAt() temporal.createdAt()
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics.length).toBeGreaterThan(0);
   });
 
-  it('rejects an unknown preset name in a registered field namespace with PSL_UNKNOWN_FIELD_PRESET', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+  it('reports an unknown preset name in a registered field namespace as a single unresolved reference', () => {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example audit.foo()
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: { field: { audit: {} }, type: {} },
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: { field: { audit: {} }, type: {} },
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
-      {
-        code: 'PSL_UNKNOWN_FIELD_PRESET',
+      expect.objectContaining({
+        code: 'PSL_UNRESOLVED_REFERENCE',
         sourceId: 'schema.prisma',
-        message:
-          'Field "Bad.example" references unknown field preset "audit.foo". The "audit" namespace has no field presets.',
-        span: {
-          start: { offset: 31, line: 3, column: 9 },
-          end: { offset: 42, line: 3, column: 20 },
-        },
-        data: { namespace: 'audit', helperPath: 'audit.foo' },
-      },
+        message: 'Cannot find type "audit.foo"',
+        data: { reference: 'type', name: 'audit.foo', constructorCall: true },
+      }),
     ]);
   });
 
   it('keeps the binder voice for a bare name in a registered field namespace', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Bad {
+    const result = interpretPostgresSchema(
+      `model Bad {
 id Int @id
 example audit.foo
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: { field: { audit: {} }, type: {} },
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: { field: { audit: {} }, type: {} },
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

@@ -99,7 +99,9 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
         nativeType: defaultCase.nativeType,
         codecId: defaultCase.codecId,
         nullable: true,
-        ...(defaultCase.many ? { many: true, noCheck: ['elementNotNull'] } : {}),
+        ...(defaultCase.many
+          ? { many: { elementNullable: false }, noCheck: ['elementNotNull'] }
+          : {}),
         ...(withDefaults ? { default: { kind: 'literal', value: defaultCase.literal } } : {}),
       },
     ]),
@@ -245,20 +247,6 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
     }
   }
 
-  /**
-   * Runs each operation's statements without the runner, because the runner verifies the schema
-   * afterwards and schema verification does not read a bytea literal default back yet.
-   */
-  async function executeStatements(migration: PlannedMigration): Promise<readonly string[]> {
-    const operations = await Promise.all(migration.operations);
-    for (const operation of operations) {
-      for (const statement of operation.execute) {
-        await driver!.query(statement.sql, statement.params ?? []);
-      }
-    }
-    return operations.map((operation) => operation.id);
-  }
-
   it('stores the codec values of defaults written by CREATE TABLE', {
     timeout: testTimeout,
   }, async () => {
@@ -269,7 +257,7 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
     expect(await insertedRow()).toEqual([storedDefaults]);
   });
 
-  it('stores the codec values of defaults a migration sets on existing columns', {
+  it('stores the codec values of defaults a migration sets on existing columns, and verifies them', {
     timeout: testTimeout,
   }, async () => {
     const withoutDefaults = buildContract(false);
@@ -279,14 +267,14 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
       INIT_ADDITIVE_POLICY,
     );
     const contract = buildContract(true);
-
-    const operationIds = await executeStatements(
-      plan(
-        contract,
-        await familyInstance.introspect({ driver: driver!, contract }),
-        additiveAndWidening,
-      ),
+    const migration = plan(
+      contract,
+      await familyInstance.introspect({ driver: driver!, contract }),
+      additiveAndWidening,
     );
+    const operationIds = (await Promise.all(migration.operations)).map((operation) => operation.id);
+
+    await applyWithRunner(contract, migration, additiveAndWidening);
 
     expect({ operationIds, rows: await insertedRow() }).toEqual({
       operationIds: cases.map((defaultCase) => `setDefault.${table}.${defaultCase.column}`),

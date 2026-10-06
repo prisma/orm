@@ -479,7 +479,7 @@ A driver-level failure occurred while reading the contract marker table: connect
 
 ### CONTRACT.MARKER_REQUIRED
 
-A command that requires a pre-signed database (marker present) as a precondition found none; also the default failure code stamped onto a non-ok verify result when no more specific code applies, which is how `db verify --strict` reports a database holding elements no contract declares. On `db verify` it is an `error` diagnostic on a completed run that exits `4`; everywhere else it is a precondition failure at exit `2`. Those are two unrelated jobs for one code: "sign the database first" and "strict mode found elements no contract declares", and splitting them would let the exit code follow from the code alone. Fix path: run `prisma db init` first, or declare the extra elements in a contract. Payload: none notable.
+A command that requires a pre-signed database (marker present) as a precondition found none. It is a precondition failure at exit `2`. Fix path: run `prisma db init` or `prisma db sign` first. Payload: none notable.
 
 ### CONTRACT.MARKER_ROW_CORRUPT
 
@@ -571,7 +571,7 @@ A role entity is declared more than once in the entities list, or a role name is
 
 ### CONTRACT.SCHEMA_VERIFICATION_FAILED
 
-Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
+Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed, and `db verify --strict` raises it once when the database holds elements no contract declares (the result's `unclaimed` list names them). It is also the code a failing verify result carries when nothing more specific applies. Fix path: `prisma db update` or adjust the contract; for unclaimed elements, declare them in a contract or drop them from the database. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`. The strict-mode unclaimed diagnostic carries no `space` and an empty `issues` list; the names are in the result's `unclaimed` list.
 
 ### CONTRACT.SOURCE_IMPORT_DISALLOWED
 
@@ -814,6 +814,14 @@ A warning, not an error: a Mongo schema types a field with a deprecated scalar n
 ### PSL_PRESET_WITHOUT_EFFECT
 
 A warning, not an error: a Mongo schema uses a field preset that fills nothing, such as `temporal.timestamp()` with neither phase: `Field "<Model>.<field>" uses temporal.timestamp() without onCreate or onUpdate, so nothing fills it and it is stored exactly like Date. Write Date, or pass onCreate: now or onUpdate: now.` Reported at the preset call through the contract source's `reportWarning`; the contract is written as for `Date`.
+
+### PSL_PRESET_NOT_CALLED
+
+A field is typed with a field preset's name but does not call it, for example `createdAt temporal.createdAt` instead of `createdAt temporal.createdAt()`: `Field "<Model>.<field>" uses field preset "<preset>" without calling it. Write <preset>().` A field preset is a function, so the field's type is the result of calling it. Reported at the field, in SQL and Mongo schemas. Add the parentheses.
+
+### PSL_TYPE_CONSTRUCTOR_NOT_CALLED
+
+A field is typed with a type constructor's name but does not call it, and the constructor needs an argument, for example `embedding Vector` instead of `embedding Vector(1536)`, or `level pg.enum` instead of `level pg.enum(AalLevel)`: `Field "<Model>.<field>" uses type constructor "<constructor>" without arguments. Write <constructor>(<arguments>).` The message names each required argument; an argument that names another entity is named by that entity's kind, such as `native_enum`. A type constructor whose arguments are all optional can be written without a call. Reported at the field, in SQL and Mongo schemas. Call the constructor with its arguments.
 
 ### PSL_VALUE_TYPE_INCOMPATIBLE
 
@@ -1622,7 +1630,11 @@ SQLite twin of `MIGRATION.POSTGRES_CONTROL_STACK_MISSING`: a `SqliteMigration` o
 
 ### MIGRATION.TABLE_NAME_CASE_CHANGED
 
-The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table, or rename it by hand with `ALTER TABLE "X" RENAME TO "Y"`, after which the plan is empty. Payload: `droppedTable`, `createdTable`.
+The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. The message gives three ways out. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table. In a project with migration history, make the rename its own schema change, create its migration with `prisma migration new --from <hash of the migration the database is at>`, and add `...this.renameTable({ table: "X", to: "Y" })` to its operations; the call renames the table and the constraints and indexes named after it, and on Postgres the message adds `schema: "<namespace>"` when the table is outside the default schema or another schema declares `X`. `migration new` defaults its origin to the `db` ref, so a project whose migrations are applied with `db migrate` has no origin to default to and must name one: pass the newest applied migration's `to` hash, which `prisma migration list` shows, or the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`. In a project that uses `db update`, rename the table by hand with the statements the message gives, then run `db update` again: on Postgres `ALTER TABLE "<schema>"."X" RENAME TO "Y"`, and on SQLite, which refuses in one statement a rename that only changes the case of ASCII letters, `ALTER TABLE "X" RENAME TO "_prisma_rename_Y"; ALTER TABLE "_prisma_rename_Y" RENAME TO "Y"`. Payload: `droppedTable`, `createdTable`.
+
+### MIGRATION.TABLE_RENAME_UNMATCHED
+
+`this.renameTable({ table, to })` in a hand-written migration does not match the migration's contracts: the migration has no start contract, the start contract has no table `table` (or, with no `schema`, declares it in more than one namespace), the start contract already has a table `to`, or the end contract has no table `to`. Raised when the migration's operations are built, so `migration.ts` writes no `ops.json`. Make the rename its own schema change, so the migration's start contract is the schema before the rename and its end contract the schema after it, and check the table names and the `schema`. Payload: `from`, `to`.
 
 ### MIGRATION.TARGET_MISMATCH
 

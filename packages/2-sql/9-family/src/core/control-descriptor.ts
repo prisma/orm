@@ -7,11 +7,16 @@ import {
   sqlExpressionDataType,
 } from '@internal/sql-contract/sql-expression';
 import { sqlEmission } from '@internal/sql-contract-emitter';
-import { sqlAttributeSpecs } from '@internal/sql-contract-psl/attribute-specs';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
 import { sqlFamilyEntityTypes, sqlFamilyPslBlockDescriptors } from './authoring-entity-types';
 import { sqlFamilyAuthoringFieldPresets } from './authoring-field-presets';
 import { sqlFamilyAuthoringTypes } from './authoring-type-constructors';
 import { createSqlFamilyInstance, type SqlControlFamilyInstance } from './control-instance';
+
+const sqlFamilyDescribeUnsupportedAttribute: unknown = describeUnsupportedSqlAttribute;
 
 export class SqlFamilyDescriptor
   implements ControlFamilyDescriptor<'sql', SqlControlFamilyInstance>
@@ -29,6 +34,9 @@ export class SqlFamilyDescriptor
     pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
     attributeSpecs: sqlAttributeSpecs,
     dataTypes: { [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry },
+  } as const;
+  readonly pslDiagnostics = {
+    describeUnsupportedAttribute: sqlFamilyDescribeUnsupportedAttribute,
   } as const;
 
   create<TTargetId extends string>(

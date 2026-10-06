@@ -8,13 +8,15 @@ import {
   FunctionCallAst,
   GenericBlockDeclarationAst,
   IdentifierAst,
+  KeyValuePairAst,
   type ModelAttributeAst,
   ModelDeclarationAst,
   nonTriviaSibling,
   ObjectLiteralExprAst,
   SyntaxNode,
+  skipTriviaToken,
 } from '@internal/psl-parser/syntax';
-import type { AttributeSpecOwner } from './attribute-spec-resolution';
+import type { ArgumentOwner, AttributeOwner } from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
   argumentAtCursor,
@@ -38,16 +40,11 @@ interface SignaturePosition {
     | undefined;
 }
 
-export type AttributeSignatureContext = AttributeSpecOwner &
-  SignaturePosition & {
-    readonly attributeName: string;
-  };
+export type SignatureContext = ArgumentOwner & SignaturePosition;
 
-export function classifyPslSignatureContext(
-  input: PslCursorInput,
-): AttributeSignatureContext | undefined {
+export function classifyPslSignatureContext(input: PslCursorInput): SignatureContext | undefined {
   const syntax = locateAttributeSyntax(input);
-  if (syntax === undefined) return undefined;
+  if (syntax === undefined) return blockValueSignatureContext(input);
   const attributeName = syntax.attribute.name()?.identifier()?.name();
   const args = syntax.attribute.argList();
   const position = args === undefined ? undefined : signatureArguments(syntax, args, []);
@@ -57,9 +54,27 @@ export function classifyPslSignatureContext(
     : { ...owner, ...position, attributeName };
 }
 
+function blockValueSignatureContext(input: PslCursorInput): SignatureContext | undefined {
+  const offset = input.sourceFile.offsetAt(input.position);
+  const anchor = input.document.syntax.tokenAtOffset(offset).leftBiased();
+  if (anchor === undefined || anchor.kind === 'Comment') return undefined;
+  const preceding = skipTriviaToken(anchor, 'prev');
+  const pair = preceding?.parent.findAncestor(KeyValuePairAst.cast);
+  const equals = pair?.equals();
+  if (pair === undefined || equals === undefined || offset <= equals.offset) return undefined;
+  const block = pair.syntax.findAncestor(GenericBlockDeclarationAst.cast);
+  const blockKeyword = block?.keyword()?.text;
+  const key = pair.key()?.name();
+  if (block === undefined || blockKeyword === undefined || key === undefined) return undefined;
+  const position = signatureExpression({ offset, preceding }, pair.value(), []);
+  return position === undefined
+    ? undefined
+    : { ownerKind: 'blockValue', block, blockKeyword, key, ...position };
+}
+
 function signatureOwner(
   attribute: FieldAttributeAst | ModelAttributeAst,
-): AttributeSpecOwner | undefined {
+): AttributeOwner | undefined {
   if (attribute instanceof FieldAttributeAst) {
     const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
     const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);

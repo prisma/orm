@@ -601,7 +601,7 @@ describe('db verify', () => {
       ]);
     });
 
-    it('fails on unclaimed elements in strict mode, under the synthesized code', async () => {
+    it('fails on unclaimed elements in strict mode, under the schema-verification code', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(aggregateOk({ unclaimed: ['public/audit_log'] }));
 
@@ -610,7 +610,9 @@ describe('db verify', () => {
       });
 
       expect(run.exitCode).toBe(4);
-      expect(diagnosticsOf(run).map((entry) => entry.code)).toEqual(['CONTRACT.MARKER_REQUIRED']);
+      expect(diagnosticsOf(run).map((entry) => entry.code)).toEqual([
+        'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+      ]);
     });
 
     it('carries unclaimed elements informationally on a passing lenient run', async () => {

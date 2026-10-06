@@ -3,6 +3,7 @@ import { isColumnDefaultLiteralInputValue } from '@internal/contract/types';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
 import type { CodecRef } from './codec-types';
+import type { OpaqueSql } from './opaque-sql';
 import type { AnyParamRef } from './types';
 
 /**
@@ -52,9 +53,9 @@ export class LiteralColumnDefault extends DdlColumnDefault {
 
 export class FunctionColumnDefault extends DdlColumnDefault {
   readonly kind = 'function' as const;
-  readonly expression: string;
+  readonly expression: OpaqueSql;
 
-  constructor(expression: string) {
+  constructor(expression: OpaqueSql) {
     super();
     this.expression = expression;
     this.freeze();
@@ -205,7 +206,7 @@ export class UniqueConstraint {
  * A table-level CHECK constraint carrying a raw SQL predicate expression. Used
  * for checks that are not enum value-set restrictions — e.g. the element-non-null
  * constraint on a scalar-array column (`array_position(col, NULL) IS NULL`).
- * The `expression` is emitted verbatim, so callers must supply safe,
+ * The `expression` is emitted through `renderOpaqueSql`, so callers must supply safe,
  * pre-validated SQL.
  *
  * Frozen on construction — immutable after creation.
@@ -213,9 +214,9 @@ export class UniqueConstraint {
 export class CheckExpressionConstraint {
   readonly kind = 'check-expression' as const;
   readonly name: string;
-  readonly expression: string;
+  readonly expression: OpaqueSql;
 
-  constructor(options: { readonly name: string; readonly expression: string }) {
+  constructor(options: { readonly name: string; readonly expression: OpaqueSql }) {
     this.name = options.name;
     this.expression = options.expression;
     Object.freeze(this);

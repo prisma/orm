@@ -1,6 +1,7 @@
-import type {
-  SchemaDiffIssue,
-  VerifyDatabaseSchemaResult,
+import {
+  type SchemaDiffIssue,
+  VERIFY_CODE_SCHEMA_FAILURE,
+  type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { combineVerifyResults } from '../../src/utils/combine-verify-results';
@@ -25,7 +26,7 @@ function makeResult(overrides: {
     timings: { total: 0 },
   };
   if (!overrides.ok) {
-    return { ...result, code: 'CONTRACT.MARKER_REQUIRED' };
+    return { ...result, code: VERIFY_CODE_SCHEMA_FAILURE };
   }
   return result;
 }
@@ -95,9 +96,49 @@ describe('combineVerifyResults', () => {
     expect(combined.result).toMatchObject({
       ok: false,
       summary: 'Database schema does not satisfy contract (1 failure)',
-      code: 'CONTRACT.MARKER_REQUIRED',
+      code: VERIFY_CODE_SCHEMA_FAILURE,
     });
     expect(combined.result.schema.issues).toHaveLength(1);
+  });
+
+  it('keeps the failing extension space code when the app passes', () => {
+    const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
+      ['app', makeResult({ spaceId: 'app', ok: true, summary: 'Schema matches contract' })],
+      [
+        'cipher',
+        {
+          ...makeResult({ spaceId: 'cipher', ok: false, summary: 'cipher failure' }),
+          code: 'CONTRACT.EXTENSION_DRIFT',
+        },
+      ],
+    ]);
+
+    const combined = combineVerifyResults(perSpace, 'app', false, []);
+
+    expect(combined.result.code).toBe('CONTRACT.EXTENSION_DRIFT');
+  });
+
+  it('keeps the app space code when the app and an extension both fail', () => {
+    const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
+      [
+        'cipher',
+        {
+          ...makeResult({ spaceId: 'cipher', ok: false, summary: 'cipher failure' }),
+          code: 'CONTRACT.EXTENSION_DRIFT',
+        },
+      ],
+      [
+        'app',
+        {
+          ...makeResult({ spaceId: 'app', ok: false, summary: 'app failure' }),
+          code: 'CONTRACT.APP_DRIFT',
+        },
+      ],
+    ]);
+
+    const combined = combineVerifyResults(perSpace, 'app', false, []);
+
+    expect(combined.result.code).toBe('CONTRACT.APP_DRIFT');
   });
 
   it('returns a non-`ok` envelope when any space fails, even when the app passes', () => {
@@ -122,7 +163,7 @@ describe('combineVerifyResults', () => {
     expect(combined.result.meta?.strict).toBe(true);
   });
 
-  it('fails the verdict in strict mode when the unclaimed list is non-empty', () => {
+  it('fails the verdict in strict mode with the schema-verification code when the unclaimed list is non-empty', () => {
     const perSpace = new Map<string, VerifyDatabaseSchemaResult>([
       [
         'app',
@@ -134,7 +175,7 @@ describe('combineVerifyResults', () => {
 
     expect(combined.result.ok).toBe(false);
     expect(combined.result.summary).toContain('1 unclaimed element');
-    expect(combined.result.code).toBe('CONTRACT.MARKER_REQUIRED');
+    expect(combined.result.code).toBe(VERIFY_CODE_SCHEMA_FAILURE);
     expect(combined.unclaimed).toEqual(['legacy_events']);
   });
 
@@ -191,7 +232,7 @@ describe('combineVerifyResults', () => {
     expect(combined.result.schema.issues).toHaveLength(2);
   });
 
-  it('uses the default `CONTRACT.MARKER_REQUIRED` code when a failing app result carries no code', () => {
+  it('uses the schema-verification code when a failing app result carries no code', () => {
     const failingWithoutCode: VerifyDatabaseSchemaResult = makeResult({
       spaceId: 'app',
       ok: false,
@@ -205,7 +246,7 @@ describe('combineVerifyResults', () => {
 
     expect(combined.result).toMatchObject({
       ok: false,
-      code: 'CONTRACT.MARKER_REQUIRED',
+      code: VERIFY_CODE_SCHEMA_FAILURE,
     });
   });
 

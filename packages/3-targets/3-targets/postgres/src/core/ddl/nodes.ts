@@ -2,6 +2,7 @@ import {
   type DdlColumn,
   DdlNode,
   type DdlTableConstraint,
+  type OpaqueSql,
 } from '@internal/sql-relational-core/ast';
 import type { RlsPolicyOperation } from '../rls/canonicalize';
 
@@ -212,8 +213,8 @@ export class PostgresCreatePolicy extends PostgresDdlNode {
   readonly permissive: boolean;
   readonly operation: RlsPolicyOperation;
   readonly roles: ReadonlyArray<string>;
-  readonly using: string | undefined;
-  readonly withCheck: string | undefined;
+  readonly using: OpaqueSql | undefined;
+  readonly withCheck: OpaqueSql | undefined;
 
   constructor(options: {
     readonly schema: string;
@@ -222,8 +223,8 @@ export class PostgresCreatePolicy extends PostgresDdlNode {
     readonly permissive: boolean;
     readonly operation: RlsPolicyOperation;
     readonly roles: readonly string[];
-    readonly using?: string;
-    readonly withCheck?: string;
+    readonly using?: OpaqueSql;
+    readonly withCheck?: OpaqueSql;
   }) {
     super();
     this.schema = options.schema;
@@ -288,14 +289,18 @@ export class PostgresAlterPolicyRename extends PostgresDdlNode {
 }
 
 /**
- * The element list between the parens of CREATE INDEX: either a column
- * tuple (each identifier quoted by the renderer) or one opaque expression
- * string covering the entire list, inserted verbatim — the same opaque-SQL
- * stance as RLS policy predicates (ADR 234).
+ * The element list between the parens of CREATE INDEX, as a migration file writes it: either a column tuple or one SQL expression string covering the entire list.
+ */
+export type CreateIndexElements =
+  | { readonly columns: readonly string[] }
+  | { readonly expression: string };
+
+/**
+ * The element list between the parens of CREATE INDEX: either a column tuple (each identifier quoted by the renderer) or one `OpaqueSql` value covering the entire list.
  */
 export type DdlIndexElements =
   | { readonly columns: readonly string[] }
-  | { readonly expression: string };
+  | { readonly expression: OpaqueSql };
 
 export class PostgresCreateIndex extends PostgresDdlNode {
   readonly kind = 'create-index' as const;
@@ -307,11 +312,8 @@ export class PostgresCreateIndex extends PostgresDdlNode {
   readonly elements: DdlIndexElements;
   readonly type: string | undefined;
   readonly options: Record<string, unknown> | undefined;
-  /**
-   * Partial-index predicate (WHERE body, without the keyword). Inserted
-   * verbatim, never quoted or escaped.
-   */
-  readonly where: string | undefined;
+  /** Partial-index predicate (WHERE body, without the keyword). Never quoted or escaped. */
+  readonly where: OpaqueSql | undefined;
 
   constructor(options: {
     readonly schema: string | undefined;
@@ -321,7 +323,7 @@ export class PostgresCreateIndex extends PostgresDdlNode {
     readonly elements: DdlIndexElements;
     readonly type: string | undefined;
     readonly options: Record<string, unknown> | undefined;
-    readonly where: string | undefined;
+    readonly where: OpaqueSql | undefined;
   }) {
     super();
     this.schema = options.schema;

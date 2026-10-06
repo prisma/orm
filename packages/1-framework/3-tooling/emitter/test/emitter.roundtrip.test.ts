@@ -91,9 +91,13 @@ describe('emitter round-trip', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-              name: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: true },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
+              name: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: true, many: false },
             },
             relations: {},
           },
@@ -107,9 +111,17 @@ describe('emitter round-trip', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              title: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-              userId: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              title: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
+              userId: {
+                type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },

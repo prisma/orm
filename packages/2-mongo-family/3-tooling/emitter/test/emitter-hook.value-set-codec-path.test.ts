@@ -27,6 +27,7 @@ const testHashes = { storageHash: 'test', profileHash: 'test' };
 
 const levelField = {
   nullable: false,
+  many: false,
   type: { kind: 'scalar', codecId: NON_IDENTITY_CODEC_ID },
   valueSet: {
     plane: 'domain',

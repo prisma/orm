@@ -2,12 +2,12 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import pgvectorControl from '@internal/extension-pgvector/control';
 import pgvectorPack from '@internal/extension-pgvector/pack';
 import sqlFamilyControl from '@internal/family-sql/control';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
 import { defineContract, field, model, nativeEnum, pg } from '@internal/postgres/contract-builder';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgresControl from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -25,33 +25,24 @@ const stack = createControlStack({
   extensions: [pgvectorControl],
 });
 
-function buildColumnDescriptorMap() {
-  return collectScalarTypeConstructors(stack.authoringContributions.type);
-}
-
 function interpretWithRealPacks(schema: string) {
-  const scalarColumnDescriptors = buildColumnDescriptorMap();
-  const { document, sources } = parse(schema, 'real-packs-parity.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(schema, {
+    sourceId: 'real-packs-parity.prisma',
+    context: contractSourceContextFromControlStack(stack),
   });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    target: postgresPack,
-    scalarColumnDescriptors,
-    dataTypeLookup: stack.dataTypeLookup,
-    controlMutationDefaults: stack.controlMutationDefaults,
-    authoringContributions: stack.authoringContributions,
-    composedExtensionContracts: new Map(),
-    composedExtensions: [pgvectorControl.id],
-    composedExtensionPackRefs: [pgvectorPack],
-    createNamespace: postgresCreateNamespace,
-    capabilities: stack.capabilities,
-    codecLookup: stack.codecLookup,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresPack,
+      composedExtensionPackRefs: [pgvectorPack],
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 describe('TS and PSL authoring parity with real packs', () => {

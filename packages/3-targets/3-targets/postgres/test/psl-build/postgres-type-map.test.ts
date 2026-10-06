@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createPostgresTypeMap } from '../../src/core/psl-build/postgres-type-map';
+import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
+import {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '../../src/core/type-constructors';
+
+const typeConstructors: Readonly<
+  Record<string, { readonly output: { readonly codecId: string } }>
+> = { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes };
 
 describe('createPostgresTypeMap', () => {
   const typeMap = createPostgresTypeMap();
@@ -14,11 +23,11 @@ describe('createPostgresTypeMap', () => {
       nativeType: 'numeric',
     });
     expect(typeMap.resolve('timestamptz')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamptz',
     });
     expect(typeMap.resolve('timestamp with time zone')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamp with time zone',
     });
     expect(typeMap.resolve('jsonb')).toEqual({ pslType: { name: 'Jsonb' }, nativeType: 'jsonb' });
@@ -81,16 +90,16 @@ describe('createPostgresTypeMap', () => {
 
   it('preserves non-default timestamp, date, time, json, and integer types', () => {
     expect(typeMap.resolve('timestamp')).toEqual({
-      pslType: { name: 'Timestamp' },
+      pslType: { name: 'TimestampString' },
       nativeType: 'timestamp',
     });
     expect(typeMap.resolve('time(3)')).toEqual({
-      pslType: { name: 'Time', args: ['3'] },
+      pslType: { name: 'TimeString', args: ['3'] },
       nativeType: 'time(3)',
       typeParams: { baseType: 'time', params: '3' },
     });
     expect(typeMap.resolve('date')).toEqual({
-      pslType: { name: 'Date' },
+      pslType: { name: 'DateString' },
       nativeType: 'date',
     });
     expect(typeMap.resolve('json')).toEqual({
@@ -138,50 +147,84 @@ describe('createPostgresTypeMap', () => {
   });
 });
 
-describe('representation-explicit spellings stay out of introspection', () => {
+describe('contract infer writes the text-backed date and time types', () => {
   const map = createPostgresTypeMap();
 
   it.each([
-    ['date', 'Date'],
-    ['timestamp', 'Timestamp'],
-    ['timestamp without time zone', 'Timestamp'],
-    ['timestamptz', 'Timestamptz'],
-    ['timestamp with time zone', 'Timestamptz'],
-    ['time', 'Time'],
-    ['time without time zone', 'Time'],
-  ])('resolves %s to the bare %s, never a *String spelling', (nativeType, pslName) => {
-    expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
-  });
-
-  it('keeps precision on the bare spelling', () => {
-    expect(map.resolve('timestamptz(6)')).toMatchObject({
-      pslType: { name: 'Timestamptz', args: ['6'] },
-    });
-  });
-
-  it('never produces a *String name for any native type it knows', () => {
-    const natives = [
-      'date',
-      'timestamp',
-      'timestamp without time zone',
-      'timestamptz',
-      'timestamp with time zone',
-      'time',
-      'time without time zone',
-      'timetz',
-      'timestamptz(6)',
-      'timestamp(3)',
-      'time(3)',
-    ];
-
-    const produced = natives.map((nativeType) => map.resolve(nativeType));
-
-    const stringSpellings = produced.flatMap((resolution) =>
-      'pslType' in resolution && resolution.pslType.name.endsWith('String')
-        ? [resolution.pslType.name]
-        : [],
+    ['timestamp', 'TimestampString', undefined],
+    ['timestamp without time zone', 'TimestampString', undefined],
+    ['timestamp(3)', 'TimestampString', ['3']],
+    ['timestamptz', 'TimestamptzString', undefined],
+    ['timestamp with time zone', 'TimestamptzString', undefined],
+    ['timestamptz(6)', 'TimestamptzString', ['6']],
+    ['date', 'DateString', undefined],
+    ['time', 'TimeString', undefined],
+    ['time without time zone', 'TimeString', undefined],
+    ['time(3)', 'TimeString', ['3']],
+    ['timetz', 'Timetz', undefined],
+    ['time with time zone', 'Timetz', undefined],
+    ['timetz(3)', 'Timetz', ['3']],
+  ])('resolves %s to %s', (nativeType, name, args) => {
+    const resolution = map.resolve(nativeType);
+    expect('pslType' in resolution ? resolution.pslType : resolution).toEqual(
+      args === undefined ? { name } : { name, args },
     );
+  });
 
-    expect(stringSpellings).toEqual([]);
+  it('binds every spelling to a codec that reads and writes without Temporal', async () => {
+    const wireValues = {
+      timestamp: '2024-01-01 00:00:00',
+      'timestamp without time zone': '2024-01-01 00:00:00',
+      'timestamp(3)': '2024-01-01 00:00:00.123',
+      timestamptz: '2024-01-01 00:00:00+00',
+      'timestamp with time zone': '2024-01-01 00:00:00+00',
+      'timestamptz(6)': '2024-01-01 00:00:00.123456+00',
+      date: '2024-01-01',
+      time: '12:34:56',
+      'time without time zone': '12:34:56',
+      'time(3)': '12:34:56.123',
+      timetz: '12:34:56+02',
+      'time with time zone': '12:34:56+02',
+      'timetz(3)': '12:34:56.123+02',
+    } as const;
+
+    const roundTripped = await withoutTemporal(async () => {
+      const results: Record<string, unknown> = {};
+      for (const [nativeType, wire] of Object.entries(wireValues)) {
+        const resolution = map.resolve(nativeType);
+        const codecId =
+          'pslType' in resolution
+            ? typeConstructors[resolution.pslType.name]?.output.codecId
+            : undefined;
+        const descriptor =
+          codecId === undefined
+            ? undefined
+            : postgresCodecDescriptorRegistry.descriptorFor(codecId);
+        if (descriptor === undefined) {
+          results[nativeType] = `no codec for ${nativeType}`;
+          continue;
+        }
+        const codec = descriptor.factory({})({ name: nativeType });
+        try {
+          results[nativeType] = await codec.encode(await codec.decode(wire, {}), {});
+        } catch (error) {
+          results[nativeType] = error instanceof Error ? error.message : error;
+        }
+      }
+      return results;
+    });
+
+    expect(roundTripped).toEqual(wireValues);
   });
 });
+
+async function withoutTemporal<T>(body: () => Promise<T>): Promise<T> {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'Temporal');
+  Reflect.deleteProperty(globalThis, 'Temporal');
+  try {
+    return await body();
+  } finally {
+    if (original === undefined) Reflect.deleteProperty(globalThis, 'Temporal');
+    else Object.defineProperty(globalThis, 'Temporal', original);
+  }
+}

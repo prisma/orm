@@ -4,14 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../src/core/authoring';
 
 function specContext() {
-  const { document, sources } = parse('role docs_probe {\n}\n', 'block-documentation.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const block = symbolTable.topLevel.blocks['docs_probe'];
-  if (block === undefined) throw new Error('expected the probe role block in the symbol table');
-  return { symbols: symbolTable, block };
+  const { document, sources } = parse('', 'block-documentation.test.psl');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  return { symbols: symbolTable };
 }
 
 describe('PostgreSQL block documentation', () => {

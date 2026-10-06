@@ -1,17 +1,16 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   modelsOf,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
 } from './fixtures';
@@ -37,23 +36,21 @@ const varCharishTypes = {
 
 describe('interpretPslDocumentToSqlContract a list field equals the single field of its type, plus many', () => {
   it('gives a list field the type parameters of the single field, from a type constructor the stack adds', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: 'model Doc {\n  id Int @id\n  one VarCharish(12)\n  many VarCharish(12)[]\n}\n',
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-      authoringContributions: {
-        type: varCharishTypes,
-        dataTypes: fixtureDataTypeSupport.entries,
+    const result = interpretSqlContract(
+      'model Doc {\n  id Int @id\n  one VarCharish(12)\n  many VarCharish(12)[]\n}\n',
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
+        authoringContributions: {
+          type: varCharishTypes,
+          dataTypes: fixtureDataTypeSupport.entries,
+        },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -64,14 +61,14 @@ describe('interpretPslDocumentToSqlContract a list field equals the single field
       typeParams: { length: 12 },
     } as const;
     expect({ one: fields?.['one'], many: fields?.['many'] }).toEqual({
-      one: { nullable: false, type: varchar },
-      many: { nullable: false, type: varchar, many: true },
+      one: { nullable: false, type: varchar, many: false },
+      many: { nullable: false, type: varchar, many: { elementNullable: false } },
     });
   });
 
   it('keeps type parameters on scalar list fields of a model', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `// use prisma-8
+    const result = interpretSqlContract(
+      `// use prisma-8
 namespace public {
   model Money {
     id    Int               @id
@@ -82,22 +79,20 @@ namespace public {
   }
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-      authoringContributions: {
-        type: postgresScalarAuthoringTypes,
-        dataTypes: fixtureDataTypeSupport.entries,
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
+        authoringContributions: {
+          type: postgresScalarAuthoringTypes,
+          dataTypes: fixtureDataTypeSupport.entries,
+        },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      ...document,
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -113,16 +108,16 @@ namespace public {
       label: fields?.['label'],
       tags: fields?.['tags'],
     }).toEqual({
-      one: { nullable: false, type: numeric },
-      many: { nullable: false, type: numeric, many: true },
-      label: { nullable: false, type: varchar },
-      tags: { nullable: false, type: varchar, many: true },
+      one: { nullable: false, type: numeric, many: false },
+      many: { nullable: false, type: numeric, many: { elementNullable: false } },
+      label: { nullable: false, type: varchar, many: false },
+      tags: { nullable: false, type: varchar, many: { elementNullable: false } },
     });
   });
 
   it('keeps type parameters on composite type members, single and list', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Price {
+    const result = interpretSqlContract(
+      `type Price {
   one  Numeric(65, 30)
   many Numeric(65, 30)[]
 }
@@ -131,35 +126,33 @@ model Product {
   id    Int   @id
   price Price
 }`,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: {
-        type: postgresScalarAuthoringTypes,
-        valueObjectStorageType: 'Jsonb',
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        authoringContributions: {
+          type: postgresScalarAuthoringTypes,
+          valueObjectStorageType: 'Jsonb',
+        },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      ...document,
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.domain.namespaces['public']?.valueObjects?.['Price']?.fields).toEqual({
-      one: { nullable: false, type: numeric },
-      many: { nullable: false, type: numeric, many: true },
+      one: { nullable: false, type: numeric, many: false },
+      many: { nullable: false, type: numeric, many: { elementNullable: false } },
     });
   });
 
   it('keeps the valueSet on enum list fields of a model, like the single field', () => {
     const pslBlockDescriptors = { enum: testEnumPslBlockDescriptor };
-    const document = symbolTableInputFromParseArgs({
-      schema: `enum Plan {
+    const result = interpretSqlContract(
+      `enum Plan {
   @@type("pg/text@1")
   FREE = "FREE"
   PAID = "PAID"
@@ -170,36 +163,35 @@ model User {
   plan  Plan
   plans Plan[]
 }`,
-      sourceId: 'schema.prisma',
-    });
-    const result = interpretPslDocumentToSqlContract({
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: {
-        entityTypes: testEnumEntityContributions,
-        pslBlockDescriptors,
-        dataTypes: fixtureDataTypeSupport.entries,
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        authoringContributions: {
+          entityTypes: testEnumEntityContributions,
+          pslBlockDescriptors,
+          dataTypes: fixtureDataTypeSupport.entries,
+        },
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        codecLookup: postgresCodecLookup,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      codecLookup: postgresCodecLookup,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      ...document,
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const fields = result.value.domain.namespaces['public']?.models['User']?.fields;
     const plan = {
+      many: false,
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: { plane: 'domain', entityKind: 'enum', namespaceId: 'public', entityName: 'Plan' },
     };
     expect({ plan: fields?.['plan'], plans: fields?.['plans'] }).toEqual({
       plan,
-      plans: { ...plan, many: true },
+      plans: { ...plan, many: { elementNullable: false } },
     });
   });
 });

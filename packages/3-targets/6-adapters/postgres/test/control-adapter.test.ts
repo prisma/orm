@@ -1956,6 +1956,47 @@ describe('PostgresControlAdapter', () => {
       });
     });
 
+    it('reads canonical_version integer text as a number', async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const driver = createMockDriver([
+        {
+          match: includes('"information_schema"."tables"'),
+          rows: [{ table_schema: 'prisma_contract' }],
+        },
+        {
+          match: includes('"prisma_contract"."marker"'),
+          rows: [{ ...validMarkerRow, canonical_version: '7', invariants: '{}' }],
+        },
+      ]);
+
+      await expect(adapter.readMarker(driver, 'app')).resolves.toMatchObject({
+        canonicalVersion: 7,
+      });
+    });
+
+    it('rejects canonical_version text that is not an integer as a corrupt marker row', async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const driver = createMockDriver([
+        {
+          match: includes('"information_schema"."tables"'),
+          rows: [{ table_schema: 'prisma_contract' }],
+        },
+        {
+          match: includes('"prisma_contract"."marker"'),
+          rows: [{ ...validMarkerRow, canonical_version: '1.5', invariants: '{}' }],
+        },
+      ]);
+
+      await expect(adapter.readMarker(driver, 'app')).rejects.toSatisfy((err: unknown) => {
+        expect(CliStructuredError.is(err)).toBe(true);
+        expect((err as CliStructuredError).toEnvelope()).toMatchObject({
+          code: 'CONTRACT.MARKER_ROW_CORRUPT',
+          why: 'Invalid contract marker row: expected integer text, got "1.5"',
+        });
+        return true;
+      });
+    });
+
     it('rejects SQL NULL invariants as a corrupt marker row', async () => {
       const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
       const driver = createMockDriver([

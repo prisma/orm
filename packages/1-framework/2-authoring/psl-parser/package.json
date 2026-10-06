@@ -46,6 +46,7 @@
     "./format": "./dist/format.mjs",
     "./interpret": "./dist/interpret.mjs",
     "./syntax": "./dist/syntax.mjs",
+    "./test": "./dist/test.mjs",
     "./tokenizer": "./dist/tokenizer.mjs",
     "./package.json": "./package.json"
   },

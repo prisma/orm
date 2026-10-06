@@ -4,21 +4,19 @@ import type {
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import {
-  type InterpretPslDocumentToSqlContractInput,
-  interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
-} from '../src/interpreter';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
-import {
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 describe('composed mutation default registries', () => {
-  const interpretPslDocumentToSqlContract = (
+  const interpretPostgresSchema = (
+    schema: string,
     input: Omit<
       InterpretPslDocumentToSqlContractInput,
+      | 'documents'
+      | 'sources'
+      | 'symbolTable'
+      | 'binder'
       | 'target'
       | 'scalarColumnDescriptors'
       | 'composedExtensionContracts'
@@ -28,7 +26,7 @@ describe('composed mutation default registries', () => {
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
-    interpretPslDocumentToSqlContractInternal({
+    interpretSqlContract(schema, {
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
@@ -39,16 +37,14 @@ describe('composed mutation default registries', () => {
     });
 
   it('rejects a default function call as invalid syntax when no components contribute handlers', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretPostgresSchema(
+      `model User {
   id Int @id
   externalId String @default(uuid())
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...document });
+      {},
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -64,46 +60,45 @@ describe('composed mutation default registries', () => {
   });
 
   it('accepts a function contributed through component composition', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretPostgresSchema(
+      `model User {
   id Int @id
   slug String @default(slugid())
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map([
-          [
-            'slugid',
-            {
-              signature: { documentation: 'Generates a slug identifier when a value is omitted.' },
-              lower: (input: {
-                call: TypedDefaultFunctionCall;
-                context: DefaultFunctionLoweringContext;
-              }) => {
-                void input;
-                return {
-                  ok: true as const,
-                  value: {
-                    kind: 'execution' as const,
-                    generated: {
-                      kind: 'generator' as const,
-                      id: 'slugid',
+      {
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map([
+            [
+              'slugid',
+              {
+                signature: {
+                  documentation: 'Generates a slug identifier when a value is omitted.',
+                },
+                lower: (input: {
+                  call: TypedDefaultFunctionCall;
+                  context: DefaultFunctionLoweringContext;
+                }) => {
+                  void input;
+                  return {
+                    ok: true as const,
+                    value: {
+                      kind: 'execution' as const,
+                      generated: {
+                        kind: 'generator' as const,
+                        id: 'slugid',
+                      },
                     },
-                  },
-                };
+                  };
+                },
+                usageSignatures: ['slugid()'],
               },
-              usageSignatures: ['slugid()'],
-            },
-          ],
-        ]),
-        generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
+            ],
+          ]),
+          generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
+        },
       },
-    });
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -123,39 +118,36 @@ describe('composed mutation default registries', () => {
   });
 
   it('emits applicability diagnostics for incompatible generator codec ids', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretPostgresSchema(
+      `model User {
   id Int @id @default(slugid())
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map([
-          [
-            'slugid',
-            {
-              signature: { documentation: 'Generates a slug identifier for text fields.' },
-              lower: () => ({
-                ok: true as const,
-                value: {
-                  kind: 'execution' as const,
-                  generated: {
-                    kind: 'generator' as const,
-                    id: 'slugid',
+      {
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map([
+            [
+              'slugid',
+              {
+                signature: { documentation: 'Generates a slug identifier for text fields.' },
+                lower: () => ({
+                  ok: true as const,
+                  value: {
+                    kind: 'execution' as const,
+                    generated: {
+                      kind: 'generator' as const,
+                      id: 'slugid',
+                    },
                   },
-                },
-              }),
-              usageSignatures: ['slugid()'],
-            },
-          ],
-        ]),
-        generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
+                }),
+                usageSignatures: ['slugid()'],
+              },
+            ],
+          ]),
+          generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
+        },
       },
-    });
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

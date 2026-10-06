@@ -1,7 +1,7 @@
 import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
-import { FunctionColumnDefault } from '@internal/sql-relational-core/ast';
+import { FunctionColumnDefault, opaqueSql } from '@internal/sql-relational-core/ast';
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -37,7 +37,13 @@ function liveSchema(rawDefault: string): SqlSchemaIR {
 function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage> {
   const event: StorageTable = {
     columns: {
-      at: { nativeType: 'text', nullable: false, codecId: 'sqlite/text@1', default: columnDefault },
+      at: {
+        many: false,
+        nativeType: 'text',
+        nullable: false,
+        codecId: 'sqlite/text@1',
+        default: columnDefault,
+      },
     },
     foreignKeys: [],
     uniques: [],
@@ -74,6 +80,29 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     expect(diff.issues).toEqual([]);
   });
 
+  it.each([["strftime('%Y-%m-%dT%H:%M:%fZ','now')"], ["datetime('now')"], ['CURRENT_TIMESTAMP']])(
+    'sees no change for now() against a live column that stores %s',
+    (stored) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
+        actualSchema: liveSchema(stored),
+        frameworkComponents: [],
+      });
+      expect(diff.issues).toEqual([]);
+    },
+  );
+
+  it('renders now() as the expression that stores the datetime codec text', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
+      actualSchema: new SqlSchemaIR({ tables: {} }),
+      frameworkComponents: [],
+    });
+    expect(diff.expected.tables['event']?.columns['at']?.default).toBe(
+      "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+    );
+  });
+
   it("sees no change for a literal-shaped body sql`'x'` against the literal the database stores", () => {
     const diff = buildSqlitePlanDiff({
       contract: contractWithDefault({ kind: 'function', expression: "'x'" }),
@@ -98,7 +127,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
         ddl: ddlColumnFromNode(column, false).default,
       }).toEqual({
         spec: { kind: 'function', expression },
-        ddl: new FunctionColumnDefault(expression),
+        ddl: new FunctionColumnDefault(opaqueSql(expression)),
       });
     },
   );
