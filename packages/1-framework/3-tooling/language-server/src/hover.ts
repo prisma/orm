@@ -13,8 +13,8 @@ import type {
   FunctionSymbol,
   ModelSymbol,
   NamedTypeSymbol,
-  ParameterSymbol,
   NamespaceSymbol,
+  ParameterSymbol,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
 import {

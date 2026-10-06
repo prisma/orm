@@ -74,6 +74,9 @@ function declarationsOf(resolution: Resolution): readonly Declaration[] {
     case 'contributedNamespace':
     case 'crossSpace':
     case 'attribute':
+    case 'parameter':
+    case 'function':
+    case 'constant':
     case 'unresolved':
       return [];
   }

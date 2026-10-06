@@ -69,9 +69,9 @@ import {
   FunctionCallAst,
   NumberLiteralExprAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   StringLiteralExprAst,
   TaggedLiteralExprAst,
-  PathExprAst,
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
