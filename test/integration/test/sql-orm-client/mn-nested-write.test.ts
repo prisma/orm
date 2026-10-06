@@ -665,4 +665,104 @@ describe('integration/mn-nested-write', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'update(): an array on a junction relation applies disconnect, connect and create in array order',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+        await seedTags(runtime, [
+          { id: TAG_RUST, name: 'Rust' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+        await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('name').orderBy((t) => t.name.asc()))
+          .update({
+            tags: (t) => [
+              t.disconnect([{ id: TAG_RUST }]),
+              t.connect({ id: TAG_TS }),
+              t.create({ name: 'Go' }),
+              t.connect({ id: TAG_RUST }),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [{ name: 'Go' }, { name: 'Rust' }, { name: 'TypeScript' }],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): a later disconnect in the array removes the link an earlier connect made',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+        await seedTags(runtime, [
+          { id: TAG_RUST, name: 'Rust' },
+          { id: TAG_TS, name: 'TypeScript' },
+        ]);
+        await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({
+            tags: (t) => [t.connect({ id: TAG_TS }), t.disconnect([{ id: TAG_TS }])],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [{ id: TAG_RUST, name: 'Rust' }],
+        });
+
+        const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
+          'select user_id, tag_id from user_tags',
+        );
+        expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'create(): an array on a junction relation connects and creates tags',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
+
+        const created = await users
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('name').orderBy((t) => t.name.asc()))
+          .create({
+            id: 1,
+            name: 'Alice',
+            email: 'alice@example.com',
+            tags: (t) => [t.connect({ id: TAG_RUST }), t.create({ name: 'Go' })],
+          });
+
+        expect(created).toEqual({
+          id: 1,
+          name: 'Alice',
+          tags: [{ name: 'Go' }, { name: 'Rust' }],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });
