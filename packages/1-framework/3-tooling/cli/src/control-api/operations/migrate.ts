@@ -230,10 +230,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       });
     }
 
-    if (planRequiresExecution(outcome.plan)) {
-      perSpacePlans.set(space.spaceId, outcome.plan);
-    } else {
+    if (leavesUnmarkedSpaceUntouched(outcome.plan)) {
       atHeadResolutions.set(space.spaceId, outcome.plan);
+    } else {
+      perSpacePlans.set(space.spaceId, outcome.plan);
     }
   }
 
@@ -244,7 +244,13 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // plans). Surfaces every loaded space — including at-head empty-
   // graph extensions — in `perSpace[]` so the result reflects the
   // full aggregate, not just the spaces the runner would have touched.
-  if (applyOrder.length === 0) {
+  // A zero-op plan still counts as pending when it advances a marker
+  // (declared-state resolution for an all-external extension space).
+  const hasPendingWork = applyOrder.some((spaceId) => {
+    const entry = perSpacePlans.get(spaceId);
+    return entry !== undefined && planRequiresExecution(entry);
+  });
+  if (!hasPendingWork) {
     const ordered = canonicalOrder
       .filter((spaceId) => perSpacePlans.has(spaceId) || atHeadResolutions.has(spaceId))
       .map((spaceId) => {
@@ -516,6 +522,11 @@ function buildAtHeadResolution(args: {
       }),
     ],
   };
+}
+
+/** Handing this plan to the runner would write a marker the database never had. */
+function leavesUnmarkedSpaceUntouched(entry: PerSpacePlan): boolean {
+  return !entry.plan.origin && !planRequiresExecution(entry);
 }
 
 /**

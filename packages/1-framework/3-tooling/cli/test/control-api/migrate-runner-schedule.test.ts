@@ -101,6 +101,19 @@ function allExternalExtension(): ControlExtensionDescriptor<'sql', 'postgres'> {
   };
 }
 
+function markerAt(storageHash: string): ContractMarkerRecord {
+  return {
+    storageHash,
+    profileHash: '',
+    contractJson: null,
+    canonicalVersion: null,
+    updatedAt: new Date(0),
+    appTag: null,
+    meta: {},
+    invariants: [],
+  };
+}
+
 function fakeDriver(): ControlDriverInstance<'sql', 'postgres'> {
   return blindCast<
     ControlDriverInstance<'sql', 'postgres'>,
@@ -213,5 +226,39 @@ describe('executeMigrate runner schedule', () => {
 
     expect(result.ok).toBe(true);
     expect(runnerCalls).toEqual([[EXTERNAL_SPACE]]);
+  });
+
+  it('does not call the runner when the app space is already at its head', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      migrateOptions({
+        migrationsDir,
+        markers: new Map([['app', markerAt(APP_HEAD)]]),
+        migrations,
+      }),
+    );
+
+    expect(result.ok && result.value.summary).toBe('Already up to date');
+    expect(runnerCalls).toEqual([]);
+  });
+
+  it('hands an app space already at its head to the runner beside an extension that needs work', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    await addAllExternalSpace(migrationsDir);
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      migrateOptions({
+        migrationsDir,
+        markers: new Map([['app', markerAt(APP_HEAD)]]),
+        migrations,
+        extensions: [allExternalExtension()],
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(runnerCalls).toEqual([[EXTERNAL_SPACE, 'app']]);
   });
 });
