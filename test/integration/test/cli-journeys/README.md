@@ -11,7 +11,7 @@ These tests are the primary regression suite for the Prisma 8 CLI's database lif
 pnpm test:journeys
 ```
 
-`init-journey.e2e.test.ts` (the 4-cell target × authoring pack+install matrix) is excluded from `pnpm test:journeys` and `pnpm test` unless `RUN_INIT_JOURNEY=1` is set; it runs nightly via `pnpm test:init-journey` (see `.github/workflows/integration-nightly.yml`).
+`init-journey.e2e.test.ts` (the 4-cell target × authoring pack+install matrix) is excluded from `pnpm test:journeys` and `pnpm test` unless `RUN_INIT_JOURNEY=1` is set; it runs nightly via `pnpm test:init-journey` (see `.github/workflows/init-journey-nightly.yml`).
 
 ## Test files
 

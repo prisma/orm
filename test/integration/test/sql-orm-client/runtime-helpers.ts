@@ -15,6 +15,7 @@ import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-co
 import {
   createExecutionContext,
   createSqlExecutionStack,
+  type RuntimeConnection,
   type SqlMiddleware,
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
@@ -74,6 +75,7 @@ interface SeedUserRole {
 
 export interface PgIntegrationRuntime extends RuntimeQueryable {
   readonly executions: readonly SqlExecutionPlan[];
+  connection(): Promise<RuntimeConnection>;
   query<Row>(
     plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
     options?: RuntimeExecuteOptions,

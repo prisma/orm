@@ -33,7 +33,7 @@ await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' });
 await cache.invalidate({ keys: ['user-1'] });
 ```
 
-The cache middleware in [`@internal/middleware-cache`](../../../packages/3-extensions/middleware-cache/README.md) caches the rows of annotated reads in a store, and lets the application remove entries when the data behind them changes. It makes no caching decisions of its own. It works out each read's key, passes data from annotations and `invalidate` calls to the store, and never interprets that data. Decisions about how to cache, such as how entries are grouped, how long they live and what a write should remove, belong to the store or to an extension built on top.
+The cache middleware in [`@internal/middleware-cache`](../../../packages/3-extensions/middleware-cache/README.md) caches the rows of annotated reads in a store, and lets the application remove entries when the data behind them changes. It decides only which reads it serves from the store ([Reads the cache does not serve](#reads-the-cache-does-not-serve)), the key each read is stored under, and that a read's rows are stored only when the read completed. It passes data from annotations and `invalidate` calls to the store and never interprets that data. Decisions about how to cache, such as how entries are grouped, how long they live and what a write should remove, belong to the store or to an extension built on top.
 
 | Concern | Owned by | Through |
 | --- | --- | --- |
