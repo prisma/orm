@@ -1137,32 +1137,32 @@ prisma migration show [target] [--config <path>] [--json] [-v] [-q] [--color/--n
 
 ### `prisma migration status`
 
-Show the migration graph and applied status. Adapts based on context:
-
-- **With DB connection**: Shows applied/pending markers and "you are here" indicators
-- **Without DB connection**: Shows the graph structure from disk only
-- **With `--ref`**: Targets a specific ref instead of the contract hash; all refs from `refs.json` are rendered on the graph
+Shows which migrations are pending between the database marker and the target contract. It needs a database connection unless `--from` names the origin.
 
 ```bash
-prisma migration status [--db <url>] [--ref <name>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma migration status [--db <url>] [--to <contract>] [--from <contract>] [--space <id>] [--legend] [--ascii] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
-- `--db <url>`: Database connection string (enables online mode)
-- `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
+- `--db <url>`: Database connection string
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration dir name, `<dir>^`, `@contract`, `@db`, or `@empty`). Defaults to the emitted contract.
+- `--from <contract>`: Origin contract reference, with the same forms as `--to`. Defaults to the database marker. With `--from`, the path is computed without reading the database.
+- `--space <id>`: Narrow output to a single contract space
+- `--legend`: Print a key for the tree glyphs and lane colors
+- `--ascii`: Use ASCII glyphs
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output
 
+`@db` in either `--to` or `--from` resolves to the database marker, so the command reads the database and needs a connection. `--to` and `--from` apply to the app space; each extension space is checked from its own marker to its own head.
+
 **What it does:**
-1. Reads migration packages from disk and reconstructs the migration graph
-2. Loads all refs from `migrations/refs.json` (if present) and renders them on the graph
-3. If `--ref` is provided, uses the ref's hash as the target instead of the contract hash; the active ref is highlighted in bold, other refs are dimmed
-4. If a DB connection is available, reads the marker to determine applied/pending status and shows distance from the ref target (e.g., "2 edge(s) behind ref")
-5. Displays the graph with `◄ DB`, `◄ Contract`, and `◄ ref:<name>` markers
-6. Shows operation summaries with destructive operation highlighting
-7. In `--ref` mode, the `CONTRACT.AHEAD` warning is suppressed — contract being ahead of a ref target is expected in multi-environment workflows
+1. Reads migration packages from disk and reconstructs each space's migration graph
+2. Resolves the origin (the database marker, or `--from`) and the target (the emitted contract, or `--to`)
+3. With a database connection, reads each space's marker and ledger to mark migrations applied or pending
+4. Draws each space's graph with `@db`, `@contract` and ref labels, and summarises what is pending
+5. Warns `MIGRATION.MARKER_NOT_IN_HISTORY` when a marker is not in its space's migration graph
 
 ### `prisma db migrate`
 
