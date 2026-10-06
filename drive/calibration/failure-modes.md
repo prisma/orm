@@ -768,15 +768,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** 2026-10-01, lsp-go-to-definition slice 1 (#30563): a rebase onto a Mongo binder change squashed 35 commits into one; later rounds were amended into it. The intermediate states were recovered from push SHAs as a four-commit series, but the rebase step itself could only be shown as a range-diff.
 
-### F40. A rebase or merge is pushed without re-running the gates, and the pushed head does not typecheck
-
-**Symptom.** CI on a just-rebased PR fails on typecheck or a test the branch never touched; the cause is new code on `main` calling an API the branch changed.
-
-**Mitigation.** After every rebase or merge of `main`, run the slice's per-dispatch gate (build, typecheck of changed packages and their dependents, the touched packages' tests) on the final head before `git push --force-with-lease`. A clean `git rebase` says nothing about whether the result compiles.
-
-**Reference incident.** 2026-10-05, lsp-go-to-definition slice 2 (#30578): a rebase picked up a new `resolveEntity` call to `qualifiedMember`, whose signature the branch had changed; two pushed heads did not typecheck until a later dispatch noticed.
-
-### F41. Test filters after `--` are dropped, so a "targeted" run executes the whole suite
+### F40. Test filters after `--` are dropped, so a "targeted" run executes the whole suite
 
 **Symptom.** A dispatch meant to run three integration files runs for 30+ minutes, sometimes twice in parallel, and reports failures in files it never touched.
 
@@ -784,7 +776,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** 2026-09-30 and 2026-10-01, lsp-go-to-definition: three separate runs of `vitest run -- test/...` executed the full integration suite; one stalled a dispatch for 40 minutes, another ran it twice concurrently.
 
-### F42. An implementer fans a mechanical migration out to parallel helpers without a decided shape, and each helper writes its own copy
+### F41. An implementer fans a mechanical migration out to parallel helpers without a decided shape, and each helper writes its own copy
 
 **Symptom.** A dispatch that changes a widely called API comes back green but adds thousands of lines: each of ~30 call sites hand-assembles the same setup. A follow-up round consolidates it.
 
