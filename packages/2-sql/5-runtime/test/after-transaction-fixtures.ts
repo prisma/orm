@@ -39,6 +39,7 @@ export interface DriverFailures {
   readonly commit?: Error;
   readonly rollback?: Error;
   readonly commitHeldUntil?: Promise<void>;
+  readonly rollbackHeldUntil?: Promise<void>;
 }
 
 function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver {
@@ -62,7 +63,9 @@ function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver 
   const transaction = {
     ...queryable,
     commit: vi.fn().mockImplementation(settle('commit', failures.commit, failures.commitHeldUntil)),
-    rollback: vi.fn().mockImplementation(settle('rollback', failures.rollback)),
+    rollback: vi
+      .fn()
+      .mockImplementation(settle('rollback', failures.rollback, failures.rollbackHeldUntil)),
   };
   const connection = {
     ...queryable,

@@ -4,14 +4,14 @@ import {
   AsyncIterableResult,
   checkAborted,
   checkMiddlewareCompatibility,
-  executeWithAfterTransaction,
   onQueryEndOutsideTransaction,
   type QueryEnding,
-  queryWithAfterTransaction,
   RuntimeCore,
   type RuntimeExecuteOptions,
   type RuntimeLog,
   type RuntimeMiddlewareContext,
+  reportExecuteEnding,
+  reportQueryEnding,
   runBeforeExecuteChain,
   runBeforeQueryChain,
   runExecuteWithMiddleware,
@@ -212,7 +212,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
   readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
-  // For each open transaction this runtime wrapped, and its connection, how a query run on it is remembered until the transaction ends.
+  // For each open transaction this runtime wrapped, and its connection, how a query run on it is remembered until the transaction's commit() or rollback() is called.
   readonly #openTransactions = new WeakMap<SqlQueryable, RememberOnTransaction>();
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
@@ -459,7 +459,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     onDriverAnswered: () => void,
   ): AsyncIterable<Row> {
-    return queryWithAfterTransaction(
+    return reportQueryEnding(
       this.scheduleAfterTransaction(queryable, exec, execMiddlewareCtx),
       () =>
         this.streamDecodedRows<Row>(
@@ -673,7 +673,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     middlewareCtx: RuntimeMiddlewareContext,
     driverCall: () => Promise<SqlStatementStats>,
   ): Promise<SqlStatementStats> {
-    return executeWithAfterTransaction(
+    return reportExecuteEnding(
       this.scheduleAfterTransaction(queryable, exec, middlewareCtx),
       async () => {
         await this.setupDriverExecution(exec, queryable);
@@ -1000,13 +1000,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` stage once when the transaction ends. A query sent on `connection` while the transaction is open runs inside it, so its stage also fires when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper. A transaction a subclass wraps reads the contract marker through the driver; only the connections and transactions this class hands out read it through themselves.
+   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` stage once when the transaction ends. `connection` is the connection `driverTx` was begun on. A query sent on it, or on the transaction, from now until `commit()` or `rollback()` is called runs inside the transaction, so its stage also fires when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper. A transaction a subclass wraps reads the contract marker through the driver; only the connections and transactions this class hands out read it through themselves.
    */
   protected wrapTransaction(
     driverTx: SqlTransaction,
-    connection: SqlQueryable,
+    connection: SqlConnection,
   ): RuntimeTransaction {
-    const endTransaction = this.declaresAfterTransaction
+    const remembered = this.anyMiddlewareDeclaresAfterTransaction
       ? this.rememberQueriesUntilEnd([driverTx, connection])
       : undefined;
     let commitAttempted = false;
@@ -1016,19 +1016,21 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementExecuteTarget = {
       async commit(): Promise<void> {
         commitAttempted = true;
+        remembered?.stopRemembering();
         try {
           await self.#inFlight.track(() => driverTx.commit());
         } catch (error) {
-          await endTransaction?.('unknown');
+          await remembered?.end('unknown');
           throw error;
         }
-        await endTransaction?.('committed');
+        await remembered?.end('committed');
       },
       async rollback(): Promise<void> {
+        remembered?.stopRemembering();
         try {
           await self.#inFlight.track(() => driverTx.rollback());
         } finally {
-          await endTransaction?.(commitAttempted ? 'unknown' : 'rolled-back');
+          await remembered?.end(commitAttempted ? 'unknown' : 'rolled-back');
         }
       },
       query<Row>(
@@ -1083,10 +1085,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return wrappedTransaction;
   }
 
-  // While a transaction is open, remembers the stage of each query run on its queryables, and whether one failed. The returned function ends the transaction: it forgets the queryables and runs each remembered stage once, in execution order. A resolved commit reports unknown if a query failed.
-  private rememberQueriesUntilEnd(
-    queryables: readonly SqlQueryable[],
-  ): (outcome: AfterTransactionResult['outcome']) => Promise<void> {
+  // Remembers the stage of each query run on the queryables, and whether one failed, until stopRemembering() is called. commit() and rollback() call it at once, because a statement sent after that call reaches the database after the COMMIT or ROLLBACK (see SqlTransaction). end() runs each remembered stage once, in execution order; a resolved commit reports unknown if a query failed.
+  private rememberQueriesUntilEnd(queryables: readonly SqlQueryable[]): {
+    readonly stopRemembering: () => void;
+    readonly end: (outcome: AfterTransactionResult['outcome']) => Promise<void>;
+  } {
     const awaitingTransactionEnd: Array<(result: AfterTransactionResult) => Promise<void>> = [];
     let aQueryFailed = false;
     const remember: RememberOnTransaction = (runStage) => {
@@ -1098,16 +1101,20 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     for (const queryable of queryables) {
       this.#openTransactions.set(queryable, remember);
     }
-    return async (outcome) => {
-      for (const queryable of queryables) {
-        if (this.#openTransactions.get(queryable) === remember) {
-          this.#openTransactions.delete(queryable);
+    return {
+      stopRemembering: () => {
+        for (const queryable of queryables) {
+          if (this.#openTransactions.get(queryable) === remember) {
+            this.#openTransactions.delete(queryable);
+          }
         }
-      }
-      const reported = outcome === 'committed' && aQueryFailed ? 'unknown' : outcome;
-      for (const runStage of awaitingTransactionEnd.splice(0)) {
-        await runStage({ outcome: reported });
-      }
+      },
+      end: async (outcome) => {
+        const reported = outcome === 'committed' && aQueryFailed ? 'unknown' : outcome;
+        for (const runStage of awaitingTransactionEnd.splice(0)) {
+          await runStage({ outcome: reported });
+        }
+      },
     };
   }
 

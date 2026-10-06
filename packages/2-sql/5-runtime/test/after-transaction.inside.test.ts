@@ -224,6 +224,19 @@ describe('afterTransaction on a transaction driven by hand', () => {
     ]);
   });
 
+  it('fires committed at commit for a query whose caller threw into its row stream after the first row', async () => {
+    const setup = createSetup();
+    const transaction = await (await setup.runtime.connection()).transaction();
+    const iterator = transaction.query(rawPlan('select 1'))[Symbol.asyncIterator]();
+    await iterator.next();
+    const callerError = new Error('caller stopped');
+
+    await expect(iterator.throw?.(callerError)).rejects.toBe(callerError);
+    await transaction.commit();
+
+    expect(stages(setup.events)).toEqual(['afterTransaction:committed']);
+  });
+
   it('commit resolves when a hook throws, and the error is logged', async () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const failure = new Error('hook failed');
@@ -408,6 +421,46 @@ describe('a query sent on the connection while its transaction is open', () => {
       'afterTransaction:committed',
     ]);
   });
+});
+
+describe('a query sent while commit or rollback is pending', () => {
+  const pendingEnds = [
+    { end: 'commit', outcome: 'committed' },
+    { end: 'rollback', outcome: 'rolled-back' },
+  ] as const;
+  const cases = pendingEnds.flatMap((pending) =>
+    (['connection', 'transaction'] as const).map((sentOn) => ({ ...pending, sentOn })),
+  );
+
+  it.each(cases)(
+    'fires committed right after its after-hook when sent on the $sentOn while $end is pending, and the earlier query gets $outcome',
+    async ({ end, outcome, sentOn }) => {
+      const endHeld = held();
+      const failures: DriverFailures =
+        end === 'commit'
+          ? { commitHeldUntil: endHeld.promise }
+          : { rollbackHeldUntil: endHeld.promise };
+      const setup = createSetup({ failures });
+      const connection = await setup.runtime.connection();
+      const transaction = await connection.transaction();
+      await transaction.execute(rawPlan('update t set x = 1'));
+
+      const ending = transaction[end]();
+      const target: RuntimeQueryable = sentOn === 'connection' ? connection : transaction;
+      await target.execute(rawPlan('update t set x = 2'));
+      endHeld.release();
+      await ending;
+
+      const afterHooks = setup.events.filter((event) => !event.name.startsWith('before'));
+      expect(afterHooks.map((event) => [event.name, event.plan?.sql])).toEqual([
+        ['afterExecute', 'update t set x = 1'],
+        ['afterExecute', 'update t set x = 2'],
+        ['afterTransaction:committed', 'update t set x = 2'],
+        [end, undefined],
+        [`afterTransaction:${outcome}`, 'update t set x = 1'],
+      ]);
+    },
+  );
 });
 
 describe('prepared statements in a transaction', () => {
