@@ -76,7 +76,7 @@ Deriving scalar names from constructors keeps tooling aligned with interpretatio
 
 - Components contribute scalar and parameterized storage types through `AuthoringContributions.type` only. The `scalarTypeDescriptors` contribution and assembly surfaces are retired.
 - Bare type syntax and constructor-call syntax share precedence, collision handling, argument validation, and lowering.
-- A SQL target contributes the constructors that are also TypeScript `type.*` helpers. It defines its PSL-only constructors, the native storage names and codec bindings, and its adapter contributes them. Family interpreters remain generic across targets.
+- A SQL target contributes the constructors that are also TypeScript `type.*` helpers. It defines its PSL-only constructors, which bind PSL type names to codecs, and its adapter contributes them. Family interpreters remain generic across targets.
 - `ControlStack.scalarTypes` remains a derived convenience view for consumers that need names, while `collectScalarTypeConstructors` provides the derived name-to-storage-output map.
 - TypeScript and PSL authoring helpers can be generated from the same descriptor namespace.
 - The contract representation does not change: storage entries still contain codec ids, base native types, and structured type parameters.
