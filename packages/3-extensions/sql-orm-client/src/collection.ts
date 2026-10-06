@@ -468,24 +468,23 @@ export class CollectionBase<
    * await db.orm.User.variant('admin').create({ name: 'Ada', role: 'super' });
    * ```
    */
-  variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
+  variant<V extends VariantValues<TContract, ModelName>, S extends CollectionTypeState = State>(
     this: HasTypeState<S>,
-    variantName: V,
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<S>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<S>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
+  variant<V extends VariantValues<TContract, ModelName>>(
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<State>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<State>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  
   variant<V extends VariantValues<TContract, ModelName>>(
     value: V,
   ): Collection<

@@ -19,22 +19,22 @@ declare const flag: boolean;
 describe('variant', () => {
   test('drops the class methods', () => {
     // @ts-expect-error titled is a TaskCollection method; variant returns the base Collection type
-    tasks.variant('Bug').titled('x');
+    tasks.variant('bug').titled('x');
   });
 
   test('keeps the established order', () => {
-    const bugs = tasks.newestFirst().variant('Bug');
+    const bugs = tasks.newestFirst().variant('bug');
     expectTypeOf<CollectionTypeStateOf<typeof bugs>['hasOrderBy']>().toEqualTypeOf<true>();
     expectTypeOf(bugs.cursor({ id: 1 })).toEqualTypeOf(bugs);
   });
 
   test('without an order, cursor stays refused', () => {
     // @ts-expect-error cursor needs an orderBy
-    tasks.variant('Bug').cursor({ id: 1 });
+    tasks.variant('bug').cursor({ id: 1 });
   });
 
   test('narrows the row to the variant', async () => {
-    const bug = await tasks.variant('Bug').first();
+    const bug = await tasks.variant('bug').first();
     expectTypeOf(bug).toEqualTypeOf<{
       id: number;
       title: string;
@@ -47,14 +47,14 @@ describe('variant', () => {
   });
 
   test('records its discriminator filter', () => {
-    const bugs = tasks.variant('Bug');
+    const bugs = tasks.variant('bug');
     expectTypeOf<CollectionTypeStateOf<typeof bugs>['hasWhere']>().toEqualTypeOf<true>();
   });
 
   test('on a union of differently ordered collections, the fallback overload drops the order', () => {
     const either = flag ? tasks.newestFirst() : tasks.titled('x');
     // @ts-expect-error the fallback overload returns the root state, which has no order
-    either.variant('Bug').cursor({ id: 1 });
+    either.variant('bug').cursor({ id: 1 });
   });
 
   test('the class survives cursor', () => {
