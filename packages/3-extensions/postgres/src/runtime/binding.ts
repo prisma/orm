@@ -52,7 +52,14 @@ export function validatePostgresUrl(url: string): string {
   const emptyHost = /^postgres(?:ql)?:\/\/([^/?#]*)/i.exec(trimmed);
   if (emptyHost !== null) {
     const hostAndPort = emptyHost[1].slice(emptyHost[1].lastIndexOf('@') + 1);
-    preserveEmptyHost = hostAndPort === '' || hostAndPort.startsWith(':');
+    if (hostAndPort.startsWith(':')) {
+      throw postgresError(
+        'RUNTIME.BINDING_INVALID',
+        'Postgres URL cannot specify a port without a host',
+        { meta: { extension: 'postgres', reason: 'port without host' } },
+      );
+    }
+    preserveEmptyHost = hostAndPort === '';
     if (preserveEmptyHost) {
       const insertAt = emptyHost[0].length - hostAndPort.length;
       input = `${trimmed.slice(0, insertAt)}localhost${trimmed.slice(insertAt)}`;

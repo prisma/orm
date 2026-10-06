@@ -83,6 +83,12 @@ describe('validatePostgresUrl', () => {
     expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@/mydb');
   });
 
+  it('rejects a port without a host', () => {
+    expect(() => validatePostgresUrl('postgresql://u:p@:5432/mydb')).toThrow(
+      'cannot specify a port without a host',
+    );
+  });
+
   it('keeps a password when the username is empty', () => {
     expect(validatePostgresUrl('postgresql://:secret@localhost/mydb')).toBe(
       'postgresql://:secret@localhost/mydb',
