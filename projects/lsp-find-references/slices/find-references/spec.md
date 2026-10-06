@@ -37,7 +37,7 @@ Remove the early `null` for a resolved node that is the declaration's own name. 
 ### Documentation
 
 - Language-server README: find references in the feature list and a short section in the style of the Hover section; the go-to-definition text reflects the declaration-name change; the Hover section covers a namespace block name if it lists hover positions.
-- psl-parser README: where it says which declaration names carry a resolution, namespaces are added.
+- psl-parser README: no change. `main` removed the binder detail this sentence belonged to while this slice was in progress, and the behaviour is asserted by the binder test.
 - `apps/lsp-playground/README.md`: find references is listed among the requests the editor sends. No playground client code changes in this slice; if references in another scratch file do not open there, that is reported, not fixed here.
 
 ## Why these changes are one PR
