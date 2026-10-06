@@ -44,9 +44,10 @@ function arrayLiteral(literals: readonly string[], typeName: string): string {
  * What the Postgres target supplies to the Prisma 7 interpreter. A `Bytes` or
  * `DateTime` default is carried as the SQL literal of the default Postgres
  * stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default as an
- * `ARRAY[...]` of those literals cast to the column type, rather than through
- * the column codec, whose JSON form (base64, ISO 8601 text) is not what
- * introspection reads back; verify parses both sides with the same parser.
+ * `ARRAY[...]` of those literals cast to the column type, rather than as the
+ * column codec's JSON form (base64, ISO 8601 text). Verify reads both forms as
+ * the same value; the reader keeps the SQL literal because storing the value
+ * instead changes the contract hash of every such schema (TML-3455).
  */
 export const prisma7PostgresBinding = {
   target: postgresTargetDescriptorMeta,

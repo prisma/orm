@@ -31,7 +31,7 @@ import {
 } from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
-import { canonicalUuid, fitsFloat4, pgIntervalCanonical } from './codec-helpers';
+import { canonicalUuid, fitsFloat4, pgByteaCanonical, pgIntervalCanonical } from './codec-helpers';
 import { quoteIdentifier } from './sql-utils';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
@@ -346,8 +346,8 @@ const canonicalFromText =
   (value) =>
     typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
 
-/** A date or time type: its canonical form, and a cast from text that gives it. */
-function dateTimeType(
+/** A type whose canonical form reads text: that canonical form, and the same function as its cast from text. */
+function typeCanonicalFromText(
   id: string,
   canonical: (text: string) => string,
   spec: { readonly texts: readonly SqlTypeText[]; readonly params?: typeof pgPrecisionParams },
@@ -356,7 +356,7 @@ function dateTimeType(
   return sqlDataType(id, { ...spec, toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
 }
 
-export const pgTimetz = dateTimeType('pg/timetz', pgTimetzCanonical, {
+export const pgTimetz = typeCanonicalFromText('pg/timetz', pgTimetzCanonical, {
   params: pgPrecisionParams,
   texts: [
     written('timetz'),
@@ -366,17 +366,20 @@ export const pgTimetz = dateTimeType('pg/timetz', pgTimetzCanonical, {
   ],
 });
 
-export const pgInterval = dateTimeType('pg/interval', pgIntervalCanonical, {
+export const pgInterval = typeCanonicalFromText('pg/interval', pgIntervalCanonical, {
   params: pgPrecisionParams,
   texts: [writtenAndCatalog('interval'), writtenAndCatalog('interval({precision})')],
 });
 
-export const pgBytea = namedOnly('pg/bytea', 'bytea', fromText);
-export const pgDate = dateTimeType('pg/date', pgDateCanonical, {
+export const pgBytea = typeCanonicalFromText('pg/bytea', pgByteaCanonical, {
+  texts: [writtenAndCatalog('bytea')],
+});
+
+export const pgDate = typeCanonicalFromText('pg/date', pgDateCanonical, {
   texts: [writtenAndCatalog('date')],
 });
 
-export const pgTime = dateTimeType('pg/time', pgTimeCanonical, {
+export const pgTime = typeCanonicalFromText('pg/time', pgTimeCanonical, {
   params: pgPrecisionParams,
   texts: [
     written('time'),
@@ -386,7 +389,7 @@ export const pgTime = dateTimeType('pg/time', pgTimeCanonical, {
   ],
 });
 
-export const pgTimestamp = dateTimeType('pg/timestamp', pgTimestampCanonical, {
+export const pgTimestamp = typeCanonicalFromText('pg/timestamp', pgTimestampCanonical, {
   params: pgPrecisionParams,
   texts: [
     written('timestamp'),
@@ -396,7 +399,7 @@ export const pgTimestamp = dateTimeType('pg/timestamp', pgTimestampCanonical, {
   ],
 });
 
-export const pgTimestamptz = dateTimeType('pg/timestamptz', pgTimestamptzCanonical, {
+export const pgTimestamptz = typeCanonicalFromText('pg/timestamptz', pgTimestamptzCanonical, {
   params: pgPrecisionParams,
   texts: [
     written('timestamptz'),
