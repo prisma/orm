@@ -2,16 +2,16 @@
 
 This page documents how the pull-request CI pipeline ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) is structured for cost — how it avoids redoing work within a run, across runs, and on PRs whose changes cannot affect the result — and the constraints that shaped those choices. It captures the *why*; the workflow file is the *what*.
 
-## What runs on a PR
+## What runs on a PR and in the merge queue
 
-`ci.yml` reports stable verification contexts including `Build`, `Type Check`, `Lint`, `Test` and `E2E Tests`; a small `Detect inert diff` job classifies the diff (below). Four non-required `Package Tests` shards upload native coverage blobs, `Coverage` merges and gates them while `Test Examples` runs concurrently, and a lightweight final `Test` fan-in preserves the required check name. The [DCO app](https://github.com/apps/dco) posts a separate `DCO` check on each PR and each merge-queue commit, and the preview-publish workflow also runs. `main` is governed by a repository ruleset that requires the verification contexts plus `DCO`, and pull requests merge through a merge queue, which runs `ci.yml` again (`merge_group` event) on each pull request merged with the latest `main`. Two consequences drive the whole design:
+`ci.yml` reports stable verification contexts including `Build`, `Type Check`, `Lint`, `Test` and `E2E Tests`; a small `Detect inert diff` job classifies the diff (below). Four non-required `Package Tests` shards upload native coverage blobs, `Coverage` merges and gates them while `Test Examples` runs concurrently, and a lightweight final `Test` fan-in preserves the required check name. The [DCO app](https://github.com/apps/dco) posts a separate `DCO` check on each PR and each merge-queue commit, and the preview-publish workflow also runs. `main` is governed by a repository ruleset that requires the verification contexts plus `DCO`, and pull requests merge through a merge queue, which runs `ci.yml` again (`merge_group` event) on each queued pull request merged with `main` and the entries ahead of it in the queue. Two consequences drive the whole design:
 
 - A required status check that never reports its result **wedges the merge**. So a job that is required can never be skipped at the job level — it must always launch and report.
 - The ruleset is a fixed constraint. The pipeline is designed *around* it; CI changes never edit the ruleset or the set of required check names.
 
 ## Integration tests run only in the merge queue
 
-The integration suite is the slowest and most resource-hungry part of CI, so it runs where it runs least often and still blocks the merge: once per merge-queue entry, against the latest `main`. The four `Integration Tests` shards run only on `merge_group` events. `Test` depends on them and fails, in the merge queue only, if a shard fails, so the queue removes the pull request. On a pull request the shards are skipped and `Test` ignores them.
+The integration suite is the slowest and most resource-hungry part of CI, so it runs where it runs least often and still blocks the merge: once per merge-queue entry. The four `Integration Tests` shards run only on `merge_group` events with a non-inert diff. `Test` depends on them and fails, in the merge queue only, if a shard does not pass, so the queue removes the pull request. The shards are not required checks themselves: a skipped matrix job reports one check named `Integration Tests (${{ matrix.shard }})`, which every pull request now shows as skipped, so a required shard name would never report.
 
 To run the suite on a branch before queueing it, start the on-demand workflow ([`.github/workflows/integration.yml`](../../.github/workflows/integration.yml)):
 
@@ -19,7 +19,7 @@ To run the suite on a branch before queueing it, start the on-demand workflow ([
 gh workflow run integration.yml --ref <branch>
 ```
 
-Its results appear as checks on the branch's head commit. The init journey matrix (`pnpm test:init-journey`) is slower still and runs on `main` every night ([`.github/workflows/init-journey-nightly.yml`](../../.github/workflows/init-journey-nightly.yml)).
+It runs the same steps as the merge-queue shards ([`.github/actions/integration-tests`](../../.github/actions/integration-tests/action.yml)) on the branch's head commit, not merged with `main`, and its results appear as checks on that commit. It cannot run on a fork's branch. The init journey matrix (`pnpm test:init-journey`) is slower still and runs on `main` every night ([`.github/workflows/init-journey-nightly.yml`](../../.github/workflows/init-journey-nightly.yml)).
 
 ## Build once per run, and across runs
 
@@ -35,19 +35,19 @@ Test, e2e, integration, and coverage results are never reused across workflow ru
 
 ## Skip the heavy work on inert diffs
 
-A PR that only edits documentation should not boot Postgres and run the full test matrix. The `Detect inert diff` job emits an `inert` boolean. The non-required package-test, example-test, and coverage jobs are skipped at the job level, while expensive steps of the `E2E Tests` / `Integration Tests` / `Fixtures` jobs guard on it:
+A PR that only edits documentation should not boot Postgres and run the full test matrix. The `Detect inert diff` job emits an `inert` boolean. The non-required package-test, example-test, integration-test, and coverage jobs are skipped at the job level, while expensive steps of the required `E2E Tests` / `Fixtures` jobs guard on it:
 
 ```yaml
-- name: Run Integration tests
+- name: Run E2E tests
   if: needs.changes.outputs.inert != 'true'
-  run: pnpm test:integration
+  run: pnpm test:e2e
 ```
 
-Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. The `Integration Tests` shards gate their steps the same way, so an inert diff runs no integration tests in the merge queue either. Package shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
+Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. Package shards, integration shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
 
 ### The inert predicate
 
-The classification lives in one place — the [`.github/actions/detect-inert-diff`](../../.github/actions/detect-inert-diff/action.yml) composite — so `ci.yml` and `preview-publish.yml` share a single allow-list rather than two copies that can drift. It is an **allow-list that fails safe toward running**: a diff is inert only if *every* changed file matches a known-harmless pattern (markdown anywhere, `docs/`, `projects/`, `skills-contrib/`, `.agents/`, `.cursor/`, `.claude/`, `LICENSE`). A single unrecognized path — source, `package.json`, the lockfile, `turbo.json`, anything under `.github/workflows/` — makes the whole diff non-inert and runs everything. Off a pull request (e.g. push to `main`) it always reports non-inert.
+The classification lives in one place — the [`.github/actions/detect-inert-diff`](../../.github/actions/detect-inert-diff/action.yml) composite — so `ci.yml` and `preview-publish.yml` share a single allow-list rather than two copies that can drift. It is an **allow-list that fails safe toward running**: a diff is inert only if *every* changed file matches a known-harmless pattern (markdown anywhere outside `packages/`, `docs/`, `projects/`, `skills-contrib/`, `.agents/`, `.cursor/`, `.claude/`, `LICENSE`). A single unrecognized path — source, `package.json`, the lockfile, `turbo.json`, anything under `.github/workflows/` — makes the whole diff non-inert and runs everything. Nothing under `packages/` is inert, READMEs included: they ship to npm, and integration tests run the config blocks in some of them. On events other than `pull_request` and `merge_group` (e.g. push to `main`) it always reports non-inert.
 
 `preview-publish.yml`'s "Publish preview" is *not* a required context, so there the whole job is skipped at the job level on inert PRs rather than gating each step.
 

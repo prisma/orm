@@ -5,7 +5,8 @@ name: Integration
 #
 #   gh workflow run integration.yml --ref <branch>
 #
-# The results appear as checks on the branch's head commit.
+# The results appear as checks on the branch's head commit. GitHub lists this
+# workflow only once it is on main, and it cannot run on a fork's branch.
 
 on:
   workflow_dispatch:
@@ -19,7 +20,7 @@ concurrency:
 
 jobs:
   test-integration:
-    name: Integration Tests, on demand (${{ matrix.shard }})
+    name: Integration Tests (on demand, ${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -31,12 +32,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build
-        run: pnpm build
-      - name: Run Integration tests
-        run: pnpm test:integration --shard=${{ matrix.shard }}
-      - name: Check working tree is clean
-        run: pnpm check:clean-tree
+      - uses: ./.github/actions/integration-tests
+        with:
+          shard: ${{ matrix.shard }}

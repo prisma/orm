@@ -1,0 +1,27 @@
+name: Integration tests
+description: >
+  Install, build and run one shard of the integration suite, then check the
+  working tree is clean. Shared by the merge-queue run in ci.yml and the
+  on-demand run in integration.yml. The caller checks out the repository.
+inputs:
+  shard:
+    description: "Vitest shard to run, for example '1/4'."
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+    - name: Build (restored from Turbo cache)
+      shell: bash
+      run: pnpm build
+    - name: Run Integration tests
+      shell: bash
+      env:
+        SHARD: ${{ inputs.shard }}
+      run: pnpm test:integration --shard="$SHARD"
+    - name: Check working tree is clean
+      shell: bash
+      run: pnpm check:clean-tree
