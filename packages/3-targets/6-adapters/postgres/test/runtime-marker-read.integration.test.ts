@@ -1,6 +1,7 @@
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { buildSignMarkerBootstrapQueries } from '@internal/target-postgres/contract-free';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -26,7 +27,10 @@ describe('runtime readMarker through the Postgres runtime driver', () => {
     });
     await driver.connect({ kind: 'url', url: database.connectionString });
 
-    const controlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const controlAdapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
     for (const query of buildSignMarkerBootstrapQueries()) {
       await driver.execute(
         await controlAdapter.lowerToExecuteRequest(query as PostgresDdlNode, {

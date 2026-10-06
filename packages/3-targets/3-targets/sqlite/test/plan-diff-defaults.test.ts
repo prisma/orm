@@ -87,7 +87,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
       const diff = buildSqlitePlanDiff({
         contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
         actualSchema: liveSchema(stored),
-        frameworkComponents: [],
+        frameworkComponents: sqliteTestComponents,
       });
       expect(diff.issues).toEqual([]);
     },
@@ -97,7 +97,7 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     const diff = buildSqlitePlanDiff({
       contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
       actualSchema: new SqlSchemaIR({ tables: {} }),
-      frameworkComponents: [],
+      frameworkComponents: sqliteTestComponents,
     });
     expect(diff.expected.tables['event']?.columns['at']?.default).toBe(
       "strftime('%Y-%m-%dT%H:%M:%fZ','now')",

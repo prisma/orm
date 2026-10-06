@@ -2054,7 +2054,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('reads canonical_version integer text as a number', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
@@ -2072,7 +2075,10 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('rejects canonical_version text that is not an integer as a corrupt marker row', async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
