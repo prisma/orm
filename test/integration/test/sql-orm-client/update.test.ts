@@ -1,5 +1,11 @@
-import type { SqlMiddleware } from '@internal/sql-runtime';
+import { Collection } from '@internal/sql-orm-client';
+import {
+  type SqlMiddleware,
+  type TransactionContext,
+  withTransaction,
+} from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
+import { getTestContext } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
@@ -8,6 +14,22 @@ import {
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
+
+function recordAfterTransaction(stages: string[]): SqlMiddleware {
+  return {
+    name: 'after-transaction-recorder',
+    familyId: 'sql',
+    async afterTransaction(_exec, result) {
+      stages.push(result.outcome);
+    },
+  };
+}
+
+function usersIn(tx: TransactionContext) {
+  return new Collection({ runtime: tx, context: getTestContext() }, 'User', {
+    namespaceId: 'public',
+  });
+}
 
 describe('integration/update', () => {
   it(
@@ -259,6 +281,69 @@ describe('integration/update', () => {
         undefined,
         [],
         [observer],
+      );
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a statement that fails inside a transaction, caught by the callback, makes the commit report unknown',
+    async () => {
+      const stages: string[] = [];
+      await withCollectionRuntime(
+        async (runtime) => {
+          await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
+
+          await withTransaction(runtime, async (tx) => {
+            const users = usersIn(tx);
+            await users.where({ id: 1 }).updateAndCount({ name: 'Updated' });
+            await expect(
+              users.createAndCount([{ id: 1, name: 'Duplicate', email: 'b@example.com' }]),
+            ).rejects.toThrow();
+          });
+
+          const rows = await runtime.query('select name from users where id = 1');
+          expect({ stages, rows }).toEqual({
+            stages: ['unknown', 'unknown'],
+            rows: [{ name: 'Stale' }],
+          });
+        },
+        undefined,
+        [],
+        [recordAfterTransaction(stages)],
+      );
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a row stream stopped early inside a transaction does not stop the commit reporting committed',
+    async () => {
+      const stages: string[] = [];
+      await withCollectionRuntime(
+        async (runtime) => {
+          await seedUsers(runtime, [
+            { id: 1, name: 'Stale', email: 'a@example.com' },
+            { id: 2, name: 'Stale', email: 'b@example.com' },
+          ]);
+
+          await withTransaction(runtime, async (tx) => {
+            const users = usersIn(tx);
+            for await (const _user of users.all()) {
+              break;
+            }
+            await users.where({ id: 1 }).updateAndCount({ name: 'Updated' });
+          });
+
+          const rows = await runtime.query('select name from users where id = 1');
+          expect({ stages, rows }).toEqual({
+            stages: ['committed', 'committed'],
+            rows: [{ name: 'Updated' }],
+          });
+        },
+        undefined,
+        [],
+        [recordAfterTransaction(stages)],
       );
     },
     timeouts.spinUpPpgDev,
