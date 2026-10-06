@@ -57,12 +57,12 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2d7de6180037b9cf0548340a660182ee32a764a41af7a0877201b44d63f53759"
+    "storageHash": "050a6a959b70dfc5ffdc237a674cbe094d4f6a6e9b874ba81acc8b3144b4d20f"
   },
   "capabilities": {
     "postgres": {

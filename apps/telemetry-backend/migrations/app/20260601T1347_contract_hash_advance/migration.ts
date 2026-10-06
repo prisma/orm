@@ -4,8 +4,8 @@ import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
 export default class M extends Migration {
   override describe() {
     return {
-      from: '41700ef5fda97339b39ea345a56aae72a1ff4be11ddc3ffcab7130bfc71c109d',
-      to: '50aadcf996213451cd2876e3caf50c2752b5b8c9ce1aa55dcae24918518b4ffb',
+      from: '2c0677a6b6e5b60bb328a78d882483d8a00804e00c1e05fba259ff8304882558',
+      to: '269d0430c7c70fa502e75feb52d9219c0339daa041c6cc9fb4ecb5ad8d0373b6',
     };
   }
 

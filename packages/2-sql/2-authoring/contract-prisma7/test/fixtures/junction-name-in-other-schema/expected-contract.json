@@ -198,7 +198,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "648e760b3a9e25a88f6323bdcf6eae63be660dffbe599f69c0b33d3aa23576e5",
+    "storageHash": "58a1e92da3820c064d35caaa926e922c0b4c410da8a2124a3a3108eb45f7ab27",
     "namespaces": {
       "one": {
         "id": "one",
@@ -208,7 +208,7 @@
             "Post": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -224,7 +224,7 @@
             "Tag": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -240,13 +240,13 @@
             "_PostToTag": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -312,7 +312,7 @@
             "PostToTag": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false

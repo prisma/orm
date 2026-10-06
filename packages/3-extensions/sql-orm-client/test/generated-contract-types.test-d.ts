@@ -80,31 +80,31 @@ type GeneratedLikeStorage = {
             columns: {
               id: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               name: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               email: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               active: {
                 readonly many: false;
-                nativeType: 'bool';
+                dataType: 'pg/bool';
                 codecId: 'pg/bool@1';
                 nullable: false;
               };
               metadata: {
                 readonly many: false;
-                nativeType: 'jsonb';
+                dataType: 'pg/jsonb';
                 codecId: 'pg/jsonb@1';
                 nullable: false;
               };
@@ -118,19 +118,19 @@ type GeneratedLikeStorage = {
             columns: {
               id: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               userId: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               title: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
@@ -520,25 +520,25 @@ type VOContractBase = Omit<
               columns: {
                 id: {
                   readonly many: false;
-                  nativeType: 'int4';
+                  dataType: 'pg/int4';
                   codecId: 'pg/int4@1';
                   nullable: false;
                 };
                 name: {
                   readonly many: false;
-                  nativeType: 'text';
+                  dataType: 'pg/text';
                   codecId: 'pg/text@1';
                   nullable: false;
                 };
                 home_address: {
                   readonly many: false;
-                  nativeType: 'jsonb';
+                  dataType: 'pg/jsonb';
                   codecId: 'pg/jsonb@1';
                   nullable: true;
                 };
                 work_address: {
                   readonly many: false;
-                  nativeType: 'jsonb';
+                  dataType: 'pg/jsonb';
                   codecId: 'pg/jsonb@1';
                   nullable: false;
                 };

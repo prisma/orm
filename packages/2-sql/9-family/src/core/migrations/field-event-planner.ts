@@ -196,7 +196,7 @@ function isAlteration(prior: StorageColumn, current: StorageColumn): boolean {
 
 function sameStorageColumn(a: StorageColumn, b: StorageColumn): boolean {
   if (a === b) return true;
-  if (a.nativeType !== b.nativeType) return false;
+  if (a.dataType !== b.dataType) return false;
   if (a.nullable !== b.nullable) return false;
   if (a.typeRef !== b.typeRef) return false;
   if (!sameJson(a.typeParams, b.typeParams)) return false;

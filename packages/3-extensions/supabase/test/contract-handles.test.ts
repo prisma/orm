@@ -112,8 +112,8 @@ describe('lowering smoke test — FK + relation to AuthUser via real supabasePac
   function buildProfileContract() {
     const Profile = model('Profile', {
       fields: {
-        id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4', nullable: false }).id(),
-        userId: field.column({ codecId: 'pg/text@1', nativeType: 'uuid', nullable: false }),
+        id: field.column({ codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false }).id(),
+        userId: field.column({ codecId: 'pg/text@1', dataType: 'pg/text', nullable: false }),
       },
       relations: {
         user: rel.belongsTo(AuthUser, { from: 'userId', to: 'id' }),
@@ -254,7 +254,7 @@ describe('handle↔contract.json consistency', () => {
 // ---------------------------------------------------------------------------
 
 describe('extensionModel factory', () => {
-  const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+  const pgText = { codecId: 'pg/text@1' } as const;
 
   it('produces a handle with the same brand/coordinate as a hand-constructed one', () => {
     const handle = extensionModel(

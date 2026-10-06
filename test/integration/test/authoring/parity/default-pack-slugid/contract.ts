@@ -6,7 +6,7 @@ export const contract = defineContract({
       fields: {
         id: field
           .generated({
-            type: { codecId: 'pg/text@1', nativeType: 'text' },
+            type: { codecId: 'pg/text@1' },
             generated: { kind: 'generator', id: 'slugid' },
           })
           .id(),

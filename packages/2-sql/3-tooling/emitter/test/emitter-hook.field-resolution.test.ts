@@ -5,9 +5,9 @@ import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
 const column = {
-  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
   role: {
-    nativeType: 'text',
+    dataType: 'pg/text',
     codecId: 'pg/text@1',
     nullable: false,
     valueSet: {

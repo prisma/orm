@@ -8,7 +8,7 @@ describe('demo TS contract authoring', () => {
     const userIdTargetColumn = tables.user.columns.id;
 
     expect(userIdColumn.codecId).toBe(userIdTargetColumn.codecId);
-    expect(userIdColumn.nativeType).toBe(userIdTargetColumn.nativeType);
+    expect(userIdColumn.dataType).toBe(userIdTargetColumn.dataType);
     expect({ ...userIdColumn }).toEqual({ ...userIdTargetColumn });
   });
 });

@@ -121,7 +121,7 @@ import sqlFamily from '@internal/family-sql/pack';
 import { defineContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
 import postgresPack from '@internal/target-postgres/pack';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 const Role = enumType('role', pgText, member('USER', 'user'), member('ADMIN', 'admin'));
 
 export const contract = defineContract(

@@ -58,7 +58,7 @@ describe('names PSL writes as identifiers', () => {
           'short text': {
             kind: 'codec-instance',
             codecId: 'pg/text@1',
-            nativeType: 'text',
+            dataType: 'pg/text',
             typeParams: {},
           },
         },

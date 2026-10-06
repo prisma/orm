@@ -245,98 +245,98 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": true
                 },
                 "bInt2": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "bool2": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": true
                 },
                 "bytes2": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 },
                 "dt2": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": true
                 },
                 "float2": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "int2": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "string2": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -355,7 +355,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "393dcace2cae644074f48f58c37a5b8ceab1be4d3c4ace9f2a8da25e33fc2818"
+    "storageHash": "c1b150b7bd2b3e645f009833004891cd15d88bbc4b6b0bf74a2e99b8296857f5"
   },
   "capabilities": {
     "postgres": {

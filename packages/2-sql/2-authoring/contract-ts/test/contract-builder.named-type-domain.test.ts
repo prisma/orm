@@ -13,7 +13,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const int4 = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const int4 = { codecId: 'pg/int4@1' } as const;
 
 describe('a field typed by a named storage type in the domain', () => {
   it('takes the named type parameters inline, and reads a named type without parameters as none', () => {
@@ -26,13 +26,11 @@ describe('a field typed by a named storage type in the domain', () => {
           Short: {
             kind: 'codec-instance',
             codecId: 'sql/varchar@1',
-            nativeType: 'character varying',
             typeParams: { length: 10 },
           },
           Email: {
             kind: 'codec-instance',
             codecId: 'pg/text@1',
-            nativeType: 'text',
             typeParams: {},
           },
         },
@@ -47,7 +45,6 @@ describe('a field typed by a named storage type in the domain', () => {
                 columnName: 'code',
                 descriptor: {
                   codecId: 'sql/varchar@1',
-                  nativeType: 'character varying',
                   typeRef: 'Short',
                 },
                 nullable: false,
@@ -55,7 +52,7 @@ describe('a field typed by a named storage type in the domain', () => {
               {
                 fieldName: 'email',
                 columnName: 'email',
-                descriptor: { codecId: 'pg/text@1', nativeType: 'text', typeRef: 'Email' },
+                descriptor: { codecId: 'pg/text@1', typeRef: 'Email' },
                 nullable: false,
               },
             ],

@@ -8,7 +8,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineContract, type FieldBuilder } from '../src/contract-builder';
 import type { EnumTypeHandle } from '../src/enum-type';
 
-const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
+const mongoDate = { codecId: 'mongo/date@1' } as const;
 
 const mongoFamilyPack = {
   kind: 'family',

@@ -30,18 +30,17 @@ import { buildColumnTypeSql } from './planner-ddl-builders';
  */
 function columnLike(
   column: SqlColumnIR,
-): Pick<StorageColumn, 'nativeType' | 'codecId' | 'nullable' | 'many' | 'typeParams' | 'default'> {
+): Pick<StorageColumn, 'codecId' | 'nullable' | 'many' | 'typeParams' | 'default'> {
   if (column.codecRef === undefined || column.codecBaseNativeType === undefined) {
     throw new InternalError(
       `columnLike: expected column "${column.name}" carries no codec identity — the expected tree must be derived via contractToSchemaIR for planning`,
     );
   }
   return {
-    nativeType: column.codecBaseNativeType,
     codecId: column.codecRef.codecId,
     nullable: column.nullable,
     // `column.many` is unset on contract-derived columns (array-ness rides
-    // on the `nativeType` `[]` suffix there instead) — `codecRef.many`
+    // on the type text's `[]` suffix there instead) — `codecRef.many`
     // carries it. Hand-built/introspected columns set `column.many` directly.
     many: (column.many ?? column.codecRef.many) ? { elementNullable: false } : false,
     ...(column.codecRef.typeParams !== undefined
@@ -58,14 +57,14 @@ function columnLike(
 }
 
 /**
- * The default DDL writes. A contract default the column's data type refuses, which a contract
- * emitted by an earlier version can hold, is refused rather than written.
+ * The default DDL writes. A contract default the canonical form of the column's values refuses,
+ * which a contract emitted by an earlier version can hold, is refused rather than written.
  */
 function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
   const columnDefault = column.authoredDefault ?? column.resolvedDefault;
   const refusal = contractDefaultRefusal(
     columnDefault,
-    column.dataType?.toCanonicalForm,
+    column.toCanonicalForm,
     (column.many ?? column.codecRef?.many) === true,
   );
   if (refusal !== undefined) {

@@ -7,6 +7,7 @@ import {
   type AggregateContractSpace,
   type ContractSpaceAggregate,
   requireHeadRef,
+  spacesInApplyOrder,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
@@ -262,15 +263,8 @@ export async function executeMigrateShowPlan(
   // planSpacePath feeds resolveRecordedPath identical inputs (targetHash, targetInvariants,
   // currentMarker with full invariants), so the preview path is always the path migrate runs.
   //
-  // Canonical schedule order: extensions alphabetically first, then app — mirroring the
-  // runner's `applyOrder` in operations/migrate.ts so the "Will run, in order:" list
-  // reflects the actual execution sequence (extensions install first, app last).
-  const canonicalOrderSpaces: ReadonlyArray<AggregateContractSpace> = [
-    ...aggregate.extensions,
-    aggregate.app,
-  ];
   const orderedMigrations: MigrateShowMigration[] = [];
-  for (const space of canonicalOrderSpaces) {
+  for (const space of spacesInApplyOrder(aggregate)) {
     const isAppSpace = space.spaceId === aggregate.app.spaceId;
     const headRef = requireHeadRef(space);
     const spaceTargetHash = isAppSpace ? targetHash : headRef.hash;

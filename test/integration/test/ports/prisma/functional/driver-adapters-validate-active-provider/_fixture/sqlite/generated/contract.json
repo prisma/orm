@@ -47,7 +47,7 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -65,7 +65,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "aca04172fe435818e766ff67181280067eb3971968a2b693e797629c291331b7"
+    "storageHash": "2f4d48d1ac5c69a25921282c44a1fe401cd20f7a2024f6753527321bdc2e6ab1"
   },
   "capabilities": {
     "sql": {

@@ -8,6 +8,7 @@ import type {
   ControlStack,
   CoreSchemaView,
   DiffSubjectGranularity,
+  MarkerHashes,
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
@@ -16,13 +17,15 @@ import type {
   PslContractInferCapable,
   SchemaDiffIssue,
   SchemaViewCapable,
-  SignDatabaseResult,
+  SpaceSignature,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
   SchemaTreeNode,
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_TARGET_MISMATCH,
@@ -46,6 +49,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import type { JsonObject } from '@internal/utils/json';
 import type { StructuredError } from '@internal/utils/structured-error';
 import { enforceSqlDataTypeInvariants } from './assembly';
+import { assertContractMatchesStack } from './contract-stack-checks';
 import type { SqlControlAdapter } from './control-adapter';
 import type {
   SqlControlTargetDescriptor,
@@ -257,13 +261,6 @@ export interface SqlControlFamilyInstance
    * capability. Nothing is stamped on the issue or the node.
    */
   classifyEntityKind(issue: SchemaDiffIssue): string | undefined;
-
-  sign(options: {
-    readonly driver: SqlControlDriverInstance<string>;
-    readonly contract: unknown;
-    readonly contractPath: string;
-    readonly configPath?: string;
-  }): Promise<SignDatabaseResult>;
 
   introspect(options: {
     readonly driver: SqlControlDriverInstance<string>;
@@ -573,7 +570,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         ? [{ spaceId: extension.id, contract: extension.contractSpace.contractJson }]
         : [],
   );
-  const deserializeWithTargetSerializer = (contractOrJson: unknown): Contract<SqlStorage> => {
+  const loadContract = (contractOrJson: unknown): Contract<SqlStorage> => {
     const serializer = targetSerializer ?? new SqlContractSerializer();
     const json =
       targetSerializer !== undefined && !isPlainRecord(contractOrJson)
@@ -584,7 +581,78 @@ export function createSqlFamilyInstance<TTargetId extends string>(
             >(contractOrJson),
           )
         : contractOrJson;
-    return serializer.deserializeContract(json);
+    const contract = serializer.deserializeContract(json);
+    assertContractMatchesStack(contract, stack);
+    return contract;
+  };
+
+  const signSpaceMarker = async (
+    controlAdapter: SqlControlAdapter<string>,
+    driver: SqlControlDriverInstance<string>,
+    { space, contract, expected }: SpaceToSign,
+  ): Promise<SpaceSignature> => {
+    const storageHash = contract.storage.storageHash;
+    const profileHash =
+      'profileHash' in contract && typeof contract.profileHash === 'string'
+        ? contract.profileHash
+        : storageHash;
+    const signed = { space, contract: { storageHash, profileHash } };
+
+    const readHashes = async (): Promise<MarkerHashes | null> => {
+      const marker = await controlAdapter.readMarker(driver, space);
+      return marker === null
+        ? null
+        : { storageHash: marker.storageHash, profileHash: marker.profileHash };
+    };
+    const existing = await readHashes();
+    if (!sameMarkerHashes(existing, expected)) {
+      return { ...signed, status: 'conflict', expected, found: existing };
+    }
+    if (existing === null) {
+      await controlAdapter.insertMarker(driver, space, { storageHash, profileHash });
+      return { ...signed, status: 'created' };
+    }
+    if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
+      return { ...signed, status: 'unchanged' };
+    }
+    const updated = await controlAdapter.updateMarker(driver, space, existing.storageHash, {
+      storageHash,
+      profileHash,
+    });
+    if (!updated) {
+      return {
+        ...signed,
+        status: 'conflict',
+        expected,
+        found: await readHashes(),
+      };
+    }
+    return { ...signed, status: 'updated', previous: existing };
+  };
+
+  const signSpaces = async (
+    driver: SqlControlDriverInstance<string>,
+    spaces: readonly SpaceToSign[],
+  ): Promise<readonly SpaceSignature[]> => {
+    const [first] = spaces;
+    if (first === undefined) {
+      return [];
+    }
+    const controlAdapter = getControlAdapter();
+    return controlAdapter.withTransaction(driver, async () => {
+      await controlAdapter.lockMarker(driver);
+      for (const query of controlAdapter.bootstrapSignMarkerQueries()) {
+        const lowered = await controlAdapter.lowerToExecuteRequest(query, {
+          contract: first.contract,
+        });
+        await driver.query(lowered.sql, lowered.params);
+      }
+      const signatures: SpaceSignature[] = [];
+      for (const space of spaces) {
+        signatures.push(await signSpaceMarker(controlAdapter, driver, space));
+      }
+      return signatures;
+    });
   };
 
   return {
@@ -593,7 +661,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     extensionIds,
 
     deserializeContract(contractJson: unknown): Contract {
-      return deserializeWithTargetSerializer(contractJson);
+      return loadContract(contractJson);
     },
 
     async verify(verifyOptions: {
@@ -612,7 +680,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       } = verifyOptions;
       const startTime = Date.now();
 
-      const contract = deserializeWithTargetSerializer(rawContract);
+      const contract = loadContract(rawContract);
 
       const contractStorageHash = contract.storage.storageHash;
       const contractProfileHash = contract.profileHash;
@@ -728,7 +796,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       readonly strict: boolean;
       readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
     }): VerifyDatabaseSchemaResult {
-      const contract = deserializeWithTargetSerializer(options.contract);
+      const contract = loadContract(options.contract);
       if (!diffSchema) {
         throw missingDescriptorOperationError(target.targetId, 'diffSchema');
       }
@@ -777,114 +845,11 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       }
       return classifyDiffEntityKind(issue, targetEntityKindOf);
     },
-    async sign(options: {
+    async signSpaces(options: {
       readonly driver: SqlControlDriverInstance<string>;
-      readonly contract: unknown;
-      readonly contractPath: string;
-      readonly configPath?: string;
-    }): Promise<SignDatabaseResult> {
-      const { driver, contract: contractInput, contractPath, configPath } = options;
-      const startTime = Date.now();
-
-      const contract = deserializeWithTargetSerializer(contractInput);
-
-      const contractStorageHash = contract.storage.storageHash;
-      const contractProfileHash =
-        'profileHash' in contract && typeof contract.profileHash === 'string'
-          ? contract.profileHash
-          : contractStorageHash;
-      const contractTarget = contract.target;
-
-      const controlAdapter = getControlAdapter();
-      const lowererContext = { contract };
-      for (const query of controlAdapter.bootstrapSignMarkerQueries()) {
-        const lowered = await controlAdapter.lowerToExecuteRequest(query, lowererContext);
-        await driver.query(lowered.sql, lowered.params);
-      }
-
-      const existingMarker = await controlAdapter.readMarker(driver, APP_SPACE_ID);
-
-      let markerCreated = false;
-      let markerUpdated = false;
-      let previousHashes: { storageHash?: string; profileHash?: string } | undefined;
-
-      if (!existingMarker) {
-        await controlAdapter.insertMarker(driver, APP_SPACE_ID, {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        });
-        markerCreated = true;
-      } else {
-        const existingStorageHash = existingMarker.storageHash;
-        const existingProfileHash = existingMarker.profileHash;
-
-        const storageHashMatches = existingStorageHash === contractStorageHash;
-        const profileHashMatches = existingProfileHash === contractProfileHash;
-
-        if (!storageHashMatches || !profileHashMatches) {
-          previousHashes = {
-            storageHash: existingStorageHash,
-            profileHash: existingProfileHash,
-          };
-          const updated = await controlAdapter.updateMarker(
-            driver,
-            APP_SPACE_ID,
-            existingStorageHash,
-            {
-              storageHash: contractStorageHash,
-              profileHash: contractProfileHash,
-            },
-          );
-          if (!updated) {
-            throw sqlFamilyError(
-              'MIGRATION.MARKER_CAS_FAILURE',
-              'CAS conflict: marker was modified by another process during sign',
-              {
-                why: 'Another process updated the contract marker between the read and the compare-and-swap write.',
-                fix: 'Re-run the sign command; if it keeps failing, make sure only one migration process runs at a time.',
-                meta: { space: APP_SPACE_ID },
-              },
-            );
-          }
-          markerUpdated = true;
-        }
-      }
-
-      let summary: string;
-      if (markerCreated) {
-        summary = 'Database signed (marker created)';
-      } else if (markerUpdated) {
-        summary = `Database signed (marker updated from ${previousHashes?.storageHash ?? 'unknown'})`;
-      } else {
-        summary = 'Database already signed with this contract';
-      }
-
-      const totalTime = Date.now() - startTime;
-
-      return {
-        ok: true,
-        summary,
-        contract: {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        },
-        target: {
-          expected: contractTarget,
-          actual: contractTarget,
-        },
-        marker: {
-          created: markerCreated,
-          updated: markerUpdated,
-          ...(previousHashes ? { previous: previousHashes } : {}),
-        },
-        meta: {
-          contractPath,
-          ...(configPath ? { configPath } : {}),
-        },
-        timings: {
-          total: totalTime,
-        },
-      };
+      readonly spaces: readonly SpaceToSign[];
+    }): Promise<readonly SpaceSignature[]> {
+      return signSpaces(options.driver, options.spaces);
     },
     async readMarker(options: {
       readonly driver: SqlControlDriverInstance<string>;

@@ -67,7 +67,6 @@
     "./contract/index-naming": "./dist/contract__index-naming.mjs",
     "./contract/index-type-validation": "./dist/contract__index-type-validation.mjs",
     "./contract/index-types": "./dist/contract__index-types.mjs",
-    "./contract/pack-types": "./dist/contract__pack-types.mjs",
     "./contract/referential-action-sql": "./dist/contract__referential-action-sql.mjs",
     "./contract/resolve-storage-table": "./dist/contract__resolve-storage-table.mjs",
     "./contract/sql-expression": "./dist/contract__sql-expression.mjs",

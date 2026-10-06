@@ -117,7 +117,7 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
 
-A `DateTime` default is stored in the canonical form of `sqlite/datetime`, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+A `DateTime` default is stored in the canonical form its codec `sqlite/datetime@1` declares, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## Across targets
 

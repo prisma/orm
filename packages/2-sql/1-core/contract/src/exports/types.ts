@@ -14,6 +14,7 @@ export type {
   AggregateResultType,
   AggregateTypesBase,
   AggregateTypesOf,
+  AuthoredStorageTypeInstance,
   CheckConstraintInput,
   CodecTypesOf,
   ContractWithTypeMaps,

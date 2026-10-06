@@ -37,7 +37,7 @@ function createParamTypesTestContract(
     tableColumns: Record<
       string,
       {
-        nativeType: string;
+        dataType: string;
         codecId: string;
         nullable: boolean;
         typeParams?: Record<string, unknown>;
@@ -61,7 +61,7 @@ function createParamTypesTestContract(
             table: {
               test: {
                 columns: options?.tableColumns ?? {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -98,7 +98,7 @@ describe('parameterized types', () => {
           Vector1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -109,7 +109,7 @@ describe('parameterized types', () => {
         Vector1536: {
           kind: 'codec-instance',
           codecId: 'pg/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       });
@@ -160,7 +160,7 @@ describe('parameterized types', () => {
           Vector1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -179,7 +179,7 @@ describe('parameterized types', () => {
           InvalidVector: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 'not-a-number' },
           },
         },
@@ -212,7 +212,7 @@ describe('parameterized types', () => {
           InvalidVector: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: {},
           },
         },
@@ -282,7 +282,7 @@ describe('parameterized types', () => {
           Vector1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -321,14 +321,14 @@ describe('parameterized types', () => {
           Vector1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
         tableColumns: {
-          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           embedding: {
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             codecId: 'pg/vector@1',
             nullable: false,
             typeRef: 'Vector1536',
@@ -353,7 +353,7 @@ describe('parameterized types', () => {
           Vector1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -364,7 +364,7 @@ describe('parameterized types', () => {
       expect(context.types['Vector1536']).toEqual({
         kind: 'codec-instance',
         codecId: 'pg/vector@1',
-        nativeType: 'vector',
+        dataType: 'pgvector/vector',
         typeParams: { length: 1536 },
       });
     });
@@ -399,9 +399,9 @@ describe('parameterized types', () => {
     it('validates inline column typeParams against codec paramsSchema', () => {
       const contract = createParamTypesTestContract({
         tableColumns: {
-          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           embedding: {
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             codecId: 'pg/vector@1',
             nullable: false,
             typeParams: { length: 1536 },
@@ -419,9 +419,9 @@ describe('parameterized types', () => {
     it('rejects invalid inline column typeParams with stable error code', () => {
       const contract = createParamTypesTestContract({
         tableColumns: {
-          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           embedding: {
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             codecId: 'pg/vector@1',
             nullable: false,
             typeParams: { length: 'invalid' },

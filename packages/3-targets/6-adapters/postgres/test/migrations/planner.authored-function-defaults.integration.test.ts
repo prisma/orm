@@ -30,7 +30,7 @@ const additiveAndWidening: MigrationOperationPolicy = {
 
 function buildContract(withDefaults: boolean): Contract<SqlStorage> {
   const id: StorageColumnInput = {
-    nativeType: 'int4',
+    dataType: 'pg/int4',
     codecId: 'pg/int4@1',
     nullable: false,
     ...(withDefaults
@@ -38,7 +38,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
       : {}),
   };
   const createdAt: StorageColumnInput = {
-    nativeType: 'timestamptz',
+    dataType: 'pg/timestamptz',
     codecId: 'pg/timestamptz-temporal@1',
     nullable: false,
     ...(withDefaults ? { default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' } } : {}),

@@ -138,19 +138,16 @@ describe('integer representation type helpers', () => {
     expect(postgresHelpers.type.BigIntNumber()).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/int8number@1',
-      nativeType: 'int8',
       typeParams: {},
     });
     expect(postgresHelpers.type.UnboundedInt()).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/unboundedint@1',
-      nativeType: 'numeric',
       typeParams: {},
     });
     expect(sqliteHelpers.type.BigIntNumber()).toEqual({
       kind: 'codec-instance',
       codecId: 'sqlite/bigintnumber@1',
-      nativeType: 'integer',
       typeParams: {},
     });
     expect(sqliteHelpers.type).not.toHaveProperty('UnboundedInt');
@@ -168,8 +165,8 @@ describe('integer representation type helpers', () => {
               table: {
                 sample: {
                   columns: {
-                    bounded: { codecId: 'pg/int8number@1', nativeType: 'int8' },
-                    unbounded: { codecId: 'pg/unboundedint@1', nativeType: 'numeric' },
+                    bounded: { codecId: 'pg/int8number@1' },
+                    unbounded: { codecId: 'pg/unboundedint@1' },
                   },
                 },
               },
@@ -196,7 +193,7 @@ describe('integer representation type helpers', () => {
               table: {
                 sample: {
                   columns: {
-                    bounded: { codecId: 'sqlite/bigintnumber@1', nativeType: 'integer' },
+                    bounded: { codecId: 'sqlite/bigintnumber@1' },
                   },
                 },
               },

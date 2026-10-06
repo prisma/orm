@@ -36,16 +36,14 @@ const TEMPORAL_ON_UPDATE_ARG = {
 The preset itself is a template over its arguments:
 
 ```ts
-export function temporalCodecPresetWithPrecision<
-  const CodecId extends string,
-  const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+export function temporalCodecPresetWithPrecision<const CodecId extends string>(input: {
+  readonly codecId: CodecId;
+}) {
   return {
     kind: 'fieldPreset',
     args: [TEMPORAL_PRECISION_ARG, TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG],
     output: {
       codecId: input.codecId,
-      nativeType: input.nativeType,
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: temporalPhaseTemplate(1),
@@ -176,15 +174,12 @@ That is what lets the per-codec presets share the `temporal` namespace with the 
 temporal: {
   .../* @__PURE__ */ temporalAuthoringPresets({
     codecId: 'pg/timestamptz@1',
-    nativeType: 'timestamptz',
   }),
   timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
     codecId: 'pg/timestamp@1',
-    nativeType: 'timestamp',
   }),
   timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
     codecId: 'pg/timestamptz@1',
-    nativeType: 'timestamptz',
   }),
 },
 ```

@@ -110,8 +110,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -142,8 +142,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -219,8 +219,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -323,8 +323,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -355,8 +355,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -425,8 +425,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -464,8 +464,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -503,8 +503,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -536,8 +536,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -596,8 +596,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -711,8 +711,8 @@ describe('planIssues', () => {
     it('translates a missing schema into a CREATE SCHEMA op ordered before the table', async () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -760,8 +760,8 @@ describe('planIssues', () => {
     it('emits correctly-qualified DDL for each same-named table under its own namespace', () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],

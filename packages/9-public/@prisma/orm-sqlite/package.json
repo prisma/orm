@@ -101,7 +101,6 @@
     "./family-contract/index-naming": "./dist/family-contract__index-naming.mjs",
     "./family-contract/index-type-validation": "./dist/family-contract__index-type-validation.mjs",
     "./family-contract/index-types": "./dist/family-contract__index-types.mjs",
-    "./family-contract/pack-types": "./dist/family-contract__pack-types.mjs",
     "./family-contract/referential-action-sql": "./dist/family-contract__referential-action-sql.mjs",
     "./family-contract/resolve-storage-table": "./dist/family-contract__resolve-storage-table.mjs",
     "./family-contract/sql-expression": "./dist/family-contract__sql-expression.mjs",

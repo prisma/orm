@@ -33,7 +33,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7cbc5dc7fc12771baa682acc74bd2a89e90e55b8717b28fa255b8dc8ea0377b9'>;
+  StorageHashBase<'2c6ca48d2b9fa1ca4e493d7033088ccdb3509d1f2f440914f8e30d8a82dd71db'>;
 export type ExecutionHash =
   ExecutionHashBase<'ea437be9a5579f915d397cc5e3df495136323e0a43ec0df5da760b862c22489b'>;
 export type ProfileHash =
@@ -592,20 +592,20 @@ type ContractBase = Omit<
             readonly comment: {
               columns: {
                 readonly content: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly created_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -615,13 +615,13 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly postId: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly update_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
                   readonly many: false;
@@ -635,14 +635,14 @@ type ContractBase = Omit<
             readonly embedding: {
               columns: {
                 readonly embedding: {
-                  readonly nativeType: 'vector';
+                  readonly dataType: 'pgvector/vector';
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 1536 };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -652,7 +652,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly profile: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'arktype/json@1';
                   readonly nullable: false;
                   readonly typeParams: {
@@ -676,27 +676,27 @@ type ContractBase = Omit<
             readonly event: {
               columns: {
                 readonly created_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly scheduled_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-string@1';
                   readonly nullable: false;
                   readonly default: {
@@ -717,7 +717,7 @@ type ContractBase = Omit<
             readonly literal_defaults: {
               columns: {
                 readonly active: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                   readonly default: {
@@ -727,7 +727,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly big_count: {
-                  readonly nativeType: 'int8';
+                  readonly dataType: 'pg/int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
                   readonly default: {
@@ -737,7 +737,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -747,7 +747,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly default: {
@@ -757,7 +757,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly metadata: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                   readonly default: {
@@ -767,7 +767,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly rating: {
-                  readonly nativeType: 'float8';
+                  readonly dataType: 'pg/float8';
                   readonly codecId: 'pg/float8@1';
                   readonly nullable: false;
                   readonly default: {
@@ -777,7 +777,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly score: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -787,7 +787,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly tags: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                   readonly default: {
@@ -805,42 +805,42 @@ type ContractBase = Omit<
             readonly param_types: {
               columns: {
                 readonly bits: {
-                  readonly nativeType: 'bit varying';
+                  readonly dataType: 'pg/varbit';
                   readonly codecId: 'pg/varbit@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly length: 12 };
                   readonly many: false;
                 };
                 readonly code: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly length: 16 };
                   readonly many: false;
                 };
                 readonly created_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly precision: 3 };
                   readonly many: false;
                 };
                 readonly duration: {
-                  readonly nativeType: 'interval';
+                  readonly dataType: 'pg/interval';
                   readonly codecId: 'pg/interval@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly precision: 6 };
                   readonly many: false;
                 };
                 readonly flags: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly length: 8 };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -850,28 +850,28 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly price: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly precision: 10; readonly scale: 2 };
                   readonly many: false;
                 };
                 readonly starts_at: {
-                  readonly nativeType: 'time';
+                  readonly dataType: 'pg/time';
                   readonly codecId: 'pg/time-temporal@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly precision: 2 };
                   readonly many: false;
                 };
                 readonly starts_at_tz: {
-                  readonly nativeType: 'timetz';
+                  readonly dataType: 'pg/timetz';
                   readonly codecId: 'pg/timetz@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly precision: 2 };
@@ -886,14 +886,14 @@ type ContractBase = Omit<
             readonly post: {
               columns: {
                 readonly created_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -903,31 +903,31 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly meta: {
-                  readonly nativeType: 'json';
+                  readonly dataType: 'pg/json';
                   readonly codecId: 'pg/json@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly published: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly update_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly userId: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -941,21 +941,21 @@ type ContractBase = Omit<
             readonly user: {
               columns: {
                 readonly created_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
                 readonly email: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -965,13 +965,13 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly profile: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly update_at: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
                   readonly many: false;
@@ -1464,14 +1464,6 @@ type ContractBase = Omit<
             readonly package: '@internal/extension-arktype-json/codec-types';
           };
         };
-        readonly storage: readonly [
-          {
-            readonly familyId: 'sql';
-            readonly nativeType: 'jsonb';
-            readonly targetId: 'postgres';
-            readonly typeId: 'arktype/json@1';
-          },
-        ];
       };
       readonly version: '0.0.1';
     };
@@ -1510,14 +1502,6 @@ type ContractBase = Omit<
             readonly package: '@internal/extension-pgvector/operation-types';
           };
         };
-        readonly storage: readonly [
-          {
-            readonly familyId: 'sql';
-            readonly nativeType: 'vector';
-            readonly targetId: 'postgres';
-            readonly typeId: 'pg/vector@1';
-          },
-        ];
       };
       readonly version: '0.0.1';
     };

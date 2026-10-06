@@ -26,7 +26,7 @@ describe('column defaults', () => {
   it('prints a decimal default as the text that keeps every digit', () => {
     expect(
       defaultOf({
-        nativeType: 'numeric',
+        dataType: 'pg/numeric',
         codecId: 'pg/numeric@1',
         nullable: false,
         default: { kind: 'literal', value: '1.50' },
@@ -46,7 +46,7 @@ describe('column defaults', () => {
     ).toBe('@default(autoincrement())');
     expect(
       defaultOf({
-        nativeType: 'timestamp',
+        dataType: 'pg/timestamp',
         codecId: 'pg/timestamp-temporal@1',
         nullable: false,
         default: { kind: 'function', expression: 'now()' },
@@ -57,7 +57,7 @@ describe('column defaults', () => {
   it('prints every other function default as a sql tagged literal', () => {
     expect(
       defaultOf({
-        nativeType: 'uuid',
+        dataType: 'pg/uuid',
         codecId: 'pg/uuid@1',
         nullable: false,
         default: { kind: 'function', expression: 'gen_random_uuid()' },
@@ -69,7 +69,7 @@ describe('column defaults', () => {
     let thrown: unknown;
     try {
       defaultOf({
-        nativeType: 'inet',
+        dataType: 'pg/inet',
         codecId: 'pg/inet@1',
         nullable: false,
         default: { kind: 'literal', value: { a: 1 } },

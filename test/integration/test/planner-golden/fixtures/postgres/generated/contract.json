@@ -1068,31 +1068,31 @@
               "columns": {
                 "code": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeRef": "Code"
                 },
                 "embedding": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": false,
                   "typeRef": "Embedding"
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false,
                   "typeRef": "Id"
                 },
                 "money": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false,
                   "typeRef": "Money"
                 },
                 "shortText": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeRef": "ShortText"
                 }
@@ -1217,18 +1217,18 @@
               "columns": {
                 "bit": {
                   "codecId": "pg/bit@1",
+                  "dataType": "pg/bit",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bit",
                   "nullable": false
                 },
                 "bitLength": {
                   "codecId": "pg/bit@1",
+                  "dataType": "pg/bit",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bit",
                   "nullable": false,
                   "typeParams": {
                     "length": 8
@@ -1236,18 +1236,18 @@
                 },
                 "char": {
                   "codecId": "sql/char@1",
+                  "dataType": "pg/char",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "character",
                   "nullable": false
                 },
                 "charLength": {
                   "codecId": "sql/char@1",
+                  "dataType": "pg/char",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "character",
                   "nullable": false,
                   "typeParams": {
                     "length": 5
@@ -1255,10 +1255,10 @@
                 },
                 "geometrySrid": {
                   "codecId": "pg/geometry@1",
+                  "dataType": "postgis/geometry",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "geometry",
                   "nullable": false,
                   "typeParams": {
                     "srid": 4326
@@ -1266,39 +1266,39 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int4": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "interval": {
                   "codecId": "pg/interval@1",
+                  "dataType": "pg/interval",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "interval",
                   "nullable": false
                 },
                 "jsonb": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "mood": {
                   "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "Mood",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Mood"
@@ -1312,18 +1312,18 @@
                 },
                 "numeric": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "numeric",
                   "nullable": false
                 },
                 "numericPrecision": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10
@@ -1331,10 +1331,10 @@
                 },
                 "numericPrecisionScale": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10,
@@ -1343,18 +1343,18 @@
                 },
                 "text": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "timePrecision": {
                   "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "time",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1362,18 +1362,18 @@
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "timestamptzPrecision": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1381,18 +1381,18 @@
                 },
                 "uuid": {
                   "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "uuid",
                   "nullable": false
                 },
                 "varbitLength": {
                   "codecId": "pg/varbit@1",
+                  "dataType": "pg/varbit",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bit varying",
                   "nullable": false,
                   "typeParams": {
                     "length": 16
@@ -1400,18 +1400,18 @@
                 },
                 "varchar": {
                   "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "character varying",
                   "nullable": false
                 },
                 "varcharLength": {
                   "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "character varying",
                   "nullable": false,
                   "typeParams": {
                     "length": 255
@@ -1419,10 +1419,10 @@
                 },
                 "vector": {
                   "codecId": "pg/vector@1",
+                  "dataType": "pgvector/vector",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "vector",
                   "nullable": false,
                   "typeParams": {
                     "length": 3
@@ -1442,26 +1442,26 @@
               "columns": {
                 "dateString": {
                   "codecId": "pg/date-string@1",
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "int8Number": {
                   "codecId": "pg/int8number@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 },
                 "pgChar": {
                   "codecId": "pg/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 5
@@ -1469,46 +1469,46 @@
                 },
                 "pgFloat": {
                   "codecId": "pg/float@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false
                 },
                 "pgInt": {
                   "codecId": "pg/int@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "pgVarchar": {
                   "codecId": "pg/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false
                 },
                 "small": {
                   "codecId": "pg/int2@1",
+                  "dataType": "pg/int2",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int2",
                   "nullable": false
                 },
                 "sqlFloat": {
                   "codecId": "sql/float@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false
                 },
                 "sqlInt": {
                   "codecId": "sql/int@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "sqlText": {
                   "codecId": "sql/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "timeString": {
                   "codecId": "pg/time-string@1",
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1516,22 +1516,22 @@
                 },
                 "timestampString": {
                   "codecId": "pg/timestamp-string@1",
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "nullable": false
                 },
                 "timestamptzDate": {
                   "codecId": "pg/timestamptz-date@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 },
                 "timestamptzString": {
                   "codecId": "pg/timestamptz-string@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 },
                 "unboundedInt": {
                   "codecId": "pg/unboundedint@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 }
               },
@@ -1548,12 +1548,12 @@
               "columns": {
                 "bit": {
                   "codecId": "pg/bit@1",
-                  "nativeType": "bit",
+                  "dataType": "pg/bit",
                   "nullable": false
                 },
                 "bitLength": {
                   "codecId": "pg/bit@1",
-                  "nativeType": "bit",
+                  "dataType": "pg/bit",
                   "nullable": false,
                   "typeParams": {
                     "length": 8
@@ -1561,22 +1561,22 @@
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": false
                 },
                 "bytea": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "char": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false
                 },
                 "charLength": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 5
@@ -1584,27 +1584,27 @@
                 },
                 "date": {
                   "codecId": "pg/date-temporal@1",
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "nullable": false
                 },
                 "float4": {
                   "codecId": "pg/float4@1",
-                  "nativeType": "float4",
+                  "dataType": "pg/float4",
                   "nullable": false
                 },
                 "float8": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false
                 },
                 "geometry": {
                   "codecId": "pg/geometry@1",
-                  "nativeType": "geometry",
+                  "dataType": "postgis/geometry",
                   "nullable": false
                 },
                 "geometrySrid": {
                   "codecId": "pg/geometry@1",
-                  "nativeType": "geometry",
+                  "dataType": "postgis/geometry",
                   "nullable": false,
                   "typeParams": {
                     "srid": 4326
@@ -1612,36 +1612,36 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "inet": {
                   "codecId": "pg/inet@1",
-                  "nativeType": "inet",
+                  "dataType": "pg/inet",
                   "nullable": false
                 },
                 "int2": {
                   "codecId": "pg/int2@1",
-                  "nativeType": "int2",
+                  "dataType": "pg/int2",
                   "nullable": false
                 },
                 "int8": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 },
                 "interval": {
                   "codecId": "pg/interval@1",
-                  "nativeType": "interval",
+                  "dataType": "pg/interval",
                   "nullable": false
                 },
                 "intervalPrecision": {
                   "codecId": "pg/interval@1",
-                  "nativeType": "interval",
+                  "dataType": "pg/interval",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1649,17 +1649,17 @@
                 },
                 "json": {
                   "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "dataType": "pg/json",
                   "nullable": false
                 },
                 "jsonb": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": false
                 },
                 "mood": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "Mood",
+                  "dataType": "pg/enum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Mood"
@@ -1673,12 +1673,12 @@
                 },
                 "numeric": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 },
                 "numericPrecision": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10
@@ -1686,7 +1686,7 @@
                 },
                 "numericPrecisionScale": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10,
@@ -1695,17 +1695,17 @@
                 },
                 "text": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "time": {
                   "codecId": "pg/time-temporal@1",
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "nullable": false
                 },
                 "timePrecision": {
                   "codecId": "pg/time-temporal@1",
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1713,12 +1713,12 @@
                 },
                 "timestamp": {
                   "codecId": "pg/timestamp-temporal@1",
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "nullable": false
                 },
                 "timestampPrecision": {
                   "codecId": "pg/timestamp-temporal@1",
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1726,12 +1726,12 @@
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 },
                 "timestamptzPrecision": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1739,12 +1739,12 @@
                 },
                 "timetz": {
                   "codecId": "pg/timetz@1",
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "nullable": false
                 },
                 "timetzPrecision": {
                   "codecId": "pg/timetz@1",
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -1752,22 +1752,22 @@
                 },
                 "tsquery": {
                   "codecId": "pg/tsquery@1",
-                  "nativeType": "tsquery",
+                  "dataType": "pg/tsquery",
                   "nullable": false
                 },
                 "uuid": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "varbit": {
                   "codecId": "pg/varbit@1",
-                  "nativeType": "bit varying",
+                  "dataType": "pg/varbit",
                   "nullable": false
                 },
                 "varbitLength": {
                   "codecId": "pg/varbit@1",
-                  "nativeType": "bit varying",
+                  "dataType": "pg/varbit",
                   "nullable": false,
                   "typeParams": {
                     "length": 16
@@ -1775,12 +1775,12 @@
                 },
                 "varchar": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false
                 },
                 "varcharLength": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 255
@@ -1788,7 +1788,7 @@
                 },
                 "vector": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": false,
                   "typeParams": {
                     "length": 3
@@ -1819,30 +1819,30 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a30ad98af6cd338809f11126b5522c80138ed5411b9fd262869ee72951759589",
+    "storageHash": "531ec46a776734805df922f0305e819346a0dcbfee1579c69e94412c1183bb9c",
     "types": {
       "Code": {
         "codecId": "sql/char@1",
-        "kind": "codec-instance",
-        "nativeType": "character"
+        "dataType": "pg/char",
+        "kind": "codec-instance"
       },
       "Embedding": {
         "codecId": "pg/vector@1",
+        "dataType": "pgvector/vector",
         "kind": "codec-instance",
-        "nativeType": "vector",
         "typeParams": {
           "length": 3
         }
       },
       "Id": {
         "codecId": "pg/uuid@1",
-        "kind": "codec-instance",
-        "nativeType": "uuid"
+        "dataType": "pg/uuid",
+        "kind": "codec-instance"
       },
       "Money": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 10,
           "scale": 2
@@ -1850,8 +1850,8 @@
       },
       "ShortText": {
         "codecId": "sql/varchar@1",
+        "dataType": "pg/varchar",
         "kind": "codec-instance",
-        "nativeType": "character varying",
         "typeParams": {
           "length": 255
         }
@@ -1919,15 +1919,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-pgvector/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "vector",
-            "targetId": "postgres",
-            "typeId": "pg/vector@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     },
@@ -1962,15 +1954,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-postgis/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "geometry",
-            "targetId": "postgres",
-            "typeId": "pg/geometry@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

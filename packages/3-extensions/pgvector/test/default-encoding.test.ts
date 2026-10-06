@@ -65,9 +65,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
             Doc: model('Doc', {
               fields: {
                 id: field.id.uuidv4String(),
-                embedding: field
-                  .column({ codecId: 'pg/vector@1', nativeType: 'vector' } as const)
-                  .default([1, 2, 3]),
+                embedding: field.column({ codecId: 'pg/vector@1' } as const).default([1, 2, 3]),
               },
             }),
           },

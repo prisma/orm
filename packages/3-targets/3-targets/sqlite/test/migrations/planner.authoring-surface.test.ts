@@ -40,8 +40,8 @@ function createContract(): Contract<SqlStorage> {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+                  email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

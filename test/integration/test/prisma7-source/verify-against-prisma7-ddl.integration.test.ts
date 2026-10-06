@@ -26,7 +26,6 @@ import {
 
 const prisma7Timestamp3 = {
   codecId: 'pg/timestamp-temporal@1',
-  nativeType: 'timestamp',
   typeParams: { precision: 3 },
 } as const;
 

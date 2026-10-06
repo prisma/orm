@@ -57,9 +57,9 @@ function buildContract(): Contract<SqlStorage> {
             table: {
               orders: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   hold: {
-                    nativeType: 'HoldType',
+                    dataType: 'pg/enum',
                     codecId: 'pg/enum@1',
                     typeParams: HOLD_TYPE_PARAMS,
                     nullable: false,

@@ -180,7 +180,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
   };
 
   const storageColumn = new StorageColumn({
-    nativeType: 'text',
+    dataType: 'pg/text',
     codecId: 'pg/text@1',
     nullable: false,
   });

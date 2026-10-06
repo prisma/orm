@@ -1,5 +1,5 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
-import type { SqlCharCodec, SqlIntCodec } from '@internal/sql-relational-core/ast';
+import type { SqlCharCodec } from '@internal/sql-relational-core/ast';
 import { expectTypeOf, test } from 'vitest';
 import type {
   AnySqliteCodecDescriptor,
@@ -9,6 +9,7 @@ import {
   codecDescriptors,
   type SqliteBigintCodec,
   type SqliteBlobCodec,
+  type SqliteSqlIntCodec,
   sqliteBigintColumn,
   sqliteBlobColumn,
   sqliteIntegerDescriptor,
@@ -28,7 +29,7 @@ test('generic adapters preserve factory result types', () => {
     (ctx: CodecInstanceContext) => SqlCharCodec
   >();
   expectTypeOf(sqliteSqlIntDescriptor.factory()).toEqualTypeOf<
-    (ctx: CodecInstanceContext) => SqlIntCodec
+    (ctx: CodecInstanceContext) => SqliteSqlIntCodec
   >();
 });
 

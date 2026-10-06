@@ -243,7 +243,7 @@ model Counter {
 });
 
 /** `sql/char@1` as PostgreSQL names its column type, the way the PSL `Char` type writes it. */
-const sqlCharacter = { codecId: 'sql/char@1', nativeType: 'character' } as const;
+const sqlCharacter = { codecId: 'sql/char@1' } as const;
 
 describe('a fixed-length column written without a length', () => {
   it(

@@ -43,7 +43,7 @@ const types = {
 
 const intColumn: StorageColumn = {
   codecId: 'pg/int4@1',
-  nativeType: 'integer',
+  dataType: 'pg/int4',
   nullable: false,
   many: false,
 };

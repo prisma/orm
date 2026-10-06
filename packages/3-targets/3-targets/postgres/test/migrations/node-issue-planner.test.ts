@@ -96,8 +96,8 @@ function rootOf(tables: Record<string, PostgresTableSchemaNode>): PostgresDataba
 
 const userTable: TableSpec = {
   columns: {
-    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
   },
   primaryKey: { columns: ['id'] },
   foreignKeys: [],
@@ -148,9 +148,9 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
       user: userTable,
       post: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [
@@ -230,8 +230,8 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     const contract = makeContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -263,9 +263,9 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
       {
         user: {
           columns: {
-            id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+            id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
             visits: {
-              nativeType: 'int8',
+              dataType: 'pg/int8',
               codecId: 'pg/int8@1',
               nullable: false,
               typeRef: 'Count',
@@ -277,7 +277,7 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
           indexes: [],
         },
       },
-      { Count: toStorageTypeInstance({ codecId: 'pg/int8@1', nativeType: 'int8' }) },
+      { Count: toStorageTypeInstance({ codecId: 'pg/int8@1', dataType: 'pg/int8' }) },
     );
     const actual = rootOf({
       user: new PostgresTableSchemaNode({
@@ -318,12 +318,12 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
   ])(
     'checks a type change to enum $typeName (typeRef $typeRef) against $formatTypeExpected',
     ({ typeName, typeRef, formatTypeExpected }) => {
-      const enumType = { codecId: 'pg/enum@1', nativeType: typeName, typeParams: { typeName } };
+      const enumType = { dataType: 'pg/enum', codecId: 'pg/enum@1', typeParams: { typeName } };
       const contract = makeContract(
         {
           user: {
             columns: {
-              id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+              id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
               role: { ...enumType, nullable: false, ...ifDefined('typeRef', typeRef) },
             },
             primaryKey: { columns: ['id'] },
@@ -360,8 +360,8 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     const contract = makeContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -523,8 +523,8 @@ describe('planNodeIssues — dependency-graph ordering', () => {
     const contract = makeContract({
       post: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -556,8 +556,8 @@ describe('planNodeIssues — dependency-graph ordering', () => {
     const contract = makeContract({
       account: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],

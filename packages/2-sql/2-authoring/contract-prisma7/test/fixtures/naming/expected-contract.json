@@ -90,7 +90,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "2039d31ee9387d557d92d735c77f38faf6211a30116def1e7a1ec3e784f47961",
+    "storageHash": "5519d3a5eb13d3dcfb40201532cf5ea2b6e48469b3895133ee212d9cd22ba87c",
     "namespaces": {
       "public": {
         "id": "public",
@@ -100,19 +100,19 @@
             "user_profiles": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "first_name": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
                 },
                 "Bio": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
@@ -128,7 +128,7 @@
             "Keep": {
               "columns": {
                 "Id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false

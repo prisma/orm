@@ -1,0 +1,96 @@
+# ADR draft — Every query has an `afterTransaction` stage that fires when its enclosing transaction ends
+
+Status: **Proposed.** This draft lives with the project until the stage ships; it then moves to `docs/architecture docs/adrs/` under the next free number.
+
+## Decision
+
+```ts
+import type { CrossFamilyMiddleware } from '@internal/framework-components/runtime';
+
+// A middleware that acts only once a write's effects are final.
+export const auditLog: CrossFamilyMiddleware = {
+  name: 'audit-log',
+  async afterTransaction(plan, result, ctx) {
+    if (result.outcome === 'rolled-back') return;
+    await audit.record(plan, ctx.planExecutionId);
+  },
+};
+```
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant R as Runtime
+    participant M as Middleware
+    participant D as Database
+    App->>R: db.transaction(fn)
+    R->>D: BEGIN
+    App->>R: update user 1 (inside fn)
+    R->>M: beforeExecute / afterExecute (user 1)
+    App->>R: update user 2 (inside fn)
+    R->>M: beforeExecute / afterExecute (user 2)
+    App-->>R: fn returns
+    R->>D: COMMIT
+    D-->>R: ok
+    R->>M: afterTransaction(user 1 plan, committed)
+    R->>M: afterTransaction(user 2 plan, committed)
+    R-->>App: transaction resolves
+```
+
+The middleware lifecycle gains one more stage per query. Today a middleware sees a query from `beforeQuery` or `beforeExecute` through `afterQuery` or `afterExecute`, and the last of those fires when the statement completes. Inside a transaction that is before the commit, so a middleware that must act only once the query's effects are final has nowhere to do it. `afterTransaction(plan, result, ctx)` is that place. It fires once per query, with the same plan and the same context the query's other hooks received, and `result.outcome` says how the query's transaction ended: `committed`, `rolled-back`, or `unknown`.
+
+The stage is part of the query's lifecycle, not an event about transactions. A middleware author reasons about one query from start to final and never has to match a transaction event to the queries that ran in it. There is no transaction identity on the context, no hook that speaks about a transaction without a query, and no way to attach data to a transaction.
+
+## Why
+
+A write that runs inside a transaction has not happened, as far as other connections can see, until the transaction commits. A middleware that reacts to the write at `afterExecute` reacts too early. The concrete case is a cache: it must remove entries for the rows a write changed, but if it removes them before the commit, another request can read the old rows from the database in between and put them back. Removing them after the commit closes that window.
+
+This matters on the default path, not only for applications that open transactions themselves. The ORM wraps several of its own mutations in a transaction: single-row `update()` and `delete()`, nested creates and updates, `create()` on a multi-table-inheritance variant, and `delete()` with includes.
+
+Giving the middleware a stage per query, rather than a hook per transaction, keeps the mental model it already has. Every hook a middleware implements is about the query in its hands. The runtime, which already knows which queries ran on a transaction, does the bookkeeping and delivers the stage to each of them.
+
+## How it works
+
+### Outside a transaction
+
+A query in `'runtime'` or `'connection'` scope commits on its own, as a statement. The runtime fires `afterTransaction` with `committed` immediately after `afterQuery` or `afterExecute`. It fires whether or not the query completed, because a write can apply and still report a failure. Every Mongo query is outside a transaction, so the Mongo runtime fires the stage the same way for every query, and the lifecycle is the same on both families.
+
+### Inside a transaction
+
+The SQL runtime wraps every transaction, whether it came from `db.transaction(fn)`, from a manual `connection().transaction()`, or from the ORM's own mutations, and every query run on the transaction passes through that wrapper with `scope: 'transaction'`. The wrapper remembers each plan, with its context, from the moment the plan's first hook runs. When the transaction ends it fires `afterTransaction` once for each remembered plan, in execution order:
+
+- `committed` when the driver's `commit()` resolves.
+- `rolled-back` when `rollback()` resolves and no commit was attempted.
+- `unknown` when `commit()` rejects, whether or not a rollback is then attempted and succeeds. A `COMMIT` that errors may already have landed on the server, and a cleanup `ROLLBACK` that succeeds is a no-op in that case and proves nothing. A consumer that must not miss a committed write treats `unknown` like `committed`.
+
+A `rollback()` that follows a rejected `commit()` fires nothing more. Each plan gets exactly one `afterTransaction` per transaction. `commit()` and `rollback()` resolve only after the hooks have run, so by the time `db.transaction(fn)` returns, every middleware has seen the final stage of every query in it.
+
+Remembering the plan from its first hook means a query whose row stream the caller stops reading early still gets its stage when the transaction ends. Outside a transaction such a query fires no after-hook and therefore no stage, because nothing marks its end.
+
+### Hook errors
+
+An error thrown by an `afterTransaction` hook is passed to `ctx.log.error` and swallowed, and later middleware still run. The commit has already happened when the hook runs. Rejecting the caller would report a failure for work that succeeded and invite a retry of a write that is not idempotent. ActiveRecord raises here instead; that is a deliberate difference, chosen because a middleware's failure to react should not masquerade as a database failure.
+
+### Ordering and the connection
+
+The stage fires after the driver's commit or rollback has resolved and before the connection returns to the pool. The hook receives no queryable and must not use the connection.
+
+## Prior art
+
+ActiveRecord's `after_commit` is declared on the record being saved, not on the transaction. It runs on each saved record once the outermost transaction commits, and runs immediately when the save happened outside an explicit transaction. Nested `transaction` blocks join the outer one and never fire it at a savepoint. The stage here is the same model applied to queries: the hook belongs to the thing written, and the runtime delivers it when that thing's transaction is final. Rails later added transaction-level callbacks (`transaction.after_commit`, `ActiveRecord.after_all_transactions_commit`) for code that is not tied to a record; the equivalent here is a later, separate addition.
+
+## Consequences
+
+- Middleware that reacts to writes moves that reaction from `afterExecute` or `afterQuery` to `afterTransaction`, and is then correct inside transactions without any transaction-specific code.
+- A middleware that needs state across a query's hooks keys it by the plan object, as the cache middleware already does for a miss in flight.
+- The runtime holds, per open transaction, the plans and contexts of the queries run on it. A transaction that never commits or rolls back holds them until its connection is destroyed.
+- Transaction-oriented hooks, if a consumer ever needs them (a span per transaction, a per-transaction audit record, session setup before the first statement), are added as a `transaction` sub-object on the middleware with its own begin and end. They stay apart from the query hooks so that the query model keeps its rule: every query hook is about the query in hand.
+
+## Alternatives considered
+
+- **A hook per transaction, with a transaction identity on every query's context.** The hook fires once when a transaction ends, and a middleware that wants to act per query remembers the queries by that identity and replays them. Rejected: it makes every middleware author reason about transaction lifecycle and correlation, and it needs a map in each middleware that leaks when a transaction never ends.
+- **Letting middleware attach data to the transaction, delivered to the end hook.** Rejected: it hands middleware a transaction object to decorate, which is not theirs, and it still frames the work as a transaction event.
+- **Letting middleware attach data to the query, delivered with the transaction's end.** Closer, but once the runtime delivers something per query at transaction end, the simplest thing to deliver is the query's own stage, with its plan and context, and no attachment API is needed.
+- **Two hooks, `afterCommit` and `afterRollback`.** Rejected: neither can express `unknown`, and a cache that skips invalidation on a failed commit that actually landed is stale until expiry.
+- **Propagating hook errors to the caller.** Rejected for the reason under Hook errors; ActiveRecord's choice is noted.
+- **A `beforeTransaction` hook.** Nothing needs it; the remembering starts from a query's first hook.

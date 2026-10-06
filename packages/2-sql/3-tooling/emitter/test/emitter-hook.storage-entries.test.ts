@@ -22,7 +22,7 @@ function contractWithEntries() {
             table: {
               sessions: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                 },
                 uniques: [],
                 indexes: [],

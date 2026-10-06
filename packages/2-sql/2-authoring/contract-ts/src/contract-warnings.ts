@@ -1,4 +1,4 @@
-import type { StorageTypeInstance } from '@internal/sql-contract/types';
+import type { AuthoredStorageTypeInstance } from '@internal/sql-contract/types';
 import {
   type ContractModelBuilder,
   type ModelAttributesSpec,
@@ -25,7 +25,7 @@ type RuntimeModelSpec = {
 };
 
 type RuntimeCollection = {
-  readonly storageTypes: Record<string, StorageTypeInstance>;
+  readonly storageTypes: Record<string, AuthoredStorageTypeInstance>;
   readonly models: Record<string, RuntimeModel>;
   readonly modelSpecs: ReadonlyMap<string, RuntimeModelSpec>;
 };
@@ -133,7 +133,7 @@ function formatFallbackWarning(location: string, current: string, suggested: str
 
 export function emitTypedNamedTypeFallbackWarnings(
   models: Record<string, RuntimeModel>,
-  storageTypes: Record<string, StorageTypeInstance>,
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
 ): void {
   const warnings: string[] = [];
   const warnedFields = new Set<string>();

@@ -71,12 +71,17 @@ export type {
 export type {
   EmitContractResult,
   IntrospectSchemaResult,
+  MarkerHashes,
   OperationContext,
-  SignDatabaseResult,
+  SpaceMarkerConflict,
+  SpaceSignature,
+  SpaceSigned,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '../control/control-operation-results';
 export {
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_SCHEMA_FAILURE,

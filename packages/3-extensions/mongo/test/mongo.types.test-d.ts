@@ -128,7 +128,7 @@ test('db.enums.Role.members.User is the literal "user"', () => {
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -162,7 +162,7 @@ test('TS DSL defineContract: namespace enum slot is typed without a cast', () =>
 
 const R5Role = enumType(
   'R5Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );

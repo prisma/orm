@@ -82,7 +82,6 @@ const includedTextDescriptor = postgresCodec(new IncludedTextDescriptor(), {
 });
 const includedTextColumn = {
   codecId: TEST_INCLUDED_TEXT_CODEC_ID,
-  nativeType: 'text',
 } as const satisfies ColumnTypeDescriptor;
 
 const includedTextExtension: SqlRuntimeExtensionDescriptor<'postgres'> = {

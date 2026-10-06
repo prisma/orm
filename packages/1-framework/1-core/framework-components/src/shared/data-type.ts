@@ -54,8 +54,8 @@ export interface DataType {
   readonly casts: Readonly<Record<DataTypeId, Cast>>;
   readonly listCast?: ListCast;
   /**
-   * Gives a value of this type its canonical form. Everything that reads, compares or writes a
-   * stored value of the type goes through it, so two forms of one value are one value.
+   * Gives a value of this type its canonical form, so two forms of one value are one value. Read it
+   * through `canonicalFormOf`, which takes a codec's own form in its place.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
 }
@@ -73,11 +73,12 @@ export interface DataTypeLookup {
   has(id: string): boolean;
 }
 
-const DATA_TYPE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** The whole of what a data type id is: `owner/name` in lower case, with no version. */
+export const DATA_TYPE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Read `id` as a data type id, refusing anything that is not `owner/name` in lower case. */
 export function dataTypeId(id: string): DataTypeId {
-  if (!DATA_TYPE_ID.test(id)) {
+  if (!DATA_TYPE_ID_PATTERN.test(id)) {
     throw runtimeError(
       'CONTRACT.DATA_TYPE_ID_INVALID',
       `"${id}" is not a data type id. A data type id is "owner/name" in lower case and carries no version, as in "owner/name"; a versioned id names a codec.`,

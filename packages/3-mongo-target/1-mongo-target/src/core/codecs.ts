@@ -283,7 +283,7 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
     throw mongoTargetError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       'renderOutputType: expected positive integer "length" for Vector',
-      { meta: { nativeType: 'Vector', param: 'length', received: length } },
+      { meta: { typeName: 'Vector', param: 'length', received: length } },
     );
   }
   return `Vector<${length}>`;

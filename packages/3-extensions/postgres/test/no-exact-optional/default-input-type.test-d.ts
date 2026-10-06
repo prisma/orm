@@ -3,7 +3,7 @@ import { defineContract, enumType, member } from '../../src/exports/contract-bui
 
 const Level = enumType(
   'Level',
-  { codecId: 'pg/int4@1' as const, nativeType: 'int4' },
+  { codecId: 'pg/int4@1' as const },
   member('Low', 1),
   member('High', 10),
 );

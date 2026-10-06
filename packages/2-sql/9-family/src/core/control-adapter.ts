@@ -91,7 +91,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
 
   /**
    * Inserts the initial marker row for `space` (`INSERT` only). Fails when a
-   * row for that space already exists. Used by `sign()` so concurrent first-time
+   * row for that space already exists. Used by `signSpaces()` so concurrent first-time
    * stamps cannot silently overwrite each other. `updated_at` is DB-side
    * (`now()` / `strftime('%Y-%m-%dT%H:%M:%fZ','now')`). Mirrors `MongoControlAdapter.initMarker`.
    */
@@ -158,6 +158,16 @@ export interface SqlControlAdapter<TTarget extends string = string>
       readonly destinationContractJson?: unknown;
     },
   ): Promise<void>;
+
+  /**
+   * Runs `fn` in one transaction on `driver`: `BEGIN`, then `COMMIT` when `fn` resolves, or `ROLLBACK` and the error rethrown when it throws. The driver must send `BEGIN`, every statement `fn` sends through it and the final `COMMIT` or `ROLLBACK` over one database session; the Postgres and SQLite control drivers each hold one connection.
+   */
+  withTransaction<T>(driver: SqlControlDriverInstance<TTarget>, fn: () => Promise<T>): Promise<T>;
+
+  /**
+   * Inside a transaction `withTransaction` opened, takes the one lock the migration runner holds while it reads and writes markers, and holds it until the transaction ends. The lock covers the marker table, so it is the same for every space. A target whose `withTransaction` already takes a lock that excludes the runner does nothing here.
+   */
+  lockMarker(driver: SqlControlDriverInstance<TTarget>): Promise<void>;
 
   /**
    * Introspects a database schema and returns the target's schema-IR node.

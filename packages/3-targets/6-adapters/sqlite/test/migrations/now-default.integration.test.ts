@@ -24,7 +24,7 @@ import {
 const CODEC_TEXT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 const nowDefault: StorageColumnInput = {
-  nativeType: 'text',
+  dataType: 'sqlite/text',
   codecId: SQLITE_DATETIME_CODEC_ID,
   nullable: false,
   default: { kind: 'function', expression: 'now()' },
@@ -45,7 +45,7 @@ function contractOf(columns: Record<string, StorageColumnInput>): Contract<SqlSt
             table: {
               post: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
                   ...columns,
                 },
                 primaryKey: { columns: ['id'] },

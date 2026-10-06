@@ -54,7 +54,6 @@ describe('contract definition lowering runtime checks', () => {
     const localVector = {
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     } as const;
 

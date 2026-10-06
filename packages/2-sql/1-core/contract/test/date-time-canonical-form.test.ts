@@ -2,17 +2,17 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { type CanonicalDateTimeOptions, canonicalDateTime } from '../src/date-time-canonical-form';
 
-const date: CanonicalDateTimeOptions = { shape: 'date', dataTypeId: 'demo/date' };
-const time: CanonicalDateTimeOptions = { shape: 'time', dataTypeId: 'demo/time' };
+const date: CanonicalDateTimeOptions = { shape: 'date', ownerId: 'demo/date' };
+const time: CanonicalDateTimeOptions = { shape: 'time', ownerId: 'demo/time' };
 const timeWithOffset: CanonicalDateTimeOptions = {
   shape: 'timeWithOffset',
-  dataTypeId: 'demo/timetz',
+  ownerId: 'demo/timetz',
   maxOffsetHours: 15,
 };
-const dateTime: CanonicalDateTimeOptions = { shape: 'dateTime', dataTypeId: 'demo/timestamp' };
+const dateTime: CanonicalDateTimeOptions = { shape: 'dateTime', ownerId: 'demo/timestamp' };
 const instant: CanonicalDateTimeOptions = {
   shape: 'instant',
-  dataTypeId: 'demo/instant',
+  ownerId: 'demo/instant',
   range: { earliest: '-004713-11-24T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
 };
 
@@ -85,7 +85,7 @@ describe('canonicalDateTime', () => {
   it('holds at most the fraction digits a type declares', () => {
     const milliseconds: CanonicalDateTimeOptions = {
       shape: 'instant',
-      dataTypeId: 'demo/millis',
+      ownerId: 'demo/millis',
       maxFractionDigits: 3,
     };
     expect({
@@ -240,7 +240,7 @@ describe('canonicalDateTime', () => {
   describe('a range on a type without a date', () => {
     const business: CanonicalDateTimeOptions = {
       shape: 'time',
-      dataTypeId: 'demo/business-hours',
+      ownerId: 'demo/business-hours',
       range: { earliest: '09:00:00', latest: '17:00:00.5' },
     };
 
@@ -265,7 +265,7 @@ describe('canonicalDateTime', () => {
     expect(() =>
       canonicalDateTime('12:00:00', {
         shape: 'time',
-        dataTypeId: 'demo/broken',
+        ownerId: 'demo/broken',
         range: { earliest: 'midnight', latest: '23:59:59' },
       }),
     ).toThrow(InternalError);

@@ -11,8 +11,8 @@
  *      (`public`) and a named schema (`auth`) — proving the deferred column
  *      descriptor's entity is harvested into the namespace's entries at build
  *      time.
- *   2. The column resolves to `{ codecId: 'pg/enum@1', nativeType,
- *      typeParams.typeName, valueSet ref }`, with `nativeType` from the mapped
+ *   2. The column resolves to `{ codecId: 'pg/enum@1', dataType: 'pg/enum',
+ *      typeParams.typeName, valueSet ref }`, with `typeParams.typeName` from the mapped
  *      Postgres type name (schema-qualified for `auth`, bare for `public`) and
  *      `valueSet.entityName` from the entity name — proving qualification
  *      happens when the Postgres target builds the namespace
@@ -42,8 +42,8 @@ import {
   pg,
 } from '../../src/exports/contract-builder';
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 
 function namespace(namespaces: Record<string, unknown>, id: string): PostgresSchema {
   const ns = namespaces[id] as PostgresSchema | undefined;
@@ -77,7 +77,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const column = ns.table['accounts']?.columns['role'];
     expect(column).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'Role',
+      dataType: 'pg/enum',
       typeParams: { typeName: 'Role' },
       nullable: false,
       valueSet: {
@@ -94,7 +94,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
   it('name !== type name (.map): keys entries by physical type name, mapped type name in the column, in public', () => {
     // AalLevel maps to Postgres type `aal_level`: the entity entry keys by the
     // PHYSICAL type name (`aal_level`); the value-set stays keyed by the entity
-    // NAME (`AalLevel`), and `nativeType` is the mapped type name.
+    // NAME (`AalLevel`), and `typeParams.typeName` is the mapped type name.
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
@@ -121,7 +121,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const column = ns.table['sessions']?.columns['aal'];
     expect(column).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'aal_level',
+      dataType: 'pg/enum',
       typeParams: { typeName: 'aal_level' },
       nullable: true,
       valueSet: {
@@ -161,7 +161,6 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const column = ns.table['sessions']?.columns['aal'];
     expect(column).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
       typeParams: { typeName: 'auth.aal_level' },
       valueSet: {
         plane: 'storage',

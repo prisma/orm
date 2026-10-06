@@ -10,8 +10,8 @@ import {
   rawSql,
   unique,
 } from '@prisma/orm-postgres/target/migration';
-import type { Contract as End } from '../../snapshots/f62a4154d0b48cb144ca4f74667fc6922e770f81edd5517393285fb92d07dddc/contract';
-import endContract from '../../snapshots/f62a4154d0b48cb144ca4f74667fc6922e770f81edd5517393285fb92d07dddc/contract.json' with {
+import type { Contract as End } from '../../snapshots/f865f3034901be5195a6e7c30b3832daa8bea2684457d29d9c7e9cff2e230aba/contract';
+import endContract from '../../snapshots/f865f3034901be5195a6e7c30b3832daa8bea2684457d29d9c7e9cff2e230aba/contract.json' with {
   type: 'json',
 };
 

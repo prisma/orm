@@ -42,7 +42,7 @@ const sqliteTargetPack = {
   defaultNamespaceId: '__unbound__',
 } as const satisfies PortableTargetPack<'sqlite'>;
 
-const uuidColumn = columnDescriptor('sql/char@1', 'character', { length: 36 });
+const uuidColumn = columnDescriptor('sql/char@1', { length: 36 });
 const textColumn = columnDescriptor('sql/text@1');
 const portableTimestampColumn = columnDescriptor('test/timestamp@1');
 
@@ -107,7 +107,6 @@ describe('contract DSL portability coverage', () => {
     expect(sqliteContract.target).toBe('sqlite');
     expect(postgresStorageTables['app_user']?.columns['created_at']).toMatchObject({
       codecId: 'test/timestamp@1',
-      nativeType: 'timestamp',
       default: {
         kind: 'function',
         expression: 'CURRENT_TIMESTAMP',
@@ -115,7 +114,6 @@ describe('contract DSL portability coverage', () => {
     });
     expect(postgresStorageTables['blog_post']?.columns['author_id']).toMatchObject({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 36 },
     });
 

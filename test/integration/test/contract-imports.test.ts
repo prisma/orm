@@ -137,19 +137,19 @@ describe('contract.d.ts imports resolution', () => {
                     columns: {
                       id: {
                         codecId: 'pg/int4@1',
-                        nativeType: 'int4',
+                        dataType: 'pg/int4',
                         nullable: false,
                         many: false,
                       },
                       email: {
                         codecId: 'pg/text@1',
-                        nativeType: 'text',
+                        dataType: 'pg/text',
                         nullable: false,
                         many: false,
                       },
                       createdAt: {
                         codecId: 'pg/timestamptz-temporal@1',
-                        nativeType: 'timestamptz',
+                        dataType: 'pg/timestamptz',
                         nullable: false,
                         many: false,
                       },
@@ -163,19 +163,19 @@ describe('contract.d.ts imports resolution', () => {
                     columns: {
                       id: {
                         codecId: 'pg/int4@1',
-                        nativeType: 'int4',
+                        dataType: 'pg/int4',
                         nullable: false,
                         many: false,
                       },
                       title: {
                         codecId: 'pg/text@1',
-                        nativeType: 'text',
+                        dataType: 'pg/text',
                         nullable: false,
                         many: false,
                       },
                       userId: {
                         codecId: 'pg/int4@1',
-                        nativeType: 'int4',
+                        dataType: 'pg/int4',
                         nullable: false,
                         many: false,
                       },
@@ -330,13 +330,13 @@ type UserIdColumn = UserColumns['id'];
                     columns: {
                       id: {
                         codecId: 'pg/int4@1',
-                        nativeType: 'int4',
+                        dataType: 'pg/int4',
                         nullable: false,
                         many: false,
                       },
                       email: {
                         codecId: 'pg/text@1',
-                        nativeType: 'text',
+                        dataType: 'pg/text',
                         nullable: false,
                         many: false,
                       },

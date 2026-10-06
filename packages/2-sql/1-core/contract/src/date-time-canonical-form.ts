@@ -11,8 +11,8 @@ export type DateTimeShape = 'date' | 'time' | 'timeWithOffset' | 'dateTime' | 'i
 
 export interface CanonicalDateTimeOptions {
   readonly shape: DateTimeShape;
-  /** The data type id, which messages name. */
-  readonly dataTypeId: string;
+  /** The id of the data type or codec that declares this canonical form, which messages name. */
+  readonly ownerId: string;
   /** The largest UTC offset the type holds, in hours. Defaults to 23. */
   readonly maxOffsetHours?: number;
   /** The most digits after the decimal point the type holds. Defaults to 6, microseconds. */
@@ -305,7 +305,7 @@ export function canonicalDateTime(
   written: string = text,
 ): string {
   const shape = SHAPES[options.shape];
-  const { dataTypeId: id } = options;
+  const { ownerId: id } = options;
 
   const parts = readWritten(text);
   if (parts === undefined) {

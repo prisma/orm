@@ -347,8 +347,8 @@ const extTransformDescriptor = sqliteCodec(new ExtTransformDescriptor(), {
 
 function buildExtContractAndTable() {
   const tableColumns: StorageTableInput['columns'] = {
-    label: { codecId: EXT_CODEC_ID, nativeType: 'TEXT', nullable: false },
-    name: { codecId: 'sqlite/text@1', nativeType: 'TEXT', nullable: true },
+    label: { codecId: EXT_CODEC_ID, dataType: 'demo/fixture', nullable: false },
+    name: { codecId: 'sqlite/text@1', dataType: 'sqlite/text', nullable: true },
   };
   const ns = sqliteCreateNamespace({
     id: UNBOUND_NAMESPACE_ID,
