@@ -438,9 +438,8 @@ describe('migrate', () => {
   });
 
   describe('--to', () => {
-    it('resolves @contract to the emitted contract and applies the pending migration', async () => {
+    it('treats @contract like an omitted --to and applies the emitted contract', async () => {
       const cwd = await buildProject();
-      await writeSnapshot(cwd, C2);
       mocks.readAllMarkers.mockResolvedValue(markerAt(C1));
       mocks.migrate.mockResolvedValue(
         ok({
@@ -466,14 +465,13 @@ describe('migrate', () => {
       );
 
       expect(run.exitCode).toBe(0);
-      expect(mocks.migrate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          refHash: C2,
-          contract: expect.objectContaining({
-            storage: expect.objectContaining({ storageHash: C2 }),
-          }),
-        }),
-      );
+      const migrateOptions = mocks.migrate.mock.calls[0]?.[0];
+      expect(migrateOptions).toMatchObject({
+        contract: JSON.parse(await readFile(join(cwd, 'contract.json'), 'utf-8')),
+      });
+      expect(migrateOptions).not.toHaveProperty('refHash');
+      expect(migrateOptions).not.toHaveProperty('refInvariants');
+      expect(migrateOptions).not.toHaveProperty('refName');
       expect(run.presented?.data).toMatchObject({
         ok: true,
         migrationsApplied: 1,

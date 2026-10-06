@@ -185,23 +185,28 @@ interface RequestedTarget {
   readonly refName: string | undefined;
 }
 
+const EMITTED_CONTRACT_TARGET: RequestedTarget = { entry: undefined, refName: undefined };
+
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
- * the ref declares; a bare hash, `@contract`, or `@empty` carries none.
- * Omitting `--to` targets the emitted contract, which needs no resolution at
- * all. `@db` is not resolved here: it needs the live marker, which is read
- * only once the connection is open.
+ * the ref declares; a bare hash or `@empty` carries none. An omitted `--to`
+ * and `@contract` both target the emitted contract. `@db` is not resolved
+ * here: it needs the live marker, which is read only once the connection is
+ * open.
  */
 function resolveRequestedTarget(
   to: string | undefined,
   context: RefResolutionContext,
 ): Result<RequestedTarget, CliStructuredError> {
   if (to === undefined) {
-    return ok({ entry: undefined, refName: undefined });
+    return ok(EMITTED_CONTRACT_TARGET);
   }
   const resolved = resolveContractRef(to, context);
   if (!resolved.ok) {
     return notOk(normalizeError(resolved.failure));
+  }
+  if (resolved.value.provenance.kind === 'reserved-contract') {
+    return ok(EMITTED_CONTRACT_TARGET);
   }
   if (resolved.value.provenance.kind !== 'ref') {
     return ok({ entry: { hash: resolved.value.hash, invariants: [] }, refName: undefined });
