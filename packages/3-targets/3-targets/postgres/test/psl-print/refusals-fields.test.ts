@@ -37,7 +37,7 @@ describe('columns and fields', () => {
     expect(
       printingWidget({
         columns: { tags: TEXT_COLUMN },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."tags"' }));
   });
@@ -82,7 +82,7 @@ describe('columns and fields', () => {
           columns: {
             priorities: {
               ...TEXT_COLUMN,
-              many: true,
+              many: { elementNullable: false },
               noCheck: ['elementNotNull', 'membership'],
               valueSet: {
                 plane: 'storage',
@@ -95,7 +95,7 @@ describe('columns and fields', () => {
           fields: {
             priorities: {
               ...TEXT_FIELD,
-              many: true,
+              many: { elementNullable: false },
               valueSet: {
                 plane: 'domain',
                 namespaceId: 'public',
@@ -121,9 +121,12 @@ describe('columns and fields', () => {
   it('refuses a model field whose type is a union of types', () => {
     expect(
       printingWidget({
-        columns: { payload: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          payload: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
           payload: {
+            many: false,
             nullable: false,
             type: {
               kind: 'union',
@@ -141,9 +144,16 @@ describe('columns and fields', () => {
   it('refuses a model field that is a dictionary', () => {
     expect(
       printingWidget({
-        columns: { counts: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          counts: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
-          counts: { nullable: false, dict: true, type: { kind: 'scalar', codecId: 'pg/jsonb@1' } },
+          counts: {
+            many: false,
+            nullable: false,
+            dict: true,
+            type: { kind: 'scalar', codecId: 'pg/jsonb@1' },
+          },
         },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."counts"' }));
@@ -179,10 +189,17 @@ describe('columns and fields', () => {
       return printingWidget(
         {
           columns: {
-            area: { nativeType: 'geometry', codecId: 'pg/geometry@1', nullable: false, typeParams },
+            area: {
+              many: false,
+              nativeType: 'geometry',
+              codecId: 'pg/geometry@1',
+              nullable: false,
+              typeParams,
+            },
           },
           fields: {
             area: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: 'pg/geometry@1', typeParams },
             },
@@ -199,6 +216,7 @@ describe('columns and fields', () => {
           columns: { v: { ...vector, nullable: false } },
           fields: {
             v: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: vector.codecId, typeParams: vector.typeParams },
             },
@@ -362,8 +380,8 @@ describe('checks and indexes', () => {
   it('refuses a managed list column without the element check the PSL source derives', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(
       refusal({
@@ -377,8 +395,8 @@ describe('checks and indexes', () => {
   it('prints a list column of a table that is not managed without derived checks', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
         table: { control: 'external' },
       }),
     ).not.toThrow();

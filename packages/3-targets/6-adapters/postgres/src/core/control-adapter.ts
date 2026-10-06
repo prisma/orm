@@ -38,6 +38,7 @@ import {
   encodeLiteralDefault,
   isDdlNode,
   type LiteralDefaultColumn,
+  renderOpaqueSql,
 } from '@internal/sql-relational-core/ast';
 import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
@@ -123,6 +124,13 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
+function decodeMarkerInteger(value: string): number {
+  if (!/^-?\d+$/.test(value)) {
+    throw new TypeError(`expected integer text, got ${JSON.stringify(value)}`);
+  }
+  return Number(value);
+}
+
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
@@ -134,12 +142,15 @@ function decodePostgresMarkerRow(row: unknown, space: string): Record<string, un
     });
   }
   const record = blindCast<
-    { readonly invariants: unknown } & Record<string, unknown>,
+    { readonly invariants: unknown; readonly canonical_version: unknown } & Record<string, unknown>,
     'Postgres marker rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
+      ...(typeof record.canonical_version === 'string'
+        ? { canonical_version: decodeMarkerInteger(record.canonical_version) }
+        : {}),
       invariants: parsePostgresListText(record.invariants),
     };
   } catch (error) {
@@ -1635,13 +1646,14 @@ interface OutputSettings {
   readonly timeZone: string;
   readonly dateStyle: string;
   readonly intervalStyle: string;
+  readonly byteaOutput: string;
 }
 
-/** Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals. */
 const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
   timeZone: 'UTC',
   dateStyle: 'ISO, MDY',
   intervalStyle: 'postgres',
+  byteaOutput: 'hex',
 };
 
 async function readOutputSettings(
@@ -1650,7 +1662,8 @@ async function readOutputSettings(
   const { rows } = await driver.query<OutputSettings>(
     `SELECT current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
-            current_setting('IntervalStyle') AS "intervalStyle"`,
+            current_setting('IntervalStyle') AS "intervalStyle",
+            current_setting('bytea_output') AS "byteaOutput"`,
   );
   return rows[0];
 }
@@ -1661,24 +1674,28 @@ async function applyOutputSettings(
   local: boolean,
 ): Promise<void> {
   await driver.query(
-    `SELECT set_config('TimeZone', $1, $4),
-            set_config('DateStyle', $2, $4),
-            set_config('IntervalStyle', $3, $4)`,
-    [settings.timeZone, settings.dateStyle, settings.intervalStyle, local],
+    `SELECT set_config('TimeZone', $1, $5),
+            set_config('DateStyle', $2, $5),
+            set_config('IntervalStyle', $3, $5),
+            set_config('bytea_output', $4, $5)`,
+    [settings.timeZone, settings.dateStyle, settings.intervalStyle, settings.byteaOutput, local],
   );
 }
 
 function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
   return (
-    a?.timeZone === b.timeZone && a.dateStyle === b.dateStyle && a.intervalStyle === b.intervalStyle
+    a?.timeZone === b.timeZone &&
+    a.dateStyle === b.dateStyle &&
+    a.intervalStyle === b.intervalStyle &&
+    a.byteaOutput === b.byteaOutput
   );
 }
 
 /**
  * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
  * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
- * dates and intervals in the session styles, so pinning them gives the same text whatever the
- * server, the role, or the caller set.
+ * dates, intervals and bytea in the session styles, so pinning them gives the same text whatever
+ * the server, the role, or the caller set.
  *
  * The settings are first set locally. A local setting outlives its own statement only inside a
  * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they
@@ -1773,7 +1790,7 @@ async function pgRenderDdlColumnDefault(
   where: LiteralDefaultColumn,
 ): Promise<string> {
   if (def.kind === 'function') {
-    if (def.expression === 'autoincrement()') {
+    if (def.expression.text === 'autoincrement()') {
       if (!SERIAL_FAMILY_TYPES.has(nativeType.toLowerCase())) {
         throw postgresError(
           'CONTRACT.DEFAULT_INVALID',
@@ -1785,15 +1802,15 @@ async function pgRenderDdlColumnDefault(
       }
       return '';
     }
-    if (checkSqlDefaultBody(def.expression) !== undefined) {
+    if (checkSqlDefaultBody(def.expression.text) !== undefined) {
       throw postgresError(
         'CONTRACT.DEFAULT_INVALID',
-        `Unsafe default expression in contract: "${def.expression}". ` +
+        `Unsafe default expression in contract: "${def.expression.text}". ` +
           'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-        { meta: { expression: def.expression } },
+        { meta: { expression: def.expression.text } },
       );
     }
-    return `DEFAULT (${def.expression})`;
+    return `DEFAULT (${renderOpaqueSql(def.expression)})`;
   }
   const dataTypeId =
     codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
@@ -1819,6 +1836,7 @@ async function pgWrittenDefault(
   codecRef: CodecRef | undefined,
   where: LiteralDefaultColumn,
 ): Promise<unknown> {
+  if (value === null && nativeType.endsWith('[]')) return null;
   if (Array.isArray(value) && nativeType.endsWith('[]')) {
     const encoded =
       codecRef === undefined
@@ -1891,7 +1909,7 @@ function pgRenderDdlConstraint(constraint: DdlTableConstraint): string {
     return sql;
   }
   if (constraint.kind === 'check-expression') {
-    return `CONSTRAINT ${quoteIdentifier(constraint.name)} CHECK (${constraint.expression})`;
+    return `CONSTRAINT ${quoteIdentifier(constraint.name)} CHECK (${renderOpaqueSql(constraint.expression)})`;
   }
   const cols = constraint.columns.map(quoteIdentifier).join(', ');
   if (constraint.name !== undefined) {
@@ -2001,10 +2019,10 @@ function pgRenderCreatePolicy(node: PostgresCreatePolicy): SqlExecuteRequest {
   const roles = node.roles.length === 0 ? 'PUBLIC' : node.roles.join(', ');
   let sql = `CREATE POLICY ${quoteIdentifier(node.name)} ON ${tableRef} AS ${permissiveness} FOR ${command} TO ${roles}`;
   if (node.using !== undefined) {
-    sql += ` USING (${node.using})`;
+    sql += ` USING (${renderOpaqueSql(node.using)})`;
   }
   if (node.withCheck !== undefined) {
-    sql += ` WITH CHECK (${node.withCheck})`;
+    sql += ` WITH CHECK (${renderOpaqueSql(node.withCheck)})`;
   }
   return { sql, params: [] };
 }
@@ -2052,7 +2070,7 @@ function pgRenderCreateIndex(node: PostgresCreateIndex): SqlExecuteRequest {
   const elementList =
     'columns' in node.elements
       ? node.elements.columns.map(quoteIdentifier).join(', ')
-      : node.elements.expression;
+      : renderOpaqueSql(node.elements.expression);
   const unique = node.unique ? 'UNIQUE ' : '';
   const using = node.type !== undefined ? ` USING ${quoteIdentifier(node.type)}` : '';
   const withClause =
@@ -2063,7 +2081,7 @@ function pgRenderCreateIndex(node: PostgresCreateIndex): SqlExecuteRequest {
           )
           .join(', ')})`
       : '';
-  const whereClause = node.where !== undefined ? ` WHERE (${node.where})` : '';
+  const whereClause = node.where !== undefined ? ` WHERE (${renderOpaqueSql(node.where)})` : '';
   return {
     sql: `CREATE ${unique}INDEX ${quoteIdentifier(node.name)} ON ${pgQualify(node.schema, node.table)}${using} (${elementList})${withClause}${whereClause}`,
     params: [],

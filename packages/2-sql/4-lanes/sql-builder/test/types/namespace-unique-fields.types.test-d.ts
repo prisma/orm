@@ -60,11 +60,13 @@ type TwoNamespaceContractBase = Omit<Contract, 'storage'> & {
             readonly users: {
               readonly columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly token: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;

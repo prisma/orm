@@ -11,13 +11,11 @@ import {
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { withDescriptors } from '../../contract-ts/test/with-descriptors';
-import {
-  type InterpretPslDocumentToSqlContractInput,
-  interpretPslDocumentToSqlContract,
-} from '../src/interpreter';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresCodecLookup,
   postgresEnumInferenceCodecs,
   postgresScalarTypeDescriptors,
@@ -26,7 +24,6 @@ import {
   sqliteEnumInferenceCodecs,
   sqliteScalarColumnDescriptors,
   sqliteTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
   testRenderCheckExpressions,
@@ -83,12 +80,7 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSqlContractInput>) {
   const contributions = overrides?.authoringContributions ?? authoringContributions;
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
@@ -1027,6 +1019,96 @@ model Post {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX' })]),
+    );
+  });
+
+  it('lowers nullable enum-list defaults through member values and preserves value-set semantics', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int         @id
+  priorities Priority?[] @default([Low, null])
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
+    expect(ns?.entries.table?.['Post']?.columns?.['priorities']).toEqual({
+      nativeType: 'text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      many: { elementNullable: true },
+      valueSet: {
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueSet',
+        entityName: 'Priority',
+      },
+      default: { kind: 'literal', value: ['low', null] },
+    });
+    expect(ns?.entries.valueSet?.['Priority']).toEqual({
+      kind: 'valueSet',
+      values: ['low', 'high'],
+    });
+  });
+
+  it('rejects null in a strict enum-list default at the null expression span', () => {
+    const schema = `
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int        @id
+  priorities Priority[] @default([Low, null])
+}
+`;
+    const result = interpret(schema);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find(
+      (candidate) => candidate.code === 'PSL_INVALID_DEFAULT_APPLICABILITY',
+    );
+    const nullOffset = schema.indexOf('null');
+    expect(diagnostic).toEqual(
+      expect.objectContaining({
+        span: {
+          start: { offset: nullOffset, line: 10, column: 40 },
+          end: { offset: nullOffset + 4, line: 10, column: 44 },
+        },
+      }),
+    );
+  });
+
+  it('rejects an unknown enum member in a list with the enum-member diagnostic', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int        @id
+  priorities Priority[] @default([Low, Critical])
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: Low | High | null',
+        }),
+      ]),
     );
   });
 

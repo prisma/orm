@@ -6,12 +6,35 @@ import type {
   NamedTypeSymbol,
   NamespaceSymbol,
 } from './symbol-table';
+import { PathExprAst } from './syntax/ast/expressions';
+import { IdentifierAst } from './syntax/ast/identifier';
+import type { SyntaxNode } from './syntax/red';
 
 export type EntitySelector =
   | { readonly kind: 'model' }
   | { readonly kind: 'compositeType' }
   | { readonly kind: 'namedType' }
   | { readonly kind: 'block'; readonly keyword: string };
+
+export interface WrittenEntityReference {
+  readonly namespace: string | undefined;
+  readonly name: string;
+}
+
+export function writtenEntityReference(node: SyntaxNode): WrittenEntityReference | undefined {
+  const name = IdentifierAst.cast(node)?.name();
+  if (name !== undefined) return { namespace: undefined, name };
+  const path = PathExprAst.cast(node)?.path();
+  if (path === undefined || path.length !== 2) return undefined;
+  const [namespace, member] = path;
+  return namespace === undefined || member === undefined ? undefined : { namespace, name: member };
+}
+
+export function describeWrittenEntityReference(reference: WrittenEntityReference): string {
+  return reference.namespace === undefined
+    ? reference.name
+    : `${reference.namespace}.${reference.name}`;
+}
 
 export type EntityDeclaration = ModelSymbol | CompositeTypeSymbol | NamedTypeSymbol | BlockSymbol;
 

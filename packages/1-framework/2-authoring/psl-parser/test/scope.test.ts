@@ -7,6 +7,7 @@ import {
   documentScope,
   isNamespaceLike,
   lookupMember,
+  memberEntries,
   namespaceScope,
 } from '../src/scope';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -94,6 +95,74 @@ describe('a scope searches itself, then delegates to its parent', () => {
     const { contributed } = scopesFor(SCHEMA);
 
     expect(contributed.lookup('Nothing')).toBeUndefined();
+  });
+});
+
+describe('scope entries', () => {
+  it('enumerates every visible kind with lookup-identical resolutions', () => {
+    const { symbolTable, top, contributed } = scopesFor(
+      [
+        'model Shared {\n id String\n}',
+        'type Address {\n street String\n}',
+        'types {\n Alias = String\n}',
+        'enum Role {\n ADMIN\n}',
+        'namespace app {\n type Shared {\n value String\n}\n model String {\n id Alias\n}\n}',
+        'namespace other {\n model Hidden {\n id String\n}\n}',
+      ].join('\n'),
+    );
+    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    const entries = [...scope.entries()];
+    expect(
+      Object.fromEntries(entries.map(([name, resolution]) => [name, resolution.kind])),
+    ).toEqual({
+      Shared: 'compositeType',
+      String: 'model',
+      Address: 'compositeType',
+      Alias: 'namedType',
+      Role: 'block',
+      app: 'namespace',
+      other: 'namespace',
+      pgvector: 'contributedNamespace',
+    });
+    expect(new Set(entries.map(([name]) => name)).size).toBe(entries.length);
+    for (const [name, resolution] of entries) expect(resolution).toEqual(scope.lookup(name));
+    expect(
+      entries.filter(([, resolution]) => resolution.kind === 'model').map(([name]) => name),
+    ).toEqual(['String']);
+    expect([...contributed.entries()].map(([name]) => name)).toEqual(['String', 'pgvector']);
+    for (const [name, resolution] of top.entries()) expect(resolution).toEqual(top.lookup(name));
+    expect(
+      [...documentScope(symbolTable.topLevel, undefined).entries()].map(([name]) => name),
+    ).toEqual(['Shared', 'Address', 'Alias', 'Role', 'app', 'other']);
+  });
+
+  it('enumerates only qualified members, never lexical parents or siblings', () => {
+    const { top } = scopesFor(SCHEMA);
+    for (const [name, expected] of [
+      ['app', ['Item', 'Shared']],
+      ['pgvector', ['Vector']],
+    ] as const) {
+      const qualifier = top.lookup(name)!;
+      if (!isNamespaceLike(qualifier)) throw new Error('not a namespace');
+      const entries = [...memberEntries(qualifier)];
+      expect(entries.map(([member]) => member)).toEqual(expected);
+      for (const [member, resolution] of entries) {
+        expect(resolution).toEqual(lookupMember(qualifier, member));
+      }
+      expect(lookupMember(qualifier, 'String')).toBeUndefined();
+    }
+  });
+
+  it('does not mistake inherited record properties for visible symbols', () => {
+    const { symbolTable, top } = scopesFor('namespace app {\n type toString {\n id String\n}\n}');
+    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    expect(scope.lookup('toString')).toEqual(new Map(scope.entries()).get('toString'));
+    expect(scope.lookup('toString')?.kind).toBe('compositeType');
+    expect(scope.lookup('constructor')).toBeUndefined();
+    expect(top.lookup('toString')).toBeUndefined();
+    const qualifier = top.lookup('app')!;
+    if (!isNamespaceLike(qualifier)) throw new Error('not a namespace');
+    expect(lookupMember(qualifier, 'constructor')).toBeUndefined();
   });
 });
 

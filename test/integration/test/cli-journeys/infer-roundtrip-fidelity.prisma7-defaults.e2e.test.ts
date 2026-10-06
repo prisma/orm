@@ -119,6 +119,9 @@ CREATE TABLE "sql_defaults" (
     "realNaN" REAL NOT NULL DEFAULT 'NaN',
     "decimalNaN" NUMERIC NOT NULL DEFAULT 'NaN',
     "timeWithZone" TIMETZ NOT NULL DEFAULT '12:34:56+00',
+    "stampInfinity" TIMESTAMP(3) NOT NULL DEFAULT 'infinity',
+    "dayNegInfinity" DATE NOT NULL DEFAULT '-infinity',
+    "instantBc" TIMESTAMPTZ(6) NOT NULL DEFAULT '0044-03-15 00:00:00+00 BC',
 
     CONSTRAINT "sql_defaults_pkey" PRIMARY KEY ("id")
 );
@@ -203,35 +206,38 @@ withTempDir(({ createTempDir }) => {
             }
 
             model NumberDefaults {
-              id            Int             @id(map: "number_defaults_pkey")
-              negInt        Int             @default(-1)
-              negSmallInt   SmallInt        @default(-2)
-              negFloat      Float           @default(-1.5)
-              tinyFloat     Float           @default(0.0000001)
-              negReal       Real            @default(-2.5)
-              negDecimal    Numeric(65, 30) @default(-0.5)
-              longDecimal   Numeric(65, 30) @default(12345678901234567890.123456789)
-              tinyDecimal   Numeric(65, 30) @default(0.000000000000000001)
-              scaleDecimal  Numeric(65, 30) @default(1.50)
-              wholeDecimal  Numeric(65, 30) @default(10)
-              scaledDecimal Numeric(10, 2)  @default(-1.25)
-              negSafeBigInt BigInt          @default(-5)
-              negBigInt     BigInt          @default(-9007199254740993)
-              hugeBigInt    BigInt          @default(9007199254740993)
-              stamp         Timestamp(3)    @default("2024-01-01T00:00:00")
-              jsonNull      Jsonb?          @default(json\`null\`)
+              id            Int                @id(map: "number_defaults_pkey")
+              negInt        Int                @default(-1)
+              negSmallInt   SmallInt           @default(-2)
+              negFloat      Float              @default(-1.5)
+              tinyFloat     Float              @default(0.0000001)
+              negReal       Real               @default(-2.5)
+              negDecimal    Numeric(65, 30)    @default(-0.5)
+              longDecimal   Numeric(65, 30)    @default(12345678901234567890.123456789)
+              tinyDecimal   Numeric(65, 30)    @default(0.000000000000000001)
+              scaleDecimal  Numeric(65, 30)    @default(1.50)
+              wholeDecimal  Numeric(65, 30)    @default(10)
+              scaledDecimal Numeric(10, 2)     @default(-1.25)
+              negSafeBigInt BigInt             @default(-5)
+              negBigInt     BigInt             @default(-9007199254740993)
+              hugeBigInt    BigInt             @default(9007199254740993)
+              stamp         TimestampString(3) @default("2024-01-01T00:00:00")
+              jsonNull      Jsonb?             @default(json\`null\`)
 
               @@map("number_defaults")
             }
 
             model SqlDefaults {
-              id           Int          @id(map: "sql_defaults_pkey")
-              textNull     VarChar(32)? @default(sql\`NULL::character varying\`)
-              floatNaN     Float        @default(NaN)
-              floatNegInf  Float        @default(-Infinity)
-              realNaN      Real         @default(NaN)
-              decimalNaN   Numeric      @default(NaN)
-              timeWithZone Timetz       @default("12:34:56Z")
+              id             Int                  @id(map: "sql_defaults_pkey")
+              textNull       VarChar(32)?         @default(sql\`NULL::character varying\`)
+              floatNaN       Float                @default(NaN)
+              floatNegInf    Float                @default(-Infinity)
+              realNaN        Real                 @default(NaN)
+              decimalNaN     Numeric              @default(NaN)
+              timeWithZone   Timetz               @default("12:34:56Z")
+              stampInfinity  TimestampString(3)   @default("infinity")
+              dayNegInfinity DateString           @default("-infinity")
+              instantBc      TimestamptzString(6) @default("-000043-03-15T00:00:00Z")
 
               @@map("sql_defaults")
             }
@@ -312,8 +318,8 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model RawListDefaults {
-              id         Int             @id(map: "raw_list_defaults_pkey")
-              timestamps Timestamp(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
+              id         Int                   @id(map: "raw_list_defaults_pkey")
+              timestamps TimestampString(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
 
               @@map("raw_list_defaults")
             }

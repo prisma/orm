@@ -374,7 +374,7 @@ withTempDir(({ createTempDir }) => {
             .find((line) => line.trim().startsWith('localAt'));
           expect(field?.trim().split(/\s+/)).toEqual([
             'localAt',
-            'Timestamp(3)',
+            'TimestampString(3)',
             '@default("2024-01-01T00:00:00")',
           ]);
         },

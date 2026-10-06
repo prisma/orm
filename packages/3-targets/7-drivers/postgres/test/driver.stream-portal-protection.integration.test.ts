@@ -139,8 +139,8 @@ describe('streamed execute on a shared single-session backend', () => {
       const h = await createSharedSessionHarness({ cursorBatchSize: 10 });
       await seedRows(h, 30);
 
-      const rows: Array<{ id: number }> = [];
-      for await (const row of h.driver.query<{ id: number }>({
+      const rows: Array<{ id: string }> = [];
+      for await (const row of h.driver.query<{ id: string }>({
         sql: 'select id from items order by id',
       })) {
         rows.push(row);
@@ -155,8 +155,8 @@ describe('streamed execute on a shared single-session backend', () => {
       }
 
       expect(rows).toHaveLength(30);
-      expect(rows[0]).toEqual({ id: 0 });
-      expect(rows[29]).toEqual({ id: 29 });
+      expect(rows[0]).toEqual({ id: '0' });
+      expect(rows[29]).toEqual({ id: '29' });
       // The race only exists while a cursor holds a suspended portal; assert a
       // cursor was actually used so buffering can't turn this into a false pass.
       expect(h.cursorSubmitCount()).toBeGreaterThan(0);
@@ -190,10 +190,10 @@ describe('streamed execute on a shared single-session backend', () => {
       await seedRows(h, 25);
       h.recordedQueryTexts.length = 0;
 
-      for await (const row of h.driver.query<{ id: number }>({
+      for await (const row of h.driver.query<{ id: string }>({
         sql: 'select id from items order by id',
       })) {
-        if (row.id >= 6) {
+        if (Number(row.id) >= 6) {
           break;
         }
       }
@@ -202,11 +202,11 @@ describe('streamed execute on a shared single-session backend', () => {
       expect(h.recordedQueryTexts.filter((text) => text === 'COMMIT')).toHaveLength(1);
       expect(h.db.isInTransaction()).toBe(false);
 
-      const after = await queryRows<{ n: number }>(
+      const after = await queryRows<{ n: string }>(
         h.driver,
         'select count(*)::int as n from items',
       );
-      expect(after).toEqual([{ n: 25 }]);
+      expect(after).toEqual([{ n: '25' }]);
     },
     timeouts.spinUpDbServer,
   );
@@ -295,8 +295,8 @@ describe('streamed execute on a shared single-session backend', () => {
         const transaction = await connection.beginTransaction();
         await transaction.execute({ sql: 'insert into items (id, n) values (100, 200)' });
 
-        const rows = await queryRows<{ id: number }>(h.driver, 'select id from items order by id');
-        expect(rows.at(-1)).toEqual({ id: 100 });
+        const rows = await queryRows<{ id: string }>(h.driver, 'select id from items order by id');
+        expect(rows.at(-1)).toEqual({ id: '100' });
         expect(h.cursorSubmitCount()).toBeGreaterThan(0);
 
         await transaction.rollback();
@@ -304,7 +304,7 @@ describe('streamed execute on a shared single-session backend', () => {
         await connection.release();
       }
 
-      const after = await queryRows<{ id: number }>(
+      const after = await queryRows<{ id: string }>(
         h.driver,
         'select id from items where id = 100',
       );

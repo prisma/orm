@@ -1,3 +1,4 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
@@ -6,16 +7,45 @@ import type {
   ModelSymbol,
   Param,
   ResolvedEntityReference,
+  SymbolTable,
 } from '@internal/psl-parser';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  createMongoBinder,
-  findModelAttributeNode,
+  describeUnsupportedMongoAttribute,
   interpretModelAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
+
+function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
+  const context: ContractSourceContext = {
+    composedExtensions: [],
+    composedExtensionContracts: new Map(),
+    authoringContributions: {
+      type: {},
+      field: {},
+      entityTypes: {},
+      pslBlockDescriptors: {},
+      modelAttributes: {},
+      attributeSpecs: mongoAttributeSpecs,
+      dataTypes: {},
+    },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+    codecLookup: {
+      get: () => undefined,
+      targetTypesFor: () => undefined,
+      renderOutputTypeFor: () => undefined,
+      descriptorFor: () => undefined,
+    },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+    dataTypeLookup: { has: () => false, get: () => undefined },
+    resolvedInputs: [],
+    capabilities: {},
+  };
+  return createBinder({ symbolTable, sources, context }).binder;
+}
 
 function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'list') throw new Error('argument is a list');
@@ -79,7 +109,7 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
       defaultFunctionRegistry: new Map(),
     },
   };
-  return { model: modelContext, field: { ...modelContext, field } };
+  return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };
 }
 
 describe('mongoAttributeSpecs', () => {
@@ -96,7 +126,7 @@ model Base { id String }`,
     });
     const model = symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
-    const node = findModelAttributeNode(model, 'base');
+    const node = model.attributes.find((attr) => attr.name === 'base')?.node;
     if (!node) throw new Error('missing base');
     const diagnostics = createPslDiagnosticCollector(sources);
     const value = interpretModelAttribute({
@@ -105,12 +135,7 @@ model Base { id String }`,
       spec: mongoAttributeSpecs.model.base(),
       model,
       sources,
-      binder: createMongoBinder({
-        symbolTable,
-        sources,
-        scalarTypeCodecIds: new Map(),
-        controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-      }).binder,
+      binder: createBinderFor(symbolTable, sources),
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<

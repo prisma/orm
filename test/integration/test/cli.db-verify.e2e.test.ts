@@ -78,6 +78,7 @@ function createTestContract(
                     col,
                     {
                       nullable: spec.nullable,
+                      many: false,
                       type: { kind: 'scalar' as const, codecId: spec.codecId },
                     },
                   ]),

@@ -621,7 +621,7 @@ type ContractBase = Omit<
               readonly stamps: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Stamp' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;
@@ -692,52 +692,52 @@ type ContractBase = Omit<
               readonly bytes: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/binary@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly dates: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly decimals: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/decimal128@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly doubles: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly flags: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly ids: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly ints: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly longs: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly points: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Point' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly words: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;
@@ -762,7 +762,7 @@ type ContractBase = Omit<
               readonly tags: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly x: {
                 readonly nullable: false;
@@ -812,7 +812,7 @@ type ContractBase = Omit<
         readonly tags: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-          readonly many: true;
+          readonly many: { readonly elementNullable: false };
         };
         readonly x: {
           readonly nullable: false;

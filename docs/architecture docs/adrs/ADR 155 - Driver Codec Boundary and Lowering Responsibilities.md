@@ -94,9 +94,9 @@ Many Postgres JS libraries return `int8` as **strings** by default to avoid prec
 
 **Resolved.** `pg/int8@1` carries `bigint` as its application value, and its canonical JSON is decimal text rather than a JSON number, which cannot hold the int64 range. Neither side depends on how a driver library chooses to parse `int8`.
 
-### The current Postgres driver does not normalize row values
+### The Postgres driver did not normalize row values
 
-The driver yields rows directly from `pg` without normalization:
+When this ADR was written, the driver yielded rows directly from `pg` without normalization:
 
 ```ts
 // packages/3-targets/7-drivers/postgres/src/postgres-driver.ts
@@ -104,7 +104,9 @@ const result = await client.query(sql, params as unknown[] | undefined);
 for (const row of result.rows as Record<string, unknown>[]) yield row;
 ```
 
-With no normalization at the driver boundary, codecs inevitably become coupled to the underlying library’s choices.
+With no normalization at the driver boundary, codecs inevitably become coupled to the underlying library’s choices. Three readers did become coupled, and `pg` hid the coupling: the runtime marker check read `canonical_version` as a number, computed `select` projections with no codec returned whatever `pg` parsed, and the interval codec read only the ISO 8601 text it writes itself, never the text Postgres prints.
+
+**Resolved.** The runtime driver now passes `serverTextTypes` to `pg` on every `query` path, so every row value arrives as the server's text output and `pg` parses nothing ([`server-text-types.ts`](../../../packages/3-targets/7-drivers/postgres/src/server-text-types.ts), [driver README](../../../packages/3-targets/7-drivers/postgres/README.md#row-parser-policy)). The three readers were fixed to read text. The control-plane driver still lets `pg` parse scalar values; it reads catalog rows without codecs and is the remaining exception to this ADR.
 
 ### Lowering already emits casts for determinism (`::vector`)
 
@@ -181,9 +183,11 @@ The boundary between codecs and drivers is standardized as:
 
 Meaning:
 
-- `string` is the canonical string encoding for the type (as defined by the codec’s policy for that `codecId`).
+- `string` is the canonical string encoding for the type. For a parameter, the codec’s policy for that `codecId` defines it. For a row value, it is the text the database server prints for the type, unchanged by the driver: `t` for a Postgres `bool`, `NaN` for a `float8`, `{a,b}` for an array, the JSON text for `jsonb`. A codec decodes that text and nothing else, so it may not depend on any parsing the driver’s underlying library would do.
 - `Uint8Array` is an opaque **binary blob** when a codec/target chooses a binary representation.
 - `null` is SQL `NULL`.
+
+A row value with no codec, such as a computed projection whose codec the composed stack cannot build, reaches the user as that server text. The driver does not fall back to library parsing for it.
 
 This intentionally excludes driver-library-specific JS types (`Date`, `bigint`, `Buffer`, custom wrappers).
 In Node, `Buffer` is a `Uint8Array`; drivers may accept `Buffer` internally but must expose `Uint8Array` at the boundary.
@@ -224,6 +228,8 @@ This is a behavioral contract, not just a TS type alias. We enforce it via:
   - bound params accept `string | Uint8Array | null` and execute correctly
 - **Optional dev-mode validation:** fail fast if a driver returns a row value outside the canonical set (e.g. a `Date`).
 
+For the Postgres driver, [`driver.server-text.integration.test.ts`](../../../packages/3-targets/7-drivers/postgres/test/driver.server-text.integration.test.ts) is that conformance test. It reads `bool`, `int2`, `int4`, `float8` (including `NaN` and both infinities), `bytea`, `oid`, `interval`, `json` and `jsonb` through the buffered, cursor and named-cursor paths and asserts that every value is the server's text, and that the global `pg` type parsers are unchanged.
+
 ## FAQ (questions a reader is likely to ask)
 
 ### “Why not just escape values and substitute them into SQL?”
@@ -253,7 +259,7 @@ This ADR does not require us to implement type-specific binary encodings for eve
 
 Each Prisma Next driver is allowed to configure its underlying library and/or post-process values so the driver outputs only `string | Uint8Array | null`.
 
-For example, if an underlying library returns timestamps as `Date`, the wrapper would convert them to ISO strings before the codec layer sees them.
+For example, if an underlying library returns timestamps as `Date`, the wrapper would convert them to ISO strings before the codec layer sees them. The Postgres driver takes the simpler route: it configures `pg` with a type parser that returns the server's text for every type OID, so there is nothing to convert back.
 
 ## Worked example: `pg/vector@1`
 

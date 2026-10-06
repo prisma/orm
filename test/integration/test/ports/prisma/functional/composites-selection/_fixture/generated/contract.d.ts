@@ -198,7 +198,7 @@ type ContractBase = Omit<
               readonly favoriteThings: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly name: {
                 readonly nullable: false;
@@ -247,7 +247,7 @@ type ContractBase = Omit<
         readonly favoriteThings: {
           readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-          readonly many: true;
+          readonly many: { readonly elementNullable: false };
         };
         readonly name: {
           readonly nullable: false;

@@ -26,6 +26,10 @@ export interface ControlFamilyDescriptor<
   >,
 > extends FamilyDescriptor<TFamilyId> {
   readonly emission: EmissionSpi;
+  readonly pslDiagnostics?: {
+    readonly describeUnsupportedAttribute?: unknown;
+    readonly describeUnresolvedType?: unknown;
+  };
   create<TTargetId extends string>(stack: ControlStack<TFamilyId, TTargetId>): TFamilyInstance;
 }
 

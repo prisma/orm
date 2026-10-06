@@ -35,9 +35,10 @@ describe('contract.d.ts types of a column typed by a named type', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
             embedding: {
               nullable: true,
+              many: false,
               type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 1536 } },
             },
           },
@@ -102,6 +103,7 @@ describe('contract.d.ts types of a column typed by a named type', () => {
           fields: {
             embedding: {
               nullable: false,
+              many: false,
               type: {
                 kind: 'scalar',
                 codecId: 'pg/vector@1',

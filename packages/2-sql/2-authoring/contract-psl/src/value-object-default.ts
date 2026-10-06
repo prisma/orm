@@ -38,6 +38,7 @@ export interface ValueObjectDefaultInput {
   readonly fieldPath: string;
   readonly value: JsonValue;
   readonly list: boolean;
+  readonly elementNullable: boolean;
   readonly nullable: boolean;
   readonly valueObjectName: string;
   readonly types: ValueObjectTypes;
@@ -91,6 +92,7 @@ export function valueObjectDefaultMismatches(
         return;
       }
       for (const [index, element] of value.entries()) {
+        if (element === null && member.elementNullable) continue;
         checkOne(element, member, `${path}[${index}]`, 'an element of the member is not null');
       }
       return;
@@ -143,6 +145,7 @@ export function valueObjectDefaultMismatches(
       return mismatches;
     }
     for (const [index, element] of input.value.entries()) {
+      if (element === null && input.elementNullable) continue;
       checkObject(element, input.valueObjectName, `${input.fieldPath}[${index}]`);
     }
     return mismatches;

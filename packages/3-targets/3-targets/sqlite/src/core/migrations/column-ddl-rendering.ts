@@ -44,9 +44,7 @@ function columnLike(
     // `column.many` is unset on contract-derived columns (array-ness rides
     // on the `nativeType` `[]` suffix there instead) — `codecRef.many`
     // carries it. Hand-built/introspected columns set `column.many` directly.
-    ...((column.many ?? column.codecRef.many) !== undefined
-      ? { many: column.many ?? column.codecRef.many }
-      : {}),
+    many: (column.many ?? column.codecRef.many) ? { elementNullable: false } : false,
     ...(column.codecRef.typeParams !== undefined
       ? {
           typeParams: blindCast<

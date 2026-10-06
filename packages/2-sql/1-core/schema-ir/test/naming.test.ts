@@ -224,6 +224,41 @@ describe('normalizeSqlBody', () => {
       expect(a).toBe(b);
     });
   });
+
+  describe('bodies with a line comment keep their line breaks', () => {
+    it('a line break after a comment differs from a space after it', () => {
+      expect([normalizeSqlBody('a --c\nb'), normalizeSqlBody('a --c b')]).toEqual([
+        'a --c\nb',
+        'a --c b',
+      ]);
+    });
+
+    it('a one-line body with a comment collapses as before', () => {
+      expect(normalizeSqlBody('  a  =  b   -- comment  ')).toBe('a = b -- comment');
+    });
+
+    it('a multi-line body without a comment collapses as before', () => {
+      expect(normalizeSqlBody('a\r\n=\rb\n')).toBe('a = b');
+    });
+
+    it('treats CRLF and a lone CR as line ends', () => {
+      expect([normalizeSqlBody('a --c\r\nb'), normalizeSqlBody('a --c\rb')]).toEqual([
+        'a --c\nb',
+        'a --c\nb',
+      ]);
+    });
+
+    it('collapses whitespace within each line and drops blank lines', () => {
+      expect(normalizeSqlBody('\n  a  =\tb  -- c  \n\n   \n\t x  y \n')).toBe('a = b -- c\nx y');
+    });
+
+    it('gives the same output on its own output', () => {
+      const bodies = ['a --c\n\n  b', ' a  -- c ', 'a\n b', "x = '--'\r\n  AND y"];
+      expect(bodies.map((body) => normalizeSqlBody(normalizeSqlBody(body)))).toEqual(
+        bodies.map(normalizeSqlBody),
+      );
+    });
+  });
 });
 
 describe('computeCheckContentHash', () => {
@@ -252,6 +287,12 @@ describe('computeCheckContentHash', () => {
   it('materially different expressions hash differently', () => {
     expect(computeCheckContentHash(`"role" IN ('user')`)).not.toBe(
       computeCheckContentHash(`"role" IN ('admin')`),
+    );
+  });
+
+  it('a line break after a line comment changes the hash', () => {
+    expect(computeCheckContentHash('a > 0 --c\nAND b > 0')).not.toBe(
+      computeCheckContentHash('a > 0 --c AND b > 0'),
     );
   });
 });
@@ -406,6 +447,20 @@ describe('computeIndexContentHash', () => {
       const a = computeIndexContentHash({ expression: 'lower(email)', unique: false });
       const b = computeIndexContentHash({ expression: 'upper(email)', unique: false });
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe('line comments', () => {
+    it('a line break after a line comment in the expression changes the hash', () => {
+      expect(
+        computeIndexContentHash({ expression: 'lower(email) --c\n, id', unique: false }),
+      ).not.toBe(computeIndexContentHash({ expression: 'lower(email) --c , id', unique: false }));
+    });
+
+    it('a line break after a line comment in the predicate changes the hash', () => {
+      expect(
+        computeIndexContentHash({ columns: ['email'], unique: false, where: 'a --c\nb' }),
+      ).not.toBe(computeIndexContentHash({ columns: ['email'], unique: false, where: 'a --c b' }));
     });
   });
 

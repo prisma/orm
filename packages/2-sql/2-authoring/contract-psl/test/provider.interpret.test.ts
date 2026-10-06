@@ -1,15 +1,25 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import type { ContractSourceContext } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
-import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
+import {
+  buildSymbolTable,
+  createBinder,
+  createPslDiagnosticCollector,
+  mapPslDiagnostics,
+} from '@internal/psl-parser';
+import {
+  hasPslInterpreter,
+  type PslInterpretCapable,
+  type PslInterpretInput,
+  withSeedDiagnostics,
+} from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { prismaContract } from '../src/exports/provider';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
-import { createSqlBinder } from '../src/sql-attribute-specs';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import { createPostgresTestContext, postgresTarget, testEnumPslBlockDescriptor } from './fixtures';
 
@@ -20,10 +30,29 @@ const baseOptions = {
 
 const SOURCE_ID = './schema.prisma';
 
-function buildInterpretInput(schema: string, filename = SOURCE_ID): PslInterpretInput {
+function buildInterpretInput(
+  schema: string,
+  context: ContractSourceContext,
+  filename = SOURCE_ID,
+): PslInterpretInput & { readonly binderDiagnostics: ReturnType<typeof mapPslDiagnostics> } {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  return { documents: [document], sources, symbolTable };
+  const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
+  return {
+    documents: [document],
+    sources,
+    symbolTable,
+    binder,
+    binderDiagnostics: mapPslDiagnostics(diagnostics, sources),
+  };
+}
+
+function interpretViaSource(
+  source: PslInterpretCapable,
+  input: ReturnType<typeof buildInterpretInput>,
+  context: ContractSourceContext,
+) {
+  return withSeedDiagnostics(source.interpret(input, context), input.binderDiagnostics);
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -75,11 +104,16 @@ model User {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
+    const interpretResult = interpretViaSource(
+      source,
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
     expect(interpretResult.failure.diagnostics).toEqual(loadResult.failure.diagnostics);
+    expect(interpretResult.failure.diagnostics).toHaveLength(1);
     expect(interpretResult.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -114,7 +148,10 @@ model User {
     if (!loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -138,17 +175,18 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createPostgresTestContext();
-    const input = buildInterpretInput(schema);
+    const input = buildInterpretInput(schema, context);
 
-    let result: ReturnType<typeof source.interpret> | undefined;
+    let result: ReturnType<typeof interpretViaSource> | undefined;
     expect(() => {
-      result = source.interpret(input, context);
+      result = interpretViaSource(source, input, context);
     }).not.toThrow();
 
     expect(result).toBeDefined();
     if (result === undefined || result.ok) {
       throw new Error('expected interpret to report diagnostics');
     }
+    expect(result.failure.diagnostics).toHaveLength(1);
     expect(result.failure.diagnostics.map(({ code, sourceId }) => ({ code, sourceId }))).toEqual([
       { code: 'PSL_UNRESOLVED_REFERENCE', sourceId: SOURCE_ID },
     ]);
@@ -160,7 +198,7 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createPostgresTestContext();
-    const input = buildInterpretInput(schema);
+    const input = buildInterpretInput(schema, context);
 
     let result: ReturnType<typeof source.interpret> | undefined;
     expect(() => {
@@ -178,6 +216,7 @@ model Other {
   id String @id @default(cuid(2))
 }
 `,
+      context,
       'memory-schema.prisma',
     );
     const model = input.symbolTable.topLevel.models['User'];
@@ -192,7 +231,7 @@ model Other {
       fieldName: field.name,
       field,
       model,
-      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
+      binder: input.binder,
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -286,8 +325,9 @@ model Profile {
     ];
 
     for (const testCase of cases) {
-      const result = source.interpret(
-        buildInterpretInput(testCase.schema, 'memory-schema.prisma'),
+      const result = interpretViaSource(
+        source,
+        buildInterpretInput(testCase.schema, context, 'memory-schema.prisma'),
         context,
       );
 
@@ -339,7 +379,11 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
+    const interpretResult = interpretViaSource(
+      source,
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 
@@ -364,8 +408,9 @@ it('attributes multi-document semantic failures to the owning file, not the entr
     documents: [entry.document, owned.document],
     sources,
   });
+  const { binder } = createBinder({ symbolTable, sources, context });
   const result = interpretCapableSource('provider.prisma').interpret(
-    { documents: [entry.document], sources, symbolTable },
+    { documents: [entry.document], sources, symbolTable, binder },
     context,
   );
   expect(result.ok).toBe(false);
@@ -421,6 +466,7 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
   };
   const input = buildInterpretInput(
     'enum Role { User }\nmodel User { id Int @id }',
+    customContext,
     'owned.prisma',
   );
   const entry = parse('', 'entry.prisma');

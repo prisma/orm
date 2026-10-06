@@ -168,6 +168,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       symbols: symbolTable,
       model,
       field,
+      typeResolution: undefined,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,

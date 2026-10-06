@@ -34,7 +34,9 @@
                 }
               },
               "str_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -103,7 +105,9 @@
                 }
               },
               "str_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -174,7 +178,9 @@
                 },
                 "str_list": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 },
@@ -240,7 +246,9 @@
                 },
                 "str_list": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -260,7 +268,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d74a90f74ac49c30bc305c83666241c2328c0bcee396f67682d348778381641e"
+    "storageHash": "123f6630cb9195eaf4c3e67b45007952285a0ebd230a74e56a2bbff16e9f5edf"
   },
   "capabilities": {
     "postgres": {

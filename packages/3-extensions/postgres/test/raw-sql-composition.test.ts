@@ -70,6 +70,7 @@ function makeStubContext(): ExecutionContext<Contract> {
     },
     queryOperations: { entries: () => ({}) },
     aggregateDescriptors: countOnlyAggregates,
+    codecDescriptors: { descriptorFor: () => undefined },
     applyMutationDefaults: () => [],
   } as unknown as ExecutionContext<Contract>;
 }

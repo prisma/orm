@@ -16,7 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
-import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
   AddColumnCall,
@@ -156,12 +156,22 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     const calls = [
       new CreateTableCall(
         'user',
-        [col('id', 'INTEGER', { primaryKey: true }), col('email', 'TEXT', { notNull: true })],
+        [
+          col('id', 'INTEGER', { primaryKey: true }),
+          col('email', 'TEXT', { notNull: true }),
+          col('label', 'TEXT', { default: fn(`printf("%s", 'user')`) }),
+        ],
         [primaryKey(['id'])],
       ),
       new AddColumnCall('user', {
         name: 'nickname',
         typeSql: 'TEXT',
+        nullable: true,
+      }),
+      new AddColumnCall('user', {
+        name: 'meta',
+        typeSql: 'TEXT',
+        default: { kind: 'function', expression: `'{"a": 1}'` },
         nullable: true,
       }),
       new CreateIndexCall('user', 'user_email_idx', ['email']),
@@ -175,6 +185,8 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     );
 
     const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(tsSource).toContain('default: fn(`printf("%s", \'user\')`)');
+    expect(tsSource).toContain('default: { kind: "function", expression: `\'{"a": 1}\'` }');
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     const { stdout, stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -263,6 +275,12 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
               codecRef: { codecId: 'sqlite/text@1' },
               nullable: true,
             },
+            {
+              name: 'meta',
+              typeSql: 'TEXT',
+              default: { kind: 'function', expression: `'{"a": 1}'` },
+              nullable: true,
+            },
           ],
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -289,6 +307,10 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     );
 
     const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(tsSource).toContain('default: { kind: "function", expression: `\'{"a": 1}\'` }');
+    expect(tsSource).toContain(
+      "sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'email' AND \"notnull\" = 0`",
+    );
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], { cwd: tmpDir });

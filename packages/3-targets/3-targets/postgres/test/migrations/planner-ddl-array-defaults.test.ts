@@ -10,7 +10,7 @@ function arrayColumn(nativeType: string): StorageColumn {
     nativeType,
     codecId: 'pg/text@1',
     nullable: false,
-    many: true,
+    many: { elementNullable: false },
   } as StorageColumn;
 }
 
@@ -68,14 +68,17 @@ describe('renderDefaultLiteral array columns', () => {
         nativeType: typeName,
         codecId: 'pg/enum@1',
         nullable: true,
-        many: true,
+        many: { elementNullable: false },
         typeParams: { typeName },
       } as StorageColumn;
       const columnTypeSql = buildColumnTypeSql(enumList, new Map(), {}, false);
 
-      expect(renderDefaultLiteral(['asc'], { many: true, nativeType: columnTypeSql })).toBe(
-        `ARRAY['asc']::${cast}`,
-      );
+      expect(
+        renderDefaultLiteral(['asc'], {
+          many: { elementNullable: false },
+          nativeType: columnTypeSql,
+        }),
+      ).toBe(`ARRAY['asc']::${cast}`);
     },
   );
 

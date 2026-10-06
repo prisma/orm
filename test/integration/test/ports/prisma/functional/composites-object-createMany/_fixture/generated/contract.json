@@ -87,7 +87,9 @@
                 }
               },
               "upvotes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",

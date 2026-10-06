@@ -217,7 +217,9 @@
                 }
               },
               "stamps": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -326,7 +328,9 @@
                 }
               },
               "bytes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/binary@1",
@@ -334,7 +338,9 @@
                 }
               },
               "dates": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -342,7 +348,9 @@
                 }
               },
               "decimals": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/decimal128@1",
@@ -350,7 +358,9 @@
                 }
               },
               "doubles": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/double@1",
@@ -358,7 +368,9 @@
                 }
               },
               "flags": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/bool@1",
@@ -366,7 +378,9 @@
                 }
               },
               "ids": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -374,7 +388,9 @@
                 }
               },
               "ints": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int32@1",
@@ -382,7 +398,9 @@
                 }
               },
               "longs": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64@1",
@@ -390,7 +408,9 @@
                 }
               },
               "points": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -398,7 +418,9 @@
                 }
               },
               "words": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -434,7 +456,9 @@
           "Point": {
             "fields": {
               "tags": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64@1",

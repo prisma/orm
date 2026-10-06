@@ -30,8 +30,28 @@ export type ScopeResolution =
   | { readonly kind: 'contributedNamespace'; readonly symbol: ContributedNamespaceSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
 
-export interface Scope {
-  lookup(name: string): ScopeResolution | undefined;
+function* recordNames(...records: readonly Readonly<Record<string, unknown>>[]): Iterable<string> {
+  for (const record of records) yield* Object.keys(record);
+}
+
+export abstract class Scope {
+  constructor(protected readonly parent: Scope | undefined) {}
+
+  abstract lookup(name: string): ScopeResolution | undefined;
+  protected abstract ownNames(): Iterable<string>;
+
+  *entries(): Iterable<readonly [string, ScopeResolution]> {
+    const seen = new Set<string>();
+    for (const name of this.ownNames()) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const resolution = this.lookup(name);
+      if (resolution !== undefined) yield [name, resolution];
+    }
+    for (const entry of this.parent?.entries() ?? []) {
+      if (!seen.has(entry[0])) yield entry;
+    }
+  }
 }
 
 function contributedResolution(member: ContributedMember): ScopeResolution {
@@ -51,10 +71,11 @@ function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolut
   return undefined;
 }
 
-class ContributedScope implements Scope {
+class ContributedScope extends Scope {
   readonly #registry: ContributedTypeScope;
 
   constructor(registry: ContributedTypeScope) {
+    super(undefined);
     this.#registry = registry;
   }
 
@@ -62,15 +83,18 @@ class ContributedScope implements Scope {
     const member = this.#registry.lookup(name);
     return member === undefined ? undefined : contributedResolution(member);
   }
+
+  protected *ownNames(): Iterable<string> {
+    for (const [name] of this.#registry.entries()) yield name;
+  }
 }
 
-class DocumentScope implements Scope {
+class DocumentScope extends Scope {
   readonly #records: TopLevelRecords;
-  readonly #parent: Scope | undefined;
 
   constructor(records: TopLevelRecords, parent: Scope | undefined) {
+    super(parent);
     this.#records = records;
-    this.#parent = parent;
   }
 
   lookup(name: string): ScopeResolution | undefined {
@@ -85,21 +109,36 @@ class DocumentScope implements Scope {
     if (block !== undefined) return { kind: 'block', symbol: block };
     const namespace = records.namespaces[name];
     if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
-    return this.#parent?.lookup(name);
+    return this.parent?.lookup(name);
+  }
+
+  protected ownNames(): Iterable<string> {
+    const records = this.#records;
+    return recordNames(
+      records.models,
+      records.compositeTypes,
+      records.namedTypes,
+      records.blocks,
+      records.namespaces,
+    );
   }
 }
 
-class NamespaceScope implements Scope {
+class NamespaceScope extends Scope {
   readonly #namespace: NamespaceSymbol;
-  readonly #parent: Scope;
 
-  constructor(namespace: NamespaceSymbol, parent: Scope) {
+  constructor(namespace: NamespaceSymbol, parent: Scope | undefined) {
+    super(parent);
     this.#namespace = namespace;
-    this.#parent = parent;
   }
 
   lookup(name: string): ScopeResolution | undefined {
-    return namespaceMember(this.#namespace, name) ?? this.#parent.lookup(name);
+    return namespaceMember(this.#namespace, name) ?? this.parent?.lookup(name);
+  }
+
+  protected ownNames(): Iterable<string> {
+    const namespace = this.#namespace;
+    return recordNames(namespace.models, namespace.compositeTypes, namespace.blocks);
   }
 }
 
@@ -111,6 +150,10 @@ export function documentScope(records: TopLevelRecords, parent: Scope | undefine
   return new DocumentScope(records, parent);
 }
 
+export function namedTypeBaseScope(records: TopLevelRecords, parent: Scope | undefined): Scope {
+  return new DocumentScope({ ...records, namedTypes: {} }, parent);
+}
+
 export function namespaceScope(namespace: NamespaceSymbol, parent: Scope): Scope {
   return new NamespaceScope(namespace, parent);
 }
@@ -119,6 +162,18 @@ export function isNamespaceLike(
   resolution: ScopeResolution,
 ): resolution is Extract<ScopeResolution, { kind: 'namespace' | 'contributedNamespace' }> {
   return resolution.kind === 'namespace' || resolution.kind === 'contributedNamespace';
+}
+
+export function* memberEntries(
+  qualifier: Extract<ScopeResolution, { kind: 'namespace' | 'contributedNamespace' }>,
+): Iterable<readonly [string, ScopeResolution]> {
+  if (qualifier.kind === 'contributedNamespace') {
+    for (const [name, member] of qualifier.symbol.members) {
+      yield [name, contributedResolution(member)];
+    }
+    return;
+  }
+  yield* new NamespaceScope(qualifier.symbol, undefined).entries();
 }
 
 export function lookupMember(

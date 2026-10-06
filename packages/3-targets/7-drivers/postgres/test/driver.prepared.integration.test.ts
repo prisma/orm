@@ -61,26 +61,26 @@ describe('@internal/driver-postgres prepared statements', () => {
       expect(await preparedNames(driver)).toEqual([]);
 
       const r1 = await consume(
-        driver.query<{ id: number; label: string }>({
+        driver.query<{ id: string; label: string }>({
           sql: 'select id, label from t where label = $1',
           params: ['a'],
           preparedStatementHandle: slot,
         }),
       );
-      expect(r1).toEqual([{ id: 1, label: 'a' }]);
+      expect(r1).toEqual([{ id: '1', label: 'a' }]);
 
       const handleName = snapshot() as string;
       expect(handleName).toMatch(/^pn_\d+$/);
       expect(await preparedNames(driver)).toEqual([handleName]);
 
       const r2 = await consume(
-        driver.query<{ id: number; label: string }>({
+        driver.query<{ id: string; label: string }>({
           sql: 'select id, label from t where label = $1',
           params: ['b'],
           preparedStatementHandle: slot,
         }),
       );
-      expect(r2).toEqual([{ id: 2, label: 'b' }]);
+      expect(r2).toEqual([{ id: '2', label: 'b' }]);
 
       expect(await preparedNames(driver)).toEqual([handleName]);
     },
@@ -240,13 +240,13 @@ describe('@internal/driver-postgres prepared statements', () => {
       const sql = 'select id, label from t5 where label = $1';
 
       const r1 = await consume(tx.query({ sql, params: ['a'], preparedStatementHandle: slot }));
-      expect(r1).toEqual([{ id: 1, label: 'a' }]);
+      expect(r1).toEqual([{ id: '1', label: 'a' }]);
 
       const handle = snapshot() as string;
       expect(handle).toMatch(/^pn_\d+$/);
 
       const r2 = await consume(tx.query({ sql, params: ['b'], preparedStatementHandle: slot }));
-      expect(r2).toEqual([{ id: 2, label: 'b' }]);
+      expect(r2).toEqual([{ id: '2', label: 'b' }]);
       expect(snapshot()).toBe(handle);
 
       await tx.commit();
@@ -256,7 +256,7 @@ describe('@internal/driver-postgres prepared statements', () => {
       const r3 = await consume(
         connection.query({ sql, params: ['c'], preparedStatementHandle: slot }),
       );
-      expect(r3).toEqual([{ id: 3, label: 'c' }]);
+      expect(r3).toEqual([{ id: '3', label: 'c' }]);
       expect(snapshot()).toBe(handle);
 
       await connection.release();
@@ -283,12 +283,12 @@ describe('@internal/driver-postgres prepared statements', () => {
       const sql = 'select id, label from t7 where label = $1';
 
       const r1 = await consume(driver.query({ sql, params: ['a'], preparedStatementHandle: slot }));
-      expect(r1).toEqual([{ id: 1, label: 'a' }]);
+      expect(r1).toEqual([{ id: '1', label: 'a' }]);
       const handle = snapshot() as string;
       expect(handle).toMatch(/^pn_\d+$/);
 
       const r2 = await consume(driver.query({ sql, params: ['b'], preparedStatementHandle: slot }));
-      expect(r2).toEqual([{ id: 2, label: 'b' }]);
+      expect(r2).toEqual([{ id: '2', label: 'b' }]);
 
       expect(await preparedNames(driver)).toEqual([handle]);
     },

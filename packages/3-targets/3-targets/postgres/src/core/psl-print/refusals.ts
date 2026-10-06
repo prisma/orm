@@ -226,10 +226,10 @@ export function refuseFieldColumnMismatch(input: {
       { coordinate },
     );
   }
-  const fieldListInColumn = field.type.kind === 'scalar' && field.many === true;
-  if (fieldListInColumn !== (column.many === true)) {
+  const fieldListInColumn = field.type.kind === 'scalar' && !!field.many;
+  if (fieldListInColumn !== (column.many !== false)) {
     throw unsupported(
-      `field ${coordinate} is ${field.many === true ? 'a list' : 'not a list'} but its column is ${column.many === true ? 'a list' : 'not a list'}, which cannot be written in Prisma 8 PSL.`,
+      `field ${coordinate} is ${field.many ? 'a list' : 'not a list'} but its column is ${column.many !== false ? 'a list' : 'not a list'}, which cannot be written in Prisma 8 PSL.`,
       'PSL writes `[]` once: the PSL source stores a list of scalars in a list column, and a list of value objects in one JSON column.',
       fix,
       { coordinate },

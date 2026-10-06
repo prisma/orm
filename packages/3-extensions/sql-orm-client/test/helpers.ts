@@ -249,11 +249,11 @@ export function buildMixedPolyContract(): TestContract {
   const domainModels = unboundDomainModels(raw);
   domainModels['Task'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      title: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-      type: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-      projectId: { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      parentId: { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      title: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      type: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      projectId: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      parentId: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
     },
     relations: {
       subtasks: {
@@ -279,8 +279,8 @@ export function buildMixedPolyContract(): TestContract {
 
   domainModels['Project'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       tasks: {
@@ -298,8 +298,8 @@ export function buildMixedPolyContract(): TestContract {
 
   domainModels['Bug'] = {
     fields: {
-      severity: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-      assigneeId: { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      severity: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      assigneeId: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
     },
     relations: {
       assignee: {
@@ -319,8 +319,8 @@ export function buildMixedPolyContract(): TestContract {
 
   domainModels['Feature'] = {
     fields: {
-      priority: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      assigneeId: { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      priority: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      assigneeId: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
     },
     relations: {
       assignee: {
@@ -340,8 +340,8 @@ export function buildMixedPolyContract(): TestContract {
 
   domainModels['Assignee'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {},
     storage: {
@@ -353,13 +353,13 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.tasks = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      type: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      severity: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
-      project_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
-      parent_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
-      assignee_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      title: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      type: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      severity: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      project_id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      parent_id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      assignee_id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -369,8 +369,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.projects_tbl = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -380,9 +380,9 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.features = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      priority: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      assignee_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      priority: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      assignee_id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -392,8 +392,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.assignees = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -421,6 +421,7 @@ export function buildStiPolyContract(): TestContract {
 
   const userModel = domainModels['User']!;
   userModel.fields['kind'] = {
+    many: false,
     nullable: false,
     type: { kind: 'scalar', codecId: 'pg/text@1' },
   };
@@ -428,6 +429,7 @@ export function buildStiPolyContract(): TestContract {
     column: 'kind',
   };
   userModel.fields['accountId'] = {
+    many: false,
     nullable: true,
     type: { kind: 'scalar', codecId: 'pg/int4@1' },
   };
@@ -442,8 +444,8 @@ export function buildStiPolyContract(): TestContract {
 
   domainModels['Account'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       members: {
@@ -460,14 +462,18 @@ export function buildStiPolyContract(): TestContract {
   };
 
   domainModels['Admin'] = {
-    fields: { role: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+    fields: {
+      role: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    },
     relations: {},
     storage: { namespaceId: 'public', table: 'users', fields: { role: { column: 'role' } } },
     base: { model: 'User', namespace: 'public' },
   };
 
   domainModels['Regular'] = {
-    fields: { plan: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+    fields: {
+      plan: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    },
     relations: {},
     storage: { namespaceId: 'public', table: 'users', fields: { plan: { column: 'plan' } } },
     base: { model: 'User', namespace: 'public' },
@@ -481,21 +487,25 @@ export function buildStiPolyContract(): TestContract {
   ).find((ns) => ns.entries.table['users'])?.entries.table['users'];
   if (!usersStorageTable) throw new Error('users table not found in any storage namespace');
   usersStorageTable.columns['kind'] = {
+    many: false,
     codecId: 'pg/text@1',
     nativeType: 'text',
     nullable: false,
   };
   usersStorageTable.columns['role'] = {
+    many: false,
     codecId: 'pg/text@1',
     nativeType: 'text',
     nullable: true,
   };
   usersStorageTable.columns['plan'] = {
+    many: false,
     codecId: 'pg/text@1',
     nativeType: 'text',
     nullable: true,
   };
   usersStorageTable.columns['account_id'] = {
+    many: false,
     codecId: 'pg/int4@1',
     nativeType: 'int4',
     nullable: true,
@@ -503,8 +513,8 @@ export function buildStiPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.accounts = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -516,6 +526,7 @@ export function buildStiPolyContract(): TestContract {
 }
 
 type RawColumn = {
+  readonly many: false;
   nativeType: string;
   codecId: string;
   nullable: boolean;

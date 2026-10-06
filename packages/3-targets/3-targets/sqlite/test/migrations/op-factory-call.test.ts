@@ -218,6 +218,50 @@ describe('AddColumnCall', () => {
     const call = new AddColumnCall('user', colSpec({ name: 'bio' }));
     await expect(async () => call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
   });
+
+  it('renders a default holding both quote kinds as a template literal', () => {
+    const call = new AddColumnCall(
+      'user',
+      colSpec({
+        name: 'meta',
+        typeSql: 'TEXT',
+        default: { kind: 'function', expression: `'{"a": 1}'` },
+        nullable: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.addColumn({ table: "user", column: {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  nullable: false,',
+        '} })',
+      ].join('\n'),
+    );
+  });
+
+  it('renders a literal default as its JSON value', () => {
+    const call = new AddColumnCall(
+      'user',
+      colSpec({
+        name: 'meta',
+        typeSql: 'TEXT',
+        default: { kind: 'literal', value: { a: 'it\'s "x"' } },
+        nullable: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.addColumn({ table: "user", column: {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "literal", value: { a: "it\'s \\"x\\"" } },',
+        '  nullable: false,',
+        '} })',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('a column spec an earlier version wrote', () => {
@@ -389,7 +433,7 @@ describe('RecreateTableCall', () => {
         column.default?.kind === 'literal'
           ? `DEFAULT '${String(column.default.value)}' /* ${table} */`
           : column.default?.kind === 'function'
-            ? `DEFAULT (${column.default.expression})`
+            ? `DEFAULT (${column.default.expression.text})`
             : '',
     };
     const call = new RecreateTableCall({
@@ -472,6 +516,79 @@ describe('RecreateTableCall', () => {
       operationClass: 'widening',
     });
     await expect(call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
+  });
+
+  it('renders a column default and a postcheck holding both quote kinds as template literals', () => {
+    const call = new RecreateTableCall({
+      tableName: 'user',
+      contractTable: tableSpec(
+        [
+          colSpec({
+            name: 'id',
+            typeSql: 'INTEGER',
+            nullable: false,
+            inlineAutoincrementPrimaryKey: true,
+          }),
+          colSpec({
+            name: 'meta',
+            typeSql: 'TEXT',
+            default: { kind: 'function', expression: `'{"a": 1}'` },
+            codecRef: { codecId: 'sqlite/text@1' },
+            nullable: false,
+          }),
+        ],
+        { primaryKey: { columns: ['id'] } },
+      ),
+      schemaColumnNames: ['id', 'meta'],
+      indexes: [],
+      summary: 'Recreates table user',
+      postchecks: [
+        {
+          description: 'verify "meta" default on "user"',
+          sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE "dflt_value" = '1'`,
+        },
+        { description: 'verify "meta" default', columnDefault: 'meta' },
+      ],
+      operationClass: 'widening',
+    });
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.recreateTable({',
+        '  tableName: "user",',
+        '  contractTable: {',
+        '  columns: [',
+        '  {',
+        '  name: "id",',
+        '  typeSql: "INTEGER",',
+        '  nullable: false,',
+        '  inlineAutoincrementPrimaryKey: true,',
+        '},',
+        '  {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  codecRef: { codecId: "sqlite/text@1" },',
+        '  nullable: false,',
+        '},',
+        '],',
+        '  primaryKey: { columns: ["id"] },',
+        '  uniques: [],',
+        '  foreignKeys: [],',
+        '},',
+        '  schemaColumnNames: ["id", "meta"],',
+        '  indexes: [],',
+        '  summary: "Recreates table user",',
+        '  postchecks: [',
+        '  {',
+        '  description: "verify \\"meta\\" default on \\"user\\"",',
+        "  sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE \"dflt_value\" = '1'`,",
+        '},',
+        '  { description: "verify \\"meta\\" default", columnDefault: "meta" },',
+        '],',
+        '  operationClass: "widening",',
+        '})',
+      ].join('\n'),
+    );
   });
 });
 

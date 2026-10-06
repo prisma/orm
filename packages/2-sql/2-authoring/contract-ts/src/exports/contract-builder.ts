@@ -2,6 +2,7 @@ export type {
   ComposedAuthoringHelpers,
   ContractInput,
   ContractModelBuilder,
+  ManyOptions,
   MergeEnums,
   ModelLike,
   ScalarFieldBuilder,

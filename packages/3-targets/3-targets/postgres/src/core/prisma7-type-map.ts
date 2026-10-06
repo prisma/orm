@@ -1,3 +1,5 @@
+import { EXISTING_COLUMN_DATE_TIME_TYPES } from './psl-build/existing-column-date-time-types';
+
 /**
  * What Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*`
  * native type, expressed as the Prisma 8 authoring type constructor that
@@ -15,7 +17,7 @@ export const prisma7PostgresTypeMap = {
     BigInt: { constructorName: 'BigInt', args: [] },
     Float: { constructorName: 'Float', args: [] },
     Decimal: { constructorName: 'Numeric', args: ['65', '30'] },
-    DateTime: { constructorName: 'Timestamp', args: ['3'] },
+    DateTime: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.timestamp, args: ['3'] },
     Json: { constructorName: 'Jsonb', args: [] },
     Bytes: { constructorName: 'Bytes', args: [] },
   },
@@ -32,11 +34,11 @@ export const prisma7PostgresTypeMap = {
     Real: { constructorName: 'Real', args: [] },
     DoublePrecision: { constructorName: 'Float', args: [] },
     Decimal: { constructorName: 'Numeric', args: [] },
-    Timestamp: { constructorName: 'Timestamp', args: [] },
-    Timestamptz: { constructorName: 'Timestamptz', args: [] },
-    Date: { constructorName: 'Date', args: [] },
-    Time: { constructorName: 'Time', args: [] },
-    Timetz: { constructorName: 'Timetz', args: [] },
+    Timestamp: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.timestamp, args: [] },
+    Timestamptz: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.timestamptz, args: [] },
+    Date: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.date, args: [] },
+    Time: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.time, args: [] },
+    Timetz: { constructorName: EXISTING_COLUMN_DATE_TIME_TYPES.timetz, args: [] },
     Json: { constructorName: 'Json', args: [] },
     JsonB: { constructorName: 'Jsonb', args: [] },
     ByteA: { constructorName: 'Bytes', args: [] },

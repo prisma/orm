@@ -118,18 +118,21 @@ function buildAppContractPojo(opts: { readonly withLength: boolean }): Contract<
     readonly codecId: string;
     readonly nativeType: string;
     readonly nullable: boolean;
+    readonly many: false;
     readonly typeParams?: Record<string, unknown>;
   } = opts.withLength
     ? {
         codecId: VECTOR_CODEC_ID,
         nativeType: PGVECTOR_NATIVE_TYPE,
         nullable: false,
+        many: false,
         typeParams: { length: VECTOR_LENGTH },
       }
     : {
         codecId: VECTOR_CODEC_ID,
         nativeType: PGVECTOR_NATIVE_TYPE,
         nullable: false,
+        many: false,
       };
 
   return {
@@ -146,7 +149,7 @@ function buildAppContractPojo(opts: { readonly withLength: boolean }): Contract<
             table: {
               [APP_TABLE]: {
                 columns: {
-                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
                   [APP_FIELD]: embeddingColumn,
                 },
                 primaryKey: { columns: ['id'] },

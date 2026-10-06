@@ -10,6 +10,7 @@ describe('SQL contract factories', () => {
         nativeType: 'int4',
         codecId: 'pg/int4@1',
         nullable: false,
+        many: false,
       });
     });
 
@@ -19,6 +20,7 @@ describe('SQL contract factories', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
+        many: false,
       });
     });
 
@@ -28,6 +30,7 @@ describe('SQL contract factories', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: true,
+        many: false,
       });
     });
   });
@@ -194,8 +197,8 @@ describe('SQL contract factories', () => {
         email: col('text', 'pg/text@1'),
       });
       expect(userTable.columns).toEqual({
-        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-        email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false, many: false },
+        email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: false },
       });
       expect(userTable.uniques).toEqual([]);
       expect(userTable.indexes).toEqual([]);
@@ -297,8 +300,12 @@ describe('SQL contract factories', () => {
           },
         },
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
-          email: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+          email: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'core/unknown@1' },
+          },
         },
         relations: {},
       });
@@ -311,9 +318,13 @@ describe('SQL contract factories', () => {
         email: { column: 'email' },
       });
       expect(userModel.fields).toEqual({
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-        name: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        email: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+        id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+        name: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        email: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'core/unknown@1' },
+        },
       });
     });
 
@@ -330,7 +341,7 @@ describe('SQL contract factories', () => {
       expect(userModel.storage.table).toBe('user');
       expect(userModel.storage.fields).toEqual({ id: { column: 'id' } });
       expect(userModel.fields).toEqual({
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+        id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
       });
       expect(userModel.relations).toEqual({
         posts: { kind: 'oneToMany', model: 'Post', foreignKey: 'userId' },

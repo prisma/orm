@@ -1,9 +1,4 @@
 import type {
-  AuthoringContributions,
-  AuthoringTypeConstructorDescriptor,
-} from '@internal/framework-components/authoring';
-import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type {
   ArgType,
   AttributeSpec,
   AttributeSpecContext,
@@ -17,14 +12,12 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
-  PslDiagnostic,
   ResolvedAttribute,
   SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
   bool,
-  createBinder,
   diagnosticSource,
   entityRef,
   fieldAttribute,
@@ -45,26 +38,6 @@ import {
   str,
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, PslSources } from '@internal/psl-parser/syntax';
-
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
 
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
@@ -113,7 +86,9 @@ function unloweredAttributeHint(attribute: ResolvedAttribute): string | undefine
   return UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
 }
 
-function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsupportedAttribute {
+export function describeUnsupportedMongoAttribute(
+  sources: PslSources,
+): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     if (level === 'model') {
       return {
@@ -131,28 +106,6 @@ function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsuppo
       ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
     };
   };
-}
-
-export function createMongoBinder(input: {
-  readonly symbolTable: SymbolTable;
-  readonly sources: PslSources;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly authoringContributions?: AuthoringContributions | undefined;
-}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
-  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
-  for (const [name, codecId] of input.scalarTypeCodecIds) {
-    scalars[name] = { kind: 'typeConstructor', output: { codecId } };
-  }
-  return createBinder({
-    sources: input.sources,
-    symbolTable: input.symbolTable,
-    typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
-    attributeSpecs: mongoAttributeSpecs,
-    controlMutationDefaults: input.controlMutationDefaults,
-    pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
-    describeUnsupportedAttribute: describeUnsupportedMongoAttribute(input.sources),
-  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse

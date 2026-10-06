@@ -224,11 +224,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly peak: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -242,16 +244,19 @@ type ContractBase = Omit<
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly meter_id: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly reading: {
                   readonly nativeType: 'integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

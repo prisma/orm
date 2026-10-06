@@ -78,3 +78,11 @@ describe('the "now" generator for each codec', () => {
     ).toEqual([]);
   });
 });
+
+describe('the timestampNow value a text timestamp codec is paired with', () => {
+  it.each(STRING_TIMESTAMP_CODEC_IDS)('%s encodes it as text', async (codecId) => {
+    const value = generate[postgresNowGeneratorIdFor(codecId) ?? '']?.();
+    expect(value).toBeInstanceOf(Date);
+    expect(typeof (await codecFor(codecId)?.encode(value, {}))).toBe('string');
+  });
+});

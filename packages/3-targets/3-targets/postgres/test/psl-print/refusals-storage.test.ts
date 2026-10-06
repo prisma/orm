@@ -279,6 +279,7 @@ describe('value objects', () => {
   it('refuses a value-object member whose type is a union', () => {
     expect(
       withAddress({
+        many: false,
         nullable: false,
         type: { kind: 'union', members: [{ kind: 'scalar', codecId: 'pg/text@1' }] },
       }),
@@ -293,7 +294,11 @@ describe('value objects', () => {
 
   it('refuses a value-object member whose codec no Postgres codec in the stack names a native type for', () => {
     expect(
-      withAddress({ nullable: false, type: { kind: 'scalar', codecId: 'pgvector/vector@1' } }),
+      withAddress({
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'pgvector/vector@1' },
+      }),
     ).toThrow(refusal({ coordinate: '"public".Address.street', codecId: 'pgvector/vector@1' }));
   });
 
@@ -311,6 +316,7 @@ describe('value objects', () => {
   it('reports the codec error, not a missing-parameters refusal, for a value-object member whose type parameters its codec rejects', () => {
     expect(
       withAddress({
+        many: false,
         nullable: false,
         type: { kind: 'scalar', codecId: 'pg/text@1', typeParams: { length: 2 } },
       }),
@@ -327,8 +333,8 @@ describe('value objects', () => {
       withAddress({
         ...TEXT_FIELD,
         valueSet: {
-          plane: 'storage',
-          entityKind: 'valueSet',
+          plane: 'domain',
+          entityKind: 'enum',
           namespaceId: 'public',
           entityName: 'Label',
         },

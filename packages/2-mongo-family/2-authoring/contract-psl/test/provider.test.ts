@@ -15,6 +15,10 @@ import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
+import {
+  describeUnsupportedMongoAttribute,
+  mongoAttributeSpecs,
+} from '../src/mongo-attribute-specs';
 
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
@@ -83,8 +87,9 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
-      attributeSpecs: { model: {}, field: {} },
+      attributeSpecs: mongoAttributeSpecs,
     },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),

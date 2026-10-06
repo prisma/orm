@@ -4,11 +4,18 @@
  * operations lower to, from the resolved storage column, so the two surfaces
  * produce the same index for the same model.
  */
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
@@ -67,27 +74,50 @@ model Message {
 // a composed stack actually gets.
 const assembled = assembleAuthoringContributions([postgresTargetControl]);
 
-function pslIndexes() {
-  const { document, sources } = parse(PSL, 'full-text-index.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const result = interpretPslDocumentToSqlContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    capabilities: {},
-    target: postgresPack,
-    dataTypeLookup: postgresDataTypeLookup,
-    scalarColumnDescriptors: new Map([
-      ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-      ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+const scalarColumnDescriptors = new Map([
+  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+]);
+
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...scalarColumnDescriptors].map(([name, output]) => [
+      name,
+      { kind: 'typeConstructor' as const, output },
     ]),
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
+  );
+
+function pslIndexes() {
+  const bound = bindPslSchema(PSL, {
+    sourceId: 'full-text-index.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      dataTypeLookup: postgresDataTypeLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      resolvedInputs: [],
+      capabilities: {},
+    },
   });
+  const result = withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresPack,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
   expect(result.ok).toBe(true);
   if (!result.ok) return [];
   return indexesOfPublicMessage(result.value.storage.namespaces['public']);
