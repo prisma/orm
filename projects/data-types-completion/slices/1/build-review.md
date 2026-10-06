@@ -30,6 +30,7 @@ Reviewer-maintained. Contract: `projects/data-types-completion/design.md` sectio
 | review fixes 3 | 1 (`c3f36b3369..e5641a42ce`, after the merge of `main`) | ANOTHER ROUND NEEDED: 1 low |
 | review fixes 3 | 2 (`a8e36d4744`) | SATISFIED: S1-rf3-R1-1 closed, no new finding |
 | review fixes 4 | 1 (`7835641a20..a5550c2793`, merge of `main` first) | ANOTHER ROUND NEEDED: 2 must-fix, 2 low |
+| review fixes 4 | 2 (`336baecdf3..946d0bbe50`) | SATISFIED: S1-rf4-R1-1 to S1-rf4-R1-4 closed, no new finding |
 
 ## Findings log
 
@@ -288,6 +289,15 @@ All 19 items of `wip/briefs/review-fixes-1.md` are built as written. Code review
 - Where: `docs/architecture docs/adrs/ADR 241 - Scalar types use the authoring type-constructor channel.md` line 79.
 - What is wrong: The rewritten bullet says a SQL target "defines its PSL-only constructors, the native storage names and codec bindings". A constructor names only a codec; line 47 of the same ADR says the type's name comes from the data type.
 - Change: "It defines its PSL-only constructors, which bind PSL type names to codecs, and its adapter contributes them."
+
+### Review fixes 4 round 2 status of the round 1 findings
+
+- S1-rf4-R1-1: closed by `336baecdf3`. The entry `mongo-derive-json-schema-takes-lookups` gives `main`'s two signatures as "before", which match `bot/main`, and the new ones as "after". It says where `MongoTypeLookups`, `createDataTypeLookup` and `mongoDataTypes` come from. Its patterns match the Mongo extension's call and not an import line or a longer name. They also match a comment that names the function before a parenthesis, which is harmless because a match only points an agent at a file. No other export whose signature changed against `main` lacks an entry: `postgresPslTypeConstructors` and `sqlitePslTypeConstructors` were not exported on `main`, and `DataTypeLookup` equals `main`'s again.
+- S1-rf4-R1-2: closed by `f56d23e313`. The five `describe` names keep only their property, and the scenario A sentence loses its ids. A sweep of every line the slice adds to code, tests, docs and upgrade instructions finds no design section, rule number, slice, `projects/` path or AC, TC, FR or task id.
+- S1-rf4-R1-3: closed by `cff59a1415`. The five functions require the codec lookup, `codecForDefault` returns a `Codec`, and `encodeDefaultValue` takes one. The `undefined` branch left in `encodeViaCodec` serves enum members whose codec the lookup lacks, which is `main`'s behaviour and not a missing lookup. The implementer left two optional lookups, and both are right. `DefaultMappingOptions.dataTypeLookup` is `main`'s option, which slice 1 only renamed. It belongs to the `contract infer` printer, which slice 3 rewrites, and without it the printer writes no literal instead of skipping a check. The facades' `codecLookup` and `dataTypeLookup` are overrides that fall back to the lookups assembled from the target and the extensions, as design 4 and the entry `define-contract-wrapper-builds-data-type-lookup` say.
+- S1-rf4-R1-4: closed by `946d0bbe50`, with the wording asked for.
+
+Every commit carries both sign-offs and no AI attribution. Checks at `946d0bbe50`, logs under `wip/rv/r2/`: typecheck passes in contract-ts and sql-contract. `sql-data-type.declare.test.ts` passes (38). The contract-ts suite, run alone, passes (569). `lint:deps` finds no violation, and `lint:docs` and `check:upgrade-coverage --mode pr --prev bot/main` exit 0. The golden planner test passes (694), and the scenario A integration test passes (6).
 
 ## Round notes
 
