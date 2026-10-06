@@ -299,7 +299,7 @@ describe('integration/update', () => {
             await users.where({ id: 1 }).updateAndCount({ name: 'Updated' });
             await expect(
               users.createAndCount([{ id: 1, name: 'Duplicate', email: 'b@example.com' }]),
-            ).rejects.toThrow();
+            ).rejects.toThrow(/duplicate key value violates unique constraint/);
           });
 
           const rows = await runtime.query('select name from users where id = 1');
@@ -317,7 +317,7 @@ describe('integration/update', () => {
   );
 
   it(
-    'a row stream stopped early inside a transaction does not stop the commit reporting committed',
+    'the runtime does not count a row stream the caller stopped inside a transaction as a failed query, so the commit reports committed',
     async () => {
       const stages: string[] = [];
       await withCollectionRuntime(
