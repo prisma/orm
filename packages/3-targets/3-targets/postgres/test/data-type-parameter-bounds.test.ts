@@ -2,7 +2,7 @@ import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
 
-/** Design 2.4: each data type parameter's bound, checked at its edges on every codec that takes it. */
+/** Each data type parameter's bound, checked at its edges on every codec that takes it. */
 const BOUNDS: ReadonlyArray<
   readonly [
     string,

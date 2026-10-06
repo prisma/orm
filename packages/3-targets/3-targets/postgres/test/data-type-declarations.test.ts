@@ -20,7 +20,6 @@ interface ExpectedDeclaration {
 
 const ownName = (name: string): ExpectedDeclaration => ({ texts: [both(name)] });
 
-/** Design section 2.6, Postgres target. */
 const EXPECTED: Readonly<Record<string, ExpectedDeclaration>> = {
   'pg/text': ownName('text'),
   'pg/int2': { texts: [written('int2'), catalog('smallint')] },
@@ -121,12 +120,12 @@ function declarationOf(type: DataType): ExpectedDeclaration {
 }
 
 describe('the Postgres data type declarations', () => {
-  it('registers exactly the data types design 2.6 declares', () => {
+  it('registers exactly these data types', () => {
     expect(registered.map((type) => type.id).sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
   it.each(registered.map((type) => [type.id, type] as const))(
-    '%s is declared as design 2.6 says',
+    '%s declares its texts and the kind it claims',
     (id, type) => {
       expect(EXPECTED).toHaveProperty([id]);
       expect(declarationOf(type)).toEqual(EXPECTED[id]);

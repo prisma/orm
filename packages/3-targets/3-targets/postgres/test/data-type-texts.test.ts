@@ -58,8 +58,9 @@ function sqlTypeOf(type: DataType): SqlDataType {
 }
 
 /**
- * Inventory `data-types.md` section 1.3: what a migration writes for each parameter object today,
- * what the database reports for the column it creates, and the parameters that report reads as.
+ * What a migration writes for each parameter object, the same text it wrote before data types
+ * declared their texts; what the database reports for the column it creates; and the parameters
+ * that report reads as.
  */
 const ROUND_TRIPS: ReadonlyArray<
   readonly [DataType, SqlTypeParams, string, string, SqlTypeParams]
@@ -131,8 +132,8 @@ const cases = ROUND_TRIPS.map(
     [type.id, JSON.stringify(params), type, params, writtenText, reportedText, readsAs] as const,
 );
 
-describe('Postgres data type texts, per inventory section 1.3', () => {
-  it.each(cases)('%s %s is written as today', (_id, _p, type, params, writtenText) => {
+describe('Postgres data type texts', () => {
+  it.each(cases)('%s %s keeps its written text', (_id, _p, type, params, writtenText) => {
     expect(renderSqlTypeName(sqlTypeOf(type), params)).toBe(writtenText);
   });
 
@@ -237,7 +238,7 @@ describe('sqlBaseName', () => {
   });
 });
 
-/** Every claiming text of design 2.6, with a value for each placeholder and what it reads as. */
+/** Every claiming text of the Postgres data types, with a value for each placeholder and what it reads as. */
 const CLAIMING_TEXTS: ReadonlyArray<readonly [string, string, SqlTypeParams]> = [
   ['text', 'pg/text', {}],
   ['smallint', 'pg/int2', {}],

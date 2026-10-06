@@ -30,11 +30,11 @@ function geometryType(): SqlDataType {
 }
 
 describe('the postgis data type declaration', () => {
-  it('registers exactly the data type design 2.6 declares', () => {
+  it('registers exactly this data type', () => {
     expect(postgisPackMeta.dataTypes.map((type) => type.id)).toEqual(['postgis/geometry']);
   });
 
-  it('is declared as design 2.6 says', () => {
+  it('declares its texts and claims no kind', () => {
     expect(geometryType().sql.texts).toEqual([
       { text: 'geometry', written: true, catalog: true },
       {

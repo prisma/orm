@@ -17,7 +17,7 @@ import { sqliteTargetDescriptorMetaRuntime } from '../src/core/descriptor-meta-r
 
 const written = (text: string): readonly SqlTypeText[] => [{ text, written: true }];
 
-/** Design section 2.6, SQLite target in slice 1: every text is written only, so nothing claims. */
+/** Every SQLite text is written only, so no SQLite data type claims a reported type. */
 const EXPECTED: Readonly<Record<string, readonly SqlTypeText[]>> = {
   'sqlite/text': written('text'),
   'sqlite/json': written('text'),
@@ -41,12 +41,12 @@ function sqlTypeOf(id: string): SqlDataType {
 }
 
 describe('the SQLite data type declarations', () => {
-  it('registers exactly the data types design 2.6 declares', () => {
+  it('registers exactly these data types', () => {
     expect(registered.map((type) => type.id).sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
   it.each(registered.map((type) => [type.id] as const))(
-    '%s is declared as design 2.6 says',
+    '%s declares its written texts and claims nothing',
     (id) => {
       expect(EXPECTED).toHaveProperty([id]);
       const { sql } = sqlTypeOf(id);

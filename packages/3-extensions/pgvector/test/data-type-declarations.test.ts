@@ -26,11 +26,11 @@ function vectorType(): SqlDataType {
 }
 
 describe('the pgvector data type declaration', () => {
-  it('registers exactly the data type design 2.6 declares', () => {
+  it('registers exactly this data type', () => {
     expect(pgvectorPackMeta.dataTypes.map((type) => type.id)).toEqual(['pgvector/vector']);
   });
 
-  it('is declared as design 2.6 says', () => {
+  it('declares its texts and claims no kind', () => {
     expect(vectorType().sql.texts).toEqual([
       { text: 'vector({length})', written: true, catalog: true },
     ]);
