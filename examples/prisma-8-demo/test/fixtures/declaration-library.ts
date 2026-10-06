@@ -144,11 +144,11 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
 
 export class TaskLibrary extends Collection<Contract, 'Task'> {
   bugs() {
-    return this.variant('Bug');
+    return this.variant('bug');
   }
 
   bugRows() {
-    return this.variant('Bug').all();
+    return this.variant('bug').all();
   }
 }
 
