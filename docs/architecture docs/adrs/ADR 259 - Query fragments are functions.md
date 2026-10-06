@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Date:** 2026-10-05
-**Builds on:** [ADR 258 — A collection keeps its class through the chain](ADR%20258%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md), [ADR 175 — Shared ORM Collection interface](ADR%20175%20-%20Shared%20ORM%20Collection%20interface.md)
+**Builds on:** [ADR 265 — A collection keeps its class through the chain](ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md), [ADR 175 — Shared ORM Collection interface](ADR%20175%20-%20Shared%20ORM%20Collection%20interface.md)
 
 ---
 
@@ -37,7 +37,7 @@ db.Comment.apply(notDeleted);   // Comment has deletedAt
 db.Tag.apply(notDeleted);       // error: Tag has no deletedAt
 ```
 
-- A **scope** is a function from a collection to a collection (ADR 258). `apply` runs one. A class method such as `published()` is a named scope.
+- A **scope** is a function from a collection to a collection (ADR 265). `apply` runs one. A class method such as `published()` is a named scope.
 - `notDeleted` and `forTenant` are scopes for any model that has the fields they declare. The declaration uses the schema's own field builders.
 - `summary` is a scope for one model. It changes the row, so it is typed once against a plain `Post` collection.
 - The conditional inside `apply` is an ordinary function. Its result is typed as unfiltered, so `deleteAll` is refused on it.
@@ -45,7 +45,7 @@ db.Tag.apply(notDeleted);       // error: Tag has no deletedAt
 
 ## Decision
 
-A **query fragment** is a function. A fragment of a row is a function of the model accessor, and `where` and `orderBy` take it. A fragment of a query is a scope, and `apply` runs it. The query API gains no methods for control flow: whatever the application would write in a function body, it writes inside the scope, and the result is sound because a filtered collection is a subtype of an unfiltered one (ADR 258).
+A **query fragment** is a function. A fragment of a row is a function of the model accessor, and `where` and `orderBy` take it. A fragment of a query is a scope, and `apply` runs it. The query API gains no methods for control flow: whatever the application would write in a function body, it writes inside the scope, and the result is sound because a filtered collection is a subtype of an unfiltered one (ADR 265).
 
 Three helpers cover the fragments applications share most.
 
@@ -101,7 +101,7 @@ db.Post.select('id').apply(summary);       // error: the rows no longer have eve
 
 A class method is the usual way to name a query on one model. `db.Post.scope` serves the cases a class method does not: an application that does not subclass `Collection`, a scope kept as a value and passed around, and an include refinement, where a class method is not available.
 
-The body is typed once, against a plain `Post` collection, so `posts` needs no annotation. The scope accepts any collection of that model whose row is the model's full row or wider: a root or filtered collection, a collection after `include`, an include refinement, `this` in a custom class. It refuses a collection whose row was narrowed by `select`, because the body was typed against the full row and on a narrowed collection its result would claim fields the query does not return. It refuses a collection narrowed by `variant` for the reason ADR 258 gives for `variant`. `CollectionRowOf` reads the row type off the result, so the application can name it.
+The body is typed once, against a plain `Post` collection, so `posts` needs no annotation. The scope accepts any collection of that model whose row is the model's full row or wider: a root or filtered collection, a collection after `include`, an include refinement, `this` in a custom class. It refuses a collection whose row was narrowed by `select`, because the body was typed against the full row and on a narrowed collection its result would claim fields the query does not return. It refuses a collection narrowed by `variant` for the reason ADR 265 gives for `variant`. `CollectionRowOf` reads the row type off the result, so the application can name it.
 
 A scope that changes the row produces a collection with the default state. A filter applied before it is not recorded after it, so `update` is refused after `apply(summary)` even when a `where` came first.
 
@@ -127,7 +127,7 @@ Measured as type instantiations on an application of about 730,000 instantiation
 ## Consequences
 
 - **Any function is a fragment.** Control flow stays in the language. The query API gains no combinators.
-- **A package can offer a scope for any model.** A scope declared with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a scope built from the index definition (ADR 260).
+- **A package can offer a scope for any model.** A scope declared with `CodecField` needs no knowledge of the application's models. A package that introduces a kind of index can offer a scope built from the index definition.
 - **A scope declared with a field map sees only those fields.** Its body cannot filter or order on a field it did not declare.
 - **A single-model scope takes its model from the collection it is called on**, not from a type parameter, because TypeScript cannot tell one model name from a union of names.
 
@@ -139,7 +139,7 @@ Measured as type instantiations on an application of about 730,000 instantiation
 
 ## Alternatives considered
 
-- **A `when(value, fn)` combinator** whose result keeps the caller's type, as the way to write conditional fragments. It moves control flow into the query API, and every construct would need its own combinator. The subtyping rule of ADR 258 makes the plain conditional sound.
+- **A `when(value, fn)` combinator** whose result keeps the caller's type, as the way to write conditional fragments. It moves control flow into the query API, and every construct would need its own combinator. The subtyping rule of ADR 265 makes the plain conditional sound.
 - **`where(undefined)` and `orderBy(undefined)` as no-ops**, so that a conditional filter is `posts.where(search ? (p) => ... : undefined)`. It adds an overload to every `where` and `orderBy`, costs about 7.5% more type checking in the client package when unused, and covers only those two methods.
 - **Declaring a scope's fields by pointing at an existing model's field**, `{ deletedAt: db.Post.fields.deletedAt }`. It ties a reusable scope to one model's field, so renaming that field breaks every scope that named it.
 - **A scope for one model written with type arguments**, `scope<Contract, 'Post'>()(body)`. The empty call exists only because TypeScript cannot take two type arguments explicitly and infer the body's type in the same call. Taking the model from the collection removes it.

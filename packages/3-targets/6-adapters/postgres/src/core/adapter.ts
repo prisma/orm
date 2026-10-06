@@ -15,30 +15,10 @@ import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgr
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import { adapterError } from './adapter-errors';
+import { postgresAdapterCapabilities } from './capabilities';
 import { PostgresControlAdapter } from './control-adapter';
 import { renderLoweredSql } from './sql-renderer';
 import type { PostgresAdapterOptions, PostgresContract, PostgresLoweredStatement } from './types';
-
-const defaultCapabilities = Object.freeze({
-  postgres: {
-    orderBy: true,
-    limit: true,
-    lateral: true,
-    jsonAgg: true,
-    returning: true,
-    distinctOn: true,
-  },
-  sql: {
-    enums: true,
-    returning: true,
-    defaultInInsert: true,
-    lateral: true,
-    scalarList: true,
-    checkConstraint: true,
-    insertOnConflictSkip: true,
-    insertOnConflictWithoutTarget: true,
-  },
-});
 
 class PostgresAdapterImpl
   implements Adapter<AnyQueryAst, PostgresContract, PostgresLoweredStatement>
@@ -62,7 +42,7 @@ class PostgresAdapterImpl
     this.profile = Object.freeze({
       id: profileId ?? 'postgres/default@1',
       target: 'postgres',
-      capabilities: defaultCapabilities,
+      capabilities: postgresAdapterCapabilities,
       readMarker: (queryable: SqlQueryable) =>
         controlAdapter.readMarkerDiscriminated(
           {
@@ -99,7 +79,13 @@ class PostgresAdapterImpl
         { meta: { surface: 'runtime-adapter' } },
       );
     }
-    return renderLoweredSql(ast, context.contract, this.codecRegistry, this.dataTypeLookup);
+    return renderLoweredSql(
+      ast,
+      context.contract,
+      this.codecRegistry,
+      this.dataTypeLookup,
+      postgresAdapterCapabilities,
+    );
   }
 }
 

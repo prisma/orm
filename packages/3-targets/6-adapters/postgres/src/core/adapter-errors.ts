@@ -7,7 +7,8 @@ type RuntimeSubcode =
   | 'TYPE_PARAMS_INVALID'
   | 'PARAM_REF_MISSING_CODEC'
   | 'NAMESPACE_UNKNOWN'
-  | 'AST_INVALID';
+  | 'AST_INVALID'
+  | 'AST_UNSUPPORTED';
 
 type ContractSubcode =
   | 'INTROSPECTION_UNSUPPORTED'

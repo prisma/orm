@@ -69,11 +69,11 @@ A declaration, attribute, contributed type, parameter, function, or constant wit
 
 ## Go to definition
 
-In an open, configured PSL input, clients can request the definition of a model, composite type, named type, generic block, field, or namespace from any reference to it. A qualified name has two positions: in `auth.User`, `User` goes to the model and `auth` goes to the namespace. A namespace declared in several blocks returns every block, across files.
+In an open, configured PSL input, clients can jump from a name to the declaration it refers to. A type reference leads to the model, composite type, named type, or generic block it names. A field or entity reference in an attribute argument or a generic block's value leads to that field or declaration. The qualifier of a qualified name, such as `auth` in `auth.User`, leads to every `namespace auth { … }` block, including those in other files of the project.
 
-On a declaration's own name the request returns that declaration: `User` in `model User` returns the model itself, and the name of a `namespace` block returns every block of that namespace. Editors that run find references when a definition is the position the cursor is already on, such as VS Code, show the usages from there.
+A declaration's own name leads to that declaration: `User` in `model User` leads to the model itself, and the name of a `namespace` block leads to every block of that namespace. Editors that run find references when a definition is the position the cursor is already on, such as VS Code, show the usages from there.
 
-Clients that support definition links receive the declaration range and the range of its name; other clients receive the location of the name. Attributes, argument keys, functions, contributed types and namespaces, cross-space references and unresolved names have no definition. Closed or unmanaged documents receive none either.
+A name with no declaration in the schema has no definition: a contributed type or namespace, a cross-space reference, an attribute name, a named argument's key, a function name, or a fixed-identifier constant. A name that does not resolve has none either.
 
 ## Find references
 

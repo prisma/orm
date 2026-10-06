@@ -1,4 +1,4 @@
-import type { AnyParamRef, AnyQueryAst } from './types';
+import type { AnyParamRef, AnyQueryAst, ProjectionItem } from './types';
 
 export function compact<T extends Record<string, unknown>>(o: T): T {
   const out: Record<string, unknown> = {};
@@ -29,4 +29,15 @@ export function collectOrderedParamRefs(ast: AnyQueryAst): ReadonlyArray<AnyPara
     ordered.push(ref);
   }
   return Object.freeze(ordered);
+}
+
+const AGGREGATING_EXPRESSION_KINDS: ReadonlySet<string> = new Set([
+  'aggregate',
+  'json-array-agg',
+  'window-func',
+]);
+
+/** Whether a projection item's top-level expression is an aggregate, `json_agg` or window function. Nested expressions are not inspected. */
+export function isAggregateProjection(item: ProjectionItem): boolean {
+  return AGGREGATING_EXPRESSION_KINDS.has(item.expr.kind);
 }

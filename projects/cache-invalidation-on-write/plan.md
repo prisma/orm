@@ -22,7 +22,7 @@ Adds `invalidateAnnotation<TMeta>({ keys, meta })` with `applicableTo: ['write']
 Done when:
 
 - the type, middleware and integration tests in the spec pass, and `cache-query-only.test.ts` checks that `afterTransaction` is the middleware's only hook for writes;
-- the package README documents the annotation, when it runs and its known limits, and ADR 259's paragraph on invalidation that comes with a write, and its consequence about the runtime hook, describe the shipped annotation.
+- the package README documents the annotation, when it runs and its known limits, and ADR 266's paragraph on invalidation that comes with a write, and its consequence about the runtime hook, describe the shipped annotation.
 
 ## Close-out
 

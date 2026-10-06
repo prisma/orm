@@ -920,11 +920,11 @@ An aggregate was invoked for an operation/input pair the composed target declare
 
 ### ORM.ARGUMENT_INVALID
 
-A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection registered as an instance / against a nonexistent model in `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer, or malformed lookup/group/update specs. For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`.
+A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection registered as an instance / against a nonexistent model in `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer, malformed lookup/group/update specs, or a row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) given both `nowait` and `skipLocked`. For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`.
 
 ### ORM.CAPABILITY_MISSING
 
-The requested operation requires a contract capability the contract does not declare, currently the `returning` capability needed for mutations that read back the affected row. Raised by the ORM client and the `sql()` builder. Payload: `capability`, `action`.
+The requested operation requires a contract capability the contract does not declare: the `returning` capability needed for mutations that read back the affected row (payload `capability`, `action`); or, on the `sql()` builder, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods, and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
 
 ### ORM.COLUMN_UNKNOWN
 
@@ -961,6 +961,10 @@ An `include()` usage is structurally invalid: the refinement callback returned s
 ### ORM.INCLUDE_UNSUPPORTED
 
 The include is well-formed but not supported in this position: scalar aggregations or `combine()` on a to-one relation (SQL), or including an embed relation / compound reference (Mongo; only reference relations can be included). Payload: `relation`, `kind`, `model`.
+
+### ORM.LOCK_INCOMPATIBLE
+
+A row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) was combined with something Postgres refuses to lock. Raised by the SQL builder: at `build()` when the select also has `distinct`, `distinctOn`, `groupBy` or `having`, or an aggregate or window function in the projection; and when a locked select is turned into a subquery through `.as()` or passed where a subquery is expected. Payload: `conflict` (`distinct`, `distinctOn`, `groupBy`, `having`, `aggregate` or `subquery`).
 
 ### ORM.MODEL_UNKNOWN
 
@@ -1050,7 +1054,7 @@ A lowered SQL AST is structurally invalid: a subquery projecting other than one 
 
 ### RUNTIME.AST_UNSUPPORTED
 
-The authored SQL AST uses a feature this target cannot render, e.g. DEFAULT as a value in INSERT … VALUES, WITH ORDINALITY on function sources, or returned-column aliases on function sources, all on SQLite. Raised by the target adapters' renderers. Payload: `node` (INSERT DEFAULT site); `target`, `feature` (function-source sites).
+The authored SQL AST uses a feature this target cannot render, e.g. DEFAULT as a value in INSERT … VALUES, WITH ORDINALITY on function sources, or returned-column aliases on function sources, all on SQLite; a row-locking clause (`FOR UPDATE` and the like) on SQLite, which has no row locks and refuses the clause rather than drop it; or a row-locking clause whose strength or option (`of`, `nowait`, `skipLocked`) needs a capability the Postgres adapter did not report. Raised by the target adapters' renderers. Payload: `node` (INSERT DEFAULT site); `target`, `feature` (function-source sites, and locking-clause sites with `feature: 'locking-clause'`); on Postgres locking-clause sites also `capability`, the missing flag.
 
 ### RUNTIME.BINDING_INVALID
 
@@ -1612,7 +1616,7 @@ A ref name resolves to nothing: no pointer file with that name exists, and the f
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
-A reference parsed, but as the wrong kind for the argument position, e.g. a migration-only reference where a contract reference is required (raised by the shared ref-resolution mapper). The message and fix come from the resolver's own diagnosis. Payload: `input`, `expectedGrammar`.
+A reference parsed, but as the wrong kind for the argument position, e.g. a migration-only reference where a contract reference is required (raised by the shared ref-resolution mapper). The message and fix come from the resolver's own diagnosis. `db sign` and `db update --to` raise it for the reserved references `@contract`, `@db`, and `@empty`, which they do not accept, and `migration plan --to @empty` raises it because `@empty` is only valid as an origin. Payload: `input`, `expectedGrammar`.
 
 ### MIGRATION.RUNNER_FAILED
 
