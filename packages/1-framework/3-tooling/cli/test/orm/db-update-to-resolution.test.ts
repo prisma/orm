@@ -165,6 +165,22 @@ describe('db update --to bundle resolution', () => {
     },
   );
 
+  it('refuses @db before it asks for a connection', async () => {
+    const { cwd } = await setupFixture();
+
+    const run = await createOrmTestCli({
+      commands,
+      groups: BIN_GROUPS,
+      orm: { ...ormConfig(cwd), db: undefined },
+    }).run(['db', 'update', '--to', '@db', '--json'], { cwd });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'MIGRATION.REF_WRONG_GRAMMAR' } },
+    });
+  });
+
   it('errors on an invalid --advance-ref name with the structured ref envelope', async () => {
     const { cwd, dirNext } = await setupFixture();
     mocks.dbUpdate.mockResolvedValue(

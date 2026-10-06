@@ -164,7 +164,6 @@ describe('resolveContractRefToSnapshot', () => {
       config,
       migrationsDir,
       refInput: 'floating',
-      contractPathAbsolute,
       fallbackToEmitted: false,
       missingBundleFlag: '--to',
     });
@@ -251,7 +250,6 @@ describe('resolveContractRefToSnapshot', () => {
       config,
       migrationsDir,
       refInput: 'x',
-      contractPathAbsolute,
       fallbackToEmitted: false,
     });
     expect(true).toBe(true);

@@ -10,7 +10,10 @@ import {
 } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
-import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
+import {
+  type ResolveContractRefToSnapshotSuccess,
+  resolveContractRefToSnapshot,
+} from '../../control-api/operations/contract-snapshot-resolution';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -26,7 +29,7 @@ import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { baseDirFor } from '../migration/paths';
+import { baseDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -149,6 +152,21 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
       const startedAt = Date.now();
+      let destination: ResolveContractRefToSnapshotSuccess | undefined;
+      if (args.flags.to !== undefined) {
+        const resolved = await resolveContractRefToSnapshot({
+          config: ctx.config,
+          migrationsDir: migrationsDirFor(ctx.config),
+          refInput: args.flags.to,
+          fallbackToEmitted: false,
+          missingBundleFlag: '--to',
+        });
+        if (!resolved.ok) {
+          return notOk(normalizeError(resolved.failure));
+        }
+        destination = resolved.value;
+      }
+
       const prepared = await prepareMigrationRun({
         config: ctx.config,
         cwd: ctx.cwd,
@@ -160,24 +178,8 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         return notOk(prepared.failure);
       }
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
-
-      let contractJson = prepared.value.contractJson;
-      let snapshotContractPath = contractPath;
-      if (args.flags.to !== undefined) {
-        const resolved = await resolveContractRefToSnapshot({
-          config: ctx.config,
-          migrationsDir,
-          refInput: args.flags.to,
-          contractPathAbsolute: contractPath,
-          fallbackToEmitted: false,
-          missingBundleFlag: '--to',
-        });
-        if (!resolved.ok) {
-          return notOk(normalizeError(resolved.failure));
-        }
-        contractJson = resolved.value.contractJson;
-        snapshotContractPath = resolved.value.contractJsonPath;
-      }
+      const contractJson = destination?.contractJson ?? prepared.value.contractJson;
+      const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
 
       const refName = computeRefAdvancementName({
         ...ifDefined('advanceRef', args.flags.advanceRef),

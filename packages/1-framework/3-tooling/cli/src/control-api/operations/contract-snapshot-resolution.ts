@@ -41,8 +41,6 @@ interface ResolveContractRefToSnapshotBaseOptions {
   readonly migrationsDir: string;
   /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
-  /** Absolute path of the emitted contract.json (fallback source + snapshot-path derivation). */
-  readonly contractPathAbsolute: string;
 }
 
 /**
@@ -55,7 +53,12 @@ interface ResolveContractRefToSnapshotBaseOptions {
  */
 export type ResolveContractRefToSnapshotOptions = ResolveContractRefToSnapshotBaseOptions &
   (
-    | { readonly fallbackToEmitted: true; readonly missingBundleFlag?: never }
+    | {
+        readonly fallbackToEmitted: true;
+        /** Absolute path of the emitted contract.json, the fallback source. */
+        readonly contractPathAbsolute: string;
+        readonly missingBundleFlag?: never;
+      }
     | { readonly fallbackToEmitted: false; readonly missingBundleFlag: '--to' }
   );
 
