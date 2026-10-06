@@ -113,9 +113,8 @@ import { toOneNullabilityContradictionMessage } from './to-one-nullability-messa
 function columnCodec(
   codecId: string,
   typeParams: Record<string, unknown> | undefined,
-  codecLookup?: CodecLookupWithDescriptors,
+  codecLookup: CodecLookupWithDescriptors,
 ): Codec | undefined {
-  if (codecLookup === undefined) return undefined;
   return codecForRef(codecLookup, {
     codecId,
     ...ifDefined(
@@ -175,7 +174,7 @@ function defaultRefusal(
 
 function encodeDefaultValue(
   value: unknown,
-  codec: Codec | undefined,
+  codec: Codec,
   site: ColumnDefaultSite,
   elementPosition?: number,
 ): JsonValue {
@@ -188,11 +187,10 @@ function encodeDefaultValue(
 }
 
 function codecForDefault(
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
   resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
-): Codec | undefined {
-  if (codecLookup === undefined) return undefined;
+): Codec {
   const codec = buildCodecForDefault(codecLookup, resolveCodec, site);
   if (codec === undefined) {
     throw contractError(
@@ -238,7 +236,7 @@ function buildCodecForDefault(
 
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
   resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
   many = false,
@@ -565,9 +563,9 @@ function encodeEnumMember(
  */
 function encodeEnumMembers(
   handle: EnumTypeHandle,
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
 ): readonly { readonly name: string; readonly value: JsonValue }[] {
-  const codec = codecLookup?.get(handle.codecId);
+  const codec = codecLookup.get(handle.codecId);
   const memberByStoredValue = new Map<string, string>();
   return handle.enumMembers.map((member) => {
     const value = encodeEnumMember(handle, member, codec);
@@ -598,7 +596,7 @@ function encodeEnumMembers(
  */
 function checkMemberValues(
   handle: EnumTypeHandle,
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
 ): readonly (string | number)[] {
   const encoded = encodeEnumMembers(handle, codecLookup).map((member) => member.value);
   const values: (string | number)[] = [];
