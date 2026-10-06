@@ -10,7 +10,7 @@
   "examples/multi-extension-monorepo/packages/feature-flags/src/contract.json": "63a396ed75020b1e301fec30d1898f05407780dd811db1c4beab330970ecc36e",
   "examples/paradedb-demo/src/prisma/contract.json": "1d7daf319db82546ee19c80811da477b8c57b214d9599c0f8b201e7578b3a536",
   "examples/prisma-8-cloudflare-worker/src/prisma/contract.json": "4868da92413877bfb3f493c5c7216629e251987bed32f89f1a2e5ba788807caa",
-  "examples/prisma-8-demo-sqlite/src/prisma/contract.json": "8bda3802ec411c4dad99e7a221a5c05b5ebe4f5d82426e6da55f8ab1b9c4495f",
+  "examples/prisma-8-demo-sqlite/src/prisma/contract.json": "7d0ad742a606180390fd4eceb6520099eed3a81e05536f86131b3cb4a05ac13e",
   "examples/prisma-8-demo/fixtures/converging-branches/migrations/snapshots/042e80cecce8271bb96dedcc7986dadb4c72b098ad5b5b43d8f3bf2d5d61806b/contract.json": "f376a03899b6e5d92bbc1f6c5b5fb9d81bfbf678b1fea927e3a1cea3e8d32014",
   "examples/prisma-8-demo/fixtures/converging-branches/migrations/snapshots/789dd79ab5ab725be1b6ced088109b803a4d62f9874f932eb384a868d94360a4/contract.json": "4de4299f471c26c98011cefa6f749d8c8b4c4219ef9fe828ea51e88e34b92d14",
   "examples/prisma-8-demo/fixtures/converging-branches/migrations/snapshots/7e3fa7fbe98974385451444c229337c87ec90c547a9214f81700f86b5af3563d/contract.json": "25bbd4bbe216d6a6ad7c146b68b05d788041d0588cfc773eda9ae0c2690a9424",
