@@ -49,7 +49,7 @@ All statements run in the scope the nested update already opens.
 
 ### Rejections
 
-Each is rejected by the types and at runtime.
+Each is rejected at runtime. Each is also rejected by the types, with one limit: the to-one and parent-link rejections need the relation's cardinality and link fields as literal types, which an emitted `contract.d.ts` carries and a contract typed directly from the TypeScript builder does not. On a builder-typed contract those two are rejected at runtime only. The existing type-level rules for junction relations have the same limit. The `create()` rejection depends only on context and holds on both.
 
 - `where`, `updateAll`, `deleteAll` inside `create()`: `ORM.RELATION_MUTATION_UNSUPPORTED`, the code `disconnect` in `create()` uses today.
 - `where`, `updateAll`, `deleteAll` on a to-one relation (`N:1` and `1:1`): `ORM.RELATION_MUTATION_UNSUPPORTED`.
