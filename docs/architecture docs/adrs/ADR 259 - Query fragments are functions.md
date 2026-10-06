@@ -133,13 +133,13 @@ Post.orderBy(orderByField(Post, input.sort, input.direction, ['title', 'createdA
 
 Measured as type instantiations with TypeScript 5.9.3. Every count was measured twice with the same result.
 
-On the `prisma-8-demo` example, which checks at 702,050 instantiations without these helpers. The unused cost is measured with `pnpm typecheck --extendedDiagnostics` after a fresh build, on the demo files that existed before ADR 258. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline. For `db.orm.scope` the definition and the uses are measured the same way, with one more file in the demo that defines a scope on `createdAt` and applies it at those ten sites, against the same file with the ten filters written inline.
+On the `prisma-8-demo` example, which checks at 735,059 instantiations on main at commit 7bc1b4dd20, without these helpers. The unused cost checks the demo files as they are at that commit with `pnpm typecheck --extendedDiagnostics`, after a fresh build, once against the packages of that commit and once against the packages with these helpers. The last column is the cost of ten uses at different sites (root collections of three models, a custom class, a collection after `where`, `orderBy`, `select` or `limit`, an include refinement, `this` in a class), over the same ten sites written inline. For `db.orm.scope` the definition and the uses are measured on the same demo files against the packages with these helpers, with one more file in the demo that defines a scope on `createdAt` and applies it at those ten sites, against the same file with the ten filters written inline. The rows for a conditional inside `apply`, `Post.scope` and `orderByField` were measured in the same way on an earlier main and were not measured again.
 
 | Feature | Present but unused | Definition | Ten uses, over the same code written inline |
 | --- | --- | --- | --- |
 | A conditional inside `apply` | none | — | 10,000 to 14,000 once per pair of collection types, then under 10 |
-| `db.orm.scope` and `Post.scope` together | +308 (+0.04%) | | |
-| `db.orm.scope` | | 7,869 for the first in a program, 143 for each later one | +3,163: 4,253 for the ten uses, against 1,090 for the same ten sites written inline |
+| `db.orm.scope` and `Post.scope` together | +342 (+0.05%) | | |
+| `db.orm.scope` | | 8,305 for the first in a program, 145 for each later one | +3,147: 4,089 for the ten uses, against 942 for the same ten sites written inline |
 | `Post.scope` | | 21 | −7,109: the body is typed once instead of at each site |
 | `orderByField` | none | — | about 550 once, then under 20 |
 
@@ -147,12 +147,12 @@ On a generated contract of 200 models, half of them with `deletedAt`, with a sco
 
 | | Instantiations |
 | --- | --- |
-| One `db.orm.scope` definition | 18,615 |
-| Its first use | 1,129 |
+| One `db.orm.scope` definition | 19,732 |
+| Its first use | 1,136 |
 | Each later use | about 890 |
-| Ten uses, with the definition | 27,754 |
-| The same ten filters written inline | 17,052 |
-| Ten uses over inline, with the definition | +10,702 |
+| Ten uses, with the definition | 28,887 |
+| The same ten filters written inline | 17,775 |
+| Ten uses over inline, with the definition | +11,112 |
 
 Each use checks the declared fields against the receiver's model only, and computes nothing for the other models of the contract. The definition costs more on the larger contract; which part of the contract's type drives that was not measured.
 
