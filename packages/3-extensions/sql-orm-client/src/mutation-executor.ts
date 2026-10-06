@@ -5,9 +5,7 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
-  isWhereExpr,
   LiteralExpr,
-  type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
@@ -51,7 +49,7 @@ import type {
   RuntimeTransaction,
 } from './types';
 import { emptyState } from './types';
-import { normalizeWhereArg } from './where-interop';
+import { isWhereDirectInput, normalizeWhereArg } from './where-interop';
 
 interface JunctionThrough {
   readonly table: string;
@@ -890,16 +888,6 @@ async function applyChildOwnedFilteredWrite(
   await executeUpdateCount(scope, contract, namespaceId, tableName, setValues, filters);
 }
 
-function isDirectWhereInput(value: unknown): value is WhereArg {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  if (isWhereExpr(value) && 'accept' in value && typeof value.accept === 'function') {
-    return true;
-  }
-  return 'toWhereExpr' in value && typeof value.toWhereExpr === 'function';
-}
-
 function resolveRelationFilter(
   context: ExecutionContext,
   relation: RelationDefinition,
@@ -910,7 +898,7 @@ function resolveRelationFilter(
   const whereArg =
     typeof input === 'function'
       ? input(createModelAccessor(context, namespaceId, modelName))
-      : isDirectWhereInput(input)
+      : isWhereDirectInput(input)
         ? input
         : shorthandToWhereExpr(context, namespaceId, modelName, input);
   return normalizeWhereArg(whereArg, { contract: context.contract, namespaceId });

@@ -42,6 +42,26 @@ export function normalizeWhereArg(
   return arg;
 }
 
+function isToWhereExprInput(value: unknown): value is ToWhereExpr {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'toWhereExpr' in value &&
+    typeof value.toWhereExpr === 'function'
+  );
+}
+
+export function isWhereDirectInput(value: unknown): value is WhereArg {
+  return (
+    (isWhereExpr(value) &&
+      typeof value === 'object' &&
+      value !== null &&
+      'accept' in value &&
+      typeof value.accept === 'function') ||
+    isToWhereExprInput(value)
+  );
+}
+
 function isToWhereExpr(arg: WhereArg): arg is ToWhereExpr {
   return typeof arg === 'object' && arg !== null && 'toWhereExpr' in arg && !isWhereExpr(arg);
 }

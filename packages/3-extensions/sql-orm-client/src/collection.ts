@@ -11,7 +11,6 @@ import {
   BinaryExpr,
   ColumnRef,
   checkLimitOffset,
-  isWhereExpr,
   LiteralExpr,
   LockingClause,
   type LockOptionCapabilities,
@@ -24,7 +23,6 @@ import {
   lockStrengthCapabilities,
   lockWaitPolicyOf,
   type OrderByItem,
-  type ToWhereExpr,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
@@ -179,7 +177,7 @@ import {
   type VariantNameForValue,
   type WithNsId,
 } from './types';
-import { normalizeWhereArg } from './where-interop';
+import { isWhereDirectInput, normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
@@ -228,26 +226,6 @@ type LockMethodArgs<
 > = Capabilities extends LockStrengthCapabilities[Strength] & LockOptionCapabilities['of']
   ? [options?: LockWaitOptions<Capabilities>]
   : never;
-
-function isToWhereExprInput(value: unknown): value is ToWhereExpr {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'toWhereExpr' in value &&
-    typeof value.toWhereExpr === 'function'
-  );
-}
-
-function isWhereDirectInput(value: unknown): value is WhereDirectInput {
-  return (
-    (isWhereExpr(value) &&
-      typeof value === 'object' &&
-      value !== null &&
-      'accept' in value &&
-      typeof value.accept === 'function') ||
-    isToWhereExprInput(value)
-  );
-}
 
 type WriteConfigure = (meta: MetaBuilder<'write'>) => void;
 
