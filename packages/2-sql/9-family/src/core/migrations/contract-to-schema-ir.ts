@@ -443,19 +443,6 @@ export interface ContractToSchemaIROptions extends SqlTypeLookups {
 }
 
 /**
- * Converts a `Contract` to `SqlSchemaIR`.
- *
- * Reads `contract.storage` for tables, and `contract.storage.types` for the
- * types `typeRef` columns name.
- *
- * Drops codec metadata (`codecId`, `typeRef`) since the schema IR only represents
- * structural information. Each column's type is written from the data type its codec
- * represents, with its parameters (e.g. `character` + `{ length: 36 }` → `character(36)`),
- * so the resulting IR compares correctly against the "to" contract during planning.
- *
- * Returns an empty schema IR when `contract` is `null` (new project).
- */
-/**
  * Converts the tables of a single namespace into a `SqlSchemaIR`, keyed by
  * table name within that namespace. Unlike {@link contractToSchemaIR}, which
  * flattens every namespace's tables into one bare-keyed record (and throws on a
@@ -506,6 +493,19 @@ export function contractNamespaceToSchemaIR(
   return new SqlSchemaIR({ tables });
 }
 
+/**
+ * Converts a `Contract` to `SqlSchemaIR`.
+ *
+ * Reads `contract.storage` for tables, and `contract.storage.types` for the
+ * types `typeRef` columns name.
+ *
+ * Drops codec metadata (`codecId`, `typeRef`) since the schema IR only represents
+ * structural information. Each column's type is written from the data type its codec
+ * represents, with its parameters (e.g. `character` + `{ length: 36 }` → `character(36)`),
+ * so the resulting IR compares correctly against the "to" contract during planning.
+ *
+ * Returns an empty schema IR when `contract` is `null` (new project).
+ */
 export function contractToSchemaIR(
   contract: Contract<SqlStorage> | null,
   options: ContractToSchemaIROptions,
