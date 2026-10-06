@@ -88,6 +88,33 @@ describe('runAfterTransaction', () => {
     expect(later).toHaveBeenCalledWith(exec, { outcome: 'rolled-back' }, ctx);
   });
 
+  it('resolves and still runs later hooks when logging a hook error throws too', async () => {
+    const ctx: RuntimeMiddlewareContext = {
+      ...makeCtx(),
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: () => {
+          throw new Error('log failed');
+        },
+      },
+    };
+    const later = vi.fn(async () => {});
+    const middleware: RuntimeMiddleware<MockExec>[] = [
+      {
+        name: 'failing',
+        async afterTransaction() {
+          throw new Error('hook failed');
+        },
+      },
+      { name: 'later', afterTransaction: later },
+    ];
+
+    await expect(runAfterTransaction(exec, middleware, committed, ctx)).resolves.toBeUndefined();
+
+    expect(later).toHaveBeenCalledWith(exec, committed, ctx);
+  });
+
   it('resolves after every hook has resolved', async () => {
     const ctx = makeCtx();
     const events: string[] = [];

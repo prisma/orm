@@ -222,7 +222,8 @@ export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
 /**
  * Calls each middleware's `afterTransaction` hook in registration order. A
  * thrown error is passed to `ctx.log.error` and swallowed, and later
- * middleware still run.
+ * middleware still run. Never rejects, so a query's result or a resolved
+ * commit is never replaced by a hook's failure.
  */
 export async function runAfterTransaction<TExec extends ExecutionPlan>(
   exec: TExec,
@@ -235,7 +236,11 @@ export async function runAfterTransaction<TExec extends ExecutionPlan>(
     try {
       await mw.afterTransaction(exec, result, ctx);
     } catch (error) {
-      ctx.log.error({ event: 'middleware.afterTransaction.error', middleware: mw.name, error });
+      try {
+        ctx.log.error({ event: 'middleware.afterTransaction.error', middleware: mw.name, error });
+      } catch {
+        // Preserve the query's result when the logger also fails.
+      }
     }
   }
 }
