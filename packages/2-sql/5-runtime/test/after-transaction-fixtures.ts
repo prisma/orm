@@ -27,6 +27,14 @@ import {
 
 export const testContract = createTestContract({ targetFamily: 'sql', target: 'postgres' });
 
+const failingDecodeCodec = defineTestCodec({
+  typeId: 'test/failing-decode@1',
+  encode: (value: number) => value,
+  decode: (): number => {
+    throw new Error('decode failed');
+  },
+});
+
 export interface HookEvent {
   readonly name: string;
   readonly plan?: SqlExecutionPlan;
@@ -170,14 +178,6 @@ export const meta = {
 export function rawPlan(sql: string): SqlExecutionPlan {
   return { sql, params: [], ast: stubAst(), meta };
 }
-
-const failingDecodeCodec = defineTestCodec({
-  typeId: 'test/failing-decode@1',
-  encode: (value: number) => value,
-  decode: (): number => {
-    throw new Error('decode failed');
-  },
-});
 
 export function failingDecodePlan(): SqlQueryPlan<{ id: number }> {
   return planFromAst(
