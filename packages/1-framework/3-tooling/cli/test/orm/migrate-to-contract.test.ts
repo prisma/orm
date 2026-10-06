@@ -320,7 +320,7 @@ describe('migrate --to reserved references and refs', () => {
   it.each([
     { to: '@db', reason: 'a database with no marker' },
     { to: '@empty', reason: 'the empty contract' },
-  ])('hands the runner the empty contract for --to $to ($reason)', async ({ to }) => {
+  ])('passes the empty contract as the target for --to $to ($reason)', async ({ to }) => {
     const cwd = await buildAppliedProject();
     mocks.readAllMarkers.mockResolvedValue(new Map());
 

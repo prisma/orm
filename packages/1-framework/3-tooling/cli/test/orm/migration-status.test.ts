@@ -124,12 +124,19 @@ describe('migration status', () => {
     const project = await createOfflineProject({ storageHash: HASH_HEAD });
     const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
 
-    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status'], {
       cwd: project.dir,
+      isTty: { stdout: true },
     });
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.diagnostics ?? []).toEqual([]);
+    expect(run.presented?.data).toMatchObject({ summary: 'No migrations found' });
+    expect(run.presented?.presentation.human.at(-1)).toEqual({
+      kind: 'summary',
+      status: 'ok',
+      text: 'No migrations found',
+    });
   });
 
   it('warns when the app space has no migrations and the marker is another contract', async () => {
