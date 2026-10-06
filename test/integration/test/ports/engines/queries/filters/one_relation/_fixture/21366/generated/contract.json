@@ -125,12 +125,12 @@
               "columns": {
                 "device_id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -170,12 +170,12 @@
               "columns": {
                 "device_id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -200,7 +200,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9f0164d2a87e9001de888da99ba039b0938ab5c21c76680cff84b74a158355cc"
+    "storageHash": "76593080d87d51421beb94004f0d9408e3fc9967ad432f5ae4806c11290bf80c"
   },
   "capabilities": {
     "postgres": {

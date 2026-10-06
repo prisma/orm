@@ -66,7 +66,7 @@ const postgresTargetPack = {
   authoring: { field: {}, renderCheckExpressions },
 } as const;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
 const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 
 export default defineContract(

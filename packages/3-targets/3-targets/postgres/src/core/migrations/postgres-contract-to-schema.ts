@@ -12,12 +12,12 @@ import { renderDefaultLiteral } from './planner-ddl-builders';
 export function postgresRenderDefault(
   def: ColumnDefault,
   column: StorageColumn,
-  dataTypeId: string,
+  type: { readonly dataType: string; readonly baseTypeName: string },
 ): string {
   if (def.kind === 'function') {
     return def.expression;
   }
-  return renderDefaultLiteral(def.value, { ...column, dataTypeId });
+  return renderDefaultLiteral(def.value, { many: column.many, ...type });
 }
 
 /**

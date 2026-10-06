@@ -175,7 +175,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -183,13 +183,13 @@
                 },
                 "location": {
                   "codecId": "pg/geometry@1",
-                  "nativeType": "geometry",
+                  "dataType": "postgis/geometry",
                   "nullable": false,
                   "typeRef": "WgsGeometry"
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -206,13 +206,13 @@
               "columns": {
                 "boundary": {
                   "codecId": "pg/geometry@1",
-                  "nativeType": "geometry",
+                  "dataType": "postgis/geometry",
                   "nullable": false,
                   "typeRef": "WgsGeometry"
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -220,7 +220,7 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -237,7 +237,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -245,12 +245,12 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "path": {
                   "codecId": "pg/geometry@1",
-                  "nativeType": "geometry",
+                  "dataType": "postgis/geometry",
                   "nullable": false,
                   "typeRef": "WgsGeometry"
                 }
@@ -270,12 +270,12 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "22e2633fb68e81380243a7fb492d650f4b45dcf990f2a3a146744fe8e2277423",
+    "storageHash": "254e34b6bf4a1f74980cfdfb8c038a58e2c06fdc73c1b19bd6f4019373e3ca58",
     "types": {
       "WgsGeometry": {
         "codecId": "pg/geometry@1",
+        "dataType": "postgis/geometry",
         "kind": "codec-instance",
-        "nativeType": "geometry",
         "typeParams": {
           "srid": 4326
         }
@@ -382,15 +382,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-postgis/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "geometry",
-            "targetId": "postgres",
-            "typeId": "pg/geometry@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

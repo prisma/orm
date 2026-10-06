@@ -151,12 +151,9 @@ export const postgisGeometryDescriptor = new PostgisGeometryDescriptor();
  */
 export const pgGeometryColumn = <S extends number>(options: { readonly srid: S }) => {
   const { srid } = options;
-  return column(
-    postgisGeometryDescriptor.factory({ srid }),
-    postgisGeometryDescriptor.codecId,
-    { srid },
-    'geometry',
-  );
+  return column(postgisGeometryDescriptor.factory({ srid }), postgisGeometryDescriptor.codecId, {
+    srid,
+  });
 };
 
 pgGeometryColumn satisfies ColumnHelperFor<PostgisGeometryDescriptor>;

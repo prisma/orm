@@ -66,7 +66,7 @@ function TableCard({ tableName, table }: { tableName: string; table: StorageTabl
               {primaryKey.includes(columnName) ? '\u{1F511} ' : ''}
               {columnName}
             </span>
-            <span className="col-type">{column.nativeType}</span>
+            <span className="col-type">{column.dataType}</span>
             {column.nullable && <span className="col-nullable">nullable</span>}
           </div>
         ))}

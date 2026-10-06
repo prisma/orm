@@ -8,8 +8,8 @@ function normalizedTables(tables: Record<string, unknown>) {
 
 describe('SQL storage fixture cardinality', () => {
   it('defaults absent many to false', () => {
-    expect(normalizedTables({ Item: { columns: { tags: { nativeType: 'text' } } } })).toEqual({
-      Item: { columns: { tags: { nativeType: 'text', many: false } } },
+    expect(normalizedTables({ Item: { columns: { tags: { dataType: 'pg/text' } } } })).toEqual({
+      Item: { columns: { tags: { dataType: 'pg/text', many: false } } },
     });
   });
 
@@ -23,7 +23,7 @@ describe('SQL storage fixture cardinality', () => {
     'invalid',
     0,
   ])('preserves an explicit many value %j', (many) => {
-    const tables = { Item: { columns: { tags: { nativeType: 'text', many } } } };
+    const tables = { Item: { columns: { tags: { dataType: 'pg/text', many } } } };
     expect(normalizedTables(tables)).toStrictEqual(tables);
   });
 

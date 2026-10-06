@@ -17,7 +17,9 @@ import type {
 } from './attribute-spec/spec-context';
 import type {
   AttributeSpec,
+  BlockAttributeCtx,
   FieldAttributeCtx,
+  FuncCallSig,
   InspectableArgType,
   ModelAttributeCtx,
   Param,
@@ -62,9 +64,14 @@ import type {
 import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
 import {
   ArrayLiteralAst,
+  BooleanLiteralExprAst,
   type ExpressionAst,
   FunctionCallAst,
+  NumberLiteralExprAst,
   ObjectLiteralExprAst,
+  PathExprAst,
+  StringLiteralExprAst,
+  TaggedLiteralExprAst,
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
@@ -75,13 +82,32 @@ export const PSL_UNRESOLVED_REFERENCE =
 
 export type BoundSpec =
   | AttributeSpec<never, ModelAttributeCtx>
-  | AttributeSpec<never, FieldAttributeCtx>;
+  | AttributeSpec<never, FieldAttributeCtx>
+  | AttributeSpec<never, BlockAttributeCtx>;
 
 export interface AttributeSymbol {
   readonly kind: 'attribute';
   readonly name: string;
-  readonly level: 'model' | 'field';
+  readonly level: 'model' | 'field' | 'block';
   readonly spec: BoundSpec;
+}
+
+export interface ParameterSymbol {
+  readonly kind: 'parameter';
+  readonly name: string;
+  readonly param: Param<unknown, never>;
+}
+
+export interface FunctionSymbol {
+  readonly kind: 'function';
+  readonly name: string;
+  readonly signature: FuncCallSig;
+}
+
+export interface ConstantSymbol {
+  readonly kind: 'constant';
+  readonly name: string;
+  readonly documentation: string;
 }
 
 export type PslSymbol =
@@ -96,6 +122,9 @@ export type Resolution =
   | ScopeResolution
   | { readonly kind: 'field'; readonly symbol: FieldSymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
+  | { readonly kind: 'parameter'; readonly symbol: ParameterSymbol }
+  | { readonly kind: 'function'; readonly symbol: FunctionSymbol }
+  | { readonly kind: 'constant'; readonly symbol: ConstantSymbol }
   | { readonly kind: 'crossSpace' }
   | { readonly kind: 'unresolved'; readonly name: string };
 
@@ -296,7 +325,7 @@ function bind(options: BindingInputs): BinderResult {
     const declaredName = symbol.node.name()?.syntax;
     if (declaredName !== undefined) references.set(declaredName, { kind: 'namedType', symbol });
     const name = symbol.node.typeAnnotation()?.name();
-    const outcome = resolveTypeReference(name, baseScope);
+    const outcome = resolveTypeReference(name, baseScope, references);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
   }
@@ -335,10 +364,9 @@ function bind(options: BindingInputs): BinderResult {
       if (fieldName !== undefined) references.set(fieldName, { kind: 'field', symbol: field });
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(
-        field.node.typeAnnotation()?.name(),
-        stack.current(),
-        (written) => describeUnresolvedType?.({ field, owner: entity, written }),
+      const name = field.node.typeAnnotation()?.name();
+      const outcome = resolveTypeReference(name, stack.current(), references, (written) =>
+        describeUnresolvedType?.({ field, owner: entity, written }),
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
@@ -435,12 +463,20 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
   for (const entry of block.node.entries()) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
-    const rule =
-      spec.mode === 'struct'
-        ? Object.hasOwn(spec.parameters, key)
-          ? spec.parameters[key]?.type
-          : undefined
-        : spec.value.type;
+    const parameter =
+      spec.mode === 'struct' && Object.hasOwn(spec.parameters, key)
+        ? spec.parameters[key]
+        : undefined;
+    const rule = spec.mode === 'struct' ? parameter?.type : spec.value.type;
+    if (parameter !== undefined) {
+      const keyNode = entry.key()?.syntax;
+      if (keyNode !== undefined) {
+        ctx.references.set(keyNode, {
+          kind: 'parameter',
+          symbol: { kind: 'parameter', name: key, param: parameter },
+        });
+      }
+    }
     const value = entry.value();
     if (rule === undefined || value === undefined) continue;
     bindExpression(rule, value, ctx);
@@ -455,6 +491,16 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
       BlockAttributeSpecFactory,
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; the binder restores the factory type the descriptor surface documents'
     >(factory)({ symbols: ctx.symbolTable });
+    const attributeSymbol: AttributeSymbol = {
+      kind: 'attribute',
+      name: attribute.name,
+      level: 'block',
+      spec: attributeSpec,
+    };
+    const nameNode = attribute.node.name()?.syntax;
+    if (nameNode !== undefined) {
+      ctx.references.set(nameNode, { kind: 'attribute', symbol: attributeSymbol });
+    }
     bindArguments(attribute, attributeSpec, ctx);
   }
 }
@@ -491,7 +537,9 @@ function tryBindExpression(
         if (trial.matched) return trial;
         for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
         for (const [node, resolution] of trial.references) {
-          if (resolution.kind === 'unresolved') references.set(node, resolution);
+          if (resolution.kind === 'unresolved') {
+            references.set(node, resolution);
+          }
         }
       }
       return { matched: false, references, diagnostics };
@@ -523,6 +571,12 @@ function tryBindExpression(
         name.identifier()?.name() !== rule.name
       )
         return { matched: false, references, diagnostics };
+      const functionSymbol: FunctionSymbol = {
+        kind: 'function',
+        name: rule.name,
+        signature: rule.signature,
+      };
+      references.set(name.syntax, { kind: 'function', symbol: functionSymbol });
       let matched = true;
       let positional = 0;
       for (const arg of call.args()) {
@@ -532,8 +586,21 @@ function tryBindExpression(
           key,
           key === undefined ? positional++ : positional,
         );
+        if (parameter === undefined) {
+          matched = false;
+          continue;
+        }
+        if (key !== undefined) {
+          const keyNode = arg.name()?.syntax;
+          if (keyNode !== undefined) {
+            references.set(keyNode, {
+              kind: 'parameter',
+              symbol: { kind: 'parameter', name: key, param: parameter },
+            });
+          }
+        }
         const value = arg.value();
-        if (parameter === undefined || value === undefined) {
+        if (value === undefined) {
           matched = false;
           continue;
         }
@@ -543,6 +610,17 @@ function tryBindExpression(
         for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
       }
       return { matched, references, diagnostics };
+    }
+    case 'identifier': {
+      if (rule.name === undefined) return { matched: true, references, diagnostics };
+      const node = expression.syntax;
+      const value = IdentifierAst.cast(node)?.name();
+      if (value !== rule.name) return { matched: false, references, diagnostics };
+      references.set(node, {
+        kind: 'constant',
+        symbol: { kind: 'constant', name: rule.name, documentation: rule.documentation },
+      });
+      return { matched: true, references, diagnostics };
     }
     case 'entityRef': {
       const node = expression.syntax;
@@ -591,8 +669,30 @@ function tryBindExpression(
         diagnostics,
       };
     }
-    default:
-      return { matched: true, references, diagnostics };
+    case 'str':
+    case 'json': {
+      const matched = StringLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'num':
+    case 'int': {
+      const matched = NumberLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'bool': {
+      const matched = BooleanLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'null': {
+      const matched = IdentifierAst.cast(expression.syntax)?.name() === 'null';
+      return { matched, references, diagnostics };
+    }
+    case 'taggedLiteral': {
+      const matched = TaggedLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'rejecting':
+      return { matched: false, references, diagnostics };
   }
 }
 
@@ -637,17 +737,15 @@ function bindAttributes<Factory>(
     }
     const spec = instantiate(factory);
     if (spec === undefined) return;
+    const attributeSymbol: AttributeSymbol = {
+      kind: 'attribute',
+      name: attribute.name,
+      level,
+      spec,
+    };
     const nameNode = nodes[index]?.name()?.syntax;
     if (nameNode !== undefined) {
-      ctx.references.set(nameNode, {
-        kind: 'attribute',
-        symbol: {
-          kind: 'attribute',
-          name: attribute.name,
-          level,
-          spec,
-        },
-      });
+      ctx.references.set(nameNode, { kind: 'attribute', symbol: attributeSymbol });
     }
     bindArguments(attribute, spec, ctx, ctx);
   });
@@ -659,16 +757,27 @@ function bindArguments(
   ctx: ReferenceContext,
   modelContext?: BindContext,
 ): void {
+  const rawArgs = Array.from(attribute.node.argList()?.args() ?? []);
   let positional = 0;
-  for (const arg of attribute.args) {
+  attribute.args.forEach((arg, index) => {
     const parameter = argumentParameter(
       spec,
       arg.name,
       arg.name === undefined ? positional++ : positional,
     );
-    if (parameter === undefined || arg.expression === undefined) continue;
+    if (parameter === undefined) return;
+    if (arg.name !== undefined) {
+      const keyNode = rawArgs[index]?.name()?.syntax;
+      if (keyNode !== undefined) {
+        ctx.references.set(keyNode, {
+          kind: 'parameter',
+          symbol: { kind: 'parameter', name: arg.name, param: parameter },
+        });
+      }
+    }
+    if (arg.expression === undefined) return;
     bindExpression(parameter.type, arg.expression, ctx, modelContext);
-  }
+  });
 }
 
 interface BindingArguments {
@@ -726,7 +835,11 @@ function resolveEntity(
   const found =
     written.namespace === undefined
       ? ctx.scope.lookup(written.name)
-      : qualifiedMember(written.namespace, written.name, ctx.scope);
+      : qualifiedMember(
+          written.namespace,
+          written.name,
+          bindQualifier(entityQualifier(node), ctx.scope, ctx.references),
+        );
   if (found === undefined) {
     const name = describeWrittenEntityReference(written);
     if (written.name !== '') report(`Cannot find entity "${name}"`, node, ctx, 'entity');
@@ -759,18 +872,47 @@ interface TypeReferenceOutcome {
   readonly name?: string;
 }
 
+interface ResolutionSink {
+  set(node: SyntaxNode, resolution: Resolution): unknown;
+}
+
+function entityQualifier(node: SyntaxNode): IdentifierAst | undefined {
+  const path = PathExprAst.cast(node);
+  if (path === undefined) return undefined;
+  const [qualifier] = path.segments();
+  return qualifier;
+}
+
+function bindQualifier(
+  qualifier: IdentifierAst | undefined,
+  scope: Scope,
+  references: ResolutionSink,
+): ScopeResolution | undefined {
+  const id = qualifier?.name();
+  if (qualifier === undefined || id === undefined) return undefined;
+  const resolution = scope.lookup(id);
+  if (resolution !== undefined && isNamespaceLike(resolution)) {
+    references.set(qualifier.syntax, resolution);
+  }
+  return resolution;
+}
+
 function resolveTypeReference(
   reference: QualifiedNameAst | undefined,
   scope: Scope,
+  references: ResolutionSink,
   describeUnresolved?: (written: string) => string | undefined,
 ): TypeReferenceOutcome | undefined {
   if (reference === undefined || reference.isOverQualified()) return undefined;
   if (reference.space() !== undefined) return { resolution: { kind: 'crossSpace' } };
   const name = reference.identifier()?.name();
   if (name === undefined || name === '') return undefined;
-  const namespaceId = reference.namespace()?.name();
+  const qualifier = reference.namespace();
+  const namespaceId = qualifier?.name();
   const found =
-    namespaceId === undefined ? scope.lookup(name) : qualifiedMember(namespaceId, name, scope);
+    namespaceId === undefined
+      ? scope.lookup(name)
+      : qualifiedMember(namespaceId, name, bindQualifier(qualifier, scope, references));
   if (found === undefined) {
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
     const message = describeUnresolved?.(written) ?? `Cannot find type "${written}"`;
@@ -806,9 +948,8 @@ interface BadQualifier {
 function qualifiedMember(
   namespaceId: string,
   name: string,
-  scope: Scope,
+  qualifier: ScopeResolution | undefined,
 ): ScopeResolution | BadQualifier | undefined {
-  const qualifier = scope.lookup(namespaceId);
   if (qualifier === undefined) return undefined;
   if (!isNamespaceLike(qualifier)) {
     return {

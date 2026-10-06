@@ -87,7 +87,11 @@ import {
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
-import { type ValueObjectTypes, valueObjectDefaultMismatches } from './value-object-default';
+import {
+  type ValueObjectTypes,
+  valueObjectDefaultDocument,
+  valueObjectDefaultMismatches,
+} from './value-object-default';
 
 export type ColumnDescriptor = {
   readonly codecId: string;
@@ -581,6 +585,9 @@ export function resolveFieldTypeDescriptor(
     }
     case 'field':
     case 'attribute':
+    case 'parameter':
+    case 'function':
+    case 'constant':
       throw new InternalError(
         `The type of ${entityLabel} resolved to a ${resolution.kind}; a type reference never names one. This is a binder bug.`,
       );
@@ -782,19 +789,27 @@ export function lowerDefaultForField(input: {
       );
     }
     if (input.valueObjectDefault !== undefined) {
+      const { document, stored } = valueObjectDefaultDocument({
+        stored: restoredValue,
+        elementwise: readsListElements(written) && !input.isListColumn,
+        codecId: input.columnDescriptor.codecId,
+        codecLookup: input.codecLookup,
+      });
       const mismatches = valueObjectDefaultMismatches({
         fieldPath: `${input.modelName}.${input.fieldName}`,
-        value: restoredValue,
+        value: document,
         list: input.field.list,
         nullable: input.field.optional,
         elementNullable: input.field.elementOptional,
         ...input.valueObjectDefault,
         codecLookup: input.codecLookup,
+        dataTypeLookup: input.dataTypeSupport.lookup,
       });
       for (const { code, message } of mismatches) {
         input.diagnostics.push({ code, message, ...source.at() });
       }
       if (mismatches.length > 0) return {};
+      return { defaultValue: { kind: 'literal' as const, value: stored, canonical: true } };
     }
     return { defaultValue: { kind: 'literal' as const, value: restoredValue, canonical: true } };
   };

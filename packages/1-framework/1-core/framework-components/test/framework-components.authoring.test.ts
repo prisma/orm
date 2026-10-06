@@ -799,7 +799,7 @@ describe('authoring template resolution', () => {
 });
 
 describe('collectScalarTypeConstructors', () => {
-  it('collects top-level zero-arg constructors with explicit nativeType as {codecId, nativeType}', () => {
+  it('collects top-level zero-arg constructors as {codecId}', () => {
     const namespace = {
       String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
       Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },

@@ -40,7 +40,7 @@ function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage>
     columns: {
       at: {
         many: false,
-        nativeType: 'text',
+        dataType: 'sqlite/text',
         nullable: false,
         codecId: 'sqlite/text@1',
         default: columnDefault,

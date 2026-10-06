@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a60cd237f46459d3cdd8d0afabbd1f682f377517ea746c88cc008378c2ced089'>;
+  StorageHashBase<'716cc4e05ded747a1bcd559160bcbe8bae1b20719ac753171cffa802c21d4017'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -304,19 +304,19 @@ type ContractBase = Omit<
             readonly event: {
               columns: {
                 readonly appId: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly createdAt: {
-                  readonly nativeType: 'date';
+                  readonly dataType: 'pg/date';
                   readonly codecId: 'pg/date-temporal@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly value: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly many: false;

@@ -71,27 +71,27 @@ export function createTestSchemaIR(tables: Record<string, SqlTableIR>): SqlSchem
 /**
  * Creates a minimal contract table for testing.
  */
-const NO_INFERRED_CODEC = new Set(['date', 'timestamp', 'timestamptz', 'time']);
+const NO_INFERRED_CODEC = new Set(['pg/date', 'pg/timestamp', 'pg/timestamptz', 'pg/time']);
 
 function codecIdFor(
   name: string,
-  col: { readonly codecId?: string; readonly nativeType: string },
+  col: { readonly dataType: string; readonly codecId?: string },
 ): string {
   if (col.codecId !== undefined) return col.codecId;
-  if (NO_INFERRED_CODEC.has(col.nativeType)) {
+  if (NO_INFERRED_CODEC.has(col.dataType)) {
     throw new Error(
-      `Test column "${name}" is a ${col.nativeType} and must name its codecId explicitly: ` +
-        `pg/${col.nativeType}-temporal@1 for a Temporal value, pg/${col.nativeType}-string@1 for the server's text.`,
+      `Test column "${name}" is a ${col.dataType} and must name its codecId explicitly: ` +
+        `${col.dataType}-temporal@1 for a Temporal value, ${col.dataType}-string@1 for the server's text.`,
     );
   }
-  return `pg/${col.nativeType}@1`;
+  return `${col.dataType}@1`;
 }
 
 export function createContractTable(
   columns: Record<
     string,
     {
-      nativeType: string;
+      dataType: string;
       codecId?: string;
       nullable: boolean;
       default?: ColumnDefault;
@@ -117,7 +117,7 @@ export function createContractTable(
       Object.entries(columns).map(([name, col]) => [
         name,
         {
-          nativeType: col.nativeType,
+          dataType: col.dataType,
           codecId: codecIdFor(name, col),
           nullable: col.nullable,
           ...ifDefined('default', col.default),

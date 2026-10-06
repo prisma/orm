@@ -13,7 +13,7 @@ import type { AuthoringFieldPresetDescriptor } from '@internal/framework-compone
  *
  * It is kept honest by `family-sql/test/temporal-codec-presets.test.ts`, which
  * imports this mirror and asserts it deep-equals the factory output. The
- * factory is generic over codecId/nativeType, so the invented codec id anchors
+ * factory is generic over codecId, so the invented codec id anchors
  * exactly as a real one would.
  */
 const NOW_PHASE = { kind: 'generator', id: 'timestampNow' } as const;

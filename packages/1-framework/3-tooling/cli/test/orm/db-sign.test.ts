@@ -1,22 +1,25 @@
 import { writeRef } from '@internal/migration-tools/refs';
+import { notOk, ok } from '@internal/utils/result';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CliStructuredError } from '../../src/utils/cli-errors';
 import {
   CONNECTION,
   cleanupProjectDirs,
   diagnosticsOf,
   envelopeOf,
+  failedSpace,
   HASH_A,
+  HASH_EXT,
   HASH_PREVIOUS,
   harness,
   MASKED_CONNECTION,
-  MISSING_COLUMN,
   mocks,
   ormConfig,
+  PROFILE_HASH,
   projectDir,
   refsDirOf,
   resetMocks,
-  schemaResult,
-  signResult,
+  signedSpace,
 } from './db-sign-fixtures';
 import {
   refusedConnection,
@@ -28,8 +31,17 @@ import {
 beforeEach(resetMocks);
 afterEach(cleanupProjectDirs);
 
+const HEADER = {
+  kind: 'fields',
+  rail: true,
+  rows: [
+    { label: 'contract', value: 'output/contract.json' },
+    { label: 'database', value: MASKED_CONNECTION },
+  ],
+};
+
 describe('db sign', () => {
-  describe('verification passes', () => {
+  describe('every space verifies', () => {
     it('signs and completes at exit 0 with no diagnostics', async () => {
       const dir = await projectDir();
 
@@ -37,108 +49,158 @@ describe('db sign', () => {
 
       expect(run.exitCode).toBe(0);
       expect(diagnosticsOf(run)).toEqual([]);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
       expect(run.presented?.data).toEqual({
-        ...signResult(),
-        advancedRef: { name: 'db', hash: HASH_A },
+        ok: true,
+        summary: 'Database signed',
+        spaces: [signedSpace('app', HASH_A)],
+        advancedRefs: [{ space: 'app', name: 'db', hash: HASH_A }],
       });
     });
 
-    it('reads the contract through the family seam rather than a bare JSON.parse', async () => {
+    it('hands the operation the contract read through the family seam and the connection', async () => {
       const dir = await projectDir();
 
       await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
-      expect(mocks.schemaVerify).toHaveBeenCalledWith(
+      expect(mocks.dbSign).toHaveBeenCalledWith(
         expect.objectContaining({
           contract: expect.objectContaining({ hydrated: true }),
-          strict: false,
+          connection: CONNECTION,
         }),
       );
     });
 
-    it('heads the human output with the contract and the masked database', async () => {
+    it('names each space and what signing did to it', async () => {
       const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            signedSpace('app', HASH_A),
+            {
+              space: 'pgvector',
+              status: 'unchanged',
+              contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
 
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
         cwd: dir,
         isTty: { stdout: true },
       });
 
       expect(run.presented?.presentation.human).toEqual([
+        HEADER,
         {
-          kind: 'fields',
-          rail: true,
-          rows: [
-            { label: 'contract', value: 'output/contract.json' },
-            { label: 'database', value: MASKED_CONNECTION },
+          kind: 'tree',
+          roots: [
+            {
+              label: [
+                { text: 'app: signed ' },
+                { text: HASH_A, tone: 'identifier' },
+                { text: ' (was ', tone: 'muted' },
+                { text: HASH_PREVIOUS, tone: 'identifier' },
+                { text: ')', tone: 'muted' },
+              ],
+              status: 'ok',
+            },
+            {
+              label: [
+                { text: 'pgvector: unchanged, already signed with ' },
+                { text: HASH_EXT, tone: 'identifier' },
+              ],
+              status: 'ok',
+            },
           ],
         },
         { kind: 'summary', status: 'ok', text: 'Database signed' },
         {
-          kind: 'fields',
-          rows: [
-            { label: 'from', value: [{ text: HASH_PREVIOUS, tone: 'identifier' }] },
-            { label: 'to', value: [{ text: HASH_A, tone: 'identifier' }] },
-          ],
-        },
-        {
           kind: 'summary',
-          status: 'ok',
-          text: [{ text: 'Advanced ref "db" → ' }, { text: HASH_A, tone: 'identifier' }],
+          status: 'info',
+          tone: 'muted',
+          text: 'Left ref "db" untouched (--no-advance-ref)',
         },
       ]);
       expect(run.presented?.presentation.stdout).toEqual([]);
       expect(run.stdout).toBe('');
     });
-  });
 
-  describe('the family reports it did not sign', () => {
-    it('reaches the engine as an internal error rather than claiming success', async () => {
+    it('says when a space had no marker before', async () => {
       const dir = await projectDir();
-      mocks.sign.mockResolvedValue({ ...signResult(), ok: false, summary: 'Marker not written' });
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            {
+              space: 'app',
+              status: 'created',
+              contract: { storageHash: HASH_A, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
 
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(run.exitCode).toBe(1);
-      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code: 'CLI.INTERNAL_ERROR' } });
-    });
-
-    it('does not present "Database signed"', async () => {
-      const dir = await projectDir();
-      mocks.sign.mockResolvedValue({ ...signResult(), ok: false, summary: 'Marker not written' });
-
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
         cwd: dir,
         isTty: { stdout: true },
       });
 
-      expect(run.stderr).not.toContain('Database signed');
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'tree',
+        roots: [
+          {
+            label: [
+              { text: 'app: signed ' },
+              { text: HASH_A, tone: 'identifier' },
+              { text: ' (no marker before)', tone: 'muted' },
+            ],
+            status: 'ok',
+          },
+        ],
+      });
     });
   });
 
-  describe('verification fails', () => {
-    const DRIFTED = schemaResult({
-      ok: false,
-      code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-      summary: 'Database schema does not satisfy contract',
-      schema: { issues: [MISSING_COLUMN] },
-    });
+  describe('a space fails verification', () => {
+    function appFailsExtensionSigns() {
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)] }),
+      );
+    }
 
-    it('completes at exit 4 without writing a signature', async () => {
+    it('completes at exit 4 and reports every space', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+      appFailsExtensionSigns();
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
       expect(run.exitCode).toBe(4);
-      expect(mocks.sign).not.toHaveBeenCalled();
       expect(envelopeOf(run)).toMatchObject({ ok: true, exitCode: 4 });
+      expect(run.presented?.data).toEqual({
+        ok: false,
+        summary: 'Database schema does not satisfy contract for space "app"; signed "pgvector"',
+        spaces: [failedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)],
+        advancedRefs: [{ space: 'pgvector', name: 'db', hash: HASH_EXT }],
+      });
     });
 
-    it('carries the verdict as one error diagnostic', async () => {
+    it('says nothing was signed when no space verified', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.presented?.data).toMatchObject({
+        summary: 'Database schema does not satisfy contract for space "app"; signed nothing',
+        advancedRefs: [],
+      });
+    });
+
+    it('carries one error diagnostic per failed space', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
@@ -147,12 +209,14 @@ describe('db sign', () => {
           code: entry.code,
           severity: entry.severity,
           summary: entry.summary,
+          space: entry.meta?.['space'],
         })),
       ).toEqual([
         {
           code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
           severity: 'error',
           summary: 'Database schema does not satisfy contract',
+          space: 'app',
         },
       ]);
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
@@ -172,7 +236,7 @@ describe('db sign', () => {
     it('aims db update at the ref being signed, and the contract change at the emitted contract', async () => {
       const dir = await projectDir();
       await writeRef(refsDirOf(dir), 'staging', { hash: HASH_A, invariants: [] });
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
 
       const run = await harness(ormConfig()).run(['db', 'sign', 'staging', '--json'], {
         cwd: dir,
@@ -193,40 +257,42 @@ describe('db sign', () => {
       ]);
     });
 
-    it('reports the schema-verify document as the --json payload', async () => {
+    it('draws the drift under the failed space and closes with the failing summary', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+      appFailsExtensionSigns();
 
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(run.presented?.data).toEqual(DRIFTED);
-      expect(run.presented?.data).not.toHaveProperty('unclaimed');
-    });
-
-    it('draws the drift as a tree and closes with the failing summary', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
         cwd: dir,
         isTty: { stdout: true },
       });
 
-      expect(run.presented?.presentation.human[1]).toEqual({
-        kind: 'tree',
-        roots: [
-          {
-            label: 'Schema issues',
-            status: 'error',
-            children: [{ label: 'missing: public/users/email', status: 'error' }],
-          },
-        ],
-      });
-      expect(run.presented?.presentation.human.at(-1)).toEqual({
-        kind: 'summary',
-        status: 'error',
-        text: 'Database schema does not satisfy contract',
-      });
+      expect(run.presented?.presentation.human.slice(1, 3)).toEqual([
+        {
+          kind: 'tree',
+          roots: [
+            {
+              label: 'app: not signed, the schema does not satisfy its contract',
+              status: 'error',
+              children: [{ label: 'missing: public/users/email', status: 'error' }],
+            },
+            {
+              label: [
+                { text: 'pgvector: signed ' },
+                { text: HASH_EXT, tone: 'identifier' },
+                { text: ' (was ', tone: 'muted' },
+                { text: HASH_PREVIOUS, tone: 'identifier' },
+                { text: ')', tone: 'muted' },
+              ],
+              status: 'ok',
+            },
+          ],
+        },
+        {
+          kind: 'summary',
+          status: 'error',
+          text: 'Database schema does not satisfy contract for space "app"; signed "pgvector"',
+        },
+      ]);
     });
   });
 
@@ -244,7 +310,7 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'CLI.CONTRACT_ARG_CONFLICT' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
     });
 
     it('errors at exit 2 when the contract has not been emitted', async () => {
@@ -296,12 +362,12 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'MIGRATION.REF_NOT_FOUND' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
     });
 
     it('reports a refused connection as every command does, with its driver code', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockRejectedValue(refusedConnection());
+      mocks.dbSign.mockRejectedValue(refusedConnection());
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
@@ -311,7 +377,7 @@ describe('db sign', () => {
 
     it('keeps the diagnostics of a structured driver error, without the connection string', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockRejectedValue(refusedWithDiagnostics());
+      mocks.dbSign.mockRejectedValue(refusedWithDiagnostics());
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
@@ -325,7 +391,7 @@ describe('db sign', () => {
 
     it('errors at exit 2 when the driver throws, without leaking the connection string', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockRejectedValue(new Error(`connect ECONNREFUSED for ${CONNECTION}`));
+      mocks.dbSign.mockRejectedValue(new Error(`connect ECONNREFUSED for ${CONNECTION}`));
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
@@ -333,6 +399,26 @@ describe('db sign', () => {
       expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code: 'CLI.UNEXPECTED' } });
       expect(JSON.stringify(run.json.at(-1))).not.toContain('secret');
       expect(mocks.close).toHaveBeenCalled();
+    });
+  });
+
+  it('errors at exit 2 when the contract spaces cannot be loaded', async () => {
+    const dir = await projectDir();
+    mocks.dbSign.mockResolvedValue(
+      notOk(
+        new CliStructuredError(
+          'MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION',
+          'Contract-space layout violation detected',
+        ),
+      ),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run)).toMatchObject({
+      ok: false,
+      error: { code: 'MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION' },
     });
   });
 

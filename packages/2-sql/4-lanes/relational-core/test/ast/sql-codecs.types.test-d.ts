@@ -64,12 +64,7 @@ sqlCharColumn satisfies ColumnHelperForStrict<SqlCharDescriptor>;
 
 test('coarse satisfies catches wrong typeParams shape on sqlCharColumn', () => {
   const brokenHelper = (length: number) =>
-    column(
-      sqlCharDescriptor.factory({ length }),
-      sqlCharDescriptor.codecId,
-      { wrongKey: length },
-      'char',
-    );
+    column(sqlCharDescriptor.factory({ length }), sqlCharDescriptor.codecId, { wrongKey: length });
   // @ts-expect-error -- typeParams shape doesn't satisfy ColumnHelperFor<SqlCharDescriptor> (missing `length`)
   brokenHelper satisfies ColumnHelperFor<SqlCharDescriptor>;
   // @ts-expect-error -- strict shape catches the same mismatch
@@ -79,7 +74,7 @@ test('coarse satisfies catches wrong typeParams shape on sqlCharColumn', () => {
 test('strict satisfies catches wrong codec wired in', () => {
   // Wire the text descriptor's factory into the char descriptor's slot. Coarse satisfies passes (`undefined` is the typeParams shape mismatch — sqlText's params resolve to `undefined` while sqlChar expects `{ readonly length?: number }`), so this exercises both axes; we assert the strict failure for the codec mismatch.
   const wrongCodecHelper = (length: number) =>
-    column(sqlTextDescriptor.factory(), sqlCharDescriptor.codecId, { length }, 'char');
+    column(sqlTextDescriptor.factory(), sqlCharDescriptor.codecId, { length });
   wrongCodecHelper satisfies ColumnHelperFor<SqlCharDescriptor>;
   // @ts-expect-error -- codec is SqlTextCodec, not SqlCharCodec
   wrongCodecHelper satisfies ColumnHelperForStrict<SqlCharDescriptor>;

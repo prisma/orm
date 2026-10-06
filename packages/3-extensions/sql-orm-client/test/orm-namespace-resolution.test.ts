@@ -22,9 +22,9 @@ function model(table: string, fieldColumns: Record<string, string>) {
 }
 
 function storageTable(columns: string[]) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<string, { codecId: string; dataType: string; nullable: boolean }> = {};
   for (const column of columns) {
-    cols[column] = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
+    cols[column] = { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false };
   }
   return {
     columns: cols,

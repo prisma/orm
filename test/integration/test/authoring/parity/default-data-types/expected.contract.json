@@ -159,24 +159,25 @@
               "columns": {
                 "active": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "default": {
                     "kind": "literal",
                     "value": true
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "count": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": 100000
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "docs": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": [{}, []]
@@ -184,20 +185,20 @@
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "meta": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": {
@@ -205,25 +206,24 @@
                       "seats": 1
                     }
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "kind": "literal",
                     "value": "anonymous"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "price": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "default": {
                     "kind": "literal",
                     "value": "1.50"
                   },
-                  "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10,
@@ -232,15 +232,16 @@
                 },
                 "ratio": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "default": {
                     "kind": "literal",
                     "value": 1.5
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "scores": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": [1, 2]
@@ -248,16 +249,15 @@
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "small": {
                   "codecId": "pg/int2@1",
+                  "dataType": "pg/int2",
                   "default": {
                     "kind": "literal",
                     "value": 100
                   },
-                  "nativeType": "int2",
                   "nullable": false
                 }
               },
@@ -273,7 +273,7 @@
         "id": "public"
       }
     },
-    "storageHash": "c300acb75b1babdede2e14075f92d8e912e571f8f68acd581330e98cf155640d"
+    "storageHash": "4cd8bdb684cf5ab1cdb215dd5b028130e1f08e5f7820b6c2b0f61fafaebbd126"
   },
   "capabilities": {
     "postgres": {

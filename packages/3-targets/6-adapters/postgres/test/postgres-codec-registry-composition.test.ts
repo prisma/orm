@@ -83,10 +83,14 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             records: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                document: { codecId: 'arktype/json@1', nativeType: 'jsonb', nullable: false },
-                embedding: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
-                location: { codecId: 'pg/geometry@1', nativeType: 'geometry', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                document: { codecId: 'arktype/json@1', dataType: 'pg/jsonb', nullable: false },
+                embedding: { codecId: 'pg/vector@1', dataType: 'pgvector/vector', nullable: false },
+                location: {
+                  codecId: 'pg/geometry@1',
+                  dataType: 'postgis/geometry',
+                  nullable: false,
+                },
               },
               uniques: [],
               indexes: [],

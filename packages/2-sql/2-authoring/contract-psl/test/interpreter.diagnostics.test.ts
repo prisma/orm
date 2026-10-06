@@ -1479,7 +1479,6 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
-      nativeType: 'text',
       codecId: 'pg/text@1',
       many: { elementNullable: false },
       default: { kind: 'literal', value: [] },
@@ -1586,7 +1585,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toEqual({
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
       many: { elementNullable: true },

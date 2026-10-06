@@ -305,7 +305,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
     ]);
     const column: StorageColumn = {
       many: false,
-      nativeType: 'vector',
+      dataType: 'pgvector/vector',
       codecId: 'pg/vector@1',
       nullable: false,
       typeParams: { length: 3 },

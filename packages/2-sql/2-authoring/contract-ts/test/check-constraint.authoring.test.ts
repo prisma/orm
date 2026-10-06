@@ -118,14 +118,13 @@ const bareTargetPack = {
   defaultNamespaceId: 'public',
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
 
 const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 const Status = enumType('Status', pgText, member('Active', 'active'));
 
 const nativeRoleDescriptor = {
   codecId: 'test/native-role@1',
-  nativeType: 'native_role',
   valueSet: {
     plane: 'storage',
     entityKind: 'valueSet',
@@ -322,7 +321,7 @@ describe('check emission — domain enum on a non-pg codec', () => {
   it('still emits a membership check (a domain enum is always a plain scalar column)', () => {
     const NativeRole = enumType(
       'NativeRole',
-      { codecId: 'test/native-enum@1', nativeType: 'native_role' },
+      { codecId: 'test/native-enum@1' },
       member('User', 'user'),
     );
     const contract = defineContract(
@@ -462,11 +461,7 @@ describe('check emission — guards', () => {
   it.each([true, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'rejects unsupported membership value %s',
     (value) => {
-      const Flag = enumType(
-        'Flag',
-        { codecId: 'pg/bool@1', nativeType: 'bool' },
-        member('On', value),
-      );
+      const Flag = enumType('Flag', { codecId: 'pg/bool@1' }, member('On', value));
       expect(() =>
         defineContract(
           {
@@ -587,7 +582,7 @@ describe('check emission — guards', () => {
     (many) => {
       const Level = enumType(
         'Level',
-        { codecId: 'pg/int8@1', nativeType: 'int8' },
+        { codecId: 'pg/int8@1' },
         member('Low', 1n),
         member('High', 10n),
       );
@@ -647,7 +642,7 @@ describe('check emission — guards', () => {
   );
 
   it('passes numeric member values to the check renderer', () => {
-    const Level = enumType('Level', { codecId: 'pg/int4@1', nativeType: 'int4' }, member('One', 1));
+    const Level = enumType('Level', { codecId: 'pg/int4@1' }, member('One', 1));
     const contract = defineContract(
       {
         ...testTypeLookups,
@@ -1152,7 +1147,7 @@ describe('noCheck — wire schema', () => {
               User: {
                 columns: {
                   tags: {
-                    nativeType: 'text',
+                    dataType: 'pg/text',
                     codecId: 'pg/text@1',
                     nullable: false,
                     many: { elementNullable: false },
@@ -1344,7 +1339,7 @@ describe('check emission — a specifier-applied policy strips derived checks', 
                 User: new StorageTableClass({
                   columns: {
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: false },
@@ -1400,10 +1395,10 @@ describe('check emission — a specifier-applied policy strips derived checks', 
               table: {
                 User: new StorageTableClass({
                   columns: {
-                    id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                    role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                    role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: false },

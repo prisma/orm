@@ -386,7 +386,6 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
    * The runner validates each operation against this policy before execution.
    */
   readonly policy: MigrationOperationPolicy;
-  readonly schemaName?: string;
   readonly strictVerification?: boolean;
   readonly callbacks?: SqlMigrationRunnerExecuteCallbacks<TTargetDetails>;
   readonly context?: OperationContext;

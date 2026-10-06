@@ -206,27 +206,27 @@
               "columns": {
                 "bigint": {
                   "codecId": "sqlite/bigint@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "bigintNumber": {
                   "codecId": "sqlite/bigintnumber@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "blob": {
                   "codecId": "sqlite/blob@1",
-                  "nativeType": "blob",
+                  "dataType": "sqlite/blob",
                   "nullable": false
                 },
                 "char": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false
                 },
                 "charLength": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -234,62 +234,62 @@
                 },
                 "datetime": {
                   "codecId": "sqlite/datetime@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "integer",
                   "nullable": false
                 },
                 "integer": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "json": {
                   "codecId": "sqlite/json@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "real": {
                   "codecId": "sqlite/real@1",
-                  "nativeType": "real",
+                  "dataType": "sqlite/real",
                   "nullable": false
                 },
                 "shortText": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "sqlite/character-varying",
                   "nullable": false,
                   "typeRef": "ShortText"
                 },
                 "sqlFloat": {
                   "codecId": "sql/float@1",
-                  "nativeType": "real",
+                  "dataType": "sqlite/real",
                   "nullable": false
                 },
                 "sqlInt": {
                   "codecId": "sql/int@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "text": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "varchar": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "sqlite/character-varying",
                   "nullable": false
                 },
                 "varcharLength": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "sqlite/character-varying",
                   "nullable": false,
                   "typeParams": {
                     "length": 255
@@ -310,12 +310,12 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "57d51972b0caaf8bcc95b6f6bd8d04564a375bfe7cc86e0493717d96b0bad3bf",
+    "storageHash": "6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607",
     "types": {
       "ShortText": {
         "codecId": "sql/varchar@1",
+        "dataType": "sqlite/character-varying",
         "kind": "codec-instance",
-        "nativeType": "character varying",
         "typeParams": {
           "length": 255
         }

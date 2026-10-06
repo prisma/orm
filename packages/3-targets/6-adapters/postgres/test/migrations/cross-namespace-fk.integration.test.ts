@@ -39,8 +39,8 @@ function buildCrossNamespaceFkContract(): Contract<SqlStorage> {
             table: {
               post: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -71,7 +71,7 @@ function buildCrossNamespaceFkContract(): Contract<SqlStorage> {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

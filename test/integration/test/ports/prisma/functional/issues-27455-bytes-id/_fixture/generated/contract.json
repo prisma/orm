@@ -125,12 +125,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -147,12 +147,12 @@
               "columns": {
                 "accommodationId": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 }
               },
@@ -197,7 +197,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cb9ea7a7d2b5db101d9659308f50801643821d12136bf99b3c211bbf4eefa407"
+    "storageHash": "300758e7d73ad2a00aa308f883b9b77628f0b1ff4c70b6b4afe44cd1f2d2b084"
   },
   "capabilities": {
     "postgres": {

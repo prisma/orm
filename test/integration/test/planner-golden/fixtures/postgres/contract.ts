@@ -1,8 +1,7 @@
 /**
- * One column per Postgres data type in each parameter shape a contract can hold
- * today, so the planner golden test sees every way a column type is written.
- * A descriptor written out by hand stands where no column helper takes that
- * shape; its `nativeType` is the type's name with no parameters.
+ * One column per Postgres data type in each parameter shape a contract can hold today, so the
+ * planner golden test sees every way a column type is written. A descriptor written out by hand
+ * stands where no column helper takes that shape.
  */
 
 import {
@@ -50,68 +49,60 @@ import {
 
 const Mood = nativeEnum('Mood', 'happy', 'sad');
 
-const numeric = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
-const char = { codecId: 'sql/char@1', nativeType: 'character' } as const;
-const varchar = { codecId: 'sql/varchar@1', nativeType: 'character varying' } as const;
-const bit = { codecId: 'pg/bit@1', nativeType: 'bit' } as const;
-const varbit = { codecId: 'pg/varbit@1', nativeType: 'bit varying' } as const;
-const uuid = { codecId: 'pg/uuid@1', nativeType: 'uuid' } as const;
-const inet = { codecId: 'pg/inet@1', nativeType: 'inet' } as const;
-const tsquery = { codecId: 'pg/tsquery@1', nativeType: 'tsquery' } as const;
+const numeric = { codecId: 'pg/numeric@1' } as const;
+const char = { codecId: 'sql/char@1' } as const;
+const varchar = { codecId: 'sql/varchar@1' } as const;
+const bit = { codecId: 'pg/bit@1' } as const;
+const varbit = { codecId: 'pg/varbit@1' } as const;
+const uuid = { codecId: 'pg/uuid@1' } as const;
+const inet = { codecId: 'pg/inet@1' } as const;
+const tsquery = { codecId: 'pg/tsquery@1' } as const;
 
 const timestamp3 = {
   codecId: 'pg/timestamp-temporal@1',
-  nativeType: 'timestamp',
   typeParams: { precision: 3 },
 } as const;
 const timestamptz3 = {
   codecId: 'pg/timestamptz-temporal@1',
-  nativeType: 'timestamptz',
   typeParams: { precision: 3 },
 } as const;
 
 const pgChar5 = {
   codecId: 'pg/char@1',
-  nativeType: 'character',
   typeParams: { length: 5 },
 } as const;
-const pgVarchar = { codecId: 'pg/varchar@1', nativeType: 'character varying' } as const;
-const pgInt = { codecId: 'pg/int@1', nativeType: 'int4' } as const;
-const pgFloat = { codecId: 'pg/float@1', nativeType: 'float8' } as const;
-const sqlInt = { codecId: 'sql/int@1', nativeType: 'int4' } as const;
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'float8' } as const;
-const sqlText = { codecId: 'sql/text@1', nativeType: 'text' } as const;
-const int8Number = { codecId: 'pg/int8number@1', nativeType: 'int8' } as const;
-const unboundedInt = { codecId: 'pg/unboundedint@1', nativeType: 'numeric' } as const;
+const pgVarchar = { codecId: 'pg/varchar@1' } as const;
+const pgInt = { codecId: 'pg/int@1' } as const;
+const pgFloat = { codecId: 'pg/float@1' } as const;
+const sqlInt = { codecId: 'sql/int@1' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
+const sqlText = { codecId: 'sql/text@1' } as const;
+const int8Number = { codecId: 'pg/int8number@1' } as const;
+const unboundedInt = { codecId: 'pg/unboundedint@1' } as const;
 
 const shortText = {
   kind: 'codec-instance',
   codecId: 'sql/varchar@1',
-  nativeType: 'character varying',
   typeParams: { length: 255 },
 } as const;
 const code = {
   kind: 'codec-instance',
   codecId: 'sql/char@1',
-  nativeType: 'character',
   typeParams: {},
 } as const;
 const id = {
   kind: 'codec-instance',
   codecId: 'pg/uuid@1',
-  nativeType: 'uuid',
   typeParams: {},
 } as const;
 const money = {
   kind: 'codec-instance',
   codecId: 'pg/numeric@1',
-  nativeType: 'numeric',
   typeParams: { precision: 10, scale: 2 },
 } as const;
 const embedding = {
   kind: 'codec-instance',
   codecId: 'pg/vector@1',
-  nativeType: 'vector',
   typeParams: { length: 3 },
 } as const;
 

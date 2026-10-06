@@ -64,7 +64,7 @@ type NativeEnumStorage = {
             columns: {
               readonly aal: {
                 readonly many: false;
-                nativeType: 'aal_level';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: false;
                 valueSet: {
@@ -76,7 +76,7 @@ type NativeEnumStorage = {
               };
               readonly factorType: {
                 readonly many: false;
-                nativeType: 'factor_type';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: true;
                 valueSet: {

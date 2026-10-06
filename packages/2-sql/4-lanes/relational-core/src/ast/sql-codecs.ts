@@ -78,7 +78,7 @@ export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
 export const sqlTextDescriptor = new SqlTextDescriptor();
 
 export const sqlTextColumn = () =>
-  column(sqlTextDescriptor.factory(), sqlTextDescriptor.codecId, undefined, 'text');
+  column(sqlTextDescriptor.factory(), sqlTextDescriptor.codecId, undefined);
 
 sqlTextColumn satisfies ColumnHelperFor<SqlTextDescriptor>;
 sqlTextColumn satisfies ColumnHelperForStrict<SqlTextDescriptor>;
@@ -115,7 +115,7 @@ export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
 export const sqlIntDescriptor = new SqlIntDescriptor();
 
 export const sqlIntColumn = () =>
-  column(sqlIntDescriptor.factory(), sqlIntDescriptor.codecId, undefined, 'int');
+  column(sqlIntDescriptor.factory(), sqlIntDescriptor.codecId, undefined);
 
 sqlIntColumn satisfies ColumnHelperFor<SqlIntDescriptor>;
 sqlIntColumn satisfies ColumnHelperForStrict<SqlIntDescriptor>;
@@ -152,7 +152,7 @@ export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
 export const sqlFloatDescriptor = new SqlFloatDescriptor();
 
 export const sqlFloatColumn = () =>
-  column(sqlFloatDescriptor.factory(), sqlFloatDescriptor.codecId, undefined, 'float');
+  column(sqlFloatDescriptor.factory(), sqlFloatDescriptor.codecId, undefined);
 
 sqlFloatColumn satisfies ColumnHelperFor<SqlFloatDescriptor>;
 sqlFloatColumn satisfies ColumnHelperForStrict<SqlFloatDescriptor>;
@@ -192,7 +192,7 @@ export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams>
 export const sqlCharDescriptor = new SqlCharDescriptor();
 
 export const sqlCharColumn = (params: LengthParams = {}) =>
-  column(sqlCharDescriptor.factory(params), sqlCharDescriptor.codecId, params, 'char');
+  column(sqlCharDescriptor.factory(params), sqlCharDescriptor.codecId, params);
 
 sqlCharColumn satisfies ColumnHelperFor<SqlCharDescriptor>;
 sqlCharColumn satisfies ColumnHelperForStrict<SqlCharDescriptor>;
@@ -232,7 +232,7 @@ export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthPara
 export const sqlVarcharDescriptor = new SqlVarcharDescriptor();
 
 export const sqlVarcharColumn = (params: LengthParams = {}) =>
-  column(sqlVarcharDescriptor.factory(params), sqlVarcharDescriptor.codecId, params, 'varchar');
+  column(sqlVarcharDescriptor.factory(params), sqlVarcharDescriptor.codecId, params);
 
 sqlVarcharColumn satisfies ColumnHelperFor<SqlVarcharDescriptor>;
 sqlVarcharColumn satisfies ColumnHelperForStrict<SqlVarcharDescriptor>;

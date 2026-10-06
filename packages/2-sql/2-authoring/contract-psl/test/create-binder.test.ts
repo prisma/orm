@@ -80,7 +80,10 @@ function normalize(resolution: unknown): unknown {
     case 'namedType':
     case 'block':
     case 'namespace':
-    case 'field': {
+    case 'field':
+    case 'parameter':
+    case 'function':
+    case 'constant': {
       const symbol = r.symbol as { readonly name: string };
       return { kind: r.kind, name: symbol.name };
     }
@@ -162,6 +165,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'id', level: 'field' },
       { kind: 'field', name: 'createdAt' },
       { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'price' },
       { kind: 'contributedType', name: 'Money', path: ['Money'] },
       { kind: 'field', name: 'weird' },
@@ -184,8 +188,11 @@ describe('createBinder', () => {
       { kind: 'contributedType', name: 'Int', path: ['Int'] },
       { kind: 'field', name: 'account' },
       { kind: 'model', name: 'Account' },
+      { kind: 'namespace', name: 'auth' },
       { kind: 'attribute', name: 'relation', level: 'field' },
+      { kind: 'parameter', name: 'fields' },
       { kind: 'field', name: 'accountId' },
+      { kind: 'parameter', name: 'references' },
       { kind: 'field', name: 'id' },
     ]);
   });

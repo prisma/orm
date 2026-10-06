@@ -34,7 +34,7 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             job: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -42,7 +42,7 @@ const contract = new SqlContractSerializer().deserializeContract({
             },
             worker: {
               columns: {
-                jobId: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                jobId: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               uniques: [],
               indexes: [],

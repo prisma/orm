@@ -441,9 +441,32 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
     return rows.length > 0;
   }
 
+  async withTransaction<T>(
+    driver: SqlControlDriverInstance<'sqlite'>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    await driver.query('BEGIN IMMEDIATE');
+    let result: T;
+    try {
+      result = await fn();
+    } catch (error) {
+      try {
+        await driver.query('ROLLBACK');
+      } catch (rollbackError) {
+        if (error instanceof Error && error.cause === undefined) {
+          error.cause = rollbackError;
+        }
+      }
+      throw error;
+    }
+    await driver.query('COMMIT');
+    return result;
+  }
+
+  async lockMarker(_driver: SqlControlDriverInstance<'sqlite'>): Promise<void> {}
+
   /**
-   * Appends a ledger entry for `space`. See the
-   * `SqlControlAdapter.writeLedgerEntry` contract.
+   * Appends a ledger entry for `space`. See the `SqlControlAdapter.writeLedgerEntry` contract.
    */
   async writeLedgerEntry(
     driver: SqlControlDriverInstance<'sqlite'>,

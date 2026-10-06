@@ -23,8 +23,8 @@ const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const userTableInput = {
   columns: {
-    id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-    email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+    id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+    email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
   },
   uniques: [],
   indexes: [],

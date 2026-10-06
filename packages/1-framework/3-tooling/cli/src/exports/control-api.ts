@@ -11,7 +11,6 @@
 // Re-export core control plane types for consumer convenience
 export type {
   ControlStack,
-  SignDatabaseResult,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -52,6 +51,13 @@ export {
 // These drive the aggregate-pipeline `db init` / `db update` / `db verify`
 // flow against a loaded contract-space aggregate.
 export { type ExecuteDbInitOptions, executeDbInit } from '../control-api/operations/db-init';
+export {
+  type DbSignSpaceFailure,
+  type DbSignSpaceOutcome,
+  type ExecuteDbSignOptions,
+  type ExecuteDbSignResult,
+  executeDbSign,
+} from '../control-api/operations/db-sign';
 export {
   type ExecuteDbUpdateOptions,
   executeDbUpdate,
@@ -149,6 +155,7 @@ export type {
   DbInitOptions,
   DbInitResult,
   DbInitSuccess,
+  DbSignOptions,
   DbUpdateFailure,
   DbUpdateFailureCode,
   DbUpdateOptions,
@@ -163,7 +170,6 @@ export type {
   IntrospectOptions,
   OnControlProgress,
   SchemaVerifyOptions,
-  SignOptions,
   VerifyOptions,
 } from '../control-api/types';
 // Lifecycle helpers for hosts that publish to many output paths

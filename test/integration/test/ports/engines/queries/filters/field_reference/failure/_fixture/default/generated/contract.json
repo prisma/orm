@@ -135,17 +135,17 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "str": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "testId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -188,12 +188,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "str": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -212,7 +212,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4fee9e4ca4dcdbac5bac3f3771c7d5b8d9089b3b8d82a583579bf044fcf72e5b"
+    "storageHash": "1cd9e1a0cc8c2d9837281862fcfb85a893121c5800f7d72edd88f8190034b829"
   },
   "capabilities": {
     "postgres": {

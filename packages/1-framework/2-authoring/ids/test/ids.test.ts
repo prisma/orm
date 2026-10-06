@@ -16,7 +16,7 @@ describe('@internal/ids', () => {
   it('builds a generated column spec for uuidv4', () => {
     const spec = uuidv4();
     expect(spec).toEqual({
-      type: { codecId: 'sql/char@1', nativeType: 'character' },
+      type: { codecId: 'sql/char@1' },
       nullable: false,
       typeParams: { length: 36 },
       generated: { kind: 'generator', id: 'uuidv4' },

@@ -407,7 +407,7 @@ describe('default omission', () => {
             columns: {
               done: {
                 codecId: 'pg/bool@1',
-                nativeType: 'bool',
+                dataType: 'pg/bool',
                 nullable: false,
                 default: { kind: 'literal', value: false },
               },
@@ -429,7 +429,7 @@ describe('default omission', () => {
             columns: {
               labels: {
                 codecId: 'pg/text_array@1',
-                nativeType: 'text[]',
+                dataType: 'pg/text-array',
                 nullable: false,
                 default: { kind: 'literal', value: [] },
               },

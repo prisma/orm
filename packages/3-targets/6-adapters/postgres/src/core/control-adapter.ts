@@ -85,6 +85,7 @@ import type {
 } from '@internal/target-postgres/ddl';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
+import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from '@internal/target-postgres/marker-lock';
 import { introspectedNativeType } from '@internal/target-postgres/native-type-normalizer';
 import {
   isPostgresDateTimeDataType,
@@ -540,13 +541,34 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     return rows.length > 0;
   }
 
+  async withTransaction<T>(
+    driver: SqlControlDriverInstance<'postgres'>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    await driver.query('BEGIN');
+    let result: T;
+    try {
+      result = await fn();
+    } catch (error) {
+      try {
+        await driver.query('ROLLBACK');
+      } catch (rollbackError) {
+        if (error instanceof Error && error.cause === undefined) {
+          error.cause = rollbackError;
+        }
+      }
+      throw error;
+    }
+    await driver.query('COMMIT');
+    return result;
+  }
+
+  async lockMarker(driver: SqlControlDriverInstance<'postgres'>): Promise<void> {
+    await driver.query(MARKER_LOCK_SQL, [MARKER_LOCK_KEY]);
+  }
+
   /**
-   * Appends a ledger entry for `space`. When the edge carries a
-   * destination contract snapshot, the content-addressed
-   * `prisma_contract.contract` store is populated first (keyed by the
-   * destination hash, DO NOTHING on revisit) so a reader never sees a
-   * ledger row whose stored destination contract is missing. See the
-   * `SqlControlAdapter.writeLedgerEntry` contract.
+   * Appends a ledger entry for `space`. When the edge carries a destination contract snapshot, the content-addressed `prisma_contract.contract` store is populated first (keyed by the destination hash, DO NOTHING on revisit) so a reader never sees a ledger row whose stored destination contract is missing. See the `SqlControlAdapter.writeLedgerEntry` contract.
    */
   async writeLedgerEntry(
     driver: SqlControlDriverInstance<'postgres'>,

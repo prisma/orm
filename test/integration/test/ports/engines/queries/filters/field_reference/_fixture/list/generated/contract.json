@@ -371,154 +371,154 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": true
                 },
                 "bInt_list": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bInt_list2": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "bool_list": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bool_list2": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": true
                 },
                 "bytes_list": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "bytes_list2": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 },
                 "dt_list": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "dt_list2": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": true
                 },
                 "float_list": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "float_list2": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "int_list": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "int_list2": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "string_list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "string_list2": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -537,7 +537,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0385e83a3bd0eae5cec7562a2473ce7bfbb8bac50f867423a39b898d83cbe7c2"
+    "storageHash": "09c60a0f47b4ad0cf9dfdcb1937e3453611cda2583719fde87bd86da593456db"
   },
   "capabilities": {
     "postgres": {

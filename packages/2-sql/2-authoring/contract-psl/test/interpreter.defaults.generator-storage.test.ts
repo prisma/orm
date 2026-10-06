@@ -57,7 +57,7 @@ id Uuid @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['F']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -84,7 +84,7 @@ id TUuid @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['E']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
       typeRef: 'TUuid',
     });
@@ -102,7 +102,7 @@ id Char(30) @id @default(cuid(2))
     expect(storage.namespaces['public']?.entries.table?.['M']?.columns['id']).toEqual({
       many: false,
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 30 },
     });
@@ -126,7 +126,7 @@ id String @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['L']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -149,7 +149,7 @@ id String() @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['P']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
   });
@@ -169,19 +169,19 @@ ref String @default(cuid(2))
     expect(columns?.['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['sized']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['ref']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual(
@@ -210,7 +210,7 @@ id TId @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['T']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
       typeRef: 'TId',
     });

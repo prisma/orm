@@ -45,17 +45,6 @@ describe('contract-free column helpers', () => {
     expect(Object.isFrozen(column)).toBe(true);
   });
 
-  it('default dispatches through the visitor', () => {
-    const kind = lit('app').accept(
-      {
-        literal: (node) => node.kind,
-        function: (node) => node.kind,
-      },
-      { nativeType: 'text' },
-    );
-    expect(kind).toBe('literal');
-  });
-
   it('rejects invalid literal input', () => {
     expect(() => lit(Symbol('x') as unknown as string)).toThrow(/Invalid column default literal/);
   });

@@ -55,7 +55,7 @@ function buildTagWithUpdatedAtContract(
     throw new Error('Test contract is missing the tags table');
   }
   tagsTable.columns['updated_at'] = {
-    nativeType: 'timestamptz',
+    dataType: 'pg/timestamptz',
     codecId,
     nullable: false,
   };

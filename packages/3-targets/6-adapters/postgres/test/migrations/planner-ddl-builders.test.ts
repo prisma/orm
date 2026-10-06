@@ -1,6 +1,6 @@
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
-import { type StorageColumn, toStorageTypeInstance } from '@internal/sql-contract/types';
+import { toStorageTypeInstance } from '@internal/sql-contract/types';
 import { col as ddlColumn, fn, lit } from '@internal/sql-relational-core/contract-free';
 import {
   createPostgresBuiltinCodecLookup,
@@ -23,12 +23,14 @@ const types: SqlTypeLookups = {
   dataTypeLookup: createDataTypeLookup(postgresDataTypes),
 };
 
-function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
-  return { many: false, codecId: 'pg/text@1', nullable: true, ...overrides };
+type TypedColumn = Parameters<typeof buildColumnTypeSql>[0];
+
+function col(overrides: Partial<TypedColumn> = {}): TypedColumn {
+  return { many: false, codecId: 'pg/text@1', ...overrides };
 }
 
-function listColumn(nativeType: string): DefaultColumn {
-  return { nativeType, dataTypeId: 'pg/text', many: { elementNullable: false } };
+function listColumn(baseTypeName: string): DefaultColumn {
+  return { baseTypeName, dataType: 'pg/text', many: { elementNullable: false } };
 }
 
 // ---------------------------------------------------------------------------
@@ -37,12 +39,11 @@ function listColumn(nativeType: string): DefaultColumn {
 
 describe('buildColumnTypeSql', () => {
   it('returns the data type name for plain columns', () => {
-    expect(buildColumnTypeSql(col({ nativeType: 'text' }), types)).toBe('text');
+    expect(buildColumnTypeSql(col(), types)).toBe('text');
   });
 
   it('returns SERIAL for int4 with autoincrement', () => {
     const column = col({
-      nativeType: 'int4',
       codecId: 'pg/int4@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
@@ -51,7 +52,6 @@ describe('buildColumnTypeSql', () => {
 
   it('returns BIGSERIAL for int8 with autoincrement', () => {
     const column = col({
-      nativeType: 'int8',
       codecId: 'pg/int8@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
@@ -60,7 +60,6 @@ describe('buildColumnTypeSql', () => {
 
   it('returns SMALLSERIAL for int2 with autoincrement', () => {
     const column = col({
-      nativeType: 'int2',
       codecId: 'pg/int2@1',
       default: { kind: 'function', expression: 'autoincrement()' },
     });
@@ -68,11 +67,11 @@ describe('buildColumnTypeSql', () => {
   });
 
   it('writes a typeRef column as a column of the referenced type', () => {
-    const column = col({ nativeType: 'auth.aal_level', typeRef: 'AalLevel' });
+    const column = col({ typeRef: 'AalLevel' });
     const storageTypes = {
       AalLevel: toStorageTypeInstance({
         codecId: 'pg/enum@1',
-        nativeType: 'auth.aal_level',
+        dataType: 'pg/enum',
         typeParams: { typeName: 'auth.aal_level' },
       }),
     };
@@ -81,7 +80,6 @@ describe('buildColumnTypeSql', () => {
 
   it('renders an unqualified named-type column as a single quoted identifier', () => {
     const column = col({
-      nativeType: 'order_status',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'order_status' },
     });
@@ -90,7 +88,6 @@ describe('buildColumnTypeSql', () => {
 
   it('renders a schema-qualified named-type column segment-by-segment', () => {
     const column = col({
-      nativeType: 'auth.aal_level',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'auth.aal_level' },
     });
@@ -99,7 +96,6 @@ describe('buildColumnTypeSql', () => {
 
   it('appends [] for a named-type array column', () => {
     const column = col({
-      nativeType: 'order_status',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'order_status' },
       many: { elementNullable: false },
@@ -109,15 +105,10 @@ describe('buildColumnTypeSql', () => {
 
   it('writes the parameters of a parameterized data type', () => {
     const column = col({
-      nativeType: 'character varying',
       codecId: 'pg/varchar@1',
       typeParams: { length: 3 },
     });
     expect(buildColumnTypeSql(column, types)).toBe('character varying(3)');
-  });
-
-  it('ignores the contract native type', () => {
-    expect(buildColumnTypeSql(col({ nativeType: 'text; DROP TABLE' }), types)).toBe('text');
   });
 });
 
@@ -212,7 +203,7 @@ describe('renderDefaultLiteral', () => {
   it('renders JSON object for jsonb column', () => {
     const result = renderDefaultLiteral(
       { key: 'val' },
-      { nativeType: 'jsonb', dataTypeId: 'pg/jsonb', many: false },
+      { baseTypeName: 'jsonb', dataType: 'pg/jsonb', many: false },
     );
     expect(result).toBe(`'{"key":"val"}'::jsonb`);
   });

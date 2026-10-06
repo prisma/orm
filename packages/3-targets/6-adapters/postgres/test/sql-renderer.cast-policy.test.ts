@@ -82,20 +82,20 @@ const baseContract = new SqlContractSerializer().deserializeContract({
           table: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                tag: { codecId: 'app/test-foo@1', nativeType: 'foo', nullable: false },
-                score: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                geo: { codecId: 'app/geography@1', nativeType: 'geography', nullable: false },
-                profile: { codecId: 'arktype/json@1', nativeType: 'jsonb', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                tag: { codecId: 'app/test-foo@1', dataType: 'app/test-foo', nullable: false },
+                score: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                geo: { codecId: 'app/geography@1', dataType: 'app/geography', nullable: false },
+                profile: { codecId: 'arktype/json@1', dataType: 'pg/jsonb', nullable: false },
                 name: {
                   codecId: 'pg/varchar@1',
-                  nativeType: 'character varying',
+                  dataType: 'pg/varchar',
                   nullable: false,
                   typeParams: { length: 255 },
                 },
                 status: {
                   codecId: 'pg/enum@1',
-                  nativeType: 'aal_level',
+                  dataType: 'pg/enum',
                   nullable: false,
                   typeParams: { typeName: 'aal_level' },
                 },

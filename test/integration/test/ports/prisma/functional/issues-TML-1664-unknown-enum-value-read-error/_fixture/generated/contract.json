@@ -70,12 +70,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "status": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "Status",
+                  "dataType": "pg/enum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Status"
@@ -112,7 +112,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2f2deb1521719938a60e8cc1333b05bc5311f4faa484c7f5811700202c44b6a2"
+    "storageHash": "a3b06ef053dbb754dea227c730e81da8e4b2dae0f4887b958a1b7d3f3df8b094"
   },
   "capabilities": {
     "postgres": {

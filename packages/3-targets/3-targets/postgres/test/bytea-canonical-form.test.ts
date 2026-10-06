@@ -1,4 +1,5 @@
 import { SqlColumnDefaultIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { pgByteaDescriptor } from '../src/core/codecs';
 import { pgBytea, pgText } from '../src/core/data-types';
@@ -76,7 +77,7 @@ describe('the canonical form of pg/bytea', () => {
       new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value },
         nativeTypeContext: Array.isArray(value) ? 'bytea[]' : 'bytea',
-        dataType: pgBytea,
+        ...ifDefined('toCanonicalForm', pgBytea.toCanonicalForm),
       });
     const actual = (value: string | readonly string[]) =>
       new SqlColumnDefaultIR({ resolved: { kind: 'literal', value } });

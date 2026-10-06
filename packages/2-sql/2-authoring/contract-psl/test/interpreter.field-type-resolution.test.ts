@@ -76,7 +76,7 @@ describe('SQL field types from the binder resolution', () => {
       unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc']?.columns[
         'body'
       ],
-    ).toMatchObject({ codecId: 'pg/text@1', nativeType: 'text' });
+    ).toMatchObject({ codecId: 'pg/text@1', dataType: 'pg/text' });
   });
 
   it('resolves a preset and a type constructor that share a namespace', () => {
@@ -92,7 +92,7 @@ describe('SQL field types from the binder resolution', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc'];
-    expect(table?.columns['id']).toMatchObject({ codecId: 'pg/uuid@1', nativeType: 'uuid' });
+    expect(table?.columns['id']).toMatchObject({ codecId: 'pg/uuid@1', dataType: 'pg/uuid' });
     expect(table?.primaryKey).toEqual({ columns: ['id'] });
   });
 

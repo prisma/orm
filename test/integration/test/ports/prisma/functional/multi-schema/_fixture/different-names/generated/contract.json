@@ -139,12 +139,12 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -176,17 +176,17 @@
               "columns": {
                 "authorId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -231,7 +231,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "aede3a2efea99253a03bdaa4679ec79f5000d06f8a853ed6f0c08f2f891aa479"
+    "storageHash": "bb21ee4b97bee31d345f97c93948290f156f803bf7055c1ec469824d855343d3"
   },
   "execution": {
     "executionHash": "fcf5b5610bfe1a583de72d24a6198e26e343a1dac89ecc6baac2dc706cee79f5",

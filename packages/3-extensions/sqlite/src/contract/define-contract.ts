@@ -6,9 +6,9 @@ import {
 } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
+  AuthoredStorageTypeInstance,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type {
   ComposedAuthoringHelpers,
@@ -23,7 +23,7 @@ import sqlitePack from '@internal/target-sqlite/pack';
 type SqlFamily = typeof sqlFamilyPack;
 type SqlitePack = typeof sqlitePack;
 
-type TypesConstraint = Record<string, StorageTypeInstance>;
+type TypesConstraint = Record<string, AuthoredStorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
 
 type SqliteResult<

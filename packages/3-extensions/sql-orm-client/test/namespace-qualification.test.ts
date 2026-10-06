@@ -24,8 +24,8 @@ const userModel = {
 
 const usersTableInput = {
   columns: {
-    id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-    email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+    id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+    email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
   },
   uniques: [],
   indexes: [],
@@ -143,8 +143,12 @@ describe('ORM namespace qualification', () => {
               table: {
                 users: new StorageTable({
                   columns: {
-                    id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
-                    email: { codecId: 'sqlite/text@1', nativeType: 'text', nullable: false },
+                    id: {
+                      codecId: 'sqlite/integer@1',
+                      dataType: 'sqlite/integer',
+                      nullable: false,
+                    },
+                    email: { codecId: 'sqlite/text@1', dataType: 'sqlite/text', nullable: false },
                   },
                   uniques: [],
                   indexes: [],

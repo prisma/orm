@@ -16,7 +16,7 @@ import {
   type TableRename,
 } from '../src/core/migrations/apply-table-rename';
 
-const idColumn = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const idColumn = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 
 function table(extra: Partial<StorageTableInput> = {}): StorageTable {
   return new StorageTable({
@@ -39,7 +39,7 @@ function contractOf(
     profileHash: profileHash(hashSeed),
     storage: new SqlStorage({
       storageHash: coreHash(hashSeed),
-      types: { Money: toStorageTypeInstance({ codecId: 'pg/numeric@1', nativeType: 'numeric' }) },
+      types: { Money: toStorageTypeInstance({ codecId: 'pg/numeric@1', dataType: 'pg/numeric' }) },
       namespaces: Object.fromEntries(
         Object.entries(namespaces).map(([id, tables]) => [
           id,

@@ -76,7 +76,7 @@ export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
 export const pgDateTemporalDescriptor = new PgDateTemporalDescriptor();
 
 export const pgDateTemporalColumn = () =>
-  column(pgDateTemporalDescriptor.factory(), pgDateTemporalDescriptor.codecId, undefined, 'date');
+  column(pgDateTemporalDescriptor.factory(), pgDateTemporalDescriptor.codecId, undefined);
 
 pgDateTemporalColumn satisfies ColumnHelperFor<PgDateTemporalDescriptor>;
 pgDateTemporalColumn satisfies ColumnHelperForStrict<PgDateTemporalDescriptor>;
@@ -123,7 +123,6 @@ export const pgTimestampTemporalColumn = (params: PrecisionParams = {}) =>
     pgTimestampTemporalDescriptor.factory(params),
     pgTimestampTemporalDescriptor.codecId,
     params,
-    'timestamp',
   );
 
 pgTimestampTemporalColumn satisfies ColumnHelperFor<PgTimestampTemporalDescriptor>;
@@ -171,7 +170,6 @@ export const pgTimestamptzTemporalColumn = (params: PrecisionParams = {}) =>
     pgTimestamptzTemporalDescriptor.factory(params),
     pgTimestamptzTemporalDescriptor.codecId,
     params,
-    'timestamptz',
   );
 
 pgTimestamptzTemporalColumn satisfies ColumnHelperFor<PgTimestamptzTemporalDescriptor>;
@@ -213,12 +211,7 @@ export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionP
 export const pgTimeTemporalDescriptor = new PgTimeTemporalDescriptor();
 
 export const pgTimeTemporalColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimeTemporalDescriptor.factory(params),
-    pgTimeTemporalDescriptor.codecId,
-    params,
-    'time',
-  );
+  column(pgTimeTemporalDescriptor.factory(params), pgTimeTemporalDescriptor.codecId, params);
 
 pgTimeTemporalColumn satisfies ColumnHelperFor<PgTimeTemporalDescriptor>;
 pgTimeTemporalColumn satisfies ColumnHelperForStrict<PgTimeTemporalDescriptor>;

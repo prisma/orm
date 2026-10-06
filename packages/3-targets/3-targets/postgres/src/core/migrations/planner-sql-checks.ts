@@ -31,7 +31,7 @@ export function qualifyTableName(schema: string, table: string): string {
  * it.
  */
 export function buildExpectedFormatType(
-  column: StorageColumn,
+  column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef'>,
   types: SqlTypeLookups,
   storageTypes: Record<string, StorageTypeInstance> = {},
 ): string {

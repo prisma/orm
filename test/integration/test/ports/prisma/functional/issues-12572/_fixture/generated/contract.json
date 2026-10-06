@@ -67,21 +67,21 @@
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 }
               },
@@ -100,7 +100,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cb43b91d46731f66bee24c3212057eeb6e76dddf6a4cb5b9434252fcdafbbf4a"
+    "storageHash": "3343c60004ca472be13a3ed2de500bf8a22ab29dcdbfe9344ea5aba38f7da957"
   },
   "execution": {
     "executionHash": "815e1ebe306e2b1e2e44b2eac84b8c40a7b09115dfb84c7f4771629ca65edc5d",

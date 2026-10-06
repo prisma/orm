@@ -1,8 +1,5 @@
 import { instantiateAuthoringTypeConstructor } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   Binder,
   BlockSymbol,
@@ -12,8 +9,10 @@ import type {
   Resolution,
 } from '@internal/psl-parser';
 import { diagnosticSource, typeReferenceNode } from '@internal/psl-parser';
-import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
-import type { StorageTypeInstance } from '@internal/sql-contract/types';
+import {
+  type AuthoredStorageTypeInstance,
+  CODEC_INSTANCE_KIND,
+} from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
   bareTypeConstructorOf,
@@ -28,7 +27,6 @@ export interface ResolveNamedTypeDeclarationsInput {
   readonly binder: Binder;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
   readonly diagnostics: PslDiagnosticCollector;
 }
 
@@ -71,23 +69,19 @@ function validateNamedTypeAttributes(input: {
 }
 
 export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarationsInput): {
-  readonly storageTypes: Record<string, StorageTypeInstance>;
+  readonly storageTypes: Record<string, AuthoredStorageTypeInstance>;
   readonly namedTypeDescriptors: Map<NamedTypeSymbol, ColumnDescriptor>;
 } {
-  const storageTypeEntries: [string, StorageTypeInstance][] = [];
+  const storageTypeEntries: [string, AuthoredStorageTypeInstance][] = [];
   const namedTypeDescriptors = new Map<NamedTypeSymbol, ColumnDescriptor>();
   const storageTypeOf = (descriptor: {
     readonly codecId: string;
     readonly typeParams?: Record<string, unknown> | undefined;
-  }): StorageTypeInstance => {
-    const typeParams = descriptor.typeParams ?? {};
-    return {
-      kind: 'codec-instance',
-      codecId: descriptor.codecId,
-      nativeType: unquotedSqlBaseNameOfCodec(descriptor.codecId, typeParams, input),
-      typeParams,
-    };
-  };
+  }): AuthoredStorageTypeInstance => ({
+    kind: CODEC_INSTANCE_KIND,
+    codecId: descriptor.codecId,
+    typeParams: descriptor.typeParams ?? {},
+  });
 
   for (const declaration of input.declarations) {
     const source = diagnosticSource(input.source.sources, declaration.node.syntax);

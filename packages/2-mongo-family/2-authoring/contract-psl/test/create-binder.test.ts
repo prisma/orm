@@ -73,7 +73,10 @@ function normalize(resolution: unknown): unknown {
     case 'namedType':
     case 'block':
     case 'namespace':
-    case 'field': {
+    case 'field':
+    case 'parameter':
+    case 'function':
+    case 'constant': {
       const symbol = r.symbol as { readonly name: string };
       return { kind: r.kind, name: symbol.name };
     }
@@ -157,6 +160,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'map', level: 'field' },
       { kind: 'field', name: 'createdAt' },
       { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'score' },
       { kind: 'contributedType', name: 'Points', path: ['Points'] },
       { kind: 'field', name: 'weird' },
@@ -168,7 +172,9 @@ describe('createBinder', () => {
       { kind: 'field', name: 'session' },
       { kind: 'model', name: 'Session' },
       { kind: 'attribute', name: 'relation', level: 'field' },
+      { kind: 'parameter', name: 'fields' },
       { kind: 'field', name: 'sessionId' },
+      { kind: 'parameter', name: 'references' },
       { kind: 'field', name: 'id' },
       { kind: 'attribute', name: 'index', level: 'model' },
       { kind: 'field', name: 'sessionId' },

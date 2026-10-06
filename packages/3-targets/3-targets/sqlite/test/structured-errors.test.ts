@@ -88,17 +88,7 @@ describe('structured error codes', () => {
 
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {
     const error = capture(() =>
-      buildColumnTypeSql(
-        {
-          many: false,
-          nativeType: 'unused',
-          nullable: true,
-          codecId: 'sqlite/text@1',
-          typeRef: 'missing',
-        },
-        sqliteTestTypes,
-        {},
-      ),
+      buildColumnTypeSql({ codecId: 'sqlite/text@1', typeRef: 'missing' }, sqliteTestTypes, {}),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.TYPE_UNKNOWN', meta: { typeRef: 'missing' } });

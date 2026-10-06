@@ -74,7 +74,7 @@ embedding pgvector.Vector(1536)
 
 ## Contract impact
 
-`StorageColumn` and `StorageTypeInstance`: `nativeType` removed, `dataType` added (slice 2). `extensions.<pack>.types.storage[].nativeType` removed. SQLite literal defaults of JSON, datetime and integer columns change stored form. Every SQL storage hash, migration hash, snapshot directory name and ref changes. Mongo contracts do not change.
+`StorageColumn` and `StorageTypeInstance`: `nativeType` removed, `dataType` added (slice 2). `extensions.<pack>.types.storage` removed. SQLite literal defaults of JSON and integer columns change stored form. Every SQL storage hash, migration hash, snapshot directory name and ref changes. Mongo contracts do not change.
 
 ## Adapter impact
 

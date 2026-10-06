@@ -21,8 +21,8 @@ The contract expresses this with one field. The Supabase extension ships its con
         "tables": {
           "users": {
             "columns": {
-              "id":    { "nativeType": "uuid", "nullable": false },
-              "email": { "nativeType": "text", "nullable": false }
+              "id":    { "dataType": "pg/uuid", "nullable": false },
+              "email": { "dataType": "pg/text", "nullable": false }
             }
           }
         }

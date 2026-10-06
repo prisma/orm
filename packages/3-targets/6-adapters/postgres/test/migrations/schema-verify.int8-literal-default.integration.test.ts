@@ -40,27 +40,27 @@ function moneyContract(): Contract<SqlStorage> {
             table: {
               ps: {
                 columns: {
-                  id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   v: {
-                    nativeType: 'int8',
+                    dataType: 'pg/int8',
                     codecId: 'pg/int8number@1',
                     nullable: false,
                     default: { kind: 'literal', value: '0' },
                   },
                   w: {
-                    nativeType: 'int4',
+                    dataType: 'pg/int4',
                     codecId: 'pg/int4@1',
                     nullable: false,
                     default: { kind: 'literal', value: 0 },
                   },
                   bigIntSmall: {
-                    nativeType: 'int8',
+                    dataType: 'pg/int8',
                     codecId: 'pg/int8@1',
                     nullable: false,
                     default: { kind: 'literal', value: '0' },
                   },
                   bigIntPastSafeInteger: {
-                    nativeType: 'int8',
+                    dataType: 'pg/int8',
                     codecId: 'pg/int8@1',
                     nullable: false,
                     default: { kind: 'literal', value: PAST_SAFE_INTEGER_TEXT },

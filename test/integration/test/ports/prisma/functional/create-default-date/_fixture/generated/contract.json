@@ -57,20 +57,20 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "visitTime": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 }
               },
@@ -89,7 +89,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2df3ff01b2375d61d7c496be7e03bd6544f35e482982ed700a9f0a86fb04e064"
+    "storageHash": "dc1c17d3ee9bb94cdcf6c1a0d3036973425c61aa3a7a623f6c2a58fd079c0d15"
   },
   "capabilities": {
     "postgres": {

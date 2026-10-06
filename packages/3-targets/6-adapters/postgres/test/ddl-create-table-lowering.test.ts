@@ -271,7 +271,7 @@ describe('PostgresCreateTable DDL lowering', () => {
     ['int4[]', 'pg/int4@1', [1, 'two'], 'two'],
   ])(
     'refuses a list default on a %s column with an element its codec %s does not read, as a hand-written migration may hold',
-    async (nativeType, codecId, value, element) => {
+    async (typeText, codecId, value, element) => {
       const adapter = new PostgresControlAdapter(
         createPostgresBuiltinCodecLookup(),
         createPostgresBuiltinDataTypeLookup(),
@@ -279,9 +279,7 @@ describe('PostgresCreateTable DDL lowering', () => {
       const lowering = adapter.lowerToExecuteRequest(
         new PostgresCreateTable({
           table: 'tokens',
-          columns: [
-            col('l', nativeType, { default: lit(value), codecRef: { codecId, many: true } }),
-          ],
+          columns: [col('l', typeText, { default: lit(value), codecRef: { codecId, many: true } })],
         }),
         { contract: {} as PostgresContract },
       );

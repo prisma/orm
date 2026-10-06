@@ -42,7 +42,7 @@ describe('RLS helper invisibility off Postgres', () => {
 
   it("an RLS handle in sqlite's defineContract fails the generic unclaimed-kind check", () => {
     const { field, model, policySelect, rlsEnabled } = postgresContractBuilder;
-    const intColumn = { codecId: 'sqlite/integer@1', nativeType: 'INTEGER' } as const;
+    const intColumn = { codecId: 'sqlite/integer@1' } as const;
     const Profile = model('Profile', {
       fields: { id: field.column(intColumn).id() },
     }).sql({ table: 'profile' });

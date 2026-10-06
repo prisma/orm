@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringFieldPresets, postgresAuthoringTypes } from '../src/core/authoring';
 
 describe('postgresAuthoringFieldPresets', () => {
-  it('exposes uuidNative preset with pg/uuid@1 and nativeType uuid', () => {
+  it('exposes uuidNative preset with pg/uuid@1', () => {
     expect(postgresAuthoringFieldPresets.uuidNative).toMatchObject({
       kind: 'fieldPreset',
       output: {

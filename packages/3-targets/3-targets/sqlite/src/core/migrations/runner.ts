@@ -594,6 +594,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       destination,
     });
     if (!updated) {
+      const found = await this.family.readMarker({ driver, space });
       return runnerFailure(
         'MIGRATION.MARKER_CAS_FAILURE',
         'Marker was modified by another process during migration execution.',
@@ -601,6 +602,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
           meta: {
             space,
             expectedStorageHash: existingMarker.storageHash,
+            foundStorageHash: found?.storageHash ?? null,
             destinationStorageHash: options.plan.destination.storageHash,
           },
         },

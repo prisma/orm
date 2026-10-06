@@ -178,29 +178,25 @@ describe('sql-codecs', () => {
   });
 
   describe('column helpers', () => {
-    it('sqlTextColumn produces a ColumnSpec with text nativeType and no typeParams', () => {
+    it('sqlTextColumn produces a ColumnSpec with the text codec and no typeParams', () => {
       const spec = sqlTextColumn();
       expect(spec.codecId).toBe(SQL_TEXT_CODEC_ID);
-      expect(spec.nativeType).toBe('text');
       expect(spec.typeParams).toBeUndefined();
     });
 
-    it('sqlIntColumn produces a ColumnSpec with int nativeType', () => {
+    it('sqlIntColumn produces a ColumnSpec with the int codec', () => {
       const spec = sqlIntColumn();
       expect(spec.codecId).toBe(SQL_INT_CODEC_ID);
-      expect(spec.nativeType).toBe('int');
     });
 
-    it('sqlFloatColumn produces a ColumnSpec with float nativeType', () => {
+    it('sqlFloatColumn produces a ColumnSpec with the float codec', () => {
       const spec = sqlFloatColumn();
       expect(spec.codecId).toBe(SQL_FLOAT_CODEC_ID);
-      expect(spec.nativeType).toBe('float');
     });
 
     it('sqlCharColumn defaults typeParams to {} when invoked without arguments', () => {
       const spec = sqlCharColumn();
       expect(spec.codecId).toBe(SQL_CHAR_CODEC_ID);
-      expect(spec.nativeType).toBe('char');
       expect(spec.typeParams).toEqual({});
     });
 

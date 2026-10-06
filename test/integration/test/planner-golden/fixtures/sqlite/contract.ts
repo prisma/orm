@@ -1,8 +1,7 @@
 /**
- * One column per SQLite codec in each parameter shape a contract can hold
- * today, so the planner golden test sees every way a column type is written.
- * A descriptor written out by hand stands where no column helper exists; its
- * `nativeType` is the name the column's data type is written with.
+ * One column per SQLite codec in each parameter shape a contract can hold today, so the planner
+ * golden test sees every way a column type is written. A descriptor written out by hand stands
+ * where no column helper exists.
  */
 
 import {
@@ -16,19 +15,17 @@ import {
 } from '@internal/adapter-sqlite/column-types';
 import { autoincrement, defineContract, field, model } from '@internal/sqlite/contract-builder';
 
-const bigintNumber = { codecId: 'sqlite/bigintnumber@1', nativeType: 'integer' } as const;
-const sqlInt = { codecId: 'sql/int@1', nativeType: 'integer' } as const;
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'real' } as const;
-const char = { codecId: 'sql/char@1', nativeType: 'character' } as const;
+const bigintNumber = { codecId: 'sqlite/bigintnumber@1' } as const;
+const sqlInt = { codecId: 'sql/int@1' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
+const char = { codecId: 'sql/char@1' } as const;
 const charLength = {
   codecId: 'sql/char@1',
-  nativeType: 'character',
   typeParams: { length: 36 },
 } as const;
-const varchar = { codecId: 'sql/varchar@1', nativeType: 'character varying' } as const;
+const varchar = { codecId: 'sql/varchar@1' } as const;
 const varcharLength = {
   codecId: 'sql/varchar@1',
-  nativeType: 'character varying',
   typeParams: { length: 255 },
 } as const;
 const shortText = { kind: 'codec-instance', ...varcharLength } as const;

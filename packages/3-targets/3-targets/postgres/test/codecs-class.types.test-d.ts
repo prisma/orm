@@ -125,12 +125,7 @@ pgNumericColumn satisfies ColumnHelperForStrict<PgNumericDescriptor>;
 
 test('coarse satisfies catches wrong typeParams shape on pgBitColumn', () => {
   const brokenHelper = (length: number) =>
-    column(
-      pgBitDescriptor.factory({ length }),
-      pgBitDescriptor.codecId,
-      { wrongKey: length },
-      'bit',
-    );
+    column(pgBitDescriptor.factory({ length }), pgBitDescriptor.codecId, { wrongKey: length });
   // @ts-expect-error -- typeParams shape doesn't satisfy ColumnHelperFor<PgBitDescriptor>
   brokenHelper satisfies ColumnHelperFor<PgBitDescriptor>;
   // @ts-expect-error -- strict shape catches the same mismatch

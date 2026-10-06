@@ -116,7 +116,7 @@ function buildAppContract(opts: { readonly withEmbedding: boolean }): Contract<S
 function buildAppContractPojo(opts: { readonly withEmbedding: boolean }): Contract<SqlStorage> {
   const embeddingColumn = {
     codecId: VECTOR_CODEC_ID,
-    nativeType: PGVECTOR_NATIVE_TYPE,
+    dataType: 'pgvector/vector',
     nullable: false,
     many: false as const,
     typeParams: { length: VECTOR_LENGTH },
@@ -136,7 +136,7 @@ function buildAppContractPojo(opts: { readonly withEmbedding: boolean }): Contra
             table: {
               [APP_TABLE]: {
                 columns: {
-                  id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
+                  id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false, many: false },
                   ...(opts.withEmbedding ? { [APP_FIELD]: embeddingColumn } : {}),
                 },
                 primaryKey: { columns: ['id'] },

@@ -94,7 +94,7 @@
               "columns": {
                 "enum": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "TestEnum",
+                  "dataType": "pg/enum",
                   "nullable": true,
                   "typeParams": {
                     "typeName": "TestEnum"
@@ -108,10 +108,10 @@
                 },
                 "enum2": {
                   "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "TestEnum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "TestEnum"
@@ -125,7 +125,7 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -154,7 +154,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5ee7fe8a76320fa89310e105cea51c40365325429a1b57d3524df5feacac156f"
+    "storageHash": "3bf5ee54fa0ca44164f152b7196b873ab879533f65dbeb9d21d410b8a0ad4762"
   },
   "capabilities": {
     "postgres": {

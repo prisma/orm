@@ -203,6 +203,36 @@ describe('enrichContract', () => {
     expect(codecTypes['import']).toBeDefined();
   });
 
+  it('copies only the type metadata keys a contract carries, leaving out the storage list an older pack still declares', () => {
+    const queryOperationTypes = {
+      import: { package: '@ext/acme', named: 'QueryOperationTypes', alias: 'AcmeQueryOps' },
+    };
+    const operationTypes = {
+      import: { package: '@ext/acme', named: 'OperationTypes', alias: 'AcmeOps' },
+    };
+    const typesOfAnOlderPack = {
+      codecTypes: {
+        import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
+      },
+      queryOperationTypes,
+      aggregateDescriptors: [],
+      operationTypes,
+      storage: [{ typeId: 'acme/shape@1', familyId: 'sql', targetId: 'postgres' }],
+    };
+    const extension = makeExtension({ types: typesOfAnOlderPack });
+
+    const result = enrichContract(makeIR(), [extension]);
+
+    expect((result.extensions['pgvector'] as Record<string, unknown>)['types']).toEqual({
+      aggregateDescriptors: [],
+      codecTypes: {
+        import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
+      },
+      operationTypes,
+      queryOperationTypes,
+    });
+  });
+
   it('does not create extension pack entries for non-extension components', () => {
     const adapter = makeAdapter({
       capabilities: { postgres: { returning: true } },

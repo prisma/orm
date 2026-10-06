@@ -279,84 +279,84 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "childId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "empty": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "parentId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "string": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "unset": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 }
               },
@@ -399,7 +399,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -418,7 +418,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "78a59a74db59f8f6e88d76a29d88491400759ae329a36b9c20b335ed527e984f"
+    "storageHash": "75d0b45fe2b2a1a9696ae60f77de6722b5e19a3e5e17df44056aece40b06194f"
   },
   "capabilities": {
     "postgres": {

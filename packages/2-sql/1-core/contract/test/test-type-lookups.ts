@@ -1,10 +1,10 @@
 /**
  * Codec and data type lookups for SQL unit tests that build contracts without a real stack.
  *
- * Every codec id represents a SQL data type written as the type name the tests expect: the name in
- * `CODEC_TYPE_NAMES` or `names`, else the codec id's middle part. A data type id that no codec here
- * produced (a test's own codec descriptors name it) is written as the name in `DATA_TYPE_NAMES`, else
- * its name part. Each codec stores its values as authored and takes any parameters.
+ * Every codec id represents the data type the real stack gives it (`CODEC_DATA_TYPES`), else the
+ * codec id without its version. A data type is written as the name in `names` (by codec id),
+ * `CODEC_TYPE_NAMES` or `DATA_TYPE_NAMES`, else its name part. Each codec stores its values as
+ * authored and takes any parameters.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -36,10 +36,34 @@ const CODEC_TYPE_NAMES: Readonly<Record<string, string>> = {
   'sql/varchar@1': 'character varying',
   'sql/int@1': 'int4',
   'sql/float@1': 'float8',
-  'sqlite/bigintnumber@1': 'integer',
-  'sqlite/bigint@1': 'integer',
-  'sqlite/datetime@1': 'text',
-  'sqlite/json@1': 'text',
+};
+
+const CODEC_DATA_TYPES: Readonly<Record<string, string>> = {
+  'pg/timestamptz-temporal@1': 'pg/timestamptz',
+  'pg/timestamptz-date@1': 'pg/timestamptz',
+  'pg/timestamptz-string@1': 'pg/timestamptz',
+  'pg/timestamp-temporal@1': 'pg/timestamp',
+  'pg/timestamp-string@1': 'pg/timestamp',
+  'pg/date-temporal@1': 'pg/date',
+  'pg/date-string@1': 'pg/date',
+  'pg/time-temporal@1': 'pg/time',
+  'pg/time-string@1': 'pg/time',
+  'pg/int@1': 'pg/int4',
+  'pg/float@1': 'pg/float8',
+  'pg/int8number@1': 'pg/int8',
+  'pg/unboundedint@1': 'pg/numeric',
+  'pg/vector@1': 'pgvector/vector',
+  'pg/geometry@1': 'postgis/geometry',
+  'arktype/json@1': 'pg/jsonb',
+  'sql/char@1': 'pg/char',
+  'sql/varchar@1': 'pg/varchar',
+  'sql/int@1': 'pg/int4',
+  'sql/float@1': 'pg/float8',
+  'sql/text@1': 'pg/text',
+  'sqlite/bigint@1': 'sqlite/integer',
+  'sqlite/bigintnumber@1': 'sqlite/integer',
+  'sqlite/datetime@1': 'sqlite/text',
+  'sqlite/json@1': 'sqlite/text',
 };
 
 const DATA_TYPE_NAMES: Readonly<Record<string, string>> = {
@@ -55,8 +79,12 @@ const DATA_TYPE_NAMES: Readonly<Record<string, string>> = {
 const ENUM_CODEC_IDS: ReadonlySet<string> = new Set(['pg/enum@1']);
 const ENUM_DATA_TYPE_IDS: ReadonlySet<string> = new Set(['pg/enum']);
 
-function middlePart(codecId: string): string {
-  return codecId.match(/^[^/]+\/([^@]+)@/)?.[1] ?? codecId;
+function dataTypeIdOf(codecId: string): string {
+  return CODEC_DATA_TYPES[codecId] ?? codecId.replace(/@[^@]*$/, '');
+}
+
+function nameOfDataType(id: string): string {
+  return DATA_TYPE_NAMES[id] ?? id.split('/')[1] ?? id;
 }
 
 function writtenName(name: string): string {
@@ -101,20 +129,14 @@ export interface TestSqlTypeLookups {
   readonly dataTypeLookup: DataTypeLookup;
 }
 
-const slug = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-
 /** Shared by every set of test lookups, so any of them reads a type another one declared. */
-const testDataTypes = new Map<string, DataType>();
+const sharedDataTypes = new Map<string, DataType>();
 
-function testDataTypeFor(id: string, name: string | undefined): DataType {
-  const existing = testDataTypes.get(id);
+function sharedDataType(id: string): DataType {
+  const existing = sharedDataTypes.get(id);
   if (existing !== undefined) return existing;
-  const created = testDataType(id, name);
-  testDataTypes.set(id, created);
+  const created = testDataType(id, ENUM_DATA_TYPE_IDS.has(id) ? undefined : nameOfDataType(id));
+  sharedDataTypes.set(id, created);
   return created;
 }
 
@@ -127,21 +149,32 @@ export function testSqlTypeLookups(
   names: Readonly<Record<string, string>> = {},
   codecs?: TestCodecs,
 ): TestSqlTypeLookups {
+  const ownDataTypes = new Map<string, DataType>();
   const codecOf = (codecId: string): Codec | undefined =>
     codecs === undefined ? storesAsAuthored(codecId) : codecs.get(codecId);
 
+  const dataTypeOfCodec = (codecId: string): DataType => {
+    const id = dataTypeIdOf(codecId);
+    const name = names[codecId] ?? CODEC_TYPE_NAMES[codecId];
+    if (name === undefined || ENUM_CODEC_IDS.has(codecId)) return lookupDataType(id);
+    const existing = ownDataTypes.get(id);
+    if (existing !== undefined) return existing;
+    const created = testDataType(id, name);
+    ownDataTypes.set(id, created);
+    return created;
+  };
+
+  const lookupDataType = (id: string): DataType => ownDataTypes.get(id) ?? sharedDataType(id);
+
   const descriptorFor = (codecId: string): AnyCodecDescriptor => {
-    const name = ENUM_CODEC_IDS.has(codecId)
-      ? undefined
-      : (names[codecId] ?? CODEC_TYPE_NAMES[codecId] ?? middlePart(codecId));
-    const dataType = () =>
-      testDataTypeFor(`test-codec/${slug(codecId)}-as-${slug(name ?? 'enum')}`, name).id;
     const own = codecs?.descriptorFor?.(codecId);
-    if (own !== undefined)
-      return own.dataType !== undefined ? own : { ...own, dataType: dataType() };
+    if (own !== undefined) {
+      if (own.dataType !== undefined) return own;
+      return { ...own, dataType: dataTypeOfCodec(codecId).id };
+    }
     return {
       codecId,
-      dataType: dataType(),
+      dataType: dataTypeOfCodec(codecId).id,
       traits: [],
       paramsSchema: acceptAnything,
       isParameterized: true,
@@ -161,11 +194,7 @@ export function testSqlTypeLookups(
       descriptorFor,
     },
     dataTypeLookup: {
-      get: (id) =>
-        testDataTypeFor(
-          id,
-          ENUM_DATA_TYPE_IDS.has(id) ? undefined : (DATA_TYPE_NAMES[id] ?? id.split('/')[1] ?? id),
-        ),
+      get: lookupDataType,
       has: () => true,
     },
   };

@@ -55,7 +55,6 @@
     "./index-naming": "./dist/index-naming.mjs",
     "./index-type-validation": "./dist/index-type-validation.mjs",
     "./index-types": "./dist/index-types.mjs",
-    "./pack-types": "./dist/pack-types.mjs",
     "./referential-action-sql": "./dist/referential-action-sql.mjs",
     "./resolve-storage-table": "./dist/resolve-storage-table.mjs",
     "./sql-expression": "./dist/sql-expression.mjs",
