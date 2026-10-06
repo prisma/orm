@@ -69,7 +69,7 @@ Go-to-definition on a declaration's own name changes with this project. It retur
 
 - **Binder** (`packages/1-framework/2-authoring/psl-parser/src/binder.ts`). `symbolForNode(node)` returns the resolution for references and, since #30569, for the name node of a model, composite type, named type, block and field declaration. It does not record one on the name of a `namespace` block today: the block node is in `declaredSymbol`, the name identifier has no resolution. This project adds a `namespace` resolution on each namespace block's name node. This is the only binder change, and it only binds.
 - **Language server** (`packages/1-framework/3-tooling/language-server`).
-  - `cursor-resolution.ts` (`resolvedNodeAt`) is reused unchanged.
+  - `cursor-resolution.ts`: `resolvedNodeAt` is reused unchanged. The file also holds the two lookups hover, go-to-definition and find references share: `identTokenAt` (the identifier touching the cursor) and `pslSymbolOf` (the declared symbol a resolution names, if any).
   - `ProjectArtifacts` already parses and binds every schema input of the project to build the symbol table and the binder, and each `DocumentSnapshot` holds the file text. Find references reads both; no new file discovery or reading is added.
   - `definition.ts` stops returning `null` on a declaration's own name.
   - `server.ts` declares `referencesProvider` and handles `textDocument/references`; `Project` gains the request method next to `definition`, with the same membership checks.

@@ -184,11 +184,14 @@ function definitionAt(uri: string, marked: string, linkSupport = true) {
     (file) => file.sources.sourceFileFor(file.document.syntax) === sourceFile,
   )?.document;
   if (document === undefined) throw new Error(`no document ${uri}`);
-  const result = provideDefinition(
-    { document, sourceFile, sources: files.sources, binder: files.binder },
-    sourceFile.positionAt(offset),
+  const result = provideDefinition({
+    document,
+    sourceFile,
+    position: sourceFile.positionAt(offset),
+    sources: files.sources,
+    binder: files.binder,
     linkSupport,
-  );
+  });
   return { files, sourceFile, result };
 }
 

@@ -197,7 +197,6 @@ function project(files: Files) {
   });
   const documents = parsed.map(
     (file): ReferencesDocument => ({
-      text: file.sources.sourceFileFor(file.document.syntax).text,
       document: file.document,
       sourceFile: file.sources.sourceFileFor(file.document.syntax),
     }),
@@ -215,15 +214,19 @@ function locationsAt(
   const current = documents.find((document) => document.sourceFile.filename === name);
   if (current === undefined) throw new Error(`no file ${name}`);
   const needle = marked.replace('|', '');
-  const start = current.text.indexOf(needle);
-  if (start < 0 || current.text.indexOf(needle, start + 1) >= 0) {
+  const text = current.sourceFile.text;
+  const start = text.indexOf(needle);
+  if (start < 0 || text.indexOf(needle, start + 1) >= 0) {
     throw new Error(`"${needle}" does not occur exactly once in ${name}`);
   }
-  const locations = provideReferences(
-    { document: current.document, sourceFile: current.sourceFile, documents, binder },
-    current.sourceFile.positionAt(start + marked.indexOf('|')),
+  const locations = provideReferences({
+    document: current.document,
+    sourceFile: current.sourceFile,
+    position: current.sourceFile.positionAt(start + marked.indexOf('|')),
+    documents,
+    binder,
     includeDeclaration,
-  );
+  });
   return { documents, locations };
 }
 
@@ -238,7 +241,7 @@ function referencesAt(
     const target = documents.find((document) => document.sourceFile.filename === uri);
     if (target === undefined) throw new Error(`no file ${uri}`);
     if (range.start.line !== range.end.line) throw new Error('range spans lines');
-    const line = target.text.split('\n')[range.start.line] ?? '';
+    const line = target.sourceFile.text.split('\n')[range.start.line] ?? '';
     const before = line.slice(0, range.start.character);
     const inside = line.slice(range.start.character, range.end.character);
     const after = line.slice(range.end.character);
@@ -379,13 +382,32 @@ describe('provideReferences — a namespace', () => {
 });
 
 describe('provideReferences — discarded text matches', () => {
-  it('leaves out longer identifiers, comments, strings and a cross-space reference', () => {
-    expect(referencesAt(kinds, 'tag.prisma', 'model Ta|g', true)).toEqual([
-      'tag.prisma: model <Tag> {',
-      'tag.prisma: on = <Tag>',
-      'group.prisma: tag       <Tag>     @relation(fields: [tagId], references: [id])',
-      'group.prisma: @@extends(<Tag>)',
-    ]);
+  const tagModel = ['model Tag {', '  id Int @id', '}', ''];
+  const tagDeclaration = ['tag.prisma: model <Tag> {'];
+
+  function tagReferences(...distractor: string[]): string[] {
+    const files = { 'tag.prisma': [...tagModel, ...distractor, ''].join('\n') };
+    return referencesAt(files, 'tag.prisma', 'model Ta|g {', true);
+  }
+
+  it('leaves out a longer identifier that contains the name', () => {
+    expect(tagReferences('model TagGroup {', '  id Int @id', '}')).toEqual(tagDeclaration);
+  });
+
+  it('leaves out the name in a comment and in a documentation comment', () => {
+    expect(tagReferences('// Tag in a comment', '/// Tag in a documentation comment')).toEqual(
+      tagDeclaration,
+    );
+  });
+
+  it('leaves out the name in a string', () => {
+    expect(tagReferences('model Label {', '  id Int @id @map("Tag")', '}')).toEqual(tagDeclaration);
+  });
+
+  it('leaves out a cross-space reference to a same-named model', () => {
+    expect(
+      tagReferences('model Remote {', '  id  Int @id', '  tag supabase:store.Tag', '}'),
+    ).toEqual(tagDeclaration);
   });
 });
 

@@ -16,7 +16,7 @@ In the loop over `symbolTable.topLevel.namespaces`, each entry of `namespace.dec
 
 A pure function next to `provideDefinition`, returning `Location[]`:
 
-1. **Target.** Pick the token at the cursor the way `definition.ts` does (the token lookup is shared, not copied) and resolve it with `resolvedNodeAt`. A target exists for resolution kinds `model`, `compositeType`, `namedType`, `block`, `field` and `namespace`; the target is `resolution.symbol`. Any other kind, or no resolution, returns `[]`.
+1. **Target.** Pick the identifier touching the cursor with `identTokenAt`, the lookup hover and go-to-definition also use, and resolve it with `resolvedNodeAt`. A target exists for resolution kinds `model`, `compositeType`, `namedType`, `block`, `field` and `namespace`; the target is `resolution.symbol`. Any other kind, or no resolution, returns `[]`.
 2. **Candidates.** For every project document, find each occurrence of the symbol's name in the document text. For each occurrence take the token at that offset and keep it only if it is an `Ident` token that starts at that offset and whose text equals the name.
 3. **Confirm.** Resolve the candidate with `resolvedNodeAt`. It is a usage when the resolution's `symbol` is the target object.
 4. **Declarations.** A usage is the declaration when the resolved node is the name node of the symbol's declaration. It is dropped unless `includeDeclaration` is set. For a `namespace` target nothing is dropped.

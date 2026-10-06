@@ -209,16 +209,14 @@ export class Project {
     const document = data?.artifacts.document(uri);
     if (data === undefined || document === undefined) return null;
     try {
-      return provideDefinition(
-        {
-          document: document.parse().document,
-          sourceFile: document.sourceFile,
-          sources: data.artifacts.sources,
-          binder: data.artifacts.binder(),
-        },
+      return provideDefinition({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
         position,
+        sources: data.artifacts.sources,
+        binder: data.artifacts.binder(),
         linkSupport,
-      );
+      });
     } catch {
       return null;
     }
@@ -234,20 +232,17 @@ export class Project {
     if (data === undefined || document === undefined) return [];
     try {
       const documents = data.artifacts.documents().map((snapshot) => ({
-        text: snapshot.text,
         document: snapshot.parse().document,
         sourceFile: snapshot.sourceFile,
       }));
-      return provideReferences(
-        {
-          document: document.parse().document,
-          sourceFile: document.sourceFile,
-          documents,
-          binder: data.artifacts.binder(),
-        },
+      return provideReferences({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
         position,
+        documents,
+        binder: data.artifacts.binder(),
         includeDeclaration,
-      );
+      });
     } catch {
       return [];
     }

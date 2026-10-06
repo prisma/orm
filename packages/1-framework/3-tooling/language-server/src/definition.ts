@@ -1,19 +1,18 @@
-import type { Binder, PslSymbol, Resolution } from '@internal/psl-parser';
+import type { Binder, PslSymbol } from '@internal/psl-parser';
 import type {
-  DocumentAst,
   IdentifierAst,
   PslSources,
   SourceFile,
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
-import type { Location, LocationLink, Position, Range } from 'vscode-languageserver';
-import { identTokenAt, resolvedNodeAt } from './cursor-resolution';
+import type { Location, LocationLink, Range } from 'vscode-languageserver';
+import type { PslCursorInput } from './attribute-syntax-context';
+import { identTokenAt, pslSymbolOf, resolvedNodeAt } from './cursor-resolution';
 
-export interface DefinitionSource {
-  readonly document: DocumentAst;
-  readonly sourceFile: SourceFile;
+export interface ProvideDefinitionInput extends PslCursorInput {
   readonly sources: PslSources;
   readonly binder: Binder;
+  readonly linkSupport: boolean;
 }
 
 interface Declaration {
@@ -22,24 +21,22 @@ interface Declaration {
 }
 
 export function provideDefinition(
-  source: DefinitionSource,
-  position: Position,
-  linkSupport: boolean,
+  input: ProvideDefinitionInput,
 ): LocationLink[] | Location[] | null {
-  const token = identTokenAt(source.document.syntax, source.sourceFile.offsetAt(position));
-  const reference = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
-  if (reference === undefined) return null;
-  const declarations = declarationsOf(reference.resolution);
-  if (declarations.length === 0) return null;
-  if (!linkSupport) {
+  const token = identTokenAt(input.document.syntax, input.sourceFile.offsetAt(input.position));
+  const reference = token === undefined ? undefined : resolvedNodeAt(token, input.binder);
+  const symbol = reference === undefined ? undefined : pslSymbolOf(reference.resolution);
+  if (reference === undefined || symbol === undefined) return null;
+  const declarations = declarationsOf(symbol);
+  if (!input.linkSupport) {
     return declarations.map((declaration) => {
-      const target = source.sources.sourceFileFor(declaration.node);
+      const target = input.sources.sourceFileFor(declaration.node);
       return { uri: target.filename, range: rangeOf(target, nameNode(declaration)) };
     });
   }
-  const originSelectionRange = rangeOf(source.sourceFile, reference.node);
+  const originSelectionRange = rangeOf(input.sourceFile, reference.node);
   return declarations.map((declaration) => {
-    const target = source.sources.sourceFileFor(declaration.node);
+    const target = input.sources.sourceFileFor(declaration.node);
     return {
       originSelectionRange,
       targetUri: target.filename,
@@ -49,33 +46,11 @@ export function provideDefinition(
   });
 }
 
-function declarationsOf(resolution: Resolution): readonly Declaration[] {
-  switch (resolution.kind) {
-    case 'model':
-    case 'compositeType':
-    case 'namedType':
-    case 'block':
-    case 'field':
-      return [declarationOf(resolution.symbol)];
-    case 'namespace':
-      return resolution.symbol.declarations.map(({ node }) => ({
-        node: node.syntax,
-        name: node.name(),
-      }));
-    case 'contributedType':
-    case 'contributedNamespace':
-    case 'crossSpace':
-    case 'attribute':
-    case 'parameter':
-    case 'function':
-    case 'constant':
-    case 'unresolved':
-      return [];
+function declarationsOf(symbol: PslSymbol): readonly Declaration[] {
+  if (symbol.kind === 'namespace') {
+    return symbol.declarations.map(({ node }) => ({ node: node.syntax, name: node.name() }));
   }
-}
-
-function declarationOf(symbol: Exclude<PslSymbol, { kind: 'namespace' }>): Declaration {
-  return { node: symbol.node.syntax, name: symbol.node.name() };
+  return [{ node: symbol.node.syntax, name: symbol.node.name() }];
 }
 
 function nameNode(declaration: Declaration): SyntaxNode {

@@ -1,42 +1,37 @@
-import type { Binder, PslSymbol, Resolution } from '@internal/psl-parser';
+import type { Binder } from '@internal/psl-parser';
 import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
-import type { Location, Position } from 'vscode-languageserver';
-import { identTokenAt, resolvedNodeAt } from './cursor-resolution';
+import type { Location } from 'vscode-languageserver';
+import type { PslCursorInput } from './attribute-syntax-context';
+import { identTokenAt, pslSymbolOf, resolvedNodeAt } from './cursor-resolution';
 
 export interface ReferencesDocument {
-  readonly text: string;
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
 }
 
-export interface ReferencesSource {
-  readonly document: DocumentAst;
-  readonly sourceFile: SourceFile;
+export interface ProvideReferencesInput extends PslCursorInput {
   readonly documents: readonly ReferencesDocument[];
   readonly binder: Binder;
+  readonly includeDeclaration: boolean;
 }
 
-export function provideReferences(
-  source: ReferencesSource,
-  position: Position,
-  includeDeclaration: boolean,
-): Location[] {
-  const token = identTokenAt(source.document.syntax, source.sourceFile.offsetAt(position));
-  const resolved = token === undefined ? undefined : resolvedNodeAt(token, source.binder);
-  const target = resolved === undefined ? undefined : targetOf(resolved.resolution);
-  if (target === undefined) return [];
+export function provideReferences(input: ProvideReferencesInput): Location[] {
+  const token = identTokenAt(input.document.syntax, input.sourceFile.offsetAt(input.position));
+  const resolved = token === undefined ? undefined : resolvedNodeAt(token, input.binder);
+  const symbol = resolved === undefined ? undefined : pslSymbolOf(resolved.resolution);
+  if (symbol === undefined) return [];
   // A namespace has no single declaration: every `namespace X` block both declares and
   // reopens it, so each block name is a usage and none is dropped when the declaration is excluded.
-  const declarationName = target.kind === 'namespace' ? undefined : target.node.name()?.syntax;
+  const declarationName = symbol.kind === 'namespace' ? undefined : symbol.node.name()?.syntax;
   const locations: Location[] = [];
-  for (const { text, document, sourceFile } of source.documents) {
-    for (const offset of occurrencesOf(target.name, text)) {
+  for (const { document, sourceFile } of input.documents) {
+    for (const offset of occurrencesOf(symbol.name, sourceFile.text)) {
       const candidate = document.syntax.tokenAtOffset(offset).rightBiased();
       if (candidate?.kind !== 'Ident') continue;
-      if (candidate.offset !== offset || candidate.text !== target.name) continue;
-      const usage = resolvedNodeAt(candidate, source.binder);
-      if (usage === undefined || !names(usage.resolution, target)) continue;
-      if (!includeDeclaration && usage.node === declarationName) continue;
+      if (candidate.offset !== offset || candidate.text !== symbol.name) continue;
+      const usage = resolvedNodeAt(candidate, input.binder);
+      if (usage === undefined || pslSymbolOf(usage.resolution) !== symbol) continue;
+      if (!input.includeDeclaration && usage.node === declarationName) continue;
       locations.push({
         uri: sourceFile.filename,
         range: {
@@ -49,27 +44,6 @@ export function provideReferences(
   return locations;
 }
 
-function targetOf(resolution: Resolution): PslSymbol | undefined {
-  switch (resolution.kind) {
-    case 'model':
-    case 'compositeType':
-    case 'namedType':
-    case 'block':
-    case 'field':
-    case 'namespace':
-      return resolution.symbol;
-    case 'contributedType':
-    case 'contributedNamespace':
-    case 'crossSpace':
-    case 'attribute':
-    case 'parameter':
-    case 'function':
-    case 'constant':
-    case 'unresolved':
-      return undefined;
-  }
-}
-
 function* occurrencesOf(name: string, text: string): Iterable<number> {
   if (name.length === 0) return;
   for (
@@ -79,12 +53,4 @@ function* occurrencesOf(name: string, text: string): Iterable<number> {
   ) {
     yield offset;
   }
-}
-
-function names(resolution: Resolution, target: PslSymbol): boolean {
-  return (
-    resolution.kind !== 'unresolved' &&
-    resolution.kind !== 'crossSpace' &&
-    resolution.symbol === target
-  );
 }
