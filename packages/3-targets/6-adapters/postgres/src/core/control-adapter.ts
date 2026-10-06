@@ -124,6 +124,13 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
+function decodeMarkerInteger(value: string): number {
+  if (!/^-?\d+$/.test(value)) {
+    throw new TypeError(`expected integer text, got ${JSON.stringify(value)}`);
+  }
+  return Number(value);
+}
+
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
@@ -135,12 +142,15 @@ function decodePostgresMarkerRow(row: unknown, space: string): Record<string, un
     });
   }
   const record = blindCast<
-    { readonly invariants: unknown } & Record<string, unknown>,
+    { readonly invariants: unknown; readonly canonical_version: unknown } & Record<string, unknown>,
     'Postgres marker rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
+      ...(typeof record.canonical_version === 'string'
+        ? { canonical_version: decodeMarkerInteger(record.canonical_version) }
+        : {}),
       invariants: parsePostgresListText(record.invariants),
     };
   } catch (error) {

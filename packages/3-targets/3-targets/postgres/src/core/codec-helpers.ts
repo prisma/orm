@@ -417,7 +417,7 @@ function postgresIntervalFields(text: string): PgInterval | undefined {
   const fraction = match[8] ?? '';
   const magnitude =
     (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
-    BigInt(fraction.padEnd(6, '0') || '0');
+    microsFromFraction(fraction, sign === '-');
   return {
     months: Number(years) * 12 + Number(months),
     days: Number(days),
@@ -464,14 +464,21 @@ export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoD
 export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
   intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
 
-/**
- * Reads the driver's wire value into the application value. `pg` parses an
- * interval into a component object, which is the same three fields under other
- * names; a text wire value is an ISO-8601 duration, because that is what the
- * codec writes.
- */
+const intervalTextFields = (text: string): PgInterval => {
+  if (ISO_DURATION.test(text)) return intervalFieldsOf(text);
+  const fields = postgresIntervalFields(text);
+  if (fields === undefined) {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      `pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got ${text}`,
+      { meta: { codecId: 'pg/interval@1', received: text } },
+    );
+  }
+  return fields;
+};
+
 export const pgIntervalDecode = (wire: string | Record<string, unknown>): PgInterval => {
-  if (typeof wire === 'string') return intervalFieldsOf(wire);
+  if (typeof wire === 'string') return intervalTextFields(wire);
   const part = (name: string): number => {
     const raw = wire[name];
     return typeof raw === 'number' ? raw : 0;
@@ -529,9 +536,6 @@ export function pgByteaCanonical(text: string): string {
   return Buffer.from(text, 'base64').toString('base64');
 }
 
-/**
- * Scalar pg bytea values arrive as Uint8Array/Buffer; target-parsed bytea list elements arrive as PostgreSQL hex text.
- */
 export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
   if (wire instanceof Uint8Array) {
     return wire.constructor === Uint8Array

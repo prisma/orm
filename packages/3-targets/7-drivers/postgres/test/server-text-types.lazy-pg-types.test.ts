@@ -28,29 +28,38 @@ function captureRegisteredArrayOids(): number[] {
 
 vi.mock('pg', () => ({ default: {}, Client: class {}, Pool: class {} }));
 
-describe('importing the temporal text parsers under a types-less pg mock', () => {
+describe('importing the server text types under a types-less pg mock', () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
   it('does not touch pg.types at import time', async () => {
-    const module = await import('../src/temporal-text-parsers');
+    const module = await import('../src/server-text-types');
 
-    expect(module.temporalTextTypes).toBeDefined();
+    expect(module.serverTextTypes).toBeDefined();
+    expect(module.controlTextTypes).toBeDefined();
   });
 
-  it('defers the failure to the first parser lookup, where a real pg would be present', async () => {
-    const { PG_TYPES_ARRAY_OIDS, temporalTextTypes } = await import('../src/temporal-text-parsers');
+  it('returns server text for every OID at runtime without touching pg.types', async () => {
+    const { serverTextTypes } = await import('../src/server-text-types');
+
+    for (const oid of [16, 17, 20, 25, 114, 700, 1114, 1186, 3802, 999_999]) {
+      expect(serverTextTypes.getTypeParser(oid, 'text')('server text')).toBe('server text');
+    }
+  });
+
+  it('returns array text for the control plane and defers other OIDs to pg.types', async () => {
+    const { PG_TYPES_ARRAY_OIDS, controlTextTypes } = await import('../src/server-text-types');
 
     expect([...PG_TYPES_ARRAY_OIDS].sort((a, b) => a - b)).toEqual(captureRegisteredArrayOids());
-    expect(temporalTextTypes.getTypeParser(1114, 'text')('2026-01-02 03:04:05')).toBe(
-      '2026-01-02 03:04:05',
-    );
-    expect(() => temporalTextTypes.getTypeParser(25, 'text')).toThrow();
+    for (const oid of PG_TYPES_ARRAY_OIDS) {
+      expect(controlTextTypes.getTypeParser(oid, 'text')('{a,b}')).toBe('{a,b}');
+    }
+    expect(() => controlTextTypes.getTypeParser(25, 'text')).toThrow();
   });
 
   it('detects when a production array OID is missing from the driver set', async () => {
-    const { PG_TYPES_ARRAY_OIDS } = await import('../src/temporal-text-parsers');
+    const { PG_TYPES_ARRAY_OIDS } = await import('../src/server-text-types');
     const actual = captureRegisteredArrayOids();
     const broken = [...PG_TYPES_ARRAY_OIDS].filter((oid) => oid !== 1000).sort((a, b) => a - b);
 

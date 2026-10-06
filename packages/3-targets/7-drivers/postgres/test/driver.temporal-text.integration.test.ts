@@ -1,4 +1,4 @@
-import type { SqlDriver, SqlExecuteRequest } from '@internal/sql-relational-core/ast';
+import type { SqlDriver } from '@internal/sql-relational-core/ast';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import pg from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,7 +7,7 @@ import {
   type PostgresBinding,
   type PostgresCursorOptions,
 } from '../src/postgres-driver';
-import { executeSql, queryRows } from './sql-queryable-test-utils';
+import { executeSql, queryRows, queryRowsInMode } from './sql-queryable-test-utils';
 
 const CREATE_TABLE = `create table moments (
   d date,
@@ -72,19 +72,6 @@ describe('@internal/driver-postgres temporal text transport', () => {
     return { driver, client };
   }
 
-  function preparedRequest(): SqlExecuteRequest {
-    let name: unknown;
-    return {
-      sql: SELECT_ROW,
-      preparedStatementHandle: {
-        get: () => name,
-        set: (value: unknown) => {
-          name = value;
-        },
-      },
-    };
-  }
-
   it(
     'buffered reads carry every temporal column as PostgreSQL text',
     async () => {
@@ -130,10 +117,7 @@ describe('@internal/driver-postgres temporal text transport', () => {
     async () => {
       const { driver } = await seededDriver();
 
-      const rows: MomentRow[] = [];
-      for await (const row of driver.query<MomentRow>(preparedRequest())) {
-        rows.push(row);
-      }
+      const rows = await queryRowsInMode<MomentRow>(driver, 'named cursor', SELECT_ROW);
 
       expect(rows).toEqual([
         {

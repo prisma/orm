@@ -146,12 +146,13 @@ describe('arktypeJsonColumn encode/encodeJson agreement', () => {
     await expect(codec.decode(wire, CALL_CTX)).rejects.toThrow(/price/);
   });
 
-  it('decode preserves the original validation error when fallback JSON parsing fails', async () => {
-    const codec = arktypeJsonColumn(productSchema).codecFactory(SYNTH_CTX);
-    await expect(codec.decode('{not json', CALL_CTX)).rejects.toThrow(/schema validation failed/);
+  it('decode rejects wire text that is not JSON with the SyntaxError the runtime wraps', async () => {
+    const codec = arktypeJsonColumn(type('string')).codecFactory(SYNTH_CTX);
+
+    await expect(codec.decode('not json', CALL_CTX)).rejects.toThrow(SyntaxError);
   });
 
-  it('decode rethrows non-runtime schema errors from the raw string pass', async () => {
+  it('decode rethrows non-runtime schema errors', async () => {
     const throwingSchema = Object.assign(
       (_value: unknown): unknown => {
         throw new Error('schema exploded');
@@ -160,34 +161,24 @@ describe('arktypeJsonColumn encode/encodeJson agreement', () => {
     );
     const codec = arktypeJsonColumn(throwingSchema as never).codecFactory(SYNTH_CTX);
 
-    await expect(codec.decode('raw wire', CALL_CTX)).rejects.toThrow('schema exploded');
+    await expect(codec.decode('"raw wire"', CALL_CTX)).rejects.toThrow('schema exploded');
   });
 
-  it('decode accepts pre-parsed JSON string primitives for string-schema columns', async () => {
-    const stringSchema = type('string');
-    const codec = arktypeJsonColumn(stringSchema).codecFactory(SYNTH_CTX);
-    expect(await codec.decode('alice', CALL_CTX)).toBe('alice');
+  it('decode parses JSON string text for string-schema columns', async () => {
+    const codec = arktypeJsonColumn(type('string')).codecFactory(SYNTH_CTX);
+    expect(await codec.decode('"hello"', CALL_CTX)).toBe('hello');
   });
 
-  it('decode preserves pre-parsed JSON-looking string primitives', async () => {
-    const stringSchema = type('string');
-    const codec = arktypeJsonColumn(stringSchema).codecFactory(SYNTH_CTX);
-    for (const value of ['42', 'true', 'null', '{"x":1}']) {
-      expect(await codec.decode(value, CALL_CTX)).toBe(value);
+  it('decode returns JSON-looking strings stored as JSON strings', async () => {
+    const codec = arktypeJsonColumn(type('string')).codecFactory(SYNTH_CTX);
+    for (const value of ['42', 'true', 'null', '{"x":1}', '"bob"', '""']) {
+      expect(await codec.decode(JSON.stringify(value), CALL_CTX)).toBe(value);
     }
   });
 
-  it('decode preserves quote-bounded strings byte-exact (jsonb pre-parsed)', async () => {
-    // Regression: the previous `isJsonStringText` heuristic unwrapped any
-    // `"…"`-shaped wire as JSON-encoded text. Under `pg` + `jsonb` the
-    // wire is already pre-parsed, so `"bob"` (5 chars with literal quote
-    // characters) IS the value — unwrapping silently truncated it to
-    // `bob` (3 chars). The decoder must return the literal wire here.
-    const stringSchema = type('string');
-    const codec = arktypeJsonColumn(stringSchema).codecFactory(SYNTH_CTX);
-    expect(await codec.decode('"bob"', CALL_CTX)).toBe('"bob"');
-    expect(await codec.decode('"hello"', CALL_CTX)).toBe('"hello"');
-    expect(await codec.decode('""', CALL_CTX)).toBe('""');
+  it('decode validates the parsed value, not the wire text', async () => {
+    const codec = arktypeJsonColumn(type('string')).codecFactory(SYNTH_CTX);
+    await expect(codec.decode('42', CALL_CTX)).rejects.toThrow(/schema validation failed/);
   });
 
   it('decode rejects pre-parsed primitives that violate the schema', async () => {
