@@ -1,6 +1,6 @@
 # Prisma 8 language server
 
-The Prisma 8 language server provides diagnostics, formatting, code completion, attribute signature help, and hover for PSL schemas through the Language Server Protocol.
+The Prisma 8 language server provides diagnostics, formatting, code completion, attribute signature help, hover, and go-to-definition for PSL schemas through the Language Server Protocol.
 
 ## Project membership and diagnostics
 

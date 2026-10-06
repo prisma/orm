@@ -13,8 +13,8 @@ import type {
   FunctionSymbol,
   ModelSymbol,
   NamedTypeSymbol,
+  NamespaceSymbol,
   ParameterSymbol,
-  Resolution,
 } from '@internal/psl-parser';
 import { findBlockDescriptor } from '@internal/psl-parser';
 import {
@@ -24,6 +24,7 @@ import {
 } from '@internal/psl-parser/syntax';
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
+import { resolvedNodeAt } from './cursor-resolution';
 import {
   namedParameterText,
   renderSignatureLabel,
@@ -44,6 +45,7 @@ type HoverEntitySymbol =
 
 type HoverResult =
   | { readonly kind: 'entity'; readonly symbol: HoverEntitySymbol }
+  | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
   | { readonly kind: 'parameter'; readonly symbol: ParameterSymbol }
@@ -84,11 +86,7 @@ function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined
 }
 
 function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | undefined {
-  const identifier = token.parent;
-  return identifier.findAncestor((node) => narrowHoverResult(binder.symbolForNode(node)));
-}
-
-function narrowHoverResult(resolution: Resolution | undefined): HoverResult | undefined {
+  const resolution = resolvedNodeAt(token, binder)?.resolution;
   switch (resolution?.kind) {
     case 'model':
     case 'compositeType':
@@ -96,6 +94,8 @@ function narrowHoverResult(resolution: Resolution | undefined): HoverResult | un
     case 'block':
     case 'field':
       return { kind: 'entity', symbol: resolution.symbol };
+    case 'namespace':
+      return { kind: 'namespace', symbol: resolution.symbol };
     case 'attribute':
       return { kind: 'attribute', symbol: resolution.symbol };
     case 'contributedType':
@@ -113,6 +113,7 @@ function narrowHoverResult(resolution: Resolution | undefined): HoverResult | un
 
 function renderHoverResult(result: HoverResult): string {
   if (result.kind === 'entity') return renderEntityContent(result.symbol);
+  if (result.kind === 'namespace') return renderNamespaceContent(result.symbol);
   if (result.kind === 'attribute') return renderAttributeContent(result.symbol);
   if (result.kind === 'contributedType') return renderContributedTypeContent(result.symbol);
   if (result.kind === 'parameter') return renderParameterContent(result.symbol);
@@ -123,6 +124,10 @@ function renderHoverResult(result: HoverResult): string {
 function renderEntityContent(entity: HoverEntitySymbol): string {
   const fence = ['```prisma', renderDeclarationLine(entity), '```'].join('\n');
   return withDocumentation(fence, entity.node.docComment());
+}
+
+function renderNamespaceContent(namespace: NamespaceSymbol): string {
+  return ['```prisma', `namespace ${namespace.name}`, '```'].join('\n');
 }
 
 function renderAttributeContent(symbol: AttributeSymbol): string {
