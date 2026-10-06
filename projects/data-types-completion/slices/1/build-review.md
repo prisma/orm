@@ -29,6 +29,7 @@ Reviewer-maintained. Contract: `projects/data-types-completion/design.md` sectio
 | review fixes 2 | 2 (`9d4437193f`, `6b99abad7d`) | SATISFIED: S1-rf2-R1-1 to S1-rf2-R1-3 closed, no new finding |
 | review fixes 3 | 1 (`c3f36b3369..e5641a42ce`, after the merge of `main`) | ANOTHER ROUND NEEDED: 1 low |
 | review fixes 3 | 2 (`a8e36d4744`) | SATISFIED: S1-rf3-R1-1 closed, no new finding |
+| review fixes 4 | 1 (`7835641a20..a5550c2793`, merge of `main` first) | ANOTHER ROUND NEEDED: 2 must-fix, 2 low |
 
 ## Findings log
 
@@ -264,7 +265,53 @@ All 19 items of `wip/briefs/review-fixes-1.md` are built as written. Code review
 
 - S1-rf3-R1-1: closed by `a8e36d4744`. Item 9 of "Assembly is strict" says the error names the codec, its data type and the data type's contributor, which is what `enforceSqlDataTypeInvariants` throws (an `InternalError`, as the list's introduction says). The reworded sentence in "Declaring a data type" says assembly refuses a codec of a type declared with plain `dataType`, and that `sql/expression` is such a type, which matches `isSqlDataType` and `sql-expression.ts`. The commit also makes `slices/1/pr-body.md` identical to the published copy on the slice 2 branch, closing the round 1 referral. `lint:docs` exits 0 (`wip/rv3/lint-docs-r2.log`). Both sign-offs, no AI attribution.
 
+### S1-rf4-R1-1 (must-fix): the extension upgrade entry does not cover the new arguments of `deriveJsonSchema`
+
+- Where: `upgrade-instructions/pending/data-types-declare-names/extension/instructions.md`. `deriveJsonSchema` and `derivePolymorphicJsonSchema` in `packages/2-mongo-family/2-authoring/contract-psl/src/derive-json-schema.ts`, exported from `@internal/mongo-contract-psl`. The Mongo extension's call at `packages/3-extensions/mongo/test/mongo.enum.e2e.test.ts` line 91.
+- What is wrong: On `main` both functions take `valueObjects?, codecLookup?, valueSets?` after their fields. Now they take a required `lookups: MongoTypeLookups` second, and `codecLookup` is no longer a later argument. The Mongo extension's own test had to change its call, earlier in slice 1 and again in `9552aeabbd`. No entry describes the change, so an extension author who calls either function gets a type error and no instruction. Design 6 says the entry covers every change an extension author sees, and the published 0.14-to-0.15 guide recorded the last signature change of these two functions (`mongo-derive-json-schema-value-sets-param`). `check:upgrade-coverage` passes because it checks only that a declaration exists.
+- Change: add an entry, for example `mongo-derive-json-schema-takes-lookups`: the second argument is a required `{ codecLookup, dataTypeLookup }` (`MongoTypeLookups` from `@internal/mongo-contract/data-type`), and the codec lookup moves into it. Detect `deriveJsonSchema` and `derivePolymorphicJsonSchema` as the 0.14-to-0.15 entry does. Add its prose section with a call before and after.
+
+### S1-rf4-R1-2 (must-fix): five test names still number the design's rules, and a rewritten comment keeps project ids
+
+- Where: `packages/2-sql/1-core/contract/test/sql-data-type.declare.test.ts` lines 80, 122, 173, 212 and 241: `describe('rule 1: …')` to `describe('rule 6: …')`, with no rule 5 block. `test/integration/test/extension-pgvector-scenario-a.e2e.integration.test.ts` line 49: `(project AC5 / AC10 / TC-16)`, in the sentence slice 1 rewrote.
+- What is wrong: "rule 1" to "rule 6" are the numbered rules of design 2.2. The code does not number them (`sqlDataType`'s comment says "a rule of the module"), so on `main` the numbers point into a deleted document, and the gap at 5 reads like a missing test. Ruling 6 asked for a sweep of the whole slice diff, and these lines are in it. `AC5`, `AC10` and `TC-16` are token shapes `.agents/rules/no-transient-project-ids-in-code.mdc` forbids; they came from `main`, but slice 1 rewrote the sentence that carries them.
+- Change: drop each `rule N: ` prefix and keep the property after it. Drop `(project AC5 / AC10 / TC-16)` from the rewritten sentence.
+
+### S1-rf4-R1-3 (low): the contract builder's inner functions still accept a missing codec lookup
+
+- Where: `packages/2-sql/2-authoring/contract-ts/src/build-contract.ts` lines 116 to 118 (`columnCodec`), 191 to 195 (`codecForDefault`), 241 (`encodeColumnDefault`), 568 to 570 (`encodeEnumMembers`) and 601 (`checkMemberValues`).
+- What is wrong: This is the class of SD F05, in a file ruling 5 did not name. Slice 1 made `buildSqlContractFromDefinition` require both lookups, and every caller of these functions passes the required codec lookup. Each still takes `CodecLookupWithDescriptors | undefined` and, when it is missing, skips encoding or the stored-as-written check. The code is `main`'s; slice 1 made the branches dead.
+- Change: make the parameter required and delete the `undefined` branches, or record it in `deferred.md` beside slice 2's item for the local `TypeLookups` in this file.
+
+### S1-rf4-R1-4 (low): one ADR 241 consequence still says constructors carry native storage names
+
+- Where: `docs/architecture docs/adrs/ADR 241 - Scalar types use the authoring type-constructor channel.md` line 79.
+- What is wrong: The rewritten bullet says a SQL target "defines its PSL-only constructors, the native storage names and codec bindings". A constructor names only a codec; line 47 of the same ADR says the type's name comes from the data type.
+- Change: "It defines its PSL-only constructors, which bind PSL type names to codecs, and its adapter contributes them."
+
 ## Round notes
+
+### Review fixes 4, round 1
+
+Scope: `7835641a20..a5550c2793`, the merge of `main` (`57675308d6`, TML-3283, and ADR 258) and 11 commits, against `wip/briefs/s1-fixes.md` and the round 4 findings (SD F01 to F07, CR F01 to F03, referrals).
+
+The merge: `git show --remerge-diff 7835641a20` shows the two conflicts only. `pg/bytea` keeps `texts: [writtenAndCatalog('bytea')]` and gains `main`'s `pgByteaCanonical` as both its canonical form and its cast from text. Slice 1's `dateTimeType` takes `main`'s name `typeCanonicalFromText` and keeps slice 1's `spec` argument, so every date and time type keeps its texts. `pgvector/vector` keeps `params` and `texts` and gains `toCanonicalForm: vectorCanonicalForm`. The auto-merged `codec-helpers.ts`, `prisma7-binding.ts` and the control adapter's output settings equal `main`'s change. `codec-literal-defaults.integration.test.ts`, the one test file both sides changed, keeps `main`'s two titles and two `expect` calls plus slice 1's data type lookup argument. TML-3283 changed no planner file, the golden manifest is unchanged in the range, and the golden test passes.
+
+Item by item:
+- 1 (`936e2b29d1`): the marks are on the four text constructors, `INFERRED` follows, and the tests are (a), (b) and a third: every constructor `EXISTING_COLUMN_DATE_TIME_TYPES` names is marked. Red: with the four marks moved back by a temporary edit, and the target rebuilt for the adapter test, (a), the third test and (b) fail, naming exactly `Date`, `Time`, `Timestamp` and `Timestamptz`. Reverted, rebuilt, green. Design 12.4, 13.4, the new 13.8 and the first slice 3 grep row follow the ruling; `CODEC_ID_BY_INFERRED_TYPE` is gone from `main`'s packages and from the row.
+- 2 (`beba4228d4`): as asked. The sweep finds no other text that puts slice 1 on the planning branch, and no link into a gitignored path. `inventory/data-types.md` lines 8, 10 and 61 name raw outputs under the gitignored `wip/data-types-inventory/` as code spans. They record how the inventory was made, and the inventory is deleted at close-out, so I leave them.
+- 3 (`1f23426887`): as asked. The keys test moved from the adapter to the target. One leftover phrase in ADR 241: S1-rf4-R1-4.
+- 4 (`760c6a68dd`): `DataTypeLookup` and `createDataTypeLookup` now equal `main`'s. The upgrade entry `data-type-lookup-lists-all` described a method slice 1 added and now removes, so deleting it is right. Design 2.7 item 1 and 5.2 agree.
+- 5 (`9552aeabbd`): no optional codec lookup and no `?.` on one is left in the SQL interpreter's `src`; the deleted `InternalError` in `storedValueReader` was the runtime form of the same off-switch. Mongo takes one required `MongoTypeLookups`. No test passes `undefined` lookups (the `undefined` arguments are `valueObjects`), and the four touched test files keep their test and `expect` counts. The same class remains in the contract builder (S1-rf4-R1-3), and the new signature has no upgrade entry (S1-rf4-R1-1).
+- 6 (`38939d1005`): the eighteen listed names are fixed; the sweep finds more (S1-rf4-R1-2).
+- 7 (`ba1680c374`, `a02e566ecc`): matches `control-instance.ts` line 451 and ADR 254 line 206. Item 10's `CONTRACT.DATA_TYPE_CASTS_FROM_SQL_EXPRESSION` is raised only from `enforceSqlDataTypeInvariants`. The extension entry says the same.
+- 8 (`c3c2cbc2c2`): moved unchanged.
+- 9 (`72379647c7`): the Mongo comment as asked. The referral's premise for `authoring.ts` was wrong: `columnFromEntity` still returns `nativeType`, which the TypeScript `pg.enum` helper reads (`packages/3-extensions/postgres/src/contract/native-enum.ts` line 168). The new comment is accurate: the PSL path reads only `typeParams` (`EntityRefColumnFromEntityResult`), and the type name comes from the `pg/enum` data type. Accepted.
+- 10: verify compares `resolvedNativeType`, which `contractToSchemaIR` writes as `renderSqlTypeName(type, normalize(params))` and introspection writes through `normalizeSchemaNativeType`. The implementer's probe (`wip/logs/f10-alias-probe.test.ts.txt`, not in the tree) compares the first with the second applied to each declared catalog text, for 24 Postgres data types and 36 parameter sets. All 36 agree, including `bigint`, `double precision`, `character varying(5)`, `time(3) without time zone` and `timestamp(3) with time zone`. No code change, as the brief says.
+
+Rules: no `any`, no bare `as` in production code, no import extension, no zod, no `@ts-expect-error`, no test name with "should". The new comments are the moved or rewritten doc comments the rulings asked for. Every commit carries both sign-offs and no AI attribution.
+
+Checks at `a5550c2793`, logs under `wip/rv/`: typecheck passes in the 16 touched packages. Touched test files, one package at a time: framework-components 66, mongo contract-psl 51, contract-prisma7 15, mongo extension 20, pgvector 48 (with `main`'s `vector-list-default` integration test), postgis 14, target-mongo 27, target-postgres 630 (20 skipped by `main`'s `runIf`), target-sqlite 69, adapter-postgres 49 (with `main`'s three TML-3283 integration files), adapter-sqlite 7. The SQL contract-psl suite alone: 648. `lint:deps` finds no violation, `lint:framework-vocabulary` is at 262 of 262, and `lint:docs` and `check:upgrade-coverage --mode pr --prev bot/main` exit 0. The golden planner test passes (694) and `main`'s `bytea-defaults` journey passes (6). The slice 1 grep check prints nothing. Only the two golden fixture `contract.json` files differ from `bot/main`. I did not rerun `fixtures:check`; the implementer's run exits 0 (`wip/logs/final-fixtures.log`).
 
 ### Review fixes 3, round 1
 
