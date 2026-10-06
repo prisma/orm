@@ -17,6 +17,7 @@ export type {
 } from '../core/codecs';
 export {
   jsonDocumentRetag,
+  SQLITE_NOW_EXPRESSION,
   sqliteBigintColumn,
   sqliteBigintNumberColumn,
   sqliteBlobColumn,

@@ -7,15 +7,17 @@ describe('sqliteResolveDefault', () => {
     expect(sqliteResolveDefault(literal, 'text')).toBe(literal);
   });
 
-  it.each([['CURRENT_TIMESTAMP'], ["datetime('now')"], ['(CURRENT_TIMESTAMP)']])(
-    'resolves the authored expression %j to now(), as introspection does',
-    (expression) => {
-      expect(sqliteResolveDefault({ kind: 'function', expression }, 'text')).toEqual({
-        kind: 'function',
-        expression: 'now()',
-      });
-    },
-  );
+  it.each([
+    ['CURRENT_TIMESTAMP'],
+    ["datetime('now')"],
+    ['(CURRENT_TIMESTAMP)'],
+    ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
+  ])('resolves the authored expression %j to now(), as introspection does', (expression) => {
+    expect(sqliteResolveDefault({ kind: 'function', expression }, 'text')).toEqual({
+      kind: 'function',
+      expression: 'now()',
+    });
+  });
 
   it('resolves an authored literal-shaped expression to the literal introspection reads', () => {
     expect(sqliteResolveDefault({ kind: 'function', expression: "'draft'" }, 'text')).toEqual({
@@ -33,6 +35,26 @@ describe('sqliteResolveDefault', () => {
 });
 
 describe('parseSqliteDefault', () => {
+  it.each([
+    ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
+    ["(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"],
+    ["STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"],
+    ["  strftime (  '%Y-%m-%dT%H:%M:%fZ' ,\n 'now'  )  "],
+    ['strftime("%Y-%m-%dT%H:%M:%fZ","now")'],
+    ['strftime("%Y-%m-%dT%H:%M:%fZ", \'now\')'],
+  ])('reads the codec-text expression %j as now()', (raw) => {
+    expect(parseSqliteDefault(raw, 'text')).toEqual({ kind: 'function', expression: 'now()' });
+  });
+
+  it.each([
+    ["strftime('%Y-%m-%d','now')"],
+    ["strftime('%y-%m-%dt%h:%m:%fz','now')"],
+    ["strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 day')"],
+    ["strftime('%Y-%m-%dT%H:%M:%fZ',\"now')"],
+  ])('keeps the other strftime expression %j as a function default', (raw) => {
+    expect(parseSqliteDefault(raw, 'text')).toEqual({ kind: 'function', expression: raw });
+  });
+
   it.each([
     ['9e999', 'Infinity'],
     ['-9e999', '-Infinity'],

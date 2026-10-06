@@ -27,6 +27,7 @@ import type {
 import { relationalNodeGranularity, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { SQLITE_NOW_EXPRESSION } from '../codecs';
 import { sqliteResolveDefault } from '../default-normalizer';
 import { renderDefaultLiteral } from './planner-ddl-builders';
 
@@ -42,7 +43,7 @@ interface SqliteDiffDatabaseSchemaInput {
 export function sqliteRenderDefault(def: ColumnDefault, column: StorageColumn): string {
   if (def.kind === 'function') {
     if (def.expression === 'now()') {
-      return "datetime('now')";
+      return SQLITE_NOW_EXPRESSION;
     }
     return def.expression;
   }
