@@ -9,7 +9,7 @@ import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
 import type { orm } from '../src/orm';
 import type { DeclaredField, MissingScopeFields, ScopeFieldsCheck } from '../src/scopes';
-import type { CodecField, ModelAccessor } from '../src/types';
+import type { CodecField, CodecListField, ModelAccessor } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { Contract as ScopeNamespaceContract } from './fixtures/scope-namespace/generated/contract';
 import {
@@ -276,25 +276,76 @@ describe('client.scope', () => {
     const labelled = client.scope({ labels: field.column(textColumn) }, (rows) => rows.limit(1));
     // @ts-expect-error Tag.labels is a list of text values, not one
     plain.Tag.apply(labelled);
-    const withLabel = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
-      rows.where((r) => {
-        expectTypeOf(r.labels.eq)
-          .parameter(0)
-          .toEqualTypeOf<Parameters<ModelAccessor<Contract, 'Tag', 'public'>['labels']['eq']>[0]>();
-        return r.labels.eq(['a']);
-      }),
-    );
-    expectTypeOf(plain.Tag.apply(withLabel)).toEqualTypeOf<Filtered<typeof plain.Tag>>();
-    const declaredList = client.scope(
-      { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
-      (rows) => rows.limit(1),
-    );
-    plain.Tag.apply(declaredList);
     const titles = client.scope({ title: field.column(textColumn).many() }, (rows) =>
       rows.limit(1),
     );
     // @ts-expect-error Post.title holds one text value, not a list
     plain.Post.apply(titles);
+    const titlesDeclared = client.scope(
+      { title: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
+      (rows) => rows.limit(1),
+    );
+    // @ts-expect-error Post.title holds one text value, not a list
+    plain.Post.apply(titlesDeclared);
+  });
+
+  test('.many() matches a list whose elements are never null, and not one whose elements may be null', () => {
+    const labels = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
+      rows.limit(1),
+    );
+    expectTypeOf(plain.Tag.apply(labels)).toEqualTypeOf<typeof plain.Tag>();
+    const notes = client.scope({ notes: field.column(textColumn).many() }, (rows) => rows.limit(1));
+    // @ts-expect-error the elements of Tag.notes may be null
+    plain.Tag.apply(notes);
+  });
+
+  test('.many({ elementsNullable: true }) matches a list whose elements may be null, and not one whose elements are never null', () => {
+    const notes = client.scope(
+      { notes: field.column(textColumn).many({ elementsNullable: true }) },
+      (rows) => rows.limit(1),
+    );
+    expectTypeOf(plain.Tag.apply(notes)).toEqualTypeOf<typeof plain.Tag>();
+    const labels = client.scope(
+      { labels: field.column(textColumn).many({ elementsNullable: true }) },
+      (rows) => rows.limit(1),
+    );
+    // @ts-expect-error the elements of Tag.labels are never null
+    plain.Tag.apply(labels);
+  });
+
+  test('the package form declares a list with many: { elementNullable }', () => {
+    const labels = client.scope(
+      { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
+      (rows) => rows.limit(1),
+    );
+    plain.Tag.apply(labels);
+    const notesAsStrict = client.scope(
+      { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
+      (rows) => rows.limit(1),
+    );
+    // @ts-expect-error the elements of Tag.notes may be null
+    plain.Tag.apply(notesAsStrict);
+    const notes = client.scope(
+      { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
+      (rows) => rows.limit(1),
+    );
+    plain.Tag.apply(notes);
+    const labelsAsNullable = client.scope(
+      { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
+      (rows) => rows.limit(1),
+    );
+    // @ts-expect-error the elements of Tag.labels are never null
+    plain.Tag.apply(labelsAsNullable);
+    client.scope(
+      // @ts-expect-error many: true is not a declaration; a list declares its element nullability
+      { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
+      (rows) => rows.limit(1),
+    );
+  });
+
+  test('the refusal compares the element nullability of a list', () => {
+    type Strict = { readonly elementNullable: false };
+    type NullableElements = { readonly elementNullable: true };
     expectTypeOf<
       MissingScopeFields<
         Contract,
@@ -308,9 +359,65 @@ describe('client.scope', () => {
         Contract,
         'Tag',
         'public',
-        { readonly labels: DeclaredField<'pg/text@1', false, true> }
+        { readonly labels: DeclaredField<'pg/text@1', false, Strict> }
       >
     >().toBeNever();
+    expectTypeOf<
+      MissingScopeFields<
+        Contract,
+        'Tag',
+        'public',
+        { readonly labels: DeclaredField<'pg/text@1', false, NullableElements> }
+      >
+    >().toEqualTypeOf<'labels'>();
+    expectTypeOf<
+      MissingScopeFields<
+        Contract,
+        'Tag',
+        'public',
+        { readonly notes: DeclaredField<'pg/text@1', false, NullableElements> }
+      >
+    >().toBeNever();
+    expectTypeOf<
+      MissingScopeFields<
+        Contract,
+        'Tag',
+        'public',
+        { readonly notes: DeclaredField<'pg/text@1', false, Strict> }
+      >
+    >().toEqualTypeOf<'notes'>();
+  });
+
+  test('the body sees a list field whose elements include null only when the declaration says they may be null', () => {
+    type TagAccessor = ModelAccessor<Contract, 'Tag', 'public'>;
+    client.scope({ labels: field.column(textColumn).many() }, (rows) =>
+      rows.where((r) => {
+        expectTypeOf(r.labels).toEqualTypeOf<CodecListField<Contract, 'pg/text@1'>>();
+        expectTypeOf(r.labels.eq)
+          .parameter(0)
+          .toEqualTypeOf<Parameters<TagAccessor['labels']['eq']>[0]>();
+        // @ts-expect-error the declaration says the elements of labels are never null
+        r.labels.eq(['a', null]);
+        return r.labels.eq(['a']);
+      }),
+    );
+    client.scope({ notes: field.column(textColumn).many({ elementsNullable: true }) }, (rows) =>
+      rows.where((r) => {
+        expectTypeOf(r.notes).toEqualTypeOf<CodecListField<Contract, 'pg/text@1', false, true>>();
+        expectTypeOf(r.notes.eq)
+          .parameter(0)
+          .toEqualTypeOf<Parameters<TagAccessor['notes']['eq']>[0]>();
+        return r.notes.eq(['a', null]);
+      }),
+    );
+    client.scope(
+      { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
+      (rows) =>
+        rows.where((r) => {
+          expectTypeOf(r.notes).toEqualTypeOf<CodecListField<Contract, 'pg/text@1', false, true>>();
+          return r.notes.eq(['a', null]);
+        }),
+    );
   });
 
   test('a union of collections is accepted when every model in it has the fields', () => {

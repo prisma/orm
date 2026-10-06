@@ -26,25 +26,35 @@ import type {
   OrderableFieldNames,
 } from './types';
 
-/** A field declared by its codec and nullability, for a scope written without a field builder. `many: true` declares a list field. */
+type FieldMultiplicity = false | { readonly elementNullable: boolean };
+
+/** A field declared by its codec and nullability, for a scope written without a field builder. `many` declares a list field as a contract field records one: `{ elementNullable: false }`, or `{ elementNullable: true }` when its elements may be null. */
 export interface DeclaredField<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
-  Many extends boolean = false,
+  Many extends FieldMultiplicity = false,
 > {
   readonly codecId: CodecId;
   readonly nullable: Nullable;
   readonly many?: Many | undefined;
 }
 
-type AnyDeclaredField = DeclaredField<string, boolean, boolean>;
+type AnyDeclaredField = DeclaredField<string, boolean, FieldMultiplicity>;
 
-type DeclaredMany<Field> = Field extends { readonly many?: false | undefined } ? false : true;
+type MultiplicityOf<Many> = Many extends {
+  readonly elementNullable: infer ElementNullable extends boolean;
+}
+  ? { readonly elementNullable: ElementNullable }
+  : false;
 
-type BuiltMany<Builder> = Builder extends { build(): { readonly many?: infer Many } }
-  ? true extends Many
-    ? true
-    : false
+type DeclaredMultiplicity<Field> = Field extends { readonly many?: false | undefined }
+  ? false
+  : Field extends { readonly many?: infer Many }
+    ? MultiplicityOf<Exclude<Many, undefined>>
+    : false;
+
+type BuiltMultiplicity<Builder> = Builder extends { build(): infer Built }
+  ? DeclaredMultiplicity<Built>
   : false;
 
 /** A field builder from the contract DSL, such as `field.text().optional()`, with the codec and nullability it declares. */
@@ -55,14 +65,14 @@ export type ScopeFieldBuilder<
 
 /** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
 export type ScopeFieldDeclarations<CodecId extends string = string> = Readonly<
-  Record<string, ScopeFieldBuilder<CodecId> | DeclaredField<CodecId, boolean, boolean>>
+  Record<string, ScopeFieldBuilder<CodecId> | DeclaredField<CodecId, boolean, FieldMultiplicity>>
 >;
 
 type DeclarationField<Declaration> =
   Declaration extends ScopeFieldBuilder<infer Id, infer Nullable>
-    ? DeclaredField<Id, Nullable, BuiltMany<Declaration>>
-    : Declaration extends DeclaredField<infer Id, infer Nullable, boolean>
-      ? DeclaredField<Id, Nullable, Declaration extends { readonly many: true } ? true : false>
+    ? DeclaredField<Id, Nullable, BuiltMultiplicity<Declaration>>
+    : Declaration extends DeclaredField<infer Id, infer Nullable, FieldMultiplicity>
+      ? DeclaredField<Id, Nullable, DeclaredMultiplicity<Declaration>>
       : never;
 
 /** The declared fields with each builder read as its codec and nullability. */
@@ -79,8 +89,10 @@ export type ScopeModelAccessor<
 > = {
   readonly [K in keyof Fields]: Fields[K]['codecId'] extends keyof ExtractCodecTypes<TContract> &
     string
-    ? DeclaredMany<Fields[K]> extends true
-      ? CodecListField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
+    ? DeclaredMultiplicity<Fields[K]> extends {
+        readonly elementNullable: infer ElementNullable extends boolean;
+      }
+      ? CodecListField<TContract, Fields[K]['codecId'], Fields[K]['nullable'], ElementNullable>
       : CodecField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
     : never;
 };
@@ -108,9 +120,11 @@ export interface ScopeCollection<Row, Facts extends ScopeFacts> {
   offset(n: number): ScopeCollection<Row, Facts>;
 }
 
-type FieldMany<Field> = Field extends { readonly many: true } ? true : false;
+type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Many }
+  ? MultiplicityOf<Many>
+  : false;
 
-/** The declared fields that the model lacks, or has with another codec or nullability, or as a list where the declaration has one value or the reverse. For a union of models, the fields any of them lacks. */
+/** The declared fields that the model lacks, or has with another codec or nullability, as a list where the declaration has one value or the reverse, or as a list whose elements differ in nullability from the declared ones. For a union of models, the fields any of them lacks. */
 export type MissingScopeFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -122,12 +136,12 @@ export type MissingScopeFields<
         ? [
             FieldCodecId<TContract, ModelName, K, NsId>,
             FieldNullable<TContract, ModelName, K, NsId>,
-            FieldMany<FieldsOf<TContract, ModelName, NsId>[K]>,
-          ] extends [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMany<Fields[K]>]
-          ? [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMany<Fields[K]>] extends [
+            ContractFieldMultiplicity<FieldsOf<TContract, ModelName, NsId>[K]>,
+          ] extends [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMultiplicity<Fields[K]>]
+          ? [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMultiplicity<Fields[K]>] extends [
               FieldCodecId<TContract, ModelName, K, NsId>,
               FieldNullable<TContract, ModelName, K, NsId>,
-              FieldMany<FieldsOf<TContract, ModelName, NsId>[K]>,
+              ContractFieldMultiplicity<FieldsOf<TContract, ModelName, NsId>[K]>,
             ]
             ? never
             : K
@@ -196,21 +210,37 @@ function isFieldBuilder(value: object): value is ScopeFieldBuilder {
 interface FieldSpec {
   readonly codecId: string;
   readonly nullable: boolean;
-  readonly many: boolean;
+  readonly many: FieldMultiplicity;
 }
 
-function isFieldSpec(value: object): value is DeclaredField<string, boolean, boolean> {
+function isListMultiplicity(value: unknown): value is { readonly elementNullable: boolean } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'elementNullable' in value &&
+    typeof value.elementNullable === 'boolean'
+  );
+}
+
+function isFieldSpec(value: object): value is AnyDeclaredField {
   return (
     'codecId' in value &&
     typeof value.codecId === 'string' &&
     'nullable' in value &&
     typeof value.nullable === 'boolean' &&
-    (!('many' in value) || value.many === undefined || typeof value.many === 'boolean')
+    (!('many' in value) ||
+      value.many === undefined ||
+      value.many === false ||
+      isListMultiplicity(value.many))
   );
 }
 
+function multiplicity(many: unknown): FieldMultiplicity {
+  return isListMultiplicity(many) ? { elementNullable: many.elementNullable } : false;
+}
+
 const FIELD_DECLARATION_FIX =
-  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }, adding .many() or many: true for a list.';
+  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.';
 
 function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
   if (typeof declaration === 'object' && declaration !== null && isFieldBuilder(declaration)) {
@@ -241,20 +271,20 @@ function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
       );
     }
     const many = typeof built === 'object' && built !== null && 'many' in built && built.many;
-    return { codecId: descriptor.codecId, nullable, many: many === true };
+    return { codecId: descriptor.codecId, nullable, many: multiplicity(many) };
   }
   if (typeof declaration === 'object' && declaration !== null && isFieldSpec(declaration)) {
     return {
       codecId: declaration.codecId,
       nullable: declaration.nullable,
-      many: declaration.many === true,
+      many: multiplicity(declaration.many),
     };
   }
   throw ormError(
     'ORM.ARGUMENT_INVALID',
     `Cannot define the scope: the declaration of field ${name} is not a field builder or { codecId, nullable }`,
     {
-      why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: true; received ${describeReceived(declaration)} for ${name}.`,
+      why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: { elementNullable } with a boolean elementNullable; received ${describeReceived(declaration)} for ${name}.`,
       fix: FIELD_DECLARATION_FIX,
       meta: { field: name },
     },
@@ -390,10 +420,36 @@ export function assertScopeResult(receiver: RuntimeModelCollection, result: unkn
   }
 }
 
-function listKindFix(name: string, declaredAsList: boolean): string {
-  return declaredAsList
-    ? `Apply the scope to a model whose ${name} field is a list, or declare ${name} without .many() or many: true.`
-    : `Apply the scope to a model whose ${name} field holds one value, or declare ${name} as a list with .many() or many: true.`;
+function elementNullability(elementNullable: boolean): string {
+  return elementNullable ? 'may be null' : 'are never null';
+}
+
+function sameMultiplicity(a: FieldMultiplicity, b: FieldMultiplicity): boolean {
+  return a === false || b === false ? a === b : a.elementNullable === b.elementNullable;
+}
+
+function fieldShape(many: FieldMultiplicity): string {
+  return many === false
+    ? 'holds one value'
+    : `is a list whose elements ${elementNullability(many.elementNullable)}`;
+}
+
+function declarationFor(many: FieldMultiplicity): string {
+  if (many === false) return 'as one value, without .many() or many';
+  return many.elementNullable
+    ? 'as a list whose elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }'
+    : 'as a list whose elements are never null, with .many() or many: { elementNullable: false }';
+}
+
+function describeField(field: {
+  readonly codecId: string;
+  readonly nullable: boolean;
+  readonly many: FieldMultiplicity;
+}): string {
+  const value = `with codec ${field.codecId} that ${nullability(field.nullable)}`;
+  return field.many === false
+    ? value
+    : `${value} and whose elements ${elementNullability(field.many.elementNullable)}`;
 }
 
 function assertScopeFields(
@@ -405,7 +461,7 @@ function assertScopeFields(
   const label = modelLabel(collection);
   const model = modelOf(contract, namespaceId, modelName);
   for (const [name, spec] of fields) {
-    const declared = `The scope was declared for models that have a ${spec.many ? 'list field' : 'field'} ${name} with codec ${spec.codecId} that ${nullability(spec.nullable)}.`;
+    const declared = `The scope was declared for models that have a ${spec.many === false ? 'field' : 'list field'} ${name} ${describeField(spec)}.`;
     const meta = {
       model: modelName,
       namespace: namespaceId,
@@ -431,21 +487,23 @@ function assertScopeFields(
       collection.tableName,
       resolveFieldToColumn(contract, namespaceId, modelName, name),
     );
-    const columnIsList = column?.many === true;
+    const columnMany = column?.many ?? false;
     const actual =
       column === undefined
         ? `${label}.${name} has no column.`
-        : `${label}.${name} ${columnIsList ? 'is a list with' : 'has'} codec ${column.codecId} and ${nullability(column.nullable)}.`;
+        : column.many === false
+          ? `${label}.${name} has codec ${column.codecId} and ${nullability(column.nullable)}.`
+          : `${label}.${name} is a list ${describeField(column)}.`;
     const sameCodecAndNullability =
       column?.codecId === spec.codecId && column.nullable === spec.nullable;
-    if (!sameCodecAndNullability || columnIsList !== spec.many) {
+    if (!sameCodecAndNullability || !sameMultiplicity(columnMany, spec.many)) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a scope to ${label}: its field ${name} does not match the declaration`,
         {
           why: `${declared} ${actual}`,
           fix: sameCodecAndNullability
-            ? listKindFix(name, spec.many)
+            ? `Apply the scope to a model whose ${name} field ${fieldShape(spec.many)}, or declare ${name} ${declarationFor(columnMany)}.`
             : `Apply the scope to a model whose ${name} field has that codec and nullability, or change the declaration in the scope.`,
           meta,
         },

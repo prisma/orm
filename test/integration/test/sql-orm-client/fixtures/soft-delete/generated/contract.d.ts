@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'5737f5d3247703c74592f54df12a2fc37c415ec66316ea08e8adc6d8acde3732'>;
+  StorageHashBase<'866c0364399bd65e7c53c92353d66a70ae417782859f44ba992de6c86de6085e'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -251,6 +251,7 @@ export type FieldOutputTypes = {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly name: CodecTypes['pg/text@1']['output'];
+      readonly notes: ReadonlyArray<CodecTypes['pg/text@1']['output'] | null>;
     };
     readonly User: {
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -278,6 +279,7 @@ export type FieldInputTypes = {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly name: CodecTypes['pg/text@1']['input'];
+      readonly notes: ReadonlyArray<CodecTypes['pg/text@1']['input'] | null>;
     };
     readonly User: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -305,6 +307,7 @@ export type StorageColumnTypes = {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly name: CodecTypes['pg/text@1']['output'];
+      readonly notes: ReadonlyArray<CodecTypes['pg/text@1']['output'] | null>;
     };
     readonly users: {
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -332,6 +335,7 @@ export type StorageColumnInputTypes = {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly name: CodecTypes['pg/text@1']['input'];
+      readonly notes: ReadonlyArray<CodecTypes['pg/text@1']['input'] | null>;
     };
     readonly users: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -364,6 +368,7 @@ export namespace Models {
     id: CodecTypes['pg/int4@1']['output'];
     labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     name: CodecTypes['pg/text@1']['output'];
+    notes: ReadonlyArray<CodecTypes['pg/text@1']['output'] | null>;
     readonly [RelationKeys]?: never;
   };
   export type public_User = {
@@ -407,11 +412,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly deleted_at: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
@@ -421,11 +428,13 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly post_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -460,11 +469,13 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
                 };
                 readonly deleted_at: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
@@ -474,21 +485,25 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly title: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly user_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly views: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -526,16 +541,25 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly labels: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly notes: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: { readonly elementNullable: true };
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -553,11 +577,13 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -706,11 +732,16 @@ type ContractBase = Omit<
               readonly labels: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly notes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: { readonly elementNullable: true };
               };
             };
             readonly relations: Record<string, never>;
@@ -721,6 +752,7 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly labels: { readonly column: 'labels' };
                 readonly name: { readonly column: 'name' };
+                readonly notes: { readonly column: 'notes' };
               };
             };
           };

@@ -6,7 +6,7 @@
  * `column()` is a trivial, non-polymorphic packager. Generic over `R` (the codec instance type returned by the descriptor's curried factory) and `P` (the typeParams record). The framework does NOT try to infer `R` and `P` from a descriptor — that path is the variance trap. Per-codec helpers absorb the descriptor relationship instead and tie themselves to their descriptor via `satisfies ColumnHelperFor<D>` or `satisfies ColumnHelperForStrict<D>`.
  */
 
-import type { ValueSetRef } from '@internal/contract/types';
+import type { ContractField, ValueSetRef } from '@internal/contract/types';
 import type { CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecInstanceContext } from './codec-types';
 
@@ -41,7 +41,7 @@ export interface CodecDescriptorRef<CodecId extends string = string> {
 }
 
 /**
- * What a field builder declares about its field: the descriptor of the field's type, when the builder names one, whether the value may be null, and whether the field is a list. Readers that only need the codec, the nullability and the list kind read this instead of the builder's own type.
+ * What a field builder declares about its field: the descriptor of the field's type, when the builder names one, whether the value may be null, and whether the field is a list, recorded as a contract field records it: `false` for one value, `{ elementNullable }` for a list. Readers that only need the codec, the nullability and the list kind read this instead of the builder's own type.
  */
 export interface ScalarFieldDeclaration<
   Descriptor extends CodecDescriptorRef = CodecDescriptorRef,
@@ -49,7 +49,7 @@ export interface ScalarFieldDeclaration<
 > {
   readonly descriptor?: Descriptor | undefined;
   readonly nullable: Nullable;
-  readonly many?: boolean | undefined;
+  readonly many?: ContractField['many'];
 }
 
 /** A field builder, read through the declaration its `build()` returns. */

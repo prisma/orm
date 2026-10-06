@@ -206,7 +206,9 @@
                 }
               },
               "labels": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -214,6 +216,16 @@
                 }
               },
               "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "notes": {
+                "many": {
+                  "elementNullable": true
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -232,6 +244,9 @@
                 },
                 "name": {
                   "column": "name"
+                },
+                "notes": {
+                  "column": "notes"
                 }
               },
               "namespaceId": "public",
@@ -452,12 +467,22 @@
                 },
                 "labels": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "notes": {
+                  "codecId": "pg/text@1",
+                  "many": {
+                    "elementNullable": true
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -503,7 +528,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5737f5d3247703c74592f54df12a2fc37c415ec66316ea08e8adc6d8acde3732"
+    "storageHash": "866c0364399bd65e7c53c92353d66a70ae417782859f44ba992de6c86de6085e"
   },
   "capabilities": {
     "postgres": {

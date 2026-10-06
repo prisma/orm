@@ -157,8 +157,8 @@ describe('client.scope', () => {
         expect.objectContaining({
           code: 'ORM.FIELD_UNKNOWN',
           message: 'Cannot apply a scope to Tag: its field labels does not match the declaration',
-          why: 'The scope was declared for models that have a field labels with codec pg/text@1 that is never null. Tag.labels is a list with codec pg/text@1 and is never null.',
-          fix: 'Apply the scope to a model whose labels field holds one value, or declare labels as a list with .many() or many: true.',
+          why: 'The scope was declared for models that have a field labels with codec pg/text@1 that is never null. Tag.labels is a list with codec pg/text@1 that is never null and whose elements are never null.',
+          fix: 'Apply the scope to a model whose labels field holds one value, or declare labels as a list whose elements are never null, with .many() or many: { elementNullable: false }.',
           meta: {
             model: 'Tag',
             namespace: 'public',
@@ -180,19 +180,19 @@ describe('client.scope', () => {
       expect(() => untyped(titles)(plain.Post)).toThrow(
         expect.objectContaining({
           code: 'ORM.FIELD_UNKNOWN',
-          why: 'The scope was declared for models that have a list field title with codec pg/text@1 that is never null. Post.title has codec pg/text@1 and is never null.',
-          fix: 'Apply the scope to a model whose title field is a list, or declare title without .many() or many: true.',
+          why: 'The scope was declared for models that have a list field title with codec pg/text@1 that is never null and whose elements are never null. Post.title has codec pg/text@1 and is never null.',
+          fix: 'Apply the scope to a model whose title field is a list whose elements are never null, or declare title as one value, without .many() or many.',
         }),
       );
     });
 
-    it('applies a list declaration to a list field', async () => {
+    it('matches a list whose elements are never null with .many() or many: { elementNullable: false }', async () => {
       const { client, plain, runtime } = scopes();
       const built = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
         rows.where((r) => r.labels.eq(['a'])),
       );
       const literal = client.scope(
-        { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
+        { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
         (rows) => rows.where((r) => r.labels.eq(['a'])),
       );
       await plain.Tag.where((t) => t.labels.eq(['a'])).all();
@@ -202,6 +202,76 @@ describe('client.scope', () => {
       expect(fromBuilder?.plan.ast).toBeDefined();
       expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
       expect(fromLiteral?.plan.ast).toEqual(inline?.plan.ast);
+    });
+
+    it('refuses a list of elements that are never null for a list whose elements may be null', () => {
+      const { client, plain } = scopes();
+      const built = client.scope({ notes: field.column(textColumn).many() }, (rows) =>
+        rows.limit(1),
+      );
+      const literal = client.scope(
+        { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
+        (rows) => rows.limit(1),
+      );
+      for (const scope of [built, literal]) {
+        expect(() => untyped(scope)(plain.Tag)).toThrow(
+          expect.objectContaining({
+            code: 'ORM.FIELD_UNKNOWN',
+            message: 'Cannot apply a scope to Tag: its field notes does not match the declaration',
+            why: 'The scope was declared for models that have a list field notes with codec pg/text@1 that is never null and whose elements are never null. Tag.notes is a list with codec pg/text@1 that is never null and whose elements may be null.',
+            fix: 'Apply the scope to a model whose notes field is a list whose elements are never null, or declare notes as a list whose elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.',
+            meta: {
+              model: 'Tag',
+              namespace: 'public',
+              field: 'notes',
+              codecId: 'pg/text@1',
+              nullable: false,
+              many: { elementNullable: false },
+            },
+          }),
+        );
+      }
+    });
+
+    it('matches a list whose elements may be null with .many({ elementsNullable: true }) or many: { elementNullable: true }', async () => {
+      const { client, plain, runtime } = scopes();
+      const built = client.scope(
+        { notes: field.column(textColumn).many({ elementsNullable: true }) },
+        (rows) => rows.where((r) => r.notes.eq(['a', null])),
+      );
+      const literal = client.scope(
+        { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
+        (rows) => rows.where((r) => r.notes.eq(['a', null])),
+      );
+      await plain.Tag.where((t) => t.notes.eq(['a', null])).all();
+      await plain.Tag.apply(built).all();
+      await plain.Tag.apply(literal).all();
+      const [inline, fromBuilder, fromLiteral] = runtime.executions;
+      expect(fromBuilder?.plan.ast).toBeDefined();
+      expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
+      expect(fromLiteral?.plan.ast).toEqual(inline?.plan.ast);
+    });
+
+    it('refuses a list of elements that may be null for a list whose elements are never null', () => {
+      const { client, plain } = scopes();
+      const built = client.scope(
+        { labels: field.column(textColumn).many({ elementsNullable: true }) },
+        (rows) => rows.limit(1),
+      );
+      const literal = client.scope(
+        { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
+        (rows) => rows.limit(1),
+      );
+      for (const scope of [built, literal]) {
+        expect(() => untyped(scope)(plain.Tag)).toThrow(
+          expect.objectContaining({
+            code: 'ORM.FIELD_UNKNOWN',
+            why: 'The scope was declared for models that have a list field labels with codec pg/text@1 that is never null and whose elements may be null. Tag.labels is a list with codec pg/text@1 that is never null and whose elements are never null.',
+            fix: 'Apply the scope to a model whose labels field is a list whose elements may be null, or declare labels as a list whose elements are never null, with .many() or many: { elementNullable: false }.',
+            meta: expect.objectContaining({ many: { elementNullable: true } }),
+          }),
+        );
+      }
     });
   });
 
@@ -234,8 +304,18 @@ describe('client.scope', () => {
       ['a number', 3, 'a number'],
       ['an object without nullable', { codecId: 'pg/text@1' }, 'an object'],
       [
-        'an object whose many is not a boolean',
+        'an object whose many is a string',
         { codecId: 'pg/text@1', nullable: false, many: 'yes' },
+        'an object',
+      ],
+      [
+        'an object whose many is true',
+        { codecId: 'pg/text@1', nullable: false, many: true },
+        'an object',
+      ],
+      [
+        'an object whose many has no boolean elementNullable',
+        { codecId: 'pg/text@1', nullable: false, many: { elementNullable: 'yes' } },
         'an object',
       ],
     ])('refuses %s as a field declaration', (_label, declaration, received) => {
@@ -244,8 +324,21 @@ describe('client.scope', () => {
           code: 'ORM.ARGUMENT_INVALID',
           message:
             'Cannot define the scope: the declaration of field title is not a field builder or { codecId, nullable }',
-          why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: true; received ${received} for title.`,
+          why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: { elementNullable } with a boolean elementNullable; received ${received} for title.`,
+          fix: 'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.',
         }),
+      );
+    });
+
+    it('accepts many: false as a declaration of one value', () => {
+      const { client, plain } = scopes();
+      const declared = blindCast<
+        (fields: unknown, body: unknown) => unknown,
+        'a JavaScript caller'
+      >(client.scope)({ title: { codecId: 'pg/text@1', nullable: false, many: false } }, validBody);
+      expect(() => untyped(declared)(plain.Post)).not.toThrow();
+      expect(() => untyped(declared)(plain.Tag)).toThrow(
+        expect.objectContaining({ meta: expect.objectContaining({ many: false }) }),
       );
     });
 
