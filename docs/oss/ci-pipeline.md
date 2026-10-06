@@ -43,7 +43,7 @@ A PR that only edits documentation should not boot Postgres and run the full tes
   run: pnpm test:integration
 ```
 
-Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. In the merge queue the `Integration Tests` shards launch for the same reason: `Test` reads their result there. Package shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
+Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. The `Integration Tests` shards gate their steps the same way, so an inert diff runs no integration tests in the merge queue either. Package shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
 
 ### The inert predicate
 
