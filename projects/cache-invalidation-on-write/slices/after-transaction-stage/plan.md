@@ -12,7 +12,7 @@ Builds on: nothing. Hands to: D2, D3 (the runner and the type).
 
 ## D2 — SQL runtime fires the stage
 
-Outcome: outside a transaction the SQL runtime fires the stage when the query ends, `committed` right after the after-hook when it completed and `unknown` when it did not; `wrapTransaction` remembers each plan with its context once the query's encoded plan exists and before it runs and, when `commit()` or `rollback()` resolves or rejects, fires once per plan in execution order with `committed` / `rolled-back` / `unknown` per the spec table, before `commit()`/`rollback()` resolve, with nothing more after a rollback that follows a rejected commit. Tests: the lifecycle cases listed in the spec, plus a Postgres integration test that an ORM single-row `update()` fires `committed` once.
+Outcome: outside a transaction the SQL runtime fires the stage when the query ends, `committed` right after the after-hook when it completed and `unknown` when it did not; `wrapTransaction` remembers each plan with its context once the query's parameters are encoded and before it runs and, when `commit()` or `rollback()` resolves or rejects, fires once per plan in execution order with `committed` / `rolled-back` / `unknown` per the spec table, before `commit()`/`rollback()` resolve, with nothing more after a rollback that follows a rejected commit. Tests: the lifecycle cases listed in the spec, plus a Postgres integration test that an ORM single-row `update()` fires `committed` once.
 
 Builds on: D1. Hands to: D3 (nothing structural; D3 mirrors the outside-transaction firing).
 

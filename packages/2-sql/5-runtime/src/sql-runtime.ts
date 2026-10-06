@@ -1000,7 +1000,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` stage once when the transaction ends. A query sent on `connection` while the transaction is open runs inside it, so its stage waits for the end too. A subclass that begins a driver transaction itself returns it through this wrapper. A transaction a subclass wraps reads the contract marker through the driver; only the connections and transactions this class hands out read it through themselves.
+   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` stage once when the transaction ends. A query sent on `connection` while the transaction is open runs inside it, so its stage also fires when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper. A transaction a subclass wraps reads the contract marker through the driver; only the connections and transactions this class hands out read it through themselves.
    */
   protected wrapTransaction(
     driverTx: SqlTransaction,

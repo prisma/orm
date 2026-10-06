@@ -300,16 +300,9 @@ export interface RuntimeMiddleware<
     ctx: RuntimeMiddlewareContext,
   ): Promise<void>;
   /**
-   * The query's last hook. Fires exactly once for every query whose encoded
-   * plan exists, when the transaction enclosing the query has ended, with its
-   * outcome. Outside a transaction it fires when the query ends: `committed`
-   * when it completed, `unknown` when it failed or the caller stopped reading
-   * its rows. Inside one, a resolved commit reports `unknown` when one of the
-   * transaction's queries failed, and when the transaction ends
-   * while the query still runs, this fires before the query's after-hook.
-   * Receives the same plan and context as `afterQuery` or
-   * `afterExecute`. The runner logs and swallows thrown errors. The hook must
-   * not use the connection.
+   * The query's last hook. Fires exactly once for every query whose before-hooks and parameter encoding succeeded, when the transaction enclosing the query has ended, with its outcome. Outside a transaction it fires when the query ends: `committed` when it completed, `unknown` when it failed or the caller stopped reading its rows. Inside one, a resolved commit reports `unknown` when one of the transaction's queries failed. When the transaction ends while the query still runs, this fires at the end with the transaction's outcome, before the query's after-hook, and the outcome does not reflect that query's own failure. Receives the same plan and context as `afterQuery` or `afterExecute`. The runner logs and swallows thrown errors.
+   *
+   * Inside a transaction the hooks run one after another while its connection is still checked out, so their time adds to how long it is held. The hook must not use the connection, and must not wait on a connection from the same pool, for example by awaiting a query through the same runtime. A write it sends through the same runtime gets its own `afterTransaction`.
    */
   afterTransaction?(
     plan: TPlan,
