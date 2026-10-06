@@ -56,6 +56,28 @@ export function liveMarkerUse(flags: {
   return { liveOrigin, liveTarget, needsDatabase: liveOrigin || liveTarget };
 }
 
+/** The command a missing-connection error suggests: the user's flags as given, plus what the retry needs to run. */
+export function retryCommandFor(args: {
+  readonly commandName: string;
+  readonly from?: string | undefined;
+  readonly to: string | undefined;
+  readonly advanceRef?: string | undefined;
+  /** The command runs without a database when `--from` names a contract. */
+  readonly offline: boolean;
+}): string {
+  const namesLiveMarker = isLiveMarkerRef(args.from) || isLiveMarkerRef(args.to);
+  const suggestsOffline = args.offline && args.from === undefined && !namesLiveMarker;
+  const needsConnection = !args.offline || namesLiveMarker;
+  return [
+    `{bin} ${args.commandName}`,
+    ...(args.from === undefined ? [] : [`--from ${args.from}`]),
+    ...(suggestsOffline ? ['--from <contract>'] : []),
+    ...(args.to === undefined ? [] : [`--to ${args.to}`]),
+    ...(args.advanceRef === undefined ? [] : [`--advance-ref ${args.advanceRef}`]),
+    ...(needsConnection ? ['--db $DATABASE_URL'] : []),
+  ].join(' ');
+}
+
 /** The missing-connection error for a command whose `--from`/`--to` read the live marker, or `null`. */
 export function requireDatabaseForLiveMarkerUse(args: {
   readonly from: string | undefined;
@@ -63,27 +85,23 @@ export function requireDatabaseForLiveMarkerUse(args: {
   readonly dbConnection: unknown;
   readonly hasDriver: boolean;
   readonly commandName: string;
-  /** Offer `--from <contract>`, which runs the command without a database, as the retry. */
-  readonly offlineRetry?: boolean;
 }): CliStructuredError | null {
   if (!liveMarkerUse(args).needsDatabase) {
     return null;
   }
-  const namesLiveMarker = isLiveMarkerRef(args.from) || isLiveMarkerRef(args.to);
-  const suggestsOffline = args.offlineRetry === true && !namesLiveMarker;
-  const retryFlags = [
-    ...(args.from === undefined ? [] : [`--from ${args.from}`]),
-    ...(suggestsOffline ? ['--from <contract>'] : []),
-    ...(args.to === undefined ? [] : [`--to ${args.to}`]),
-    ...(suggestsOffline ? [] : ['--db $DATABASE_URL']),
-  ];
   return requireLiveDatabase({
     dbConnection: args.dbConnection,
     hasDriver: args.hasDriver,
-    why: namesLiveMarker
-      ? `${LIVE_MARKER_REF} resolves to the live database marker and requires a --db connection`
-      : `${args.commandName} needs a database connection to read the live marker${suggestsOffline ? ' (or pass --from <contract> to run offline)' : ''}`,
+    why:
+      isLiveMarkerRef(args.from) || isLiveMarkerRef(args.to)
+        ? `${LIVE_MARKER_REF} resolves to the live database marker and requires a --db connection`
+        : `${args.commandName} needs a database connection to read the live marker (or pass --from <contract> to run offline)`,
     commandName: args.commandName,
-    retryCommand: [`{bin} ${args.commandName}`, ...retryFlags].join(' '),
+    retryCommand: retryCommandFor({
+      commandName: args.commandName,
+      from: args.from,
+      to: args.to,
+      offline: true,
+    }),
   });
 }

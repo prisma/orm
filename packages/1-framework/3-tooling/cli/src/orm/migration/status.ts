@@ -269,7 +269,6 @@ export const migrationStatusCommand = defineOrmCommand({
       dbConnection,
       hasDriver,
       commandName: 'migration status',
-      offlineRetry: true,
     });
     if (missingDb !== null) {
       return notOk(normalizeError(missingDb));

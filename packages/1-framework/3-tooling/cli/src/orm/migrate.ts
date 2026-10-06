@@ -3,7 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import { isLiveMarkerRef, LIVE_MARKER_REF } from '@internal/migration-tools/ref-resolution';
+import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -33,6 +33,7 @@ import {
 import {
   type RefResolutionContext,
   resolveContractRef,
+  retryCommandFor,
 } from '../control-api/operations/ref-resolution';
 import type {
   CreateControlClient,
@@ -313,10 +314,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db migrate',
         createClient,
-        ...ifDefined(
-          'retryCommand',
-          liveTarget ? `{bin} db migrate --to ${LIVE_MARKER_REF} --db $DATABASE_URL` : undefined,
-        ),
+        retryCommand: retryCommandFor({
+          commandName: 'db migrate',
+          to: args.flags.to,
+          advanceRef: args.flags.advanceRef,
+          offline: false,
+        }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);

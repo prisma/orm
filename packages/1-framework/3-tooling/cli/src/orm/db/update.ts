@@ -21,6 +21,7 @@ import {
   NO_REF_ADVANCEMENT,
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
+import { retryCommandFor } from '../../control-api/operations/ref-resolution';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
@@ -173,6 +174,12 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db update',
         createClient,
+        retryCommand: retryCommandFor({
+          commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
+          to: args.flags.to,
+          advanceRef: args.flags.advanceRef,
+          offline: false,
+        }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);

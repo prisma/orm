@@ -181,6 +181,43 @@ describe('db update --to bundle resolution', () => {
     });
   });
 
+  it.each([
+    { flags: [], command: 'db update', after: '' },
+    { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
+    { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
+  ])(
+    'keeps --to and $flags in the retry command when no connection is configured',
+    async ({ flags, command, after }) => {
+      const { cwd, dirNext } = await setupFixture();
+
+      const run = await createOrmTestCli({
+        commands,
+        groups: BIN_GROUPS,
+        orm: { ...ormConfig(cwd), db: undefined },
+      }).run(['db', 'update', '--to', dirNext, ...flags, '--json'], { cwd });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CONFIG.DB_CONNECTION_REQUIRED',
+            meta: { missingFlags: ['--db'] },
+            nextActions: [
+              expect.objectContaining({
+                label: expect.stringContaining(
+                  `Run \`prisma-test ${command} --to ${dirNext}${after} --db $DATABASE_URL\``,
+                ),
+              }),
+            ],
+          },
+        },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+    },
+  );
+
   it('errors on an invalid --advance-ref name with the structured ref envelope', async () => {
     const { cwd, dirNext } = await setupFixture();
     mocks.dbUpdate.mockResolvedValue(

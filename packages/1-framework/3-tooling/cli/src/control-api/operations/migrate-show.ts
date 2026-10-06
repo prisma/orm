@@ -108,7 +108,6 @@ export async function executeMigrateShowPlan(
     dbConnection,
     hasDriver: driver !== undefined,
     commandName: 'db migrate --show',
-    offlineRetry: true,
   });
   if (missingDb) {
     return notOk(missingDb);

@@ -346,33 +346,44 @@ describe('migrate --to reserved references and refs', () => {
     );
   });
 
-  it('errors with the connection-required envelope for @db without a connection', async () => {
-    const cwd = await buildAppliedProject();
+  it.each([
+    { argv: ['--to', '@db'], retry: 'db migrate --to @db --db $DATABASE_URL' },
+    { argv: ['--to', 'prod'], retry: 'db migrate --to prod --db $DATABASE_URL' },
+    {
+      argv: ['--to', '@db', '--advance-ref', 'staging'],
+      retry: 'db migrate --to @db --advance-ref staging --db $DATABASE_URL',
+    },
+    { argv: [], retry: 'db migrate --db $DATABASE_URL' },
+  ])(
+    'repeats $argv in the retry command when no connection is configured',
+    async ({ argv, retry }) => {
+      const cwd = await buildAppliedProject();
 
-    const run = await harness(ormConfig(cwd, { db: undefined })).run(
-      ['db', 'migrate', '--to', '@db', '--json'],
-      { cwd },
-    );
+      const run = await harness(ormConfig(cwd, { db: undefined })).run(
+        ['db', 'migrate', ...argv, '--json'],
+        { cwd },
+      );
 
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: {
-        ok: false,
-        error: {
-          code: 'CONFIG.DB_CONNECTION_REQUIRED',
-          meta: { missingFlags: ['--db'] },
-          nextActions: [
-            expect.objectContaining({
-              label: expect.stringContaining('db migrate --to @db --db $DATABASE_URL'),
-            }),
-          ],
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CONFIG.DB_CONNECTION_REQUIRED',
+            meta: { missingFlags: ['--db'] },
+            nextActions: [
+              expect.objectContaining({
+                label: expect.stringContaining(`Run \`prisma-test ${retry}\``),
+              }),
+            ],
+          },
         },
-      },
-    });
-    expect(mocks.connect).not.toHaveBeenCalled();
-    expect(mocks.migrate).not.toHaveBeenCalled();
-  });
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+      expect(mocks.migrate).not.toHaveBeenCalled();
+    },
+  );
 
   it('reports a missing driver for @db as a missing driver', async () => {
     const cwd = await buildAppliedProject();
