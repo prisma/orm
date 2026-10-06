@@ -184,8 +184,10 @@ changes:
     summary: |
       `validateScalarTypeCodecIds` is removed. Stack assembly now refuses, with an `InternalError`,
       a type constructor or field preset that names an unregistered codec, a constructor argument
-      mapped onto a parameter neither the data type nor the codec declares, two constructors of one
-      data type marked `inferred`, and two SQL data types that claim the same reported type.
+      mapped onto a parameter neither the data type nor the codec declares, and two constructors of
+      one data type marked `inferred`. The SQL family refuses two SQL data types that claim the same
+      reported type when it creates its control instance, so CLI commands report it and the
+      language server does not.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
