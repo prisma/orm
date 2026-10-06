@@ -49,11 +49,11 @@ All statements run in the scope the nested update already opens.
 
 ### Rejections
 
-Each is rejected by the types and at runtime with `ORM.RELATION_MUTATION_INVALID`, following how `disconnect` is rejected in `create()` today.
+Each is rejected by the types and at runtime.
 
-- `where`, `updateAll`, `deleteAll` inside `create()`.
-- `where`, `updateAll`, `deleteAll` on a to-one relation (`N:1` and `1:1`).
-- `updateAll` data that sets a column linking the child to this parent.
+- `where`, `updateAll`, `deleteAll` inside `create()`: `ORM.RELATION_MUTATION_UNSUPPORTED`, the code `disconnect` in `create()` uses today.
+- `where`, `updateAll`, `deleteAll` on a to-one relation (`N:1` and `1:1`): `ORM.RELATION_MUTATION_UNSUPPORTED`.
+- `updateAll` data that sets a column linking the child to this parent: `ORM.RELATION_MUTATION_INVALID`, the code for malformed nested input.
 
 ## Coherence rationale
 
