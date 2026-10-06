@@ -102,7 +102,8 @@ function cursor(file, marked) {
   const needle = marked.replace('|', '');
   const start = text.indexOf(needle);
   if (start < 0 || text.indexOf(needle, start + 1) >= 0) {
-    throw new Error(`"${needle}" does not occur exactly once in ${file}`);
+    console.error(`"${needle}" does not occur exactly once in ${file}`);
+    process.exit(1);
   }
   return positionAt(text, start + marked.indexOf('|'));
 }
