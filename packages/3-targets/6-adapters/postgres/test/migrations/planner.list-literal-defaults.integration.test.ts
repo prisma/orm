@@ -159,7 +159,7 @@ function enumListColumns(
           nativeType,
           codecId: 'pg/enum@1',
           nullable: true,
-          many: true,
+          many: { elementNullable: false },
           noCheck: ['elementNotNull'],
           typeParams: { typeName: nativeType },
           valueSet: {
@@ -199,7 +199,7 @@ function auditNamespace(withDefaults: boolean) {
       table: {
         AuditLog: {
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             ...enumListColumns(auditSchema, [auditEnumList], withDefaults),
           },
           primaryKey: { columns: ['id'] },
@@ -231,7 +231,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
         {
           ...defaultCase.type,
           nullable: true,
-          many: true,
+          many: { elementNullable: false },
           noCheck: ['elementNotNull'],
           ...(withDefaults ? { default: defaultCase.default } : {}),
         },
@@ -252,7 +252,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
             table: {
               Lists: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
                   ...columns,
                   ...enumListColumns(publicSchema, publicEnumLists, withDefaults),
                 },

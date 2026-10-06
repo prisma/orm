@@ -23,31 +23,37 @@ const testUserModel: MongoModelDefinition = {
   fields: {
     _id: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
     name: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     email: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     age: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/int32@1' },
     },
     active: {
       nullable: true,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/boolean@1' },
     },
     tags: {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
-      many: true,
+      many: { elementNullable: false },
     },
     address: {
       nullable: false,
+      many: false,
       type: { kind: 'valueObject', name: 'Address' },
     },
   },
@@ -59,14 +65,17 @@ const testPostModel: MongoModelDefinition = {
   fields: {
     _id: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
     title: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     authorId: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
   },

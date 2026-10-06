@@ -46,6 +46,7 @@ describe('diffSqliteSchema resolves authored function defaults like introspected
     const event: StorageTable = {
       columns: {
         at: {
+          many: false,
           nativeType: 'text',
           nullable: false,
           codecId: 'sqlite/text@1',

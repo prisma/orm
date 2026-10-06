@@ -23,7 +23,9 @@
                 }
               },
               "contents": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -55,7 +57,9 @@
                 }
               },
               "upvotes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",

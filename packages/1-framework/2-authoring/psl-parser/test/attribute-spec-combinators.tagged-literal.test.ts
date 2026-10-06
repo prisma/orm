@@ -8,6 +8,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
@@ -22,12 +23,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }

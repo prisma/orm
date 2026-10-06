@@ -714,25 +714,6 @@ export function isAuthoringModelAttributeDescriptor(
   return 'kind' in value && value.kind === 'modelAttribute';
 }
 
-/**
- * Returns true when `namespace` is a non-leaf key in `contributions.field`.
- *
- * `AuthoringFieldNamespace` permits a leaf descriptor at any depth — including
- * the root — so a top-level `field: { Foo: { kind: 'fieldPreset', ... } }`
- * registration must NOT be treated as a "namespace" with sub-paths. Callers
- * use this predicate to gate dot-namespaced lookups (e.g. PSL `@Foo.bar`).
- */
-export function hasRegisteredFieldNamespace(
-  contributions: AuthoringContributions | undefined,
-  namespace: string,
-): boolean {
-  if (contributions?.field === undefined || !Object.hasOwn(contributions.field, namespace)) {
-    return false;
-  }
-  const value = contributions.field[namespace];
-  return value !== undefined && !isAuthoringFieldPresetDescriptor(value);
-}
-
 function isCopyableNamespaceObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const proto: unknown = Object.getPrototypeOf(value);

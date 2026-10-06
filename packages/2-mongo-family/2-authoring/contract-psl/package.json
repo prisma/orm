@@ -27,6 +27,7 @@
     "pathe": "^2.0.3"
   },
   "devDependencies": {
+    "@internal/mongo-contract-ts": "workspace:8.0.0-rc.13",
     "@repo/tsconfig": "workspace:8.0.0-rc.14",
     "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
@@ -54,6 +55,10 @@
     "./provider": {
       "types": "./dist/exports/provider.d.mts",
       "import": "./dist/exports/provider.mjs"
+    },
+    "./test": {
+      "types": "./dist/exports/test.d.mts",
+      "import": "./dist/exports/test.mjs"
     },
     "./package.json": {
       "types": "./package.json",

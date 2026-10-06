@@ -65,16 +65,32 @@ function buildAppContract(): MongoContract {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            email: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
         },
         Post: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            slug: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            slug: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'posts' },
@@ -138,8 +154,16 @@ function buildAppContractMissingPosts(): MongoContract {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            email: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },

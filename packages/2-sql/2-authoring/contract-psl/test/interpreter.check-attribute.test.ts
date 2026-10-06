@@ -2,24 +2,21 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { check, defineContract, field, model } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
   sqliteScalarColumnDescriptors,
   sqliteTarget,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
 } from './fixtures';
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function interpret(schema: string) {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
@@ -314,8 +311,8 @@ model Bug {
 
 describe('@@check capability gating', () => {
   it('rejects @@check against a target whose adapter lacks the checkConstraint capability', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `
+    const result = interpretSqlContract(
+      `
 model Order {
   id    Int     @id
   total Decimal
@@ -323,19 +320,16 @@ model Order {
   @@check(expression: "total > 0", name: "order_total_positive")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      target: sqliteTarget,
-      scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: {} },
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        target: sqliteTarget,
+        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: {} },
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -351,8 +345,8 @@ model Order {
   });
 
   it('rejects @@check against an empty capability matrix (fail-closed)', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `
+    const result = interpretSqlContract(
+      `
 model Order {
   id    Int     @id
   total Decimal
@@ -360,19 +354,16 @@ model Order {
   @@check(expression: "total > 0", name: "order_total_positive")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: {},
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: {},
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

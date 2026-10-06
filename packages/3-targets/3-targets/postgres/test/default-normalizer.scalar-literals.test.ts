@@ -48,19 +48,38 @@ describe('parsePostgresDefault numeric literals', () => {
 describe('parsePostgresDefault uuid literals', () => {
   it('reads a uuid in the form PostgreSQL stores, whatever spelling it was written in', () => {
     expect(
-      ['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11', '{a0eebc99-9c0b4ef8-bb6d6bb9bd380a11}'].map(
-        (written) => parsePostgresDefault(`'${written}'::uuid`, 'uuid'),
-      ),
-    ).toEqual([
-      { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
-      { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
-    ]);
+      [
+        "'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid",
+        "'{a0eebc99-9c0b4ef8-bb6d6bb9bd380a11}'::uuid",
+        "'a0eebc999c0b4ef8bb6d6bb9bd380a11'",
+        "'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid",
+      ].map((raw) => parsePostgresDefault(raw, 'uuid')),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({
+        kind: 'literal',
+        value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      })),
+    );
   });
 
   it('reads each element of a uuid list the same way', () => {
     expect(
       parsePostgresDefault("'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,NULL}'::uuid[]", 'uuid[]'),
     ).toEqual({ kind: 'literal', value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', null] });
+  });
+
+  it('keeps text that is not a uuid as written on a uuid column', () => {
+    expect(parsePostgresDefault("'Not-A-Uuid'::uuid", 'uuid')).toEqual({
+      kind: 'literal',
+      value: 'Not-A-Uuid',
+    });
+  });
+
+  it('keeps the case of uuid-shaped text on a text column', () => {
+    expect(parsePostgresDefault("'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::text", 'text')).toEqual({
+      kind: 'literal',
+      value: 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
+    });
   });
 });
 

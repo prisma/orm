@@ -62,6 +62,7 @@ export {
   createSqlExecutionStack,
 } from '../sql-context';
 export type {
+  CloseRefusal,
   ConnectionProvider,
   Runtime,
   RuntimeConnection,

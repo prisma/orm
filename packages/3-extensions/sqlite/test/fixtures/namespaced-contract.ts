@@ -13,10 +13,12 @@ type Models = {
   readonly User: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
       };
       readonly name: {
+        readonly many: false;
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
       };
@@ -43,11 +45,13 @@ type Storage = {
           readonly users: {
             columns: {
               readonly id: {
+                readonly many: false;
                 readonly nativeType: 'integer';
                 readonly codecId: 'sqlite/integer@1';
                 readonly nullable: false;
               };
               readonly name: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'sqlite/text@1';
                 readonly nullable: false;

@@ -143,6 +143,7 @@ describe('value objects e2e: SQL → real Postgres → typed round-trip', () => 
           await driver.connect({ kind: 'pgClient', client });
 
           const runtime = new PostgresRuntimeImpl({
+            closeRefusal: undefined,
             context,
             adapter: stackInstance.adapter,
             driver,

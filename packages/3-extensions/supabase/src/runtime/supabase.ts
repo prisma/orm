@@ -328,6 +328,7 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
     driver,
     ...ifDefined('verifyMarker', options.verifyMarker),
     ...ifDefined('middleware', options.middleware),
+    closeRefusal: 'at-once',
   });
 
   async function verifyJwt(jwt: string): Promise<JWTVerifyResult> {
@@ -418,6 +419,7 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
       driver,
       verifyMarker: false,
       ...ifDefined('middleware', options.middleware),
+      closeRefusal: 'at-once',
     });
 
   const extNativeEnums = blindCast<

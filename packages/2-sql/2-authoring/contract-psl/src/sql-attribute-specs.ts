@@ -1,12 +1,4 @@
-import type {
-  AuthoringContributions,
-  AuthoringFieldNamespace,
-  AuthoringModelAttributeDescriptor,
-  AuthoringPslBlockDescriptorNamespace,
-  AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
-import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
+import type { AuthoringModelAttributeDescriptor } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -16,7 +8,6 @@ import type {
   AttributeSpecContext,
   AttributeSpecNamespace,
   Binder,
-  DescribeUnsupportedAttribute,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -35,7 +26,6 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
-  createBinder,
   diagnosticSource,
   entityRef,
   fieldAttribute,
@@ -55,6 +45,7 @@ import {
   referencedFieldRef,
   str,
   taggedLiteral,
+  typeReferenceNode,
 } from '@internal/psl-parser';
 import type {
   AstNode,
@@ -64,7 +55,7 @@ import type {
 } from '@internal/psl-parser/syntax';
 import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
-import { notOk } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
 import { getAttribute } from './psl-attribute-parsing';
 
@@ -98,19 +89,6 @@ function buildFieldAttributeCtx(input: {
   };
 }
 
-function fieldPresetsAsTypeNames(
-  namespace: AuthoringFieldNamespace | undefined,
-): AuthoringTypeNamespace {
-  if (namespace === undefined) return {};
-  const result: Record<string, AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace> = {};
-  for (const [name, value] of Object.entries(namespace)) {
-    result[name] = isAuthoringFieldPresetDescriptor(value)
-      ? { kind: 'typeConstructor', output: { codecId: value.output.codecId } }
-      : fieldPresetsAsTypeNames(value);
-  }
-  return result;
-}
-
 export function modelAttributeSpecsFrom(
   modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>,
 ): Readonly<Record<string, ModelAttributeSpecFactory>> {
@@ -122,49 +100,6 @@ export function modelAttributeSpecsFrom(
     >(descriptor.spec);
   }
   return result;
-}
-
-export function createSqlBinder(input: {
-  readonly symbolTable: SymbolTable;
-  readonly sources: PslSources;
-  readonly authoringContributions?: AuthoringContributions | undefined;
-  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
-  readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
-  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
-  readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
-  readonly contributedModelAttributeSpecs?:
-    | Readonly<Record<string, ModelAttributeSpecFactory>>
-    | undefined;
-}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
-  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
-  for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
-    scalars[name] = { kind: 'typeConstructor', output: { codecId: descriptor.codecId } };
-  }
-  return createBinder({
-    sources: input.sources,
-    symbolTable: input.symbolTable,
-    ...(input.pslBlockDescriptors === undefined
-      ? {}
-      : { pslBlockDescriptors: input.pslBlockDescriptors }),
-    typeConstructors: {
-      ...scalars,
-      ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
-      ...(input.authoringContributions?.type ?? {}),
-    },
-    attributeSpecs: {
-      model: Object.assign(
-        Object.create(null),
-        sqlAttributeSpecs.model,
-        input.contributedModelAttributeSpecs,
-      ),
-      field: sqlAttributeSpecs.field,
-    },
-    controlMutationDefaults: input.controlMutationDefaults ?? {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
-    describeUnsupportedAttribute: input.describeUnsupportedAttribute,
-  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
@@ -248,7 +183,21 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral;
+type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral | null;
+
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', {
+    documentation: 'A null list element or nullable scalar default.',
+  });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
 
 type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
 
@@ -268,7 +217,7 @@ function scalarDefaultArms(
   const tagArms = () =>
     [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));
   // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
-  const literal = () => oneOf(str(), numLiteral(), bool(), ...tagArms());
+  const literal = () => oneOf(str(), numLiteral(), bool(), nullLiteral(), ...tagArms());
   const listArm = () => list(literal(), { label: `list of (${literal().label})` });
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
@@ -279,11 +228,9 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  // A scalar column takes a list literal too: a codec such as `pg/vector@1` declares a list of
-  // element types, and its value is written as a PSL list on a column that is not a list.
   return isList
     ? [listArm(), ...funcArms, ...tagArms()]
-    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms(), listArm()];
+    : [str(), numLiteral(), bool(), nullLiteral(), ...funcArms, ...tagArms(), listArm()];
 }
 
 /**
@@ -297,7 +244,7 @@ function defaultValueArm(
   ],
   registry: ControlDefaultRegistries['defaultFunctionRegistry'],
 ) {
-  const value = oneOf(...arms);
+  const value = arms.length === 1 && arms[0].kind === 'list' ? arms[0] : oneOf(...arms);
   return {
     ...value,
     parse: (arg: Parameters<typeof value.parse>[0], ctx: AttributeCtx) =>
@@ -324,12 +271,9 @@ function noEnumMember(): RejectingArgType<never, AttributeCtx> {
 }
 
 function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | undefined {
-  const scope =
-    ctx.field.typeNamespaceId === undefined
-      ? ctx.symbols.topLevel
-      : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
-  const block = scope?.blocks[ctx.field.typeName];
-  if (block === undefined || block.keyword !== 'enum') return undefined;
+  const resolution = ctx.typeResolution;
+  if (resolution?.kind !== 'block' || resolution.symbol.keyword !== 'enum') return undefined;
+  const block = resolution.symbol;
   const names: string[] = [];
   const seen = new Set<string>();
   for (const entry of block.node.entries()) {
@@ -344,11 +288,13 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
 function enumDefaultArms(
   members: readonly string[],
   enumName: string,
+  isList: boolean,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
   const member = (name: string) =>
     identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
+  if (isList) return [list(oneOf(member(first), ...rest.map(member), nullLiteral()))];
   return [member(first), ...rest.map(member)];
 }
 
@@ -357,7 +303,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const valueArms =
     members === undefined
       ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
-      : enumDefaultArms(members, ctx.field.typeName);
+      : enumDefaultArms(members, ctx.field.typeName, ctx.field.list);
   return fieldAttribute('default', {
     documentation: 'Supplies a default value when this field is omitted from a mutation.',
     positional: [
@@ -761,12 +707,15 @@ export function fieldSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
+  readonly binder: Binder;
   readonly controlMutationDefaults: ControlDefaultRegistries;
 }): FieldAttributeSpecContext {
+  const node = typeReferenceNode(input.field);
   return {
     symbols: input.symbols,
     model: input.model,
     field: input.field,
+    typeResolution: node === undefined ? undefined : input.binder.symbolForNode(node),
     controlMutationDefaults: input.controlMutationDefaults,
   };
 }

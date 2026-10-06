@@ -1,7 +1,22 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import { type Binder, createBinder } from '../src/binder';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
+  DataTypeAuthoringEntry,
+} from '@internal/framework-components/authoring';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { AttributeSpecNamespace } from '../src/attribute-spec/spec-context';
+import type { BlockAttributeCtx } from '../src/attribute-spec/types';
+import {
+  type Binder,
+  type BinderContext,
+  createBinder,
+  type DescribeUnresolvedType,
+  type DescribeUnsupportedAttribute,
+} from '../src/binder';
+import { parse } from '../src/parse';
 import type { PslSources, Range, SourceFile } from '../src/source-file';
-import type { SymbolTable } from '../src/symbol-table';
+import { buildSymbolTable, type SymbolTable } from '../src/symbol-table';
+import type { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
 
 /**
@@ -83,6 +98,42 @@ export function highlight(sourceFile: SourceFile, range: Range): string {
   return `\n${rendered.join('\n')}\n`;
 }
 
+export function binderContext(
+  input: {
+    readonly contributedTypes?: AuthoringTypeNamespace;
+    readonly attributeSpecs?: AttributeSpecNamespace;
+    readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+    readonly defaultFunctionRegistry?: ControlMutationDefaultRegistry;
+    readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>>;
+    readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute;
+    readonly describeUnresolvedType?: DescribeUnresolvedType;
+  } = {},
+): BinderContext {
+  const { describeUnsupportedAttribute, describeUnresolvedType } = input;
+  return {
+    authoringContributions: {
+      field: {},
+      type: input.contributedTypes ?? {},
+      entityTypes: {},
+      pslBlockDescriptors: input.pslBlockDescriptors ?? {},
+      modelAttributes: {},
+      attributeSpecs: input.attributeSpecs ?? { model: {}, field: {} },
+      dataTypes: input.dataTypeEntries ?? {},
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.defaultFunctionRegistry ?? new Map(),
+    },
+    pslDiagnostics: {
+      ...(describeUnsupportedAttribute === undefined
+        ? {}
+        : { describeUnsupportedAttribute: () => describeUnsupportedAttribute }),
+      ...(describeUnresolvedType === undefined
+        ? {}
+        : { describeUnresolvedType: () => describeUnresolvedType }),
+    },
+  };
+}
+
 export function supportBinder(input: {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
@@ -91,11 +142,31 @@ export function supportBinder(input: {
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    ...(input.pslBlockDescriptors === undefined
-      ? {}
-      : { pslBlockDescriptors: input.pslBlockDescriptors }),
+    context: binderContext(
+      input.pslBlockDescriptors === undefined
+        ? {}
+        : { pslBlockDescriptors: input.pslBlockDescriptors },
+    ),
   }).binder;
+}
+
+/** The single `@@` attribute of a `fixture` block, with the parse context its block gives it. */
+export function blockAttributeFixture(attributeSource: string): {
+  readonly node: ModelAttributeAst;
+  readonly ctx: BlockAttributeCtx;
+} {
+  const { document, sources } = parse(`fixture Probe {\n  ${attributeSource}\n}`, 'schema.prisma');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const block = symbolTable.topLevel.blocks['Probe'];
+  const node = block === undefined ? undefined : [...block.node.attributes()][0];
+  if (block === undefined || node === undefined) throw new Error('expected a block attribute');
+  return {
+    node,
+    ctx: {
+      sources,
+      symbols: symbolTable,
+      binder: supportBinder({ sources, symbolTable }),
+      selfBlock: block,
+    },
+  };
 }

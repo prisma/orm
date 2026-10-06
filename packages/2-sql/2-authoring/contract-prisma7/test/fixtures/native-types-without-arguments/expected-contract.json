@@ -42,7 +42,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "char": {
                 "type": {
@@ -52,49 +53,56 @@
                     "length": 1
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "varChar": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "sql/varchar@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "decimal": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timestamp": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1"
+                  "codecId": "pg/timestamp-string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timestamptz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1"
+                  "codecId": "pg/timestamptz-string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "time": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1"
+                  "codecId": "pg/time-string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timetz": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/timetz@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -114,7 +122,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "0f0a95699c5f38eb60ba7230c8daff078f203e8b6d9f6d38923207018edce524",
+    "storageHash": "eb22edf84d7f612cd86d1ea08baecac54c8e4c71750a2069ee6ace388da70484",
     "namespaces": {
       "public": {
         "id": "public",
@@ -126,12 +134,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "char": {
                   "nativeType": "character",
                   "codecId": "sql/char@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "length": 1
                   }
@@ -139,32 +149,38 @@
                 "varChar": {
                   "nativeType": "character varying",
                   "codecId": "sql/varchar@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "decimal": {
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "timestamp": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
-                  "nullable": false
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": false,
+                  "many": false
                 },
                 "timestamptz": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-string@1",
+                  "nullable": false,
+                  "many": false
                 },
                 "time": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
-                  "nullable": false
+                  "codecId": "pg/time-string@1",
+                  "nullable": false,
+                  "many": false
                 },
                 "timetz": {
                   "nativeType": "timetz",
                   "codecId": "pg/timetz@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],

@@ -517,6 +517,17 @@ describe('PostgresMigration op-builder methods with a ControlStack', () => {
     );
   });
 
+  it('setDefault refuses a column with no default', async () => {
+    const m = new ExposedMigration(fakeControlStack());
+
+    await expect(
+      m.callSetDefault({ schema: 'public', table: 'Box', column: col('changed', 'int4') }),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      meta: { table: 'Box', column: 'changed', reason: 'set-default-without-default' },
+    });
+  });
+
   it('createSchema lowers to an additive create-schema operation', async () => {
     const m = new ExposedMigration(fakeControlStack());
     const op = await m.callCreateSchema({ schema: 'reporting' });

@@ -5,7 +5,9 @@ import { createMockRuntime, getEmptyAggregates, type TestContract } from './help
 
 function model(table: string) {
   return {
-    fields: { id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } } },
+    fields: {
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+    },
     relations: {},
     storage: { table, fields: { id: { column: 'id' } } },
   };
@@ -13,7 +15,7 @@ function model(table: string) {
 
 function storageTable() {
   return {
-    columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+    columns: { id: { many: false, codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
     primaryKey: { columns: ['id'] },
     uniques: [],
     indexes: [],

@@ -113,8 +113,8 @@ function buildStiIncludeContract(): TestContract {
 
   models['Account'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       members: {
@@ -156,8 +156,8 @@ function buildMtiIncludeContract(): TestContract {
 
   models['Project'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       tasks: {

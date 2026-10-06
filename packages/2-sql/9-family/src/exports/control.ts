@@ -21,6 +21,14 @@ export type {
   SqlPslBuildContext,
 } from '../core/control-target-descriptor';
 export type {
+  AppliedTableRename,
+  ApplyTableRenameInput,
+  RenameTableReferences,
+  ResolvedTableRename,
+  TableRename,
+} from '../core/migrations/apply-table-rename';
+export { applyTableRename } from '../core/migrations/apply-table-rename';
+export type {
   ContractToSchemaIROptions,
   DefaultRenderer,
   DefaultResolver,
@@ -57,7 +65,11 @@ export type {
   SqlSchemaDiffInput,
   SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
-export type { TableNameCaseGuardTable } from '../core/migrations/table-name-case-guard';
+export type {
+  TableNameCaseGuardTable,
+  TableRenameByHand,
+  TableRenameInMigration,
+} from '../core/migrations/table-name-case-guard';
 export {
   detectTableNameCaseChanges,
   TABLE_NAME_CASE_CHANGED_CODE,

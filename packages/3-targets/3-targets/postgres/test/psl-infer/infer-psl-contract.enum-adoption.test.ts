@@ -6,17 +6,24 @@
  * design — a top-level `native_enum` never lowers), subtracts pack-owned
  * enum types by TYPE NAME, and leaves enum-free output flat and byte-identical.
  */
+
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { printPsl } from '@internal/psl-printer';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -226,25 +233,45 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
 ]);
 
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...scalarTypeDescriptors].map(([name, output]) => [
+      name,
+      { kind: 'typeConstructor' as const, output },
+    ]),
+  );
+
 function interpret(source: string) {
-  const { document, sources } = parse(source, 'infer-psl-contract.enum-adoption.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(source, {
+    sourceId: 'infer-psl-contract.enum-adoption.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: {},
+    },
   });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: postgresDataTypeLookup,
-    symbolTable,
-    sources,
-    capabilities: {},
-    target: postgresTarget,
-    scalarColumnDescriptors: scalarTypeDescriptors,
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    codecLookup,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresTarget,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 // ---------------------------------------------------------------------------

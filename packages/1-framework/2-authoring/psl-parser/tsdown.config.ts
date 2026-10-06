@@ -7,5 +7,6 @@ export default defineConfig({
     'src/exports/syntax.ts',
     'src/exports/format.ts',
     'src/exports/interpret.ts',
+    'src/exports/test.ts',
   ],
 });

@@ -1,5 +1,18 @@
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import { type DocumentAst, parse, SourceFile } from '@internal/psl-parser/syntax';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  type Binder,
+  buildSymbolTable,
+  entityRef,
+  fieldAttribute,
+  fieldRef,
+  identifier,
+  list,
+  referencedFieldRef,
+  type SymbolTable,
+  structBlock,
+} from '@internal/psl-parser';
+import { type DocumentAst, PslSources, parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
   buildSemanticTokens,
@@ -14,10 +27,12 @@ import {
   semanticTokensLegend,
   semanticTokenTypes,
 } from '../src/semantic-tokens';
+import { testBinder } from './helpers/binder';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime', 'Float', 'Json'] as const;
 
 interface ParsedSemanticTokenSource {
+  readonly binder: Binder;
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
   readonly symbolTable: SymbolTable;
@@ -32,14 +47,23 @@ interface TokenDetails {
   readonly character: number;
 }
 
-function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
+function parseSemanticTokenSource(
+  source: string,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {},
+): ParsedSemanticTokenSource {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
   });
-  return { document, sourceFile, symbolTable, scalarTypes };
+  return {
+    document,
+    sourceFile,
+    symbolTable,
+    scalarTypes,
+    binder: testBinder({ sources, symbolTable, scalarTypes, pslBlockDescriptors }),
+  };
 }
 
 function collectDetails(source: ParsedSemanticTokenSource): readonly TokenDetails[] {
@@ -149,6 +173,123 @@ function sameModifiers(
 }
 
 describe('semantic token substrate', () => {
+  it('highlights every parsed segment of an overqualified decorator', () => {
+    const source = parseSemanticTokenSource('model User { id Int @foo.bar.baz }');
+    expect(collectDetails(source).filter(({ tokenType }) => tokenType === 'decorator')).toEqual([
+      { text: '@foo', tokenType: 'decorator', modifiers: [], line: 0, character: 20 },
+      { text: 'bar', tokenType: 'decorator', modifiers: [], line: 0, character: 25 },
+      { text: 'baz', tokenType: 'decorator', modifiers: [], line: 0, character: 29 },
+    ]);
+  });
+
+  it('retains syntactic property highlighting for unresolved and cross-space field references', () => {
+    const source = parseSemanticTokenSource(
+      'model Owner { id Int @relation(fields: [missing])\n  external elsewhere:Other @relation(references: [remote])\n}',
+    );
+    const binder = testBinder({
+      sources: new PslSources([[source.document.syntax, source.sourceFile]]),
+      symbolTable: source.symbolTable,
+      scalarTypes,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'relations',
+          authoring: {
+            attributeSpecs: {
+              model: {},
+              field: {
+                relation: () =>
+                  fieldAttribute('relation', {
+                    documentation: '',
+                    named: {
+                      fields: { type: list(fieldRef()), documentation: '' },
+                      references: { type: list(referencedFieldRef()), documentation: '' },
+                    },
+                  }),
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(
+      collectDetails({ ...source, binder }).filter(({ text }) =>
+        ['missing', 'remote'].includes(text),
+      ),
+    ).toEqual([
+      { text: 'missing', tokenType: 'property', modifiers: [], line: 0, character: 40 },
+      { text: 'remote', tokenType: 'property', modifiers: [], line: 1, character: 50 },
+    ]);
+  });
+
+  it('distinguishes descriptor-bound entity references from unrestricted identifiers', () => {
+    const source = parseSemanticTokenSource(
+      `model Invoice { id Int }
+policy Probe { on = Invoice\n unrestricted = Invoice\n scalar = Int }`,
+      {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: () =>
+            structBlock({
+              parameters: {
+                on: { type: entityRef({ kind: 'model' }), documentation: '' },
+                unrestricted: { type: identifier(), documentation: '' },
+                scalar: { type: identifier(), documentation: '' },
+              },
+            }),
+        },
+      },
+    );
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line > 0 && ['Invoice', 'Int'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Invoice', tokenType: 'class', modifiers: [] },
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Int', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('uses the alias definition binding without recursively interpreting aliases', () => {
+    const source =
+      parseSemanticTokenSource(`types { Scalar = Int\n Indirect = Scalar\n Missing = Unknown }
+namespace app {
+  model Int { id String }
+  model Owner { scalar Scalar\n indirect Indirect\n missing Missing }
+}`);
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line >= 5 && ['Scalar', 'Indirect', 'Missing'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Scalar', tokenType: 'type', modifiers: ['defaultLibrary'] },
+      { text: 'Indirect', tokenType: 'type', modifiers: [] },
+      { text: 'Missing', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('does not infer unbound expressions or missing qualified members from spelling', () => {
+    const source = parseSemanticTokenSource(`model Invoice { id Int }
+namespace app { model Other { id Int } }
+model Owner { missing app.Invoice }
+policy Probe { target = Invoice\n value = Int }`);
+    expect(
+      collectDetails(source)
+        .filter(
+          ({ line, text }) =>
+            (line === 2 && text === 'Invoice') || (line >= 3 && ['Invoice', 'Int'].includes(text)),
+        )
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Int', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
   it('keeps the semantic token legend stable', () => {
     expect(semanticTokenTypes).toEqual([
       'keyword',

@@ -163,7 +163,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Runtime: date columns decode via pg/date-temporal@1 in both top-level select and include()', () => {
+  describe('Runtime: inferred date and time columns decode as PostgreSQL text in both top-level select and include()', () => {
     let database: Awaited<ReturnType<typeof createDevDatabase>>;
 
     beforeAll(async () => {
@@ -176,10 +176,14 @@ withTempDir(({ createTempDir }) => {
           CREATE TABLE record (
             id int4 PRIMARY KEY,
             owner_id int4 NOT NULL REFERENCES owner(id),
-            noted_on date NOT NULL
+            noted_on date NOT NULL,
+            logged_at timestamp(3) NOT NULL,
+            seen_at timestamptz NOT NULL,
+            opens_at time NOT NULL
           );
           INSERT INTO owner (id) VALUES (1);
-          INSERT INTO record (id, owner_id, noted_on) VALUES (1, 1, '2024-01-15');
+          INSERT INTO record (id, owner_id, noted_on, logged_at, seen_at, opens_at)
+            VALUES (1, 1, '2024-01-15', '2024-01-15 10:00:00.5', '2024-01-15 10:00:00+00', '08:30:00');
         `),
       );
     }, timeouts.spinUpPpgDev);
@@ -189,10 +193,16 @@ withTempDir(({ createTempDir }) => {
     }, timeouts.spinUpPpgDev);
 
     it(
-      'top-level select and include() both decode the date column',
+      'top-level select and include() both decode the date and time columns',
       async () => {
         const ctx = await inferAndEmit(database.connectionString, createTempDir);
         const contract = readEmittedContract(ctx);
+        const stored = {
+          notedOn: '2024-01-15',
+          loggedAt: '2024-01-15 10:00:00.5',
+          seenAt: '2024-01-15 10:00:00+00',
+          opensAt: '08:30:00',
+        };
 
         const stack = createSqlExecutionStack({
           target: postgresTarget,
@@ -211,13 +221,20 @@ withTempDir(({ createTempDir }) => {
         await client.connect();
         try {
           await driver.connect({ kind: 'pgClient', client });
-          const runtime = new PostgresRuntimeImpl({ context, adapter, driver });
+          const runtime = new PostgresRuntimeImpl({
+            context,
+            adapter,
+            driver,
+            closeRefusal: undefined,
+          });
           try {
             const records = new Collection({ runtime, context }, 'Record', {
               namespaceId: 'public',
             });
-            const rows = await records.select('id', 'notedOn').all();
-            expect(rows).toEqual([{ id: 1, notedOn: Temporal.PlainDate.from('2024-01-15') }]);
+            const rows = await records
+              .select('id', 'notedOn', 'loggedAt', 'seenAt', 'opensAt')
+              .all();
+            expect(rows).toEqual([{ id: 1, ...stored }]);
 
             const owners = new Collection({ runtime, context }, 'Owner', {
               namespaceId: 'public',
@@ -229,13 +246,11 @@ withTempDir(({ createTempDir }) => {
               // runs infer + emit), so `include`'s relation-name type inference
               // has nothing to key off; test files are exempt from the
               // no-bare-casts rule.
-              .include('records' as never, (record) => record.select('notedOn'))
+              .include('records' as never, (record) =>
+                record.select('notedOn', 'loggedAt', 'seenAt', 'opensAt'),
+              )
               .all();
-            // `pg/date-temporal@1.decodeJson` accepts the bare `YYYY-MM-DD` that
-            // `json_agg` renders.
-            expect(includeResult).toEqual([
-              { id: 1, records: [{ notedOn: Temporal.PlainDate.from('2024-01-15') }] },
-            ]);
+            expect(includeResult).toEqual([{ id: 1, records: [stored] }]);
           } finally {
             await runtime.close();
           }

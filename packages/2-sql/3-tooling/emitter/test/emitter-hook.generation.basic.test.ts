@@ -31,7 +31,7 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
           },
           relations: {},
         },
@@ -68,7 +68,7 @@ describe('sql-target-family-hook', () => {
               fields: { id: { column: 'id' } },
             },
             fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+              id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
             },
             relations: {},
           },
@@ -116,7 +116,7 @@ describe('sql-target-family-hook', () => {
               fields: { id: { column: 'id' } },
             },
             fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+              id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
             },
             relations: {},
           },
@@ -154,7 +154,7 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
           },
           relations: {},
         },
@@ -591,9 +591,9 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-            email: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-            name: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            email: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            name: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
           },
           relations: {},
         },
@@ -637,8 +637,8 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-            email: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            email: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
           },
           relations: {},
         },
@@ -677,7 +677,7 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
           },
           relations: {},
         },
@@ -738,7 +738,7 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
           },
           relations: {},
         },
@@ -785,6 +785,7 @@ describe('sql-target-family-hook', () => {
           fields: {
             vector: {
               nullable: false,
+              many: false,
               type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 1536 } },
             },
           },
@@ -977,8 +978,8 @@ describe('sql-target-family-hook', () => {
             fields: { id: { column: 'id' }, name: { column: 'name' } },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-            name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
           },
           relations: {},
         },
@@ -1041,7 +1042,7 @@ describe('sql-target-family-hook', () => {
               fields: { id: { column: 'id' } },
             },
             fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+              id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
             },
             relations: {},
           },
@@ -1049,8 +1050,16 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-              city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
+              city: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
             },
           },
         },
@@ -1079,7 +1088,11 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
             },
           },
         },
@@ -1103,9 +1116,10 @@ describe('sql-target-family-hook', () => {
               },
             },
             fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+              id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
               homeAddress: {
                 nullable: true,
+                many: false,
                 type: { kind: 'valueObject', name: 'Address' },
               },
             },
@@ -1115,7 +1129,11 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
             },
           },
         },
@@ -1140,7 +1158,7 @@ describe('sql-target-family-hook', () => {
       );
     });
 
-    it('handles many: true on value object model fields', () => {
+    it('handles nested many metadata on value object model fields', () => {
       const ir = createContract({
         models: {
           User: {
@@ -1153,11 +1171,11 @@ describe('sql-target-family-hook', () => {
               },
             },
             fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+              id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
               addresses: {
                 nullable: false,
                 type: { kind: 'valueObject', name: 'Address' },
-                many: true,
+                many: { elementNullable: false },
               },
             },
             relations: {},
@@ -1166,7 +1184,11 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
             },
           },
         },
@@ -1187,7 +1209,7 @@ describe('sql-target-family-hook', () => {
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
       expect(types).toContain(
-        'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: true }',
+        'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
@@ -1196,11 +1218,15 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           NavItem: {
             fields: {
-              label: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              label: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+              },
               children: {
                 nullable: false,
                 type: { kind: 'valueObject', name: 'NavItem' },
-                many: true,
+                many: { elementNullable: false },
               },
             },
           },
@@ -1226,7 +1252,7 @@ describe('sql-target-family-hook', () => {
         valueObjects: {
           Address: {
             fields: {
-              zip: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              zip: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
             },
           },
         },

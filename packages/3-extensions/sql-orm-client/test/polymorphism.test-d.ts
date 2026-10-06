@@ -18,36 +18,43 @@ interface PolyStorage {
     readonly tasks: {
       columns: {
         readonly id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly title: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
         readonly type: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
         };
         readonly severity: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: true;
         };
         readonly project_id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
         readonly parent_id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
         };
         readonly assignee_id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
@@ -61,16 +68,19 @@ interface PolyStorage {
     readonly features: {
       columns: {
         readonly id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly priority: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly assignee_id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: true;
@@ -84,11 +94,13 @@ interface PolyStorage {
     readonly assignees: {
       columns: {
         readonly id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
@@ -102,11 +114,13 @@ interface PolyStorage {
     readonly plain_model: {
       columns: {
         readonly id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
@@ -120,11 +134,13 @@ interface PolyStorage {
     readonly projects: {
       columns: {
         readonly id: {
+          readonly many: false;
           readonly nativeType: 'int4';
           readonly codecId: 'pg/int4@1';
           readonly nullable: false;
         };
         readonly name: {
+          readonly many: false;
           readonly nativeType: 'text';
           readonly codecId: 'pg/text@1';
           readonly nullable: false;
@@ -145,22 +161,27 @@ type PolyModels = {
   readonly Task: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       readonly title: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       readonly type: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       readonly projectId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: true;
       };
       readonly parentId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: true;
       };
@@ -194,10 +215,12 @@ type PolyModels = {
   readonly Bug: {
     readonly fields: {
       readonly severity: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: true;
       };
       readonly assigneeId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: true;
       };
@@ -228,10 +251,12 @@ type PolyModels = {
   readonly Feature: {
     readonly fields: {
       readonly priority: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       readonly assigneeId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: true;
       };
@@ -262,10 +287,12 @@ type PolyModels = {
   readonly Assignee: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       readonly name: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
@@ -282,10 +309,12 @@ type PolyModels = {
   readonly PlainModel: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       readonly name: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
@@ -302,10 +331,12 @@ type PolyModels = {
   readonly Project: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       readonly name: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };

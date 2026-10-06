@@ -26,6 +26,7 @@ import {
   encodeLiteralDefault,
   isDdlNode,
   type LiteralDefaultColumn,
+  renderOpaqueSql,
 } from '@internal/sql-relational-core/ast';
 import type {
   PrimaryKeyInput,
@@ -761,20 +762,20 @@ async function sqliteRenderDdlColumnDefault(
   where: LiteralDefaultColumn,
 ): Promise<string> {
   if (def.kind === 'function') {
-    if (def.expression === 'autoincrement()') return '';
+    if (def.expression.text === 'autoincrement()') return '';
     // SQLite has no `now()` function; the contract canonicalizes
     // `CURRENT_TIMESTAMP` / `datetime('now')` to `now()`, so map it back to a
     // valid SQLite expression on the way out.
-    if (def.expression === 'now()') return "DEFAULT (datetime('now'))";
-    if (checkSqlDefaultBody(def.expression) !== undefined) {
+    if (def.expression.text === 'now()') return "DEFAULT (datetime('now'))";
+    if (checkSqlDefaultBody(def.expression.text) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
-        `Unsafe default expression in contract: "${def.expression}". ` +
+        `Unsafe default expression in contract: "${def.expression.text}". ` +
           'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-        { meta: { expression: def.expression } },
+        { meta: { expression: def.expression.text } },
       );
     }
-    return `DEFAULT (${def.expression})`;
+    return `DEFAULT (${renderOpaqueSql(def.expression)})`;
   }
   const encoded =
     codecRef === undefined

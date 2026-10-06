@@ -10,13 +10,12 @@ import { defineIndexTypes } from '@internal/sql-contract/index-types';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
@@ -83,9 +82,7 @@ function searchIndexContributions(repeatable?: boolean): AuthoringContributions 
 }
 
 function interpret(schema: string, authoringContributions?: AuthoringContributions) {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: targetWithIndexTypes,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),

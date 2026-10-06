@@ -14,9 +14,9 @@ $ pnpm test:packages:agent
 log: wip/test-packages.20260615-190441.32317.log
 ```
 
-The full output goes to that file. The exit code is written to a sibling `.exit` file (same path with `.log` → `.exit`). Use the path printed by the command — don't guess one. Every run gets its own timestamped path, so history is preserved automatically. Contents of `wip/` are gitignored.
+The full output goes to that file; the exit code to a sibling `.exit` file. Use the printed path, never guess one. Each run gets its own timestamped path. `wip/` is gitignored.
 
-Each `:agent` run has a hard timeout (default 5 minutes, override with `AGENT_CMD_TIMEOUT_SECONDS` — bump it for a legitimately long suite). If the run hangs — e.g. vitest freezes after printing its summary — the child process group is killed and the `.exit` file records `124` rather than blocking forever.
+Each `:agent` run has a hard timeout (default 5 minutes; `AGENT_CMD_TIMEOUT_SECONDS` raises it). A hung run is killed and `.exit` records `124`.
 
 | Command | Purpose |
 |---|---|
@@ -68,8 +68,8 @@ tail -50 wip/test-packages.20260615-190441.32317.log
 
 ## Don't
 
-- **Don't run the full suite when you already know which file is failing.** Use the targeted commands in §3 — they run in seconds.
-- **Don't run the bare canonical commands (`pnpm test:packages`, etc.) for a full-suite run.** They dump the entire output into your context window. Use the `:agent` variant.
-- **Don't pipe a `:agent` command to `tail`/`grep`/`head`.** The point is that the output is already on disk — read the log path the `:agent` command printed.
+- **Don't run the full integration suite locally.** It is too slow and flakes under load: run only the files for your change (`pnpm --filter integration-tests test test/cross-package/<name>`; a `--` before the path runs the whole suite) and let CI run the rest. Same for `pnpm test:packages`: run the changed package's own `pnpm test`. When you know the failing file, use §3.
+- **Don't run bare `pnpm test:packages` etc. for a full run.** They dump everything into your context; use the `:agent` variant.
+- **Don't pipe a `:agent` command to `tail`/`grep`/`head`.** Read the log path it printed.
 - **Don't re-run a suite to refine a grep.** Grep the file you already have.
 - **Don't pass `--force` to `turbo`.** The cache is correct by default. Only force when this same run edited `tsconfig.json` or a lockfile.

@@ -16,8 +16,10 @@
  *  - Member-change refusal (R9): rename/removal/reorder each plan zero ops
  *    and leave the database untouched.
  */
+
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
@@ -26,10 +28,15 @@ import {
   issueOutcome,
   type MigrationOperationPolicy,
 } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
@@ -213,42 +220,60 @@ function buildScalarTypeDescriptors(): ReadonlyMap<
 function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<SqlStorage> {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarTypeDescriptors = buildScalarTypeDescriptors();
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...scalarTypeDescriptors].map(([name, output]) => [
+        name,
+        { kind: 'typeConstructor' as const, output },
+      ]),
+    );
 
-  const { document, sources } = parse(psl, 'native-enum-lifecycle-e2e.integration.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-
-  const result = interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: postgresDataTypeLookup,
-    symbolTable,
-    sources,
-    // Carries the REAL Postgres target pack's authoring contributions
-    // (`postgresTargetDescriptor.authoring`, including `qualifyColumnType` =
-    // `postgresQualifyColumnType`), which schema-qualifies a `pg.enum` column's
-    // native type for a named (non-default) schema (`aal_level` → `auth.aal_level`).
-    // A hand-built target that omits it silently leaves the column bare — the
-    // exact contrived-harness gap that let D3-F1 hide — so the authoring object
-    // here is the production one, not a fabricated hook.
-    target: {
-      kind: 'target' as const,
-      familyId: 'sql' as const,
-      targetId: 'postgres' as const,
-      id: 'postgres',
-      version: postgresTargetDescriptor.version,
-      capabilities: {},
-      defaultNamespaceId: 'public',
-      ...ifDefined('authoring', postgresTargetDescriptor.authoring),
+  const bound = bindPslSchema(psl, {
+    sourceId: 'native-enum-lifecycle-e2e.integration.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: createPostgresBuiltinCodecLookup(),
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypeLookup: postgresDataTypeLookup,
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
     },
-    scalarColumnDescriptors: scalarTypeDescriptors,
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    codecLookup: createPostgresBuiltinCodecLookup(),
-    capabilities: { sql: { scalarList: true } },
   });
+  const result = withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      // Carries the REAL Postgres target pack's authoring contributions
+      // (`postgresTargetDescriptor.authoring`, including `qualifyColumnType` =
+      // `postgresQualifyColumnType`), which schema-qualifies a `pg.enum` column's
+      // native type for a named (non-default) schema (`aal_level` → `auth.aal_level`).
+      // A hand-built target that omits it silently leaves the column bare — the
+      // exact contrived-harness gap that let D3-F1 hide — so the authoring object
+      // here is the production one, not a fabricated hook.
+      target: {
+        kind: 'target' as const,
+        familyId: 'sql' as const,
+        targetId: 'postgres' as const,
+        id: 'postgres',
+        version: postgresTargetDescriptor.version,
+        capabilities: {},
+        defaultNamespaceId: 'public',
+        ...ifDefined('authoring', postgresTargetDescriptor.authoring),
+      },
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 
   if (!result.ok) throw new Error(`PSL interpretation failed: ${JSON.stringify(result)}`);
   // `native_enum` leaves per-node control unset; the effective grade resolves

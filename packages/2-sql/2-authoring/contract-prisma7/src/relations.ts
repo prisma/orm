@@ -872,8 +872,20 @@ function synthesizeJunction(
       tableName,
       namespaceId,
       fields: [
-        { fieldName: 'A', columnName: 'A', descriptor: idA.descriptor, nullable: false },
-        { fieldName: 'B', columnName: 'B', descriptor: idB.descriptor, nullable: false },
+        {
+          fieldName: 'A',
+          columnName: 'A',
+          descriptor: idA.descriptor,
+          nullable: false,
+          many: false,
+        },
+        {
+          fieldName: 'B',
+          columnName: 'B',
+          descriptor: idB.descriptor,
+          nullable: false,
+          many: false,
+        },
       ],
       id: { columns: ['A', 'B'] },
       indexes: [index],

@@ -1,14 +1,21 @@
 import type {
+  AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
-import { isAuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+
+export type ContributedTypeDescriptor =
+  | AuthoringTypeConstructorDescriptor
+  | AuthoringFieldPresetDescriptor;
+
+export type ContributedTypeNamespace = {
+  readonly [name: string]: ContributedTypeDescriptor | ContributedTypeNamespace;
+};
 
 export interface ContributedTypeSymbol {
   readonly kind: 'contributedType';
   readonly name: string;
   readonly path: readonly string[];
-  readonly descriptor: AuthoringTypeConstructorDescriptor;
+  readonly descriptor: ContributedTypeDescriptor;
 }
 
 export interface ContributedNamespaceSymbol {
@@ -22,27 +29,49 @@ export type ContributedMember = ContributedTypeSymbol | ContributedNamespaceSymb
 
 export interface ContributedTypeScope {
   lookup(name: string): ContributedMember | undefined;
+  entries(): Iterable<readonly [string, ContributedMember]>;
 }
 
-const scopes = new WeakMap<AuthoringTypeNamespace, ContributedTypeScope>();
+export function isContributedTypeDescriptor(
+  value: ContributedTypeDescriptor | ContributedTypeNamespace,
+): value is ContributedTypeDescriptor {
+  return 'kind' in value && (value.kind === 'typeConstructor' || value.kind === 'fieldPreset');
+}
+
+export function mergeContributedTypes(
+  ...namespaces: readonly ContributedTypeNamespace[]
+): ContributedTypeNamespace {
+  const merged: Record<string, ContributedTypeDescriptor | ContributedTypeNamespace> = {};
+  for (const namespace of namespaces) {
+    for (const [name, value] of Object.entries(namespace)) {
+      const existing = Object.hasOwn(merged, name) ? merged[name] : undefined;
+      merged[name] =
+        existing !== undefined &&
+        !isContributedTypeDescriptor(existing) &&
+        !isContributedTypeDescriptor(value)
+          ? mergeContributedTypes(existing, value)
+          : value;
+    }
+  }
+  return merged;
+}
 
 export function contributedTypeScope(
-  typeConstructors: AuthoringTypeNamespace,
+  contributedTypes: ContributedTypeNamespace,
 ): ContributedTypeScope {
-  const existing = scopes.get(typeConstructors);
-  if (existing !== undefined) return existing;
-  const members = collect(typeConstructors, []);
-  const created: ContributedTypeScope = {
+  const members = collect(contributedTypes, []);
+  return {
     lookup(name) {
       return members.get(name);
     },
+    entries() {
+      return members.entries();
+    },
   };
-  scopes.set(typeConstructors, created);
-  return created;
 }
 
 function collect(
-  namespace: AuthoringTypeNamespace,
+  namespace: ContributedTypeNamespace,
   prefix: readonly string[],
 ): ReadonlyMap<string, ContributedMember> {
   const members = new Map<string, ContributedMember>();
@@ -50,7 +79,7 @@ function collect(
     const path = [...prefix, name];
     members.set(
       name,
-      isAuthoringTypeConstructorDescriptor(value)
+      isContributedTypeDescriptor(value)
         ? { kind: 'contributedType', name, path, descriptor: value }
         : { kind: 'contributedNamespace', name, path, members: collect(value, path) },
     );

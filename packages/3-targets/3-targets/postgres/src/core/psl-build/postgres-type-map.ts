@@ -1,4 +1,5 @@
 import type { PslTypeMap, PslTypeResolution } from '@internal/family-sql/psl-build';
+import { EXISTING_COLUMN_DATE_TIME_TYPES } from './existing-column-date-time-types';
 
 const POSTGRES_TO_PSL: Record<string, string> = {
   text: 'String',
@@ -27,15 +28,15 @@ const PRESERVED_NATIVE_TYPES: Record<string, string> = {
   real: 'Real',
   numeric: 'Numeric',
   decimal: 'Numeric',
-  timestamp: 'Timestamp',
-  'timestamp without time zone': 'Timestamp',
-  timestamptz: 'Timestamptz',
-  'timestamp with time zone': 'Timestamptz',
-  date: 'Date',
-  time: 'Time',
-  'time without time zone': 'Time',
-  timetz: 'Timetz',
-  'time with time zone': 'Timetz',
+  timestamp: EXISTING_COLUMN_DATE_TIME_TYPES.timestamp,
+  'timestamp without time zone': EXISTING_COLUMN_DATE_TIME_TYPES.timestamp,
+  timestamptz: EXISTING_COLUMN_DATE_TIME_TYPES.timestamptz,
+  'timestamp with time zone': EXISTING_COLUMN_DATE_TIME_TYPES.timestamptz,
+  date: EXISTING_COLUMN_DATE_TIME_TYPES.date,
+  time: EXISTING_COLUMN_DATE_TIME_TYPES.time,
+  'time without time zone': EXISTING_COLUMN_DATE_TIME_TYPES.time,
+  timetz: EXISTING_COLUMN_DATE_TIME_TYPES.timetz,
+  'time with time zone': EXISTING_COLUMN_DATE_TIME_TYPES.timetz,
   json: 'Json',
 };
 
@@ -46,10 +47,10 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
   varchar: 'VarChar',
   numeric: 'Numeric',
   decimal: 'Numeric',
-  timestamp: 'Timestamp',
-  timestamptz: 'Timestamptz',
-  time: 'Time',
-  timetz: 'Timetz',
+  timestamp: EXISTING_COLUMN_DATE_TIME_TYPES.timestamp,
+  timestamptz: EXISTING_COLUMN_DATE_TIME_TYPES.timestamptz,
+  time: EXISTING_COLUMN_DATE_TIME_TYPES.time,
+  timetz: EXISTING_COLUMN_DATE_TIME_TYPES.timetz,
 };
 
 /**

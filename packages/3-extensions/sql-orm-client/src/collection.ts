@@ -1244,7 +1244,7 @@ class CollectionImpl<
    * merged into `plan.meta.annotations` at compile time.
    *
    * ```typescript
-   * await db.orm.User.all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 })));
+   * await db.orm.User.all((meta) => meta.annotate(cacheAnnotation({ key: 'users' })));
    * ```
    */
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<Row> {
@@ -1311,7 +1311,7 @@ class CollectionImpl<
    *
    * // Annotate without filtering further:
    * await db.orm.User.first(undefined, (meta) =>
-   *   meta.annotate(cacheAnnotation({ ttl: 60 })),
+   *   meta.annotate(cacheAnnotation({})),
    * );
    * ```
    */

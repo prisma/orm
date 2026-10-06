@@ -73,18 +73,18 @@ type ResolveFieldType<
     readonly kind: 'scalar';
     readonly codecId: infer CId extends string & keyof TCodecTypes;
   };
-  readonly many: true;
+  readonly many: { readonly elementNullable: infer ElementNullable extends boolean };
   readonly nullable: true;
 }
-  ? readonly TCodecTypes[CId]['output'][] | null
+  ? readonly (TCodecTypes[CId]['output'] | (ElementNullable extends true ? null : never))[] | null
   : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
         readonly type: {
           readonly kind: 'scalar';
           readonly codecId: infer CId extends string & keyof TCodecTypes;
         };
-        readonly many: true;
+        readonly many: { readonly elementNullable: infer ElementNullable extends boolean };
       }
-    ? readonly TCodecTypes[CId]['output'][]
+    ? readonly (TCodecTypes[CId]['output'] | (ElementNullable extends true ? null : never))[]
     : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
           readonly type: {
             readonly kind: 'scalar';

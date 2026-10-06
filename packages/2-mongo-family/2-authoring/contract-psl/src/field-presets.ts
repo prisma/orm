@@ -1,28 +1,21 @@
 import type { ContractField, ExecutionMutationDefaultPhases } from '@internal/contract/types';
-import {
-  type AuthoringContributions,
-  type AuthoringFieldPresetDescriptor,
-  checkUncomposedNamespace,
-  getAuthoringFieldPreset,
-  hasRegisteredFieldNamespace,
+import type {
+  AuthoringContributions,
+  AuthoringFieldPresetDescriptor,
 } from '@internal/framework-components/authoring';
 import {
   diagnosticSource,
   type FieldSymbol,
   type PslDiagnosticCollector,
+  type ResolvedTypeConstructorCall,
 } from '@internal/psl-parser';
-import {
-  instantiatePslFieldPreset,
-  reportUncomposedNamespace,
-  reportUnknownFieldPreset,
-} from '@internal/psl-parser/interpret';
+import { instantiatePslFieldPreset } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
 import { getAttribute } from './psl-helpers';
 
 export interface FieldPresetContext {
   readonly authoringContributions: AuthoringContributions | undefined;
-  readonly composedExtensions: ReadonlySet<string>;
   readonly sources: PslSources;
   readonly diagnostics: PslDiagnosticCollector;
   readonly warnPresetWithoutEffect: (preset: PresetWithoutEffect) => void;
@@ -37,7 +30,6 @@ export interface PresetWithoutEffect {
 }
 
 export type FieldPresetResolution =
-  | { readonly kind: 'none' }
   | { readonly kind: 'invalid' }
   | {
       readonly kind: 'preset';
@@ -45,7 +37,6 @@ export type FieldPresetResolution =
       readonly executionDefaults?: ExecutionMutationDefaultPhases;
     };
 
-const NONE: FieldPresetResolution = { kind: 'none' };
 const INVALID: FieldPresetResolution = { kind: 'invalid' };
 
 function unsupportedContributions(
@@ -58,57 +49,19 @@ function unsupportedContributions(
   ];
 }
 
-/**
- * Resolves a field whose type is a field-preset call (`temporal.updatedAt()`) against the composed field presets. Returns `none` when the type is not a preset call, so the caller falls back to scalar resolution.
- */
 export function resolveFieldPreset(input: {
   readonly field: FieldSymbol;
+  readonly call: ResolvedTypeConstructorCall;
+  readonly descriptor: AuthoringFieldPresetDescriptor;
   readonly ownerName: string;
   readonly ownerKind: 'model' | 'compositeType';
   readonly context: FieldPresetContext;
 }): FieldPresetResolution {
-  const { field, ownerName, context } = input;
-  const call = field.typeConstructor;
-  if (!call) {
-    return NONE;
-  }
+  const { field, call, descriptor, ownerName, context } = input;
   const { diagnostics } = context;
   const source = diagnosticSource(context.sources, field.node.syntax);
   const entityLabel = `Field "${ownerName}.${field.name}"`;
   const helperPath = call.path.join('.');
-
-  const descriptor = getAuthoringFieldPreset(context.authoringContributions, call.path);
-  if (!descriptor) {
-    const namespace = call.path.length > 1 ? call.path[0] : undefined;
-    if (namespace && hasRegisteredFieldNamespace(context.authoringContributions, namespace)) {
-      reportUnknownFieldPreset({
-        entityLabel,
-        namespace,
-        helperPath,
-        authoringContributions: context.authoringContributions,
-        source,
-        span: call.span,
-        diagnostics,
-      });
-      return INVALID;
-    }
-    const uncomposedNamespace = checkUncomposedNamespace(helperPath, context.composedExtensions, {
-      familyId: 'mongo',
-      targetId: 'mongo',
-      authoringContributions: context.authoringContributions,
-    });
-    if (uncomposedNamespace) {
-      reportUncomposedNamespace({
-        subjectLabel: `Type constructor "${helperPath}"`,
-        namespace: uncomposedNamespace,
-        source,
-        span: call.span,
-        diagnostics,
-      });
-      return INVALID;
-    }
-    return NONE;
-  }
 
   if (input.ownerKind === 'compositeType') {
     diagnostics.push({
@@ -185,6 +138,7 @@ export function resolveFieldPreset(input: {
         ...ifDefined('typeParams', instantiated.descriptor.typeParams),
       },
       nullable: instantiated.nullable,
+      many: false,
     },
     ...ifDefined('executionDefaults', instantiated.executionDefaults),
   };

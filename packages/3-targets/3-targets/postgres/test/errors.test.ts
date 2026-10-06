@@ -60,6 +60,7 @@ describe('postgresError sites', () => {
 
   it('buildColumnTypeSql rejects an unsafe native type as CONTRACT.NATIVE_TYPE_INVALID', () => {
     const column = {
+      many: false,
       nativeType: 'text; DROP TABLE users',
       codecId: 'pg/text@1',
       nullable: false,
@@ -82,6 +83,7 @@ describe('postgresError sites', () => {
 
   it('buildColumnTypeSql without an expandNativeType hook throws CONTRACT.PACK_CONTRIBUTION_INVALID', () => {
     const column = {
+      many: false,
       nativeType: 'varchar',
       codecId: 'pg/varchar@1',
       nullable: false,

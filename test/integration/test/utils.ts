@@ -80,6 +80,7 @@ export async function createTestRuntime(
   }
 
   return new PostgresRuntimeImpl({
+    closeRefusal: undefined,
     context,
     adapter: stackInstance.adapter,
     driver,

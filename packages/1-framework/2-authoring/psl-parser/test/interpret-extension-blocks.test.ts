@@ -15,7 +15,7 @@ import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
 import { buildSymbolTable } from '../src/symbol-table';
-import { ownEntry } from './support';
+import { binderContext, ownEntry } from './support';
 
 const POLICY_DESCRIPTOR = {
   kind: 'pslBlock',
@@ -84,13 +84,13 @@ function build(source: string) {
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-    },
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: DESCRIPTORS,
+    context: binderContext({
+      contributedTypes: {
+        Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      },
+      pslBlockDescriptors: DESCRIPTORS,
+    }),
   });
   const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
     symbolTable,

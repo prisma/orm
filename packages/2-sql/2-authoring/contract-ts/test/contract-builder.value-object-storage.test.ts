@@ -69,9 +69,9 @@ describe('value-object fields are stored in one column of the descriptor they ca
     );
 
     expect(unboundTables(contract.storage)['user']?.columns).toEqual({
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      home_address: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false, many: false },
+      home_address: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true, many: false },
+      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false, many: false },
     });
   });
 

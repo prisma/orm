@@ -165,6 +165,28 @@ policy_all p_admin {
 `,
   },
   {
+    name: 'a policy whose target and role are qualified by another namespace',
+    schema: `namespace unbound {
+  role auditor {
+  }
+}
+
+namespace auth {
+  model Account {
+    id Int @id
+
+    @@rls
+  }
+}
+
+policy_select p_read {
+  target = auth.Account
+  roles  = [unbound.auditor]
+  using  = "true"
+}
+`,
+  },
+  {
     name: 'a check written with a name prefix',
     schema: `model Widget {
   id    Int    @id

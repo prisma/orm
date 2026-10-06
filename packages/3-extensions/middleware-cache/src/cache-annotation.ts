@@ -1,61 +1,82 @@
-import { defineAnnotation } from '@internal/framework-components/runtime';
+import {
+  type AnnotationHandle,
+  type AnnotationValue,
+  defineAnnotation,
+} from '@internal/framework-components/runtime';
 
 /**
- * Payload accepted when calling the `cacheAnnotation` handle.
+ * Options for a read annotated with `cacheAnnotation`. A read with the annotation, in runtime scope
+ * and not bypassed, is cached; how long the entry lives is the store's policy.
  *
- * - `ttl` — Time-to-live for the cached entry, in milliseconds. When
- *   omitted, the cache middleware passes the query through untouched —
- *   presence of the annotation alone is not sufficient to enable caching.
- *   This makes the cache strictly opt-in per query.
- * - `skip` — When `true`, the cache middleware passes the query through
- *   untouched even if a `ttl` is set. Useful for selectively bypassing
- *   the cache on a per-call basis without removing the annotation
- *   entirely (e.g. a "force refresh" knob in user code).
- * - `key` — Per-query override of the cache key. When supplied, replaces
- *   the default `RuntimeMiddlewareContext.contentHash(exec)` digest.
- *   The supplied string is stored as-is — the cache middleware does
- *   **not** rehash it, so the caller is responsible for ensuring the
- *   string is bounded in size and free of sensitive data they do not
- *   want flowing into logs / Redis `KEYS` / persistence dumps.
+ * - `key` — the entry's key. When absent, the middleware's `deriveKey` computes it. The key is
+ *   stored and logged as given, so keep it bounded and free of secrets.
+ * - `meta` — any value, passed by reference to the store's `set` with the entry. The middleware
+ *   never reads it. Stores use it to group entries (for example by tag) or to set a lifetime.
+ * - `bypass` — when `true`, the read neither reads from nor writes to the cache.
+ *
+ * `TMeta` is the shape of `meta`; pass the store's `TMeta` so the two agree.
  */
-export interface CachePayload {
-  readonly ttl?: number;
-  readonly skip?: boolean;
+export interface CacheAnnotationOptions<TMeta = unknown> {
   readonly key?: string;
+  readonly meta?: TMeta;
+  readonly bypass?: boolean;
 }
 
 /**
- * Read-only annotation handle for the cache middleware.
+ * The type of `cacheAnnotation`: a call generic in `TMeta`, plus the read-only `namespace`,
+ * `applicableTo` and `read` of the underlying annotation handle.
+ */
+export type CacheAnnotationHandle = (<TMeta = unknown>(
+  options: CacheAnnotationOptions<TMeta>,
+) => AnnotationValue<CacheAnnotationOptions, 'read'>) & {
+  readonly namespace: string;
+  readonly applicableTo: ReadonlySet<'read'>;
+  readonly read: AnnotationHandle<CacheAnnotationOptions, 'read'>['read'];
+};
+
+/**
+ * Marks a read for the cache middleware. It applies to reads only: a write terminal refuses it at
+ * compile time and at run time. The middleware reads it from `plan.meta.annotations.cache`.
  *
- * Declared with `applicableTo: ['read']`. Write terminals supply
- * `K = 'write'` to the type-level `ValidAnnotations<'write', As>` gate
- * (and the runtime `assertAnnotationsApplicable(annotations, 'write', ...)`
- * check); the join `K extends Kinds` fails for this annotation, making
- * "cache a mutation" structurally impossible without an `as any` cast
- * bypass at both type *and* runtime levels.
- *
- * Stored under namespace `'cache'` in `plan.meta.annotations`. The cache
- * middleware reads it via `cacheAnnotation.read(plan)`.
+ * `TMeta` types `meta` for this call only. Nothing ties it to the store's `TMeta`, so a store
+ * package should export a wrapper typed with its own meta, such as
+ * `(o: CacheAnnotationOptions<TagMeta>) => cacheAnnotation<TagMeta>(o)`.
  *
  * @example
  * ```typescript
  * import { cacheAnnotation } from '@internal/middleware-cache';
  *
  * // ORM read terminal — accepts the read-only annotation via the meta callback.
- * const user = await db.User.first(
+ * const user = await db.orm.public.User.first(
  *   { id },
- *   (meta) => meta.annotate(cacheAnnotation({ ttl: 60_000 })),
+ *   (meta) => meta.annotate(cacheAnnotation({ key: `user-${id}` })),
  * );
  *
  * // SQL DSL select builder — chainable.
  * const plan = db.sql
  *   .from(tables.user)
- *   .annotate(cacheAnnotation({ ttl: 60_000 }))
+ *   .annotate(cacheAnnotation({}))
  *   .select({ id: tables.user.columns.id })
  *   .build();
  * ```
  */
-export const cacheAnnotation = defineAnnotation<CachePayload>()({
-  namespace: 'cache',
-  applicableTo: ['read'],
-});
+export const cacheAnnotation: CacheAnnotationHandle = withTypedMeta(
+  defineAnnotation<CacheAnnotationOptions>()({ namespace: 'cache', applicableTo: ['read'] }),
+);
+
+function withTypedMeta(
+  handle: AnnotationHandle<CacheAnnotationOptions, 'read'>,
+): CacheAnnotationHandle {
+  function cacheAnnotationWithMeta<TMeta = unknown>(
+    options: CacheAnnotationOptions<TMeta>,
+  ): AnnotationValue<CacheAnnotationOptions, 'read'> {
+    return handle(options);
+  }
+  return Object.freeze(
+    Object.assign(cacheAnnotationWithMeta, {
+      namespace: handle.namespace,
+      applicableTo: handle.applicableTo,
+      read: handle.read,
+    }),
+  );
+}

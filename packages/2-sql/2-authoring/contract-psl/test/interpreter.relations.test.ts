@@ -1,14 +1,13 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   modelsOf,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
@@ -26,8 +25,8 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 describe('interpretPslDocumentToSqlContract relations', () => {
   it('accepts relation navigation list fields and emits relation metadata for both sides', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -38,10 +37,8 @@ model Post {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -79,8 +76,8 @@ model Post {
   });
 
   it('records nullable: true on an optional relation field backed by an optional FK field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -91,10 +88,8 @@ model Post {
   user User? @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -112,8 +107,8 @@ model Post {
   });
 
   it('records the 1:1 back side as nullable from its own optionality', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   profile Profile?
 }
@@ -124,10 +119,8 @@ model Profile {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -145,8 +138,8 @@ model Profile {
   });
 
   it('rejects a required relation field whose FK fields include an optional field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -157,10 +150,8 @@ model Post {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -173,8 +164,8 @@ model Post {
   });
 
   it('rejects an optional relation field whose FK fields are all required', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -185,10 +176,8 @@ model Post {
   user User? @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -201,8 +190,8 @@ model Post {
   });
 
   it('accepts a bare model-typed optional field with no @relation as the 1:1 back side', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   profile Profile?
 }
@@ -213,10 +202,8 @@ model Profile {
   user User @relation(fields: [userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -249,8 +236,8 @@ model Profile {
   });
 
   it('reports an unnamed backrelation as orphaned when only a differently named FK side was rejected', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model A {
+    const result = interpretSqlContract(
+      `model A {
   id Int @id
   bId Int?
   b B @relation("named", fields: [bId], references: [id])
@@ -261,10 +248,8 @@ model B {
   as A[]
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -275,8 +260,8 @@ model B {
   });
 
   it('reports an orphaned 1:1 backrelation candidate when no FK points back at it', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   profile Profile?
 }
@@ -285,10 +270,8 @@ model Profile {
   id Int @id
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -303,27 +286,26 @@ model Profile {
   });
 
   it('still rejects a field whose type is neither a model, enum, composite, nor scalar', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   nonsense Nonsense
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
+    expect(result.failure.diagnostics).toHaveLength(1);
     expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
       { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Nonsense"' },
     ]);
   });
 
   it('matches named backrelations using positional and named relation forms', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   authored Post[] @relation("AuthoredPosts")
   reviewed Post[] @relation(name: "ReviewedPosts")
@@ -337,10 +319,8 @@ model Post {
   reviewer User @relation(name: "ReviewedPosts", fields: [reviewerId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -370,8 +350,8 @@ model Post {
   });
 
   it('matches backrelations with unrelated FK metadata present', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
   posts Post[]
 }
@@ -392,10 +372,8 @@ model Member {
   team Team @relation(fields: [teamId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -423,18 +401,16 @@ model Member {
   });
 
   it('matches self-referential backrelations when disambiguated by relation name', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Employee {
+    const result = interpretSqlContract(
+      `model Employee {
   id Int @id
   managerId Int?
   manager Employee? @relation("Manages", fields: [managerId], references: [id])
   reports Employee[] @relation("Manages")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -464,8 +440,8 @@ model Member {
   });
 
   it('returns diagnostics for ambiguous self-referential backrelations without a relation name', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Employee {
+    const result = interpretSqlContract(
+      `model Employee {
   id Int @id
   managerId Int?
   mentorId Int?
@@ -474,10 +450,8 @@ model Member {
   reports Employee[]
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -494,8 +468,8 @@ model Member {
   });
 
   it('accepts Prisma relation map argument and records foreign key constraint name', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id @map("team_id")
   members Member[]
   @@map("org_team")
@@ -509,10 +483,8 @@ model Member {
   @@map("team_member")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -531,8 +503,8 @@ model Member {
   });
 
   it('defaults a relation foreign key to a required backing index', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id
   members Member[]
 }
@@ -543,10 +515,8 @@ model Member {
   team Team @relation(fields: [teamId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -566,8 +536,8 @@ model Member {
   });
 
   it('opts a relation foreign key out of its backing index via index: false', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id
   members Member[]
 }
@@ -578,10 +548,8 @@ model Member {
   team Team @relation(fields: [teamId], references: [id], index: false)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -594,8 +562,8 @@ model Member {
   });
 
   it('rejects index on a backrelation list field', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Team {
+    const result = interpretSqlContract(
+      `model Team {
   id Int @id
   members Member[] @relation(index: false)
 }
@@ -606,10 +574,8 @@ model Member {
   team Team @relation(fields: [teamId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -624,8 +590,8 @@ model Member {
   });
 
   it('returns diagnostics for unsupported referential action tokens', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -635,14 +601,11 @@ model Post {
   author User @relation(fields: [userId], references: [id], onDelete: WeirdAction)
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -659,8 +622,8 @@ model Post {
   });
 
   it('returns diagnostics when relation fields reference unknown local fields', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -670,18 +633,15 @@ model Post {
   user User @relation(fields: [missingUserId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+    expect(result.failure.summary).toBe('Schema has 1 error');
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -693,8 +653,8 @@ model Post {
   });
 
   it('returns diagnostics when relation references target unknown fields', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -704,18 +664,15 @@ model Post {
   user User @relation(fields: [userId], references: [missingId])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
+    expect(result.failure.summary).toBe('Schema has 1 error');
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -729,8 +686,8 @@ model Post {
   });
 
   it('returns diagnostics when relation fields repeats a column name', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -740,14 +697,11 @@ model Post {
   user User @relation(fields: [userId, userId], references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -763,8 +717,8 @@ model Post {
   });
 
   it('returns diagnostics when relation omits required fields argument', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const result = interpretSqlContract(
+      `model User {
   id Int @id
 }
 
@@ -774,14 +728,11 @@ model Post {
   user User @relation(references: [id])
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        ...baseInput,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

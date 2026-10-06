@@ -45,8 +45,8 @@ The CLI / ControlClient remain source-agnostic and do not import PSL-specific pa
 
 ## Implementation notes (non-normative)
 
-- The interpretation package accepts a **PSL symbol table** (the scope-aware view over the parsed CST, plus parse + symbol-table diagnostics) and produces `Contract` (e.g. `interpretPslDocumentToSqlContract` in `@internal/sql-contract-psl`).
-- The provider owns parsing and shared PSL resolution: it calls `parse(schema)` then `buildSymbolTable({ document, sourceFile, scalarTypes, pslBlockDescriptors })` (from `@internal/psl-parser`), seeds the combined parse + symbol-table diagnostics, and passes the symbol table to the interpreter. `scalarTypes` comes from the target composition context; `pslBlockDescriptors` comes from authoring contributions so descriptor-driven generic/extension blocks are reconstructed once before target interpretation.
+- The interpretation package accepts parsed `documents`, their `sources`, and a **PSL symbol table**, alongside target composition inputs, and produces `Contract` (e.g. `interpretPslDocumentToSqlContract` in `@internal/sql-contract-psl`).
+- The provider owns parsing and declaration collection: it calls `parse(text, path)` for each source, then `buildSymbolTable({ documents, sources })` (from `@internal/psl-parser`), seeds the combined parse + symbol-table diagnostics, and passes the parsed documents, sources, and symbol table to the interpreter.
 - File paths belong in diagnostics only; canonical artifacts must not embed provenance.
 
 ## Related

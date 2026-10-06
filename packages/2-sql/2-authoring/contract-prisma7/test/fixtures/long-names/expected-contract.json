@@ -30,28 +30,32 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "short": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -75,14 +79,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -103,7 +109,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -143,7 +150,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -186,14 +194,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "col": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -217,14 +227,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "B": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -301,22 +313,26 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "short": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -347,12 +363,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -373,7 +391,8 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -388,7 +407,8 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -403,12 +423,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "col": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -429,12 +451,14 @@
                 "A": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "B": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],

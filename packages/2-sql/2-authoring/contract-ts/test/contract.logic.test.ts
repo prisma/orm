@@ -247,7 +247,11 @@ describe('SqlContractSerializer logic validation', () => {
               fields: { id: { column: 'id' } },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -273,8 +277,8 @@ describe('SqlContractSerializer logic validation', () => {
           fields: { id: { column: 'id' }, userId: { column: 'userId' } },
         },
         fields: {
-          id: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-          userId: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+          id: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many: false },
+          userId: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many: false },
         },
         relations: {},
       };

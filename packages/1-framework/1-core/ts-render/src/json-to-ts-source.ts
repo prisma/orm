@@ -13,6 +13,10 @@
  * To render a non-JSON JS value (Date, Vector, BigInt, Buffer, …), encode it
  * through the relevant codec's `encodeJson` first. Adding special cases to
  * this file is not the answer — that's what codecs are for.
+ *
+ * The file also exports `tsObjectSource` and `tsArraySource`, the object and
+ * array layouts `jsonToTsSource` uses, for callers that render some values
+ * themselves.
  */
 
 import { InternalError } from '@internal/utils/internal-error';
@@ -35,21 +39,35 @@ export function jsonToTsSource(value: unknown): string {
   if (typeof value === 'string') return tsStringLiteral(value);
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (Array.isArray(value)) {
-    if (value.length === 0) return '[]';
-    const items = value.map((v: unknown) => jsonToTsSource(v));
-    const singleLine = `[${items.join(', ')}]`;
-    if (singleLine.length <= 80) return singleLine;
-    return `[\n${items.map((i) => `  ${i}`).join(',\n')},\n]`;
+    return tsArraySource(value.map((v: unknown) => jsonToTsSource(v)));
   }
   if (typeof value === 'object') {
-    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
-    if (entries.length === 0) return '{}';
-    const items = entries.map(([k, v]) => `${renderKey(k)}: ${jsonToTsSource(v)}`);
-    const singleLine = `{ ${items.join(', ')} }`;
-    if (singleLine.length <= 80) return singleLine;
-    return `{\n${items.map((i) => `  ${i}`).join(',\n')},\n}`;
+    return tsObjectSource(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, jsonToTsSource(v)] as const),
+    );
   }
   throw new InternalError(`jsonToTsSource: unsupported value type "${typeof value}"`);
+}
+
+/** An object literal from entries whose values are already TypeScript source, laid out as `jsonToTsSource` lays out objects. */
+export function tsObjectSource(
+  entries: readonly (readonly [key: string, source: string])[],
+): string {
+  if (entries.length === 0) return '{}';
+  const items = entries.map(([key, source]) => `${renderKey(key)}: ${source}`);
+  const singleLine = `{ ${items.join(', ')} }`;
+  if (singleLine.length <= 80 && !singleLine.includes('\n')) return singleLine;
+  return `{\n${items.map((i) => `  ${i}`).join(',\n')},\n}`;
+}
+
+/** An array literal from items that are already TypeScript source, laid out as `jsonToTsSource` lays out arrays. */
+export function tsArraySource(items: readonly string[]): string {
+  if (items.length === 0) return '[]';
+  const singleLine = `[${items.join(', ')}]`;
+  if (singleLine.length <= 80 && !singleLine.includes('\n')) return singleLine;
+  return `[\n${items.map((i) => `  ${i}`).join(',\n')},\n]`;
 }
 
 function renderKey(key: string): string {

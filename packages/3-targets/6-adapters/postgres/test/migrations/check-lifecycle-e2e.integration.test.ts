@@ -79,14 +79,16 @@ type ColumnSpec = {
   readonly nativeType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  readonly many?: true;
+  readonly many?: false | { readonly elementNullable: boolean };
 };
 
-/** Builds the checks the Postgres pack would emit for one column. */
 function checksForColumn(
   tableName: string,
   columnName: string,
-  options: { readonly many: boolean; readonly memberValues?: readonly string[] },
+  options: {
+    readonly many: false | { readonly elementNullable: boolean };
+    readonly memberValues?: readonly string[];
+  },
 ): CheckConstraint[] {
   return postgresRenderCheckExpressions({
     tableName,
@@ -256,6 +258,31 @@ function itemContractWithVarcharCheck(input: {
   ) as Contract<SqlStorage>;
 }
 
+function authoredScalarListContract(elementNullable: boolean): Contract<SqlStorage> {
+  return defineContract(
+    {
+      family: authoringFamilyPack,
+      target: authoringTargetPack,
+      createNamespace: postgresCreateNamespace,
+    },
+    ({ field: f, model: m }) =>
+      ({
+        models: {
+          Item: m('Item', {
+            fields: {
+              id: f.text().id(),
+              strictTags: f.text().many(),
+              nullableTags: f.text().many({ elementsNullable: true }),
+              transitioningTags: elementNullable
+                ? f.text().many({ elementsNullable: true })
+                : f.text().many({ elementsNullable: false }),
+            },
+          }),
+        },
+      }) as const,
+  ) as Contract<SqlStorage>;
+}
+
 function itemCheckName(contract: Contract<SqlStorage>): string | undefined {
   const table = contract.storage.namespaces['public']?.entries.table?.['Item'] as
     | StorageTable
@@ -369,11 +396,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([]);
 
     // Nullable: ADD COLUMN NOT NULL with no default is rejected outright.
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const after = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: true,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -397,11 +429,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   it('dropping a list column removes its element check in the same plan', {
     timeout: testTimeout,
   }, async () => {
-    const attrsChecks = checksForColumn('Item', 'attrs', { many: true });
+    const attrsChecks = checksForColumn('Item', 'attrs', { many: { elementNullable: false } });
     const before = contractOf(
       {
         id: idColumn,
-        attrs: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        attrs: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: true,
+          many: { elementNullable: false },
+        },
       },
       attrsChecks,
     );
@@ -424,11 +461,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   it('a manually dropped check is reported missing and repaired by the next plan', {
     timeout: testTimeout,
   }, async () => {
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const contract = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -466,13 +508,18 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
 
     const checks = [
       ...checksForColumn('Item', 'role', { many: false, memberValues: ['user', 'admin'] }),
-      ...checksForColumn('Item', 'tags', { many: true }),
+      ...checksForColumn('Item', 'tags', { many: { elementNullable: false } }),
     ];
     const contract = contractOf(
       {
         id: idColumn,
         role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       checks,
     );
@@ -537,14 +584,19 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const checks = checksForColumn('Item', 'roles', {
-      many: true,
+      many: { elementNullable: false },
       memberValues: ['user', 'admin'],
     });
     expect(checks).toHaveLength(2);
     const contract = contractOf(
       {
         id: idColumn,
-        roles: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        roles: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       checks,
     );
@@ -562,23 +614,58 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['user','root'])`),
     ).rejects.toThrow(new RegExp(membershipName));
-    // `<@` does not match a NULL element either, so containment rejects this
-    // one too — the element-non-null check is belt for a different hole (a
-    // list column with no member set at all).
+    // Membership ignores NULL; the independently named element check rejects it.
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('c', ARRAY['user',NULL])`),
-    ).rejects.toThrow(/Item_roles/);
+    ).rejects.toThrow(new RegExp(checks[1]?.name ?? 'Item_roles_elem_not_null'));
 
     const schema = await familyInstance.introspect({ driver: driver!, contract });
     PostgresDatabaseSchemaNode.assert(schema);
     const live = schema.namespaces['public']?.tables['Item']?.checks ?? [];
     expect([...live.map((c) => c.expression)].sort()).toEqual([
       '(array_position(roles, NULL::text) IS NULL)',
-      `(roles <@ ARRAY['user'::text, 'admin'::text])`,
+      `(array_remove(roles, NULL::text) <@ ARRAY['user'::text, 'admin'::text])`,
     ]);
 
     expect((await verify(contract)).ok).toBe(true);
     // Reprint stability: the containment shape does not drift on re-verify.
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('an element-nullable array domain enum accepts valid NULLs and rejects invalid non-null values', {
+    timeout: testTimeout,
+  }, async () => {
+    const checks = checksForColumn('Item', 'roles', {
+      many: { elementNullable: true },
+      memberValues: ['user', 'admin'],
+    });
+    expect(checks).toHaveLength(1);
+    const contract = contractOf(
+      {
+        id: idColumn,
+        roles: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: true },
+        },
+      },
+      checks,
+    );
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual([...declaredCheckNames(contract)]);
+    await driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('a', ARRAY['user',NULL])`);
+    expect(
+      (await driver!.query<{ roles: string }>(`SELECT roles FROM "Item" WHERE id = 'a'`)).rows,
+    ).toEqual([{ roles: '{user,NULL}' }]);
+
+    const membershipName = checks[0]?.name;
+    assertDefined(membershipName, 'membership check must be named');
+    await expect(
+      driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['root',NULL])`),
+    ).rejects.toThrow(new RegExp(membershipName));
     expect((await verify(contract)).ok).toBe(true);
   });
 
@@ -590,7 +677,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const checks = checksForColumn('Item', 'roles', {
-      many: true,
+      many: { elementNullable: false },
       memberValues: ['user', 'admin'],
     });
     const contract = contractOf(
@@ -600,7 +687,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
           nativeType: 'character varying',
           codecId: 'pg/varchar@1',
           nullable: false,
-          many: true,
+          many: { elementNullable: false },
         },
       },
       checks,
@@ -781,6 +868,62 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect((await verify(changed)).ok).toBe(true);
   });
 
+  it('authored scalar lists install element checks by element nullability and enforce them', {
+    timeout: testTimeout,
+  }, async () => {
+    const contract = authoredScalarListContract(true);
+    const table = contract.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    expect(table?.checks?.map((constraint) => constraint.prefix).sort()).toEqual([
+      'Item_strictTags_elem_not_null',
+    ]);
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual(table?.checks?.map((constraint) => constraint.name));
+    await driver!.query(
+      `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('a', ARRAY['strict'], ARRAY['nullable',NULL], ARRAY['transitioning',NULL])`,
+    );
+    expect(
+      (
+        await driver!.query<{
+          nullableTags: string;
+          transitioningTags: string;
+        }>(`SELECT "nullableTags", "transitioningTags" FROM "Item" WHERE id = 'a'`)
+      ).rows,
+    ).toEqual([{ nullableTags: '{nullable,NULL}', transitioningTags: '{transitioning,NULL}' }]);
+    await expect(
+      driver!.query(
+        `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('b', ARRAY['strict',NULL], ARRAY['nullable'], ARRAY['transitioning'])`,
+      ),
+    ).rejects.toThrow(/Item_strictTags_elem_not_null/);
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('changing authored list element nullability drops and restores exactly one check', {
+    timeout: testTimeout,
+  }, async () => {
+    const strict = authoredScalarListContract(false);
+    await migrate(strict);
+    const strictTable = strict.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    const transitioningName = strictTable?.checks?.find(
+      (constraint) => constraint.prefix === 'Item_transitioningTags_elem_not_null',
+    )?.name;
+    assertDefined(transitioningName, 'transitioning element check must be named');
+
+    const nullable = authoredScalarListContract(true);
+    const toNullable = await migrate(nullable, { from: strict, policy: FULL_POLICY });
+    expect(toNullable.opIds).toEqual([`dropCheckConstraint.Item.${transitioningName}`]);
+    expect((await verify(nullable)).ok).toBe(true);
+
+    const toStrict = await migrate(strict, { from: nullable, policy: FULL_POLICY });
+    expect(toStrict.opIds).toEqual([`checkConstraint.Item.${transitioningName}`]);
+    expect((await verify(strict)).ok).toBe(true);
+  });
+
   // Slice 3 (`@noCheck`): an opted-out contract simply does not declare the
   // check. The first two scenarios are hand-built contracts and pin the
   // planner/DDL lifecycle for a check-less contract — deleting a declared
@@ -791,11 +934,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   it('adding an opt-out later drops the live element check in one destructive plan', {
     timeout: testTimeout,
   }, async () => {
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -807,7 +955,12 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       [],
     );
@@ -829,7 +982,12 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       [],
     );
@@ -837,11 +995,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([]);
     await driver!.query(`INSERT INTO "Item" (id, tags) VALUES ('a', ARRAY['x',NULL])`);
 
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          nativeType: 'text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );

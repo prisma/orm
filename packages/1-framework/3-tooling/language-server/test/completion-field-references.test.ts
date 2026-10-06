@@ -16,6 +16,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
+import { testBinder } from './helpers/binder';
 
 const completionOnlyNestedSignature = {
   documentation: 'Selects fields from the declaring and referenced models.',
@@ -48,13 +49,16 @@ const authoringContributions = assembleAuthoringContributions([
   },
 ]);
 
-function complete(markedSource: string) {
+function complete(markedSource: string, siblings: readonly string[] = []) {
   const offset = markedSource.indexOf('|');
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
-  const { document, sources } = parse(source, 'language-server-test.psl');
+  const parsed = parse(source, 'language-server-test.psl');
+  const { document } = parsed;
+  const others = siblings.map((text, index) => parse(text, `sibling-${index}.psl`));
+  const sources = parsed.sources.merge(...others.map((other) => other.sources));
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
-    documents: [document],
+    documents: [...others.map((other) => other.document), document],
     sources,
   });
   const items = providePslCompletionItems({
@@ -65,6 +69,7 @@ function complete(markedSource: string) {
     }),
     sourceFile,
     candidates: {
+      binder: testBinder({ sources, symbolTable, scalarTypes: ['String'], authoringContributions }),
       scalarTypes: ['String'],
       symbolTable,
       pslBlockDescriptors: {},
@@ -75,6 +80,14 @@ function complete(markedSource: string) {
   });
   return { labels: items.map((item) => item.label), items, sourceFile };
 }
+
+it('selects the actual owner when another document has identical declaration spans', () => {
+  expect(
+    complete('model Bravo { other String\n @@probe(local: [|]) }', [
+      'model Alpha { first String\n @@probe(local: []) }',
+    ]).labels,
+  ).toEqual(['other']);
+});
 
 function schema(type: string, args: string) {
   return `model Target { topOnly String }

@@ -10,10 +10,14 @@ import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer } from './test-sql-contract-serializer';
 
-const int = { nullable: false, type: { kind: 'scalar' as const, codecId: 'pg/int4@1' } };
+const int = {
+  many: false as const,
+  nullable: false,
+  type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+};
 
 function column(nullable: boolean) {
-  return { nativeType: 'int4', codecId: 'pg/int4@1', nullable };
+  return { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable };
 }
 
 /** A to-one relation as an rc.9 `contract.json` wrote it: no `nullable` key unless given. */

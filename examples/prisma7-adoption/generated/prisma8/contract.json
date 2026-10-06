@@ -270,7 +270,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "kind": "scalar",
                   "typeParams": {
                     "precision": 3
@@ -311,7 +311,7 @@
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "kind": "scalar",
                   "typeParams": {
                     "precision": 3
@@ -490,7 +490,7 @@
             "User": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -539,7 +539,7 @@
                   }
                 },
                 "updatedAt": {
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nativeType": "timestamp",
                   "nullable": false,
                   "typeParams": {
@@ -647,19 +647,19 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8a3bf4f3a5f417a5be8a3c3f1fd5047d9bcee0bc6b9901c90cda00c4550f3282"
+    "storageHash": "7e0fbcfc4cc5178d89ab0cda93756513a0a823a3dea3708476207b0527c2e423"
   },
   "execution": {
-    "executionHash": "e0c01811610733c2a6998a03a85ca773ca691e63d55d983da65ad1323b372db0",
+    "executionHash": "76ee8948067fff39e1b787eafdf2c9319ebe5e0f5029f71536b4f58b92d7790e",
     "mutations": {
       "defaults": [
         {
           "onCreate": {
-            "id": "plainDateTimeNow",
+            "id": "timestampNow",
             "kind": "generator"
           },
           "onUpdate": {
-            "id": "plainDateTimeNow",
+            "id": "timestampNow",
             "kind": "generator"
           },
           "ref": {

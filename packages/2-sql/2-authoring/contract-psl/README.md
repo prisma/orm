@@ -123,6 +123,9 @@ Contract-level default (specifier options bag):
 - `@internal/sql-contract-psl/map-names`
   - `pslModelMapName(modelName, tableName)` and `pslFieldMapName(fieldName, columnName)` — the `@@map` or `@map` name a model or field must carry to read back with that table or column name, or `undefined` when the name this source derives already matches. Code that writes PSL uses them to decide when to write the attribute.
 
+- `@internal/sql-contract-psl/test`
+  - `sqlContextInput(context)` — maps a `ContractSourceContext` to the context fields of `interpretPslDocumentToSqlContract`'s input. Tests combine it with `bindPslSchema` from `@internal/psl-parser/test`. Not part of the published shells.
+
 ## Architecture
 
 ```mermaid
