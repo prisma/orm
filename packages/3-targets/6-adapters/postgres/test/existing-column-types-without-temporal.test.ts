@@ -38,3 +38,14 @@ describe('the types contract infer and prisma7Schema write', () => {
     ).toEqual([]);
   });
 });
+
+describe('the constructors marked inferred', () => {
+  it('name no codec that needs Temporal', () => {
+    expect(
+      Object.entries(postgresPslTypeConstructors)
+        .filter(([, descriptor]) => 'inferred' in descriptor)
+        .map(([name, descriptor]) => ({ name, codecId: descriptor.output.codecId }))
+        .filter(({ codecId }) => TEMPORAL_CODEC_IDS.includes(codecId)),
+    ).toEqual([]);
+  });
+});

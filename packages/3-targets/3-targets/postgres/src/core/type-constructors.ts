@@ -111,7 +111,6 @@ export const postgresNativeAuthoringTypes = {
   },
   Timestamp: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation: 'A date and time without a time zone, represented as Temporal.PlainDateTime.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
@@ -121,7 +120,6 @@ export const postgresNativeAuthoringTypes = {
   },
   Timestamptz: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation:
       'An instant represented as Temporal.Instant, with optional fractional-second precision.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
@@ -132,7 +130,6 @@ export const postgresNativeAuthoringTypes = {
   },
   Time: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation: 'A time of day without a time zone, represented as Temporal.PlainTime.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
@@ -176,7 +173,6 @@ export const postgresNativeAuthoringTypes = {
   },
   Date: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation: 'A calendar date represented as Temporal.PlainDate.',
     output: { codecId: 'pg/date-temporal@1' },
   },
@@ -185,11 +181,13 @@ export const postgresNativeAuthoringTypes = {
   // value Temporal cannot express still round-trips.
   DateString: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation: 'A PostgreSQL date represented as database text rather than Temporal.PlainDate.',
     output: { codecId: 'pg/date-string@1' },
   },
   TimestampString: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation: 'A timestamp without a time zone represented as PostgreSQL text.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
@@ -209,6 +207,7 @@ export const postgresNativeAuthoringTypes = {
   },
   TimestamptzString: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation: 'A timestamp with time zone represented as PostgreSQL text.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
@@ -218,6 +217,7 @@ export const postgresNativeAuthoringTypes = {
   },
   TimeString: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation: 'A time of day without a time zone represented as PostgreSQL text.',
     args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {

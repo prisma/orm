@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresDataTypes } from '../src/core/data-types';
+import { EXISTING_COLUMN_DATE_TIME_TYPES } from '../src/core/psl-build/existing-column-date-time-types';
+import { INFERRED_PSL_TYPE_NAMES } from '../src/core/psl-build/postgres-type-map';
 import {
   postgresNativeAuthoringTypes,
   postgresScalarAuthoringTypes,
@@ -36,7 +38,7 @@ const everyPostgresConstructor = {
   ...postgresNativeAuthoringTypes,
 };
 
-/** Design 13.4: the constructor `contract infer` prints for each data type, where one exists today. */
+/** The constructor `contract infer` prints for each data type that has one. */
 const INFERRED = [
   'String',
   'Boolean',
@@ -53,11 +55,11 @@ const INFERRED = [
   'VarChar',
   'Uuid',
   'Inet',
-  'Date',
-  'Time',
+  'DateString',
+  'TimeString',
   'Timetz',
-  'Timestamp',
-  'Timestamptz',
+  'TimestampString',
+  'TimestamptzString',
   'pg.enum',
 ];
 
@@ -81,13 +83,42 @@ function constructorAt(path: string): unknown {
     );
 }
 
+function markedInferred(): string[] {
+  return constructorPaths(everyPostgresConstructor).filter((path) => {
+    const descriptor = constructorAt(path);
+    return descriptor !== null && typeof descriptor === 'object' && 'inferred' in descriptor;
+  });
+}
+
+function constructorsByDataType(paths: readonly string[]): Record<string, string[]> {
+  const codecLookup = createPostgresBuiltinCodecLookup();
+  const byDataType: Record<string, string[]> = {};
+  for (const path of paths) {
+    const descriptor = constructorAt(path) as { output: { codecId: string } };
+    const dataType = codecLookup.descriptorFor(descriptor.output.codecId)?.dataType ?? path;
+    byDataType[dataType] = [...(byDataType[dataType] ?? []), path];
+  }
+  return byDataType;
+}
+
 describe('the constructors contract infer prints', () => {
   it('are marked inferred, and no other constructor is', () => {
-    const marked = constructorPaths(everyPostgresConstructor).filter((path) => {
-      const descriptor = constructorAt(path);
-      return descriptor !== null && typeof descriptor === 'object' && 'inferred' in descriptor;
-    });
-    expect(marked.sort()).toEqual([...INFERRED].sort());
+    expect(markedInferred().sort()).toEqual([...INFERRED].sort());
+  });
+
+  it('are, for each data type, the one contract infer writes for a column of it', () => {
+    const writtenByInfer = [...INFERRED_PSL_TYPE_NAMES, 'pg.enum'];
+    expect(constructorsByDataType(markedInferred())).toEqual(
+      constructorsByDataType(writtenByInfer),
+    );
+  });
+
+  it('include every date and time constructor written for an existing column', () => {
+    expect(
+      Object.values(EXISTING_COLUMN_DATE_TIME_TYPES).filter(
+        (name) => !markedInferred().includes(name),
+      ),
+    ).toEqual([]);
   });
 
   it.each(INFERRED)('%s is marked with true', (path) => {
