@@ -77,7 +77,7 @@ The binder is built by the caller, next to the symbol table, following the patte
 - **Family providers and interpreters**: `packages/2-sql/2-authoring/contract-psl` and `packages/2-mongo-family/2-authoring/contract-psl`. `provider.load()` builds the binder, and the interpreters receive it instead of building it. `createSqlBinder` and `createMongoBinder` are removed.
 - **Family descriptor and `ContractSourceContext`** (`framework-components` `control-descriptors.ts`, `@internal/config` `contract-source-types.ts`). Both gain `pslDiagnostics` (`describeUnsupportedAttribute`, `describeUnresolvedType`), type-erased. The SQL and Mongo family descriptors set it; the CLI and language server copy it from `stack.family` into the context.
 - **Language server**: `packages/1-framework/3-tooling/language-server`. `ProjectArtifacts` caches the binder next to `#symbolTableResult` and invalidates it at the same points. The binder's inputs come from `ProjectInterpretation.context` (`ContractSourceContext`: `authoringContributions`, `codecLookup`, `dataTypeLookup`, `controlMutationDefaults`) plus the symbol table and sources. Without a `ProjectInterpretation` there is no binder, and go-to-definition returns `null`.
-- **ADRs**: ADR 255 (block specs bind top-level block values; block references resolve through the snapshot binder), ADR 231 (declarative attribute specifications), ADR 249 (central attribute-spec registry).
+- **ADRs**: ADR 262 (block specs bind top-level block values; block references resolve through the snapshot binder), ADR 231 (declarative attribute specifications), ADR 249 (central attribute-spec registry).
 - **Sibling project**: `projects/symbol-table-resolve` (introduced the binder).
 
 ### Contract impact
@@ -121,7 +121,7 @@ None.
 - [ ] Tests cover both response shapes: `LocationLink[]` when the client declares `linkSupport`, and `Location[]` otherwise.
 - [ ] Manual check in VS Code: go-to-definition and peek definition work on a type reference, a qualifier, an `@relation` `fields` / `references` entry, and an `@@index` entry.
 - [ ] Language-server README lists go-to-definition among supported features.
-- [ ] ADR recording that the binder is built by the caller and passed to `interpret` (new ADR or an amendment to ADR 255, decided at close-out).
+- [ ] ADR recording that the binder is built by the caller and passed to `interpret` (new ADR or an amendment to ADR 262, decided at close-out).
 
 ## Open Questions
 
@@ -131,5 +131,5 @@ None.
 
 - Linear Project: none (skipped by operator).
 - Sibling projects: [`projects/symbol-table-resolve`](../symbol-table-resolve/spec.md).
-- ADRs: ADR 231, ADR 249, ADR 255.
+- ADRs: ADR 231, ADR 249, ADR 262.
 - Design discussion: this project's shaping conversation (2026-09-30). Decisions: binder built by the caller and passed to `interpret`; qualifier resolved in the binder; `LocationLink` with `Location` fallback; `null` on a declaration's own name; two PRs; `describeUnsupportedAttribute` moves to the family control stack; the extension-pack guess and the SQL binder-diagnostic filter are removed (the filter came from #30349 and was not recorded in its design decisions).

@@ -76,7 +76,7 @@ A binder belongs to one snapshot of a schema. After an edit, the caller builds a
 
 ### Attribute and block specifications
 
-Attributes and generic blocks are described declaratively, as specifications built from combinators (`str`, `list`, `oneOf`, `entityRef`, `funcCall`, …). A specification states which arguments exist, what each accepts and what it means, with documentation. The same specification drives interpretation, diagnostics, completion, signature help and hover. See [ADR 231](../../../../docs/architecture%20docs/adrs/ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Central%20attribute-spec%20registry.md) and [ADR 255](../../../../docs/architecture%20docs/adrs/ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md).
+Attributes and generic blocks are described declaratively, as specifications built from combinators (`str`, `list`, `oneOf`, `entityRef`, `funcCall`, …). A specification states which arguments exist, what each accepts and what it means, with documentation. The same specification drives interpretation, diagnostics, completion, signature help and hover. See [ADR 231](../../../../docs/architecture%20docs/adrs/ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Central%20attribute-spec%20registry.md) and [ADR 262](../../../../docs/architecture%20docs/adrs/ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md).
 
 Diagnostics are divided between two owners. The binder reports names that do not resolve. Specifications report values of the wrong shape, wrong argument counts and references to the wrong kind of declaration. A schema error is reported by one of them, never both.
 
@@ -103,4 +103,4 @@ Diagnostics are divided between two owners. The binder reports names that do not
 - `docs/architecture docs/adrs/ADR 231 - Declarative attribute specifications.md`
 - `docs/architecture docs/adrs/ADR 249 - Central attribute-spec registry.md`
 - `docs/architecture docs/adrs/ADR 253 - PSL red-root source ownership.md`
-- `docs/architecture docs/adrs/ADR 255 - Block specs bind top-level block values.md`
+- `docs/architecture docs/adrs/ADR 262 - Block specs bind top-level block values.md`

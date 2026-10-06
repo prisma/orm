@@ -28,6 +28,7 @@ import {
   type UnwrittenRef,
 } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { appRefsDirFor, baseDirFor, migrationsDirFor } from '../migration/paths';
@@ -56,6 +57,8 @@ const FINDINGS_EXIT_CODE = 4;
  * suppresses it.
  */
 const DEFAULT_ADVANCE_REF = 'db';
+
+const CONTRACT_REF_BRIEF = `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`;
 
 interface AdvancedRef {
   readonly space: string;
@@ -408,17 +411,13 @@ export function createDbSignCommand(
     args: {
       positionals: {
         contract: positional.optionalString({
-          brief: 'Contract reference (hash, prefix, ref name, or migration dir name)',
+          brief: CONTRACT_REF_BRIEF,
           placeholder: 'contract',
         }),
       },
       flags: {
         db: dbFlag,
-        contract: flag.string({
-          brief:
-            'Contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
-          placeholder: 'contract',
-        }),
+        contract: flag.string({ brief: CONTRACT_REF_BRIEF, placeholder: 'contract' }),
         advanceRef: flag.string({
           brief: 'Advance the named ref to the post-command contract hash',
           placeholder: 'name',
@@ -466,6 +465,7 @@ export function createDbSignCommand(
           config: ctx.config,
           migrationsDir,
           refInput: contractRef,
+          argument: 'the contract argument',
           contractPathAbsolute: emitted.value.path,
           fallbackToEmitted: true,
         });

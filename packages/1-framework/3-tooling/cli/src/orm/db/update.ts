@@ -10,7 +10,10 @@ import {
 } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
-import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
+import {
+  type ResolveContractRefToSnapshotSuccess,
+  resolveContractRefToSnapshot,
+} from '../../control-api/operations/contract-snapshot-resolution';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -18,14 +21,16 @@ import {
   NO_REF_ADVANCEMENT,
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
+import { retryCommandFor } from '../../control-api/operations/ref-resolution';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { baseDirFor } from '../migration/paths';
+import { baseDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -136,7 +141,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         db: dbFlag,
         dryRun: flag.boolean({ brief: 'Preview the planned operations without applying them' }),
         to: flag.string({
-          brief: 'Contract to update to (hash, prefix, ref name, migration dir name, or ./path)',
+          brief: `Contract to update to (${RECORDED_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -148,35 +153,40 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
       const startedAt = Date.now();
+      let destination: ResolveContractRefToSnapshotSuccess | undefined;
+      if (args.flags.to !== undefined) {
+        const resolved = await resolveContractRefToSnapshot({
+          config: ctx.config,
+          migrationsDir: migrationsDirFor(ctx.config),
+          refInput: args.flags.to,
+          argument: '--to',
+          fallbackToEmitted: false,
+        });
+        if (!resolved.ok) {
+          return notOk(normalizeError(resolved.failure));
+        }
+        destination = resolved.value;
+      }
+
       const prepared = await prepareMigrationRun({
         config: ctx.config,
         cwd: ctx.cwd,
         db: args.flags.db,
         commandName: 'db update',
         createClient,
+        retryCommand: retryCommandFor({
+          commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
+          to: args.flags.to,
+          advanceRef: args.flags.advanceRef,
+          canRunOffline: false,
+        }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);
       }
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
-
-      let contractJson = prepared.value.contractJson;
-      let snapshotContractPath = contractPath;
-      if (args.flags.to !== undefined) {
-        const resolved = await resolveContractRefToSnapshot({
-          config: ctx.config,
-          migrationsDir,
-          refInput: args.flags.to,
-          contractPathAbsolute: contractPath,
-          fallbackToEmitted: false,
-          missingBundleFlag: '--to',
-        });
-        if (!resolved.ok) {
-          return notOk(normalizeError(resolved.failure));
-        }
-        contractJson = resolved.value.contractJson;
-        snapshotContractPath = resolved.value.contractJsonPath;
-      }
+      const contractJson = destination?.contractJson ?? prepared.value.contractJson;
+      const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
 
       const refName = computeRefAdvancementName({
         ...ifDefined('advanceRef', args.flags.advanceRef),

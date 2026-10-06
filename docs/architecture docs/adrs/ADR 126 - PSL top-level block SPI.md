@@ -1,6 +1,6 @@
 # ADR 126 — PSL top-level block SPI
 
-**Status:** Accepted; amended by [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). The registration SPI stands — descriptors claim keywords, pair a `discriminator` with an `entityTypes` factory, and keep the framework as the only parser — but a descriptor no longer carries a typed parameter table. The four parameter value-kinds, the descriptor-data validator, the codec-JSON value medium, and descriptor-driven printing described below are superseded: a descriptor declares its value grammar as a `spec` factory built from the shared argument combinators, validation happens by interpreting that spec after complete declaration collection, and the printer renders producer-built print documents (parsed source is never converted to text). The superseded sections are preserved as a historical record.
+**Status:** Accepted; amended by [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md). The registration SPI stands — descriptors claim keywords, pair a `discriminator` with an `entityTypes` factory, and keep the framework as the only parser — but a descriptor no longer carries a typed parameter table. The four parameter value-kinds, the descriptor-data validator, the codec-JSON value medium, and descriptor-driven printing described below are superseded: a descriptor declares its value grammar as a `spec` factory built from the shared argument combinators, validation happens by interpreting that spec after complete declaration collection, and the printer renders producer-built print documents (parsed source is never converted to text). The superseded sections are preserved as a historical record.
 **Date:** 2026-06-08
 
 ---
@@ -49,7 +49,7 @@ The constraint this addresses: PSL's keyword set was closed, so an extension tha
 
 ## Parameter value-kinds
 
-> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`structBlock` / `mapBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
+> **Superseded by [ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`structBlock` / `mapBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
 
 A parameter is one of four kinds. The split is principled, not incidental:
 
@@ -68,7 +68,7 @@ A parameter is one of four kinds. The split is principled, not incidental:
 
 ## How the framework interprets a block
 
-> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)** for the validate and print steps: validation interprets the descriptor's spec after complete declaration collection and publishes typed envelopes; the printer renders producer-built print documents without consulting the descriptor, and parsed source is never converted to text. Parse dispatch by keyword and lowering through the `discriminator`-matched factory stand.
+> **Superseded by [ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)** for the validate and print steps: validation interprets the descriptor's spec after complete declaration collection and publishes typed envelopes; the printer renders producer-built print documents without consulting the descriptor, and parsed source is never converted to text. Parse dispatch by keyword and lowering through the `discriminator`-matched factory stand.
 
 **Parse.** On an unknown top-level keyword, the framework looks it up in the `pslBlockDescriptors` registry. If a descriptor claims it, the generic parser reads the block into a `PslExtensionBlock` node — a name plus a `parameters` map keyed by parameter name. No extension code runs.
 
