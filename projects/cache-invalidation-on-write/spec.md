@@ -68,14 +68,14 @@ Inside a transaction, the SQL runtime's `wrapTransaction` ([`sql-runtime.ts`](..
 
 | What happened | Outcome |
 |---|---|
-| `commit()` resolves and every query on the transaction completed | `committed` |
-| `commit()` resolves after a query on the transaction did not complete | `unknown` |
+| `commit()` resolves and no query on the transaction failed | `committed` |
+| `commit()` resolves after a query on the transaction failed | `unknown` |
 | `rollback()` resolves, no commit attempted | `rolled-back` |
 | `rollback()` rejects, no commit attempted | `rolled-back` |
 | `commit()` rejects | `unknown` |
 | `rollback()` settles while `commit()` is pending | `unknown` |
 
-- A query did not complete when it failed, a row failed to decode, or the caller stopped reading its rows. Postgres answers `COMMIT` on a transaction that a failed statement aborted with a rollback, and the driver's `commit()` still resolves; other databases keep the transaction. `unknown` is the answer that holds on every database. The transaction learns whether each query completed from the same helpers that deliver the stage outside a transaction.
+- A query failed when the driver or a hook threw, a row failed to decode, or the signal aborted. A row stream the caller stops reading early is not a failure: it does not abort the transaction, so a commit after it fires `committed`. Postgres answers `COMMIT` on a transaction that a failed statement aborted with a rollback, and the driver's `commit()` still resolves; other databases keep the transaction. `unknown` is the answer that holds on every database. The transaction learns whether each query failed from the same helpers that deliver the stage outside a transaction.
 - `unknown` fires for every rejected `commit()`, whether or not the `rollback()` that follows succeeds. A `COMMIT` that errors may already have landed, for example when it fails on the response path. A cleanup `ROLLBACK` that succeeds proves nothing about it.
 - A rejected `rollback()` with no commit attempted fires `rolled-back`, because no `COMMIT` was sent, so none of the transaction's writes can have landed.
 - A `rollback()` after a rejected `commit()` fires nothing more. Both `withTransaction` and the ORM's `runInTransaction` call `rollback()` after a rejected `commit()`.
@@ -117,7 +117,8 @@ Hooks for transactions are a later, separate decision. Whatever their shape, the
   - a query in runtime scope, and one in connection scope, fires `committed` right after its after-hook, and `unknown` when it fails, when the caller stops reading its rows, or when the signal aborts between rows;
   - a query whose before-hook throws gets no stage, inside or outside a transaction;
   - a decode failure, a marker read failure, and an abort during the marker read fire `unknown` outside a transaction;
-  - a failing execute, a failing row stream, a decode failure, or an abandoned row stream inside a transaction makes a resolved `commit()` fire `unknown` for every plan, through `withTransaction` and by hand, and a `rollback()` still fires `rolled-back`;
+  - a failing execute, a failing row stream, or a decode failure inside a transaction makes a resolved `commit()` fire `unknown` for every plan, also when another query's row stream was abandoned, through `withTransaction` and by hand, and a `rollback()` still fires `rolled-back`;
+  - an abandoned row stream alone inside a transaction gets `committed` when `commit()` resolves;
   - prepared queries and prepared executes inside a transaction fire when it ends;
   - a query run on a hand-driven transaction after `commit()` fires its stage right after its after-hook;
   - a `rollback()` that settles while `commit()` is pending fires `unknown` once;

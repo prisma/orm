@@ -121,13 +121,13 @@ describe('runAfterTransaction', () => {
   });
 });
 
-describe('queryWithAfterTransaction', () => {
-  function recordStage(events: string[]) {
-    return async (result: AfterTransactionResult) => {
-      events.push(`afterTransaction:${result.outcome}`);
-    };
-  }
+function recordStage(events: string[]) {
+  return async (result: AfterTransactionResult, query: { readonly failed: boolean }) => {
+    events.push(`afterTransaction:${result.outcome}${query.failed ? ' failed' : ''}`);
+  };
+}
 
+describe('queryWithAfterTransaction', () => {
   async function* rows(events: string[], failure?: Error): AsyncGenerator<number> {
     events.push('row 1');
     yield 1;
@@ -160,7 +160,7 @@ describe('queryWithAfterTransaction', () => {
     });
   });
 
-  it('fires unknown once and rethrows when the rows throw', async () => {
+  it('fires unknown once, marked failed, and rethrows when the rows throw', async () => {
     const events: string[] = [];
     const failure = new Error('rows failed');
 
@@ -170,10 +170,10 @@ describe('queryWithAfterTransaction', () => {
       ),
     ).rejects.toBe(failure);
 
-    expect(events).toEqual(['row 1', 'afterTransaction:unknown']);
+    expect(events).toEqual(['row 1', 'afterTransaction:unknown failed']);
   });
 
-  it('fires unknown once when the caller stops reading', async () => {
+  it('fires unknown once, not marked failed, when the caller stops reading', async () => {
     const events: string[] = [];
 
     for await (const _row of delegate(
@@ -223,15 +223,10 @@ describe('executeWithAfterTransaction', () => {
   it('fires committed once after the operation resolves', async () => {
     const events: string[] = [];
 
-    const result = await executeWithAfterTransaction(
-      async (stage) => {
-        events.push(`afterTransaction:${stage.outcome}`);
-      },
-      async () => {
-        events.push('executed');
-        return 3;
-      },
-    );
+    const result = await executeWithAfterTransaction(recordStage(events), async () => {
+      events.push('executed');
+      return 3;
+    });
 
     expect({ result, events }).toEqual({
       result: 3,
@@ -239,22 +234,17 @@ describe('executeWithAfterTransaction', () => {
     });
   });
 
-  it('fires unknown once and rethrows when the operation rejects', async () => {
+  it('fires unknown once, marked failed, and rethrows when the operation rejects', async () => {
     const events: string[] = [];
     const failure = new Error('execute failed');
 
     await expect(
-      executeWithAfterTransaction(
-        async (stage) => {
-          events.push(`afterTransaction:${stage.outcome}`);
-        },
-        async () => {
-          throw failure;
-        },
-      ),
+      executeWithAfterTransaction(recordStage(events), async () => {
+        throw failure;
+      }),
     ).rejects.toBe(failure);
 
-    expect(events).toEqual(['afterTransaction:unknown']);
+    expect(events).toEqual(['afterTransaction:unknown failed']);
   });
 
   it('runs the operation alone when there is nothing to fire', async () => {

@@ -191,7 +191,7 @@ describe('afterTransaction on a transaction driven by hand', () => {
     });
   });
 
-  it('fires unknown at commit for a query whose row stream the caller abandoned', async () => {
+  it('fires committed at commit for a query whose row stream the caller abandoned', async () => {
     const setup = createSetup();
     const connection = await setup.runtime.connection();
     const transaction = await connection.transaction();
@@ -207,7 +207,7 @@ describe('afterTransaction on a transaction driven by hand', () => {
     const fired = setup.events.filter((event) => event.name.startsWith('afterTransaction'));
     expect(fired).toEqual([
       expect.objectContaining({
-        name: 'afterTransaction:unknown',
+        name: 'afterTransaction:committed',
         planExecutionId: before?.planExecutionId,
       }),
     ]);
@@ -292,13 +292,13 @@ const incompleteQueryCases: ReadonlyArray<IncompleteQueryCase> = [
     },
   },
   {
-    title: 'the caller stops reading the rows',
-    failures: {},
+    title: 'the caller stops reading one row stream and the driver fails an execute',
+    failures: { execute: new Error('execute failed') },
     run: async (tx) => {
-      await tx.execute(rawPlan('update t set x = 1'));
       for await (const _row of tx.query(rawPlan('select 1'))) {
         break;
       }
+      await expect(tx.execute(rawPlan('update t set x = 1'))).rejects.toThrow('execute failed');
     },
   },
 ];

@@ -240,11 +240,16 @@ export async function runAfterTransaction<TExec extends ExecutionPlan>(
   }
 }
 
+type FireAfterTransaction = (
+  result: AfterTransactionResult,
+  query: { readonly failed: boolean },
+) => Promise<void>;
+
 /**
- * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading, including before the first row. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
+ * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading, including before the first row. The second argument tells the two `unknown` cases apart: `failed` is true only when the stream threw. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
  */
 export function queryWithAfterTransaction<Row>(
-  fireAfterTransaction: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+  fireAfterTransaction: FireAfterTransaction | undefined,
   rows: () => AsyncIterable<Row>,
 ): AsyncIterable<Row> {
   return fireAfterTransaction === undefined
@@ -253,7 +258,7 @@ export function queryWithAfterTransaction<Row>(
 }
 
 function rowsThenAfterTransaction<Row>(
-  fireAfterTransaction: (result: AfterTransactionResult) => Promise<void>,
+  fireAfterTransaction: FireAfterTransaction,
   rows: () => AsyncIterable<Row>,
 ): AsyncIterable<Row> {
   return {
@@ -263,7 +268,7 @@ function rowsThenAfterTransaction<Row>(
       const fireIfStoppedBeforeStart = async (): Promise<void> => {
         if (started) return;
         started = true;
-        await fireAfterTransaction({ outcome: 'unknown' });
+        await fireAfterTransaction({ outcome: 'unknown' }, { failed: false });
       };
       return {
         next: () => {
@@ -284,23 +289,27 @@ function rowsThenAfterTransaction<Row>(
 }
 
 async function* streamThenAfterTransaction<Row>(
-  fireAfterTransaction: (result: AfterTransactionResult) => Promise<void>,
+  fireAfterTransaction: FireAfterTransaction,
   rows: () => AsyncIterable<Row>,
 ): AsyncGenerator<Row, void, unknown> {
   let completed = false;
+  let failed = false;
   try {
     yield* rows();
     completed = true;
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' });
+    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' }, { failed });
   }
 }
 
 /**
- * Runs `execute()` and then calls `fireAfterTransaction` exactly once: with `committed` when it resolves, and with `unknown` when it rejects.
+ * Runs `execute()` and then calls `fireAfterTransaction` exactly once: with `committed` when it resolves, and with `unknown` and `failed: true` when it rejects.
  */
 export async function executeWithAfterTransaction<T>(
-  fireAfterTransaction: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+  fireAfterTransaction: FireAfterTransaction | undefined,
   execute: () => Promise<T>,
 ): Promise<T> {
   if (fireAfterTransaction === undefined) return execute();
@@ -310,7 +319,10 @@ export async function executeWithAfterTransaction<T>(
     completed = true;
     return result;
   } finally {
-    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' });
+    await fireAfterTransaction(
+      { outcome: completed ? 'committed' : 'unknown' },
+      { failed: !completed },
+    );
   }
 }
 

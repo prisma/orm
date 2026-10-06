@@ -163,8 +163,14 @@ export interface TransactionContext extends RuntimeQueryable {
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
 
 type FireAfterTransaction = (result: AfterTransactionResult) => Promise<void>;
-// Remembers a query's afterTransaction hooks on an open transaction, and returns what the query calls when it ends, which tells the transaction whether the query completed.
-type RememberOnTransaction = (fireAfterTransaction: FireAfterTransaction) => FireAfterTransaction;
+
+type ReportQueryEnd = (
+  result: AfterTransactionResult,
+  query: { readonly failed: boolean },
+) => Promise<void>;
+
+// Remembers a query's afterTransaction hooks on an open transaction, and returns what the query calls when it ends, which tells the transaction whether the query failed.
+type RememberOnTransaction = (fireAfterTransaction: FireAfterTransaction) => ReportQueryEnd;
 
 function isExecutionPlan(plan: SqlExecutionPlan | SqlQueryPlan): plan is SqlExecutionPlan {
   return 'sql' in plan;
@@ -429,12 +435,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.#inFlight.begin();
   }
 
-  // Returns what to call when the query ends. Outside a transaction that fires the query's hooks. On an open transaction the hooks are remembered until it ends, and the query's end only tells the transaction whether it completed.
+  // Returns what to call when the query ends. Outside a transaction that fires the query's hooks. On an open transaction the hooks are remembered until it ends, and the query's end only tells the transaction whether it failed.
   private scheduleAfterTransaction(
     queryable: SqlQueryable,
     exec: SqlExecutionPlan,
     ctx: RuntimeMiddlewareContext,
-  ): FireAfterTransaction | undefined {
+  ): ReportQueryEnd | undefined {
     const fireAfterTransaction = this.afterTransactionHooks(exec, ctx);
     const rememberOnTransaction = this.#openTransactions.get(queryable);
     if (fireAfterTransaction === undefined || rememberOnTransaction === undefined) {
@@ -1001,11 +1007,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
    */
   protected wrapTransaction(driverTx: SqlTransaction): RuntimeTransaction {
     const awaitingTransactionEnd: FireAfterTransaction[] = [];
-    let aQueryDidNotComplete = false;
+    let aQueryFailed = false;
     this.#openTransactions.set(driverTx, (fireAfterTransaction) => {
       awaitingTransactionEnd.push(fireAfterTransaction);
-      return async ({ outcome }) => {
-        if (outcome !== 'committed') aQueryDidNotComplete = true;
+      return async (_result, { failed }) => {
+        if (failed) aQueryFailed = true;
       };
     });
     let commitAttempted = false;
@@ -1030,7 +1036,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           await end('unknown');
           throw error;
         }
-        await end(aQueryDidNotComplete ? 'unknown' : 'committed');
+        await end(aQueryFailed ? 'unknown' : 'committed');
       },
       async rollback(): Promise<void> {
         try {

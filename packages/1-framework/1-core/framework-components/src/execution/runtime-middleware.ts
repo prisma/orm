@@ -305,7 +305,7 @@ export interface RuntimeMiddleware<
    * outcome. Outside a transaction it fires when the query ends: `committed`
    * when it completed, `unknown` when it failed or the caller stopped reading
    * its rows. Inside one, a resolved commit reports `unknown` when one of the
-   * transaction's queries did not complete, and when the transaction ends
+   * transaction's queries failed, and when the transaction ends
    * while the query still runs, this fires before the query's after-hook.
    * Receives the same plan and context as `afterQuery` or
    * `afterExecute`. The runner logs and swallows thrown errors. The hook must
