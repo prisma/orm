@@ -2,8 +2,11 @@ import type {
   AggregateResult,
   AggregateSelector,
   CodecField,
+  CodecListField,
   Collection,
   CollectionRowOf,
+  DeclaredField,
+  FieldScope,
   Filtered,
   Ordered,
 } from '@prisma/orm-postgres/orm-client';
@@ -14,6 +17,8 @@ import {
   filterPosts,
   firstPage,
   type GenericLibrary,
+  labelled,
+  labelledAs,
   notExpired,
   type PostLibrary,
   type PrivateLibrary,
@@ -161,4 +166,25 @@ export function queryFragments(now: Temporal.Instant) {
     title: string;
     user: UserRow;
   }>();
+}
+
+export function listFragments() {
+  expectTypeOf(labelledAs(['a'])).toEqualTypeOf<
+    (row: {
+      labels: CodecListField<Contract, 'pg/text@1'>;
+    }) => ReturnType<ReturnType<typeof labelledAs>>
+  >();
+  // @ts-expect-error Post has no labels field
+  posts.where(labelledAs(['a']));
+  expectTypeOf(labelled(['a'])).toEqualTypeOf<
+    FieldScope<
+      Contract,
+      {
+        readonly labels: DeclaredField<'pg/text@1', false, { readonly elementNullable: false }>;
+      },
+      { readonly hasWhere: true; readonly hasOrderBy: boolean }
+    >
+  >();
+  // @ts-expect-error Post has no list field labels
+  posts.apply(labelled(['a']));
 }

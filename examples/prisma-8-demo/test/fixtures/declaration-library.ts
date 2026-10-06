@@ -2,6 +2,7 @@ import { field } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
   type CodecField,
+  type CodecListField,
   Collection,
   type Filtered,
   orderByField,
@@ -15,6 +16,11 @@ type ExpiresAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
 export const notExpired = (now: Temporal.Instant) => (row: { expiresAt: ExpiresAt }) =>
   row.expiresAt.gt(now);
 
+type Labels = CodecListField<Contract, 'pg/text@1'>;
+
+export const labelledAs = (labels: readonly string[]) => (row: { labels: Labels }) =>
+  row.labels.eq(labels);
+
 declare const runtime: Runtime;
 declare const context: ExecutionContext<Contract>;
 
@@ -27,6 +33,11 @@ export const titleSummary = client.public.Post.scope((posts) =>
 export const firstPage = client.scope({ title: field.text() }, (rows) => rows.limit(10).offset(0));
 
 export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.apply(unexpired(now));
+
+export const labelled = (labels: readonly string[]) =>
+  client.scope({ labels: field.text().many() }, (rows) =>
+    rows.where((row) => row.labels.eq(labels)),
+  );
 
 export const unexpired = (now: Temporal.Instant) =>
   client.scope({ expiresAt: field.temporal.timestamptz() }, (rows) =>

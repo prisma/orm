@@ -38,6 +38,7 @@ export type {
   AggregateSelector,
   AggregateSpec,
   CodecField,
+  CodecListField,
   CollectionContext,
   CollectionModelName,
   CollectionState,
