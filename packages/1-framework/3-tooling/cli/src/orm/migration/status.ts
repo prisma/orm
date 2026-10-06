@@ -415,11 +415,7 @@ export const migrationStatusCommand = defineOrmCommand({
           : undefined;
       const markerDiverged =
         readMarker !== undefined &&
-        !isInSpaceHistory(readMarker.storageHash, {
-          graph,
-          headHash: space.headRef?.hash,
-          isExtension: !isAppSpace,
-        });
+        !isInSpaceHistory(readMarker.storageHash, { graph, headHash: space.headRef?.hash });
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };

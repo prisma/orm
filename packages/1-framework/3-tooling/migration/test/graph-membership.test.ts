@@ -58,22 +58,22 @@ describe('isGraphNode', () => {
 describe('isInSpaceHistory', () => {
   it('counts a node of the space graph', () => {
     const graph = reconstructGraph(chain([E, 'aaa', 'm1']));
-    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: false })).toBe(true);
+    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa' })).toBe(true);
   });
 
-  it('counts the head of an extension space that ships no migrations', () => {
+  it('counts the head of a space that has no migrations', () => {
     const graph = reconstructGraph([]);
-    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: true })).toBe(true);
+    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa' })).toBe(true);
   });
 
-  it('does not count the head of an app space that has no migrations', () => {
+  it('does not count another hash in a space that has no migrations', () => {
     const graph = reconstructGraph([]);
-    expect(isInSpaceHistory('aaa', { graph, headHash: 'aaa', isExtension: false })).toBe(false);
+    expect(isInSpaceHistory('bbb', { graph, headHash: 'aaa' })).toBe(false);
   });
 
-  it('does not count a head that is not a node when the extension space has migrations', () => {
+  it('does not count a head that is not a node when the space has migrations', () => {
     const graph = reconstructGraph(chain([E, 'aaa', 'm1']));
-    expect(isInSpaceHistory('bbb', { graph, headHash: 'bbb', isExtension: true })).toBe(false);
+    expect(isInSpaceHistory('bbb', { graph, headHash: 'bbb' })).toBe(false);
   });
 });
 

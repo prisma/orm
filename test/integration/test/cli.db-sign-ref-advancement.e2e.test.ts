@@ -144,7 +144,7 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'migration status warns after signing a project with no migrations, as db migrate refuses',
+      'migration status reports up to date after signing',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const ctx = await setupInferredProject(connectionString, createTempDir);
@@ -161,9 +161,7 @@ withTempDir(({ createTempDir }) => {
             targetContract: signedHash,
             migrations: [],
           });
-          expect(statusJson.diagnostics?.map((diagnostic) => diagnostic.code)).toEqual([
-            'MIGRATION.MARKER_NOT_IN_HISTORY',
-          ]);
+          expect(statusJson.diagnostics ?? []).toEqual([]);
         });
       },
       timeouts.spinUpPpgDev,

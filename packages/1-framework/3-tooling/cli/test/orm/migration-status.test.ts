@@ -120,9 +120,21 @@ describe('migration status', () => {
     });
   });
 
-  it('warns about an app marker when the app space has no migrations', async () => {
+  it('stays quiet when the app space has no migrations and the marker is the emitted contract', async () => {
     const project = await createOfflineProject({ storageHash: HASH_HEAD });
     const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.diagnostics ?? []).toEqual([]);
+  });
+
+  it('warns when the app space has no migrations and the marker is another contract', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    const db = fakeDatabase({ markers: markersAt(HASH_UNKNOWN) });
 
     const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
       cwd: project.dir,
