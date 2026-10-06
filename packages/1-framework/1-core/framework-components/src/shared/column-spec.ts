@@ -40,7 +40,7 @@ export interface CodecDescriptorRef<CodecId extends string = string> {
 }
 
 /**
- * What a field builder declares about its field: the descriptor of the field's type, when the builder names one, and whether the value may be null. Readers that only need the codec and the nullability read this instead of the builder's own type.
+ * What a field builder declares about its field: the descriptor of the field's type, when the builder names one, whether the value may be null, and whether the field is a list. Readers that only need the codec, the nullability and the list kind read this instead of the builder's own type.
  */
 export interface ScalarFieldDeclaration<
   Descriptor extends CodecDescriptorRef = CodecDescriptorRef,
@@ -48,6 +48,7 @@ export interface ScalarFieldDeclaration<
 > {
   readonly descriptor?: Descriptor | undefined;
   readonly nullable: Nullable;
+  readonly many?: boolean | undefined;
 }
 
 /** A field builder, read through the declaration its `build()` returns. */

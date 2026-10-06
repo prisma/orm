@@ -2335,6 +2335,8 @@ export class CollectionBase<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
+   * The row is the one `first()` returns, so an order and an offset choose it. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit or an offset.
+   *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
    * The callback receives a mutator exposing `create(...)`, `connect(...)`, and `disconnect(...)`.
@@ -2376,7 +2378,6 @@ export class CollectionBase<
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
-    this.#assertNoLimitOrOffset('update');
     assertReturningCapability(this.contract, 'update()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
 
@@ -2391,6 +2392,7 @@ export class CollectionBase<
         >(data),
       )
     ) {
+      this.#assertNestedUpdateHasNoOrderLimitOrOffset();
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
         runtime: this.ctx.runtime,
@@ -2579,7 +2581,7 @@ export class CollectionBase<
    * Write terminal: delete a single matching row — the first one the
    * filter matches — and return it (or `null` when no row matched).
    * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error.
+   * unfiltered collection is a type error. The row is the one `first()` returns, so an order and an offset choose it.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2602,7 +2604,11 @@ export class CollectionBase<
       if (!identityWhere) {
         return null;
       }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
+      const narrowed = scoped.#clone({
+        filters: [identityWhere],
+        limit: undefined,
+        offset: undefined,
+      });
       const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
       return rows[0] ?? null;
     });
@@ -2654,6 +2660,23 @@ export class CollectionBase<
         why: `${method} changes every row that matches the filter. The statement it runs cannot apply a limit or an offset, so they would be ignored and more rows would change than the chain asks for. A scope applied with apply can add them without showing them at the call site.`,
         fix: `Remove limit() and offset() before ${method}, or read the rows first and change them by their ids.`,
         meta: { model: this.modelName, method, limit, offset },
+      },
+    );
+  }
+
+  #assertNestedUpdateHasNoOrderLimitOrOffset(): void {
+    const { orderBy, limit, offset } = this.state;
+    const ordered = orderBy !== undefined && orderBy.length > 0;
+    if (!ordered && limit === undefined && offset === undefined) {
+      return;
+    }
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `Cannot update ${this.modelName} with a relation mutation: the collection has an order, a limit or an offset`,
+      {
+        why: 'An update that changes a relation finds its row by the filter alone. It would ignore the order, the limit and the offset, and could change another row than first() returns. A scope applied with apply can add them without showing them at the call site.',
+        fix: 'Remove orderBy(), limit() and offset() before update, or filter to the one row, such as by its id.',
+        meta: { model: this.modelName, method: 'update', ordered, limit, offset },
       },
     );
   }

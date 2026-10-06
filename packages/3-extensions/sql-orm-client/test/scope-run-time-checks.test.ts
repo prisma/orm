@@ -27,16 +27,21 @@ const notDeleted = () =>
 
 describe('a scope for any model checks what it is given and what its body returns', () => {
   it.each([
-    ['undefined', undefined],
-    ['null', null],
-    ['a number', 3],
-    ['an object', { modelName: 'Post' }],
-  ])('refuses %s as the collection', (description, value) => {
+    ['undefined', 'undefined', undefined],
+    ['null', 'null', null],
+    ['a number', 'a number', 3],
+    ['an object without ctx', 'an object', { modelName: 'Post' }],
+    [
+      'an object whose ctx is empty',
+      'an object',
+      { ctx: {}, modelName: 'Post', namespaceId: 'public' },
+    ],
+  ])('refuses %s as the collection', (_title, received, value) => {
     expect(() => untyped(notDeleted())(value)).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: 'Cannot apply the scope: it was not given a collection',
-        why: `A scope is applied to a collection, such as db.orm.public.Post; received ${description}.`,
+        why: `A scope is applied to a collection, such as db.orm.public.Post; received ${received}.`,
       }),
     );
   });
@@ -158,14 +163,11 @@ describe('writes refuse a limit or an offset they would ignore', () => {
     );
   });
 
-  it('refuses update, updateAndCount and deleteAndCount after a limit', async () => {
+  it('refuses updateAndCount and deleteAndCount after a limit', async () => {
     const { plain, runtime } = createScopesOrm();
     const limited = plain.Post.where((p) => p.views.gte(1)).limit(3);
-    await expect(limited.update({ title: 'x' })).rejects.toMatchObject({
-      code: 'ORM.ARGUMENT_INVALID',
-      message: 'Cannot update Post: the collection has a limit or an offset',
-    });
     await expect(limited.updateAndCount({ title: 'x' })).rejects.toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
       message: 'Cannot updateAndCount Post: the collection has a limit or an offset',
     });
     await expect(limited.deleteAndCount()).rejects.toMatchObject({
@@ -181,6 +183,62 @@ describe('writes refuse a limit or an offset they would ignore', () => {
         .orderBy((p) => p.views.desc())
         .deleteAll(),
     ).not.toThrow();
+  });
+});
+
+type PlainPublic = ReturnType<typeof createScopesOrm>['plain'];
+
+describe('update and delete change the row first() returns', () => {
+  const thirdByViews = (plain: PlainPublic) =>
+    plain.Post.where((p) => p.views.gte(1))
+      .orderBy((p) => p.views.desc())
+      .offset(2);
+
+  it('update finds its row with the order and the offset', async () => {
+    const { plain, runtime } = createScopesOrm();
+    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x' }]]);
+    await thirdByViews(plain).update({ title: 'x' });
+    await thirdByViews(plain).select('id').first();
+    const [lookup, , first] = runtime.executions;
+    expect(lookup?.plan.ast).toMatchObject({ offset: 2, limit: 1 });
+    expect(lookup?.plan.ast).toEqual(first?.plan.ast);
+  });
+
+  it('delete finds its row with the order and the offset', async () => {
+    const { plain, runtime } = createScopesOrm();
+    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x' }]]);
+    await thirdByViews(plain).delete();
+    await thirdByViews(plain).select('id').first();
+    const [lookup, , first] = runtime.executions;
+    expect(lookup?.plan.ast).toMatchObject({ offset: 2, limit: 1 });
+    expect(lookup?.plan.ast).toEqual(first?.plan.ast);
+  });
+
+  it('delete with an include reads the row it deletes without the offset', async () => {
+    const { plain, runtime } = createScopesOrm();
+    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x', user: null }]]);
+    await thirdByViews(plain).include('user').delete();
+    const [, readBack] = runtime.executions;
+    expect(readBack?.plan.ast).toMatchObject({ offset: undefined });
+  });
+
+  it.each([
+    [
+      'an order',
+      (plain: PlainPublic) => plain.Post.where({ userId: 1 }).orderBy((p) => p.id.asc()),
+    ],
+    ['a limit', (plain: PlainPublic) => plain.Post.where({ userId: 1 }).limit(1)],
+    ['an offset', (plain: PlainPublic) => plain.Post.where({ userId: 1 }).offset(2)],
+  ])('refuses an update that changes a relation after %s', async (_, chain) => {
+    const { plain, runtime } = createScopesOrm();
+    await expect(
+      chain(plain).update({ comments: (comments) => comments.connect([{ id: 1 }]) }),
+    ).rejects.toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'Cannot update Post with a relation mutation: the collection has an order, a limit or an offset',
+    });
+    expect(runtime.executions).toEqual([]);
   });
 });
 

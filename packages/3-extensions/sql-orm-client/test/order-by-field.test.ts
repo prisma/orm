@@ -261,11 +261,16 @@ describe('orderByField', () => {
     });
 
     it.each([
-      ['undefined', undefined],
-      ['null', null],
-      ['a number', 3],
-      ['an object', { modelName: 'Post' }],
-    ])('refuses %s as the collection', (description, collection) => {
+      ['undefined', 'undefined', undefined],
+      ['null', 'null', null],
+      ['a number', 'a number', 3],
+      ['an object without ctx', 'an object', { modelName: 'Post' }],
+      [
+        'an object whose ctx is empty',
+        'an object',
+        { ctx: {}, modelName: 'Post', namespaceId: 'public', tableName: 'posts' },
+      ],
+    ])('refuses %s as the collection', (_title, received, collection) => {
       expect(() =>
         orderByField(
           collection as unknown as ReturnType<typeof createChainingOrm>['db']['Post'],
@@ -277,7 +282,7 @@ describe('orderByField', () => {
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message: 'Cannot order: orderByField was not given a collection',
-          why: `orderByField takes the collection it orders, such as db.orm.public.Post; received ${description}.`,
+          why: `orderByField takes the collection it orders, such as db.orm.public.Post; received ${received}.`,
         }),
       );
     });

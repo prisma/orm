@@ -89,6 +89,7 @@ describe('client.scope', () => {
           field: 'deletedAt',
           codecId: 'pg/timestamptz-temporal@1',
           nullable: true,
+          many: false,
         },
       }),
     );
@@ -148,6 +149,62 @@ describe('client.scope', () => {
     );
   });
 
+  describe('list fields', () => {
+    it('refuses a declaration of one value for a list field', () => {
+      const { client, plain, runtime } = scopes();
+      const labelled = client.scope({ labels: field.column(textColumn) }, (rows) => rows.limit(1));
+      expect(() => untyped(labelled)(plain.Tag)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.FIELD_UNKNOWN',
+          message: 'Cannot apply a scope to Tag: its field labels does not match the declaration',
+          why: 'The scope was declared for models that have a field labels with codec pg/text@1 that is never null. Tag.labels is a list with codec pg/text@1 and is never null.',
+          fix: 'Apply the scope to a model whose labels field holds one value, or declare labels as a list with .many() or many: true.',
+          meta: {
+            model: 'Tag',
+            namespace: 'public',
+            field: 'labels',
+            codecId: 'pg/text@1',
+            nullable: false,
+            many: false,
+          },
+        }),
+      );
+      expect(runtime.executions).toEqual([]);
+    });
+
+    it('refuses a list declaration for a field that holds one value', () => {
+      const { client, plain } = scopes();
+      const titles = client.scope({ title: field.column(textColumn).many() }, (rows) =>
+        rows.limit(1),
+      );
+      expect(() => untyped(titles)(plain.Post)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.FIELD_UNKNOWN',
+          why: 'The scope was declared for models that have a list field title with codec pg/text@1 that is never null. Post.title has codec pg/text@1 and is never null.',
+          fix: 'Apply the scope to a model whose title field is a list, or declare title without .many() or many: true.',
+        }),
+      );
+    });
+
+    it('applies a list declaration to a list field', async () => {
+      const { client, plain, runtime } = scopes();
+      const built = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
+        rows.where((r) => r.labels.eq(['a'])),
+      );
+      const literal = client.scope(
+        { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
+        (rows) => rows.where((r) => r.labels.eq(['a'])),
+      );
+      await plain.Tag.where((t) => t.labels.eq(['a'])).all();
+      await plain.Tag.apply(built).all();
+      await plain.Tag.apply(literal).all();
+      const [inline, fromBuilder, fromLiteral] = runtime.executions;
+      expect(fromBuilder?.plan.ast).toBeDefined();
+      expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
+      expect(fromLiteral?.plan.ast).toEqual(inline?.plan.ast);
+    });
+  });
+
   describe('input from a JavaScript caller', () => {
     const scopeOf = (fields: unknown, body: unknown) => () => {
       const { client } = scopes();
@@ -176,13 +233,18 @@ describe('client.scope', () => {
       ['null', null, 'null'],
       ['a number', 3, 'a number'],
       ['an object without nullable', { codecId: 'pg/text@1' }, 'an object'],
+      [
+        'an object whose many is not a boolean',
+        { codecId: 'pg/text@1', nullable: false, many: 'yes' },
+        'an object',
+      ],
     ])('refuses %s as a field declaration', (_label, declaration, received) => {
       expect(scopeOf({ title: declaration }, validBody)).toThrow(
         expect.objectContaining({
           code: 'ORM.ARGUMENT_INVALID',
           message:
             'Cannot define the scope: the declaration of field title is not a field builder or { codecId, nullable }',
-          why: `Each field of a scope is declared with a field builder or with an object that has a string codecId and a boolean nullable; received ${received} for title.`,
+          why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: true; received ${received} for title.`,
         }),
       );
     });

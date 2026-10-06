@@ -385,6 +385,19 @@ export type CodecField<
   > &
   CodecOperations<TContract, CodecId>;
 
+/** The model accessor's type for a list field whose elements have the codec `CodecId`, as a scope for any model declares it with `.many()`. */
+export type CodecListField<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends keyof ExtractCodecTypes<TContract> & string,
+  Nullable extends boolean = false,
+> = Expression<{ codecId: CodecId; nullable: Nullable }> &
+  ComparisonMethods<
+    ReadonlyArray<CodecOutput<TContract, CodecId>> | (Nullable extends true ? null : never),
+    CodecTraits<TContract, CodecId>,
+    CodecId
+  > &
+  CodecOperations<TContract, CodecId>;
+
 function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
   const expression = predicateExpression(value);
   if (expression !== undefined) return expression;

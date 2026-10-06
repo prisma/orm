@@ -18,6 +18,7 @@ import { hasTrait, resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import type {
   CodecField,
+  CodecListField,
   FieldCodecId,
   FieldNullable,
   FieldsOf,
@@ -25,14 +26,26 @@ import type {
   OrderableFieldNames,
 } from './types';
 
-/** A field declared by its codec and nullability, for a scope written without a field builder. */
+/** A field declared by its codec and nullability, for a scope written without a field builder. `many: true` declares a list field. */
 export interface DeclaredField<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
+  Many extends boolean = false,
 > {
   readonly codecId: CodecId;
   readonly nullable: Nullable;
+  readonly many?: Many | undefined;
 }
+
+type AnyDeclaredField = DeclaredField<string, boolean, boolean>;
+
+type DeclaredMany<Field> = Field extends { readonly many?: false | undefined } ? false : true;
+
+type BuiltMany<Builder> = Builder extends { build(): { readonly many?: infer Many } }
+  ? true extends Many
+    ? true
+    : false
+  : false;
 
 /** A field builder from the contract DSL, such as `field.text().optional()`, with the codec and nullability it declares. */
 export type ScopeFieldBuilder<
@@ -42,14 +55,14 @@ export type ScopeFieldBuilder<
 
 /** The fields a scope for any model needs, each declared with a field builder or a {@link DeclaredField}. */
 export type ScopeFieldDeclarations<CodecId extends string = string> = Readonly<
-  Record<string, ScopeFieldBuilder<CodecId> | DeclaredField<CodecId>>
+  Record<string, ScopeFieldBuilder<CodecId> | DeclaredField<CodecId, boolean, boolean>>
 >;
 
 type DeclarationField<Declaration> =
   Declaration extends ScopeFieldBuilder<infer Id, infer Nullable>
-    ? DeclaredField<Id, Nullable>
-    : Declaration extends DeclaredField<infer Id, infer Nullable>
-      ? DeclaredField<Id, Nullable>
+    ? DeclaredField<Id, Nullable, BuiltMany<Declaration>>
+    : Declaration extends DeclaredField<infer Id, infer Nullable, boolean>
+      ? DeclaredField<Id, Nullable, Declaration extends { readonly many: true } ? true : false>
       : never;
 
 /** The declared fields with each builder read as its codec and nullability. */
@@ -62,11 +75,13 @@ export type DeclaredFields<Declarations extends ScopeFieldDeclarations> = {
 /** The model accessor of a scope for any model: only the declared fields, typed by codec. */
 export type ScopeModelAccessor<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, DeclaredField>>,
+  Fields extends Readonly<Record<string, AnyDeclaredField>>,
 > = {
   readonly [K in keyof Fields]: Fields[K]['codecId'] extends keyof ExtractCodecTypes<TContract> &
     string
-    ? CodecField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
+    ? DeclaredMany<Fields[K]> extends true
+      ? CodecListField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
+      : CodecField<TContract, Fields[K]['codecId'], Fields[K]['nullable']>
     : never;
 };
 
@@ -93,22 +108,26 @@ export interface ScopeCollection<Row, Facts extends ScopeFacts> {
   offset(n: number): ScopeCollection<Row, Facts>;
 }
 
-/** The declared fields that the model lacks, or has with another codec or nullability. For a union of models, the fields any of them lacks. */
+type FieldMany<Field> = Field extends { readonly many: true } ? true : false;
+
+/** The declared fields that the model lacks, or has with another codec or nullability, or as a list where the declaration has one value or the reverse. For a union of models, the fields any of them lacks. */
 export type MissingScopeFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
-  Fields extends Readonly<Record<string, DeclaredField>>,
+  Fields extends Readonly<Record<string, AnyDeclaredField>>,
 > = ModelName extends string
   ? {
       [K in keyof Fields & string]: K extends keyof FieldsOf<TContract, ModelName, NsId>
         ? [
             FieldCodecId<TContract, ModelName, K, NsId>,
             FieldNullable<TContract, ModelName, K, NsId>,
-          ] extends [Fields[K]['codecId'], Fields[K]['nullable']]
-          ? [Fields[K]['codecId'], Fields[K]['nullable']] extends [
+            FieldMany<FieldsOf<TContract, ModelName, NsId>[K]>,
+          ] extends [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMany<Fields[K]>]
+          ? [Fields[K]['codecId'], Fields[K]['nullable'], DeclaredMany<Fields[K]>] extends [
               FieldCodecId<TContract, ModelName, K, NsId>,
               FieldNullable<TContract, ModelName, K, NsId>,
+              FieldMany<FieldsOf<TContract, ModelName, NsId>[K]>,
             ]
             ? never
             : K
@@ -117,21 +136,24 @@ export type MissingScopeFields<
     }[keyof Fields & string]
   : never;
 
-type ScopeFieldsCheck<
+/** What a scope for any model requires of its receiver beyond the collection's own members: nothing when the model has the declared fields, otherwise a property whose name says why it is refused. */
+export type ScopeFieldsCheck<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
-  Fields extends Readonly<Record<string, DeclaredField>>,
-> = [MissingScopeFields<TContract, ModelName, NsId, Fields>] extends [never]
-  ? unknown
-  : {
-      readonly 'the model has no field with the codec and nullability the scope declares': MissingScopeFields<
-        TContract,
-        ModelName,
-        NsId,
-        Fields
-      >;
-    };
+  Fields extends Readonly<Record<string, AnyDeclaredField>>,
+> = string extends ModelName
+  ? { readonly 'the scope could not read the model of the collection from its type': ModelName }
+  : [MissingScopeFields<TContract, ModelName, NsId, Fields>] extends [never]
+    ? unknown
+    : {
+        readonly 'the model has no field that matches the declaration in the scope': MissingScopeFields<
+          TContract,
+          ModelName,
+          NsId,
+          Fields
+        >;
+      };
 
 /** A collection plus the filter and order a scope's body established. */
 export type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends true
@@ -145,7 +167,7 @@ export type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends
  */
 export interface FieldScope<
   TContract extends Contract<SqlStorage>,
-  Fields extends Readonly<Record<string, DeclaredField>>,
+  Fields extends Readonly<Record<string, AnyDeclaredField>>,
   Facts extends ScopeFacts,
 > {
   <
@@ -171,19 +193,26 @@ function isFieldBuilder(value: object): value is ScopeFieldBuilder {
   return 'build' in value && typeof value.build === 'function';
 }
 
-function isFieldSpec(value: object): value is DeclaredField {
+interface FieldSpec {
+  readonly codecId: string;
+  readonly nullable: boolean;
+  readonly many: boolean;
+}
+
+function isFieldSpec(value: object): value is DeclaredField<string, boolean, boolean> {
   return (
     'codecId' in value &&
     typeof value.codecId === 'string' &&
     'nullable' in value &&
-    typeof value.nullable === 'boolean'
+    typeof value.nullable === 'boolean' &&
+    (!('many' in value) || value.many === undefined || typeof value.many === 'boolean')
   );
 }
 
 const FIELD_DECLARATION_FIX =
-  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }.';
+  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }, adding .many() or many: true for a list.';
 
-function declaredFieldSpec(name: string, declaration: unknown): DeclaredField {
+function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
   if (typeof declaration === 'object' && declaration !== null && isFieldBuilder(declaration)) {
     const built: unknown = declaration.build();
     const descriptor =
@@ -211,25 +240,28 @@ function declaredFieldSpec(name: string, declaration: unknown): DeclaredField {
         },
       );
     }
-    return { codecId: descriptor.codecId, nullable };
+    const many = typeof built === 'object' && built !== null && 'many' in built && built.many;
+    return { codecId: descriptor.codecId, nullable, many: many === true };
   }
   if (typeof declaration === 'object' && declaration !== null && isFieldSpec(declaration)) {
-    return { codecId: declaration.codecId, nullable: declaration.nullable };
+    return {
+      codecId: declaration.codecId,
+      nullable: declaration.nullable,
+      many: declaration.many === true,
+    };
   }
   throw ormError(
     'ORM.ARGUMENT_INVALID',
     `Cannot define the scope: the declaration of field ${name} is not a field builder or { codecId, nullable }`,
     {
-      why: `Each field of a scope is declared with a field builder or with an object that has a string codecId and a boolean nullable; received ${describeReceived(declaration)} for ${name}.`,
+      why: `Each field of a scope is declared with a field builder or with an object that has a string codecId, a boolean nullable and, for a list, many: true; received ${describeReceived(declaration)} for ${name}.`,
       fix: FIELD_DECLARATION_FIX,
       meta: { field: name },
     },
   );
 }
 
-function declaredFieldSpecs(
-  declarations: unknown,
-): ReadonlyArray<readonly [string, DeclaredField]> {
+function declaredFieldSpecs(declarations: unknown): ReadonlyArray<readonly [string, FieldSpec]> {
   if (typeof declarations !== 'object' || declarations === null || Array.isArray(declarations)) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
@@ -258,6 +290,17 @@ export function assertScopeBody(body: unknown): void {
   }
 }
 
+function hasContract(ctx: object): boolean {
+  return (
+    'context' in ctx &&
+    typeof ctx.context === 'object' &&
+    ctx.context !== null &&
+    'contract' in ctx.context &&
+    typeof ctx.context.contract === 'object' &&
+    ctx.context.contract !== null
+  );
+}
+
 function isModelCollection(value: unknown): value is RuntimeModelCollection {
   return (
     typeof value === 'object' &&
@@ -265,6 +308,7 @@ function isModelCollection(value: unknown): value is RuntimeModelCollection {
     'ctx' in value &&
     typeof value.ctx === 'object' &&
     value.ctx !== null &&
+    hasContract(value.ctx) &&
     'modelName' in value &&
     typeof value.modelName === 'string' &&
     'namespaceId' in value &&
@@ -346,22 +390,29 @@ export function assertScopeResult(receiver: RuntimeModelCollection, result: unkn
   }
 }
 
+function listKindFix(name: string, declaredAsList: boolean): string {
+  return declaredAsList
+    ? `Apply the scope to a model whose ${name} field is a list, or declare ${name} without .many() or many: true.`
+    : `Apply the scope to a model whose ${name} field holds one value, or declare ${name} as a list with .many() or many: true.`;
+}
+
 function assertScopeFields(
   collection: RuntimeModelCollection,
-  fields: ReadonlyArray<readonly [string, DeclaredField]>,
+  fields: ReadonlyArray<readonly [string, FieldSpec]>,
 ): void {
   const { contract } = collection.ctx.context;
   const { modelName, namespaceId } = collection;
   const label = modelLabel(collection);
   const model = modelOf(contract, namespaceId, modelName);
   for (const [name, spec] of fields) {
-    const declared = `The scope was declared for models that have a field ${name} with codec ${spec.codecId} that ${nullability(spec.nullable)}.`;
+    const declared = `The scope was declared for models that have a ${spec.many ? 'list field' : 'field'} ${name} with codec ${spec.codecId} that ${nullability(spec.nullable)}.`;
     const meta = {
       model: modelName,
       namespace: namespaceId,
       field: name,
       codecId: spec.codecId,
       nullable: spec.nullable,
+      many: spec.many,
     };
     if (!Object.hasOwn(model?.fields ?? {}, name)) {
       throw ormError(
@@ -380,17 +431,22 @@ function assertScopeFields(
       collection.tableName,
       resolveFieldToColumn(contract, namespaceId, modelName, name),
     );
-    if (column?.codecId !== spec.codecId || column.nullable !== spec.nullable) {
-      const actual =
-        column === undefined
-          ? `${label}.${name} has no column.`
-          : `${label}.${name} has codec ${column.codecId} and ${nullability(column.nullable)}.`;
+    const columnIsList = column?.many === true;
+    const actual =
+      column === undefined
+        ? `${label}.${name} has no column.`
+        : `${label}.${name} ${columnIsList ? 'is a list with' : 'has'} codec ${column.codecId} and ${nullability(column.nullable)}.`;
+    const sameCodecAndNullability =
+      column?.codecId === spec.codecId && column.nullable === spec.nullable;
+    if (!sameCodecAndNullability || columnIsList !== spec.many) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a scope to ${label}: its field ${name} does not match the declaration`,
         {
           why: `${declared} ${actual}`,
-          fix: `Apply the scope to a model whose ${name} field has that codec and nullability, or change the declaration in the scope.`,
+          fix: sameCodecAndNullability
+            ? listKindFix(name, spec.many)
+            : `Apply the scope to a model whose ${name} field has that codec and nullability, or change the declaration in the scope.`,
           meta,
         },
       );

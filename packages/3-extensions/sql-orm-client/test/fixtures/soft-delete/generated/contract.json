@@ -205,6 +205,14 @@
                   "kind": "scalar"
                 }
               },
+              "labels": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "name": {
                 "nullable": false,
                 "type": {
@@ -218,6 +226,9 @@
               "fields": {
                 "id": {
                   "column": "id"
+                },
+                "labels": {
+                  "column": "labels"
                 },
                 "name": {
                   "column": "name"
@@ -422,6 +433,13 @@
               "uniques": []
             },
             "tags": {
+              "checks": [
+                {
+                  "expression": "array_position(\"labels\", NULL) IS NULL",
+                  "name": "tags_labels_elem_not_null_0c04ab5c",
+                  "prefix": "tags_labels_elem_not_null"
+                }
+              ],
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
@@ -430,6 +448,12 @@
                     "kind": "function"
                   },
                   "nativeType": "int4",
+                  "nullable": false
+                },
+                "labels": {
+                  "codecId": "pg/text@1",
+                  "many": true,
+                  "nativeType": "text",
                   "nullable": false
                 },
                 "name": {
@@ -479,7 +503,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "35c3067e8800fbde3262dff3e0f03d06259f1ca04376f2a3bc27847902f5ab6f"
+    "storageHash": "5737f5d3247703c74592f54df12a2fc37c415ec66316ea08e8adc6d8acde3732"
   },
   "capabilities": {
     "postgres": {

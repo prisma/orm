@@ -8,8 +8,8 @@ import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
 import type { orm } from '../src/orm';
-import type { DeclaredField, MissingScopeFields } from '../src/scopes';
-import type { CodecField } from '../src/types';
+import type { DeclaredField, MissingScopeFields, ScopeFieldsCheck } from '../src/scopes';
+import type { CodecField, ModelAccessor } from '../src/types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { Contract as ScopeNamespaceContract } from './fixtures/scope-namespace/generated/contract';
 import {
@@ -42,6 +42,7 @@ const titled = (term: string) =>
   client.scope({ title: field.column(textColumn) }, (rows) => rows.where((r) => r.title.eq(term)));
 
 declare const tasks: Collection<PolyContract, 'Task'>;
+declare const anyModel: Collection<Contract, string>;
 declare const flag: boolean;
 declare const polyClient: ReturnType<typeof orm<PolyContract>>;
 declare const scopeNamespaceClient: ReturnType<typeof orm<ScopeNamespaceContract>>;
@@ -184,7 +185,7 @@ describe('client.scope', () => {
     client.scope<typeof deletedAt, { readonly hasWhere: true; readonly hasOrderBy: true }>(
       deletedAt,
       // @ts-expect-error the body applied no filter, so it cannot be typed as filtering
-      (rows: unknown) => rows,
+      (rows) => rows,
     );
   });
 
@@ -238,6 +239,78 @@ describe('client.scope', () => {
       { title: { codecId: 'pg/text@1', nullable: false } },
       (rows: unknown) => rows,
     );
+  });
+
+  test('a receiver whose model cannot be read from its type is refused for that reason', () => {
+    type Fields = { readonly deletedAt: DeclaredField<'pg/timestamptz-temporal@1', true> };
+    expectTypeOf<
+      keyof ScopeFieldsCheck<Contract, string, string, Fields>
+    >().toEqualTypeOf<'the scope could not read the model of the collection from its type'>();
+    expectTypeOf<
+      keyof ScopeFieldsCheck<Contract, 'Tag', 'public', Fields>
+    >().toEqualTypeOf<'the model has no field that matches the declaration in the scope'>();
+    // @ts-expect-error call cannot infer the scope's type parameters, so the model cannot be read
+    notDeleted.call(undefined, plain.Post);
+    // @ts-expect-error apply cannot infer the scope's type parameters, so the model cannot be read
+    notDeleted.apply(undefined, [plain.Post]);
+    // @ts-expect-error the type of the collection names no single model
+    anyModel.apply(notDeleted);
+    expectTypeOf(notDeleted.bind(undefined)(plain.Post)).toEqualTypeOf<
+      Filtered<typeof plain.Post>
+    >();
+  });
+
+  test('a union of scopes is accepted only when their facts are the same', () => {
+    const alsoNotDeleted = client.scope(
+      { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+      (rows) => rows.where((r) => r.deletedAt.isNull()),
+    );
+    expectTypeOf(plain.Post.apply(flag ? notDeleted : alsoNotDeleted)).toEqualTypeOf<
+      Filtered<typeof plain.Post>
+    >();
+    // @ts-expect-error one scope filters and the other orders, so the union has no single result
+    plain.Post.apply(flag ? notDeleted : deletedLast);
+  });
+
+  test('a declaration of one value does not match a list field, and a list declaration matches only a list field', () => {
+    const labelled = client.scope({ labels: field.column(textColumn) }, (rows) => rows.limit(1));
+    // @ts-expect-error Tag.labels is a list of text values, not one
+    plain.Tag.apply(labelled);
+    const withLabel = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
+      rows.where((r) => {
+        expectTypeOf(r.labels.eq)
+          .parameter(0)
+          .toEqualTypeOf<Parameters<ModelAccessor<Contract, 'Tag', 'public'>['labels']['eq']>[0]>();
+        return r.labels.eq(['a']);
+      }),
+    );
+    expectTypeOf(plain.Tag.apply(withLabel)).toEqualTypeOf<Filtered<typeof plain.Tag>>();
+    const declaredList = client.scope(
+      { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
+      (rows) => rows.limit(1),
+    );
+    plain.Tag.apply(declaredList);
+    const titles = client.scope({ title: field.column(textColumn).many() }, (rows) =>
+      rows.limit(1),
+    );
+    // @ts-expect-error Post.title holds one text value, not a list
+    plain.Post.apply(titles);
+    expectTypeOf<
+      MissingScopeFields<
+        Contract,
+        'Tag',
+        'public',
+        { readonly labels: DeclaredField<'pg/text@1', false> }
+      >
+    >().toEqualTypeOf<'labels'>();
+    expectTypeOf<
+      MissingScopeFields<
+        Contract,
+        'Tag',
+        'public',
+        { readonly labels: DeclaredField<'pg/text@1', false, true> }
+      >
+    >().toBeNever();
   });
 
   test('a union of collections is accepted when every model in it has the fields', () => {

@@ -16,11 +16,12 @@ changes:
         - 'import\s*\{[^}]*\bfield\b[^}]*\}\s*from\s*[''"]@(?:prisma/orm-|internal/)postgres/contract-builder[''"]'
   - id: writes-refuse-limit-or-offset
     summary: |
-      `update`, `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` now throw `ORM.ARGUMENT_INVALID` on a collection that has a `limit` or an `offset`. These writes change every row that matches the filter; the limit and the offset were ignored, so more rows changed than the chain asked for. Remove the limit and offset before the write, or read the rows first and change them by their ids.
+      `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` now throw `ORM.ARGUMENT_INVALID` on a collection that has a `limit` or an `offset`. These writes change every row that matches the filter; the limit and the offset were ignored, so more rows changed than the chain asked for. Remove the limit and offset before the write, or read the rows first and change them by their ids. `update` with a relation callback now throws on a collection with an order, a limit or an offset, which it ignored; filter it to the one row instead. `update` and `delete` without a relation callback are unchanged: they change the row `first()` returns.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.(?:limit|offset)\s*\([^)]*\)[\s\S]{0,300}?\.(?:update|updateAll|updateAndCount|deleteAll|deleteAndCount)\s*\('
+        - '\.orderBy\s*\([\s\S]{0,300}?\.update\s*\('
 ---
 
 The `scope` change applies to the SQL ORM client only. The MongoDB ORM client did not change; skip matches in code that uses it.
@@ -47,13 +48,21 @@ An aggregate operation named `scope` is now refused with `ORM.AGGREGATE_OPERATIO
 + field.column(int8Column).default(1n)
 ```
 
-## Writes refuse a limit or an offset
+## Writes refuse a limit or an offset they would ignore
 
-`update`, `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` change every row that matches the filter. They ignored a `limit` or an `offset` on the collection, so a chain such as `db.orm.public.Post.where(...).limit(10).deleteAll()` deleted every matching row, not ten. They now throw `ORM.ARGUMENT_INVALID` instead. An order is still ignored without an error. Remove the limit and offset, or read the rows and change them by their ids:
+`updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` change every row that matches the filter. They ignored a `limit` or an `offset` on the collection, so a chain such as `db.orm.public.Post.where(...).limit(10).deleteAll()` deleted every matching row, not ten. They now throw `ORM.ARGUMENT_INVALID` instead. An order does not change which rows they change, and they still accept it. Remove the limit and offset, or read the rows and change them by their ids:
 
 ```diff
 - await db.orm.public.Post.where({ userId }).limit(10).deleteAll();
 + const ids = (await db.orm.public.Post.where({ userId }).select('id').limit(10).all()).map((p) => p.id);
 + await db.orm.public.Post.where((p) => p.id.in(ids)).deleteAll();
+```
+
+`update` and `delete` change one row, the one `first()` returns, so the order and the offset choose it; they are unchanged. The exception is `update` with a relation callback, such as `posts: (posts) => posts.connect(...)`. It finds its row by the filter alone and ignored the order, the limit and the offset, so it could change another row than the chain chose. It now throws `ORM.ARGUMENT_INVALID` on a collection with any of them. Find the row first and filter to it:
+
+```diff
+- await users.where({ teamId }).orderBy((u) => u.createdAt.asc()).update({ posts: (posts) => posts.connect([{ id: postId }]) });
++ const oldest = await users.where({ teamId }).orderBy((u) => u.createdAt.asc()).select('id').first();
++ if (oldest) await users.where({ id: oldest.id }).update({ posts: (posts) => posts.connect([{ id: postId }]) });
 ```
 

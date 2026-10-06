@@ -3,7 +3,8 @@
 // Emitted fixture for the sql-orm-client query fragment tests.
 //
 // Post and Comment have a nullable `deletedAt` with the same codec; Tag has
-// none. Post's `createdAt` has that codec without null.
+// none. Post's `createdAt` has that codec without null. Tag's `labels` is a
+// list of text values.
 
 model User {
   id    Int    @id @default(autoincrement())
@@ -39,8 +40,9 @@ model Comment {
 }
 
 model Tag {
-  id   Int    @id @default(autoincrement())
-  name String
+  id     Int      @id @default(autoincrement())
+  name   String
+  labels String[]
 
   @@map("tags")
 }
