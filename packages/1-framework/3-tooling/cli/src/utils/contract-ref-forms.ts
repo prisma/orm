@@ -18,5 +18,5 @@ export const RECORDED_OR_EMPTY_CONTRACT_REF_FORMS = listForms([
   EMPTY_CONTRACT_REF,
 ]);
 
-/** The recorded forms plus every reserved token. */
+/** The recorded forms plus every reserved reference. */
 export const ALL_CONTRACT_REF_FORMS = listForms([...RECORDED_FORMS, ...RESERVED_CONTRACT_REFS]);

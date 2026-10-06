@@ -14,19 +14,19 @@ export const WORKING_CONTRACT_REF = '@contract';
 export const LIVE_MARKER_REF = '@db';
 export const EMPTY_CONTRACT_REF = '@empty';
 
-/** The reserved tokens, in the order help text lists them. */
+/** The reserved references, in a fixed order: `@contract`, `@db`, `@empty`. */
 export const RESERVED_CONTRACT_REFS: readonly string[] = [
   WORKING_CONTRACT_REF,
   LIVE_MARKER_REF,
   EMPTY_CONTRACT_REF,
 ];
 
-/** True for a reserved token, which resolves from contract.json, the database, or the empty contract rather than from a contract recorded in the migrations directory. */
+/** True for a reserved reference, which resolves from contract.json, the database, or the empty contract rather than from a contract recorded in the migrations directory. */
 export function isReservedContractRef(input: string): boolean {
   return RESERVED_CONTRACT_REFS.includes(input);
 }
 
-/** True for `@db`, the only reserved token that needs a database read to resolve. */
+/** True for `@db`, the only reserved reference that needs a database read to resolve. */
 export function isLiveMarkerRef(input: string | undefined): boolean {
   return input === LIVE_MARKER_REF;
 }

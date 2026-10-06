@@ -7,7 +7,7 @@ export interface RefResolutionContext {
   readonly refs: Refs;
   /**
    * Hash of the on-disk contract (`contract.json`). Required to resolve the
-   * `@contract` reserved token, which is an offline-resolvable alias for
+   * `@contract` reserved reference, which is an offline-resolvable alias for
    * "the working contract the app carries."
    */
   readonly contractHash?: string;
@@ -19,18 +19,18 @@ export type ContractRefProvenance =
   | { readonly kind: 'migration-to'; readonly dirName: string }
   | { readonly kind: 'migration-from'; readonly dirName: string }
   /**
-   * Resolved from the `@contract` reserved token — the hash of the on-disk
+   * Resolved from the `@contract` reserved reference — the hash of the on-disk
    * working contract (`contract.json`). Offline-resolvable.
    */
   | { readonly kind: 'reserved-contract' }
   /**
-   * Resolved from the `@db` reserved token. The `hash` field is a placeholder
+   * Resolved from the `@db` reserved reference. The `hash` field is a placeholder
    * that must not be used: callers that accept `@db` test `isLiveMarkerRef`
    * before parsing and resolve it from the live marker.
    */
   | { readonly kind: 'reserved-db' }
   /**
-   * Resolved from the `@empty` reserved token — the empty contract
+   * Resolved from the `@empty` reserved reference — the empty contract
    * (`EMPTY_CONTRACT_HASH`), the origin with no prior storage state.
    * Offline-resolvable.
    */

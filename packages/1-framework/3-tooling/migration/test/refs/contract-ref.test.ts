@@ -229,7 +229,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@contract reserved token', () => {
+  describe('@contract reserved reference', () => {
     it('resolves @contract to the contractHash in context', () => {
       const ctx = createContext();
       const result = parseContractRef('@contract', { ...ctx, contractHash: HASH_B });
@@ -247,7 +247,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@db reserved token', () => {
+  describe('@db reserved reference', () => {
     it('returns a reserved-db provenance that callers must resolve via readAllMarkers', () => {
       const ctx = createContext();
       const result = parseContractRef('@db', ctx);
@@ -269,7 +269,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@empty reserved token', () => {
+  describe('@empty reserved reference', () => {
     it('resolves @empty to the empty contract hash offline', () => {
       const ctx = createContext();
       const result = parseContractRef('@empty', ctx);
@@ -323,7 +323,7 @@ describe('parseContractRef', () => {
 });
 
 describe('reserved contract references', () => {
-  it('lists the reserved tokens in help order', () => {
+  it('keeps the reserved references in a fixed order', () => {
     expect(RESERVED_CONTRACT_REFS).toEqual(['@contract', '@db', '@empty']);
   });
 
