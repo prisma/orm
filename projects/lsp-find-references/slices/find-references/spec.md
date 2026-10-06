@@ -19,9 +19,10 @@ A pure function next to `provideDefinition`, returning `Location[]`:
 1. **Target.** Pick the token at the cursor the way `definition.ts` does (the token lookup is shared, not copied) and resolve it with `resolvedNodeAt`. A target exists for resolution kinds `model`, `compositeType`, `namedType`, `block`, `field` and `namespace`; the target is `resolution.symbol`. Any other kind, or no resolution, returns `[]`.
 2. **Candidates.** For every project document, find each occurrence of the symbol's name in the document text. For each occurrence take the token at that offset and keep it only if it is an `Ident` token that starts at that offset and whose text equals the name.
 3. **Confirm.** Resolve the candidate with `resolvedNodeAt`. It is a usage when the resolution's `symbol` is the target object.
-4. **Last-segment rule.** When the resolved node is wider than the candidate's own identifier (a qualified name or a path), the candidate counts only if it is the last identifier token of the resolved node. This keeps a non-final segment that has no resolution of its own from being reported as a usage of the entity the whole name resolves to.
-5. **Declarations.** A usage is the declaration when the resolved node is the name node of the symbol's declaration. It is dropped unless `includeDeclaration` is set. For a `namespace` target nothing is dropped.
-6. **Result.** One `Location` per kept token: the document's URI and the token's range. Order: project documents in input order, then by offset.
+4. **Declarations.** A usage is the declaration when the resolved node is the name node of the symbol's declaration. It is dropped unless `includeDeclaration` is set. For a `namespace` target nothing is dropped.
+5. **Result.** One `Location` per kept token: the document's URI and the token's range. Order: project documents in input order, then by offset.
+
+A rule that a candidate inside a wider resolved node must be its last identifier token was specified first and removed after Dispatch 1: with the binder as it is, every qualifier that lets the whole name resolve carries its own resolution, so the rule never rejected anything and no test could fail without it.
 
 ### Wiring
 
