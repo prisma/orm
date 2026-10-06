@@ -74,6 +74,7 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  HasNoVariant,
   HasOrderBy,
   HasRow,
   HasTypeState,
@@ -452,10 +453,10 @@ export class CollectionBase<
   /**
    * Narrow a polymorphic model to the variant declared with the given
    * discriminator value. The returned collection has the variant's row
-   * shape and a discriminator filter is automatically applied. Chaining
-   * `.variant(...)` again replaces the previous variant filter and also
-   * removes any direct comparison on the discriminator column that was
-   * added with `where()`.
+   * shape and a discriminator filter is automatically applied. Call
+   * `.variant(...)` once, on the base collection: a collection that
+   * already has a variant selected refuses it. To select a different
+   * variant, start again from the base collection.
    *
    * ```typescript
    * // Read only admin users (STI):
@@ -471,7 +472,7 @@ export class CollectionBase<
    * ```
    */
   variant<V extends VariantValues<TContract, ModelName>, S extends CollectionTypeState = State>(
-    this: HasTypeState<S>,
+    this: HasTypeState<S> & HasNoVariant,
     value: V,
   ): Collection<
     TContract,
@@ -480,6 +481,7 @@ export class CollectionBase<
     WithVariantState<WithWhereState<S>, VariantNameForValue<TContract, ModelName, V>>
   >;
   variant<V extends VariantValues<TContract, ModelName>>(
+    this: HasNoVariant,
     value: V,
   ): Collection<
     TContract,
@@ -497,6 +499,25 @@ export class CollectionBase<
   > {
     type VariantName = VariantNameForValue<TContract, ModelName, V>;
     const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
+    const selectedVariantName = this.state.variantName;
+
+    if (selectedVariantName !== undefined) {
+      const selectedValue = polyInfo?.variants.get(selectedVariantName)?.value;
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `variant("${value}") cannot be called on model "${this.modelName}" because variant("${selectedValue}") is already selected; call variant() on the base collection instead`,
+        {
+          meta: {
+            method: 'variant',
+            model: this.modelName,
+            variant: selectedVariantName,
+            selectedValue,
+            reason: 'variant-already-selected',
+          },
+        },
+      );
+    }
+
     const variantInfo = polyInfo?.variantsByValue.get(value);
 
     if (!polyInfo || !variantInfo) {
@@ -524,23 +545,11 @@ export class CollectionBase<
       LiteralExpr.of(variantInfo.value),
     );
 
-    const filtersWithoutPreviousVariant = this.state.variantName
-      ? this.state.filters.filter(
-          (f) =>
-            !(
-              f instanceof BinaryExpr &&
-              f.left instanceof ColumnRef &&
-              f.left.column === columnName &&
-              f.left.table === this.tableName
-            ),
-        )
-      : this.state.filters;
-
     return this.#cloneWithRow<
       VariantModelRow<TContract, ModelName, VariantName>,
       WithVariantState<WithWhereState<State>, VariantName>
     >({
-      filters: [...filtersWithoutPreviousVariant, filter],
+      filters: [...this.state.filters, filter],
       variantName: variantInfo.modelName,
     });
   }

@@ -18,7 +18,7 @@ import type {
   Contract,
 } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
-import { createMongoCollection } from '../src/collection';
+import { createMongoCollection, type MongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import {
   compileFieldOperations,
@@ -508,34 +508,47 @@ describe('MongoCollection variant()', () => {
     expect(match.filter.kind).toBe('and');
   });
 
-  it('replaces the previous discriminator filter when chained', () => {
+  it('throws when a variant is already selected', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor).variant('bug').variant('feature');
-    col.all();
-    const match = executor.lastStages![0] as MongoMatchStage;
-    expect(match.filter).toEqual(MongoFieldFilter.eq('type', new MongoParamRef('feature')));
+    const bugs = createMongoCollection(contract, 'Task', executor).variant(
+      'bug',
+    ) as unknown as MongoCollection<Contract, 'Task'>;
+
+    expect(() => bugs.variant('feature')).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'variant("feature") cannot be called on model "Task" because variant("bug") is already selected; call variant() on the base collection instead',
+        meta: {
+          method: 'variant',
+          model: 'Task',
+          variant: 'Bug',
+          selectedValue: 'bug',
+          reason: 'variant-already-selected',
+        },
+      }),
+    );
   });
 
-  it('keeps non-discriminator filters when re-narrowing', () => {
+  it('keeps a discriminator where() written before variant()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor)
-      .where(MongoFieldFilter.eq('title', 'Login'))
+    createMongoCollection(contract, 'Task', executor)
+      .where(MongoFieldFilter.eq('type', 'feature'))
       .variant('bug')
-      .variant('feature');
-    col.all();
+      .all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('and');
     if (match.filter.kind === 'and') {
       expect(match.filter.exprs).toEqual([
         MongoFieldFilter.eq(
-          'title',
-          new MongoParamRef('Login', {
+          'type',
+          new MongoParamRef('feature', {
             codecId: 'mongo/string@1',
-            name: 'title',
+            name: 'type',
             collection: 'tasks',
           }),
         ),
-        MongoFieldFilter.eq('type', new MongoParamRef('feature')),
+        MongoFieldFilter.eq('type', new MongoParamRef('bug')),
       ]);
     }
   });

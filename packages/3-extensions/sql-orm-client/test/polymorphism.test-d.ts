@@ -414,6 +414,20 @@ test('variant cannot be called on a non-polymorphic receiver', () => {
   plainModels.variant('bug');
 });
 
+test('variant can be called on a collection with no variant selected', () => {
+  const ordered = tasks.orderBy((task) => task.id.desc());
+  expectTypeOf(ordered.variant('bug')).not.toBeNever();
+  expectTypeOf(tasks.variant(taskVariantValue)).not.toBeNever();
+});
+
+test('variant cannot be called on a collection with a variant selected', () => {
+  const bugs = tasks.variant('bug');
+  // @ts-expect-error a variant is already selected; select from the base collection
+  bugs.variant('feature');
+  // @ts-expect-error a variant is already selected, even when it is a union
+  tasks.variant(taskVariantValue).variant('bug');
+});
+
 class TaskCollection extends Collection<PolyContract, 'Task'> {
   bugs() {
     return this.variant('bug');
@@ -421,6 +435,13 @@ class TaskCollection extends Collection<PolyContract, 'Task'> {
 }
 
 declare const taskCollection: TaskCollection;
+
+test('a variant helper result rejects a second variant selection', () => {
+  const bugs = taskCollection.bugs();
+  expectTypeOf(bugs.where((task) => task.severity.eq('high'))).not.toBeNever();
+  // @ts-expect-error bugs() already selected a variant
+  bugs.variant('feature');
+});
 
 test('a zero-argument custom helper exposes the variant row and create input', () => {
   const bugs = taskCollection.bugs();

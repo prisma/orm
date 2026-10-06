@@ -57,6 +57,15 @@ describe('variant', () => {
     either.variant('bug').cursor({ id: 1 });
   });
 
+  test('is refused once a variant is selected, on either overload', () => {
+    // @ts-expect-error a variant is already selected
+    tasks.newestFirst().variant('bug').variant('feature');
+    const either = flag ? tasks.newestFirst() : tasks.titled('x');
+    expectTypeOf(either.variant('bug')).not.toBeNever();
+    // @ts-expect-error a variant is already selected on the fallback overload's result
+    either.variant('bug').variant('feature');
+  });
+
   test('the class survives cursor', () => {
     expectTypeOf(tasks.newestFirst().cursor({ id: 1 })).toEqualTypeOf<Ordered<TaskCollection>>();
   });

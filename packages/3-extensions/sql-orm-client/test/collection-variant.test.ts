@@ -129,15 +129,24 @@ describe('Collection.variant()', () => {
     expect(narrowed.state.variantName).toBe('Regular');
   });
 
-  it('replaces previous variant filter when chaining', () => {
+  it('throws when a variant is already selected', () => {
     const { collection } = createPolyCollection();
-    const first = collection.variant('admin' as never);
-    const second = first.variant('regular' as never);
+    const admins = collection.variant('admin' as never);
 
-    expect(second.state.filters).toHaveLength(1);
-    const filter = second.state.filters[0] as BinaryExpr;
-    expect((filter.right as LiteralExpr).value).toBe('regular');
-    expect(second.state.variantName).toBe('Regular');
+    expect(() => admins.variant('regular' as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'variant("regular") cannot be called on model "User" because variant("admin") is already selected; call variant() on the base collection instead',
+        meta: {
+          method: 'variant',
+          model: 'User',
+          variant: 'Admin',
+          selectedValue: 'admin',
+          reason: 'variant-already-selected',
+        },
+      }),
+    );
   });
 
   it('throws when the model has no discriminator', () => {
@@ -190,15 +199,16 @@ describe('Collection.variant()', () => {
     expect((variantFilter.left as ColumnRef).column).toBe('kind');
   });
 
-  it('preserves non-variant filters when re-narrowing', () => {
+  it('keeps a discriminator where() written before variant()', () => {
     const { collection } = createPolyCollection();
-    const withWhere = collection.where({ name: 'Alice' } as never);
-    const first = withWhere.variant('admin' as never);
-    const second = first.variant('regular' as never);
+    const withWhere = collection.where({ kind: 'regular' } as never);
+    const narrowed = withWhere.variant('admin' as never);
 
-    expect(second.state.filters).toHaveLength(2);
-    const variantFilter = second.state.filters[1] as BinaryExpr;
-    expect((variantFilter.right as LiteralExpr).value).toBe('regular');
+    expect(narrowed.state.filters).toEqual([
+      ...withWhere.state.filters,
+      BinaryExpr.eq(ColumnRef.of('users', 'kind'), LiteralExpr.of('admin')),
+    ]);
+    expect(withWhere.state.filters).toHaveLength(1);
   });
 });
 

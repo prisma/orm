@@ -156,6 +156,12 @@ export type VariantNameForValue<
     }[keyof V & string]
   : never;
 
+export type VariantSelectable<TVariant extends string> = [TVariant] extends [never]
+  ? unknown
+  : {
+      readonly 'variant() needs a collection with no variant selected; call it on the base collection': never;
+    };
+
 export type VariantModelRow<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,

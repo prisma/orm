@@ -73,6 +73,7 @@ import type {
   ReferenceRelationKeys,
   ResolvedCreateInput,
   VariantNameForValue,
+  VariantSelectable,
   VariantValues,
 } from './types';
 import { upsertPipeline } from './upsert-pipeline';
@@ -91,11 +92,11 @@ export interface MongoCollection<
   readonly _row?: SimplifyDeep<IncludedRow<TContract, ModelName, TIncludes>>;
   /**
    * Narrows to the variant declared with the given discriminator value,
-   * injecting a discriminator filter. A later call replaces that filter and
-   * also removes any direct equality filter on the discriminator field that
-   * was added with `where()`.
+   * injecting a discriminator filter. Call it once, on the base collection:
+   * a collection that already has a variant selected refuses it.
    */
   variant<V extends VariantValues<TContract, ModelName>>(
+    this: VariantSelectable<TVariant>,
     value: V,
   ): MongoCollection<TContract, ModelName, TIncludes, VariantNameForValue<TContract, ModelName, V>>;
   /** Appends equality filters from a plain object. Values are encoded through codecs. */
@@ -259,6 +260,25 @@ class MongoCollectionImpl<
       'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
     >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
     const discriminator = model?.discriminator;
+    const selectedVariantName = this.#variantName;
+
+    if (selectedVariantName !== undefined) {
+      const selectedValue = model?.variants?.[selectedVariantName]?.value;
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `variant("${value}") cannot be called on model "${this.#modelName}" because variant("${selectedValue}") is already selected; call variant() on the base collection instead`,
+        {
+          meta: {
+            method: 'variant',
+            model: this.#modelName,
+            variant: selectedVariantName,
+            selectedValue,
+            reason: 'variant-already-selected',
+          },
+        },
+      );
+    }
+
     const variantEntries = Object.entries(model?.variants ?? {});
     const variantName = discriminator
       ? variantEntries.find(([, entry]) => entry.value === value)?.[0]
@@ -283,16 +303,9 @@ class MongoCollectionImpl<
       );
     }
 
-    const filtersWithoutPreviousVariant =
-      this.#variantName === undefined
-        ? this.#state.filters
-        : this.#state.filters.filter(
-            (f) =>
-              !(f instanceof MongoFieldFilter && f.op === '$eq' && f.field === discriminator.field),
-          );
     const filter = MongoFieldFilter.eq(discriminator.field, new MongoParamRef(value));
     return this.#cloneWithVariant<VariantNameForValue<TContract, ModelName, V>>(
-      { filters: [...filtersWithoutPreviousVariant, filter] },
+      { filters: [...this.#state.filters, filter] },
       variantName,
     );
   }

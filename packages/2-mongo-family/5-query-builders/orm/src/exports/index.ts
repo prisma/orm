@@ -33,5 +33,6 @@ export type {
   VariantModelRow,
   VariantNameForValue,
   VariantNames,
+  VariantSelectable,
   VariantValues,
 } from '../types';

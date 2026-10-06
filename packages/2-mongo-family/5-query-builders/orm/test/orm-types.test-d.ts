@@ -444,6 +444,25 @@ test('variant() maps a union of values to the union of variant names', () => {
   >();
 });
 
+test('variant() cannot be called on a collection with a variant selected', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  expectTypeOf(col.where({ title: 'X' }).variant('bug')).not.toBeNever();
+  const bugs = col.variant('bug');
+  // @ts-expect-error a variant is already selected; select from the base collection
+  bugs.variant('feature');
+  const value = 'bug' as 'bug' | 'feature';
+  // @ts-expect-error a variant is already selected, even when it is a union
+  col.variant(value).variant('bug');
+});
+
+test('a variant helper result rejects a second variant selection', () => {
+  const tasks = {} as MongoCollection<Contract, 'Task'>;
+  const bugs = () => tasks.variant('bug');
+  expectTypeOf(bugs().where({ title: 'X' })).not.toBeNever();
+  // @ts-expect-error bugs() already selected a variant
+  bugs().variant('feature');
+});
+
 test('a zero-argument custom helper exposes the variant collection and create input', () => {
   const tasks = {} as MongoCollection<Contract, 'Task'>;
   const bugs = () => tasks.variant('bug');
