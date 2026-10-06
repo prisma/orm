@@ -100,6 +100,15 @@ export async function buildProject(): Promise<string> {
   return cwd;
 }
 
+/** A project whose app space has no migrations, with the emitted contract at C2. */
+export async function buildProjectWithoutMigrations(): Promise<string> {
+  const cwd = createTestProjectDir('orm-migrate-show');
+  tempDirs.push(cwd);
+  await mkdir(join(cwd, 'migrations', 'app'), { recursive: true });
+  await writeFile(join(cwd, 'contract.json'), JSON.stringify(contractEnvelope(C2)));
+  return cwd;
+}
+
 /** Adds a declared pgvector space with its own empty → EXT_C1 graph. */
 export async function addExtensionSpace(cwd: string): Promise<string> {
   const extDir = join(cwd, 'migrations', 'pgvector');
