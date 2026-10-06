@@ -5,7 +5,7 @@ describe('buildNoPathSummary', () => {
   it('names the live contract when no --to was passed', () => {
     expect(
       buildNoPathSummary({
-        markerHash: 'a'.repeat(64),
+        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
         explicitTarget: false,
         refName: undefined,
@@ -18,7 +18,7 @@ describe('buildNoPathSummary', () => {
   it('names the ref when --to resolved via ref', () => {
     expect(
       buildNoPathSummary({
-        markerHash: 'a'.repeat(64),
+        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
         explicitTarget: true,
         refName: 'prod',
@@ -31,7 +31,7 @@ describe('buildNoPathSummary', () => {
   it('omits via ref when --to was a raw hash', () => {
     expect(
       buildNoPathSummary({
-        markerHash: 'a'.repeat(64),
+        origin: { kind: 'database', markerHash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
         explicitTarget: true,
         refName: undefined,
@@ -44,13 +44,26 @@ describe('buildNoPathSummary', () => {
   it('omits the marker parenthetical when the marker hash is unknown', () => {
     expect(
       buildNoPathSummary({
-        markerHash: undefined,
+        origin: { kind: 'database', markerHash: undefined },
         targetHash: 'b'.repeat(64),
         explicitTarget: false,
         refName: undefined,
       }),
     ).toBe(
       "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one.",
+    );
+  });
+
+  it('names the --from contract when the origin is offline', () => {
+    expect(
+      buildNoPathSummary({
+        origin: { kind: 'from', hash: 'a'.repeat(64) },
+        targetHash: 'b'.repeat(64),
+        explicitTarget: true,
+        refName: undefined,
+      }),
+    ).toBe(
+      'No migration path from the --from contract (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 });

@@ -118,16 +118,27 @@ async function readDatabaseState(inputs: {
   }
 }
 
+/** Where a status path starts: the database marker, or the contract `--from` names. */
+export type NoPathOrigin =
+  | { readonly kind: 'database'; readonly markerHash: string | undefined }
+  | { readonly kind: 'from'; readonly hash: string };
+
+function describeOrigin(origin: NoPathOrigin): string {
+  if (origin.kind === 'from') {
+    return `the --from contract (${shortDisplayHash(origin.hash)})`;
+  }
+  return origin.markerHash !== undefined
+    ? `the database state (${shortDisplayHash(origin.markerHash)})`
+    : 'the database state';
+}
+
 export function buildNoPathSummary(args: {
-  readonly markerHash: string | undefined;
+  readonly origin: NoPathOrigin;
   readonly targetHash: string;
   readonly explicitTarget: boolean;
   readonly refName: string | undefined;
 }): string {
-  const markerPart =
-    args.markerHash !== undefined
-      ? `the database state (${shortDisplayHash(args.markerHash)})`
-      : 'the database state';
+  const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
   if (!args.explicitTarget) {
     return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
@@ -373,9 +384,7 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath:
-      | { readonly markerHash: string | undefined; readonly targetHash: string }
-      | undefined;
+    let noPath: { readonly origin: NoPathOrigin; readonly targetHash: string } | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -392,30 +401,40 @@ export const migrationStatusCommand = defineOrmCommand({
         headlineTargetHash = targetHash;
       }
 
+      const offlineOrigin = isAppSpace ? fromOverrideHash : undefined;
       const marker = liveOrigin
         ? database.markersBySpace.get(entry.space)
-        : isAppSpace && fromOverrideHash !== undefined
-          ? { storageHash: fromOverrideHash }
+        : offlineOrigin !== undefined
+          ? { storageHash: offlineOrigin }
           : undefined;
       const markerHash = marker?.storageHash;
       const originHash = contractHashAtMarker(marker);
-      const markerInGraph =
-        markerHash === undefined ||
-        isGraphNode(markerHash, graph) ||
-        (graph.nodes.size === 0 && markerHash === space.headRef?.hash);
+      const readMarker =
+        liveOrigin || (isAppSpace && liveTarget)
+          ? database.markersBySpace.get(entry.space)
+          : undefined;
+      const markerDiverged =
+        readMarker !== undefined &&
+        !isGraphNode(readMarker.storageHash, graph) &&
+        !(graph.nodes.size === 0 && readMarker.storageHash === space.headRef?.hash);
 
+      if (markerDiverged) {
+        divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
+        findings.push(markerNotInHistoryFinding(entry.space));
+      }
+      const origin: NoPathOrigin | undefined = liveOrigin
+        ? { kind: 'database', markerHash }
+        : offlineOrigin !== undefined
+          ? { kind: 'from', hash: offlineOrigin }
+          : undefined;
       if (
-        liveOrigin &&
-        markerInGraph &&
+        origin !== undefined &&
+        !markerDiverged &&
         originHash !== targetHash &&
         noPath === undefined &&
         !hasMigrationPath(graph, originHash, targetHash)
       ) {
-        noPath = { markerHash, targetHash };
-      }
-      if (liveOrigin && markerHash !== undefined && !markerInGraph) {
-        divergedMarker ??= { space: entry.space, markerHash };
-        findings.push(markerNotInHistoryFinding(entry.space));
+        noPath = { origin, targetHash };
       }
 
       const ledger = database.ledgersBySpace.get(entry.space) ?? [];
@@ -499,7 +518,7 @@ export const migrationStatusCommand = defineOrmCommand({
       ? 'No migrations found'
       : noPath !== undefined
         ? buildNoPathSummary({
-            markerHash: noPath.markerHash,
+            origin: noPath.origin,
             targetHash: noPath.targetHash,
             explicitTarget: args.flags.to !== undefined,
             refName: activeRefName,

@@ -701,6 +701,42 @@ describe('migration status', () => {
       );
     });
 
+    it('reports no path when --from @contract is ahead of the database named by --to @db', async () => {
+      const project = await projectWithTwoMigrations();
+      const db = fakeDatabase({
+        markers: markersAt(HASH_BASE),
+        ledger: [{ migrationHash: project.baseMigrationHash }],
+      });
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--from', '@contract', '--to', '@db', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        summary: `No migration path from the --from contract (${HASH_HEAD.slice(0, 12)}) to the target (${HASH_BASE.slice(0, 12)}). Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`,
+      });
+    });
+
+    it('warns when --to @db reads a marker outside the graph and --from is a hash', async () => {
+      const project = await projectWithTwoMigrations();
+      const db = fakeDatabase({ markers: markersAt(HASH_UNKNOWN) });
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--from', HASH_BASE, '--to', '@db', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(codesAndSeverities(run.presented?.diagnostics ?? [])).toEqual([
+        { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn' },
+      ]);
+      expect(run.presented?.data).toMatchObject({
+        summary: `Database marker ${HASH_UNKNOWN.slice(0, 12)} is not in the on-disk migration graph`,
+      });
+    });
+
     it('errors with the connection-required envelope for --to @db without a connection', async () => {
       const project = await projectWithOneMigration();
       const config = driverConfig(project);
