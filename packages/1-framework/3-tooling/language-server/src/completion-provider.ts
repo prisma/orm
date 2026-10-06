@@ -1,24 +1,30 @@
 import {
   type AuthoringPslBlockDescriptorNamespace,
   isAuthoringPslBlockDescriptor,
-  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import {
+  type ArgType,
   type AttributeSpec,
   assembleAttributeSpecs,
+  type BlockSpec,
   blockSpecFactoryOf,
   findBlockDescriptor,
-  type NamespaceSymbol,
+  isNamespaceLike,
+  memberEntries,
   type SymbolTable,
 } from '@internal/psl-parser';
-import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  GenericBlockDeclarationAst,
+  SourceFile,
+  SyntaxNode,
+} from '@internal/psl-parser/syntax';
+import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import {
-  type CompletionItem,
-  CompletionItemKind,
-  CompletionItemTag,
-  InsertTextFormat,
-} from 'vscode-languageserver';
-import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
+  type ArgumentOwner,
+  type AttributeSpecSource,
+  argumentRootGrammar,
+  attributeSpecResolver,
+} from './attribute-spec-resolution';
 import type {
   AttributeNameCompletionContext,
   DeclarationKeywordCompletionContext,
@@ -27,14 +33,14 @@ import type {
   NamespaceMemberCompletionContext,
   PslCompletionContext,
 } from './completion-context';
+import { type ScopeCompletionCapabilities, scopeCompletionItems } from './completion-scope';
 import { requiredArgumentsSnippet } from './completion-snippets';
-import { blockSymbolForNode, localFieldNames, referencedFieldNames } from './completion-symbols';
+import { localFieldNames, referencedFieldNames } from './completion-symbols';
 import {
   provideAttributeArgumentSlotCompletionItems,
   provideAttributeNamedKeyCompletionItems,
   provideAttributeValueCompletionItems,
 } from './completion-values';
-import { refinesScalarType } from './named-type-classification';
 
 export interface PslCompletionCandidateSource extends AttributeSpecSource {
   readonly scalarTypes: readonly string[];
@@ -51,17 +57,6 @@ export interface ProvidePslCompletionItemsInput {
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
 
-type ModelTypeCompletionCandidateCategory =
-  | 'configuredScalar'
-  | 'topLevelModel'
-  | 'topLevelCompositeType'
-  | 'scalar'
-  | 'typeAlias'
-  | 'namespace'
-  | 'namespaceModel'
-  | 'namespaceCompositeType'
-  | 'deprecatedScalar';
-
 interface DeclarationKeywordCompletionCandidate {
   readonly category: DeclarationKeywordCompletionCandidateCategory;
   readonly label: string;
@@ -70,28 +65,6 @@ interface DeclarationKeywordCompletionCandidate {
   readonly detail: string;
   readonly kind: CompletionItemKind;
 }
-
-interface ModelTypeCompletionCandidate {
-  readonly category: ModelTypeCompletionCandidateCategory;
-  readonly label: string;
-  readonly insertText: string;
-  readonly filterText: string;
-  readonly detail: string;
-  readonly kind: CompletionItemKind;
-  readonly deprecated?: boolean;
-}
-
-const categoryOrder: Record<ModelTypeCompletionCandidateCategory, number> = {
-  configuredScalar: 0,
-  topLevelModel: 1,
-  topLevelCompositeType: 2,
-  scalar: 3,
-  typeAlias: 4,
-  namespace: 5,
-  namespaceModel: 6,
-  namespaceCompositeType: 7,
-  deprecatedScalar: 8,
-};
 
 const declarationKeywordCategoryOrder: Record<
   DeclarationKeywordCompletionCandidateCategory,
@@ -146,10 +119,6 @@ export function providePslCompletionItems(
     // contract-space registry exists today, so this position yields nothing yet.
     case 'spaceMember':
       return [];
-    // Parameter-value completion (option allowed-values / ref scopes) is future
-    // work.
-    case 'genericBlockValue':
-      return [];
     case 'fieldAttributeName':
     case 'modelAttributeName':
     case 'blockAttributeName':
@@ -162,9 +131,10 @@ export function providePslCompletionItems(
       );
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
-    case 'blockAttributeNamedKey': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+    case 'blockAttributeNamedKey':
+    case 'blockValueNamedKey': {
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeNamedKeyCompletionItems(
             {
@@ -174,18 +144,21 @@ export function providePslCompletionItems(
               clientSupportsTriggerSuggestCommand:
                 input.clientSupportsTriggerSuggestCommand === true,
             },
-            spec,
+            root,
           );
     }
     case 'fieldAttributeArgumentSlot':
     case 'modelAttributeArgumentSlot':
-    case 'blockAttributeArgumentSlot': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+    case 'blockAttributeArgumentSlot':
+    case 'blockValueArgumentSlot': {
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeArgumentSlotCompletionItems(
             {
               context,
+              binder: input.candidates.binder,
+              scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
@@ -194,51 +167,36 @@ export function providePslCompletionItems(
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    )
-                  : referencedFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    ),
+                  ? localFieldNames(context, input.candidates.binder)
+                  : referencedFieldNames(context, input.candidates.binder),
             },
-            spec,
+            root,
           );
     }
     case 'fieldAttributeValue':
     case 'modelAttributeValue':
-    case 'blockAttributeValue': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+    case 'blockAttributeValue':
+    case 'blockValue': {
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeValueCompletionItems(
             {
               context,
+              binder: input.candidates.binder,
+              scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
               clientSupportsTriggerParameterHintsCommand:
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    )
-                  : referencedFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    ),
+                  ? localFieldNames(context, input.candidates.binder)
+                  : referencedFieldNames(context, input.candidates.binder),
             },
-            spec,
+            root,
           );
     }
     case 'declarationKeyword':
@@ -249,11 +207,31 @@ export function providePslCompletionItems(
         input.clientSupportsSnippets,
       );
     case 'genericBlockKey':
-      return provideGenericBlockKeyCompletionItems(context, input.sourceFile, input.candidates);
+      return provideGenericBlockKeyCompletionItems(context, input.sourceFile, input.candidates, {
+        clientSupportsSnippets: input.clientSupportsSnippets,
+        clientSupportsTriggerSuggestCommand: input.clientSupportsTriggerSuggestCommand === true,
+      });
     case 'modelType':
-      return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates);
+      return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates, input);
     case 'namespaceMember':
-      return provideNamespaceMemberCompletionItems(context, input.sourceFile, input.candidates);
+      return provideNamespaceMemberCompletionItems(
+        context,
+        input.sourceFile,
+        input.candidates,
+        input,
+      );
+  }
+}
+
+function ownerSyntax(owner: ArgumentOwner): SyntaxNode {
+  switch (owner.ownerKind) {
+    case 'field':
+      return owner.field.syntax;
+    case 'model':
+      return owner.model.syntax;
+    case 'block':
+    case 'blockValue':
+      return owner.block.syntax;
   }
 }
 
@@ -371,7 +349,7 @@ function declarationKeywordCandidates(
     scope === 'namespace' ? namespaceNativeDeclarationKeywords : documentNativeDeclarationKeywords;
   return [
     ...nativeCandidates,
-    ...genericBlockDeclarationKeywordCandidates(source.pslBlockDescriptors),
+    ...genericBlockDeclarationKeywordCandidates(source.pslBlockDescriptors, source.symbolTable),
   ];
 }
 
@@ -393,6 +371,7 @@ function nativeDeclarationKeyword(
 
 function genericBlockDeclarationKeywordCandidates(
   descriptors: AuthoringPslBlockDescriptorNamespace,
+  symbols: SymbolTable,
 ): readonly DeclarationKeywordCompletionCandidate[] {
   return descriptorBlockKeywords(descriptors).map((keyword) => {
     const descriptor = findBlockDescriptor(descriptors, keyword);
@@ -400,16 +379,31 @@ function genericBlockDeclarationKeywordCandidates(
       category: 'genericBlock',
       label: keyword,
       insertText: `${keyword} `,
-      snippetText: genericBlockSnippet(keyword),
+      snippetText: genericBlockSnippet(
+        keyword,
+        descriptor === undefined ? undefined : blockSpecFactoryOf(descriptor)({ symbols }),
+      ),
       detail: descriptor?.documentation || 'Generic block keyword',
       kind: CompletionItemKind.Keyword,
     };
   });
 }
 
-function genericBlockSnippet(keyword: string): string {
-  const cursor = '$' + '{0:// Block keys and attributes}';
-  return [`${keyword} ${nameSnippetPlaceholder} {`, `  ${cursor}`, '}'].join('\n');
+function genericBlockSnippet(keyword: string, spec: BlockSpec | undefined): string {
+  const required =
+    spec?.mode === 'struct'
+      ? Object.entries(spec.parameters).filter(([, parameter]) => !isOptionalType(parameter.type))
+      : [];
+  const lines = required.map(([name, parameter], index) => {
+    const placeholder = `\${${index + 2}:${name}}`;
+    return `  ${name} = ${parameter.type.kind === 'list' ? `[${placeholder}]` : placeholder}`;
+  });
+  const cursor = lines.length === 0 ? '$' + '{0:// Block keys and attributes}' : '$0';
+  return [`${keyword} ${nameSnippetPlaceholder} {`, ...lines, `  ${cursor}`, '}'].join('\n');
+}
+
+function isOptionalType(type: ArgType<unknown, never>): boolean {
+  return 'optional' in type && type.optional === true;
 }
 
 function descriptorBlockKeywords(
@@ -441,21 +435,19 @@ function provideGenericBlockKeyCompletionItems(
   context: GenericBlockKeyCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
   const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
   if (descriptor === undefined) {
     return [];
   }
-  const block = blockSymbolForNode(source.symbolTable, context.block);
-  if (block === undefined) {
-    return [];
-  }
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
   if (spec.mode !== 'struct') {
     return [];
   }
 
   const existing = existingGenericBlockParameterNames(context.block, context.offset);
+  const hasEquals = editedKeyHasEquals(context.block, context.offset);
   const replacementRange = {
     start: sourceFile.positionAt(context.replacementStartOffset),
     end: sourceFile.positionAt(context.offset),
@@ -463,17 +455,39 @@ function provideGenericBlockKeyCompletionItems(
 
   return Object.entries(spec.parameters)
     .filter(([parameterName]) => !existing.has(parameterName))
-    .map(([parameterName, parameter], index) => ({
-      label: parameterName,
-      kind: CompletionItemKind.Property,
-      detail: parameter.documentation || 'Generic block parameter',
-      sortText: genericBlockParameterSortText(index, parameterName),
-      filterText: parameterName,
-      textEdit: {
-        range: replacementRange,
-        newText: parameterName,
-      },
-    }));
+    .map(([parameterName, parameter], index) => {
+      const snippet =
+        !hasEquals && capabilities.clientSupportsSnippets && parameter.type.kind === 'list';
+      const newText = hasEquals
+        ? parameterName
+        : snippet
+          ? `${parameterName} = [$1]`
+          : `${parameterName} = `;
+      return {
+        label: parameterName,
+        kind: CompletionItemKind.Property,
+        detail: parameter.documentation || 'Generic block parameter',
+        sortText: genericBlockParameterSortText(index, parameterName),
+        filterText: parameterName,
+        textEdit: { range: replacementRange, newText },
+        ...(snippet ? { insertTextFormat: InsertTextFormat.Snippet } : {}),
+        ...(!hasEquals && capabilities.clientSupportsTriggerSuggestCommand === true
+          ? {
+              command: {
+                title: 'Suggest argument values',
+                command: 'editor.action.triggerSuggest',
+              },
+            }
+          : {}),
+      };
+    });
+}
+
+function editedKeyHasEquals(block: GenericBlockDeclarationAst, cursorOffset: number): boolean {
+  for (const entry of block.entries()) {
+    if (!entry.syntax.isOutside(cursorOffset)) return entry.equals() !== undefined;
+  }
+  return false;
 }
 
 function existingGenericBlockParameterNames(
@@ -497,188 +511,44 @@ function provideModelTypeCompletionItems(
   context: ModelTypeCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
-  return modelTypeCompletionItems(context, sourceFile, [
-    ...configuredScalarCandidates(source),
-    ...topLevelSymbolCandidates(source.symbolTable, source.scalarTypes),
-    ...allNamespaceCandidates(source.symbolTable),
-  ]);
+  return scopeCompletionItems(
+    source.binder.scopeAt(context.field.syntax).entries(),
+    source.binder,
+    {
+      start: sourceFile.positionAt(context.replacementStartOffset),
+      end: sourceFile.positionAt(context.offset),
+    },
+    capabilities,
+  );
 }
 
 function provideNamespaceMemberCompletionItems(
   context: NamespaceMemberCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
   // A foreign contract-space reference resolves against external symbols that no
   // registry exposes yet; local namespace members must not stand in for them.
   if (context.space !== undefined) {
     return [];
   }
-  return modelTypeCompletionItems(
-    context,
-    sourceFile,
-    namespaceCandidates(source.symbolTable.topLevel.namespaces[context.namespace]),
-  );
-}
-
-function modelTypeCompletionItems(
-  context: ModelTypeCompletionContext | NamespaceMemberCompletionContext,
-  sourceFile: SourceFile,
-  candidates: readonly ModelTypeCompletionCandidate[],
-): readonly CompletionItem[] {
-  const replacementRange = {
-    start: sourceFile.positionAt(context.replacementStartOffset),
-    end: sourceFile.positionAt(context.offset),
-  };
-
-  return candidates.map((candidate) => ({
-    label: candidate.label,
-    kind: candidate.kind,
-    detail: candidate.detail,
-    sortText: sortText(candidate),
-    filterText: candidate.filterText,
-    textEdit: {
-      range: replacementRange,
-      newText: candidate.insertText,
+  const qualifier = source.binder.scopeAt(context.field.syntax).lookup(context.namespace);
+  return scopeCompletionItems(
+    qualifier !== undefined && isNamespaceLike(qualifier) ? memberEntries(qualifier) : [],
+    source.binder,
+    {
+      start: sourceFile.positionAt(context.replacementStartOffset),
+      end: sourceFile.positionAt(context.offset),
     },
-    ...(candidate.deprecated === true ? { tags: [CompletionItemTag.Deprecated] } : {}),
-  }));
-}
-
-function configuredScalarCandidates(
-  source: PslCompletionCandidateSource,
-): readonly ModelTypeCompletionCandidate[] {
-  const constructors = source.authoringContributions?.type ?? {};
-  return sortedUnique(source.scalarTypes).map((name) => {
-    const descriptor = constructors[name];
-    const typeConstructor =
-      descriptor !== undefined && isAuthoringTypeConstructorDescriptor(descriptor)
-        ? descriptor
-        : undefined;
-    const base = {
-      label: name,
-      insertText: name,
-      filterText: name,
-      kind: CompletionItemKind.Keyword,
-    };
-    if (typeConstructor?.deprecated !== undefined) {
-      return {
-        ...base,
-        category: 'deprecatedScalar',
-        detail: `Deprecated: use ${typeConstructor.deprecated.replacement}.`,
-        deprecated: true,
-      };
-    }
-    return {
-      ...base,
-      category: 'configuredScalar',
-      detail: typeConstructor?.documentation || 'Configured scalar type',
-    };
-  });
-}
-
-function topLevelSymbolCandidates(
-  symbolTable: SymbolTable,
-  scalarTypes: readonly string[],
-): readonly ModelTypeCompletionCandidate[] {
-  const { topLevel } = symbolTable;
-  const namedTypes = Object.values(topLevel.namedTypes);
-  const scalarRefinementNames = namedTypes
-    .filter((symbol) => refinesScalarType(symbol, scalarTypes))
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
-  const aliasNames = namedTypes
-    .filter((symbol) => !refinesScalarType(symbol, scalarTypes))
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
-  return [
-    ...symbolCandidates(
-      recordNames(topLevel.models),
-      'topLevelModel',
-      'Model',
-      CompletionItemKind.Class,
-    ),
-    ...symbolCandidates(
-      recordNames(topLevel.compositeTypes),
-      'topLevelCompositeType',
-      'Composite type',
-      CompletionItemKind.Struct,
-    ),
-    ...symbolCandidates(scalarRefinementNames, 'scalar', 'Scalar type', CompletionItemKind.Unit),
-    ...symbolCandidates(aliasNames, 'typeAlias', 'Type alias', CompletionItemKind.Reference),
-  ];
-}
-
-function allNamespaceCandidates(symbolTable: SymbolTable): readonly ModelTypeCompletionCandidate[] {
-  return Object.values(symbolTable.topLevel.namespaces)
-    .sort((left, right) => compareNames(left.name, right.name))
-    .map(namespaceQualifierCandidate);
-}
-
-function namespaceCandidates(
-  namespace: NamespaceSymbol | undefined,
-): readonly ModelTypeCompletionCandidate[] {
-  if (namespace === undefined) {
-    return [];
-  }
-  return [
-    ...symbolCandidates(
-      recordNames(namespace.models),
-      'namespaceModel',
-      `Model in namespace ${namespace.name}`,
-      CompletionItemKind.Class,
-    ),
-    ...symbolCandidates(
-      recordNames(namespace.compositeTypes),
-      'namespaceCompositeType',
-      `Composite type in namespace ${namespace.name}`,
-      CompletionItemKind.Struct,
-    ),
-  ];
-}
-
-function namespaceQualifierCandidate(namespace: NamespaceSymbol): ModelTypeCompletionCandidate {
-  return {
-    category: 'namespace',
-    label: namespace.name,
-    insertText: namespace.name,
-    filterText: namespace.name,
-    detail: 'Namespace',
-    kind: CompletionItemKind.Module,
-  };
-}
-
-function symbolCandidates(
-  names: readonly string[],
-  category: ModelTypeCompletionCandidateCategory,
-  detail: string,
-  kind: CompletionItemKind,
-): readonly ModelTypeCompletionCandidate[] {
-  return names.map((name) => ({
-    category,
-    label: name,
-    insertText: name,
-    filterText: name,
-    detail,
-    kind,
-  }));
-}
-
-function recordNames<T extends { readonly name: string }>(
-  record: Record<string, T>,
-): readonly string[] {
-  return Object.values(record)
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
+    capabilities,
+  );
 }
 
 function sortedUnique(names: readonly string[]): readonly string[] {
   return [...new Set(names)].sort(compareNames);
-}
-
-function sortText(candidate: ModelTypeCompletionCandidate): string {
-  return `${categoryOrder[candidate.category]}:${candidate.label}`;
 }
 
 function genericBlockParameterSortText(index: number, label: string): string {

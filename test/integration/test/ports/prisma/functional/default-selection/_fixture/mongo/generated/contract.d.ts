@@ -195,12 +195,12 @@ type ContractBase = Omit<
               readonly enumList: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly list: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly otherId: {
                 readonly nullable: false;

@@ -16,7 +16,9 @@
           "TestModel": {
             "fields": {
               "bInt": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -24,7 +26,9 @@
                 }
               },
               "bool": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -32,7 +36,9 @@
                 }
               },
               "bytes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -40,7 +46,9 @@
                 }
               },
               "dt": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -48,7 +56,9 @@
                 }
               },
               "float": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -63,7 +73,9 @@
                 }
               },
               "int": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -71,7 +83,9 @@
                 }
               },
               "string": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -161,31 +175,41 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bytea",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "float8",
                   "nullable": false
                 },
@@ -196,13 +220,17 @@
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -222,7 +250,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6196cfc0e490c6c3382c73cbb244fa21e43f365e47449da706aed8ea35fdea21"
+    "storageHash": "4f233828207b7f822a1028a226bf309ba1397a49ddac2d07b202642e1747d89c"
   },
   "capabilities": {
     "postgres": {

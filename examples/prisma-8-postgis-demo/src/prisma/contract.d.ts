@@ -369,17 +369,20 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly location: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -394,17 +397,20 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -419,17 +425,20 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly path: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

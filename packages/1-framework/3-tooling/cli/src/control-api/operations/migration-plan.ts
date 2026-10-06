@@ -624,8 +624,8 @@ async function executeMigrationPlanCommandInner(
     const planner = migrations.createPlanner(controlAdapter);
 
     if (isAutoBaseline && fromHash !== null && fromContract !== null && fromContractInStore) {
-      const baselineTimestamp = new Date();
-      const deltaTimestamp = new Date(baselineTimestamp.getTime() + 60_000);
+      const deltaTimestamp = new Date();
+      const baselineTimestamp = new Date(deltaTimestamp.getTime() - 60_000);
       const baselineDirName = formatMigrationDirName(baselineTimestamp, 'baseline');
       const deltaDirName = formatMigrationDirName(deltaTimestamp, options.name ?? 'migration');
       const baselinePackageDir = join(appMigrationsDir, baselineDirName);

@@ -18,7 +18,8 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "tags": {
                 "type": {
@@ -26,7 +27,9 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "scores": {
                 "type": {
@@ -34,7 +37,9 @@
                   "codecId": "mongo/int64Number@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "refs": {
                 "type": {
@@ -42,7 +47,9 @@
                   "codecId": "mongo/objectId@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "roles": {
                 "type": {
@@ -56,7 +63,9 @@
                   "namespaceId": "__unbound__",
                   "entityName": "Role"
                 },
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "address": {
                 "type": {
@@ -64,7 +73,9 @@
                   "name": "Address"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {},
@@ -81,7 +92,8 @@
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             }
           }

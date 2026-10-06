@@ -12,13 +12,8 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
-import {
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 interface GuardEntity {
   readonly guardName: string;
@@ -100,12 +95,7 @@ function interpretWith(schema: string, contributions: AuthoringContributions) {
     capturedEntries[input.id] = { ...(capturedEntries[input.id] ?? {}), ...input.entries };
     return createTestSqlNamespace(input);
   };
-  const symbolTableInput = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  const result = interpretPslDocumentToSqlContract({
-    ...symbolTableInput,
+  const result = interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),

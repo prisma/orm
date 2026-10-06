@@ -74,6 +74,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
   const lower = vi.fn(instance.adapter.lower.bind(instance.adapter));
   const driverQuery = vi.spyOn(driver, 'query');
   const runtime = new PostgresRuntimeImpl({
+    closeRefusal: undefined,
     context,
     adapter: { ...instance.adapter, lower },
     driver,
@@ -151,6 +152,7 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   const lower = vi.fn(instance.adapter.lower.bind(instance.adapter));
   const driverQuery = vi.spyOn(driver, 'query');
   const runtime = new SqliteRuntimeImpl({
+    closeRefusal: undefined,
     context,
     adapter: { ...instance.adapter, lower },
     driver,

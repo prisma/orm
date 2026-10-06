@@ -750,7 +750,7 @@ function decodeIncludedColumnValue(
   codec: Codec,
   value: unknown,
 ): unknown {
-  if (ref.storageColumn.many === true) {
+  if (ref.storageColumn.many !== false) {
     if (!Array.isArray(value)) {
       wrapIncludedDecodeFailure(
         new TypeError(

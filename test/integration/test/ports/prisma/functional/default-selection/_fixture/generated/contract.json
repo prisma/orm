@@ -48,7 +48,9 @@
                 }
               },
               "enumList": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -69,7 +71,9 @@
                 }
               },
               "list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -184,8 +188,8 @@
             "model": {
               "checks": [
                 {
-                  "expression": "\"enumList\"::text[] <@ ARRAY['A', 'B']::text[]",
-                  "name": "model_enumList_check_b238669f",
+                  "expression": "array_remove(\"enumList\"::text[], NULL) <@ ARRAY['A', 'B']::text[]",
+                  "name": "model_enumList_check_1c166cb8",
                   "prefix": "model_enumList_check"
                 },
                 {
@@ -218,7 +222,9 @@
                 },
                 "enumList": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
@@ -235,7 +241,9 @@
                 },
                 "list": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 },
@@ -314,7 +322,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "019ff2a2b0f56316f82278233a7578b1223735e43620cdd1a6d8b2f1cf37f602"
+    "storageHash": "7ee8029cfb611651262de2818234c05e0f09da1373f372c7c49a66dc81e4c0c5"
   },
   "capabilities": {
     "postgres": {

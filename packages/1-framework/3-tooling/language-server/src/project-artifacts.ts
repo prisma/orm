@@ -1,6 +1,9 @@
 import type { ContractSourceDiagnostic, PslParserOptions } from '@internal/config/config-types';
 import {
+  type Binder,
+  type BinderResult,
   buildSymbolTable,
+  createBinder,
   isPrismaNextSchema,
   type PslDiagnostic,
   type SymbolTable,
@@ -16,6 +19,7 @@ import {
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { DocumentSnapshot } from './document-snapshot';
+import { binderContextFromStack, type LspControlStack } from './lsp-control-stack';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
@@ -23,6 +27,7 @@ function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
 }
 
 export interface ProjectArtifactsOptions {
+  readonly controlStack: LspControlStack;
   readonly inputs: SchemaInputSet;
   readonly readSnapshot: (uri: string) => DocumentSnapshot | undefined;
   readonly interpretation?: ProjectInterpretation;
@@ -39,6 +44,7 @@ export class ProjectArtifacts {
   #inputs: SchemaInputSet;
   readonly #documents = new Map<string, DocumentSnapshot>();
   #symbolTableResult: SymbolTableResult | undefined;
+  #binderResult: BinderResult | undefined;
   #sources: PslSources | undefined;
   #interpretMemo: ReadonlyMap<string, readonly LspDiagnostic[]> | undefined;
 
@@ -71,9 +77,13 @@ export class ProjectArtifacts {
     const symbolDiagnostics = (projectSymbolDiagnostics ?? this.symbolDiagnostics()).filter(
       (diagnostic) => diagnostic.filename === snapshot.uri,
     );
+    const binderDiagnostics = this.#binderDiagnostics().filter(
+      (diagnostic) => diagnostic.filename === snapshot.uri,
+    );
     return [
       ...mapParseDiagnostics(snapshot.parse().diagnostics),
       ...mapParseDiagnostics(symbolDiagnostics),
+      ...mapParseDiagnostics(binderDiagnostics),
       ...this.#interpretDiagnostics(snapshot.uri),
     ];
   };
@@ -81,6 +91,19 @@ export class ProjectArtifacts {
   symbolTable = (): SymbolTable => this.#readSymbolTable();
 
   symbolDiagnostics = (): readonly PslDiagnostic[] => this.#readSymbolTableResult().diagnostics;
+
+  binder = (): Binder => this.#readBinderResult().binder;
+
+  #readBinderResult(): BinderResult {
+    if (this.#binderResult !== undefined) return this.#binderResult;
+    const symbolTable = (this.#symbolTableResult ?? this.#readSymbolTableResult()).symbolTable;
+    this.#binderResult = createBinder({
+      symbolTable,
+      sources: this.sources,
+      context: this.#interpretation?.context ?? binderContextFromStack(this.#options.controlStack),
+    });
+    return this.#binderResult;
+  }
 
   documentChanged = (uri: string): void => this.#drop(uri);
 
@@ -104,13 +127,12 @@ export class ProjectArtifacts {
   #refreshSources(): void {
     this.#sources = undefined;
     this.#symbolTableResult = undefined;
+    this.#binderResult = undefined;
     this.#interpretMemo = undefined;
   }
 
   #projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
-    if (this.#interpretation === undefined) {
-      return new Map();
-    }
+    if (this.#interpretation === undefined) return new Map();
     this.#interpretMemo ??= this.#computeInterpretDistribution(this.#interpretation);
     return this.#interpretMemo;
   }
@@ -125,8 +147,14 @@ export class ProjectArtifacts {
       (snapshot) => snapshot.parse().document,
     );
     const warnings: ContractSourceDiagnostic[] = [];
+    const binderResult = this.#readBinderResult();
     const result = activeInterpretation.source.interpret(
-      { documents: allDocuments, sources: this.sources, symbolTable: currentSymbolTable },
+      {
+        documents: allDocuments,
+        sources: this.sources,
+        symbolTable: currentSymbolTable,
+        binder: binderResult.binder,
+      },
       {
         ...activeInterpretation.context,
         reportWarning: (diagnostic) => {
@@ -232,5 +260,9 @@ export class ProjectArtifacts {
 
   #readSymbolTable(): SymbolTable {
     return this.#readSymbolTableResult().symbolTable;
+  }
+
+  #binderDiagnostics(): readonly PslDiagnostic[] {
+    return this.#readBinderResult().diagnostics;
   }
 }

@@ -33,7 +33,10 @@ const spec = sqlAttributeSpecs.field.default(
     symbols: input.symbolTable,
     model,
     field,
-    controlMutationDefaults: input.defaultFunctionRegistry,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.defaultFunctionRegistry,
+      dataTypeEntries: input.dataTypeSupport.entries,
+    },
   }),
 );
 ```
@@ -45,7 +48,7 @@ const specs = assembleAttributeSpecs(interpretation.context.authoringContributio
 const spec = specs.model['rls']?.({
   symbols: pipeline.symbolTable,
   model,
-  controlMutationDefaults: interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+  controlMutationDefaults: interpretation.context.controlMutationDefaults,
 });
 ```
 
@@ -78,7 +81,7 @@ The registry is descriptive. It supplies the specs the interpreters run; it does
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
@@ -159,10 +162,7 @@ A parameter position makes `Out` contravariant. A concrete spec — the one `mod
 
 An attribute name the registry does not carry is reported, in both families and at both levels.
 
-- SQL model level: `buildModelNodeFromPsl` in `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts` reports a name absent from both `sqlAttributeSpecs.model` and the target-contributed model attributes as `PSL_UNSUPPORTED_MODEL_ATTRIBUTE`.
-- SQL field level: `validateFieldAttributes` in `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts` reports a name absent from `sqlAttributeSpecs.field` as `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, after the `db.` prefix and removed-attribute paths have had their say. A module-level check refuses to load if a removed-attribute rule and a registered field attribute claim the same name, so the two name sets cannot overlap.
-- Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
-- Block level: the block-spec interpreter (`interpretExtensionBlock` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`) reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
+Families retain their diagnostic codes and wording, including migration hints. Model and field attributes are checked against their respective registry keys; block attributes are checked against the owning block descriptor's `attributes`.
 
 This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
 

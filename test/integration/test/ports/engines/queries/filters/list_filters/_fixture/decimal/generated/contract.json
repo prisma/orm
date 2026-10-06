@@ -16,7 +16,9 @@
           "TestModel": {
             "fields": {
               "decimal": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -65,7 +67,9 @@
               "columns": {
                 "decimal": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "numeric",
                   "nullable": false
                 },
@@ -90,7 +94,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7eaa488c883f1e037cea95529cab0a2d848db0fc17861f3e0fddabd00911f167"
+    "storageHash": "cafb04ec76956f4dc3e194f64f40481c39da02d71be23bc1b3d01d06d54581df"
   },
   "capabilities": {
     "postgres": {

@@ -9,7 +9,16 @@ function normalizeModels(
   return Object.fromEntries(
     Object.entries(models).map(([name, model]) => [
       name,
-      { ...model, relations: model.relations ?? {} },
+      {
+        ...model,
+        fields: Object.fromEntries(
+          Object.entries(model.fields).map(([fieldName, field]) => [
+            fieldName,
+            { ...field, many: field.many ?? false },
+          ]),
+        ),
+        relations: model.relations ?? {},
+      },
     ]),
   ) as Record<string, ContractModelBase>;
 }
@@ -17,7 +26,7 @@ function normalizeModels(
 const defaultTables = {
   User: {
     columns: {
-      id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+      id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],

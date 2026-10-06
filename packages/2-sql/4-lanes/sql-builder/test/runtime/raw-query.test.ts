@@ -191,8 +191,8 @@ describe('storage column names that collide with object machinery', () => {
   // express the name, so the getter is exercised against its own typed input.
   const table = new StorageTable({
     columns: Object.fromEntries([
-      ['id', { codecId: 'pg/text@1', nullable: false, nativeType: 'text' }],
-      ['__proto__', { codecId: 'pg/text@1', nullable: true, nativeType: 'text' }],
+      ['id', { many: false, codecId: 'pg/text@1', nullable: false, nativeType: 'text' }],
+      ['__proto__', { many: false, codecId: 'pg/text@1', nullable: true, nativeType: 'text' }],
     ]),
     uniques: [],
     indexes: [],

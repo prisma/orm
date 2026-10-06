@@ -93,8 +93,16 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           models: {
             User: {
               fields: {
-                id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-                name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                id: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
+                name: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                },
               },
               relations: {},
               storage: {
@@ -109,9 +117,21 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           models: {
             Note: {
               fields: {
-                id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-                body: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-                authorId: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+                id: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
+                body: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                },
+                authorId: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
               },
               relations: {
                 author: {

@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'684b4f51e9b798d6e691aaf5e2c04918aa635cfa3bce005236264630dd3c33ed'>;
+  StorageHashBase<'78a59a74db59f8f6e88d76a29d88491400759ae329a36b9c20b335ed527e984f'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -358,56 +358,67 @@ type ContractBase = Omit<
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly bool: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly bytes: {
                   readonly nativeType: 'bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly childId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly dt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly empty: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly float: {
                   readonly nativeType: 'float8';
                   readonly codecId: 'pg/float8@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly int: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly parentId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly string: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly unset: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               primaryKey: { readonly columns: readonly ['childId'] };
@@ -441,6 +452,7 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -471,17 +483,17 @@ type ContractBase = Omit<
               readonly bInt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly bool: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly bytes: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bytea@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly childId: {
                 readonly nullable: false;
@@ -493,22 +505,22 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly empty: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly float: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly int: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly parentId: {
                 readonly nullable: true;
@@ -517,12 +529,12 @@ type ContractBase = Omit<
               readonly string: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly unset: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: {

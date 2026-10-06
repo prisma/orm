@@ -3,7 +3,12 @@ import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/
 import type { ControlPolicy } from '@internal/contract/types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
-import { buildSymbolTable, isPrismaNextSchema, mapPslDiagnostics } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  isPrismaNextSchema,
+  mapPslDiagnostics,
+} from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
@@ -16,7 +21,6 @@ import { basename, extname } from 'pathe';
 import { isDynamicPattern } from 'tinyglobby';
 
 import { interpretPslDocumentToSqlContract } from './interpreter';
-import type { ColumnDescriptor } from './psl-column-resolution';
 
 export interface PrismaContractOptions {
   readonly output?: string;
@@ -75,12 +79,14 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
     format: 'psl',
     inputs: [schemaPath],
     interpret(input, context) {
-      const scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor> =
-        collectScalarTypeConstructors(context.authoringContributions.type);
+      const scalarColumnDescriptors = collectScalarTypeConstructors(
+        context.authoringContributions.type,
+      );
       return interpretPslDocumentToSqlContract({
         documents: input.documents,
         symbolTable: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         seedDiagnostics: [],
         target: options.target,
         authoringContributions: context.authoringContributions,
@@ -161,24 +167,32 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       const [firstSources, ...restSources] = parsed.map(({ sources }) => sources);
       assertDefined(firstSources, 'prismaContract requires at least one parsed schema file');
       const sources = firstSources.merge(...restSources);
-      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-        documents,
-        sources,
-      });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
       const seedDiagnostics = [
         ...readDiagnostics,
         ...mapPslDiagnostics(
-          [...parsed.flatMap(({ diagnostics }) => diagnostics), ...symbolTableDiagnostics],
+          parsed.flatMap(({ diagnostics }) => diagnostics),
           sources,
         ),
       ];
 
+      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+        documents,
+        sources,
+      });
+      const { binder, diagnostics: binderDiagnostics } = createBinder({
+        symbolTable,
+        sources,
+        context,
+      });
       const interpreted = withSeedDiagnostics(
-        this.interpret({ documents, sources, symbolTable }, context),
-        seedDiagnostics,
+        this.interpret({ documents, sources, symbolTable, binder }, context),
+        [
+          ...seedDiagnostics,
+          ...mapPslDiagnostics([...symbolTableDiagnostics, ...binderDiagnostics], sources),
+        ],
       );
       if (!interpreted.ok) {
         return interpreted;

@@ -224,6 +224,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
       driver,
       ...ifDefined('verifyMarker', options.verifyMarker),
       ...ifDefined('middleware', options.middleware),
+      closeRefusal: 'at-once',
     });
 
     return runtimeInstance;

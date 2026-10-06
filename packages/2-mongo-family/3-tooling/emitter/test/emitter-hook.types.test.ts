@@ -8,8 +8,16 @@ describe('mongoEmission.validateTypes', () => {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            name: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
           storage: { collection: 'users' },
@@ -29,7 +37,7 @@ describe('mongoEmission.validateTypes', () => {
       models: {
         User: {
           fields: {
-            name: { nullable: false, type: { kind: 'scalar', codecId: '' } },
+            name: { nullable: false, many: false, type: { kind: 'scalar', codecId: '' } },
           },
           relations: {},
           storage: {},
@@ -44,7 +52,11 @@ describe('mongoEmission.validateTypes', () => {
       models: {
         User: {
           fields: {
-            name: { nullable: false, type: { kind: 'scalar', codecId: 'invalid-format' } },
+            name: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'invalid-format' },
+            },
           },
           relations: {},
           storage: {},

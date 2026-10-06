@@ -44,7 +44,7 @@ async function createRuntime(path: string) {
   await driver.connect({ kind: 'path', path });
   return {
     context,
-    runtime: new SqliteRuntimeImpl({ context, adapter, driver }),
+    runtime: new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined }),
   };
 }
 

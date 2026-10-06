@@ -428,26 +428,30 @@ describe('a closed connection', () => {
     expect(() => db.runtime()).toThrow(expect.objectContaining(closedConnectionError));
   });
 
-  it('an ORM read fails with DRIVER.NOT_CONNECTED', async () => {
+  it('an ORM read is refused by the closed runtime with DRIVER.NOT_CONNECTED', async () => {
     const db = await closedConnection();
 
-    await expect(db.orm.public.User.first()).rejects.toMatchObject(closedConnectionError);
+    await expect(db.orm.public.User.first()).rejects.toMatchObject({
+      code: 'DRIVER.NOT_CONNECTED',
+      message: 'Runtime is closed',
+    });
   });
 
-  it('db.transaction() fails with DRIVER.NOT_CONNECTED', async () => {
+  it('db.transaction() is refused by the closed runtime with DRIVER.NOT_CONNECTED', async () => {
     const db = await closedConnection();
 
-    expect(() => db.transaction(async () => undefined)).toThrow(
-      expect.objectContaining(closedConnectionError),
-    );
+    await expect(db.transaction(async () => undefined)).rejects.toMatchObject({
+      code: 'DRIVER.NOT_CONNECTED',
+      message: 'Runtime is closed',
+    });
   });
 
-  it('db.prepare() fails with DRIVER.NOT_CONNECTED', async () => {
+  it('db.prepare() goes through the runtime, which still prepares because preparing sends nothing to the database', async () => {
     const db = await closedConnection();
 
-    expect(() => db.prepare({}, () => db.sql.public.users.select('id').build())).toThrow(
-      expect.objectContaining(closedConnectionError),
-    );
+    await expect(
+      db.prepare({}, () => db.sql.public.users.select('id').build()),
+    ).resolves.toBeDefined();
   });
 });
 

@@ -1,0 +1,23 @@
+// use prisma-8
+
+namespace public {
+  model Account {
+    id Int @id
+  }
+
+  model UserProfile {
+    id        Int    @id
+    email     String
+    handle    String
+    tenantId  Int    @map("tenant_id")
+    accountId Int
+
+    @@rls
+  }
+
+  policy_select tenant_read {
+    target = UserProfile
+    roles  = [app_user]
+    using  = "(tenant_id = 1)"
+  }
+}

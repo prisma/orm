@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkUncomposedNamespace,
   fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../src/shared/field-preset-resolution';
@@ -142,19 +141,4 @@ describe('fieldPresetSpellings', () => {
   it('lists nothing for a namespace that holds no preset at any depth', () => {
     expect(fieldPresetSpellings({ field: { ext: { empty: {} } } }, 'ext')).toEqual([]);
   });
-});
-
-describe('checkUncomposedNamespace', () => {
-  const context = { familyId: 'fam', targetId: 'tgt', authoringContributions: contributions };
-
-  it('returns the namespace of an attribute from an uncomposed extension', () => {
-    expect(checkUncomposedNamespace('ext.foo', new Set(), context)).toBe('ext');
-  });
-
-  it.each(['db.Text', 'fam.foo', 'tgt.foo', 'temporal.foo', 'composed.foo', 'plain', '.x', 'x.'])(
-    'accepts %s',
-    (name) => {
-      expect(checkUncomposedNamespace(name, new Set(['composed']), context)).toBeUndefined();
-    },
-  );
 });

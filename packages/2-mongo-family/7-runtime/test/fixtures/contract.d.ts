@@ -10,22 +10,27 @@ type UserModel = {
   readonly fields: {
     readonly _id: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly name: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly email: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly bio: {
       readonly nullable: true;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly createdAt: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
   };
@@ -46,38 +51,47 @@ type PostModel = {
   readonly fields: {
     readonly _id: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly title: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly slug: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly content: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly status: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly authorId: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly viewCount: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
     };
     readonly publishedAt: {
       readonly nullable: true;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
     readonly updatedAt: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
   };

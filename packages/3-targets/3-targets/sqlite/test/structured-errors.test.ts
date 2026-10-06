@@ -1,5 +1,4 @@
-import { CheckExpressionConstraint } from '@internal/sql-relational-core/ast';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { checkExpression, col } from '@internal/sql-relational-core/contract-free';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { sqliteBigintDescriptor, sqliteRealDescriptor } from '../src/core/codecs';
@@ -88,7 +87,12 @@ describe('structured error codes', () => {
 
   it('unsafe native type raises CONTRACT.NATIVE_TYPE_INVALID', () => {
     const error = capture(() =>
-      buildColumnTypeSql({ nativeType: 'TEXT; DROP', nullable: true, codecId: 'sqlite/text@1' }),
+      buildColumnTypeSql({
+        many: false,
+        nativeType: 'TEXT; DROP',
+        nullable: true,
+        codecId: 'sqlite/text@1',
+      }),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
@@ -100,7 +104,13 @@ describe('structured error codes', () => {
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {
     const error = capture(() =>
       buildColumnTypeSql(
-        { nativeType: 'unused', nullable: true, codecId: 'sqlite/text@1', typeRef: 'missing' },
+        {
+          many: false,
+          nativeType: 'unused',
+          nullable: true,
+          codecId: 'sqlite/text@1',
+          typeRef: 'missing',
+        },
         {},
       ),
     );
@@ -121,7 +131,7 @@ describe('structured error codes', () => {
     const call = new CreateTableCall(
       'user',
       [col('id', 'INTEGER')],
-      [new CheckExpressionConstraint({ name: 'chk', expression: '1 = 1' })],
+      [checkExpression('chk', '1 = 1')],
     );
     const error = capture(() => call.renderTypeScript());
     expect(isStructuredError(error)).toBe(true);

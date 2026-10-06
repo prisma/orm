@@ -7,9 +7,12 @@ import { orm } from '../src/orm';
 import { buildTestContextFromContract, createMockRuntime, type MockRuntime } from './helpers';
 
 function storageTable(columns: string[]) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<
+    string,
+    { codecId: string; nativeType: string; nullable: boolean; many: false }
+  > = {};
   for (const column of columns) {
-    cols[column] = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
+    cols[column] = { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false };
   }
   return {
     columns: cols,

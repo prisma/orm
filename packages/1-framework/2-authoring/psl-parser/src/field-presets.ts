@@ -1,75 +1,24 @@
 import {
-  type AuthoringContributions,
   type AuthoringFieldPresetDescriptor,
-  fieldPresetSpellings,
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { mapPslHelperArgs } from './authoring-arguments';
-import type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from './diagnostic';
+import type { DiagnosticSource, PslDiagnosticCollector } from './diagnostic';
 import type { ResolvedTypeConstructorCall } from './resolve';
 
-/**
- * Pushes the canonical `PSL_EXTENSION_NAMESPACE_NOT_COMPOSED` diagnostic for a subject (attribute, model attribute, or type constructor) that references an extension namespace which is not composed in the current contract.
- *
- * The `data` payload carries the missing namespace so machine consumers (agents, IDE extensions, CLI auto-fix) don't have to parse the prose.
- */
-export function uncomposedNamespaceDiagnostic(input: {
-  readonly subjectLabel: string;
-  readonly namespace: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-}): PslDiagnostic {
-  return {
-    code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-    message: `${input.subjectLabel} uses unrecognized namespace "${input.namespace}". Add extension pack "${input.namespace}" to extensions in prisma.config.ts.`,
-    ...input.source.at(input.span),
-    data: { namespace: input.namespace, suggestedPack: input.namespace },
-  };
-}
-
-export function reportUncomposedNamespace(input: {
-  readonly subjectLabel: string;
-  readonly namespace: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-  readonly diagnostics: PslDiagnosticCollector;
-}): void {
-  input.diagnostics.push(
-    uncomposedNamespaceDiagnostic({
-      subjectLabel: input.subjectLabel,
-      namespace: input.namespace,
-      source: input.source,
-      span: input.span,
-    }),
-  );
-}
-
-/**
- * Pushes the canonical `PSL_UNKNOWN_FIELD_PRESET` diagnostic when a typoed preset name is referenced inside a registered field-preset namespace. The `data` payload exposes the namespace and full helper path so machine consumers (agents, IDE extensions) don't have to parse the prose.
- */
-export function reportUnknownFieldPreset(input: {
+export function reportPresetNotCalled(input: {
   readonly entityLabel: string;
-  readonly namespace: string;
-  readonly helperPath: string;
-  readonly authoringContributions: AuthoringContributions | undefined;
+  readonly presetPath: string;
   readonly source: DiagnosticSource;
   readonly span: PslSpan;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
-  const presets = fieldPresetSpellings(input.authoringContributions, input.namespace);
-  const listed =
-    presets.length === 0
-      ? 'no field presets'
-      : presets.length === 1
-        ? presets.join('')
-        : `${presets.slice(0, -1).join(', ')} and ${presets.at(-1)}`;
   input.diagnostics.push({
-    code: 'PSL_UNKNOWN_FIELD_PRESET',
-    message: `${input.entityLabel} references unknown field preset "${input.helperPath}". The "${input.namespace}" namespace has ${listed}.`,
+    code: 'PSL_PRESET_NOT_CALLED',
+    message: `${input.entityLabel} uses field preset "${input.presetPath}" without calling it. Write ${input.presetPath}().`,
     ...input.source.at(input.span),
-    data: { namespace: input.namespace, helperPath: input.helperPath },
   });
 }
 

@@ -11,16 +11,16 @@
  * The cache key is computed by the runtime via
  * `RuntimeMiddlewareContext.contentHash(exec)` — the post-lowering
  * statement plus parameters, hashed to a bounded SHA-512 digest.
- * Subsequent calls with the same plan within the TTL window are
+ * Subsequent calls with the same plan while the entry lives are
  * served from the cache without invoking the driver.
  */
 import { cacheAnnotation } from '@prisma/orm-extension-middleware-cache';
 import { db } from '../prisma/db';
 
-export async function getUsersCached(limit = 10, ttlMs = 60_000) {
+export async function getUsersCached(limit = 10) {
   const plan = db.sql.public.user
     .select('id', 'email', 'createdAt', 'kind')
-    .annotate(cacheAnnotation({ ttl: ttlMs }))
+    .annotate(cacheAnnotation({}))
     .limit(limit)
     .build();
   return db.runtime().query(plan);

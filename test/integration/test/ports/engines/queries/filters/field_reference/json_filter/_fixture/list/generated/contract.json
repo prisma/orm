@@ -30,7 +30,9 @@
                 }
               },
               "json_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -38,7 +40,9 @@
                 }
               },
               "json_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -101,13 +105,17 @@
                 },
                 "json_list": {
                   "codecId": "pg/jsonb@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "jsonb",
                   "nullable": false
                 },
                 "json_list2": {
                   "codecId": "pg/jsonb@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "jsonb",
                   "nullable": false
                 }
@@ -127,7 +135,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2e67372f379c2785af7c65a09d4abb5cddad7150a53666ce736fe6d8bc56f671"
+    "storageHash": "94da78f8dcb9bc6ca653282a89157284290ec310863cabb852c6ca8b7954d826"
   },
   "capabilities": {
     "postgres": {

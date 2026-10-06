@@ -3,8 +3,8 @@ export type {
   AuthoringTypeConstructorOutput,
 } from '../shared/authoring-type-constructor-call';
 export { findAuthoringTypeConstructorCall } from '../shared/authoring-type-constructor-call';
+export { type EnumBlockMember, readEnumBlockMembers } from '../shared/enum-block-members';
 export {
-  checkUncomposedNamespace,
   fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../shared/field-preset-resolution';
@@ -50,7 +50,6 @@ export {
   collectScalarTypeConstructors,
   flushAuthoringWarnings,
   getAuthoringTypeConstructor,
-  hasRegisteredFieldNamespace,
   instantiateAuthoringEntityType,
   instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeConstructor,

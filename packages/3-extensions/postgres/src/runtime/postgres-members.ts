@@ -61,23 +61,25 @@ export interface PostgresRuntimeBoundMembersOptions<TContract extends Contract<S
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
   readonly getRuntime: () => Runtime;
+  // The runtime that ORM queries, transaction() and prepare() run on. An owner whose close() should let continuing work finish returns its runtime even after close(), so the runtime's own rule decides; otherwise it is getRuntime.
+  readonly getRuntimeForWork: () => Runtime;
 }
 
 export function buildPostgresRuntimeBoundMembers<TContract extends Contract<SqlStorage>>(
   options: PostgresRuntimeBoundMembersOptions<TContract>,
 ): PostgresRuntimeBoundMembers<TContract> {
-  const { context, rawCodecInferer, enums, nativeEnums, getRuntime } = options;
+  const { context, rawCodecInferer, enums, nativeEnums, getRuntime, getRuntimeForWork } = options;
 
   const orm: OrmClient<TContract> = ormBuilder({
     runtime: {
       query(plan) {
-        return getRuntime().query(plan);
+        return getRuntimeForWork().query(plan);
       },
       execute(plan) {
-        return getRuntime().execute(plan);
+        return getRuntimeForWork().execute(plan);
       },
       connection() {
-        return getRuntime().connection();
+        return getRuntimeForWork().connection();
       },
     },
     context,
@@ -91,7 +93,7 @@ export function buildPostgresRuntimeBoundMembers<TContract extends Contract<SqlS
     declaration: D,
     callback: (params: BindSiteParams<D>) => Q,
   ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
-    return prepareQuery<D, Q, CT>(getRuntime(), declaration, callback);
+    return prepareQuery<D, Q, CT>(getRuntimeForWork(), declaration, callback);
   }
 
   return {
@@ -104,7 +106,7 @@ export function buildPostgresRuntimeBoundMembers<TContract extends Contract<SqlS
     prepare,
 
     transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
-      return withTransaction(getRuntime(), (txCtx) => {
+      return withTransaction(getRuntimeForWork(), (txCtx) => {
         const txSql: Db<TContract> = sqlBuilder<TContract>({
           context,
           rawCodecInferer,

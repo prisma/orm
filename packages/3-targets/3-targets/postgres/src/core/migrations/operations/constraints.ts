@@ -1,5 +1,6 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
+import { opaqueSql, renderOpaqueSql } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { constraintExistsAst } from '../../../contract-free/checks';
 import { quoteIdentifier } from '../../sql-utils';
@@ -154,16 +155,35 @@ export async function addCheckConstraint(
     execute: [
       step(
         `add check constraint "${constraintName}"`,
-        `ALTER TABLE ${qualified} ADD CONSTRAINT ${quoteIdentifier(constraintName)} CHECK (${expression})`,
+        `ALTER TABLE ${qualified} ADD CONSTRAINT ${quoteIdentifier(constraintName)} CHECK (${renderOpaqueSql(opaqueSql(expression))})`,
       ),
     ],
     postcheck: [step(`verify constraint "${constraintName}" exists`, present.sql, present.params)],
   };
 }
 
-export async function renameCheckConstraint(
+export type RenamableConstraintKind = 'primaryKey' | 'unique' | 'foreignKey' | 'checkConstraint';
+
+const CONSTRAINT_KIND_LABEL: Readonly<Record<RenamableConstraintKind, string>> = {
+  primaryKey: 'primary key',
+  unique: 'unique constraint',
+  foreignKey: 'foreign key',
+  checkConstraint: 'check constraint',
+};
+
+export function renameConstraintLabel(
+  kind: RenamableConstraintKind,
+  fromName: string,
+  toName: string,
+  tableName: string,
+): string {
+  return `Rename ${CONSTRAINT_KIND_LABEL[kind]} "${fromName}" to "${toName}" on "${tableName}"`;
+}
+
+export async function renameConstraint(
   schemaName: string,
   tableName: string,
+  kind: RenamableConstraintKind,
   fromName: string,
   toName: string,
   lowerer: ExecuteRequestLowerer,
@@ -182,19 +202,19 @@ export async function renameCheckConstraint(
     table: tableName,
   });
   return {
-    id: `checkConstraint.${schemaName}.${tableName}.${fromName}.rename`,
-    label: `Rename check constraint "${fromName}" to "${toName}" on "${tableName}"`,
+    id: `${kind}.${schemaName}.${tableName}.${fromName}.rename`,
+    label: renameConstraintLabel(kind, fromName, toName, tableName),
     operationClass: 'widening',
     // The NEW name is the constraint's contract-side identity — the rename
     // convention indexes and policies already follow.
-    target: targetDetails('checkConstraint', toName, schemaName, tableName),
+    target: targetDetails(kind, toName, schemaName, tableName),
     precheck: [
       step(`ensure constraint "${fromName}" exists`, from.present.sql, from.present.params),
       step(`ensure constraint "${toName}" does not exist`, to.absent.sql, to.absent.params),
     ],
     execute: [
       step(
-        `rename check constraint "${fromName}" to "${toName}"`,
+        `rename ${CONSTRAINT_KIND_LABEL[kind]} "${fromName}" to "${toName}"`,
         `ALTER TABLE ${qualified} RENAME CONSTRAINT ${quoteIdentifier(fromName)} TO ${quoteIdentifier(toName)}`,
       ),
     ],

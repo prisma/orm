@@ -63,6 +63,12 @@ export interface ContractSourceContext {
    * Receives a warning the source reports while it still produces a contract, such as a deprecated name. Callers that show diagnostics supply it; a source reports through it when present and otherwise drops the warning.
    */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  readonly pslDiagnostics?:
+    | {
+        readonly describeUnsupportedAttribute?: unknown;
+        readonly describeUnresolvedType?: unknown;
+      }
+    | undefined;
 }
 
 /**

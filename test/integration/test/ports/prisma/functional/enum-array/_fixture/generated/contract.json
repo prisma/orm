@@ -42,7 +42,9 @@
                 }
               },
               "plans": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -82,8 +84,8 @@
             "user": {
               "checks": [
                 {
-                  "expression": "\"plans\"::text[] <@ ARRAY['FREE', 'PAID', 'CUSTOM']::text[]",
-                  "name": "user_plans_check_86e31b31",
+                  "expression": "array_remove(\"plans\"::text[], NULL) <@ ARRAY['FREE', 'PAID', 'CUSTOM']::text[]",
+                  "name": "user_plans_check_15afb6ce",
                   "prefix": "user_plans_check"
                 },
                 {
@@ -100,7 +102,9 @@
                 },
                 "plans": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
@@ -136,7 +140,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "28369815a587ef18873c40e9269de8b47a1f0d86f1c34db4748d24cd98cdb9cb"
+    "storageHash": "842a26442455b5ded0b2e51bb1beb20754c4fd6e47ce144659c9221ba785eb31"
   },
   "execution": {
     "executionHash": "e18dbda8332f8974e92016590064ce897aa2fb8f1ca059429e3460e668f4e488",

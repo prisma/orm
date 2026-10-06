@@ -29,6 +29,7 @@ import { describeWithMongoDB } from './setup';
 type ScalarField<TCodecId extends string> = {
   readonly type: { readonly kind: 'scalar'; readonly codecId: TCodecId };
   readonly nullable: false;
+  readonly many: false;
 };
 
 type PipelineContract = MongoContract & {
@@ -102,6 +103,7 @@ type TContract = MongoContractWithTypeMaps<PipelineContract, TestTypeMaps>;
 const scalarField = <TCodecId extends string>(codecId: TCodecId) => ({
   type: { kind: 'scalar' as const, codecId },
   nullable: false,
+  many: false,
 });
 
 const contractJson = {

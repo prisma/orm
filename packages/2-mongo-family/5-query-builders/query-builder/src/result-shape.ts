@@ -26,15 +26,16 @@ function elementShape(
   enclosing: ReadonlySet<string>,
 ): MongoFieldShape {
   const { type } = field;
+  const nullable = !!field.many && field.many.elementNullable;
   if (type.kind === 'scalar') {
-    return { kind: 'leaf', codecId: type.codecId, nullable: false };
+    return { kind: 'leaf', codecId: type.codecId, nullable };
   }
   if (type.kind !== 'valueObject' || enclosing.has(type.name)) return UNKNOWN;
   const valueObject = valueObjects[type.name];
   if (valueObject === undefined) return UNKNOWN;
   return {
     kind: 'document',
-    nullable: false,
+    nullable,
     fields: valueObjectFields(valueObject, valueObjects, new Set([...enclosing, type.name])),
   };
 }
@@ -47,7 +48,7 @@ function fieldShape(
   if (field.dict === true) return UNKNOWN;
   const element = elementShape(field, valueObjects, enclosing);
   if (element.kind === 'unknown') return UNKNOWN;
-  if (field.many === true) {
+  if (field.many) {
     return { kind: 'array', nullable: field.nullable, element };
   }
   return { ...element, nullable: field.nullable };

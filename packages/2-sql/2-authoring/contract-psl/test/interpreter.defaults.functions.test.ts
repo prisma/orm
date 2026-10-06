@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { symbolTableInputFromParseArgs } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
-  interpretPslDocumentToSqlContract,
+  interpretPostgresSchema,
 } from './interpreter-defaults-support';
 
 describe('interpretPslDocumentToSqlContract default function lowering', () => {
   it('lowers supported default functions into execution and storage contract shapes', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Defaults {
+    const result = interpretPostgresSchema(
+      `model Defaults {
   id Int @id
   idCuid2 String @default(cuid(2))
   idUuidV4 String @default(uuid())
@@ -20,13 +19,10 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
   dbExpr String @default(sql\`gen_random_uuid()\`)
   createdAt DateTime @default(now())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -104,8 +100,8 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
   });
 
   it('accepts uuid() and uuid(7) defaults on bare Uuid columns, preserving native uuid storage type', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretPostgresSchema(
+      `types {
   UuidNativeId = Uuid
 }
 
@@ -113,13 +109,10 @@ model UuidNative {
   idV4 UuidNativeId @id @default(uuid())
   idV7 UuidNativeId @default(uuid(7))
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -152,8 +145,8 @@ model UuidNative {
   });
 
   it('accepts uuid() default on a named Uuid type field (e.g. id Uuid @id @default(uuid())), preserving native uuid storage type', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretPostgresSchema(
+      `types {
   Uuid = Uuid
 }
 
@@ -161,13 +154,10 @@ model Profile {
   id Uuid @id @default(uuid())
   name String
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -192,21 +182,18 @@ model Profile {
   });
 
   it('rejects non-uuid generators on bare Uuid columns with PSL_INVALID_DEFAULT_APPLICABILITY', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretPostgresSchema(
+      `types {
   UuidNativeId = Uuid
 }
 
 model UuidNativeBad {
   id UuidNativeId @id @default(nanoid())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -222,20 +209,17 @@ model UuidNativeBad {
   });
 
   it('returns diagnostics for unsupported default functions and invalid arguments', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model InvalidDefaults {
+    const result = interpretPostgresSchema(
+      `model InvalidDefaults {
   id Int @id
   cuidValue String @default(cuid())
   badUuid String @default(uuid(5))
   badNanoid String @default(nanoid(1))
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -251,19 +235,16 @@ model UuidNativeBad {
   });
 
   it('reports dbgenerated as removed and names the tagged literal that replaces it', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Removed {
+    const result = interpretPostgresSchema(
+      `model Removed {
   id Int @id
   token String @default(dbgenerated("gen_random_uuid()"))
   bare String @default(dbgenerated())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -283,18 +264,15 @@ model UuidNativeBad {
   });
 
   it('returns diagnostics for optional fields with execution defaults', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model OptionalDefaults {
+    const result = interpretPostgresSchema(
+      `model OptionalDefaults {
   id Int @id
   token String? @default(nanoid())
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -313,18 +291,15 @@ model UuidNativeBad {
   });
 
   it('preserves raw sql defaults for timestamp columns', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Defaults {
+    const result = interpretPostgresSchema(
+      `model Defaults {
   id Int @id
   touchedAt DateTime @default(sql\`clock_timestamp()\`)
 }`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

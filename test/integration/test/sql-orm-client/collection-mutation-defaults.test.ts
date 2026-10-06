@@ -41,6 +41,7 @@ function buildTagWithUpdatedAtContract(
   const tagFields = tagModel['fields'] as Record<string, unknown>;
   tagFields['updatedAt'] = {
     nullable: false,
+    many: false,
     type: { kind: 'scalar', codecId },
   };
   const tagStorage = tagModel['storage'] as Record<string, unknown>;

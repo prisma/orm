@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'db84b109afa8ccab6e32a70f2053101f12a232891c52d445f5f023a3d237e195'>;
+  StorageHashBase<'5c0baa131866139cb38390f049f646699217645d3248a1d38fb50144a8348aee'>;
 export type ExecutionHash =
   ExecutionHashBase<'d37d6cdcd69355911c95feb313e24897fe99136ac9e816c500b26e18f71a8d57'>;
 export type ProfileHash =
@@ -303,11 +303,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly words: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -341,7 +343,7 @@ type ContractBase = Omit<
               readonly words: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;

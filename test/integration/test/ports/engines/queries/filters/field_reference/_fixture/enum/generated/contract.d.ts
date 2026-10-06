@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a58ac14bf968332c1d2a26237f9e3e91535eb4a8c4998f2ae5951a447a1ee386'>;
+  StorageHashBase<'5ee7fe8a76320fa89310e105cea51c40365325429a1b57d3524df5feacac156f'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -308,17 +308,20 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly typeName: 'TestEnum' };
+                  readonly many: false;
                 };
                 readonly enum2: {
                   readonly nativeType: 'TestEnum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly typeName: 'TestEnum' };
+                  readonly many: { readonly elementNullable: false };
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -366,7 +369,7 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly typeParams: { readonly typeName: 'TestEnum' };
                 };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly id: {
                 readonly nullable: false;

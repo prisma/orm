@@ -108,9 +108,7 @@ export function parseWireName(name: string): WireName | undefined {
 }
 
 /**
- * Stabilizes an authored SQL body (index expression, partial-index predicate,
- * RLS policy predicate) for hashing: trim, and collapse runs of internal
- * whitespace to a single space.
+ * Stabilizes an authored SQL body (index expression, partial-index predicate, RLS policy predicate) for hashing: trim, and collapse runs of internal whitespace to a single space. A body that contains `--` is collapsed line by line and keeps its line breaks.
  *
  * This is deliberately minimal. The content hash is the equivalence relation
  * for a wire-named object, and the wire name (prefix + hash) is the only
@@ -120,10 +118,19 @@ export function parseWireName(name: string): WireName | undefined {
  * (lowercasing, paren-stripping, cast-alias folding) risks collapsing two
  * distinct bodies onto one hash.
  *
- * The normalizer is a stability commitment: any change re-suffixes all wire names.
+ * A body that contains `--` keeps its line breaks, because a line break ends a line comment: `a --c` followed by a line break and `b` compares `b`, while `a --c b` does not. Such a body is split into lines, each line is collapsed and trimmed, blank lines are dropped, and the lines are joined with `\n`. Every body without `--` normalizes as it always has.
+ *
+ * The normalizer gives the same output on its own output, which policy hashing relies on: it normalizes twice.
+ *
+ * The normalizer is a stability commitment: a change to it re-suffixes the wire name of every body whose normalized form changes, so a change must say which bodies it affects. See ADR 234, "Normalizer stability".
  */
 export function normalizeSqlBody(sql: string): string {
-  return sql.replace(/\s+/g, ' ').trim();
+  if (!sql.includes('--')) return sql.replace(/\s+/g, ' ').trim();
+  return sql
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((line) => line !== '')
+    .join('\n');
 }
 
 /**

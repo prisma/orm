@@ -3,13 +3,8 @@ import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { entityRef, modelAttribute, optional, structBlock } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
-import {
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 const pslBlockDescriptors = {
   audit_rule: {
@@ -57,12 +52,7 @@ const auditContributions: AuthoringContributions = {
 };
 
 function interpretWith(schema: string) {
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),

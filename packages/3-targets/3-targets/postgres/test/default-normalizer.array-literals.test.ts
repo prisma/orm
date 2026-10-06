@@ -291,3 +291,23 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 });
+
+describe('parsePostgresDefault uuid array literals', () => {
+  it.each([
+    { raw: "'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,B0EEBC999C0B4EF8BB6D6BB9BD380A11}'::uuid[]" },
+    {
+      raw: '\'{"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11","{B0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}"}\'',
+    },
+  ])('reads each element of $raw as the text Postgres prints', ({ raw }) => {
+    expect(parsePostgresDefault(raw, 'uuid[]')).toEqual({
+      kind: 'literal',
+      value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'],
+    });
+  });
+
+  it('keeps the case of uuid-shaped elements of a text array', () => {
+    expect(
+      parsePostgresDefault("'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'::text[]", 'text[]'),
+    ).toEqual({ kind: 'literal', value: ['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'] });
+  });
+});

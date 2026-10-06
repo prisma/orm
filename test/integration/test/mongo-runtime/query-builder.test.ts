@@ -23,6 +23,7 @@ import { withMongod } from '../mongo/setup';
 type ScalarField<TCodecId extends string> = {
   readonly type: { readonly kind: 'scalar'; readonly codecId: TCodecId };
   readonly nullable: false;
+  readonly many: false;
 };
 
 type TestContract = MongoContract & {
@@ -60,6 +61,7 @@ type PlanRow<TPlan> = TPlan extends MongoQueryPlan<infer Row> ? Row : never;
 const scalarField = <TCodecId extends string>(codecId: TCodecId) => ({
   type: { kind: 'scalar' as const, codecId },
   nullable: false,
+  many: false,
 });
 
 const contractJson = {

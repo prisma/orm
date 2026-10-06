@@ -79,8 +79,8 @@ function typeMapCall(
  * The PSL type position for a storage column: a call to a type constructor the configured stack
  * contributes that produces exactly the column's codec, native type and type parameters. The
  * constructor the type map `contract infer` uses names for the native type comes first; otherwise
- * the first one in the stack that produces them, such as `TimestamptzString(3)` for a `timestamptz`
- * column carried as text, or `pgvector.Vector(3)`. An enum-typed column takes the
+ * the first one in the stack that produces them, such as `DateTime` for a `timestamptz` column read
+ * as a `Temporal.Instant`, or `pgvector.Vector(3)`. An enum-typed column takes the
  * `pg.enum(<Block>)` constructor, named after the value set the column points at; a column typed by
  * a domain enum takes that enum's name. A column no PSL type reads back is refused.
  */
