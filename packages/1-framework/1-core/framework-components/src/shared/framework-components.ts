@@ -39,7 +39,7 @@ export interface ComponentMetadata {
        */
       readonly controlPlaneHooks?: Record<string, unknown>;
       /**
-       * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `targetTypes`, `renderOutputType`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
+       * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `renderOutputType`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
        */
       readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
     };

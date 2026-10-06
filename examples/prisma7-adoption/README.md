@@ -1,6 +1,6 @@
 # Adopting Prisma 8 beside Prisma 7
 
-A Prisma 7 project (PostgreSQL) adopts Prisma 8 the way the public guide [Prisma ORM 7 to 8 (PostgreSQL)](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) describes, with one change: instead of running `prisma contract infer` and hand-editing the inferred contract, Prisma 8 reads `prisma/schema.prisma` directly through `prisma7Schema(...)`. Prisma 7 is installed for real (`@prisma/prisma7`, `@prisma/client`, `@prisma/adapter-pg`, all 7.10.0) and keeps owning the database and its migrations; Prisma 8 reads the schema, signs and verifies the database, and serves the routes that have moved. Nothing is hand-edited.
+A Prisma 7 project (PostgreSQL) adopts Prisma 8 the way the public guide [Prisma ORM 7 to 8 (PostgreSQL)](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) describes, with one change: instead of running `prisma contract infer` and hand-editing the inferred contract, Prisma 8 reads `prisma/schema.prisma` directly through `prisma7Schema(...)`. Prisma 7 is installed for real (`@prisma/prisma7`, `@prisma/client`, `@prisma/adapter-pg`, all 7.10.0). At first it keeps owning the database and its migrations, while Prisma 8 reads the schema, signs and verifies the database, and serves the routes that have moved. Then Prisma 8 takes over the migrations, and Prisma 7 only generates its client. Nothing is hand-edited.
 
 ## The story in one run
 
@@ -15,10 +15,10 @@ pnpm v7:generate         # prisma7 generate: the Prisma 7 client
 pnpm seed                # rows written through the Prisma 7 client
 pnpm start               # the same rows read and written through the Prisma 8 ORM
 pnpm v7:read             # the same rows read through Prisma 7 again
-pnpm test                # the whole story on a fresh database, including the second migration
+pnpm test                # the whole story on a fresh database, including the second migration and the handover
 ```
 
-`prisma/migrations/` holds two Prisma 7 migrations, the initial one and one adding `Post.viewCount`. On a fresh database `pnpm v7:migrate` applies both at once, so to watch the refresh loop that every later Prisma 7 migration needs, run `pnpm test`: it rolls a scratch copy of this example back to the first migration, runs the commands above, then lands the second migration and runs `pnpm emit`, `pnpm sign`, and `pnpm verify` again. After every `prisma7 migrate deploy` (or `migrate dev`) that is the whole loop: emit, sign, verify. Nothing else changes.
+`prisma/migrations/` holds two Prisma 7 migrations, the initial one and one adding `Post.viewCount`. On a fresh database `pnpm v7:migrate` applies both at once, so to watch the refresh loop that every later Prisma 7 migration needs, run `pnpm test`: it rolls a scratch copy of this example back to the first migration, runs the commands above, then lands the second migration and runs `pnpm emit`, `pnpm sign`, and `pnpm verify` again. Until phase 4, after every `prisma7 migrate deploy` (or `migrate dev`) that is the whole loop: emit, sign, verify. Nothing else changes.
 
 ## Phase by phase
 
@@ -63,7 +63,37 @@ Two rules to know before you start:
 
 ### 4. Transfer migration ownership, then 5. remove Prisma 7
 
-This example stops before phase 4. The [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 4 works from a Prisma ORM 8 contract file, and this example reads `prisma/schema.prisma` through `prisma7Schema(...)` instead. When the last route has moved, `prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`; point `contract` in `prisma.config.ts` at the written file and run `prisma contract emit` again to confirm the contract is unchanged. Then follow [phase 4](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql#41-sign-the-existing-database) and phase 5 as the guide writes them.
+Prisma 8 can take over migrations while `prisma/schema.prisma`, in the Prisma 7 dialect, stays the contract source and Prisma 7 keeps generating the client that serves the routes that have not moved. `test/handover.test.ts` runs this phase on a fresh database. Its starting point is the end of phase 3: Prisma 7 has applied both of its migrations, and `prisma contract emit`, `prisma db sign` and `prisma db verify` have run.
+
+From then on, you edit `prisma/schema.prisma` as before, and Prisma 8 plans and applies the change:
+
+```bash
+# edit prisma/schema.prisma in the Prisma 7 dialect
+pnpm exec prisma contract emit
+pnpm exec prisma migration plan --name add-comments
+pnpm exec prisma db migrate --advance-ref db
+pnpm exec prisma db verify --strict       # exits 4: unclaimed _prisma_migrations, nothing else
+pnpm exec prisma db verify                # zero findings
+pnpm exec prisma7 migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma7.config.ts
+                                          # -- This is an empty migration.
+pnpm exec prisma7 generate --config prisma7.config.ts
+```
+
+The test runs that loop twice. Each edited schema is a file in `test/handover/`:
+
+- `edit-1.prisma` makes additive changes. It adds `User.bio String?`, `Post.likes Int @default(0)`, `@@index([authorId])` on `Post`, and a `Comment` model with a required relation to `Post`. The plan creates the `Comment` table, adds both columns, creates the index `Post_authorId_idx`, and adds the foreign key `Comment_postId_fkey` with `ON DELETE RESTRICT ON UPDATE CASCADE`. Those are the names and referential actions Prisma 7 would have written. After `prisma7 generate`, the Prisma 7 client writes and reads the new columns and the new model (`test/handover/v7-after-edit-1.ts`), and the Prisma 8 ORM reads them (`test/handover/v8-after-edit-1.ts`).
+- `edit-2.prisma` makes destructive changes. It drops `User.bio` and makes `Post.likes` optional with no default. The plan drops the column, drops the default, and drops `NOT NULL`. After `prisma7 generate`, the Prisma 7 client reads the surviving columns and clears one post's `likes` to null (`test/handover/v7-after-edit-2.ts`), and the Prisma 8 ORM reads that null back (`test/handover/v8-after-edit-2.ts`).
+
+What each step does:
+
+- **The first `migration plan` writes two packages.** The migrations directory has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone. The test proves it: `prisma db migrate` against a second, empty database applies all three packages, and `db verify --strict` then passes with nothing unclaimed, because Prisma 7 never created `_prisma_migrations` there.
+- **`db migrate --advance-ref db` moves the `db` ref along with the marker.** Plain `db migrate` moves only the database marker. The next `migration plan` starts from the `db` ref, so without the flag it would plan from the contract before your last change.
+- **`db verify --strict` exits 4 and lists `_prisma_migrations` as unclaimed.** That is Prisma 7's migration ledger table, and no contract declares it. Strict mode fails on any table no contract declares, so this one finding is expected; anything else in the list, or any schema finding, is real drift. Plain `prisma db verify` reports zero findings.
+- **`prisma7 migrate diff` shows Prisma 7 agrees with the database.** An empty migration means the tables, indexes and constraints Prisma 8 created are the ones Prisma 7 would have created from the same schema.
+- **A destructive plan is not confirmed at a prompt.** `migration plan` writes the package to `migrations/app/<timestamp>_<name>/`, marks the destructive operations in its output, and prints the SQL. Review that package before running `db migrate`; nothing else asks. The only prompt comes when the first plan's baseline itself would destroy data, and a baseline that only creates the existing schema never does.
+- **Never run `prisma7 migrate` again.** Once Prisma 8 has applied a migration, `prisma/migrations/` no longer describes the database. `prisma7 migrate dev` would report drift and offer to reset the database, and a new migration applied with `prisma7 migrate deploy` would change the schema without moving Prisma 8's marker. From here on, Prisma 7 runs only `prisma7 generate`.
+
+When the last route has moved to Prisma 8, `pnpm exec prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`. Point `contract` in `prisma.config.ts` at the written file, then run `pnpm exec prisma contract emit` again to confirm the contract is unchanged. Then remove Prisma 7 as the [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 5 describes.
 
 ## What a Prisma 7 user meets along the way
 
@@ -74,7 +104,7 @@ This example stops before phase 4. The [upgrade guide](https://www.prisma.io/doc
 - The guide's `prisma7.config.ts` sets `datasource.url` to `process.env["DATABASE_URL"]`, which is `string | undefined`; under `exactOptionalPropertyTypes` that does not type-check, so this example adds the `datasource` block only when the variable is set. `prisma7 generate` runs without a database either way.
 - Prisma 7 rejects `url` inside the `datasource` block; the URL lives only in `prisma7.config.ts` (Prisma 7) and `prisma.config.ts` (Prisma 8), both reading the same `DATABASE_URL` from `.env`.
 - Prisma 8 reads a `DateTime` column as the text PostgreSQL prints, such as `2026-09-14 10:00:00.123` (UTC, as Prisma 7 wrote it), not as a JavaScript `Date`. `@db.Timestamptz`, `@db.Date` and `@db.Time` columns read as text too, so the application needs no `Temporal`.
-- `pnpm sign` creates `migrations/` (a snapshot of the signed contract and the `db` ref). It is Prisma 8's record of what was signed and is committed here; phase 4 builds on it.
+- `pnpm sign` creates `migrations/` (a snapshot of the signed contract and the `db` ref). It is Prisma 8's record of what was signed and is committed here; in phase 4 the first `migration plan` builds the baseline from it.
 - The Prisma 8 CLI prints JSON when stdout is not a terminal (a pipe, a file, or an agent) and prose in a terminal.
 
 ## Files
@@ -90,4 +120,7 @@ This example stops before phase 4. The [upgrade guide](https://www.prisma.io/doc
 | `src/main.ts` | Routes that moved to Prisma 8. |
 | `scripts/seed.ts`, `src/v7-read.ts` | Routes still on Prisma 7. |
 | `scripts/db-start.ts` | In-process Postgres for local runs. |
-| `test/adoption.test.ts` | The whole story on a fresh database, including the second migration. |
+| `test/adoption.test.ts` | Phases 1 to 3 on a fresh database, including the second Prisma 7 migration. |
+| `test/handover.test.ts` | Phase 4 on a fresh database: Prisma 8 plans, applies and verifies an additive and a destructive edit. |
+| `test/handover/` | The two edited schemas, the scripts each client runs after them, and the tsconfigs the test typechecks those scripts with once the edit is applied. |
+| `test/story.ts` | Helpers both tests share. |

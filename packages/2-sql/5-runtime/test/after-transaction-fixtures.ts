@@ -173,7 +173,6 @@ export function rawPlan(sql: string): SqlExecutionPlan {
 
 const failingDecodeCodec = defineTestCodec({
   typeId: 'test/failing-decode@1',
-  targetTypes: ['int4'],
   encode: (value: number) => value,
   decode: (): number => {
     throw new Error('decode failed');

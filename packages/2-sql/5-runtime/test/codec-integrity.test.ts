@@ -30,7 +30,6 @@ describe('createExecutionContext — column codec integrity', () => {
       codecId: 'pgvector/vector@1',
       dataType: dataTypeId('pgvector/vector'),
       traits: [],
-      targetTypes: ['vector'],
       paramsSchema: {
         '~standard': {
           version: 1,
@@ -66,7 +65,6 @@ describe('createExecutionContext — column codec integrity', () => {
       codecId: 'async/vector@1',
       dataType: dataTypeId('async/vector'),
       traits: [],
-      targetTypes: ['vector'],
       paramsSchema: {
         '~standard': {
           version: 1,
@@ -96,7 +94,6 @@ describe('createExecutionContext — column codec integrity', () => {
       codecId: 'test/scalar@1',
       dataType: dataTypeId('test/scalar'),
       traits: [],
-      targetTypes: ['scalar'],
       paramsSchema: undefined,
       isParameterized: false,
       factory: ((_params: undefined) => (_ctx: SqlCodecInstanceContext) =>

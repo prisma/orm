@@ -1,5 +1,4 @@
 import {
-  collectScalarTypeConstructors,
   temporalAuthoringPresets,
   temporalCodecPreset,
 } from '@internal/framework-components/authoring';
@@ -8,12 +7,10 @@ import { sqliteAuthoringFieldPresets, sqliteAuthoringTypes } from '../src/core/a
 
 describe('sqliteAuthoringFieldPresets', () => {
   it('contributes BigIntNumber as its only integer-representation type', () => {
-    expect(Object.fromEntries(collectScalarTypeConstructors(sqliteAuthoringTypes))).toEqual({
-      BigIntNumber: {
-        codecId: 'sqlite/bigintnumber@1',
-        nativeType: 'integer',
-      },
+    expect(sqliteAuthoringTypes.BigIntNumber.output).toEqual({
+      codecId: 'sqlite/bigintnumber@1',
     });
+    expect(sqliteAuthoringTypes).not.toHaveProperty('UnboundedInt');
   });
 
   it('does not expose integer representations as field presets', () => {
@@ -29,7 +26,7 @@ describe('sqliteAuthoringFieldPresets', () => {
 describe('sqlite temporal per-codec presets', () => {
   it('registers datetime against sqlite/datetime@1, named for the codec base name', () => {
     expect(sqliteAuthoringFieldPresets.temporal.datetime).toEqual(
-      temporalCodecPreset({ codecId: 'sqlite/datetime@1', nativeType: 'text' }),
+      temporalCodecPreset({ codecId: 'sqlite/datetime@1' }),
     );
   });
 
@@ -43,8 +40,8 @@ describe('sqlite temporal per-codec presets', () => {
 
   it('keeps the createdAt/updatedAt convenience presets alongside the new sibling', () => {
     expect(sqliteAuthoringFieldPresets.temporal).toEqual({
-      ...temporalAuthoringPresets({ codecId: 'sqlite/datetime@1', nativeType: 'text' }),
-      datetime: temporalCodecPreset({ codecId: 'sqlite/datetime@1', nativeType: 'text' }),
+      ...temporalAuthoringPresets({ codecId: 'sqlite/datetime@1' }),
+      datetime: temporalCodecPreset({ codecId: 'sqlite/datetime@1' }),
     });
   });
 });

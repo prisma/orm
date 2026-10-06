@@ -285,7 +285,6 @@ function testAggregateRegistry() {
       {
         codecId: 'pg/int4@1',
         traits: ['numeric', 'order', 'equality'],
-        targetTypes: [],
         isParameterized: false,
         paramsSchema: undefined,
         factory: () => () => ({ id: 'pg/int4@1' }),
@@ -295,7 +294,6 @@ function testAggregateRegistry() {
       {
         codecId: 'lib/text@1',
         traits: ['textual', 'order', 'equality'],
-        targetTypes: [],
         isParameterized: false,
         paramsSchema: undefined,
         factory: () => () => ({ id: 'lib/text@1' }),
@@ -303,7 +301,6 @@ function testAggregateRegistry() {
       {
         codecId: 'lib/int8@1',
         traits: ['numeric', 'order', 'equality'],
-        targetTypes: [],
         isParameterized: false,
         paramsSchema: undefined,
         factory: () => () => ({ id: 'lib/int8@1' }),

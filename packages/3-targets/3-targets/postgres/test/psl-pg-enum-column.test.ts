@@ -13,7 +13,7 @@
  */
 
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
@@ -32,35 +32,14 @@ import {
   postgresAuthoringTypes,
 } from '../src/core/authoring';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
-import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
-import { pgEnumDescriptor, postgresQualifyColumnType } from '../src/core/codecs';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
+import { postgresQualifyColumnType } from '../src/core/codecs';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
-// Production always resolves `pg.enum(Ref)` through a real `CodecLookup` (the
-// CLI/config-loading pipeline supplies `stack.codecLookup`), so this test
-// double mirrors that shape. A `pg.enum(Ref)` column resolves through the
-// entity-ref type-constructor path, which reaches `pgEnumDescriptor` via
-// `codecLookup.descriptorFor` to call its `columnFromEntity` authoring hook —
-// without `descriptorFor` below, resolution fails, so it is required, not
-// just a production-shape mirror.
-const pgEnumCodec = {
-  id: PG_ENUM_CODEC_ID,
-  descriptor: pgEnumDescriptor,
-  encode: () => Promise.reject(new Error('unused')),
-  decode: () => Promise.reject(new Error('unused')),
-  encodeJson: (value) => value,
-  decodeJson: (json) => json,
-} as Codec;
-
-const codecLookup: CodecLookupWithDescriptors = {
-  get: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumCodec : undefined),
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumDescriptor : undefined),
-};
+const codecLookup: CodecLookupWithDescriptors = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -95,9 +74,9 @@ const postgresTarget = {
   },
 };
 
-const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =

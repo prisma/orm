@@ -96,6 +96,7 @@ export {
 } from '../core/plain-date-time-now-generator';
 export {
   postgresNativeAuthoringTypes,
+  postgresPslTypeConstructors,
   postgresScalarAuthoringTypes,
 } from '../core/type-constructors';
 

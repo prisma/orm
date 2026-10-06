@@ -20,8 +20,17 @@ import {
   SqlUniqueIR,
 } from '@internal/sql-schema-ir/types';
 
-/** Placeholder codec id for hand-built test fixtures — SQLite's DDL builders only uppercase the base native type, never resolving codec hooks by id. */
-const TEST_CODEC_ID = 'test/native@1';
+/** The built-in SQLite codec whose data type is written as each native type; DDL is written from it. */
+const CODEC_ID_BY_NATIVE_TYPE: Readonly<Record<string, string>> = {
+  INTEGER: 'sqlite/integer@1',
+  TEXT: 'sqlite/text@1',
+  REAL: 'sqlite/real@1',
+  BLOB: 'sqlite/blob@1',
+};
+
+function codecIdFor(nativeType: string): string {
+  return CODEC_ID_BY_NATIVE_TYPE[nativeType.toUpperCase()] ?? 'test/native@1';
+}
 
 /**
  * An expected (desired-side) column, carrying the codec identity
@@ -45,7 +54,10 @@ export function expectedColumn(input: {
     resolvedNativeType: input.resolvedNativeType ?? input.nativeType,
     ...(input.many !== undefined ? { many: input.many } : {}),
     ...(input.resolvedDefault !== undefined ? { resolvedDefault: input.resolvedDefault } : {}),
-    codecRef: { codecId: TEST_CODEC_ID, ...(input.many !== undefined ? { many: input.many } : {}) },
+    codecRef: {
+      codecId: codecIdFor(input.nativeType),
+      ...(input.many !== undefined ? { many: input.many } : {}),
+    },
     codecBaseNativeType: input.nativeType,
   });
 }

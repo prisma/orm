@@ -38,7 +38,7 @@ const CODECS = [
   {
     id: PG_DATE_STRING_CODEC_ID,
     descriptor: pgDateStringDescriptor,
-    nativeType: 'date',
+    dataType: 'pg/date',
     standardJson: [
       ['2026-01-02', '2026-01-02'],
       ['0044-03-15 BC', '-000043-03-15'],
@@ -49,7 +49,7 @@ const CODECS = [
   {
     id: PG_TIMESTAMP_STRING_CODEC_ID,
     descriptor: pgTimestampStringDescriptor,
-    nativeType: 'timestamp without time zone',
+    dataType: 'pg/timestamp',
     standardJson: [
       ['2026-01-02 03:04:05.123456', '2026-01-02T03:04:05.123456'],
       ['12026-01-02 03:04:05', '+012026-01-02T03:04:05'],
@@ -60,7 +60,7 @@ const CODECS = [
   {
     id: PG_TIMESTAMPTZ_STRING_CODEC_ID,
     descriptor: pgTimestamptzStringDescriptor,
-    nativeType: 'timestamp with time zone',
+    dataType: 'pg/timestamptz',
     standardJson: [
       ['2026-01-02 03:04:05.123456+00', '2026-01-02T03:04:05.123456Z'],
       ['0044-03-15 00:00:00+00 BC', '-000043-03-15T00:00:00Z'],
@@ -71,7 +71,7 @@ const CODECS = [
   {
     id: PG_TIME_STRING_CODEC_ID,
     descriptor: pgTimeStringDescriptor,
-    nativeType: 'time',
+    dataType: 'pg/time',
     standardJson: [['03:04:05.123000', '03:04:05.123']],
     refusedJson: ['24:00:00', 'infinity'],
   },
@@ -91,7 +91,7 @@ async function withoutTemporalGlobal<T>(body: () => Promise<T>): Promise<T> {
 }
 
 describe('representation-explicit temporal string codecs', () => {
-  for (const { id, descriptor, nativeType, standardJson, refusedJson } of CODECS) {
+  for (const { id, descriptor, dataType, standardJson, refusedJson } of CODECS) {
     describe(id, () => {
       const codec = descriptor.factory({})(instanceCtx);
 
@@ -128,17 +128,15 @@ describe('representation-explicit temporal string codecs', () => {
         );
       });
 
-      it('declares no target types, so introspection ownership stays with the temporal codecs', () => {
+      it('declares its traits and the data type of the column it serves', () => {
         expect({
           codecId: descriptor.codecId,
           traits: descriptor.traits,
-          targetTypes: descriptor.targetTypes,
-          nativeType: descriptor.nativeTypeFor({ codecId: id }),
+          dataType: descriptor.dataType,
         }).toEqual({
           codecId: id,
           traits: ['equality', 'order'],
-          targetTypes: [],
-          nativeType,
+          dataType,
         });
       });
 

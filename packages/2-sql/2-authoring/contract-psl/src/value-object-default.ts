@@ -42,7 +42,7 @@ export interface ValueObjectDefaultInput {
   readonly nullable: boolean;
   readonly valueObjectName: string;
   readonly types: ValueObjectTypes;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
 }
 
 /** Each way the default does not match the composite type. */
@@ -168,11 +168,11 @@ function enumValueMismatch(
   value: JsonValue,
   member: ScalarMemberNode,
   path: string,
-  codecLookup: CodecLookupWithDescriptors | undefined,
+  codecLookup: CodecLookupWithDescriptors,
 ): ValueObjectDefaultMismatch | undefined {
   const handle = member.enumTypeHandle;
   if (handle === undefined) return undefined;
-  const codec = codecLookup?.get(handle.codecId);
+  const codec = codecLookup.get(handle.codecId);
   const stored = handle.values.map((enumValue) =>
     codec === undefined ? enumValue : codec.encodeJson(enumValue),
   );

@@ -5,7 +5,6 @@ import { PG_INT8_NUMBER_CODEC_ID, PG_UNBOUNDED_INT_CODEC_ID } from '../src/core/
 import {
   pgInt8Descriptor,
   pgInt8NumberDescriptor,
-  pgNumericDescriptor,
   pgUnboundedIntDescriptor,
 } from '../src/core/codecs';
 import { postgresCodecDescriptorRegistry, postgresCodecRegistry } from '../src/core/registry';
@@ -154,15 +153,8 @@ describe('pg/int8number@1', () => {
     ).toEqual(CastExpr.as(expression, 'text'));
   });
 
-  it('claims no target type, so int8 stays pg/int8@1 in type position', () => {
-    expect(pgInt8NumberDescriptor.targetTypes).toEqual([]);
-    expect(postgresCodecRegistry.byTargetType('int8')).toEqual([pgInt8Descriptor]);
-  });
-
-  it('states the bigint native type', () => {
-    expect(pgInt8NumberDescriptor.nativeTypeFor({ codecId: PG_INT8_NUMBER_CODEC_ID })).toBe(
-      'bigint',
-    );
+  it('represents the int8 data type', () => {
+    expect(pgInt8NumberDescriptor.dataType).toBe('pg/int8');
   });
 
   it('carries the numeric ordering traits', () => {
@@ -332,16 +324,8 @@ describe('pg/unboundedint@1', () => {
     ).toEqual(CastExpr.as(expression, 'text'));
   });
 
-  it('claims no target type, so numeric and decimal stay pg/numeric@1 in type position', () => {
-    expect(pgUnboundedIntDescriptor.targetTypes).toEqual([]);
-    expect(postgresCodecRegistry.byTargetType('numeric')).toEqual([pgNumericDescriptor]);
-    expect(postgresCodecRegistry.byTargetType('decimal')).toEqual([pgNumericDescriptor]);
-  });
-
-  it('states the unconstrained numeric native type', () => {
-    expect(pgUnboundedIntDescriptor.nativeTypeFor({ codecId: PG_UNBOUNDED_INT_CODEC_ID })).toBe(
-      'numeric',
-    );
+  it('represents the numeric data type', () => {
+    expect(pgUnboundedIntDescriptor.dataType).toBe('pg/numeric');
   });
 
   it('carries the numeric ordering traits', () => {

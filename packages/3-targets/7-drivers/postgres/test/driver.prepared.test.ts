@@ -4,7 +4,7 @@ import { timeouts } from '@repo/test-utils';
 import type { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBoundDriverFromBinding, type PostgresBinding } from '../src/postgres-driver';
-import { temporalTextTypes } from '../src/temporal-text-parsers';
+import { serverTextTypes } from '../src/server-text-types';
 
 interface MockQueryArg {
   readonly arg: unknown;
@@ -196,7 +196,7 @@ describe('postgres prepared statements', () => {
       name: 'pn_1',
       text: 'select id from t',
       values: [],
-      types: temporalTextTypes,
+      types: serverTextTypes,
     });
   });
 

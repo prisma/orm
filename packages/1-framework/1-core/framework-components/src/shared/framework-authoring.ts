@@ -12,9 +12,10 @@ import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Type } from 'arktype';
-import type { CodecLookup } from './codec-types';
-import type { DataTypeId } from './data-type';
+import type { CodecLookupWithDescriptors } from './codec-types';
+import type { DataTypeId, DataTypeLookup } from './data-type';
 import type { AuthoringOption } from './option-descriptor';
 import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
@@ -82,17 +83,12 @@ export type AuthoringArgumentDescriptor = AuthoringArgumentDescriptorCommon &
     | AuthoringOption
   );
 
+/**
+ * What a type constructor or field preset produces: a codec and its parameters. The database type
+ * is the codec's data type's, named by the family that writes the contract.
+ */
 export interface AuthoringStorageTypeTemplate {
   readonly codecId: string;
-  /**
-   * The storage type's base name — a plain string, never a template:
-   * parameters live in `typeParams` and the DDL renderer composes them.
-   * Optional so a type constructor whose {@link AuthoringTypeConstructorDescriptor.entityRefArg}
-   * names another entity can omit it entirely — its output for that case is
-   * derived by the codec at `codecId`. Every other consumer of this shape
-   * (field presets, plain type constructors) always supplies it.
-   */
-  readonly nativeType?: string;
   readonly typeParams?: Record<string, AuthoringTemplateValue>;
 }
 
@@ -127,6 +123,8 @@ export interface AuthoringTypeConstructorDescriptor {
   readonly entityRefArg?: AuthoringTypeConstructorEntityRef;
   /** Present when this name is kept only as an alias of `replacement` and will be removed; it resolves as before, and a source may warn. */
   readonly deprecated?: { readonly replacement: string };
+  /** Marks the constructor `contract infer` prints for its codec's data type; at most one per data type. */
+  readonly inferred?: true;
 }
 
 export interface AuthoringColumnDefaultTemplateLiteral {
@@ -264,7 +262,9 @@ export interface AuthoringEntityContext {
   readonly family: string;
   readonly target: string;
   /** Codec registry available to factories that need to validate or decode values. */
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  /** The stack's data types, for factories that read the data type a codec represents. */
+  readonly dataTypeLookup: DataTypeLookup;
   /** Source file identifier threaded into diagnostics emitted by the factory. */
   readonly sourceId?: string;
   /** Push channel for authoring-time diagnostics emitted by the factory. */
@@ -968,7 +968,6 @@ export function collectContributedDescriptorPaths(
 
 export interface ScalarTypeConstructorOutput {
   readonly codecId: string;
-  readonly nativeType: string;
   readonly typeParams?: Record<string, unknown>;
 }
 
@@ -1030,9 +1029,8 @@ function visitTemplateArgRefs(
  * per contributing component at assembly (which supplies `contributedBy`
  * for attribution). Rejects what the types cannot express — entity-ref
  * constructors are skipped (their output derives from the referenced
- * entity): a plain constructor must declare its output storage type name,
- * and every `typeParams` arg-ref (including refs inside arg-ref defaults)
- * must point at a declared argument index.
+ * entity): every `typeParams` arg-ref (including refs inside arg-ref
+ * defaults) must point at a declared argument index.
  */
 export function assertResolvableTypeConstructorTemplates(
   namespace: AuthoringTypeNamespace,
@@ -1053,11 +1051,6 @@ export function assertResolvableTypeConstructorTemplates(
         `Invalid authoring type constructor "${currentPath.join('.')}" contributed by descriptor "${contributedBy}". ${detail}`,
       );
 
-    if (value.output.nativeType === undefined) {
-      throw invalid(
-        'The output declares no storage type template and no entityRefArg; a plain constructor must declare one.',
-      );
-    }
     for (const [key, template] of Object.entries(value.output.typeParams ?? {})) {
       visitTemplateArgRefs(template, (ref) => {
         if (args[ref.index] === undefined) {
@@ -1706,21 +1699,53 @@ function describeReceivedArgument(value: unknown): string {
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
+function argumentIndexOf(template: AuthoringTemplateValue | undefined): number | undefined {
+  let index: number | undefined;
+  visitTemplateArgRefs(template, (ref) => {
+    index ??= ref.index;
+  });
+  return index;
+}
+
+function issueKey(issue: StandardSchemaV1.Issue): string | undefined {
+  const [first] = issue.path ?? [];
+  const key = typeof first === 'object' && first !== null ? first.key : first;
+  return typeof key === 'string' ? key : undefined;
+}
+
+/**
+ * Checks the type parameters a constructor or preset produced against its codec's parameter schema, which is where the bounds of a data type's parameters are written. A failure names the argument the failing parameter came from.
+ */
+export function validateAuthoringTypeParams(
+  helperPath: string,
+  template: AuthoringStorageTypeTemplate,
+  typeParams: Record<string, unknown> | undefined,
+  paramsSchema: StandardSchemaV1<unknown> | undefined,
+): void {
+  if (template.typeParams === undefined || paramsSchema === undefined) return;
+  const result = paramsSchema['~standard'].validate(typeParams ?? {});
+  if (result instanceof Promise) {
+    throw new InternalError(
+      `The parameter schema of codec "${template.codecId}" is asynchronous; authoring requires a synchronous schema.`,
+    );
+  }
+  const [issue] = result.issues ?? [];
+  if (issue === undefined) return;
+  const key = issueKey(issue);
+  const argumentIndex = key === undefined ? undefined : argumentIndexOf(template.typeParams[key]);
+  throw runtimeError(
+    'CONTRACT.ARGUMENT_INVALID',
+    argumentIndex === undefined
+      ? `The type parameters of ${helperPath} are invalid: ${issue.message}`
+      : `Authoring helper argument at ${helperPath}[${argumentIndex}] is invalid: ${issue.message}`,
+    { helperPath, ...ifDefined('argumentIndex', argumentIndex) },
+  );
+}
+
 function resolveAuthoringStorageTypeTemplate(
   template: AuthoringStorageTypeTemplate,
   args: readonly unknown[],
-): {
-  readonly codecId: string;
-  readonly nativeType: string;
-  readonly typeParams?: Record<string, unknown>;
-} {
-  const nativeType = template.nativeType;
-  if (nativeType === undefined) {
-    throw runtimeError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Authoring output template for codec "${template.codecId}" declares no nativeType; only entity-ref constructors may omit it`,
-    );
-  }
+): ScalarTypeConstructorOutput {
   const typeParams =
     template.typeParams === undefined
       ? undefined
@@ -1736,7 +1761,6 @@ function resolveAuthoringStorageTypeTemplate(
 
   return {
     codecId: template.codecId,
-    nativeType,
     ...ifDefined('typeParams', normalizedTypeParams),
   };
 }
@@ -1820,11 +1844,7 @@ function resolveAuthoringExecutionDefaultsTemplate(
 export function instantiateAuthoringTypeConstructor(
   descriptor: AuthoringTypeConstructorDescriptor,
   args: readonly unknown[],
-): {
-  readonly codecId: string;
-  readonly nativeType: string;
-  readonly typeParams?: Record<string, unknown>;
-} {
+): ScalarTypeConstructorOutput {
   return resolveAuthoringStorageTypeTemplate(descriptor.output, args);
 }
 
@@ -1864,11 +1884,7 @@ export function instantiateAuthoringFieldPreset(
   descriptor: AuthoringFieldPresetDescriptor,
   args: readonly unknown[],
 ): {
-  readonly descriptor: {
-    readonly codecId: string;
-    readonly nativeType: string;
-    readonly typeParams?: Record<string, unknown>;
-  };
+  readonly descriptor: ScalarTypeConstructorOutput;
   readonly nullable: boolean;
   readonly default?: ColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;

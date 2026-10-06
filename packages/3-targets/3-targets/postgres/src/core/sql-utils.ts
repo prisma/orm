@@ -11,6 +11,7 @@
  */
 
 import { postgresError } from './errors';
+import { POSTGRES_QUOTED_KEYWORDS } from './postgres-keywords';
 
 const MAX_IDENTIFIER_BYTES = 63;
 
@@ -53,6 +54,17 @@ export function quoteIdentifier(identifier: string): string {
     );
   }
   return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Quotes `identifier` only where Postgres's `quote_ident` would: when it is not all lower-case
+ * letters, digits and underscores, starts with a digit, or is a keyword that is not unreserved. This is how
+ * `format_type` prints a type name.
+ */
+export function quoteIdentifierWhereNeeded(identifier: string): string {
+  return /^[a-z_][a-z0-9_]*$/.test(identifier) && !POSTGRES_QUOTED_KEYWORDS.has(identifier)
+    ? identifier
+    : quoteIdentifier(identifier);
 }
 
 /**

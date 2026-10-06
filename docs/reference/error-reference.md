@@ -239,7 +239,7 @@ The migration-file CLI (`prisma migration`) received a flag it does not recognis
 
 ### CONTRACT.ARGUMENT_INVALID
 
-A builder or helper on the contract-authoring surface is called with a bad argument: a composed authoring helper receives too many arguments or a malformed trailing options object, `field.sql({ id })` / `field.sql({ unique })` is used without a matching inline `.id(...)` / `.unique(...)` declaration, `model("Name", ...)` is called without a model definition, a nanoid ID generator is given a size outside 2–255, or an authored index combines its cross-field parameters invalidly (fields and an expression together or neither, an expression without `name:`/`map:`, or `map:` combined with `name:`). Also raised when a contract targets SQLite and declares an expression or partial index: SQLite's namespace construction rejects `expression:`/`where:` because the target does not support them. Also raised when a column with a literal default has type parameters that its codec does not accept (meta: `modelName`, `fieldName`, `codecId`, `reason: 'type-params-invalid'`; the codec's error is the `cause`). Raised while authoring/building the contract, before emit. Payload: varies per site.
+A builder or helper on the contract-authoring surface is called with a bad argument: a composed authoring helper receives too many arguments or a malformed trailing options object, `field.sql({ id })` / `field.sql({ unique })` is used without a matching inline `.id(...)` / `.unique(...)` declaration, `model("Name", ...)` is called without a model definition, a nanoid ID generator is given a size outside 2–255, a TypeScript `type.*` type constructor receives an argument its data type's parameter schema refuses (meta: `helperPath`, `argumentIndex`; see `CONTRACT.TYPE_PARAMS_INVALID` for how PSL and the contract build report the same bound), or an authored index combines its cross-field parameters invalidly (fields and an expression together or neither, an expression without `name:`/`map:`, or `map:` combined with `name:`). Also raised when a contract targets SQLite and declares an expression or partial index: SQLite's namespace construction rejects `expression:`/`where:` because the target does not support them. Also raised when a column with a literal default has type parameters that its codec does not accept beyond its data type's parameters, which the build checks first with `CONTRACT.TYPE_PARAMS_INVALID` (meta: `modelName`, `fieldName`, `codecId`, `reason: 'type-params-invalid'`; the codec's error is the `cause`). Raised while authoring/building the contract, before emit. Payload: varies per site.
 
 ### CONTRACT.AGGREGATE_DESCRIPTOR_AMBIGUOUS
 
@@ -259,7 +259,7 @@ The SQL emitter is asked to emit an aggregate result row whose declared result c
 
 ### CONTRACT.CODEC_DESCRIPTOR_MISSING
 
-The control plane resolves a codec referenced by the contract (a `CodecRef.codecId`) against the contract's pack stack and finds no registered codec descriptor for that id. Hit during control-plane operations (emit, migration tooling) when a contract references a codec no composed pack provides. Payload: `codecId`.
+The control plane resolves a codec referenced by the contract (a `CodecRef.codecId`) against the contract's pack stack and finds no registered codec descriptor for that id. Hit during control-plane operations (emit, migration tooling) when a contract references a codec no composed pack provides. Payload: `codecId`. Also raised while a SQL contract is authored, when a column or storage type names a codec the contract's packs do not register, so its database type cannot be named from the codec's data type. A TypeScript `contract.ts` hits this when it uses an extension's codec without listing the extension in `defineContract({ extensions })`. List the pack that provides the codec. Payload (meta): `codecId`.
 
 ### CONTRACT.CAST_REFUSED
 
@@ -381,7 +381,7 @@ A data type declares a cast from a type no contract source can write, so the cas
 
 ### CONTRACT.DATA_TYPE_UNREGISTERED
 
-Something names a data type that no component in the stack registers: a codec's `dataType`, an authoring entry's key, a type its number classifier returns, or a type a cast takes values of. Raised while checking the assembled data types. Payload: `dataType`, `contributedBy`.
+Something names a data type that no component in the stack registers: a codec's `dataType`, an authoring entry's key, a type its number classifier returns, or a type a cast takes values of. Raised while checking the assembled data types. Payload: `dataType`, `contributedBy`. Also raised while a SQL contract is authored, when a column's codec is registered but the data type it represents is not, so the column's database type cannot be named. List the pack that declares the data type, usually the pack that provides the codec. Payload (meta): `codecId`, `dataType`. Also raised when a PostgreSQL adapter is built with a codec whose data type is not passed beside it (`createPostgresAdapter` without the codec's type in `dataTypes`, or an extension that contributes codecs without their `dataTypes`), because a parameter of that codec could not be cast. Payload (meta): `codecId`, `dataType`.
 
 ### CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE
 
@@ -479,7 +479,7 @@ A driver-level failure occurred while reading the contract marker table: connect
 
 ### CONTRACT.MARKER_REQUIRED
 
-A command that requires a pre-signed database (marker present) as a precondition found none; also the default failure code stamped onto a non-ok verify result when no more specific code applies, which is how `db verify --strict` reports a database holding elements no contract declares. On `db verify` it is an `error` diagnostic on a completed run that exits `4`; everywhere else it is a precondition failure at exit `2`. Those are two unrelated jobs for one code: "sign the database first" and "strict mode found elements no contract declares", and splitting them would let the exit code follow from the code alone. Fix path: run `prisma db init` first, or declare the extra elements in a contract. Payload: none notable.
+A command that requires a pre-signed database (marker present) as a precondition found none. It is a precondition failure at exit `2`. Fix path: run `prisma db init` or `prisma db sign` first. Payload: none notable.
 
 ### CONTRACT.MARKER_ROW_CORRUPT
 
@@ -533,10 +533,6 @@ A model references a namespace that is not in the contract's declared `namespace
 
 Namespaces are declared (contract-level list or a model-level `namespace`) on a target that has no schema/namespace concept, i.e. SQLite. Raised by the SQL contract builder. Payload: `namespaces`, `modelKey`, `targetId`.
 
-### CONTRACT.NATIVE_TYPE_INVALID
-
-A native type name in the contract fails the identifier-safety pattern required to render it into DDL. Raised by the Postgres and SQLite migration planners while building column DDL. Payload: `nativeType`.
-
 ### CONTRACT.PACK_CONTRIBUTION_INVALID
 
 A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, a model attribute that lowers to a malformed index, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (a block keyword with no PSL block descriptor, or a descriptor whose discriminator disagrees with the block's kind). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
@@ -571,7 +567,7 @@ A role entity is declared more than once in the entities list, or a role name is
 
 ### CONTRACT.SCHEMA_VERIFICATION_FAILED
 
-Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
+Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed, and `db verify --strict` raises it once when the database holds elements no contract declares (the result's `unclaimed` list names them). It is also the code a failing verify result carries when nothing more specific applies. Fix path: `prisma db update` or adjust the contract; for unclaimed elements, declare them in a contract or drop them from the database. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`. The strict-mode unclaimed diagnostic carries no `space` and an empty `issues` list; the names are in the result's `unclaimed` list.
 
 ### CONTRACT.SOURCE_IMPORT_DISALLOWED
 
@@ -596,6 +592,12 @@ A foreign key or index references a table name that disagrees with the table the
 ### CONTRACT.TARGET_MISMATCH
 
 The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected`, `actual`.
+
+### CONTRACT.TYPE_PARAMS_INVALID
+
+A column's type parameters do not fit its data type: a parameter fails the data type's schema (for example a `numeric` precision of 0 or an enum with no `typeName`), no written text of the data type takes that set of parameters (for example a `scale` with no `precision`), or no catalog text takes the parameters in their normal form. Raised by `renderSqlTypeName`, `renderSqlCatalogText`, `validateSqlTypeParams`, and `sqlBaseName` for a type that renders its own name, in `@internal/sql-contract/data-type`, when a type name is rendered. Also raised when a TypeScript contract is built and a column's `typeParams`, or those of the `storage.types` entry it references, fail its data type's schema; for example `varcharColumn(0)`, `numericColumn(2000)`, pgvector's `vector(0)` or PostGIS's `pgGeometryColumn({ srid: 0 })`. The column helpers check nothing themselves; the build does. A `storage.types` entry no column references is not checked. Payload: `dataType`, `parameters`, and, from the contract build, `modelName` and `fieldName`.
+
+A data type's `params` is the only place its bounds are written, and the code that reports a failure depends on where the parameters came from: a PSL type constructor argument is reported at the argument as the diagnostic `PSL_INVALID_ATTRIBUTE_ARGUMENT`; a TypeScript `type.*` constructor call raises `CONTRACT.ARGUMENT_INVALID` naming the argument; a column's parameters checked when a TypeScript contract is built, and a type name rendered from parameters, raise `CONTRACT.TYPE_PARAMS_INVALID`.
 
 ### CONTRACT.TYPE_UNKNOWN
 
@@ -809,7 +811,7 @@ A tagged literal uses a tag no pack in the stack registered: `Unknown literal ta
 
 ### PSL_DEPRECATED_SCALAR_NAME
 
-A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float`, `Boolean` or `DateTime`: `Scalar type "<old>" is deprecated and will be removed; use "<new>" (stored as BSON <bsonType>).` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double`, `Bool` or `Date`.
+A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float`, `Boolean` or `DateTime`: `Scalar type "<old>" is deprecated and will be removed; use "<new>".` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double`, `Bool` or `Date`.
 
 ### PSL_PRESET_WITHOUT_EFFECT
 
@@ -869,6 +871,10 @@ A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is 
 ### PSL_INVALID_DEFAULT_SQL
 
 A `` @default(sql`...`) `` text fails the check `@default` runs on raw SQL: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The tag is always `sql`. Only `@default` reports this code. Reported at the literal.
+
+### PSL_ENUM_TYPE_NEEDS_PARAMETERS
+
+An `enum` block's `@@type` names a codec whose data type requires a parameter, which an enum block has no way to give: `enum "<Enum>" @@type codec "<codecId>" represents data type "<dataType>", which requires the parameter "<parameter>"; an enum block gives it none`. Reported by the SQL PSL reader at the `@@type` attribute. Choose a codec whose data type takes no required parameter, such as the target's text or integer codec.
 
 ### PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE
 

@@ -26,6 +26,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 const EXPECTED_MEMBERS = ['draft', 'review', 'done'] as const;
 
@@ -104,7 +105,7 @@ function planResultFor(contract: Contract<SqlStorage>, actual: PostgresDatabaseS
   const { issues } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
   });
   return planIssues({
     issues: coalesceSubtreeIssues(issues),
@@ -112,6 +113,7 @@ function planResultFor(contract: Contract<SqlStorage>, actual: PostgresDatabaseS
     fromContract: null,
     schemaName: 'sales',
     codecHooks: new Map(),
+    types: postgresTypeLookups,
     storageTypes: contract.storage.types ?? {},
     strategies: [],
   });

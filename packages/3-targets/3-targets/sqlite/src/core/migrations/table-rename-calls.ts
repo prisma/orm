@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import { applyTableRename, type TableRename } from '@internal/family-sql/control';
+import { applyTableRename, sqlTypeLookupsOf, type TableRename } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
@@ -28,7 +28,10 @@ export function sqliteTableRenameCalls(input: {
   const { rename } = applied.value;
   const { issues } = buildSqlitePlanDiff({
     contract: input.endContract,
-    actualSchema: sqliteContractToSchema(applied.value.contract),
+    actualSchema: sqliteContractToSchema(
+      applied.value.contract,
+      sqlTypeLookupsOf(input.frameworkComponents),
+    ),
     frameworkComponents: input.frameworkComponents,
   });
   return [

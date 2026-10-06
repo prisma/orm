@@ -25,7 +25,6 @@ export function defineTestCodec<
 >(
   config: {
     typeId: Id;
-    targetTypes?: readonly string[];
     encode: (value: TInput, ctx: SqlCodecCallContext) => TWire | Promise<TWire>;
     decode: (wire: TWire, ctx: SqlCodecCallContext) => TInput | Promise<TInput>;
     traits?: TTraits;

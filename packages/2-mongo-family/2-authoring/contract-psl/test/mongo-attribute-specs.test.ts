@@ -1,4 +1,5 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import type {
   ArgType,
   AttributeCtx,
@@ -33,14 +34,9 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
       dataTypes: {},
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
-    codecLookup: {
-      get: () => undefined,
-      targetTypesFor: () => undefined,
-      renderOutputTypeFor: () => undefined,
-      descriptorFor: () => undefined,
-    },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-    dataTypeLookup: { has: () => false, get: () => undefined },
+    dataTypeLookup: createDataTypeLookup([]),
     resolvedInputs: [],
     capabilities: {},
   };

@@ -229,18 +229,10 @@ describe('sql-codecs', () => {
       expect(sqlVarcharDescriptor.codecId).toBe(SQL_VARCHAR_CODEC_ID);
     });
 
-    it('exposes traits and targetTypes for each codec', () => {
+    it('exposes traits for each codec', () => {
       expect(sqlTextDescriptor.traits).toEqual(['equality', 'order', 'textual']);
-      expect(sqlTextDescriptor.targetTypes).toEqual(['text']);
-
       expect(sqlIntDescriptor.traits).toEqual(['equality', 'order', 'numeric']);
-      expect(sqlIntDescriptor.targetTypes).toEqual(['int']);
-
       expect(sqlFloatDescriptor.traits).toEqual(['equality', 'order', 'numeric']);
-      expect(sqlFloatDescriptor.targetTypes).toEqual(['float']);
-
-      expect(sqlCharDescriptor.targetTypes).toEqual(['char']);
-      expect(sqlVarcharDescriptor.targetTypes).toEqual(['varchar']);
     });
   });
 });

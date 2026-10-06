@@ -1,5 +1,6 @@
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { contractError } from './contract-errors';
 
 /**
@@ -73,8 +74,8 @@ export interface EnumTypeHandle<
   /** codecId from the codec passed to `enumType`. */
   readonly codecId: string;
 
-  /** nativeType from the codec passed to `enumType`. */
-  readonly nativeType: string;
+  /** Ignored: the contract names the database type from the codec's data type. */
+  readonly nativeType?: string;
 
   /** Ordered member list for lowering (name + value pairs). */
   readonly enumMembers: readonly { readonly name: string; readonly value: Values[number] }[];
@@ -226,7 +227,7 @@ export function enumType(
     [ENUM_TYPE_HANDLE_BRAND]: true,
     enumName: name,
     codecId: codec.codecId,
-    nativeType: codec.nativeType,
+    ...ifDefined('nativeType', codec.nativeType),
     enumMembers,
     values,
     names,

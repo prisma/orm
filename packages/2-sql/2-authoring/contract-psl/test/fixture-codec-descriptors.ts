@@ -10,11 +10,16 @@ import {
   type AnyCodecDescriptor,
   type CodecLookupWithDescriptors,
   type CodecTrait,
+  type DataType,
   type DataTypeId,
+  type DataTypeLookup,
   isNonFiniteText,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import {
+  fixtureDataTypeSupport,
+  fixtureDataTypes,
   pgBool,
   pgBytea,
   pgChar,
@@ -35,29 +40,6 @@ import {
   pgVarchar,
   pgvectorVector,
 } from './fixture-data-types';
-
-const targetTypesByCodecId: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int@1': ['int4'],
-  'pg/bool@1': ['bool'],
-  'pg/int4@1': ['int4'],
-  'pg/int8@1': ['int8'],
-  'pg/float8@1': ['float8'],
-  'pg/numeric@1': ['numeric'],
-  'pg/timestamptz-temporal@1': ['timestamptz'],
-  'pg/jsonb@1': ['jsonb'],
-  'pg/bytea@1': ['bytea'],
-  'sql/char@1': ['character'],
-  'sql/varchar@1': ['character varying'],
-  'pg/int2@1': ['int2'],
-  'pg/float4@1': ['float4'],
-  'pg/timestamp-temporal@1': ['timestamp'],
-  'pg/date-temporal@1': ['date'],
-  'pg/time-temporal@1': ['time'],
-  'pg/timetz@1': ['timetz'],
-  'pg/json@1': ['json'],
-  'pg/vector@1': ['vector'],
-};
 
 const dataTypeByCodecId: Readonly<Record<string, DataTypeId>> = {
   'pg/text@1': pgText.id,
@@ -173,34 +155,22 @@ const fixtureCodecs: Readonly<
   };
 })();
 
-/** Passes `typeParams` through: the fixture type constructors already validate them. */
-const passThroughParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
-  '~standard': {
-    version: 1,
-    vendor: 'contract-psl-fixtures',
-    validate: (value: unknown) => ({ value }),
-  },
-};
+const fixtureDataTypeById: ReadonlyMap<string, DataType> = new Map(
+  fixtureDataTypes.map((type) => [type.id, type]),
+);
 
-const parameterizedCodecIds: ReadonlySet<string> = new Set([
-  'pg/vector@1',
-  'pg/numeric@1',
-  'sql/char@1',
-  'sql/varchar@1',
-]);
-
-/** A descriptor for a fixture codec, parameterized as the real codec is; only `pg/vector@1` checks its parameters. */
+/** A descriptor for a fixture codec, taking the parameters its data type declares. */
 function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const codec = fixtureCodecs[codecId];
   if (codec === undefined) return undefined;
-  const parameterized = parameterizedCodecIds.has(codecId);
+  const dataType = dataTypeByCodecId[codecId] ?? pgText.id;
+  const paramsSchema = fixtureDataTypeById.get(dataType)?.params;
   return {
     codecId,
-    dataType: dataTypeByCodecId[codecId] ?? pgText.id,
+    dataType,
     traits: codec.traits,
-    targetTypes: targetTypesByCodecId[codecId] ?? [],
-    paramsSchema: parameterized ? passThroughParamsSchema : undefined,
-    isParameterized: parameterized,
+    paramsSchema,
+    isParameterized: paramsSchema !== undefined,
     factory: (params: unknown) => () => ({
       id: codecId,
       encode: async (value: unknown) =>
@@ -213,7 +183,7 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
       decodeJson: (value: JsonValue) =>
         codec.decodeJson(
           value,
-          blindCast<Record<string, unknown>, 'the fixture vector schema passes typeParams through'>(
+          blindCast<Record<string, unknown>, 'the parameter schema accepted these parameters'>(
             params ?? {},
           ),
         ),
@@ -225,6 +195,25 @@ export const postgresCodecLookup: CodecLookupWithDescriptors = {
   // A representative instance, built with no params — the same shape the control stack builds.
   get: (id: string) => fixtureDescriptor(id)?.factory({})({ name: id }),
   descriptorFor: fixtureDescriptor,
-  targetTypesFor: (id: string) => targetTypesByCodecId[id],
   renderOutputTypeFor: () => undefined,
+};
+
+const lenient = testSqlTypeLookups(
+  { 'custom/varchar@1': 'character varying', 'custom/text@1': 'custom_text' },
+  postgresCodecLookup,
+);
+
+/**
+ * The fixture stack's lookups, which also name a column of any codec the fixture does not declare,
+ * so tests about other things can use codecs of their own.
+ */
+export const fixtureTypeLookups: {
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
+} = {
+  codecLookup: lenient.codecLookup,
+  dataTypeLookup: {
+    get: (id) => fixtureDataTypeSupport.lookup.get(id) ?? lenient.dataTypeLookup.get(id),
+    has: (id) => fixtureDataTypeSupport.lookup.has(id) || lenient.dataTypeLookup.has(id),
+  },
 };

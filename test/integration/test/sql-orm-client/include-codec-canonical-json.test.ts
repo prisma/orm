@@ -7,6 +7,7 @@ import {
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
+import pgvector from '@internal/extension-pgvector/pack';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
@@ -66,7 +67,10 @@ const ReadingWithStations = Reading.relations({
   stations: rel.hasMany(() => StationBase, { by: 'readingId' }),
 }).sql({ table: 'canonical_readings' });
 
-const contract = defineContract({ models: { Reading: ReadingWithStations, Station } });
+const contract = defineContract({
+  extensions: { pgvector },
+  models: { Reading: ReadingWithStations, Station },
+});
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({

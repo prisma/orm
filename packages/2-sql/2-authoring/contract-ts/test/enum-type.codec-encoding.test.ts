@@ -8,6 +8,7 @@ import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/build-contract';
 import type { ContractDefinition } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
@@ -71,7 +72,10 @@ describe('enum lowering encodes member values through the codec', () => {
       'pg/text@1': stubCodec('pg/text@1', (v) => v as JsonValue),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Role), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Role),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Role')).toEqual(['user', 'admin']);
     expect(memberValues(contract, 'Role')).toEqual(['user', 'admin']);
@@ -83,7 +87,10 @@ describe('enum lowering encodes member values through the codec', () => {
       'pg/int4@1': stubCodec('pg/int4@1', (v) => v as JsonValue),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Priority), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Priority),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Priority')).toEqual([1, 10]);
     expect(memberValues(contract, 'Priority')).toEqual([1, 10]);
@@ -99,7 +106,10 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Role), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Role),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Role')).toEqual(['USER', 'ADMIN']);
     expect(memberValues(contract, 'Role')).toEqual(['USER', 'ADMIN']);
@@ -120,7 +130,10 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Level), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Level),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(memberValues(contract, 'Level')).toEqual(['1', '10']);
   });
@@ -138,7 +151,9 @@ describe('enum lowering encodes member values through the codec', () => {
         ),
       });
 
-      expect(() => buildSqlContractFromDefinition(definitionWith(Role), codecLookup)).toThrow(
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Role), ...withTestTypes(codecLookup)),
+      ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ENUM_INVALID',
           message: `enumType("Role"): member "${written.name}" is written ${JSON.stringify(as)}, but the column stores ${JSON.stringify(stored)}. Write the member as ${JSON.stringify(stored)}.`,
@@ -170,7 +185,9 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    expect(() => buildSqlContractFromDefinition(definitionWith(Ratio), codecLookup)).toThrow(
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Ratio), ...withTestTypes(codecLookup)),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
@@ -201,7 +218,9 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    expect(() => buildSqlContractFromDefinition(definitionWith(Moment), codecLookup)).toThrow(
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Moment), ...withTestTypes(codecLookup)),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:

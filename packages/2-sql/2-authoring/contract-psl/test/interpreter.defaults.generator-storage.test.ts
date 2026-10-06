@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarAuthoringTypes, postgresTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { builtinControlMutationDefaults } from './interpreter-defaults-support';
@@ -15,13 +15,12 @@ describe('generator defaults never mutate storage — the type position is the o
   // the same way the provider derives it (collectScalarTypeConstructors).
   const authoringTypes = {
     ...postgresScalarAuthoringTypes,
-    Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
+    Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
     Char: {
       kind: 'typeConstructor',
       args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
       output: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: { kind: 'arg', index: 0 } },
       },
     },
@@ -36,7 +35,7 @@ describe('generator defaults never mutate storage — the type position is the o
 
   const interpret = (schema: string) =>
     interpretSqlContract(schema, {
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       target: postgresTarget,
       scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
       authoringContributions,

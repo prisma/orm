@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { hasOperationPreview } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
@@ -112,7 +113,9 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
       extensions: [],
       codecTypeImports: [],
       extensionIds: [],
+      dataTypeLookup: createDataTypeLookup([]),
       declaredDataTypes: [],
+      codecDescriptors: [],
       // biome-ignore lint/suspicious/noExplicitAny: minimal stub
     } as any;
     return sqlFamilyDescriptor.create(stack);

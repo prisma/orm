@@ -5,6 +5,7 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../src/contract-builder';
 
 const sqlFamilyPack = {
@@ -57,6 +58,7 @@ describe('defineContract runtime guards', () => {
       name: 'non-SQL family packs',
       run: () =>
         defineContract({
+          ...testTypeLookups,
           family: documentFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -69,6 +71,7 @@ describe('defineContract runtime guards', () => {
       name: 'a target pack from another family',
       run: () =>
         defineContract({
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: { ...postgresTargetPack, familyId: 'document' } as unknown as TargetPackRef<
             'sql',
@@ -84,6 +87,7 @@ describe('defineContract runtime guards', () => {
       name: 'non-extension pack refs in extensions',
       run: () =>
         defineContract({
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -100,6 +104,7 @@ describe('defineContract runtime guards', () => {
       name: 'extension packs from another family',
       run: () =>
         defineContract({
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -119,6 +124,7 @@ describe('defineContract runtime guards', () => {
       name: 'extension packs for another target',
       run: () =>
         defineContract({
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -149,6 +155,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('accepts an empty namespaces list and treats it as no-op', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: [],
@@ -161,6 +168,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('accepts user-declared Postgres schema names with a `createNamespace` factory', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['public', 'auth'],
@@ -171,6 +179,7 @@ describe('defineContract namespace declaration runtime guards', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['public', 'auth'],
@@ -183,6 +192,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('rejects the reserved IR sentinel `__unbound__` in the declared namespaces list', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['__unbound__'],
@@ -193,6 +203,7 @@ describe('defineContract namespace declaration runtime guards', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['__unbound__'],
@@ -205,6 +216,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('rejects the reserved parser-synthesised sentinel `__unspecified__` in the declared namespaces list', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['__unspecified__'],
@@ -217,6 +229,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('rejects Postgres-specific reserved keyword `unbound` in the declared namespaces list', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['unbound'],
@@ -229,6 +242,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('rejects duplicate namespace names', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['auth', 'public', 'auth'],
@@ -239,6 +253,7 @@ describe('defineContract namespace declaration runtime guards', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['auth', 'public', 'auth'],
@@ -251,6 +266,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('rejects empty / whitespace-only namespace names', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: [''],
@@ -261,6 +277,7 @@ describe('defineContract namespace declaration runtime guards', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['   '],
@@ -273,6 +290,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('on SQLite, rejects any non-empty namespaces list (SQLite has no schema concept)', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: sqliteTargetPack,
         namespaces: ['auth'],
@@ -285,6 +303,7 @@ describe('defineContract namespace declaration runtime guards', () => {
   it('on SQLite, accepts an empty namespaces list (the no-op default)', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: sqliteTargetPack,
         namespaces: [],

@@ -59,7 +59,7 @@ Two changes make this possible:
 1. **Keys bound to `parameter`:** named attribute arguments, named function-call arguments, and struct-block entry keys. Map-block entry keys are not bound: their names are chosen by the user, and the only documentation available is the value spec's.
 2. **Positional argument values get no parameter hover.** Hover shows the hovered thing itself, which matches tsserver, rust-analyzer, Pylance and gopls. Existing signature help (`signature-help.ts`) already shows which parameter a positional value fills. A positional value that resolves to a symbol (a model, a field, a constant) shows that symbol.
 3. **New binder resolutions:**
-   - `ParameterSymbol { name, param, owner }`, where `owner` is an attribute, a function or a block.
+   - `ParameterSymbol { name, param }`.
    - `FunctionSymbol { name, signature }`.
    - `ConstantSymbol { name, documentation }`.
    - `AttributeSymbol.level` gains `'block'`.

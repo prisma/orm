@@ -21,13 +21,14 @@
  */
 
 import { errorUnfilledPlaceholder } from '@internal/errors/migration';
-import type { CodecControlHooks, SqlMigrationPlanOperation } from '@internal/family-sql/control';
+import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type {
   OpFactoryCall as FrameworkOpFactoryCall,
   MigrationOperationClass,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import type { AnyDdlColumnDefault, DdlTableConstraint } from '@internal/sql-relational-core/ast';
 import {
@@ -841,7 +842,7 @@ export class AddNotNullColumnWithTempDefaultCall extends PostgresOpFactoryCallNo
   readonly tableName: string;
   readonly columnName: string;
   readonly column: StorageColumn;
-  readonly codecHooks: Map<string, CodecControlHooks>;
+  readonly types: SqlTypeLookups;
   readonly storageTypes: Record<string, StorageTypeInstance>;
   readonly temporaryDefault: string;
   readonly label: string;
@@ -851,7 +852,7 @@ export class AddNotNullColumnWithTempDefaultCall extends PostgresOpFactoryCallNo
     readonly tableName: string;
     readonly columnName: string;
     readonly column: StorageColumn;
-    readonly codecHooks: Map<string, CodecControlHooks>;
+    readonly types: SqlTypeLookups;
     readonly storageTypes: Record<string, StorageTypeInstance>;
     readonly temporaryDefault: string;
   }) {
@@ -860,7 +861,7 @@ export class AddNotNullColumnWithTempDefaultCall extends PostgresOpFactoryCallNo
     this.tableName = options.tableName;
     this.columnName = options.columnName;
     this.column = options.column;
-    this.codecHooks = options.codecHooks;
+    this.types = options.types;
     this.storageTypes = options.storageTypes;
     this.temporaryDefault = options.temporaryDefault;
     this.label = `Add column ${options.columnName} to ${options.tableName}`;
@@ -880,7 +881,7 @@ export class AddNotNullColumnWithTempDefaultCall extends PostgresOpFactoryCallNo
       tableName: this.tableName,
       columnName: this.columnName,
       column: this.column,
-      codecHooks: this.codecHooks,
+      types: this.types,
       storageTypes: this.storageTypes,
       temporaryDefault: this.temporaryDefault,
       lowerer,

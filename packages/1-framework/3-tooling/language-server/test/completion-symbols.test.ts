@@ -94,7 +94,7 @@ model Owner { value Alias\n @@probe(fields: [|]) }`),
   it('includes registered inline and aliased scalar constructors in local and referenced fields', () => {
     const typeConstructors: AuthoringTypeNamespace = {
       sql: {
-        String: { kind: 'typeConstructor', output: { codecId: 'text', nativeType: 'varchar' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'text' } },
       },
       pg: {
         enum: {

@@ -44,7 +44,6 @@ class Int4FixtureDescriptor extends CodecDescriptorImpl<void> implements CodecDe
   override readonly dataType = dataTypeId('demo/int4');
   override readonly codecId = 'demo/int4@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
-  override readonly targetTypes: readonly string[] = ['int4'];
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Int4FixtureCodec {
     return () => new Int4FixtureCodec(this);
@@ -101,7 +100,6 @@ class VectorFixtureDescriptor
   override readonly dataType = dataTypeId('demo/vector');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
-  override readonly targetTypes: readonly string[] = ['vector'];
   override readonly paramsSchema = vectorFixtureParamsSchema;
   override factory<N extends number>(params: {
     readonly length: N;
@@ -190,7 +188,7 @@ test('strict satisfies catches wrong codec wired in', () => {
 
 test('column packs the helper-supplied nativeType (non-parameterized)', () => {
   const col = int4Fixture();
-  expectTypeOf(col.nativeType).toEqualTypeOf<string>();
+  expectTypeOf(col.nativeType).toEqualTypeOf<string | undefined>();
   expectTypeOf(col.codecId).toEqualTypeOf<string>();
   // Runtime confirms the helper's nativeType reaches the spec, distinct from codecId.
   if (col.nativeType !== 'int4' || col.codecId !== 'demo/int4@1') {
@@ -200,7 +198,7 @@ test('column packs the helper-supplied nativeType (non-parameterized)', () => {
 
 test('column packs the helper-supplied nativeType (parameterized)', () => {
   const col = vectorFixture(1536);
-  expectTypeOf(col.nativeType).toEqualTypeOf<string>();
+  expectTypeOf(col.nativeType).toEqualTypeOf<string | undefined>();
   if (col.nativeType !== 'vector' || col.codecId !== 'demo/vector@1') {
     throw new Error(`nativeType / codecId mismatch: ${col.nativeType} / ${col.codecId}`);
   }

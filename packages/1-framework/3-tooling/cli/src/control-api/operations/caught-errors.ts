@@ -9,7 +9,7 @@ import {
 } from '../../utils/command-helpers';
 
 /**
- * The error a command reports for one it caught. A CLI error is reported as it is, and so is any other error a library raised with a structured code, such as `CONTRACT.DEFAULT_INVALID` for a stale contract's default or `RUNTIME.TYPE_PARAMS_INVALID` for its type parameters: the code says what went wrong better than the command can. An `InternalError` is thrown again, so the command boundary, `defineOrmCommand`, lets the engine report it as a bug. Anything else is reported as `CLI.UNEXPECTED` with the `why` the command gives for the error's message, and a `code` it carries that is not a structured one, such as a driver's `ECONNREFUSED` or a SQLSTATE, in `meta.code`.
+ * The error a command reports for one it caught. A CLI error is reported as it is, and so is any other error a library raised with a structured code, such as `CONTRACT.DEFAULT_INVALID` for a stale contract's default or `CONTRACT.TYPE_PARAMS_INVALID` for its type parameters: the code says what went wrong better than the command can. An `InternalError` is thrown again, so the command boundary, `defineOrmCommand`, lets the engine report it as a bug. Anything else is reported as `CLI.UNEXPECTED` with the `why` the command gives for the error's message, and a `code` it carries that is not a structured one, such as a driver's `ECONNREFUSED` or a SQLSTATE, in `meta.code`.
  *
  * A command that holds a database connection passes its connection string, which is then removed from every string the reported error carries, whichever of those it is.
  */

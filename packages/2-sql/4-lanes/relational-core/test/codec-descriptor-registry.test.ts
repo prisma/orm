@@ -11,11 +11,10 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import type { AnyCodecDescriptor } from '../src/ast/codec-types';
 import { buildCodecDescriptorRegistry } from '../src/codec-descriptor-registry';
 
-const stub = (codecId: string, targetTypes: readonly string[]): AnyCodecDescriptor =>
+const stub = (codecId: string): AnyCodecDescriptor =>
   ({
     codecId,
     traits: [],
-    targetTypes,
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: codecId }) as never,
@@ -23,8 +22,8 @@ const stub = (codecId: string, targetTypes: readonly string[]): AnyCodecDescript
 
 describe('buildCodecDescriptorRegistry', () => {
   it('descriptorFor returns the registered descriptor by codec id', () => {
-    const a = stub('lib/a@1', ['ta']);
-    const b = stub('lib/b@1', ['tb']);
+    const a = stub('lib/a@1');
+    const b = stub('lib/b@1');
     const registry = buildCodecDescriptorRegistry([a, b]);
 
     expect(registry.descriptorFor('lib/a@1')).toBe(a as unknown as CodecDescriptor<unknown>);
@@ -32,38 +31,22 @@ describe('buildCodecDescriptorRegistry', () => {
   });
 
   it('descriptorFor returns undefined for an unknown codec id', () => {
-    const registry = buildCodecDescriptorRegistry([stub('lib/a@1', ['ta'])]);
+    const registry = buildCodecDescriptorRegistry([stub('lib/a@1')]);
     expect(registry.descriptorFor('lib/missing@1')).toBeUndefined();
   });
 
   it('values() yields all registered descriptors in registration order', () => {
-    const a = stub('lib/a@1', ['ta']);
-    const b = stub('lib/b@1', ['tb']);
-    const c = stub('lib/c@1', ['tc']);
+    const a = stub('lib/a@1');
+    const b = stub('lib/b@1');
+    const c = stub('lib/c@1');
     const registry = buildCodecDescriptorRegistry([a, b, c]);
 
     expect([...registry.values()]).toEqual([a, b, c]);
   });
 
-  it('byTargetType groups descriptors that advertise the same target type', () => {
-    const a = stub('lib/a@1', ['shared']);
-    const b = stub('lib/b@1', ['shared', 'extra']);
-    const registry = buildCodecDescriptorRegistry([a, b]);
-
-    expect(registry.byTargetType('shared')).toEqual([a, b]);
-    expect(registry.byTargetType('extra')).toEqual([b]);
-  });
-
-  it('byTargetType returns an empty frozen array for an unknown target type', () => {
-    const registry = buildCodecDescriptorRegistry([stub('lib/a@1', ['ta'])]);
-    const result = registry.byTargetType('unknown');
-    expect(result).toEqual([]);
-    expect(Object.isFrozen(result)).toBe(true);
-  });
-
   it('throws when a codec id is registered twice', () => {
-    const a = stub('lib/dup@1', ['ta']);
-    const a2 = stub('lib/dup@1', ['tb']);
+    const a = stub('lib/dup@1');
+    const a2 = stub('lib/dup@1');
     expect(() => buildCodecDescriptorRegistry([a, a2])).toThrowError(
       /Duplicate codec descriptor id: 'lib\/dup@1'/,
     );
@@ -87,7 +70,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
     });
   }
 
-  const descriptors = [stub('pg/vector@1', ['vector']), stub('pg/text@1', ['text'])];
+  const descriptors = [stub('pg/vector@1'), stub('pg/text@1')];
 
   it('returns undefined when the registry was built without storage', () => {
     const registry = buildCodecDescriptorRegistry(descriptors);
@@ -229,11 +212,7 @@ describe('buildCodecDescriptorRegistry — codecRefForColumn', () => {
 });
 
 describe('buildCodecDescriptorRegistry — codecRefForColumn namespace coordinate', () => {
-  const descriptors = [
-    stub('pg/int4@1', ['int4']),
-    stub('pg/text@1', ['text']),
-    stub('pg/varchar@1', ['varchar']),
-  ];
+  const descriptors = [stub('pg/int4@1'), stub('pg/text@1'), stub('pg/varchar@1')];
 
   function table(columns: Record<string, string>): StorageTableInput {
     return {

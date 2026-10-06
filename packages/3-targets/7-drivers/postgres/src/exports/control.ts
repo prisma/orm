@@ -9,7 +9,7 @@ import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-conn
 import { Client } from 'pg';
 import { postgresDriverDescriptorMeta } from '../core/descriptor-meta';
 import { normalizePgError } from '../normalize-error';
-import { controlTextTypes } from '../temporal-text-parsers';
+import { controlTextTypes } from '../server-text-types';
 
 export class PostgresControlDriver implements SqlControlDriverInstance<'postgres'> {
   readonly familyId = 'sql' as const;

@@ -11,7 +11,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -57,7 +57,7 @@ namespace public {
         composedExtensionContracts: new Map(),
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -90,6 +90,7 @@ namespace public {
     });
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: { kind: 'family', id: 'sql', familyId: 'sql', version: '0.0.1' },
       target: postgresTarget,
       namespaces: ['auth', 'public'] as const,
@@ -183,7 +184,7 @@ namespace public {
         composedExtensions: ['supabase'],
         composedExtensionContracts: new Map([['supabase', syntheticExtensionContract]]),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -214,6 +215,7 @@ namespace public {
     }));
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: { kind: 'family', id: 'sql', familyId: 'sql', version: '0.0.1' },
       target: postgresTarget,
       extensions: { supabase: supabaseExtensionPackRef },
@@ -253,7 +255,7 @@ namespace public {
         composedExtensions: ['supabase'],
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         capabilities: { sql: { scalarList: true } },
       },
     );

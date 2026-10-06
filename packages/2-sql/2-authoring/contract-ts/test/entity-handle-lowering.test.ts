@@ -9,6 +9,7 @@ import type {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, extensionModel, field, model } from '../src/contract-builder';
 
 /**
@@ -80,6 +81,7 @@ describe('generic entities handle channel', () => {
     const { pack, calls } = makeGadgetPack();
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: targetPack,
       createNamespace: createTestSqlNamespace,
@@ -112,6 +114,7 @@ describe('generic entities handle channel', () => {
     const Unknown = model('Unknown', { fields: { id: field.column(intColumn).id() } });
 
     defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: targetPack,
       createNamespace: createTestSqlNamespace,
@@ -137,6 +140,7 @@ describe('generic entities handle channel', () => {
   it('rejects a handle whose entityKind no composed pack registers, naming the kind', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: targetPack,
         createNamespace: createTestSqlNamespace,
@@ -146,6 +150,7 @@ describe('generic entities handle channel', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: targetPack,
         createNamespace: createTestSqlNamespace,
@@ -158,6 +163,7 @@ describe('generic entities handle channel', () => {
     const { pack } = makeGadgetPack({ withHook: false });
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: targetPack,
         createNamespace: createTestSqlNamespace,
@@ -179,6 +185,7 @@ describe('generic entities handle channel', () => {
     ];
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: targetPack,
         createNamespace: createTestSqlNamespace,

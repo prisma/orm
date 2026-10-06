@@ -24,6 +24,7 @@ import type {
 } from '@internal/framework-components/components';
 import { blindCast } from '@internal/utils/casts';
 import {
+  type AuthoringTypeLookups,
   createFieldPresetHelper,
   createTypeHelpersFromNamespace,
 } from './authoring-helper-runtime';
@@ -79,7 +80,7 @@ type StorageTypeFromDescriptor<
 > = {
   readonly kind: 'codec-instance';
   readonly codecId: ResolveTemplateValue<Descriptor['output']['codecId'], Args>;
-  readonly nativeType: ResolveTemplateValue<Descriptor['output']['nativeType'], Args>;
+  readonly nativeType: string;
 } & (Descriptor['output'] extends {
   readonly typeParams: infer TypeParams extends Record<string, unknown>;
 }
@@ -213,6 +214,7 @@ function assertNoBuiltInEntityCollisions(namespace: AuthoringEntityTypeNamespace
 
 function createComposedFieldHelpers(
   fieldNamespace: AuthoringFieldNamespace,
+  lookups: AuthoringTypeLookups,
 ): CoreFieldHelpers & Record<string, unknown> {
   const helperNamespace = createFieldHelpersFromNamespace(
     fieldNamespace,
@@ -220,6 +222,7 @@ function createComposedFieldHelpers(
       createFieldPresetHelper({
         helperPath,
         descriptor,
+        codecLookup: lookups.codecLookup,
         build: ({ args, namedConstraintOptions }) =>
           buildFieldPreset(descriptor, args, namedConstraintOptions),
       }),
@@ -251,11 +254,13 @@ export function createComposedAuthoringHelpers<
   Family extends FamilyPackRef<string>,
   Target extends TargetPackRef<'sql', string>,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
->(options: {
-  readonly family: Family;
-  readonly target: Target;
-  readonly extensions?: Extensions;
-}): ComposedAuthoringHelpers<Family, Target, Extensions> {
+>(
+  options: {
+    readonly family: Family;
+    readonly target: Target;
+    readonly extensions?: Extensions;
+  } & AuthoringTypeLookups,
+): ComposedAuthoringHelpers<Family, Target, Extensions> {
   const extensionValues: readonly ExtensionPackRef<'sql', string>[] = Object.values(
     (options.extensions ?? {}) as Record<string, ExtensionPackRef<'sql', string>>,
   );
@@ -278,11 +283,16 @@ export function createComposedAuthoringHelpers<
     'the helpers are the same objects for every set of packs; the packs decide only their types'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
-      ctx: { family: options.family.familyId, target: options.target.targetId },
+      ctx: {
+        family: options.family.familyId,
+        target: options.target.targetId,
+        codecLookup: options.codecLookup,
+        dataTypeLookup: options.dataTypeLookup,
+      },
     }),
-    field: createComposedFieldHelpers(fieldNamespace),
+    field: createComposedFieldHelpers(fieldNamespace, options),
     model,
     rel,
-    type: createTypeHelpersFromNamespace(typeNamespace),
+    type: createTypeHelpersFromNamespace(typeNamespace, options),
   });
 }

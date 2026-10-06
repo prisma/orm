@@ -1,3 +1,5 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import { Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import {
@@ -5,6 +7,7 @@ import {
   mongoCodecDescriptors,
   mongoDescriptorById,
 } from '../src/core/codecs';
+import { mongoDataTypes } from '../src/core/data-types';
 import { prisma6MongoBinding } from '../src/core/prisma6-binding';
 
 /**
@@ -39,9 +42,18 @@ function codecFor(typeName: string, nativeType: string): string | undefined {
   return table !== undefined && Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
+const lookups = {
+  codecLookup: { descriptorFor: mongoDescriptorById },
+  dataTypeLookup: createDataTypeLookup(mongoDataTypes),
+};
+
+function bsonTypesOf(codecId: string | undefined): readonly string[] {
+  return codecId === undefined ? [] : (bsonTypesOfCodec(codecId, lookups) ?? []);
+}
+
 function codecsReading(bson: string): readonly string[] {
   return mongoCodecDescriptors
-    .filter((descriptor) => descriptor.targetTypes.includes(bson))
+    .filter((descriptor) => bsonTypesOf(descriptor.codecId).includes(bson))
     .map((descriptor) => descriptor.codecId);
 }
 
@@ -51,9 +63,7 @@ describe('prisma6MongoBinding', () => {
     ({ typeName, nativeType, bson }) => {
       const codecId = codecFor(typeName, nativeType);
 
-      expect(codecId === undefined ? [] : mongoDescriptorById(codecId)?.targetTypes).toContain(
-        bson,
-      );
+      expect(bsonTypesOf(codecId)).toContain(bson);
     },
   );
 
@@ -99,8 +109,6 @@ describe('prisma6MongoBinding', () => {
   );
 
   it('gives an @id the codec for the ObjectId Prisma 6 stores in _id', () => {
-    expect(mongoDescriptorById(prisma6MongoBinding.objectIdCodecId)?.targetTypes).toContain(
-      'objectId',
-    );
+    expect(bsonTypesOf(prisma6MongoBinding.objectIdCodecId)).toContain('objectId');
   });
 });

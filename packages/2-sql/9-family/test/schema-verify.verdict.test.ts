@@ -26,9 +26,10 @@ import {
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
+import { testTypeLookups } from '../../1-core/contract/test/test-type-lookups';
 import { extractCodecControlHooks } from '../src/core/assembly';
 import { computeSqlDiffVerdict, computeStorageTypeVerdict } from '../src/core/diff/schema-verify';
-import type { DefaultNormalizer, NativeTypeNormalizer } from '../src/core/diff/sql-schema-diff';
+import type { DefaultNormalizer } from '../src/core/diff/sql-schema-diff';
 import { contractToSchemaIR } from '../src/core/migrations/contract-to-schema-ir';
 import {
   createContractTable,
@@ -53,7 +54,7 @@ const testNormalizer: DefaultNormalizer = (rawDefault: string): ColumnDefault | 
   return { kind: 'function', expression: trimmed };
 };
 
-const identityNativeNormalizer: NativeTypeNormalizer = (nativeType: string) =>
+const identityNativeNormalizer = (nativeType: string): string =>
   nativeType === 'varchar' ? 'character varying' : nativeType;
 
 /** Stamps resolved values onto a raw actual tree the way introspection does. */
@@ -126,6 +127,8 @@ function runVerdict(options: {
 
   const expected = contractToSchemaIR(options.contract, {
     annotationNamespace: 'pg',
+    dataTypeLookup: testTypeLookups.dataTypeLookup,
+    codecLookup: testTypeLookups.codecLookup,
   });
   const actual = stampLikeIntrospection(options.schema);
   const issues = diffSchemas(expected, actual);

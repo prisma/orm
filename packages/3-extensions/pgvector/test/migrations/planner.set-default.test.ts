@@ -1,3 +1,4 @@
+import postgresAdapterDescriptor from '@internal/adapter-postgres/control';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import {
@@ -6,6 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import {
@@ -96,7 +98,7 @@ async function setDefaultStatement(value: number[]): Promise<string | undefined>
     schema: liveSchema,
     policy,
     fromContract: null,
-    frameworkComponents: [pgvectorDescriptor],
+    frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor, pgvectorDescriptor],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });

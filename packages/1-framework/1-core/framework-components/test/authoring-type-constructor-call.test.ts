@@ -5,7 +5,7 @@ import type { AuthoringTypeNamespace } from '../src/shared/framework-authoring';
 const namespace = {
   Text: {
     kind: 'typeConstructor',
-    output: { codecId: 'test/text@1', nativeType: 'text' },
+    output: { codecId: 'test/text@1' },
   },
   Decimal: {
     kind: 'typeConstructor',
@@ -15,7 +15,6 @@ const namespace = {
     ],
     output: {
       codecId: 'test/numeric@1',
-      nativeType: 'numeric',
       typeParams: {
         precision: { kind: 'arg', index: 0 },
         scale: { kind: 'arg', index: 1 },
@@ -28,7 +27,6 @@ const namespace = {
       args: [{ kind: 'number', name: 'length', integer: true }],
       output: {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
         typeParams: { length: { kind: 'arg', index: 0 } },
       },
     },
@@ -36,22 +34,22 @@ const namespace = {
   Ref: {
     kind: 'typeConstructor',
     entityRefArg: { index: 0, entityKind: 'native_enum' },
-    output: { codecId: 'test/enum@1', nativeType: 'text' },
+    output: { codecId: 'test/enum@1' },
   },
 } as const satisfies AuthoringTypeNamespace;
 
 describe('findAuthoringTypeConstructorCall', () => {
   it('finds a constructor that takes no arguments', () => {
-    expect(
-      findAuthoringTypeConstructorCall(namespace, { codecId: 'test/text@1', nativeType: 'text' }),
-    ).toEqual({ path: ['Text'], args: [] });
+    expect(findAuthoringTypeConstructorCall(namespace, { codecId: 'test/text@1' })).toEqual({
+      path: ['Text'],
+      args: [],
+    });
   });
 
   it('finds a nested constructor, with the arguments its type parameters come from', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
         typeParams: { length: 3 },
       }),
     ).toEqual({ path: ['vector', 'Vector'], args: [3] });
@@ -61,7 +59,6 @@ describe('findAuthoringTypeConstructorCall', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/numeric@1',
-        nativeType: 'numeric',
         typeParams: { scale: 2, precision: 10 },
       }),
     ).toEqual({ path: ['Decimal'], args: [10, 2] });
@@ -71,17 +68,13 @@ describe('findAuthoringTypeConstructorCall', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/numeric@1',
-        nativeType: 'numeric',
       }),
     ).toEqual({ path: ['Decimal'], args: [] });
   });
 
-  it('finds nothing when no constructor produces the native type', () => {
+  it('finds nothing when no constructor produces the codec', () => {
     expect(
-      findAuthoringTypeConstructorCall(namespace, {
-        codecId: 'test/text@1',
-        nativeType: 'varchar',
-      }),
+      findAuthoringTypeConstructorCall(namespace, { codecId: 'test/other@1' }),
     ).toBeUndefined();
   });
 
@@ -89,7 +82,6 @@ describe('findAuthoringTypeConstructorCall', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/text@1',
-        nativeType: 'text',
         typeParams: { length: 3 },
       }),
     ).toBeUndefined();
@@ -99,7 +91,6 @@ describe('findAuthoringTypeConstructorCall', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/numeric@1',
-        nativeType: 'numeric',
         typeParams: { scale: 2 },
       }),
     ).toBeUndefined();
@@ -109,25 +100,23 @@ describe('findAuthoringTypeConstructorCall', () => {
     expect(
       findAuthoringTypeConstructorCall(namespace, {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
       }),
     ).toBeUndefined();
   });
 
   it('never calls a constructor whose argument names another entity', () => {
-    expect(
-      findAuthoringTypeConstructorCall(namespace, { codecId: 'test/enum@1', nativeType: 'text' }),
-    ).toBeUndefined();
+    expect(findAuthoringTypeConstructorCall(namespace, { codecId: 'test/enum@1' })).toBeUndefined();
   });
 
   it('takes the first constructor in namespace order when two produce the same output', () => {
     const twice = {
-      First: { kind: 'typeConstructor', output: { codecId: 'test/text@1', nativeType: 'text' } },
-      Second: { kind: 'typeConstructor', output: { codecId: 'test/text@1', nativeType: 'text' } },
+      First: { kind: 'typeConstructor', output: { codecId: 'test/text@1' } },
+      Second: { kind: 'typeConstructor', output: { codecId: 'test/text@1' } },
     } as const satisfies AuthoringTypeNamespace;
 
-    expect(
-      findAuthoringTypeConstructorCall(twice, { codecId: 'test/text@1', nativeType: 'text' }),
-    ).toEqual({ path: ['First'], args: [] });
+    expect(findAuthoringTypeConstructorCall(twice, { codecId: 'test/text@1' })).toEqual({
+      path: ['First'],
+      args: [],
+    });
   });
 });

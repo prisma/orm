@@ -5,10 +5,7 @@ import { binderContextFromStack, type LspControlStack } from '../../src/lsp-cont
 
 export function testTypeConstructors(names: readonly string[]): AuthoringTypeNamespace {
   return Object.fromEntries(
-    names.map((name) => [
-      name,
-      { kind: 'typeConstructor', output: { codecId: 'fixture/scalar', nativeType: name } },
-    ]),
+    names.map((name) => [name, { kind: 'typeConstructor', output: { codecId: 'fixture/scalar' } }]),
   );
 }
 

@@ -22,6 +22,7 @@ import {
 } from '@internal/adapter-postgres/control';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { blindCast } from '@internal/utils/casts';
@@ -51,7 +52,10 @@ function nodeTypes(node: unknown): readonly string[] {
 describe('full-text index usage', { timeout: timeouts.databaseOperation }, () => {
   const { db, runtime, client, contract, context, lower } = setupIntegrationTest();
 
-  const controlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+  const controlAdapter = new PostgresControlAdapter(
+    createPostgresBuiltinCodecLookup(),
+    createPostgresBuiltinDataTypeLookup(),
+  );
 
   /** The index nodes the fixture's `fullTextIndex(...)` helpers emitted. */
   function fixtureIndexes() {

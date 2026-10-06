@@ -108,44 +108,39 @@ describe('PgEnumDescriptor.qualifyNativeType', () => {
 
 describe('postgresQualifyColumnType', () => {
   it('passes non-enum columns through unchanged', () => {
-    const input = { codecId: PG_TEXT_CODEC_ID, nativeType: 'text' };
+    const input = { codecId: PG_TEXT_CODEC_ID };
     expect(postgresQualifyColumnType(input, 'auth')).toBe(input);
   });
 
   it('passes an enum column through unchanged when typeParams.typeName is missing', () => {
-    const input = { codecId: PG_ENUM_CODEC_ID, nativeType: 'aal_level' };
+    const input = { codecId: PG_ENUM_CODEC_ID };
     expect(postgresQualifyColumnType(input, 'auth')).toBe(input);
   });
 
   it('passes an enum column through unchanged when typeName is not a string', () => {
     const input = {
       codecId: PG_ENUM_CODEC_ID,
-      nativeType: 'aal_level',
       typeParams: { typeName: 42 },
     };
     expect(postgresQualifyColumnType(input, 'auth')).toBe(input);
   });
 
-  it('schema-qualifies an enum column nativeType and typeParams.typeName for a named namespace', () => {
+  it('schema-qualifies an enum column’s typeParams.typeName for a named namespace', () => {
     const input = {
       codecId: PG_ENUM_CODEC_ID,
-      nativeType: 'aal_level',
       typeParams: { typeName: 'aal_level' },
     };
     expect(postgresQualifyColumnType(input, 'auth')).toEqual({
-      nativeType: 'auth.aal_level',
       typeParams: { typeName: 'auth.aal_level' },
     });
   });
 
-  it('keeps the nativeType bare for the default namespace', () => {
+  it('keeps the typeName bare for the default namespace', () => {
     const input = {
       codecId: PG_ENUM_CODEC_ID,
-      nativeType: 'aal_level',
       typeParams: { typeName: 'aal_level' },
     };
     expect(postgresQualifyColumnType(input, DEFAULT_NAMESPACE_ID)).toEqual({
-      nativeType: 'aal_level',
       typeParams: { typeName: 'aal_level' },
     });
   });
@@ -193,12 +188,9 @@ describe('pg/text-array@1 codec', () => {
     expect(codec.id).toBe(PG_TEXT_ARRAY_CODEC_ID);
   });
 
-  it('exposes equality-only traits and the text[] target/native types', () => {
+  it('exposes equality-only traits and the text-array data type', () => {
     expect(pgTextArrayDescriptor.traits).toEqual(['equality']);
-    expect(pgTextArrayDescriptor.targetTypes).toEqual(['text[]']);
-    expect(pgTextArrayDescriptor.nativeTypeFor({ codecId: pgTextArrayDescriptor.codecId })).toBe(
-      'text[]',
-    );
+    expect(pgTextArrayDescriptor.dataType).toBe('pg/text-array');
   });
 
   it('round-trips a string array verbatim', async () => {

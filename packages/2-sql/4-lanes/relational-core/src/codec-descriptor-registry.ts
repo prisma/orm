@@ -21,7 +21,6 @@ export function buildCodecDescriptorRegistry(
 ): CodecDescriptorRegistry {
   type AnyDescriptor = CodecDescriptor<unknown>;
   const byId = new Map<string, AnyDescriptor>();
-  const byTargetType = new Map<string, Array<AnyDescriptor>>();
 
   for (const descriptor of allDescriptors) {
     if (byId.has(descriptor.codecId)) {
@@ -34,14 +33,6 @@ export function buildCodecDescriptorRegistry(
     }
     const widened = descriptor as unknown as AnyDescriptor;
     byId.set(descriptor.codecId, widened);
-    for (const targetType of descriptor.targetTypes) {
-      const list = byTargetType.get(targetType);
-      if (list) {
-        list.push(widened);
-      } else {
-        byTargetType.set(targetType, [widened]);
-      }
-    }
   }
 
   return {
@@ -54,9 +45,6 @@ export function buildCodecDescriptorRegistry(
     },
     *values(): IterableIterator<AnyDescriptor> {
       yield* byId.values();
-    },
-    byTargetType(targetType: string): readonly AnyDescriptor[] {
-      return byTargetType.get(targetType) ?? Object.freeze([]);
     },
   };
 }

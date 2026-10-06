@@ -120,7 +120,6 @@ const pgVectorCodecStubExtension: SqlRuntimeExtensionDescriptor<'postgres'> = ((
     codecId: 'pg/vector@1',
     dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
-    targetTypes: ['vector'],
     paramsSchema: {
       '~standard': {
         version: 1,

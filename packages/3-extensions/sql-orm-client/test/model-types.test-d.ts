@@ -1,13 +1,13 @@
 import type { AsyncIterableResult, ResultType } from '@internal/framework-components/runtime';
 import type { Scalars, Shape } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type {
-  Contract as PolyContract,
-  Models as PolyModels,
-} from '../../../../test/integration/test/sql-orm-client/fixtures/polymorphism/generated/contract';
 import type { Collection } from '../src/collection';
 import type { DefaultModelRow, VariantModelRow } from '../src/types';
 import type { Contract, Models } from './fixtures/generated/contract';
+import type {
+  Contract as PolyContract,
+  Models as PolyModels,
+} from './fixtures/polymorphism/generated/contract';
 
 declare const db: {
   Article: Collection<Contract, 'Article'>;

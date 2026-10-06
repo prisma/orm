@@ -10,8 +10,9 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { withDescriptors } from '../../contract-ts/test/with-descriptors';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -49,25 +50,14 @@ const sqliteCodecsById: Record<string, Codec> = {
   'sqlite/integer@1': stubCodec('sqlite/integer@1', 'number'),
 };
 
-const sqliteTargetTypesById: Record<string, readonly string[]> = {
-  'sqlite/text@1': ['text'],
-  'sqlite/integer@1': ['integer'],
-};
-
-const sqliteCodecLookup = withDescriptors({
-  get: (id) => sqliteCodecsById[id],
-  targetTypesFor: (id) => sqliteTargetTypesById[id],
-  renderOutputTypeFor: () => undefined,
-});
-
-const testCodecLookup: CodecLookupWithDescriptors = {
-  get: (id) => postgresCodecLookup.get(id) ?? sqliteCodecLookup.get(id),
-  descriptorFor: (id) =>
-    postgresCodecLookup.descriptorFor(id) ?? sqliteCodecLookup.descriptorFor(id),
-  targetTypesFor: (id) =>
-    postgresCodecLookup.targetTypesFor(id) ?? sqliteCodecLookup.targetTypesFor(id),
-  renderOutputTypeFor: () => undefined,
-};
+const testCodecLookup: CodecLookupWithDescriptors = testSqlTypeLookups(
+  {},
+  {
+    get: (id) => postgresCodecLookup.get(id) ?? sqliteCodecsById[id],
+    descriptorFor: (id) => postgresCodecLookup.descriptorFor(id),
+    renderOutputTypeFor: () => undefined,
+  },
+).codecLookup;
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
@@ -92,7 +82,7 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
         ...('dataTypes' in contributions ? contributions.dataTypes : {}),
       },
     },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureTypeLookups,
     codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
@@ -182,6 +172,7 @@ model Post {
     };
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       enums: { Priority: PriorityHandle },
@@ -270,6 +261,7 @@ model Post {
     };
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       enums: { Priority: PriorityHandle },

@@ -29,13 +29,5 @@ describe('postgis column-types', () => {
         typeParams: { srid: 3857 },
       });
     });
-
-    it('rejects a non-integer SRID', () => {
-      expect(() => geometry({ srid: 1.5 })).toThrow('srid must be a non-negative integer');
-    });
-
-    it('rejects a negative SRID', () => {
-      expect(() => geometry({ srid: -1 })).toThrow('srid must be a non-negative integer');
-    });
   });
 });

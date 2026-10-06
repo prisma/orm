@@ -66,7 +66,6 @@ export {
   pgTimestamptzDateDescriptor,
 } from '../core/date-codecs';
 export { parsePostgresListText } from '../core/list-decoder';
-export { NUMERIC_PRECISION_RANGE, NUMERIC_SCALE_RANGE } from '../core/numeric-limits';
 export {
   postgresCodecDescriptorRegistry,
   postgresCodecRegistry,

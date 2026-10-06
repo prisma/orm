@@ -73,7 +73,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe@1',
-        targetTypes: ['text'],
         encode: (value: string, ctx?: SqlCodecCallContext) => {
           observed.push(ctx);
           return value;
@@ -103,7 +102,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-column@1',
-        targetTypes: ['text'],
         encode: (value: string, ctx?: SqlCodecCallContext) => {
           observed = ctx;
           return value;
@@ -126,7 +124,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/passthrough@1',
-        targetTypes: ['text'],
         encode: (value: string) => `wire:${value}`,
         decode: (wire: string) => wire,
       }),
@@ -148,7 +145,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/counter@1',
-        targetTypes: ['text'],
         encode: (value: string) => {
           callCount += 1;
           return value;
@@ -196,7 +192,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/blocking@1',
-        targetTypes: ['text'],
         encode: (value: string) => release.promise.then((suffix) => `${value}:${suffix}`),
         decode: (wire: string) => wire,
       }),
@@ -230,7 +225,6 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        targetTypes: ['text'],
         encode: () => {
           throw cause;
         },
@@ -255,7 +249,6 @@ describe('encodeParam — ctx forwarded to codec.encode', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/single-cell@1',
-        targetTypes: ['text'],
         encode: (value: string, ctx?: SqlCodecCallContext) => {
           observedSignal = ctx?.signal;
           return value;
@@ -280,7 +273,6 @@ describe('encodeParam — ctx forwarded to codec.encode', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/never@1',
-        targetTypes: ['text'],
         encode: () => {
           throw new Error('must not be invoked for null/undefined');
         },

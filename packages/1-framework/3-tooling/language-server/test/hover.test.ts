@@ -1,17 +1,26 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
+  type ArgType,
+  type AttributeCtx,
+  blockAttribute,
+  bool,
   buildSymbolTable,
   entityRef,
   fieldAttribute,
   fieldRef,
+  funcCall,
+  identifier,
   list,
   modelAttribute,
+  numLiteral,
+  oneOf,
   optional,
   str,
   structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
+import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { providePslHover } from '../src/hover';
 import { testBinder } from './helpers/binder';
@@ -26,18 +35,87 @@ const guardedBy = modelAttribute('guardedBy', {
 });
 const relationSpec = fieldAttribute('relation', {
   documentation: 'Declares a relation.',
-  named: { name: { type: optional(str()), documentation: 'An explicit relation name.' } },
+  named: {
+    name: { type: optional(str()), documentation: 'An explicit relation name.' },
+  },
+});
+const incompleteKeySpec = fieldAttribute('incompleteKey', {
+  documentation: '',
+  named: {
+    references: { type: optional(str()), documentation: 'Referenced fields.' },
+  },
+});
+const onDeleteSpec = fieldAttribute('onDeleteExample', {
+  documentation: '',
+  named: {
+    onDelete: {
+      type: oneOf(
+        identifier('NoAction', { documentation: 'Takes no action.' }),
+        identifier('Restrict', { documentation: 'Rejects the delete.' }),
+        identifier('Cascade', { documentation: 'Cascades the delete.' }),
+      ),
+      documentation: '',
+    },
+  },
 });
 const indexSpec = modelAttribute('index', {
   documentation: 'Declares an index.',
   named: { fields: { type: list(str()), documentation: 'Indexed field names.' } },
+});
+const autoincrementFunc = funcCall('autoincrement', {
+  documentation: 'Generates sequential integers.',
+});
+const dbgeneratedFunc = funcCall('dbgenerated', {
+  documentation: 'Lets the database generate the value.',
+  named: { expr: { type: str(), documentation: 'The database expression.' } },
+});
+const defaultSpec = fieldAttribute('default', {
+  documentation: '',
+  positional: [
+    { key: 'value', type: oneOf(autoincrementFunc, dbgeneratedFunc), documentation: '' },
+  ],
+});
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
+const autoincrementRealOrderFunc = funcCall('autoincrement', {
+  documentation: 'Generates sequential integers.',
+});
+const defaultRealOrderSpec = fieldAttribute('default', {
+  documentation: '',
+  positional: [
+    {
+      key: 'value',
+      type: oneOf(str(), numLiteral(), bool(), nullLiteral(), autoincrementRealOrderFunc),
+      documentation: '',
+    },
+  ],
+});
+const someBlockAttribute = blockAttribute('someBlockAttribute', {
+  documentation: 'Does something.',
+  positional: [{ key: 'value', type: str(), documentation: 'The value.' }],
 });
 const authoringContributions = assembleAuthoringContributions([
   {
     id: 'hover-fixture',
     authoring: {
       attributeSpecs: {
-        field: { relatesTo: () => relatesTo, relation: () => relationSpec },
+        field: {
+          relatesTo: () => relatesTo,
+          relation: () => relationSpec,
+          incompleteKey: () => incompleteKeySpec,
+          onDeleteExample: () => onDeleteSpec,
+          default: () => defaultSpec,
+          defaultRealOrder: () => defaultRealOrderSpec,
+        },
         model: { guardedBy: () => guardedBy, index: () => indexSpec },
       },
       type: {
@@ -46,28 +124,28 @@ const authoringContributions = assembleAuthoringContributions([
             kind: 'typeConstructor',
             documentation: 'A variable-length string.',
             args: [{ name: 'length', kind: 'number' }],
-            output: { codecId: 'fixture/varchar', nativeType: 'varchar' },
+            output: { codecId: 'fixture/varchar' },
           },
           Text: {
             kind: 'typeConstructor',
-            output: { codecId: 'fixture/text', nativeType: 'text' },
+            output: { codecId: 'fixture/text' },
           },
           Tags: {
             kind: 'typeConstructor',
             documentation: 'A list of tags.',
             args: [{ name: 'tags', kind: 'stringArray' }],
-            output: { codecId: 'fixture/tags', nativeType: 'tags' },
+            output: { codecId: 'fixture/tags' },
           },
           Mode: {
             kind: 'typeConstructor',
             documentation: 'A deletion mode.',
             args: [{ name: 'mode', kind: 'option', values: ['cascade', 'restrict'] }],
-            output: { codecId: 'fixture/mode', nativeType: 'mode' },
+            output: { codecId: 'fixture/mode' },
           },
           Flag: {
             kind: 'typeConstructor',
             documentation: '',
-            output: { codecId: 'fixture/flag', nativeType: 'flag' },
+            output: { codecId: 'fixture/flag' },
           },
         },
       },
@@ -76,7 +154,7 @@ const authoringContributions = assembleAuthoringContributions([
           Serial: {
             kind: 'fieldPreset',
             args: [{ name: 'start', kind: 'number' }],
-            output: { codecId: 'fixture/serial', nativeType: 'serial' },
+            output: { codecId: 'fixture/serial' },
           },
         },
       },
@@ -90,7 +168,13 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'hover-policy',
     name: { required: true },
-    spec: () => structBlock({ parameters: {} }),
+    spec: () =>
+      structBlock({
+        parameters: {
+          using: { type: str(), documentation: 'The policy filter expression.' },
+        },
+      }),
+    attributes: { someBlockAttribute: () => someBlockAttribute },
   },
   view: {
     kind: 'pslBlock',
@@ -403,5 +487,109 @@ describe('providePslHover', () => {
   it('returns null for a block keyword without documentation', () => {
     const result = hover('vie|w Summary {\n}');
     expect(result).toBeNull();
+  });
+
+  it('shows a named attribute-argument key and its documentation', () => {
+    const result = hover('model User {\n  author User @relation(nam|e: "x")\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nname?: string\n```\n\nAn explicit relation name.',
+      },
+      range: { start: { line: 1, character: 24 }, end: { line: 1, character: 28 } },
+    });
+  });
+
+  it('shows a named attribute-argument key while its value is missing', () => {
+    const result = hover('model User {\n  author User @incompleteKey(referen|ces: )\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nreferences?: string\n```\n\nReferenced fields.',
+      },
+      range: { start: { line: 1, character: 29 }, end: { line: 1, character: 39 } },
+    });
+  });
+
+  it('omits the documentation section for a parameter with empty documentation', () => {
+    const result = hover('model User {\n  id Int\n  author User @relatesTo(field|s: id)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nfields: field name\n```' },
+      range: { start: { line: 2, character: 25 }, end: { line: 2, character: 31 } },
+    });
+  });
+
+  it('shows a struct-block entry key and its documentation', () => {
+    const result = hover('policy ReadOwn {\n  usi|ng = "x"\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nusing: string\n```\n\nThe policy filter expression.',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 7 } },
+    });
+  });
+
+  it('shows a function name without args and its documentation', () => {
+    const result = hover('model User {\n  id Int @default(autoincreme|nt())\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
+      },
+      range: { start: { line: 1, character: 18 }, end: { line: 1, character: 31 } },
+    });
+  });
+
+  it('shows a function name past leading scalar leaves, in the real @default arm order', () => {
+    const result = hover('model User {\n  id Int @defaultRealOrder(autoincreme|nt())\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
+      },
+      range: { start: { line: 1, character: 27 }, end: { line: 1, character: 40 } },
+    });
+  });
+
+  it('shows a function name with args and its documentation', () => {
+    const result = hover('model User {\n  value String @default(dbgenerat|ed(expr: "now()"))\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\ndbgenerated(expr: string)\n```\n\nLets the database generate the value.',
+      },
+      range: { start: { line: 1, character: 24 }, end: { line: 1, character: 35 } },
+    });
+  });
+
+  it('shows a named function-call-argument key and its documentation', () => {
+    const result = hover('model User {\n  value String @default(dbgenerated(ex|pr: "now()"))\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nexpr: string\n```\n\nThe database expression.',
+      },
+      range: { start: { line: 1, character: 36 }, end: { line: 1, character: 40 } },
+    });
+  });
+
+  it('shows a constant not first in a oneOf and its documentation', () => {
+    const result = hover('model User {\n  author User @onDeleteExample(onDelete: Casc|ade)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nCascade\n```\n\nCascades the delete.' },
+      range: { start: { line: 1, character: 41 }, end: { line: 1, character: 48 } },
+    });
+  });
+
+  it('shows a block attribute and its documentation', () => {
+    const result = hover('policy ReadOwn {\n  @@someBlockAttri|bute("x")\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@@someBlockAttribute(string)\n```\n\nDoes something.',
+      },
+      range: { start: { line: 1, character: 4 }, end: { line: 1, character: 22 } },
+    });
   });
 });

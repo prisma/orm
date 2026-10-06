@@ -12,7 +12,10 @@ import {
 import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -82,10 +85,7 @@ import type {
 } from '@internal/target-postgres/ddl';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
-import {
-  introspectedNativeType,
-  normalizeSchemaNativeType,
-} from '@internal/target-postgres/native-type-normalizer';
+import { introspectedNativeType } from '@internal/target-postgres/native-type-normalizer';
 import {
   isPostgresDateTimeDataType,
   postgresDateTimeDdlText,
@@ -124,6 +124,13 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
+function decodeMarkerInteger(value: string): number {
+  if (!/^-?\d+$/.test(value)) {
+    throw new TypeError(`expected integer text, got ${JSON.stringify(value)}`);
+  }
+  return Number(value);
+}
+
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
@@ -135,12 +142,15 @@ function decodePostgresMarkerRow(row: unknown, space: string): Record<string, un
     });
   }
   const record = blindCast<
-    { readonly invariants: unknown } & Record<string, unknown>,
+    { readonly invariants: unknown; readonly canonical_version: unknown } & Record<string, unknown>,
     'Postgres marker rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
+      ...(typeof record.canonical_version === 'string'
+        ? { canonical_version: decodeMarkerInteger(record.canonical_version) }
+        : {}),
       invariants: parsePostgresListText(record.invariants),
     };
   } catch (error) {
@@ -172,20 +182,16 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   readonly familyId = 'sql' as const;
   readonly targetId = 'postgres' as const;
 
-  constructor(private readonly codecRegistry: PostgresCodecRegistry) {}
+  constructor(
+    private readonly codecRegistry: PostgresCodecRegistry,
+    private readonly dataTypeLookup: DataTypeLookup,
+  ) {}
 
   /**
    * Target-specific normalizer for raw Postgres default expressions.
    * Used by schema verification to normalize raw defaults before comparison.
    */
   readonly normalizeDefault = parsePostgresDefault;
-
-  /**
-   * Target-specific normalizer for Postgres schema native type names.
-   * Used by schema verification to normalize introspected type names
-   * before comparison with contract native types.
-   */
-  readonly normalizeNativeType = normalizeSchemaNativeType;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -217,6 +223,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         context.contract,
       ),
       this.codecRegistry,
+      this.dataTypeLookup,
     );
   }
 
@@ -254,7 +261,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'Caller must supply matching contract'>(
       context?.contract,
     );
-    const lowered = renderLoweredSql(ast, contract, this.codecRegistry);
+    const lowered = renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
     const codecRegistry = blindCast<
       ContractCodecRegistry,
       'framework CodecRegistry: its descriptors materialise SQL codecs; the framework Codec type erases to BaseCodec at this boundary'
@@ -1636,13 +1643,14 @@ interface OutputSettings {
   readonly timeZone: string;
   readonly dateStyle: string;
   readonly intervalStyle: string;
+  readonly byteaOutput: string;
 }
 
-/** Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals. */
 const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
   timeZone: 'UTC',
   dateStyle: 'ISO, MDY',
   intervalStyle: 'postgres',
+  byteaOutput: 'hex',
 };
 
 async function readOutputSettings(
@@ -1651,7 +1659,8 @@ async function readOutputSettings(
   const { rows } = await driver.query<OutputSettings>(
     `SELECT current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
-            current_setting('IntervalStyle') AS "intervalStyle"`,
+            current_setting('IntervalStyle') AS "intervalStyle",
+            current_setting('bytea_output') AS "byteaOutput"`,
   );
   return rows[0];
 }
@@ -1662,24 +1671,28 @@ async function applyOutputSettings(
   local: boolean,
 ): Promise<void> {
   await driver.query(
-    `SELECT set_config('TimeZone', $1, $4),
-            set_config('DateStyle', $2, $4),
-            set_config('IntervalStyle', $3, $4)`,
-    [settings.timeZone, settings.dateStyle, settings.intervalStyle, local],
+    `SELECT set_config('TimeZone', $1, $5),
+            set_config('DateStyle', $2, $5),
+            set_config('IntervalStyle', $3, $5),
+            set_config('bytea_output', $4, $5)`,
+    [settings.timeZone, settings.dateStyle, settings.intervalStyle, settings.byteaOutput, local],
   );
 }
 
 function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
   return (
-    a?.timeZone === b.timeZone && a.dateStyle === b.dateStyle && a.intervalStyle === b.intervalStyle
+    a?.timeZone === b.timeZone &&
+    a.dateStyle === b.dateStyle &&
+    a.intervalStyle === b.intervalStyle &&
+    a.byteaOutput === b.byteaOutput
   );
 }
 
 /**
  * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
  * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
- * dates and intervals in the session styles, so pinning them gives the same text whatever the
- * server, the role, or the caller set.
+ * dates, intervals and bytea in the session styles, so pinning them gives the same text whatever
+ * the server, the role, or the caller set.
  *
  * The settings are first set locally. A local setting outlives its own statement only inside a
  * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they

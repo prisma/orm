@@ -1,6 +1,10 @@
+import type { AnyCodecDescriptor, DataType } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { assertUniqueCodecOwner } from '@internal/framework-components/control';
+import { findSqlDataTypeCollision, isSqlDataType } from '@internal/sql-contract/data-type';
+import { assertNothingCastsFromSqlExpression } from '@internal/sql-contract/sql-expression';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import type { CodecControlHooks } from './migrations/types';
 
 type CodecControlHooksMap = Record<string, CodecControlHooks>;
@@ -52,4 +56,48 @@ export function extractCodecControlHooks(
   }
 
   return hooks;
+}
+
+interface DeclaredDataType {
+  readonly type: DataType;
+  readonly contributedBy: string;
+}
+
+/**
+ * The SQL family's checks of the stack's data types and codecs, each naming the contributor:
+ * no two SQL data types would both recognise one reported type, by colliding claiming texts or by
+ * claiming the same kind; no data type casts from `sql/expression`; and every codec represents a
+ * SQL data type, because a codec represents a column's type and `sql/expression` is the one data
+ * type no column has.
+ */
+export function enforceSqlDataTypeInvariants(
+  declaredDataTypes: ReadonlyArray<DeclaredDataType>,
+  codecDescriptors: ReadonlyArray<Pick<AnyCodecDescriptor, 'codecId' | 'dataType'>>,
+): void {
+  const declaredById = new Map(declaredDataTypes.map((declared) => [declared.type.id, declared]));
+  const describe = (type: DataType): string =>
+    `data type "${type.id}" contributed by "${declaredById.get(type.id)?.contributedBy ?? '<unknown>'}"`;
+
+  const collision = findSqlDataTypeCollision(declaredDataTypes.map(({ type }) => type));
+  if (collision !== undefined) {
+    const { first, second, claims } = collision;
+    if (claims.by === 'kind') {
+      throw new InternalError(
+        `The ${describe(first)} and the ${describe(second)} both claim the kind "${claims.kind}".`,
+      );
+    }
+    throw new InternalError(
+      `The ${describe(first)} claims the text "${claims.first}", which collides with the text "${claims.second}" claimed by the ${describe(second)}.`,
+    );
+  }
+
+  assertNothingCastsFromSqlExpression(declaredDataTypes);
+
+  for (const codec of codecDescriptors) {
+    const represented = declaredById.get(codec.dataType)?.type;
+    if (represented === undefined || isSqlDataType(represented)) continue;
+    throw new InternalError(
+      `Codec "${codec.codecId}" represents ${describe(represented)}, which is not a SQL data type. In a SQL stack a codec represents a column's type, so its data type is declared with sqlDataType.`,
+    );
+  }
 }
