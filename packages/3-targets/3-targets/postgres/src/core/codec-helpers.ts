@@ -423,7 +423,7 @@ function postgresIntervalFields(text: string): PgInterval | undefined {
   const fraction = match[8] ?? '';
   const magnitude =
     (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
-    BigInt(fraction.padEnd(6, '0') || '0');
+    microsFromFraction(fraction, sign === '-');
   return {
     months: Number(years) * 12 + Number(months),
     days: Number(days),

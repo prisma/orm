@@ -380,6 +380,16 @@ describe('adapter-postgres codecs', () => {
       );
     });
 
+    it('rounds interval text past six fractional digits to microseconds as ISO-8601 text does', async () => {
+      expect(await codec.decode('00:00:00.1234567', {})).toEqual(
+        await codec.decode('PT0.1234567S', {}),
+      );
+      expect(await codec.decode('00:00:00.1234567', {})).toEqual(fields({ micros: 123_457n }));
+      expect(await codec.decode('-00:00:00.1234565', {})).toEqual(
+        await codec.decode('PT-0.1234565S', {}),
+      );
+    });
+
     it('rejects a text wire value that is neither an ISO-8601 duration nor interval text', async () => {
       await expect(codec.decode('one day', {})).rejects.toThrow(
         'pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got one day',
