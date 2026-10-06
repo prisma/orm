@@ -19,7 +19,7 @@ import {
 } from '../../control-api/operations/ref-advancement';
 import { errorAdvanceRefArgConflict, errorContractArgConflict } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
-import { ON_DISK_CONTRACT_REF_FORMS } from '../contract-ref-forms';
+import { ON_DISK_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { appRefsDirFor, baseDirFor, displayPath, migrationsDirFor } from '../migration/paths';

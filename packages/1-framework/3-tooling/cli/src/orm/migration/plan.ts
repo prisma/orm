@@ -15,9 +15,9 @@ import type {
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
 import type { CreateControlClient, DestructivePlanOperation } from '../../control-api/types';
 import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
+import { ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
-import { ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS } from '../contract-ref-forms';
 import { destructiveOperationList, errorConsentOperationsMissing } from '../db/consent';
 import { defineOrmCommand } from '../define-command';
 import { consentToken } from '../init-inputs';

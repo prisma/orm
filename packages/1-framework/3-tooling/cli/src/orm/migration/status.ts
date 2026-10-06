@@ -47,6 +47,7 @@ import {
 } from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
+import { ALL_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { renderMigrationGraphLegend } from '../../utils/formatters/migration-graph-labels';
 import { TONE_MIGRATION_GRAPH_PALETTE } from '../../utils/formatters/migration-graph-palette';
 import {
@@ -58,7 +59,6 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ALL_CONTRACT_REF_FORMS } from '../contract-ref-forms';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';

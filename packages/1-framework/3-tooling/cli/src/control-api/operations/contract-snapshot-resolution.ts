@@ -27,6 +27,7 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import { ON_DISK_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
@@ -66,8 +67,6 @@ export interface ResolveContractRefToSnapshotSuccess {
   readonly source: 'snapshot' | 'emitted';
 }
 
-const ON_DISK_FORMS = 'hash, prefix, ref name, migration directory name, or `<dir>^`';
-
 function reservedRefRefusal(
   options: ResolveContractRefToSnapshotOptions,
 ): RefResolutionWrongGrammar {
@@ -77,15 +76,15 @@ function reservedRefRefusal(
         kind: 'wrong-grammar',
         input,
         expectedGrammar: 'contract',
-        message: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by ${ON_DISK_FORMS}`,
-        fix: `Pass a ${ON_DISK_FORMS}, or omit the contract to sign the emitted contract.`,
+        message: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by ${ON_DISK_CONTRACT_REF_FORMS}`,
+        fix: `Name a contract on disk (${ON_DISK_CONTRACT_REF_FORMS}), or omit the contract to sign the emitted contract.`,
       }
     : {
         kind: 'wrong-grammar',
         input,
         expectedGrammar: 'contract',
         message: `"${input}" is a reserved reference; \`db update ${options.missingBundleFlag}\` names a migration destination on disk`,
-        fix: `Pass the ${ON_DISK_FORMS} of a migration destination, or omit ${options.missingBundleFlag} to update to the emitted contract.`,
+        fix: `Name a migration destination on disk (${ON_DISK_CONTRACT_REF_FORMS}), or omit ${options.missingBundleFlag} to update to the emitted contract.`,
       };
 }
 

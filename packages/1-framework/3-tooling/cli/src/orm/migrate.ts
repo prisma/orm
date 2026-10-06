@@ -42,6 +42,7 @@ import type {
 } from '../control-api/types';
 import { errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
+import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
 import {
   migrateShowRunListRows,
@@ -53,7 +54,6 @@ import { toneDrawing } from '../utils/formatters/tone-markup';
 import { mapMigrateFailure } from '../utils/migrate-failure';
 import { runCommandAction } from '../utils/next-actions';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
-import { ALL_CONTRACT_REF_FORMS } from './contract-ref-forms';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
