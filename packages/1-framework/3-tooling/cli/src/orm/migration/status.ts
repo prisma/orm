@@ -251,15 +251,14 @@ export const migrationStatusCommand = defineOrmCommand({
     const dbConnection = args.flags.db ?? ctx.config.db?.connection;
     const hasDriver = ctx.config.driver !== undefined;
     const { from, to } = args.flags;
-    const use = liveMarkerUse({ from, to });
-    const { liveOrigin, liveTarget, needsDatabase } = use;
+    const { liveOrigin, liveTarget, needsDatabase } = liveMarkerUse({ from, to });
     const missingDb = requireDatabaseForLiveMarkerUse({
-      use,
+      from,
+      to,
       dbConnection,
       hasDriver,
       commandName: 'migration status',
-      from,
-      to,
+      offlineRetry: true,
     });
     if (missingDb !== null) {
       return notOk(normalizeError(missingDb));

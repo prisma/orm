@@ -453,6 +453,35 @@ describe('migration status', () => {
     });
   });
 
+  it('keeps --to in the retry command it suggests when no connection is configured', async () => {
+    const project = await projectWithOneMigration();
+    const config = driverConfig(project);
+
+    const run = await harness({ ...config, db: undefined }).run(
+      ['migration', 'status', '--to', HASH_HEAD, '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.DB_CONNECTION_REQUIRED',
+          meta: { missingFlags: ['--db'] },
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining(
+                `migration status --from <contract> --to ${HASH_HEAD}`,
+              ),
+            }),
+          ],
+        },
+      },
+    });
+  });
+
   it('uses the same envelope with no missing flags when only the driver is absent', async () => {
     const project = await projectWithOneMigration();
     const config = driverConfig(project);

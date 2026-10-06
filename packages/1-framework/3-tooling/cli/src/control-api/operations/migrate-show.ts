@@ -97,16 +97,18 @@ export async function executeMigrateShowPlan(
   const dbConnection = options.db ?? config.db?.connection;
   const driver = config.driver;
   const hasExplicitFrom = options.from !== undefined;
-  const use = liveMarkerUse({ from: options.from, to: options.to });
-  const { liveOrigin, liveTarget } = use;
+  const { liveOrigin, liveTarget, needsDatabase } = liveMarkerUse({
+    from: options.from,
+    to: options.to,
+  });
 
   const missingDb = requireDatabaseForLiveMarkerUse({
-    use,
+    from: options.from,
+    to: options.to,
     dbConnection,
     hasDriver: driver !== undefined,
     commandName: 'db migrate --show',
-    from: options.from,
-    to: options.to,
+    offlineRetry: true,
   });
   if (missingDb) {
     return notOk(missingDb);
@@ -181,7 +183,7 @@ export async function executeMigrateShowPlan(
     markerBySpace.set(aggregate.app.spaceId, offlineMarker);
   }
 
-  if (use.needsDatabase && driver !== undefined) {
+  if (needsDatabase && driver !== undefined) {
     const client = (options.createClient ?? createControlClient)({
       family: config.family,
       target: config.target,
