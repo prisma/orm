@@ -453,7 +453,9 @@ export class CollectionBase<
    * Narrow a polymorphic model to the variant declared with the given
    * discriminator value. The returned collection has the variant's row
    * shape and a discriminator filter is automatically applied. Chaining
-   * `.variant(...)` again replaces the previous variant filter.
+   * `.variant(...)` again replaces the previous variant filter and also
+   * removes any direct comparison on the discriminator column that was
+   * added with `where()`.
    *
    * ```typescript
    * // Read only admin users (STI):

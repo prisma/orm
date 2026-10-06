@@ -91,7 +91,9 @@ export interface MongoCollection<
   readonly _row?: SimplifyDeep<IncludedRow<TContract, ModelName, TIncludes>>;
   /**
    * Narrows to the variant declared with the given discriminator value,
-   * injecting a discriminator filter. A later call replaces that filter.
+   * injecting a discriminator filter. A later call replaces that filter and
+   * also removes any direct equality filter on the discriminator field that
+   * was added with `where()`.
    */
   variant<V extends VariantValues<TContract, ModelName>>(
     value: V,
