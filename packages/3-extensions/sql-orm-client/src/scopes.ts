@@ -13,7 +13,7 @@ import {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { modelOf, resolveFieldToColumn } from './collection-contract';
-import type { Filtered, HasState, Ordered } from './collection-types';
+import type { Filtered, HasTypeState, Ordered } from './collection-types';
 import { hasTrait, resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import type {
@@ -155,7 +155,7 @@ export interface FieldScope<
     NsId extends string = never,
   >(
     collection: C &
-      HasState<{ readonly nsId: NsId }> & {
+      HasTypeState<{ readonly nsId: NsId }> & {
         readonly modelName: ModelName;
         readonly ctx: { readonly context: { readonly contract: ReceiverContract } };
       } & ScopeFieldsCheck<ReceiverContract, ModelName, NsId, Fields>,

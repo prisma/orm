@@ -73,11 +73,11 @@ import {
 import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
 import type {
   CollectionRowOf,
-  CollectionStateOf,
+  CollectionTypeStateOf,
   Filtered,
   HasOrderBy,
   HasRow,
-  HasState,
+  HasTypeState,
   HasWhere,
   Including,
   ModelScopeReceiver,
@@ -85,7 +85,7 @@ import type {
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   Scope,
-  StateType,
+  TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
 import { GroupedCollection } from './grouped-collection';
@@ -301,9 +301,9 @@ export class CollectionBase<
   ModelName extends string,
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
-> implements HasRow<Row>, HasState<State>
+> implements HasRow<Row>, HasTypeState<State>
 {
-  declare readonly [StateType]: State;
+  declare readonly [TypeState]: State;
   declare readonly [RowType]: Row;
   declare readonly _row?: CollectionRowOf<this>;
   /** @internal */
@@ -483,7 +483,7 @@ export class CollectionBase<
    * ```
    */
   scope<Self extends ScopeSource, NsId extends string, Result>(
-    this: Self & HasState<{ readonly nsId: NsId }>,
+    this: Self & HasTypeState<{ readonly nsId: NsId }>,
     body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
   ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertScopeBody(body);
@@ -519,7 +519,7 @@ export class CollectionBase<
    * ```
    */
   variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
-    this: HasState<S>,
+    this: HasTypeState<S>,
     variantName: V,
   ): Collection<
     TContract,
@@ -781,7 +781,7 @@ export class CollectionBase<
         >;
       }
     >,
-    CollectionStateOf<this>
+    CollectionTypeStateOf<this>
   > {
     const relation = resolveIncludeRelation(
       this.contract,
@@ -871,7 +871,7 @@ export class CollectionBase<
           >;
         }
       >,
-      CollectionStateOf<this>
+      CollectionTypeStateOf<this>
     >({
       includes: [...this.state.includes, includeExpr],
     });
@@ -899,7 +899,7 @@ export class CollectionBase<
     S extends CollectionTypeState = State,
     R = Row,
   >(
-    this: HasState<S> & HasRow<R>,
+    this: HasTypeState<S> & HasRow<R>,
     ...fields: Fields
   ): Collection<
     TContract,
@@ -1354,9 +1354,9 @@ export class CollectionBase<
     TContract,
     ModelName,
     CollectionRowOf<this>,
-    CollectionStateOf<this>
+    CollectionTypeStateOf<this>
   > {
-    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionStateOf<this>> = {
+    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>> = {
       aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
       all: (configure) => {
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
@@ -1371,7 +1371,7 @@ export class CollectionBase<
       },
     };
     return blindCast<
-      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionStateOf<this>>,
+      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionTypeStateOf<this>>,
       'the row this collection reads is the row its type carries'
     >(prepared);
   }
@@ -2371,7 +2371,7 @@ export class CollectionBase<
     this: Self,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<CollectionRowOf<this & Self> | null>;
+  ): Promise<CollectionRowOf<Self & HasRow> | null>;
   async update(
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2462,7 +2462,7 @@ export class CollectionBase<
     this: Self,
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<CollectionRowOf<this & Self>>;
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow>>;
   updateAll(
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2592,7 +2592,7 @@ export class CollectionBase<
   async delete<Self extends HasWhere>(
     this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): Promise<CollectionRowOf<this & Self> | null>;
+  ): Promise<CollectionRowOf<Self & HasRow> | null>;
   async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
@@ -2634,7 +2634,7 @@ export class CollectionBase<
   deleteAll<Self extends HasWhere>(
     this: Self,
     configure?: (meta: MetaBuilder<'write'>) => void,
-  ): AsyncIterableResult<CollectionRowOf<this & Self>>;
+  ): AsyncIterableResult<CollectionRowOf<Self & HasRow>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
     this.#assertNoLimitOrOffset('deleteAll');
     return this.#deleteAllWithAnnotations(

@@ -2,7 +2,7 @@ import { describe, expectTypeOf, test } from 'vitest';
 import type { Collection } from '../src/collection';
 import type {
   CollectionRowOf,
-  CollectionStateOf,
+  CollectionTypeStateOf,
   Filtered,
   Ordered,
   Scope,
@@ -151,10 +151,10 @@ describe('apply', () => {
 });
 
 describe('state and row are read from the facts', () => {
-  test('CollectionStateOf reads the established flags', () => {
-    expectTypeOf<CollectionStateOf<PostCollection>['hasWhere']>().toEqualTypeOf<boolean>();
+  test('CollectionTypeStateOf reads the established flags', () => {
+    expectTypeOf<CollectionTypeStateOf<PostCollection>['hasWhere']>().toEqualTypeOf<boolean>();
     expectTypeOf<
-      CollectionStateOf<ReturnType<PostCollection['published']>>['hasWhere']
+      CollectionTypeStateOf<ReturnType<PostCollection['published']>>['hasWhere']
     >().toEqualTypeOf<true>();
   });
 

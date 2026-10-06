@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, test } from 'vitest';
-import { createChainingOrm } from './collection-chaining-fixture';
+import type { CollectionRowOf, Filtered } from '../src/collection-types';
+import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 
 declare const search: string | undefined;
 
@@ -107,5 +108,41 @@ describe('TML-3397: a ternary between a filtered and an unfiltered collection re
     const posts = search ? Post.published() : Post;
     // @ts-expect-error the collection may have no filter
     posts.deleteAll();
+  });
+});
+
+describe('an Omit of a collection type keeps its methods', () => {
+  type PostWithoutPublished = Omit<PostCollection, 'published'>;
+  type FilteredPostWithoutPublished = Omit<Filtered<PostCollection>, 'published'>;
+  type Row = CollectionRowOf<PostCollection>;
+
+  test('writes after where', async () => {
+    const posts = {} as PostWithoutPublished;
+    expectTypeOf(await posts.where({ id: 1 }).deleteAll().toArray()).toEqualTypeOf<Row[]>();
+    expectTypeOf(await posts.where({ id: 1 }).updateAll({ title: 'x' }).toArray()).toEqualTypeOf<
+      Row[]
+    >();
+    expectTypeOf(await posts.where({ id: 1 }).update({ title: 'x' })).toEqualTypeOf<Row | null>();
+    expectTypeOf(await posts.where({ id: 1 }).delete()).toEqualTypeOf<Row | null>();
+  });
+
+  test('writes on an Omit of a filtered collection', async () => {
+    const posts = {} as FilteredPostWithoutPublished;
+    expectTypeOf(await posts.deleteAll().toArray()).toEqualTypeOf<Row[]>();
+    expectTypeOf(await posts.updateAll({ title: 'x' }).toArray()).toEqualTypeOf<Row[]>();
+  });
+
+  test('reads', async () => {
+    const posts = {} as PostWithoutPublished;
+    expectTypeOf(await posts.all().toArray()).toEqualTypeOf<Row[]>();
+    expectTypeOf(await posts.first()).toEqualTypeOf<Row | null>();
+  });
+
+  test('writes stay refused without a filter', () => {
+    const posts = {} as PostWithoutPublished;
+    // @ts-expect-error deleteAll needs a where
+    posts.deleteAll();
+    // @ts-expect-error updateAll needs a where
+    posts.updateAll({ title: 'x' });
   });
 });

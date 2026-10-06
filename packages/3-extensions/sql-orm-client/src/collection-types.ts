@@ -4,23 +4,23 @@ import type { CollectionTypeState, DefaultModelRow } from './types';
 
 export declare const RowType: unique symbol;
 
-export declare const StateType: unique symbol;
+export declare const TypeState: unique symbol;
 
-/** Something that produces rows of type `Row`: a collection, an include scalar or an include combine. */
+/** Something that yields values of type `Row`: a collection, whose row includes the relations and values `include` adds, or an include scalar or combine, which yields one value per parent row. */
 export interface HasRow<Row = unknown> {
   readonly [RowType]: Row;
 }
 
 /** A collection whose type state is `State`. */
-export interface HasState<State = CollectionTypeState> {
-  readonly [StateType]: State;
+export interface HasTypeState<State = CollectionTypeState> {
+  readonly [TypeState]: State;
 }
 
-/** The fact that a filter has been applied. Write `Filtered<C>` for a filtered collection. */
-export interface HasWhere extends HasState<{ readonly hasWhere: true }> {}
+/** The fact that a filter has been applied: the type-state flag `hasWhere` is `true`. Write `Filtered<C>` for a filtered collection; error messages print `HasWhere`. */
+export interface HasWhere extends HasTypeState<{ readonly hasWhere: true }> {}
 
-/** The fact that an order has been applied. Write `Ordered<C>` for an ordered collection. */
-export interface HasOrderBy extends HasState<{ readonly hasOrderBy: true }> {}
+/** The fact that an order has been applied: the type-state flag `hasOrderBy` is `true`. Write `Ordered<C>` for an ordered collection; error messages print `HasOrderBy`. */
+export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> {}
 
 /** A collection with a filter applied: `C & HasWhere`. */
 export type Filtered<C> = C & HasWhere;
@@ -40,14 +40,14 @@ export type ModelScopeReceiver<
   ModelName extends string,
   NsId extends string = never,
 > = HasRow<DefaultModelRow<TContract, ModelName, NsId>> &
-  HasState<
+  HasTypeState<
     [NsId] extends [never]
       ? { readonly variantName: undefined }
       : { readonly variantName: undefined; readonly nsId: NsId }
   > & { readonly modelName: ModelName };
 
 /** The type state of a collection. */
-export type CollectionStateOf<C extends HasState> = C[typeof StateType];
+export type CollectionTypeStateOf<C extends HasTypeState> = C[typeof TypeState];
 
 /** The rows a collection produces, as one object type. Declarations print it by this name, so it never names `RowType`. */
 export type CollectionRowOf<C extends HasRow> = C[typeof RowType] extends infer Row extends

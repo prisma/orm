@@ -1,17 +1,17 @@
 export { Collection } from '../collection';
 export type {
   CollectionRowOf,
-  CollectionStateOf,
+  CollectionTypeStateOf,
   Filtered,
   HasOrderBy,
   HasRow,
-  HasState,
+  HasTypeState,
   HasWhere,
   Including,
   Ordered,
   RowType,
   Scope,
-  StateType,
+  TypeState,
 } from '../collection-types';
 export { all, and, not, or } from '../filters';
 export { GroupedCollection } from '../grouped-collection';

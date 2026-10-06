@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { CollectionStateOf, Ordered } from '../src/collection-types';
+import type { CollectionTypeStateOf, Ordered } from '../src/collection-types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 
 class TaskCollection extends Collection<PolyContract, 'Task'> {
@@ -24,7 +24,7 @@ describe('variant', () => {
 
   test('keeps the established order', () => {
     const bugs = tasks.newestFirst().variant('Bug');
-    expectTypeOf<CollectionStateOf<typeof bugs>['hasOrderBy']>().toEqualTypeOf<true>();
+    expectTypeOf<CollectionTypeStateOf<typeof bugs>['hasOrderBy']>().toEqualTypeOf<true>();
     expectTypeOf(bugs.cursor({ id: 1 })).toEqualTypeOf(bugs);
   });
 
@@ -48,7 +48,7 @@ describe('variant', () => {
 
   test('records its discriminator filter', () => {
     const bugs = tasks.variant('Bug');
-    expectTypeOf<CollectionStateOf<typeof bugs>['hasWhere']>().toEqualTypeOf<true>();
+    expectTypeOf<CollectionTypeStateOf<typeof bugs>['hasWhere']>().toEqualTypeOf<true>();
   });
 
   test('on a union of differently ordered collections, the fallback overload drops the order', () => {
