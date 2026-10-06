@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionPlan } from '../src/execution/query-plan';
 import {
   executeWithAfterTransaction,
+  onQueryEndOutsideTransaction,
+  type QueryEnding,
   queryWithAfterTransaction,
   runAfterTransaction,
 } from '../src/execution/run-with-middleware';
@@ -121,9 +123,9 @@ describe('runAfterTransaction', () => {
   });
 });
 
-function recordStage(events: string[]) {
-  return async (result: AfterTransactionResult, query: { readonly failed: boolean }) => {
-    events.push(`afterTransaction:${result.outcome}${query.failed ? ' failed' : ''}`);
+function recordEnding(events: string[]) {
+  return async (ending: QueryEnding) => {
+    events.push(`ended:${ending}`);
   };
 }
 
@@ -147,47 +149,47 @@ describe('queryWithAfterTransaction', () => {
     yield* iterable;
   }
 
-  it('fires committed once after the last row', async () => {
+  it('reports completed once after the last row', async () => {
     const events: string[] = [];
 
     const read = await collect(
-      delegate(queryWithAfterTransaction(recordStage(events), () => rows(events))),
+      delegate(queryWithAfterTransaction(recordEnding(events), () => rows(events))),
     );
 
     expect({ read, events }).toEqual({
       read: [1, 2],
-      events: ['row 1', 'row 2', 'rows done', 'afterTransaction:committed'],
+      events: ['row 1', 'row 2', 'rows done', 'ended:completed'],
     });
   });
 
-  it('fires unknown once, marked failed, and rethrows when the rows throw', async () => {
+  it('reports failed once and rethrows when the rows throw', async () => {
     const events: string[] = [];
     const failure = new Error('rows failed');
 
     await expect(
       collect(
-        delegate(queryWithAfterTransaction(recordStage(events), () => rows(events, failure))),
+        delegate(queryWithAfterTransaction(recordEnding(events), () => rows(events, failure))),
       ),
     ).rejects.toBe(failure);
 
-    expect(events).toEqual(['row 1', 'afterTransaction:unknown failed']);
+    expect(events).toEqual(['row 1', 'ended:failed']);
   });
 
-  it('fires unknown once, not marked failed, when the caller stops reading', async () => {
+  it('reports stopped once when the caller stops reading', async () => {
     const events: string[] = [];
 
     for await (const _row of delegate(
-      queryWithAfterTransaction(recordStage(events), () => rows(events)),
+      queryWithAfterTransaction(recordEnding(events), () => rows(events)),
     )) {
       break;
     }
 
-    expect(events).toEqual(['row 1', 'afterTransaction:unknown']);
+    expect(events).toEqual(['row 1', 'ended:stopped']);
   });
 
-  it('fires unknown once when the caller stops before reading a row, without delegating', async () => {
+  it('reports stopped once when the caller stops before reading a row, without delegating', async () => {
     const events: string[] = [];
-    const iterator = queryWithAfterTransaction(recordStage(events), () => rows(events))[
+    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
       Symbol.asyncIterator
     ]();
 
@@ -195,23 +197,61 @@ describe('queryWithAfterTransaction', () => {
     await iterator.return?.();
     await iterator.next();
 
-    expect(events).toEqual(['afterTransaction:unknown']);
+    expect(events).toEqual(['ended:stopped']);
   });
 
-  it('fires unknown once and rethrows when the caller throws into it before reading a row', async () => {
+  it('reports stopped once and rethrows when the caller throws into it before reading a row', async () => {
     const events: string[] = [];
     const failure = new Error('caller failed');
-    const iterator = queryWithAfterTransaction(recordStage(events), () => rows(events))[
+    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
       Symbol.asyncIterator
     ]();
 
     await expect(iterator.throw?.(failure)).rejects.toBe(failure);
     await iterator.return?.();
 
-    expect(events).toEqual(['afterTransaction:unknown']);
+    expect(events).toEqual(['ended:stopped']);
   });
 
-  it('returns the rows unchanged when there is nothing to fire', () => {
+  it('reports stopped once and rethrows when the caller throws into it after the first row', async () => {
+    const events: string[] = [];
+    const failure = new Error('caller failed');
+    const iterator = queryWithAfterTransaction(recordEnding(events), () => rows(events))[
+      Symbol.asyncIterator
+    ]();
+
+    const first = await iterator.next();
+    await expect(iterator.throw?.(failure)).rejects.toBe(failure);
+    await iterator.return?.();
+
+    expect({ first, events }).toEqual({
+      first: { done: false, value: 1 },
+      events: ['row 1', 'ended:stopped'],
+    });
+  });
+
+  it('reports failed when the rows answer an error the caller threw in with an error of their own', async () => {
+    const events: string[] = [];
+    const rowsFailure = new Error('rows failed');
+    const rowsThatFailWhenThrownInto = (): AsyncIterable<number> => ({
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ done: false, value: 1 }),
+        throw: async () => {
+          throw rowsFailure;
+        },
+      }),
+    });
+    const iterator = queryWithAfterTransaction(recordEnding(events), rowsThatFailWhenThrownInto)[
+      Symbol.asyncIterator
+    ]();
+
+    await iterator.next();
+    await expect(iterator.throw?.(new Error('caller failed'))).rejects.toBe(rowsFailure);
+
+    expect(events).toEqual(['ended:failed']);
+  });
+
+  it('returns the rows unchanged when there is nothing to report to', () => {
     const events: string[] = [];
     const source = rows(events);
 
@@ -220,34 +260,58 @@ describe('queryWithAfterTransaction', () => {
 });
 
 describe('executeWithAfterTransaction', () => {
-  it('fires committed once after the operation resolves', async () => {
+  it('reports completed once after the operation resolves', async () => {
     const events: string[] = [];
 
-    const result = await executeWithAfterTransaction(recordStage(events), async () => {
+    const result = await executeWithAfterTransaction(recordEnding(events), async () => {
       events.push('executed');
       return 3;
     });
 
     expect({ result, events }).toEqual({
       result: 3,
-      events: ['executed', 'afterTransaction:committed'],
+      events: ['executed', 'ended:completed'],
     });
   });
 
-  it('fires unknown once, marked failed, and rethrows when the operation rejects', async () => {
+  it('reports failed once and rethrows when the operation rejects', async () => {
     const events: string[] = [];
     const failure = new Error('execute failed');
 
     await expect(
-      executeWithAfterTransaction(recordStage(events), async () => {
+      executeWithAfterTransaction(recordEnding(events), async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
 
-    expect(events).toEqual(['afterTransaction:unknown failed']);
+    expect(events).toEqual(['ended:failed']);
   });
 
-  it('runs the operation alone when there is nothing to fire', async () => {
+  it('runs the operation alone when there is nothing to report to', async () => {
     await expect(executeWithAfterTransaction(undefined, async () => 3)).resolves.toBe(3);
+  });
+});
+
+describe('onQueryEndOutsideTransaction', () => {
+  it.each([
+    { ending: 'completed', outcome: 'committed' },
+    { ending: 'failed', outcome: 'unknown' },
+    { ending: 'stopped', outcome: 'unknown' },
+  ] as const)(
+    'runs the stage with $outcome when the query $ending',
+    async ({ ending, outcome }) => {
+      const results: AfterTransactionResult[] = [];
+      const onQueryEnd = onQueryEndOutsideTransaction(async (result) => {
+        results.push(result);
+      });
+
+      await onQueryEnd?.(ending);
+
+      expect(results).toEqual([{ outcome }]);
+    },
+  );
+
+  it('returns undefined when there is no stage to run', () => {
+    expect(onQueryEndOutsideTransaction(undefined)).toBeUndefined();
   });
 });

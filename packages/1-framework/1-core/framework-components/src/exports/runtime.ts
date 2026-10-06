@@ -27,8 +27,10 @@ export {
 } from '../execution/mutation-defaults';
 export type { ExecutionPlan, QueryPlan, ResultType } from '../execution/query-plan';
 export { checkAborted, raceAgainstAbort } from '../execution/race-against-abort';
+export type { QueryEnding } from '../execution/run-with-middleware';
 export {
   executeWithAfterTransaction,
+  onQueryEndOutsideTransaction,
   queryWithAfterTransaction,
   runAfterTransaction,
   runExecuteWithMiddleware,

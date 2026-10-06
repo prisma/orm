@@ -6,6 +6,7 @@ import type { ExecutionPlan, QueryPlan } from './query-plan';
 import { checkAborted } from './race-against-abort';
 import {
   executeWithAfterTransaction,
+  onQueryEndOutsideTransaction,
   queryWithAfterTransaction,
   runAfterTransaction,
   runExecuteWithMiddleware,
@@ -48,11 +49,12 @@ export interface RuntimeCoreOptions<TMiddleware extends RuntimeMiddleware<Execut
  * 4. The matching runner processes `interceptQuery` or `interceptExecute`
  *    before invoking the driver. Queries then fire `onRow` and `afterQuery`;
  *    statements fire `afterExecute`.
- * 5. Every operation whose lowered plan exists fires `afterTransaction` once,
- *    as its last hook: `committed` when it completed, `unknown` when it threw
- *    or the caller stopped reading its rows. `queryWithAfterTransaction` and
- *    `executeWithAfterTransaction` deliver it; family runtimes that override
- *    `query` or `execute` call them too, with {@link afterTransactionHooks}.
+ * 5. Every operation whose before-hooks and parameter encoding succeeded
+ *    fires `afterTransaction` once, as its last hook: `committed` when it
+ *    completed, `unknown` when it threw or the caller stopped reading its rows.
+ *    `queryWithAfterTransaction` and `executeWithAfterTransaction` deliver it
+ *    with `onQueryEndOutsideTransaction`; family runtimes that override `query`
+ *    or `execute` call them too, with {@link afterTransactionStageFor}.
  *
  * Concrete subclasses must implement `lower`, `runDriver`, `runExecute`, and
  * `close`.
@@ -73,24 +75,22 @@ export abstract class RuntimeCore<
 {
   protected readonly middleware: ReadonlyArray<TMiddleware>;
   protected readonly ctx: RuntimeMiddlewareContext;
-  readonly #declaresAfterTransaction: boolean;
+  protected readonly declaresAfterTransaction: boolean;
 
   constructor(options: RuntimeCoreOptions<TMiddleware>) {
-    this.middleware = options.middleware;
+    this.middleware = [...options.middleware];
     this.ctx = options.ctx;
-    this.#declaresAfterTransaction = options.middleware.some(
-      (mw) => mw.afterTransaction !== undefined,
-    );
+    this.declaresAfterTransaction = this.middleware.some((mw) => mw.afterTransaction !== undefined);
   }
 
   /**
-   * Returns the function that runs every middleware's `afterTransaction` hook for this operation, or `undefined` when no middleware declared the hook when the runtime was created.
+   * Returns the function that runs every middleware's `afterTransaction` hook for one operation with a given result, or `undefined` when no middleware declared the hook when the runtime was created.
    */
-  protected afterTransactionHooks(
+  protected afterTransactionStageFor(
     exec: TExec,
     ctx: RuntimeMiddlewareContext,
   ): ((result: AfterTransactionResult) => Promise<void>) | undefined {
-    if (!this.#declaresAfterTransaction) return undefined;
+    if (!this.declaresAfterTransaction) return undefined;
     return (result) => runAfterTransaction(exec, this.middleware, result, ctx);
   }
 
@@ -152,7 +152,8 @@ export abstract class RuntimeCore<
       const compiled = await self.runBeforeCompile(plan);
       const exec = await self.lower(compiled, codecCtx);
       await runBeforeQueryChain<TExec>(exec, self.middleware, execCtx);
-      yield* queryWithAfterTransaction(self.afterTransactionHooks(exec, execCtx), () =>
+      const onQueryEnd = onQueryEndOutsideTransaction(self.afterTransactionStageFor(exec, execCtx));
+      yield* queryWithAfterTransaction(onQueryEnd, () =>
         runQueryWithMiddleware<TExec, Row>(exec, self.middleware, execCtx, () =>
           blindCast<
             AsyncIterable<Row>,
@@ -179,7 +180,8 @@ export abstract class RuntimeCore<
     const compiled = await this.runBeforeCompile(plan);
     const exec = await this.lower(compiled, codecCtx);
     await runBeforeExecuteChain<TExec>(exec, this.middleware, execCtx);
-    return executeWithAfterTransaction(this.afterTransactionHooks(exec, execCtx), () =>
+    const onQueryEnd = onQueryEndOutsideTransaction(this.afterTransactionStageFor(exec, execCtx));
+    return executeWithAfterTransaction(onQueryEnd, () =>
       runExecuteWithMiddleware(exec, this.middleware, execCtx, () => this.runExecute(exec)),
     );
   }

@@ -240,35 +240,46 @@ export async function runAfterTransaction<TExec extends ExecutionPlan>(
   }
 }
 
-type FireAfterTransaction = (
-  result: AfterTransactionResult,
-  query: { readonly failed: boolean },
-) => Promise<void>;
+/** How a query ended: its rows or statistics all arrived, an error came out of it, or the caller stopped reading its rows. */
+export type QueryEnding = 'completed' | 'failed' | 'stopped';
 
 /**
- * Streams `rows()` and then calls `fireAfterTransaction` exactly once, however the stream ends: with `committed` when it completes, and with `unknown` when it throws or the caller stops reading, including before the first row. The second argument tells the two `unknown` cases apart: `failed` is true only when the stream threw. Returns `rows()` itself when `fireAfterTransaction` is `undefined`.
+ * Returns what a query outside a transaction calls when it ends: it runs `runStage` with `committed` when the query completed and `unknown` otherwise. Returns `undefined` when `runStage` is `undefined`.
  */
-export function queryWithAfterTransaction<Row>(
-  fireAfterTransaction: FireAfterTransaction | undefined,
-  rows: () => AsyncIterable<Row>,
-): AsyncIterable<Row> {
-  return fireAfterTransaction === undefined
-    ? rows()
-    : rowsThenAfterTransaction(fireAfterTransaction, rows);
+export function onQueryEndOutsideTransaction(
+  runStage: ((result: AfterTransactionResult) => Promise<void>) | undefined,
+): ((ending: QueryEnding) => Promise<void>) | undefined {
+  if (runStage === undefined) return undefined;
+  return (ending) => runStage({ outcome: ending === 'completed' ? 'committed' : 'unknown' });
 }
 
-function rowsThenAfterTransaction<Row>(
-  fireAfterTransaction: FireAfterTransaction,
+/**
+ * Streams `rows()` and then calls `onQueryEnd` exactly once with how the query ended: `completed` when the stream completes, `failed` when an error comes out of it, and `stopped` when the caller stops reading, calls `return()` or throws into the iterator, before or after the first row. Returns `rows()` itself when `onQueryEnd` is `undefined`.
+ */
+export function queryWithAfterTransaction<Row>(
+  onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
+  rows: () => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return onQueryEnd === undefined ? rows() : rowsThenQueryEnd(onQueryEnd, rows);
+}
+
+function rowsThenQueryEnd<Row>(
+  onQueryEnd: (ending: QueryEnding) => Promise<void>,
   rows: () => AsyncIterable<Row>,
 ): AsyncIterable<Row> {
   return {
     [Symbol.asyncIterator](): AsyncIterator<Row, void, undefined> {
-      const generator = streamThenAfterTransaction(fireAfterTransaction, rows);
+      let thrownByCaller: { readonly error: unknown } | undefined;
+      const generator = streamThenQueryEnd(
+        onQueryEnd,
+        rows,
+        (error) => thrownByCaller !== undefined && thrownByCaller.error === error,
+      );
       let started = false;
-      const fireIfStoppedBeforeStart = async (): Promise<void> => {
+      const reportStoppedBeforeStart = async (): Promise<void> => {
         if (started) return;
         started = true;
-        await fireAfterTransaction({ outcome: 'unknown' }, { failed: false });
+        await onQueryEnd('stopped');
       };
       return {
         next: () => {
@@ -276,11 +287,12 @@ function rowsThenAfterTransaction<Row>(
           return generator.next();
         },
         return: async () => {
-          await fireIfStoppedBeforeStart();
+          await reportStoppedBeforeStart();
           return generator.return(undefined);
         },
         throw: async (error: unknown) => {
-          await fireIfStoppedBeforeStart();
+          thrownByCaller = { error };
+          await reportStoppedBeforeStart();
           return generator.throw(error);
         },
       };
@@ -288,41 +300,38 @@ function rowsThenAfterTransaction<Row>(
   };
 }
 
-async function* streamThenAfterTransaction<Row>(
-  fireAfterTransaction: FireAfterTransaction,
+async function* streamThenQueryEnd<Row>(
+  onQueryEnd: (ending: QueryEnding) => Promise<void>,
   rows: () => AsyncIterable<Row>,
+  isThrownByCaller: (error: unknown) => boolean,
 ): AsyncGenerator<Row, void, unknown> {
-  let completed = false;
-  let failed = false;
+  let ending: QueryEnding = 'stopped';
   try {
     yield* rows();
-    completed = true;
+    ending = 'completed';
   } catch (error) {
-    failed = true;
+    if (!isThrownByCaller(error)) ending = 'failed';
     throw error;
   } finally {
-    await fireAfterTransaction({ outcome: completed ? 'committed' : 'unknown' }, { failed });
+    await onQueryEnd(ending);
   }
 }
 
 /**
- * Runs `execute()` and then calls `fireAfterTransaction` exactly once: with `committed` when it resolves, and with `unknown` and `failed: true` when it rejects.
+ * Runs `execute()` and then calls `onQueryEnd` exactly once: with `completed` when it resolves, and with `failed` when it rejects.
  */
 export async function executeWithAfterTransaction<T>(
-  fireAfterTransaction: FireAfterTransaction | undefined,
+  onQueryEnd: ((ending: QueryEnding) => Promise<void>) | undefined,
   execute: () => Promise<T>,
 ): Promise<T> {
-  if (fireAfterTransaction === undefined) return execute();
-  let completed = false;
+  if (onQueryEnd === undefined) return execute();
+  let ending: QueryEnding = 'failed';
   try {
     const result = await execute();
-    completed = true;
+    ending = 'completed';
     return result;
   } finally {
-    await fireAfterTransaction(
-      { outcome: completed ? 'committed' : 'unknown' },
-      { failed: !completed },
-    );
+    await onQueryEnd(ending);
   }
 }
 

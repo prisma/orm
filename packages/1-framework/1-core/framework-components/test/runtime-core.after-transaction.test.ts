@@ -171,4 +171,28 @@ describe('RuntimeCore afterTransaction stage', () => {
 
     expect(names(events)).toEqual(['afterQuery', 'afterExecute']);
   });
+
+  it("ignores middleware added to the caller's array after creation", async () => {
+    const events: HookEvent[] = [];
+    const { afterTransaction: _afterTransaction, ...withoutAfterTransaction } = recorder(events);
+    const middleware: RuntimeMiddleware<MockExec>[] = [withoutAfterTransaction];
+    const runtime = new MockRuntime(middleware, undefined);
+    middleware.push({
+      name: 'late',
+      async afterQuery(exec, _result, hookCtx) {
+        events.push({ name: 'late:afterQuery', exec, planExecutionId: hookCtx.planExecutionId });
+      },
+      async afterTransaction(exec, _result, hookCtx) {
+        events.push({
+          name: 'late:afterTransaction',
+          exec,
+          planExecutionId: hookCtx.planExecutionId,
+        });
+      },
+    });
+
+    await runtime.query(plan).toArray();
+
+    expect(names(events)).toEqual(['afterQuery']);
+  });
 });
