@@ -131,6 +131,16 @@ describe('a SQLite now() default', { timeout: timeouts.databaseOperation }, () =
       [APP_SPACE_ID],
     );
     await expectCodecText(marker.rows[0]!.updated_at, before, after);
+
+    const controlDefaults = await driver.query<{ name: string; dflt_value: string }>(
+      `SELECT 'marker.updated_at' AS name, dflt_value FROM pragma_table_info('_prisma_marker') WHERE name = 'updated_at'
+       UNION ALL
+       SELECT 'ledger.created_at', dflt_value FROM pragma_table_info('_prisma_ledger') WHERE name = 'created_at'`,
+    );
+    expect(controlDefaults.rows).toEqual([
+      { name: 'marker.updated_at', dflt_value: "strftime('%Y-%m-%dT%H:%M:%fZ','now')" },
+      { name: 'ledger.created_at', dflt_value: "strftime('%Y-%m-%dT%H:%M:%fZ','now')" },
+    ]);
   });
 
   it.each([["(datetime('now'))"], ['CURRENT_TIMESTAMP']])(

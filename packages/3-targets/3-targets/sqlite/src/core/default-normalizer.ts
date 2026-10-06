@@ -8,7 +8,7 @@
  */
 
 import type { ColumnDefault } from '@internal/contract/types';
-import { SQLITE_NOW_EXPRESSION } from './codecs';
+import { SQLITE_DATETIME_TEXT_FORMAT } from './datetime-text';
 
 const NULL_PATTERN = /^NULL$/i;
 const INTEGER_PATTERN = /^-?\d+$/;
@@ -22,8 +22,7 @@ function isCurrentTimestamp(expression: string): boolean {
   if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
     return true;
   }
-  const format = expression.match(STRFTIME_NOW_PATTERN)?.[2];
-  return format !== undefined && `strftime('${format}','now')` === SQLITE_NOW_EXPRESSION;
+  return expression.match(STRFTIME_NOW_PATTERN)?.[2] === SQLITE_DATETIME_TEXT_FORMAT;
 }
 
 function isNumericLiteral(value: string): boolean {

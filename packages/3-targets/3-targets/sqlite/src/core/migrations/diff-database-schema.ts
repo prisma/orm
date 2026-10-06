@@ -27,7 +27,7 @@ import type {
 import { relationalNodeGranularity, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { SQLITE_NOW_EXPRESSION } from '../codecs';
+import { SQLITE_NOW_EXPRESSION } from '../datetime-text';
 import { sqliteResolveDefault } from '../default-normalizer';
 import { renderDefaultLiteral } from './planner-ddl-builders';
 

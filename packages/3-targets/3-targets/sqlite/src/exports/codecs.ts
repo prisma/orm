@@ -17,7 +17,6 @@ export type {
 } from '../core/codecs';
 export {
   jsonDocumentRetag,
-  SQLITE_NOW_EXPRESSION,
   sqliteBigintColumn,
   sqliteBigintNumberColumn,
   sqliteBlobColumn,
@@ -27,4 +26,5 @@ export {
   sqliteRealColumn,
   sqliteTextColumn,
 } from '../core/codecs';
+export { SQLITE_NOW_EXPRESSION } from '../core/datetime-text';
 export { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../core/registry';

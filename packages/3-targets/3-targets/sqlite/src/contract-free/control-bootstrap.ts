@@ -1,7 +1,7 @@
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { DdlNode } from '@internal/sql-relational-core/ast';
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
-import { SQLITE_NOW_EXPRESSION } from '../core/codecs';
+import { SQLITE_NOW_EXPRESSION } from '../core/datetime-text';
 import { createTable } from './ddl';
 
 const markerColumns = [

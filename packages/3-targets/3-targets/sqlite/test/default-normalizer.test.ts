@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SQLITE_NOW_EXPRESSION } from '../src/core/datetime-text';
 import { parseSqliteDefault, sqliteResolveDefault } from '../src/core/default-normalizer';
 
 describe('sqliteResolveDefault', () => {
@@ -35,6 +36,13 @@ describe('sqliteResolveDefault', () => {
 });
 
 describe('parseSqliteDefault', () => {
+  it('reads the expression a now() default is rendered as back as now()', () => {
+    expect(parseSqliteDefault(SQLITE_NOW_EXPRESSION, 'text')).toEqual({
+      kind: 'function',
+      expression: 'now()',
+    });
+  });
+
   it.each([
     ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
     ["(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"],

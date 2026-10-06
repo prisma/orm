@@ -510,9 +510,6 @@ export function encodeSqliteDatetime(value: Date): string {
   return value.toISOString();
 }
 
-/** The SQLite expression for the current instant, as the text `encodeSqliteDatetime` writes. */
-export const SQLITE_NOW_EXPRESSION = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-
 export class SqliteDatetimeCodec extends CodecImpl<
   typeof SQLITE_DATETIME_CODEC_ID,
   readonly ['equality', 'order'],
