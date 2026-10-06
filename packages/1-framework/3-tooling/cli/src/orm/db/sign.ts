@@ -19,7 +19,7 @@ import {
 } from '../../control-api/operations/ref-advancement';
 import { errorAdvanceRefArgConflict, errorContractArgConflict } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
-import { ON_DISK_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { appRefsDirFor, baseDirFor, displayPath, migrationsDirFor } from '../migration/paths';
@@ -60,7 +60,7 @@ type SchemaVerifyDocument = VerifyDatabaseSchemaResult;
  */
 const DEFAULT_ADVANCE_REF = 'db';
 
-const CONTRACT_REF_BRIEF = `Contract reference (${ON_DISK_CONTRACT_REF_FORMS})`;
+const CONTRACT_REF_BRIEF = `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`;
 
 interface AdvancedRef {
   readonly name: string;
@@ -269,6 +269,7 @@ export function createDbSignCommand(
           config: ctx.config,
           migrationsDir,
           refInput: contractRef,
+          argument: 'the contract argument',
           contractPathAbsolute: emitted.value.path,
           fallbackToEmitted: true,
         });

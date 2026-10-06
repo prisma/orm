@@ -14,15 +14,16 @@ export const WORKING_CONTRACT_REF = '@contract';
 export const LIVE_MARKER_REF = '@db';
 export const EMPTY_CONTRACT_REF = '@empty';
 
-const RESERVED_CONTRACT_REFS: ReadonlySet<string> = new Set([
+/** The reserved tokens, in the order help text lists them. */
+export const RESERVED_CONTRACT_REFS: readonly string[] = [
   WORKING_CONTRACT_REF,
   LIVE_MARKER_REF,
   EMPTY_CONTRACT_REF,
-]);
+];
 
-/** True for `@contract`, `@db`, and `@empty`, which name a state rather than a contract on disk. */
+/** True for a reserved token, which resolves from contract.json, the database, or the empty contract rather than from a contract recorded in the migrations directory. */
 export function isReservedContractRef(input: string): boolean {
-  return RESERVED_CONTRACT_REFS.has(input);
+  return RESERVED_CONTRACT_REFS.includes(input);
 }
 
 /** True for `@db`, the only reserved token that needs a database read to resolve. */

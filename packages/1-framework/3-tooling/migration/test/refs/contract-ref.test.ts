@@ -7,6 +7,7 @@ import {
   isLiveMarkerRef,
   isReservedContractRef,
   parseContractRef,
+  RESERVED_CONTRACT_REFS,
 } from '../../src/refs/contract-ref';
 import type { RefResolutionContext, RefResolutionError } from '../../src/refs/types';
 
@@ -322,6 +323,10 @@ describe('parseContractRef', () => {
 });
 
 describe('reserved contract references', () => {
+  it('lists the reserved tokens in help order', () => {
+    expect(RESERVED_CONTRACT_REFS).toEqual(['@contract', '@db', '@empty']);
+  });
+
   it.each(['@contract', '@db', '@empty'])('%s is reserved', (input) => {
     expect(isReservedContractRef(input)).toBe(true);
   });

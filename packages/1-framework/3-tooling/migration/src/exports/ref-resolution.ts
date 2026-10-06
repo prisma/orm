@@ -4,6 +4,7 @@ export {
   isReservedContractRef,
   LIVE_MARKER_REF,
   parseContractRef,
+  RESERVED_CONTRACT_REFS,
   WORKING_CONTRACT_REF,
 } from '../refs/contract-ref';
 export { parseMigrationRef } from '../refs/migration-ref';

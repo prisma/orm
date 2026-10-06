@@ -311,7 +311,7 @@ describe('db sign', () => {
           ok: false,
           error: {
             code: 'MIGRATION.REF_WRONG_GRAMMAR',
-            why: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by hash, prefix, ref name, migration dir name, or <dir>^`,
+            why: `"${input}" is a reserved reference; the contract argument takes a contract recorded in the migrations directory (hash, prefix, ref name, migration dir name, or <dir>^)`,
             meta: { input, expectedGrammar: 'contract' },
           },
         });

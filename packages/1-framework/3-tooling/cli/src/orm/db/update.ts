@@ -24,7 +24,7 @@ import {
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
-import { ON_DISK_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
@@ -140,7 +140,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         db: dbFlag,
         dryRun: flag.boolean({ brief: 'Preview the planned operations without applying them' }),
         to: flag.string({
-          brief: `Contract to update to (${ON_DISK_CONTRACT_REF_FORMS})`,
+          brief: `Contract to update to (${RECORDED_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -158,8 +158,8 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           config: ctx.config,
           migrationsDir: migrationsDirFor(ctx.config),
           refInput: args.flags.to,
+          argument: '--to',
           fallbackToEmitted: false,
-          missingBundleFlag: '--to',
         });
         if (!resolved.ok) {
           return notOk(normalizeError(resolved.failure));

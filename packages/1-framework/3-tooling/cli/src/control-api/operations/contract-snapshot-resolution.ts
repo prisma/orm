@@ -27,7 +27,7 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
-import { ON_DISK_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
@@ -41,15 +41,14 @@ interface ResolveContractRefToSnapshotBaseOptions {
   readonly migrationsDir: string;
   /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
+  /** How errors name the argument that carried `refInput`, for example `--to`. */
+  readonly argument: string;
 }
 
 /**
- * `fallbackToEmitted` discriminates the missing-bundle behavior:
- * true (db sign): fall back to the emitted contract when no bundle matches and its
- * storage.storageHash matches; else the 'No contract file found for hash "<hash>"' errorRuntime.
- * false (db update --to): missing bundle = the errorUnexpected 'No migration bundle found for
- * <flag> "<input>" (resolved hash: <hash>)' envelope, so `missingBundleFlag` (the flag label
- * for that message) is required in this branch.
+ * `fallbackToEmitted` decides what happens when no migration bundle ends at the resolved hash:
+ * true (db sign) falls back to the emitted contract when its storage hash matches; false
+ * (db update --to) fails, because the argument must name a migration destination.
  */
 export type ResolveContractRefToSnapshotOptions = ResolveContractRefToSnapshotBaseOptions &
   (
@@ -57,9 +56,8 @@ export type ResolveContractRefToSnapshotOptions = ResolveContractRefToSnapshotBa
         readonly fallbackToEmitted: true;
         /** Absolute path of the emitted contract.json, the fallback source. */
         readonly contractPathAbsolute: string;
-        readonly missingBundleFlag?: never;
       }
-    | { readonly fallbackToEmitted: false; readonly missingBundleFlag: '--to' }
+    | { readonly fallbackToEmitted: false }
   );
 
 export interface ResolveContractRefToSnapshotSuccess {
@@ -73,22 +71,15 @@ export interface ResolveContractRefToSnapshotSuccess {
 function reservedRefRefusal(
   options: ResolveContractRefToSnapshotOptions,
 ): RefResolutionWrongGrammar {
-  const input = options.refInput;
-  return options.fallbackToEmitted
-    ? {
-        kind: 'wrong-grammar',
-        input,
-        expectedGrammar: 'contract',
-        message: `"${input}" is a reserved reference; \`db sign\` names a contract on disk by ${ON_DISK_CONTRACT_REF_FORMS}`,
-        fix: `Name a contract on disk (${ON_DISK_CONTRACT_REF_FORMS}), or omit the contract to sign the emitted contract.`,
-      }
-    : {
-        kind: 'wrong-grammar',
-        input,
-        expectedGrammar: 'contract',
-        message: `"${input}" is a reserved reference; \`db update ${options.missingBundleFlag}\` names a migration destination on disk`,
-        fix: `Name a migration destination on disk (${ON_DISK_CONTRACT_REF_FORMS}), or omit ${options.missingBundleFlag} to update to the emitted contract.`,
-      };
+  const { refInput: input, argument } = options;
+  const accepted = `${options.fallbackToEmitted ? 'a contract' : 'a migration destination'} recorded in the migrations directory`;
+  return {
+    kind: 'wrong-grammar',
+    input,
+    expectedGrammar: 'contract',
+    message: `"${input}" is a reserved reference; ${argument} takes ${accepted} (${RECORDED_CONTRACT_REF_FORMS})`,
+    fix: `Name ${accepted}, or omit ${argument} to use the emitted contract.`,
+  };
 }
 
 export async function resolveContractRefToSnapshot(
@@ -137,7 +128,7 @@ export async function resolveContractRefToSnapshot(
     if (!options.fallbackToEmitted) {
       return notOk(
         errorUnexpected(
-          `No migration bundle found for ${options.missingBundleFlag} "${options.refInput}" (resolved hash: ${targetHash})`,
+          `No migration bundle found for ${options.argument} "${options.refInput}" (resolved hash: ${targetHash})`,
           {
             why: `The ref resolved successfully but no on-disk migration package has a destination (\`to\`) hash matching ${targetHash}.`,
             fix: 'Provide a ref or hash that corresponds to an existing migration package, or run `migration list` to see available migrations.',

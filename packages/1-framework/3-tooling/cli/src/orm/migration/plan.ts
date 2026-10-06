@@ -15,7 +15,7 @@ import type {
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
 import type { CreateControlClient, DestructivePlanOperation } from '../../control-api/types';
 import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
-import { ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { RECORDED_OR_EMPTY_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
 import { destructiveOperationList, errorConsentOperationsMissing } from '../db/consent';
@@ -281,7 +281,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
       flags: {
         name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
         from: flag.string({
-          brief: `Starting contract reference (${ON_DISK_OR_EMPTY_CONTRACT_REF_FORMS})`,
+          brief: `Starting contract reference (${RECORDED_OR_EMPTY_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         to: flag.string({

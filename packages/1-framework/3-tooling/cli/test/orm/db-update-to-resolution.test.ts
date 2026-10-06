@@ -155,7 +155,7 @@ describe('db update --to bundle resolution', () => {
           ok: false,
           error: {
             code: 'MIGRATION.REF_WRONG_GRAMMAR',
-            why: `"${input}" is a reserved reference; \`db update --to\` names a migration destination on disk`,
+            why: `"${input}" is a reserved reference; --to takes a migration destination recorded in the migrations directory (hash, prefix, ref name, migration dir name, or <dir>^)`,
             meta: { input, expectedGrammar: 'contract' },
           },
         },
