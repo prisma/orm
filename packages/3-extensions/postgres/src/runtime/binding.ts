@@ -45,17 +45,15 @@ export function validatePostgresUrl(url: string): string {
     });
   }
 
-  // libpq-style URLs may omit the host (`postgresql:///db`, `postgresql://user@/db`);
-  // a `host` query param is a Unix socket dir and overrides any hostname, so a
-  // credential-bearing authority still gets a placeholder host to satisfy URL parsing.
+  // Omitted-host libpq DSNs use a temporary host only for WHATWG validation.
+  // Return the original hostless value so the pg driver applies its defaults.
   let input = trimmed;
+  let preserveEmptyHost = false;
   const emptyHost = /^postgres(?:ql)?:\/\/([^/?#]*)/i.exec(trimmed);
   if (emptyHost !== null) {
     const hostAndPort = emptyHost[1].slice(emptyHost[1].lastIndexOf('@') + 1);
-    const needsHost = hostAndPort === '' || hostAndPort.startsWith(':');
-    const hasSocketDir = /[?&]host=/i.test(trimmed);
-    const hasUserinfo = emptyHost[1].includes('@');
-    if (needsHost && (!hasSocketDir || hasUserinfo)) {
+    preserveEmptyHost = hostAndPort === '' || hostAndPort.startsWith(':');
+    if (preserveEmptyHost) {
       const insertAt = emptyHost[0].length - hostAndPort.length;
       input = `${trimmed.slice(0, insertAt)}localhost${trimmed.slice(insertAt)}`;
     }
@@ -78,7 +76,7 @@ export function validatePostgresUrl(url: string): string {
     );
   }
 
-  if (parsed.hostname === '') {
+  if (preserveEmptyHost || parsed.hostname === '') {
     return trimmed;
   }
 

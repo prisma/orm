@@ -64,8 +64,8 @@ describe('isPgClient', () => {
 });
 
 describe('validatePostgresUrl', () => {
-  it('defaults an empty host to localhost', () => {
-    expect(validatePostgresUrl('postgresql:///mydb')).toBe('postgresql://localhost/mydb');
+  it('preserves an empty host so driver defaults apply', () => {
+    expect(validatePostgresUrl('postgresql:///mydb')).toBe('postgresql:///mydb');
   });
 
   it('drops empty userinfo so driver defaults apply', () => {
@@ -79,8 +79,8 @@ describe('validatePostgresUrl', () => {
     );
   });
 
-  it('defaults only the missing host when credentials are present', () => {
-    expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@localhost/mydb');
+  it('preserves credentials when the host is omitted', () => {
+    expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@/mydb');
   });
 
   it('keeps a password when the username is empty', () => {
@@ -89,9 +89,9 @@ describe('validatePostgresUrl', () => {
     );
   });
 
-  it('normalizes an empty host on a socket url that carries credentials', () => {
+  it('preserves a hostless socket url that carries credentials', () => {
     expect(validatePostgresUrl('postgresql://u:p@/mydb?host=/var/run/postgresql')).toBe(
-      'postgresql://u:p@localhost/mydb?host=/var/run/postgresql',
+      'postgresql://u:p@/mydb?host=/var/run/postgresql',
     );
   });
 
