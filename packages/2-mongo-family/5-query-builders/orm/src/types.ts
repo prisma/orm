@@ -135,7 +135,7 @@ export type VariantNames<
   ? keyof V & string
   : never;
 
-export type VariantValues<
+export type DiscriminatorValues<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = MongoModelsMap<TContract>[ModelName] extends {

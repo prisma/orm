@@ -21,6 +21,7 @@ export type { RawMongoCollection } from '../raw-collection';
 export type {
   CreateInput,
   DefaultModelRow,
+  DiscriminatorValues,
   IncludedRow,
   IncludeResultFields,
   InferFullRow,
@@ -34,5 +35,4 @@ export type {
   VariantNameForValue,
   VariantNames,
   VariantSelectable,
-  VariantValues,
 } from '../types';

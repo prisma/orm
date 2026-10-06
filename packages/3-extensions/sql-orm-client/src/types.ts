@@ -636,7 +636,7 @@ export type VariantNames<
     ? keyof V & string
     : never;
 
-export type VariantValues<
+export type DiscriminatorValues<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,

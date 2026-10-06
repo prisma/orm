@@ -66,6 +66,7 @@ import {
 import { ormError } from './orm-errors';
 import type {
   DefaultModelRow,
+  DiscriminatorValues,
   IncludedRow,
   MongoIncludeSpec,
   MongoWhereFilter,
@@ -74,7 +75,6 @@ import type {
   ResolvedCreateInput,
   VariantNameForValue,
   VariantSelectable,
-  VariantValues,
 } from './types';
 import { upsertPipeline } from './upsert-pipeline';
 
@@ -95,7 +95,7 @@ export interface MongoCollection<
    * injecting a discriminator filter. Call it once, on the base collection:
    * a collection that already has a variant selected refuses it.
    */
-  variant<V extends VariantValues<TContract, ModelName>>(
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
     this: VariantSelectable<TVariant>,
     value: V,
   ): MongoCollection<TContract, ModelName, TIncludes, VariantNameForValue<TContract, ModelName, V>>;
@@ -247,7 +247,7 @@ class MongoCollectionImpl<
     this.#state = emptyCollectionState();
   }
 
-  variant<V extends VariantValues<TContract, ModelName>>(
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
     value: V,
   ): MongoCollection<
     TContract,

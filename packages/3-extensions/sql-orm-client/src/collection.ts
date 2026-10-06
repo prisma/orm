@@ -130,6 +130,7 @@ import {
   type CollectionTypeState,
   type DefaultCollectionTypeState,
   type DefaultModelRow,
+  type DiscriminatorValues,
   emptyGroupPagingState,
   emptyState,
   type IncludeCombine,
@@ -153,7 +154,6 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNameForValue,
-  type VariantValues,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
@@ -471,7 +471,10 @@ export class CollectionBase<
    * await db.orm.User.variant('admin').create({ name: 'Ada', role: 'super' });
    * ```
    */
-  variant<V extends VariantValues<TContract, ModelName>, S extends CollectionTypeState = State>(
+  variant<
+    V extends DiscriminatorValues<TContract, ModelName>,
+    S extends CollectionTypeState = State,
+  >(
     this: HasTypeState<S> & HasNoVariant,
     value: V,
   ): Collection<
@@ -480,7 +483,7 @@ export class CollectionBase<
     VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
     WithVariantState<WithWhereState<S>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  variant<V extends VariantValues<TContract, ModelName>>(
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
     this: HasNoVariant,
     value: V,
   ): Collection<
@@ -489,7 +492,7 @@ export class CollectionBase<
     VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
     WithVariantState<WithWhereState<State>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  variant<V extends VariantValues<TContract, ModelName>>(
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
     value: V,
   ): Collection<
     TContract,
