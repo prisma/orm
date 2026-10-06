@@ -26,7 +26,7 @@ export type { MongoControlDriverInstance };
 import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring channel. Each names a codec; the collection validator reads the BSON types from the codec, not from the constructor.
+ * The base PSL scalars as zero-arg type constructors in the unified authoring channel. Each names a codec; the collection validator reads the BSON types from the data type the codec represents, not from the constructor.
  */
 export const mongoScalarAuthoringTypes = {
   String: {

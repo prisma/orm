@@ -106,7 +106,8 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
  * literal value. The interpreter resolves the ref to the `native_enum`
  * entity generically (driven by `entityRefArg`); the `pg/enum@1` codec
  * descriptor's `columnFromEntity` hook (see `codecs.ts`) converts that
- * entity into the column's `typeParams` and native type.
+ * entity into the column's `typeParams`. The column's type name comes from the
+ * `pg/enum` data type, which renders `typeParams.typeName`.
  */
 export const postgresAuthoringTypes = {
   BigIntNumber: {
