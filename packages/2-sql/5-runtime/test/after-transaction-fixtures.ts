@@ -144,16 +144,15 @@ export function createSetup(options: SetupOptions = {}) {
     adapter: createTestAdapterDescriptor(adapter),
     extensions: [],
   });
-  const middlewareList: SqlMiddleware[] = [middleware];
   const runtime = createRuntime({
     stackInstance: instantiateExecutionStack(stack),
     context: createTestContext(testContract, adapter),
     driver: createDriver(events, options.failures ?? {}),
     verifyMarker: readMarker === undefined ? false : 'onFirstUse',
-    middleware: middlewareList,
+    middleware: [middleware],
     ...(options.log ? { log: options.log } : {}),
   });
-  return { runtime, events, middleware, middlewareList, afterTransaction };
+  return { runtime, events, middleware, afterTransaction };
 }
 
 export type Setup = ReturnType<typeof createSetup>;

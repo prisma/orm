@@ -2,9 +2,10 @@ import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import type { AffectedCount } from '@internal/sql-relational-core/expression';
 import { planFromAst } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeConnection, RuntimeQueryable } from '../src/sql-runtime';
+import type { RuntimeConnection, RuntimeQueryable, RuntimeTransaction } from '../src/sql-runtime';
 import { withTransaction } from '../src/sql-runtime';
 import {
+  afterHookNames,
   createSetup,
   type DriverFailures,
   failingDecodePlan,
@@ -151,6 +152,17 @@ describe('afterTransaction on a transaction driven by hand', () => {
     expect(stages(setup.events)).toEqual(['afterTransaction:unknown']);
   });
 
+  it('fires nothing more when commit or rollback settles again after the transaction ended', async () => {
+    const setup = createSetup();
+    const transaction = await begin(setup);
+
+    await transaction.commit();
+    await transaction.rollback();
+    await transaction.commit();
+
+    expect(stages(setup.events)).toEqual(['afterTransaction:committed']);
+  });
+
   it('fires committed right after the after-hook for a query run after the transaction ended', async () => {
     const setup = createSetup();
     const transaction = await begin(setup);
@@ -180,15 +192,14 @@ describe('afterTransaction on a transaction driven by hand', () => {
       (event) => event.name === 'afterQuery' || event.name === 'afterExecute',
     );
     const fired = setup.events.filter((event) => event.name.startsWith('afterTransaction'));
+    const identities = (events: readonly HookEvent[]) =>
+      events.map(({ plan, planExecutionId }) => ({ plan, planExecutionId }));
     expect(fired.map((event) => event.plan?.sql)).toEqual([
       'select 1',
       'update t set x = 1',
       'select 2',
     ]);
-    fired.forEach((stage, index) => {
-      expect(stage.plan).toBe(afterHooks[index]?.plan);
-      expect(stage.planExecutionId).toBe(afterHooks[index]?.planExecutionId);
-    });
+    expect(identities(fired)).toEqual(identities(afterHooks));
   });
 
   it('fires committed at commit for a query whose row stream the caller abandoned', async () => {
@@ -258,13 +269,13 @@ describe('afterTransaction on a transaction driven by hand', () => {
   });
 });
 
-interface IncompleteQueryCase {
+interface FailedQueryCase {
   readonly title: string;
   readonly failures: DriverFailures;
   readonly run: (tx: RuntimeQueryable) => Promise<void>;
 }
 
-const incompleteQueryCases: ReadonlyArray<IncompleteQueryCase> = [
+const failedQueryCases: ReadonlyArray<FailedQueryCase> = [
   {
     title: 'the driver fails an execute',
     failures: { execute: new Error('execute failed') },
@@ -303,7 +314,7 @@ const incompleteQueryCases: ReadonlyArray<IncompleteQueryCase> = [
   },
 ];
 
-describe.each(incompleteQueryCases)('a transaction in which $title', ({ failures, run }) => {
+describe.each(failedQueryCases)('a transaction in which $title', ({ failures, run }) => {
   it('fires nothing before it ends, then unknown for every query when commit resolves', async () => {
     const setup = createSetup({ failures });
     const transaction = await (await setup.runtime.connection()).transaction();
@@ -334,6 +345,68 @@ describe.each(incompleteQueryCases)('a transaction in which $title', ({ failures
     await withTransaction(setup.runtime, run);
 
     expect(stages(setup.events)).toEqual(['afterTransaction:unknown', 'afterTransaction:unknown']);
+  });
+});
+
+describe('a query sent on the connection while its transaction is open', () => {
+  async function beginOnConnection(setup: Setup) {
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction();
+    await connection.execute(rawPlan('update t set x = 1'));
+    return { connection, transaction };
+  }
+
+  it.each([
+    {
+      end: 'commit',
+      outcome: 'committed',
+      run: (transaction: RuntimeTransaction) => transaction.commit(),
+    },
+    {
+      end: 'rollback',
+      outcome: 'rolled-back',
+      run: (transaction: RuntimeTransaction) => transaction.rollback(),
+    },
+  ])('fires $outcome when the transaction ends with $end', async ({ end, outcome, run }) => {
+    const setup = createSetup();
+    const { transaction } = await beginOnConnection(setup);
+
+    expect(stages(setup.events)).toEqual([]);
+    await run(transaction);
+
+    expect(afterHookNames(setup.events)).toEqual([
+      'afterExecute',
+      end,
+      `afterTransaction:${outcome}`,
+    ]);
+  });
+
+  it('waits for a later transaction on the connection when an earlier one ends again', async () => {
+    const setup = createSetup({ failures: { commit: new Error('commit failed') } });
+    const connection = await setup.runtime.connection();
+    const earlier = await connection.transaction();
+    await expect(earlier.commit()).rejects.toThrow('commit failed');
+    const later = await connection.transaction();
+
+    await earlier.rollback();
+    await connection.execute(rawPlan('update t set x = 1'));
+    expect(stages(setup.events)).toEqual([]);
+    await later.rollback();
+
+    expect(stages(setup.events)).toEqual(['afterTransaction:rolled-back']);
+  });
+
+  it('fires committed right after the after-hook once the transaction has ended', async () => {
+    const setup = createSetup();
+    const { connection, transaction } = await beginOnConnection(setup);
+    await transaction.commit();
+
+    await connection.execute(rawPlan('update t set x = 2'));
+
+    expect(afterHookNames(setup.events).slice(-2)).toEqual([
+      'afterExecute',
+      'afterTransaction:committed',
+    ]);
   });
 });
 

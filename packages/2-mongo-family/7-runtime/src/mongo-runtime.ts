@@ -4,6 +4,7 @@ import {
   checkAborted,
   checkMiddlewareCompatibility,
   executeWithAfterTransaction,
+  onQueryEndOutsideTransaction,
   queryWithAfterTransaction,
   RuntimeCore,
   type RuntimeExecuteOptions,
@@ -111,7 +112,7 @@ class MongoRuntimeImpl
   readonly #codecs: MongoCodecLookup;
 
   constructor(options: MongoRuntimeOptions) {
-    const middleware = options.middleware ? [...options.middleware] : [];
+    const middleware = options.middleware ?? [];
     const targetId = options.context.stack.target.targetId;
     for (const mw of middleware) {
       checkMiddlewareCompatibility(mw, 'mongo', targetId);
@@ -242,7 +243,10 @@ class MongoRuntimeImpl
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
       const exec = await self.prepareQueryExecution(plan, codecCtx, middlewareCtx);
-      yield* queryWithAfterTransaction(self.afterTransactionHooks(exec, middlewareCtx), () =>
+      const onQueryEnd = onQueryEndOutsideTransaction(
+        self.afterTransactionStageFor(exec, middlewareCtx),
+      );
+      yield* queryWithAfterTransaction(onQueryEnd, () =>
         self.#decodedRows<Row>(exec, codecCtx, middlewareCtx),
       );
     };
@@ -285,15 +289,15 @@ class MongoRuntimeImpl
   ): Promise<RuntimeStatementStats> {
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const exec = await this.prepareExecuteExecution(plan, codecCtx, middlewareCtx);
-    return executeWithAfterTransaction(
-      this.afterTransactionHooks(exec, middlewareCtx),
-      async () => {
-        checkAborted(codecCtx, 'stream');
-        return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
-          this.runExecute(exec),
-        );
-      },
+    const onQueryEnd = onQueryEndOutsideTransaction(
+      this.afterTransactionStageFor(exec, middlewareCtx),
     );
+    return executeWithAfterTransaction(onQueryEnd, async () => {
+      checkAborted(codecCtx, 'stream');
+      return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
+        this.runExecute(exec),
+      );
+    });
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {

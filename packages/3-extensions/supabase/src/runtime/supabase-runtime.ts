@@ -96,30 +96,18 @@ export class SupabaseRuntimeImpl<
         params: Params,
         options?: RuntimeExecuteOptions,
       ): AsyncIterableResult<Row> {
-        return self.runPreparedQueryAgainstRoleQueryable(
-          prepared,
-          params,
-          conn,
-          options,
-          'connection',
-        );
+        return self.runPreparedQueryAgainstRoleQueryable(prepared, params, conn, options);
       },
       [preparedStatementExecute]<Params>(
         prepared: PreparedExecution<Params>,
         params: Params,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        return self.runPreparedExecuteAgainstRoleQueryable(
-          prepared,
-          params,
-          conn,
-          options,
-          'connection',
-        );
+        return self.runPreparedExecuteAgainstRoleQueryable(prepared, params, conn, options);
       },
 
       async transaction(): Promise<RuntimeTransaction> {
-        return self.wrapTransaction(await conn.beginTransaction());
+        return self.wrapTransaction(await conn.beginTransaction(), conn);
       },
 
       /**
@@ -196,7 +184,6 @@ export class SupabaseRuntimeImpl<
     params: Params,
     queryable: SqlQueryable,
     options: RuntimeExecuteOptions | undefined,
-    scope: 'connection' | 'transaction',
   ): Promise<SqlStatementStats> {
     return this.runPreparedExecuteAgainstQueryable<Params>(
       blindCast<
@@ -207,7 +194,7 @@ export class SupabaseRuntimeImpl<
         params,
       ),
       queryable,
-      { ...options, scope },
+      { ...options, scope: 'connection' },
     );
   }
 
@@ -216,7 +203,6 @@ export class SupabaseRuntimeImpl<
     params: Params,
     queryable: SqlQueryable,
     options: RuntimeExecuteOptions | undefined,
-    scope: 'connection' | 'transaction',
   ): AsyncIterableResult<Row> {
     return this.runPreparedQueryAgainstQueryable<Params, Row>(
       blindCast<
@@ -227,7 +213,7 @@ export class SupabaseRuntimeImpl<
         params,
       ),
       queryable,
-      { ...options, scope },
+      { ...options, scope: 'connection' },
     );
   }
 }

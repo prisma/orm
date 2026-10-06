@@ -82,6 +82,24 @@ describe('role session transaction afterTransaction stage', () => {
     expect(events).toEqual(['afterExecute', 'rollback', 'afterTransaction:rolled-back']);
   });
 
+  it.each([
+    { end: 'commit', outcome: 'committed' },
+    { end: 'rollback', outcome: 'rolled-back' },
+  ] as const)(
+    'fires $outcome after the $end for a query sent on the session while its transaction is open',
+    async ({ end, outcome }) => {
+      const { runtime, events } = createRecordingSetup();
+      const session = await runtime.openRoleSession({ role: 'authenticated' });
+      const tx = await session.transaction();
+
+      await session.execute(stubPlan());
+      await tx[end]();
+      await session.release();
+
+      expect(events).toEqual(['afterExecute', end, `afterTransaction:${outcome}`]);
+    },
+  );
+
   it('fires committed for a prepared query and a prepared execute once the commit resolves', async () => {
     const { runtime, events } = createRecordingSetup();
     const { ast, meta } = stubPlan();
