@@ -66,3 +66,21 @@ Hovering a model, field, or block attribute shows the same signature label signa
 Hovering a named argument's key — in an attribute call, a function call, or a struct-block entry — shows that key with its type, e.g. `fields: field name`, followed by the parameter's documentation. Hovering a function call's name, such as `autoincrement()` or `uuid((4 | 7)?)`, shows its signature label followed by the function's documentation. Hovering a fixed-identifier constant, such as `Cascade` in a referential-action argument, shows the constant's name followed by its documentation.
 
 A declaration, attribute, contributed type, parameter, function, or constant with no documentation to show omits that section rather than leaving a blank one; a block keyword with no contributed documentation shows no hover at all. Closed or unmanaged documents, and positions with nothing to show, also receive no hover.
+
+## Go to definition
+
+In a configured PSL input, clients can request the definition of a name that refers to a declaration in the project's schema. The server follows these references:
+
+- a type reference, such as a field's type, to the model, composite type, named type, or generic block it names;
+- the qualifier of a qualified name, such as `auth` in `auth.User`, to every `namespace auth { … }` block, across files;
+- a field or entity reference in an attribute argument or a generic block's value, to the field or declaration it names.
+
+The result selects the declaration's name. Clients that declare `textDocument.definition.linkSupport` receive `LocationLink` results, which also carry the range of the reference and the range of the whole declaration; other clients receive `Location` results.
+
+The server returns nothing for:
+
+- a declaration's own name;
+- a contributed type or contributed namespace, which has no declaration in the schema;
+- a cross-space reference;
+- an attribute name, a named argument's key, a function name, or a fixed-identifier constant;
+- a name that does not resolve.
