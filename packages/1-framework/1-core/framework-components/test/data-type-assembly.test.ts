@@ -118,11 +118,15 @@ describe('assembleDataTypes', () => {
   });
 
   it('lists the types in assembly order: contributor by contributor, each in its own order', () => {
-    const { lookup } = assembleDataTypes([
+    const { declared } = assembleDataTypes([
       contributor('demo', [int8, int2]),
       contributor('other', [text]),
     ]);
-    expect(lookup.all()).toEqual([int8, int2, text]);
+    expect(declared).toEqual([
+      { type: int8, contributedBy: 'demo' },
+      { type: int2, contributedBy: 'demo' },
+      { type: text, contributedBy: 'other' },
+    ]);
   });
 
   it('holds nothing when no contributor registers a type', () => {

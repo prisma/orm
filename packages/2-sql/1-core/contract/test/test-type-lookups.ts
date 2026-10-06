@@ -167,7 +167,6 @@ export function testSqlTypeLookups(
           ENUM_DATA_TYPE_IDS.has(id) ? undefined : (DATA_TYPE_NAMES[id] ?? id.split('/')[1] ?? id),
         ),
       has: () => true,
-      all: () => [...testDataTypes.values()],
     },
   };
 }

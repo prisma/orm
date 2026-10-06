@@ -71,8 +71,6 @@ export interface DataTypeSpec {
 export interface DataTypeLookup {
   get(id: string): DataType | undefined;
   has(id: string): boolean;
-  /** Every type, in assembly order. */
-  all(): readonly DataType[];
 }
 
 const DATA_TYPE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -163,11 +161,9 @@ export function requiredParamKeys(type: DataType): readonly string[] {
 
 export function createDataTypeLookup(types: readonly DataType[]): DataTypeLookup {
   const byId = new Map<string, DataType>(types.map((type) => [type.id, type]));
-  const inOrder = [...types];
   return {
     get: (id) => byId.get(id),
     has: (id) => byId.has(id),
-    all: () => inOrder,
   };
 }
 

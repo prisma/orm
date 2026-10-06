@@ -161,15 +161,6 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '\bcontractToSchemaIR\s*\('
-  - id: data-type-lookup-lists-all
-    summary: |
-      `DataTypeLookup` gains `all(): readonly DataType[]`, in assembly order. A hand-written lookup
-      adds it; `createDataTypeLookup(types)` already provides it.
-    detection:
-      glob: "**/*.{ts,mts,cts}"
-      matches:
-        - '\bimplements\s+(?:[\w.]+\s*,\s*)*DataTypeLookup\b'
-        - ':\s*DataTypeLookup\s*=\s*\{'
   - id: authoring-entity-context-takes-data-type-lookup
     summary: |
       `AuthoringEntityContext` gains a required `dataTypeLookup`, the stack's data types, and its
@@ -746,10 +737,6 @@ contractToSchemaIR(contract, { annotationNamespace: 'pg', dataTypeLookup, codecL
 ```
 
 `dataTypeLookup` and `codecLookup` come from the assembled stack: `sqlTypeLookupsOf(frameworkComponents)` from `@internal/family-sql/control` returns both. Every field or parameter that holds a `DataTypeLookup` is now named `dataTypeLookup`; `dataTypes` names only a list of data types.
-
-## `data-type-lookup-lists-all`
-
-Add `all()` to a hand-written `DataTypeLookup`, returning every registered data type in assembly order, or build the lookup with `createDataTypeLookup(types)`.
 
 ## `authoring-entity-context-takes-data-type-lookup`
 

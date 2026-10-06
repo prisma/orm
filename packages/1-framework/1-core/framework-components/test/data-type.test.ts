@@ -106,11 +106,6 @@ describe('createDataTypeLookup', () => {
   it('says which ids it holds', () => {
     expect(lookup.has(int2.id)).toBe(true);
   });
-
-  it('lists every type in the order it was given', () => {
-    expect(lookup.all()).toEqual([int2, int8]);
-    expect(createDataTypeLookup([int8, int2]).all()).toEqual([int8, int2]);
-  });
 });
 
 describe('requiredParamKeys', () => {

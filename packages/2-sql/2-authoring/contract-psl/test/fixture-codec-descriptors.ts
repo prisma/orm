@@ -215,6 +215,5 @@ export const fixtureTypeLookups: {
   dataTypeLookup: {
     get: (id) => fixtureDataTypeSupport.lookup.get(id) ?? lenient.dataTypeLookup.get(id),
     has: (id) => fixtureDataTypeSupport.lookup.has(id) || lenient.dataTypeLookup.has(id),
-    all: () => fixtureDataTypeSupport.lookup.all(),
   },
 };

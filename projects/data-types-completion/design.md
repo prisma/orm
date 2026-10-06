@@ -152,7 +152,7 @@ Every text below is complete: no other text is declared. `W` marks written, `C` 
 
 ### 2.7 Rules fixed while building dispatch a
 
-1. **Listing data types.** `DataTypeLookup` gains `all(): readonly DataType[]`, in assembly order. `resolveReportedSqlType` takes that list; the collision check of 5.2 and every later caller use it.
+1. **Listing data types.** `resolveReportedSqlType` takes a list of data types. Its slice 3 callers pass the types of `stack.declaredDataTypes`, in assembly order, the list the collision check of 5.2 reads. `DataTypeLookup` has no method that lists its types.
 2. **Literal characters.** The literal parts of a `text` may contain lower-case letters, digits, spaces, `_`, `.`, `,`, `(` and `)`. Placeholder names are exact `params` keys and may contain upper-case letters.
 3. **Text preparation** (11.2 step 2) applies outside double quotes only; quoted text is kept exactly as reported. Spaces directly after `(` or `,` and directly before `)` are removed, including when the next character is a double quote. A space before `,` is kept.
 4. **`display`** must equal `text` compared without regard to letter case, and every placeholder in `display` must be written exactly as in `text`.
