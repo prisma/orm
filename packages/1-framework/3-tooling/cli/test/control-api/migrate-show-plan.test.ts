@@ -136,7 +136,7 @@ describe('executeMigrateShowPlan', () => {
         },
       ]);
       expect(result.value.summary).toBe('1 migration will run');
-      expect(result.value.usedLiveMarker).toBe(false);
+      expect(result.value.databaseMarkersRead).toBe(false);
       expect(result.value.contractHash).toBe(HASH_B);
     }
     expect(mocks.createControlClient).not.toHaveBeenCalled();

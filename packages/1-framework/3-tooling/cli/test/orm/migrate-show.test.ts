@@ -34,6 +34,7 @@ const EMPTY = 'empty';
 const C1 = '1'.repeat(64);
 const C2 = '2'.repeat(64);
 const EXT_C1 = 'e'.repeat(64);
+const UNKNOWN = 'd'.repeat(64);
 const TARGET = 'mock';
 const FAMILY = 'mock';
 
@@ -351,6 +352,47 @@ describe('migrate --show', () => {
 
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({ ok: true, migrations: [] });
+    });
+
+    it('labels the target @db for --from @empty --to @db', async () => {
+      const cwd = await buildProject();
+      mocks.readAllMarkers.mockResolvedValue(
+        new Map([['app', { storageHash: C1, invariants: [] }]]),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--show', '--from', '@empty', '--to', '@db'],
+        { cwd, isTty: { stdout: true } },
+      );
+      const dbLines = drawingLines(run.presented?.presentation.human ?? []).filter((line) =>
+        line.includes('@db'),
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(dbLines).toHaveLength(1);
+      expect(dbLines[0]).toContain(C1.slice(0, 7));
+    });
+
+    it.each([
+      { argv: [] },
+      { argv: ['--to', '@db'] },
+      { argv: ['--from', '@empty', '--to', '@db'] },
+    ])('refuses a marker outside the migration graph: $argv', async ({ argv }) => {
+      const cwd = await buildProject();
+      mocks.readAllMarkers.mockResolvedValue(
+        new Map([['app', { storageHash: UNKNOWN, invariants: [] }]]),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--show', ...argv, '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: { ok: false, error: { code: 'MIGRATION.MARKER_MISMATCH' } },
+      });
     });
 
     it.each([

@@ -107,7 +107,9 @@ export function renderMigrateShowGraph(
       rowModel,
       contractHash,
       isAppSpace: isApp,
-      ...(plan.usedLiveMarker && liveMarkerHash !== undefined ? { dbHash: liveMarkerHash } : {}),
+      ...(plan.databaseMarkersRead && liveMarkerHash !== undefined
+        ? { dbHash: liveMarkerHash }
+        : {}),
       refsByHash: listRefsByContractHash(space),
       edgeAnnotationsByHash: edgeAnnotations,
       colorize: options.colorize,

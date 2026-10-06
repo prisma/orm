@@ -24,6 +24,7 @@ import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
+import { refuseMarkerOutsideGraph } from './graph-queries';
 import { planSpacePath } from './migrate';
 import {
   liveMarkerUse,
@@ -68,10 +69,10 @@ export interface MigrateShowPlanSuccess {
   readonly contractHash: string;
   readonly migrations: readonly MigrateShowMigration[];
   readonly summary: string;
-  /** Per-space render hash: live/override marker storageHash, pre-defaulted to the empty sentinel. */
+  /** Each space's database marker hash for the tree's `@db` label; the empty sentinel when the space has no marker or the database was not read. */
   readonly renderMarkerHashBySpace: ReadonlyMap<string, string>;
-  /** True when the live DB marker was read — gates the ★ db marker in the tree. */
-  readonly usedLiveMarker: boolean;
+  /** True when the preview read the database markers; only then does the tree mark `@db`. */
+  readonly databaseMarkersRead: boolean;
 }
 
 /**
@@ -166,6 +167,7 @@ export async function executeMigrateShowPlan(
   // marker would produce a different `required` set and a different (incorrect) path.
   type LiveMarker = { readonly storageHash: string; readonly invariants: readonly string[] };
   const markerBySpace = new Map<string, LiveMarker | null>();
+  let databaseMarkers: ReadonlyMap<string, LiveMarker> | undefined;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
 
   if (options.from !== undefined && !liveOrigin) {
@@ -194,6 +196,17 @@ export async function executeMigrateShowPlan(
     try {
       await client.connect(dbConnection);
       const allMarkers = await client.readAllMarkers();
+      databaseMarkers = allMarkers;
+      const appMarker = allMarkers.get(aggregate.app.spaceId);
+      if (appMarker !== undefined) {
+        const refusal = refuseMarkerOutsideGraph({
+          markerHash: appMarker.storageHash,
+          graph: appGraph,
+        });
+        if (refusal) {
+          return notOk(refusal);
+        }
+      }
       // Store the full marker record (storageHash + invariants) per space.
       // This is the same data executeMigrate uses via familyInstance.readAllMarkers().
       if (liveOrigin) {
@@ -203,7 +216,7 @@ export async function executeMigrateShowPlan(
         }
       }
       if (liveTarget) {
-        targetHash = contractHashAtMarker(allMarkers.get(aggregate.app.spaceId));
+        targetHash = contractHashAtMarker(appMarker);
       }
     } catch (error) {
       return notOk(
@@ -300,10 +313,7 @@ export async function executeMigrateShowPlan(
       : `${count} migration${count === 1 ? '' : 's'} will run`;
 
   const renderMarkerHashBySpace = new Map(
-    allSpaces.map((s) => [
-      s.spaceId,
-      markerBySpace.get(s.spaceId)?.storageHash ?? EMPTY_CONTRACT_HASH,
-    ]),
+    allSpaces.map((s) => [s.spaceId, contractHashAtMarker(databaseMarkers?.get(s.spaceId))]),
   );
 
   return ok({
@@ -312,6 +322,6 @@ export async function executeMigrateShowPlan(
     migrations: orderedMigrations,
     summary,
     renderMarkerHashBySpace,
-    usedLiveMarker: liveOrigin,
+    databaseMarkersRead: databaseMarkers !== undefined,
   });
 }
