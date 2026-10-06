@@ -26,6 +26,16 @@ Port the seven remaining upstream tests in this slice's scope, with the same rul
 - The other tests in `delete_many.rs`, `prisma_8265.rs` and the other files; only the ones named.
 - MongoDB variants.
 
+## The standard these ports are held to
+
+Read first, in full: `projects/port-all-tests/spec.md` (§ "No workarounds — THE hard gate", the non-goals, and the layout rules) and `projects/port-all-tests/briefs/engine-implementer.md`. That brief is written for `queries/` batches; everything in it applies here except its paths (`queries/` → the directories in the table above), its checklist file, and its case-500 cutoff. Where it and this brief differ on anything else, it wins, with these stated exceptions:
+
+- **Layout:** one self-contained directory per upstream source file, named after the file without `.rs`, with its own `_fixture/` (variants under `_fixture/<variant>/`). The table's "port into" column gives the parent directory; the suite directory is the file name. No shared matrix helper; loops are written inline in the test file.
+- **Every macro expansion is ported.** If a test uses `relation_link_test` or another schema generator, derive the full list from the generator and port every schema with every lookup key it names.
+- **Each ported test is run individually** once, as that brief's recipe says, in addition to the directory run.
+- **`contains` / `startsWith` / `endsWith`:** the project owner granted one exception for this project's ports: `contains` may be written as `like('%x%')` where the string operator is incidental to what the test checks and the seed data has no `%` or `_`. State each use in your report with the reason it is incidental. Where the string operator is the subject of the test, the rule stands and the test is non-ported.
+- **Dispositions:** in this project you write the disposition text into the checklist entry and leave the box unticked; the reviewer ticks after an independent run. There is no inbox file.
+
 ## What these tests pin
 
 - `disallow_write_parent_inline_rel_sclrs`: upstream rejects nested `updateMany` data that sets the foreign key linking the child to the parent (code 2009). Prisma 8 rejects it with `ORM.RELATION_MUTATION_INVALID`. Assert that, plus the type error where the fixture is an emitted contract.
