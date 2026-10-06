@@ -434,7 +434,7 @@ An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and
 
 `dataType(id, spec)` from `@internal/framework-components/codec` declares a data type with its casts and, optionally, its parameters. The id is `owner/name` in lower case and carries no version; a versioned id such as `pg/int8@1` names a codec, and `dataType` refuses anything that is not the `owner/name` shape.
 
-A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type`. It takes the same `params`, `casts` and `listCast`, and adds how the database writes and reports the type. Migrations, schema verification and PostgreSQL's parameter casts all read the type's name from this declaration, and from nowhere else. In a SQL stack every codec must represent a type declared with `sqlDataType`, because a codec is how a column stores its values; assembly refuses a codec that represents a type declared with plain `dataType` (item 9 under [Assembly is strict](#assembly-is-strict)). The SQL family's own `sql/expression` is such a plain type: it is the type of a written SQL expression, and no codec or column has it. A Mongo data type is declared with `mongoDataType(id, { bsonTypes })` instead; see [Target-owned Mongo codecs](#target-owned-mongo-codecs).
+A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type`. It takes the same `params`, `casts` and `listCast`, and adds how the database writes and reports the type. Migrations, schema verification and PostgreSQL's parameter casts all read the type's name from this declaration, and from nowhere else. In a SQL stack every codec must represent a type declared with `sqlDataType`, because a codec is how a column stores its values; the SQL family refuses a codec that represents a type declared with plain `dataType` when it creates its control instance (item 9 under [Assembly is strict](#assembly-is-strict)). The SQL family's own `sql/expression` is such a plain type: it is the type of a written SQL expression, and no codec or column has it. A Mongo data type is declared with `mongoDataType(id, { bsonTypes })` instead; see [Target-owned Mongo codecs](#target-owned-mongo-codecs).
 
 ```ts
 import { sqlDataType } from '@internal/sql-contract/data-type';
@@ -647,15 +647,19 @@ The control stack assembles every pack's data types, codec descriptors and autho
 3. **Two entries claim one tag or one plain form.** `CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE`. Two packs registering one type id is `CONTRACT.DATA_TYPE_DUPLICATE`, and two entries under one key is `CONTRACT.DATA_TYPE_ENTRY_DUPLICATE`.
 4. **A type some cast takes values of cannot be written.** `CONTRACT.DATA_TYPE_NOT_WRITABLE`: a cast from a type no contract source can write is never exercised. A type counts as writable when it has an authoring entry of its own, or when a number entry's `types` names it.
 
-Type constructors, field presets and SQL declarations are checked at assembly too. Each failure is an `InternalError` naming the contributor and the id:
+The reverse of the fourth is not required: a type may be reachable only through casts. These checks span packs, which is why they run at assembly — `pgvector/vector` taking `pg/numeric` values is valid only when the Postgres target that owns `pg/numeric` is in the stack. Within a pack, refer to a type by its constant rather than by string, so a misspelt id fails to compile.
+
+Type constructors and field presets are checked at assembly too. Each failure is an `InternalError` naming the contributor and the id:
 
 5. **A type constructor or field preset names a codec no component registers.**
 6. **A type constructor maps an argument onto a parameter** that neither the codec's data type's `params` nor the codec's own parameters declare.
 7. **Two type constructors of one data type are both marked `inferred`.**
-8. **Two SQL data types claim the same reported type**: a claiming text of one matches a claiming text of the other, or both claim the same kind.
-9. **A codec in a SQL stack represents a data type that is not a SQL data type** (declared with plain `dataType` rather than `sqlDataType`). The error names the codec, its data type and the data type's contributor.
 
-The reverse of the fourth is not required: a type may be reachable only through casts. These checks span packs, which is why they run at assembly — `pgvector/vector` taking `pg/numeric` values is valid only when the Postgres target that owns `pg/numeric` is in the stack. Within a pack, refer to a type by its constant rather than by string, so a misspelt id fails to compile.
+The SQL family checks its stack's data types and codecs when it creates its control instance, not during assembly. So CLI commands report these failures and the language server does not. Each failure names the contributor:
+
+8. **Two SQL data types claim the same reported type**: a claiming text of one matches a claiming text of the other, or both claim the same kind. An `InternalError`.
+9. **A codec in a SQL stack represents a data type that is not a SQL data type** (declared with plain `dataType` rather than `sqlDataType`). An `InternalError` that names the codec, its data type and the data type's contributor.
+10. **A data type casts from `sql/expression`.** `CONTRACT.DATA_TYPE_CASTS_FROM_SQL_EXPRESSION`.
 
 ### A codec whose data type depends on the target
 
