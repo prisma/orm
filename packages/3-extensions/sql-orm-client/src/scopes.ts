@@ -222,16 +222,17 @@ function isListMultiplicity(value: unknown): value is { readonly elementNullable
   );
 }
 
+function isMultiplicity(value: unknown): value is FieldMultiplicity | undefined {
+  return value === undefined || value === false || isListMultiplicity(value);
+}
+
 function isFieldSpec(value: object): value is AnyDeclaredField {
   return (
     'codecId' in value &&
     typeof value.codecId === 'string' &&
     'nullable' in value &&
     typeof value.nullable === 'boolean' &&
-    (!('many' in value) ||
-      value.many === undefined ||
-      value.many === false ||
-      isListMultiplicity(value.many))
+    (!('many' in value) || isMultiplicity(value.many))
   );
 }
 
@@ -271,6 +272,17 @@ function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
       );
     }
     const many = typeof built === 'object' && built !== null && 'many' in built && built.many;
+    if (!isMultiplicity(many)) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `Cannot define the scope: the field builder for ${name} builds a many that is not false or { elementNullable }`,
+        {
+          why: `A field builder's build() returns many as false or undefined for one value, or as { elementNullable } with a boolean elementNullable for a list; received ${describeReceived(many)} for ${name}.`,
+          fix: FIELD_DECLARATION_FIX,
+          meta: { field: name },
+        },
+      );
+    }
     return { codecId: descriptor.codecId, nullable, many: multiplicity(many) };
   }
   if (typeof declaration === 'object' && declaration !== null && isFieldSpec(declaration)) {
@@ -470,7 +482,8 @@ function assertScopeFields(
       nullable: spec.nullable,
       many: spec.many,
     };
-    if (!Object.hasOwn(model?.fields ?? {}, name)) {
+    const modelFields = model?.fields ?? {};
+    if (!Object.hasOwn(modelFields, name)) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a scope to ${label}: it has no field ${name}`,
@@ -481,29 +494,29 @@ function assertScopeFields(
         },
       );
     }
+    const fieldMany = multiplicity(modelFields[name]?.many);
     const column = resolveColumn(
       contract,
       namespaceId,
       collection.tableName,
       resolveFieldToColumn(contract, namespaceId, modelName, name),
     );
-    const columnMany = column?.many ?? false;
     const actual =
       column === undefined
         ? `${label}.${name} has no column.`
-        : column.many === false
+        : fieldMany === false
           ? `${label}.${name} has codec ${column.codecId} and ${nullability(column.nullable)}.`
-          : `${label}.${name} is a list ${describeField(column)}.`;
+          : `${label}.${name} is a list ${describeField({ codecId: column.codecId, nullable: column.nullable, many: fieldMany })}.`;
     const sameCodecAndNullability =
       column?.codecId === spec.codecId && column.nullable === spec.nullable;
-    if (!sameCodecAndNullability || !sameMultiplicity(columnMany, spec.many)) {
+    if (!sameCodecAndNullability || !sameMultiplicity(fieldMany, spec.many)) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a scope to ${label}: its field ${name} does not match the declaration`,
         {
           why: `${declared} ${actual}`,
           fix: sameCodecAndNullability
-            ? `Apply the scope to a model whose ${name} field ${fieldShape(spec.many)}, or declare ${name} ${declarationFor(columnMany)}.`
+            ? `Apply the scope to a model whose ${name} field ${fieldShape(spec.many)}, or declare ${name} ${declarationFor(fieldMany)}.`
             : `Apply the scope to a model whose ${name} field has that codec and nullability, or change the declaration in the scope.`,
           meta,
         },

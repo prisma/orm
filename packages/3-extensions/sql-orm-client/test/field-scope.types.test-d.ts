@@ -1,5 +1,6 @@
 import {
   int4Column,
+  jsonbColumn,
   textColumn,
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
@@ -341,6 +342,23 @@ describe('client.scope', () => {
       { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
       (rows) => rows.limit(1),
     );
+  });
+
+  test('a list of value objects, stored as one jsonb value, matches a list declaration only', () => {
+    const asList = client.scope({ addresses: field.column(jsonbColumn).many() }, (rows) =>
+      rows.limit(1),
+    );
+    expectTypeOf(plain.Tag.apply(asList)).toEqualTypeOf<typeof plain.Tag>();
+    const asDeclaredList = client.scope(
+      { addresses: { codecId: 'pg/jsonb@1', nullable: false, many: { elementNullable: false } } },
+      (rows) => rows.limit(1),
+    );
+    expectTypeOf(plain.Tag.apply(asDeclaredList)).toEqualTypeOf<typeof plain.Tag>();
+    const asOneValue = client.scope({ addresses: field.column(jsonbColumn) }, (rows) =>
+      rows.limit(1),
+    );
+    // @ts-expect-error Tag.addresses is a list of value objects, not one value
+    plain.Tag.apply(asOneValue);
   });
 
   test('the refusal compares the element nullability of a list', () => {

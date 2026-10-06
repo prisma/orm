@@ -1,4 +1,8 @@
-import { textColumn, timestamptzTemporalColumn } from '@internal/adapter-postgres/column-types';
+import {
+  jsonbColumn,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import { field } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
@@ -273,6 +277,38 @@ describe('client.scope', () => {
         );
       }
     });
+
+    it('matches a list of value objects, stored as one jsonb value, with a list declaration', async () => {
+      const { client, plain, runtime } = scopes();
+      const built = client.scope({ addresses: field.column(jsonbColumn).many() }, (rows) =>
+        rows.limit(1),
+      );
+      const literal = client.scope(
+        { addresses: { codecId: 'pg/jsonb@1', nullable: false, many: { elementNullable: false } } },
+        (rows) => rows.limit(1),
+      );
+      await plain.Tag.limit(1).all();
+      await plain.Tag.apply(built).all();
+      await plain.Tag.apply(literal).all();
+      const [inline, fromBuilder, fromLiteral] = runtime.executions;
+      expect(fromBuilder?.plan.ast).toBeDefined();
+      expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
+      expect(fromLiteral?.plan.ast).toEqual(inline?.plan.ast);
+    });
+
+    it('refuses a declaration of one value for a list of value objects', () => {
+      const { client, plain } = scopes();
+      const oneValue = client.scope({ addresses: field.column(jsonbColumn) }, (rows) =>
+        rows.limit(1),
+      );
+      expect(() => untyped(oneValue)(plain.Tag)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.FIELD_UNKNOWN',
+          why: 'The scope was declared for models that have a field addresses with codec pg/jsonb@1 that is never null. Tag.addresses is a list with codec pg/jsonb@1 that is never null and whose elements are never null.',
+          fix: 'Apply the scope to a model whose addresses field holds one value, or declare addresses as a list whose elements are never null, with .many() or many: { elementNullable: false }.',
+        }),
+      );
+    });
   });
 
   describe('input from a JavaScript caller', () => {
@@ -328,6 +364,38 @@ describe('client.scope', () => {
           fix: 'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.',
         }),
       );
+    });
+
+    it.each([
+      ['true', true, 'a boolean'],
+      ['a string', 'yes', 'a string'],
+      ['an object without a boolean elementNullable', { elementNullable: 'yes' }, 'an object'],
+    ])('refuses a field builder whose build() returns %s as many', (_label, many, received) => {
+      const builder = {
+        build: () => ({ descriptor: { codecId: 'pg/text@1' }, nullable: false, many }),
+      };
+      expect(scopeOf({ labels: builder }, validBody)).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message:
+            'Cannot define the scope: the field builder for labels builds a many that is not false or { elementNullable }',
+          why: `A field builder's build() returns many as false or undefined for one value, or as { elementNullable } with a boolean elementNullable for a list; received ${received} for labels.`,
+          fix: 'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.',
+          meta: { field: 'labels' },
+        }),
+      );
+    });
+
+    it('reads a field builder whose build() returns many as undefined as one value', () => {
+      const { client, plain } = scopes();
+      const builder = {
+        build: () => ({ descriptor: { codecId: 'pg/text@1' }, nullable: false, many: undefined }),
+      };
+      const declared = blindCast<
+        (fields: unknown, body: unknown) => unknown,
+        'a JavaScript caller'
+      >(client.scope)({ title: builder }, validBody);
+      expect(() => untyped(declared)(plain.Post)).not.toThrow();
     });
 
     it('accepts many: false as a declaration of one value', () => {

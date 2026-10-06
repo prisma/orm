@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'866c0364399bd65e7c53c92353d66a70ae417782859f44ba992de6c86de6085e'>;
+  StorageHashBase<'38150bcaf16caf63a89a66023e63e6fd7623571be0e108211c63e2e5a60cb626'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -230,7 +230,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     ? Encoded
     : CodecTypes[CodecId]['json']
   : Encoded;
-
+export type AddressOutput = { readonly street: CodecTypes['pg/text@1']['output'] };
+export type AddressInput = { readonly street: CodecTypes['pg/text@1']['input'] };
 export type FieldOutputTypes = {
   readonly public: {
     readonly Comment: {
@@ -248,6 +249,7 @@ export type FieldOutputTypes = {
       readonly views: CodecTypes['pg/int4@1']['output'];
     };
     readonly Tag: {
+      readonly addresses: ReadonlyArray<AddressOutput>;
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly name: CodecTypes['pg/text@1']['output'];
@@ -276,6 +278,7 @@ export type FieldInputTypes = {
       readonly views: CodecTypes['pg/int4@1']['input'];
     };
     readonly Tag: {
+      readonly addresses: ReadonlyArray<AddressInput>;
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly name: CodecTypes['pg/text@1']['input'];
@@ -304,6 +307,7 @@ export type StorageColumnTypes = {
       readonly views: CodecTypes['pg/int4@1']['output'];
     };
     readonly tags: {
+      readonly addresses: CodecTypes['pg/jsonb@1']['output'];
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly name: CodecTypes['pg/text@1']['output'];
@@ -332,6 +336,7 @@ export type StorageColumnInputTypes = {
       readonly views: CodecTypes['pg/int4@1']['input'];
     };
     readonly tags: {
+      readonly addresses: CodecTypes['pg/jsonb@1']['input'];
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly labels: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly name: CodecTypes['pg/text@1']['input'];
@@ -365,6 +370,7 @@ export namespace Models {
     readonly [RelationKeys]?: 'comments' | 'user';
   };
   export type public_Tag = {
+    addresses: ReadonlyArray<AddressOutput>;
     id: CodecTypes['pg/int4@1']['output'];
     labels: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     name: CodecTypes['pg/text@1']['output'];
@@ -533,6 +539,12 @@ type ContractBase = Omit<
             };
             readonly tags: {
               columns: {
+                readonly addresses: {
+                  readonly nativeType: 'jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -725,6 +737,11 @@ type ContractBase = Omit<
           };
           readonly Tag: {
             readonly fields: {
+              readonly addresses: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly many: { readonly elementNullable: false };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -749,6 +766,7 @@ type ContractBase = Omit<
               readonly table: 'tags';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly addresses: { readonly column: 'addresses' };
                 readonly id: { readonly column: 'id' };
                 readonly labels: { readonly column: 'labels' };
                 readonly name: { readonly column: 'name' };
@@ -787,6 +805,16 @@ type ContractBase = Omit<
             };
           };
         };
+        readonly valueObjects: {
+          readonly Address: {
+            readonly fields: {
+              readonly street: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+          };
+        };
       };
     };
   };
@@ -812,7 +840,16 @@ type ContractBase = Omit<
   };
   readonly extensions: {};
   readonly meta: {};
-
+  readonly valueObjects: {
+    readonly Address: {
+      readonly fields: {
+        readonly street: {
+          readonly nullable: false;
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+        };
+      };
+    };
+  };
   readonly profileHash: ProfileHash;
 };
 

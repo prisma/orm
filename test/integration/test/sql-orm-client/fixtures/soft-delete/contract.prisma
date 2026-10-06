@@ -5,6 +5,11 @@
 // Post and Comment have a nullable `deletedAt` with the same codec; Tag has
 // none. Post's `createdAt` has that codec without null. Tag's `labels` is a
 // list of text values, and its `notes` a list of text values that may be null.
+// Tag's `addresses` is a list of value objects, stored as one jsonb value.
+
+type Address {
+  street String
+}
 
 model User {
   id    Int    @id @default(autoincrement())
@@ -40,10 +45,11 @@ model Comment {
 }
 
 model Tag {
-  id     Int       @id @default(autoincrement())
-  name   String
-  labels String[]
-  notes  String?[]
+  id        Int       @id @default(autoincrement())
+  name      String
+  labels    String[]
+  notes     String?[]
+  addresses Address[]
 
   @@map("tags")
 }

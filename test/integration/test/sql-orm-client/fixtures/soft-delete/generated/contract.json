@@ -198,6 +198,16 @@
           },
           "Tag": {
             "fields": {
+              "addresses": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Address"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -236,6 +246,9 @@
             "relations": {},
             "storage": {
               "fields": {
+                "addresses": {
+                  "column": "addresses"
+                },
                 "id": {
                   "column": "id"
                 },
@@ -298,6 +311,19 @@
               },
               "namespaceId": "public",
               "table": "users"
+            }
+          }
+        },
+        "valueObjects": {
+          "Address": {
+            "fields": {
+              "street": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
             }
           }
         }
@@ -456,6 +482,11 @@
                 }
               ],
               "columns": {
+                "addresses": {
+                  "codecId": "pg/jsonb@1",
+                  "nativeType": "jsonb",
+                  "nullable": false
+                },
                 "id": {
                   "codecId": "pg/int4@1",
                   "default": {
@@ -528,7 +559,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "866c0364399bd65e7c53c92353d66a70ae417782859f44ba992de6c86de6085e"
+    "storageHash": "38150bcaf16caf63a89a66023e63e6fd7623571be0e108211c63e2e5a60cb626"
   },
   "capabilities": {
     "postgres": {
