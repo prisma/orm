@@ -83,6 +83,18 @@ describe('validatePostgresUrl', () => {
     expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@localhost/mydb');
   });
 
+  it('keeps a password when the username is empty', () => {
+    expect(validatePostgresUrl('postgresql://:secret@localhost/mydb')).toBe(
+      'postgresql://:secret@localhost/mydb',
+    );
+  });
+
+  it('normalizes an empty host on a socket url that carries credentials', () => {
+    expect(validatePostgresUrl('postgresql://u:p@/mydb?host=/var/run/postgresql')).toBe(
+      'postgresql://u:p@localhost/mydb?host=/var/run/postgresql',
+    );
+  });
+
   it('leaves a socket-dir host query parameter alone', () => {
     expect(validatePostgresUrl('postgresql:///mydb?host=/var/run/postgresql')).toBe(
       'postgresql:///mydb?host=/var/run/postgresql',

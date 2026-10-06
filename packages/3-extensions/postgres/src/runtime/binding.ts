@@ -46,12 +46,16 @@ export function validatePostgresUrl(url: string): string {
   }
 
   // libpq-style URLs may omit the host (`postgresql:///db`, `postgresql://user@/db`);
-  // a `host` query param is a Unix socket dir and must keep an empty hostname.
+  // a `host` query param is a Unix socket dir and overrides any hostname, so a
+  // credential-bearing authority still gets a placeholder host to satisfy URL parsing.
   let input = trimmed;
   const emptyHost = /^postgres(?:ql)?:\/\/([^/?#]*)/i.exec(trimmed);
-  if (emptyHost !== null && !/[?&]host=/i.test(trimmed)) {
+  if (emptyHost !== null) {
     const hostAndPort = emptyHost[1].slice(emptyHost[1].lastIndexOf('@') + 1);
-    if (hostAndPort === '' || hostAndPort.startsWith(':')) {
+    const needsHost = hostAndPort === '' || hostAndPort.startsWith(':');
+    const hasSocketDir = /[?&]host=/i.test(trimmed);
+    const hasUserinfo = emptyHost[1].includes('@');
+    if (needsHost && (!hasSocketDir || hasUserinfo)) {
       const insertAt = emptyHost[0].length - hostAndPort.length;
       input = `${trimmed.slice(0, insertAt)}localhost${trimmed.slice(insertAt)}`;
     }
@@ -79,7 +83,7 @@ export function validatePostgresUrl(url: string): string {
   }
 
   const userinfo =
-    parsed.username === ''
+    parsed.username === '' && parsed.password === ''
       ? ''
       : `${parsed.username}${parsed.password === '' ? '' : `:${parsed.password}`}@`;
   const port = parsed.port === '' ? '' : `:${parsed.port}`;
