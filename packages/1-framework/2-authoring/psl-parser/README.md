@@ -87,7 +87,7 @@ binder.scopeAt(modelDeclarationNode).entries();
 - `describeUnsupportedAttribute(sources)` returns a `DescribeUnsupportedAttribute`. The binder calls it for a model or field attribute that no spec claims and reports the diagnostic it returns; when it returns `undefined`, the binder reports nothing for that attribute.
 - `describeUnresolvedType(contributions)` returns a `DescribeUnresolvedType`. The binder calls it with the field, its owner, and the type name as written (qualifier included) for a field type it cannot resolve, and reports a `PSL_UNRESOLVED_REFERENCE` with the message it returns. When it returns `undefined`, or when the family contributes no describer, the binder keeps its default message, `Cannot find type "…"`.
 
-`declaredSymbol` answers for the node that *introduces* a name, `symbolForNode` for a node that *mentions* one. `scopeAt(node)` returns the lexical `Scope`, whose `lookup(name)` and `entries()` agree on the nearest visible declaration. Queries require nodes from the binder's snapshot.
+`declaredSymbol` answers for the node that *introduces* a name, `symbolForNode` for a node that *mentions* one. `symbolForNode` also answers for the name identifier of a declaration: the name of a model, composite type, named type, block, field or `namespace` block resolves to the symbol that declaration introduces. A namespace declared in several blocks resolves to the same `namespace` symbol from the name of each block. `scopeAt(node)` returns the lexical `Scope`, whose `lookup(name)` and `entries()` agree on the nearest visible declaration. Queries require nodes from the binder's snapshot.
 
 ### Scope chain
 
