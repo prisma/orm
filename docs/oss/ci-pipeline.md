@@ -4,10 +4,22 @@ This page documents how the pull-request CI pipeline ([`.github/workflows/ci.yml
 
 ## What runs on a PR
 
-`ci.yml` reports stable verification contexts including `Build`, `Type Check`, `Lint`, `Test`, `E2E Tests`, and `Integration Tests`; a small `Detect inert diff` job classifies the diff (below). Four non-required `Package Tests` shards upload native coverage blobs, `Coverage` merges and gates them while `Test Examples` runs concurrently, and a lightweight final `Test` fan-in preserves the required check name. The [DCO app](https://github.com/apps/dco) posts a separate `DCO` check on each PR and each merge-queue commit, and the preview-publish workflow also runs. `main` is governed by a repository ruleset that requires the verification contexts plus `DCO` and uses the strict "branch must be up to date" policy. Two consequences drive the whole design:
+`ci.yml` reports stable verification contexts including `Build`, `Type Check`, `Lint`, `Test` and `E2E Tests`; a small `Detect inert diff` job classifies the diff (below). Four non-required `Package Tests` shards upload native coverage blobs, `Coverage` merges and gates them while `Test Examples` runs concurrently, and a lightweight final `Test` fan-in preserves the required check name. The [DCO app](https://github.com/apps/dco) posts a separate `DCO` check on each PR and each merge-queue commit, and the preview-publish workflow also runs. `main` is governed by a repository ruleset that requires the verification contexts plus `DCO`, and pull requests merge through a merge queue, which runs `ci.yml` again (`merge_group` event) on each pull request merged with the latest `main`. Two consequences drive the whole design:
 
 - A required status check that never reports its result **wedges the merge**. So a job that is required can never be skipped at the job level — it must always launch and report.
 - The ruleset is a fixed constraint. The pipeline is designed *around* it; CI changes never edit the ruleset or the set of required check names.
+
+## Integration tests run only in the merge queue
+
+The integration suite is the slowest and most resource-hungry part of CI, so it runs where it runs least often and still blocks the merge: once per merge-queue entry, against the latest `main`. The four `Integration Tests` shards run only on `merge_group` events. `Test` depends on them and fails, in the merge queue only, if a shard fails, so the queue removes the pull request. On a pull request the shards are skipped and `Test` ignores them.
+
+To run the suite on a branch before queueing it, start the on-demand workflow ([`.github/workflows/integration.yml`](../../.github/workflows/integration.yml)):
+
+```bash
+gh workflow run integration.yml --ref <branch>
+```
+
+Its results appear as checks on the branch's head commit. The init journey matrix (`pnpm test:init-journey`) is slower still and runs on `main` every night ([`.github/workflows/init-journey-nightly.yml`](../../.github/workflows/init-journey-nightly.yml)).
 
 ## Build once per run, and across runs
 
@@ -31,7 +43,7 @@ A PR that only edits documentation should not boot Postgres and run the full tes
   run: pnpm test:integration
 ```
 
-Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. Package shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
+Because required jobs cannot be skipped at the job level (they would never report), those jobs always launch and report green; only their *steps* are gated. In the merge queue the `Integration Tests` shards launch for the same reason: `Test` reads their result there. Package shards, examples, and coverage are implementation details rather than required contexts, so they may be skipped entirely. On an inert PR the stable `Test` fan-in launches without setup and succeeds once its prerequisite checks are healthy. `Type Check` and `Build` always run but are near-free via the Turbo cache, and `Lint` always runs in full — it is exactly what validates the docs/rules/skills/README changes an inert diff is made of.
 
 ### The inert predicate
 
@@ -56,4 +68,3 @@ The action is SHA-pinned and must be added to the repository's allowed-actions l
 ## Deliberately out of scope
 
 - **`turbo run test --affected` package-scoped test selection** — would run only the affected packages, but correctness depends on the package dependency graph being complete, which needs its own audit.
-- **A merge queue / relaxing the strict up-to-date policy** — likely the largest remaining source of avoidable CI, but the safe fix is a merge queue, which is its own change.

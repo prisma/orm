@@ -1,10 +1,8 @@
-name: Integration Nightly
+name: Init Journey Nightly
 
-# While Integration Tests is not a required check (the launch window,
-# until ~2026-08-21), this nightly run on main is what keeps regressions
-# from sitting unnoticed — an unrequired check is how a red e2e sat
-# silently on main from rc.2 until #30057. Delete this workflow when the
-# check is required again.
+# The init journey matrix (target × authoring, with pack install) is too slow
+# for pull requests and the merge queue, so it runs on main every night.
+# The rest of the integration suite runs in the merge queue (ci.yml).
 
 on:
   schedule:
@@ -15,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  test-integration:
-    name: Integration Tests (nightly, main)
+  init-journey:
+    name: Init journey (nightly, main)
     runs-on: ubuntu-latest
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
@@ -43,9 +41,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
-      - name: Run Integration tests
-        run: pnpm test:integration
-      - name: Run init-journey matrix (nightly-only; excluded from PR runs)
+      - name: Run init-journey matrix
         run: pnpm --filter integration-tests test:init-journey
       - name: Check working tree is clean
         run: pnpm check:clean-tree
