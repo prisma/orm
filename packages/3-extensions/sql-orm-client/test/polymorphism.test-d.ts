@@ -451,9 +451,17 @@ test('a zero-argument custom helper exposes the variant row and create input', (
   type BugsState =
     typeof bugs extends Collection<PolyContract, 'Task', infer _Row, infer State> ? State : never;
   expectTypeOf<BugsState['variantName']>().toEqualTypeOf<'Bug'>();
-  expectTypeOf<ResolvedCreateInput<PolyContract, 'Task', BugsState['variantName']>>().toEqualTypeOf<
-    VariantCreateInput<PolyContract, 'Task', 'Bug'>
+});
+
+test('create() on a zero-argument custom helper takes the variant create input', () => {
+  const bugs = taskCollection.bugs();
+  expectTypeOf(bugs.create({ id: 1, title: 'Crash', severity: 'high' })).resolves.toEqualTypeOf<
+    VariantModelRow<PolyContract, 'Task', 'Bug'>
   >();
+  // @ts-expect-error priority belongs to the Feature variant
+  bugs.create({ id: 1, title: 'Crash', severity: 'high', priority: 1 });
+  // @ts-expect-error the discriminator is set by the variant, not by the caller
+  bugs.create({ id: 1, title: 'Crash', severity: 'high', type: 'bug' });
 });
 
 test('include after union-valued narrowing keeps an unshadowed base relation', () => {

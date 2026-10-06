@@ -11,6 +11,14 @@ class TaskCollection extends Collection<PolyContract, 'Task'> {
   newestFirst() {
     return this.orderBy((task) => task.id.desc());
   }
+
+  bugs() {
+    return this.variant('bug');
+  }
+
+  features() {
+    return this.variant('feature');
+  }
 }
 
 declare const tasks: TaskCollection;
@@ -68,6 +76,34 @@ describe('variant', () => {
 
   test('the class survives cursor', () => {
     expectTypeOf(tasks.newestFirst().cursor({ id: 1 })).toEqualTypeOf<Ordered<TaskCollection>>();
+  });
+});
+
+describe('create on a variant helper', () => {
+  test('takes the variant create input', () => {
+    const bugs = tasks.bugs();
+    expectTypeOf(bugs.create({ title: 'Crash', severity: 'high' })).resolves.toEqualTypeOf<
+      CollectionRowOf<typeof bugs>
+    >();
+    const features = tasks.features();
+    expectTypeOf(
+      features.create({ id: 1, title: 'Dark mode', priority: 1 }),
+    ).resolves.toEqualTypeOf<CollectionRowOf<typeof features>>();
+  });
+
+  test('requires a field the variant requires', () => {
+    // @ts-expect-error priority is required on the Feature variant
+    tasks.features().create({ id: 1, title: 'Dark mode' });
+  });
+
+  test('rejects a field of another variant', () => {
+    // @ts-expect-error priority belongs to the Feature variant
+    tasks.bugs().create({ title: 'Crash', severity: 'high', priority: 1 });
+  });
+
+  test('rejects the discriminator, which the variant sets', () => {
+    // @ts-expect-error type is set by the variant, not by the caller
+    tasks.bugs().create({ title: 'Crash', severity: 'high', type: 'bug' });
   });
 });
 
