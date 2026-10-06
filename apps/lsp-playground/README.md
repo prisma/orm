@@ -37,7 +37,7 @@ Go to Definition (F12 or Ctrl/Cmd-click) and Peek Definition (Alt+F12) send `tex
 
 ### Find references
 
-Find All References (Shift+Alt+F12) and Peek References (Shift+F12) send `textDocument/references` to the language server; the playground does not search for usages itself. The server answers from every scratch-project member, including files that were never selected in the sidebar.
+The editor's reference requests go to the language server as `textDocument/references`; the playground does not search for usages itself. The server answers from every scratch-project member, including files that were never selected in the sidebar.
 
 ## How it works
 
