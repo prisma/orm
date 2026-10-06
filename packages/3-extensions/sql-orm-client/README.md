@@ -183,11 +183,16 @@ await db.User.where({ id: 1 }).update({
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
 | `r.where(w).deleteAll()`, `r.deleteAll()` | `update()` | to-many |
 
-The parent write and its nested operations run in one transaction, so they succeed or fail together.
+Two restrictions apply on a many-to-many relation:
+
+- `r.disconnect()` without criteria is refused with `ORM.RELATION_MUTATION_INVALID`, and is a type error. Pass the criteria of the rows to disconnect.
+- `r.create` and `r.connect` are refused with `ORM.RELATION_MUTATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its two keys that is not nullable and has no default. `r.disconnect(criteria)` stays available.
+
+On a runtime that provides transactions, the parent write and its nested operations run in one transaction, so either all of them are applied or none is.
 
 ### Updating and deleting related rows
 
-`updateAll` and `deleteAll` change or delete only rows related to the record being updated. On a one-to-many relation, a row is related when its foreign key points at that record. On a many-to-many relation, a row is related when a junction row links it to that record. A row that matches the filter but belongs to another record is left alone. A row linked to this record and to others is related to this record, so it is changed.
+`updateAll` and `deleteAll` change or delete only rows related to the record being updated. On a one-to-many relation, a row is related when its foreign key equals that record's key. On a many-to-many relation, a row is related when the junction table has a row holding both that record's key and the row's key. A row that matches the filter but is related only to another record is not changed. A row related to this record and also to other records is changed.
 
 ```ts
 await db.User.where({ id: 1 }).update({
@@ -209,15 +214,15 @@ await db.User.where({ id: 1 }).update({
 });
 ```
 
-`updateAll` data is the related model's own fields. It cannot set the field that links the related row to its parent; that is refused with `ORM.RELATION_MUTATION_INVALID`. `updateAll` with no fields to set does nothing. No matching row is not an error.
+`updateAll` data is the related model's own fields. It cannot set the foreign-key field that refers to the parent; that is refused with `ORM.RELATION_MUTATION_INVALID`. `updateAll` with no fields to set changes no rows. It is not an error when no row matches.
 
 Both operations are refused with `ORM.RELATION_MUTATION_UNSUPPORTED` inside `create()` and on a to-one relation. With an emitted `contract.d.ts` these are also type errors.
 
-On a many-to-many relation, `deleteAll` deletes the related rows and does nothing to the junction table. What happens to their junction rows is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back.
+On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to their junction rows is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back.
 
 ### Several operations on one relation
 
-A callback may return an array of operations. They run in array order, so a later operation sees the effect of an earlier one. An empty array does nothing.
+A callback may return an array of operations. They are applied in array order, each after the previous one has been written. An empty array applies no operation.
 
 ```ts
 await db.User.where({ id: 1 }).update({
