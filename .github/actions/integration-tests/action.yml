@@ -14,7 +14,7 @@ runs:
     - name: Install dependencies
       shell: bash
       run: pnpm install --frozen-lockfile
-    - name: Build (restored from Turbo cache)
+    - name: Build
       shell: bash
       run: pnpm build
     - name: Run Integration tests
