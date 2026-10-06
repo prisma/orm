@@ -42,8 +42,7 @@ describe('the type constructors the target contributes', () => {
 
 const everyPostgresConstructor = {
   ...postgresAuthoringTypes,
-  ...postgresScalarAuthoringTypes,
-  ...postgresNativeAuthoringTypes,
+  ...postgresPslTypeConstructors,
 };
 
 /** The constructor `contract infer` prints for each data type that has one. */
@@ -301,5 +300,25 @@ describe('postgresNativeAuthoringTypes', () => {
     expect(postgresNativeAuthoringTypes.Timestamptz.output.codecId).toBe(
       'pg/timestamptz-temporal@1',
     );
+  });
+});
+
+describe('precision bounds live on the data type', () => {
+  it.each([
+    'Timestamp',
+    'Timestamptz',
+    'Time',
+    'Timetz',
+    'TimestampString',
+    'TimestamptzString',
+    'TimeString',
+  ] as const)('%s declares no bound of its own on precision', (typeName) => {
+    const typeConstructor = postgresPslTypeConstructors[typeName];
+    expect(typeConstructor.args?.find((arg) => arg.name === 'precision')).toEqual({
+      kind: 'number',
+      name: 'precision',
+      integer: true,
+      optional: true,
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { postgresPslTypeConstructors } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
+import postgresAdapterDescriptor from '../src/exports/control';
 import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 
 const storage = postgresAdapterDescriptorMeta.types.storage;
@@ -49,26 +50,6 @@ describe('storage entries', () => {
   });
 });
 
-describe('precision bounds live on the data type', () => {
-  it.each([
-    'Timestamp',
-    'Timestamptz',
-    'Time',
-    'Timetz',
-    'TimestampString',
-    'TimestamptzString',
-    'TimeString',
-  ] as const)('%s declares no bound of its own on precision', (typeName) => {
-    const typeConstructor = postgresPslTypeConstructors[typeName];
-    expect(typeConstructor.args?.find((arg) => arg.name === 'precision')).toEqual({
-      kind: 'number',
-      name: 'precision',
-      integer: true,
-      optional: true,
-    });
-  });
-});
-
 describe('postgres adapter query operations', () => {
   // Postgres built-in operations moved to @internal/target-postgres; the adapter contributes none,
   // so a stale slot here would register them twice.
@@ -78,5 +59,19 @@ describe('postgres adapter query operations', () => {
 
   it('the descriptor meta declares no query-operation type import', () => {
     expect(postgresAdapterDescriptorMeta.types).not.toHaveProperty('queryOperationTypes');
+  });
+});
+
+describe('the adapter authoring contribution', () => {
+  it('contributes the PSL-only type constructors the target defines', () => {
+    expect(postgresAdapterDescriptor.authoring?.type).toBe(postgresPslTypeConstructors);
+  });
+
+  it('contributes no data type entries, which the target contributes', () => {
+    expect(postgresAdapterDescriptor.authoring).not.toHaveProperty('dataTypes');
+  });
+
+  it('declares Jsonb as the value-object storage type', () => {
+    expect(postgresAdapterDescriptor.authoring?.valueObjectStorageType).toBe('Jsonb');
   });
 });

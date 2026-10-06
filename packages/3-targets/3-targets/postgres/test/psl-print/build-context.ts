@@ -9,10 +9,7 @@ import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/c
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
-import {
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
-} from '../../src/core/type-constructors';
+import { postgresPslTypeConstructors } from '../../src/core/type-constructors';
 
 const citextTemplate: CodecDescriptorTemplate = {
   codecId: 'ext/citext@1',
@@ -45,8 +42,7 @@ export function testBuildContext(
     authoringContributions: {
       type: {
         ...postgresAuthoringTypes,
-        ...postgresScalarAuthoringTypes,
-        ...postgresNativeAuthoringTypes,
+        ...postgresPslTypeConstructors,
         ...extra.types,
       },
       dataTypes: postgresDataTypeEntries(),

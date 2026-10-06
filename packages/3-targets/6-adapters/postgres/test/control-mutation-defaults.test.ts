@@ -1,10 +1,8 @@
-import { postgresPslTypeConstructors } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
 import {
   createPostgresDefaultFunctionRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
 } from '../src/core/control-mutation-defaults';
-import postgresAdapterDescriptor from '../src/exports/control';
 import runtimeAdapterDescriptor from '../src/exports/runtime';
 
 const stubSpan = {
@@ -193,19 +191,5 @@ describe('postgres runtime mutation default generators', () => {
     );
 
     expect(generator?.generate()).toBeInstanceOf(Date);
-  });
-});
-
-describe('the adapter authoring contribution', () => {
-  it('contributes the PSL-only type constructors the target defines', () => {
-    expect(postgresAdapterDescriptor.authoring?.type).toBe(postgresPslTypeConstructors);
-  });
-
-  it('contributes no data type entries, which the target contributes', () => {
-    expect(postgresAdapterDescriptor.authoring).not.toHaveProperty('dataTypes');
-  });
-
-  it('declares Jsonb as the value-object storage type', () => {
-    expect(postgresAdapterDescriptor.authoring?.valueObjectStorageType).toBe('Jsonb');
   });
 });
