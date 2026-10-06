@@ -93,7 +93,7 @@ const authoringContributions = assembleAuthoringContributions([
         pgvector: {
           Vector: {
             kind: 'typeConstructor',
-            output: { codecId: 'fixture/vector', nativeType: 'vector' },
+            output: { codecId: 'fixture/vector' },
           },
         },
       },
