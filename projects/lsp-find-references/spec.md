@@ -50,7 +50,7 @@ The server answers in four steps:
 
 1. Resolve the symbol at the cursor with `resolvedNodeAt` (the lookup go-to-definition and hover use).
 2. Search the text of every schema file of the project for the symbol's name.
-3. For each match, take the token at that offset. Keep it only if it is an identifier token whose text equals the name exactly, then resolve it with `resolvedNodeAt`.
+3. For each match, take the token at that offset and resolve it with `resolvedNodeAt`.
 4. Keep the tokens whose resolution names the same symbol object as step 1. Return the range of the token, not of the resolved node: for `auth.User` the resolved node is the whole qualified name, and the usage of `User` is only the last segment.
 
 Go-to-definition on a declaration's own name changes with this project. It returned `null`; it now returns the declaration's own location. VS Code runs find references when a definition result is the position the cursor is already on, so F12 on `model User` shows the usages of `User`.
@@ -89,7 +89,7 @@ None.
 
 - **Same resolution as go-to-definition.** A token is a usage of a symbol exactly when go-to-definition from that token reaches that symbol's declaration. Both features go through `resolvedNodeAt`; find references has no name matching of its own beyond the text search that produces candidates.
 - **Symbol identity decides, text only proposes.** A text match is a usage only if its resolution holds the same symbol object as the cursor's resolution. Two fields named `id` on different models are different symbols and never appear in each other's results.
-- **Exact identifier tokens only.** A match inside a longer identifier (`UserProfile` for `User`), a comment or a string is discarded before any binder lookup.
+- **Matches that are not usages are rejected by resolution.** A match inside a longer identifier (`UserProfile` for `User`) resolves to a different symbol, and a match in a comment or a string resolves to nothing. There is no separate token filter: one was specified first and removed in review, because no input could be found where it changed the result.
 - **Token ranges.** Every returned location is the range of one identifier token: the last segment of a qualified name for an entity, the qualifier for a namespace. Rename will replace exactly these ranges.
 - **Whole project.** Results cover every schema input of the project, including files not open in the editor, each with its own URI.
 - **Cursor position does not change the answer.** A cursor on the declaration name and a cursor on any reference to the same symbol return the same list.

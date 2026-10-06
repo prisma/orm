@@ -27,8 +27,7 @@ export function provideReferences(input: ProvideReferencesInput): Location[] {
   for (const { document, sourceFile } of input.documents) {
     for (const offset of occurrencesOf(symbol.name, sourceFile.text)) {
       const candidate = document.syntax.tokenAtOffset(offset).rightBiased();
-      if (candidate?.kind !== 'Ident') continue;
-      if (candidate.offset !== offset || candidate.text !== symbol.name) continue;
+      if (candidate === undefined) continue;
       const usage = resolvedNodeAt(candidate, input.binder);
       if (usage === undefined || pslSymbolOf(usage.resolution) !== symbol) continue;
       if (!input.includeDeclaration && usage.node === declarationName) continue;

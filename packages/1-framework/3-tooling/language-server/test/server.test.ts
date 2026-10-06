@@ -4505,6 +4505,56 @@ describe('language server whole-project push and freshness', {
     ]);
   });
 
+  it('follows unsaved edits in another open project file', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    const userSource = '// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+    const withUsage = `${userSource}model Comment {\n  id Int @id\n  owner User\n}\n`;
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel Post {\n  id Int @id\n  author Us|er\n}\n',
+    );
+    await writeFile(memberAPath, userSource);
+    await writeFile(memberBPath, source);
+    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
+    await harness.initialize();
+    openDocument(harness, memberAUri, userSource);
+    openDocument(harness, memberBUri, source);
+    await harness.waitForDiagnostics(memberBUri);
+    const usageInB = {
+      uri: memberBUri,
+      range: { start: { line: 3, character: 9 }, end: { line: 3, character: 13 } },
+    };
+
+    await expect(requestReferences(harness, memberBUri, position, false)).resolves.toEqual([
+      usageInB,
+    ]);
+
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 2 },
+      contentChanges: [{ text: withUsage }],
+    });
+    await settle();
+    await expect(requestReferences(harness, memberBUri, position, false)).resolves.toEqual([
+      {
+        uri: memberAUri,
+        range: { start: { line: 6, character: 8 }, end: { line: 6, character: 12 } },
+      },
+      usageInB,
+    ]);
+
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 3 },
+      contentChanges: [{ text: userSource }],
+    });
+    await settle();
+    await expect(requestReferences(harness, memberBUri, position, false)).resolves.toEqual([
+      usageInB,
+    ]);
+  });
+
   it.each(['delete', 'directive', 'config', 'replace-config'] as const)(
     'clears previously related members after %s even when the excluded member is pulled first',
     async (removal) => {
