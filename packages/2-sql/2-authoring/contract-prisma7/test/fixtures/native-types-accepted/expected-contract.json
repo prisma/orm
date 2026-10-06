@@ -188,7 +188,7 @@
               "timestamp": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -199,7 +199,7 @@
               "timestamptz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -210,7 +210,7 @@
               "date": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": false,
                 "many": false
@@ -218,7 +218,7 @@
               "time": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -277,7 +277,7 @@
               "timestamptzOpt": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -303,7 +303,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "519efefd7ea513a5d01f53e41300247d4b8f2246e0d7d1880cb848f713a8866f",
+    "storageHash": "7243b4fbe953ffdd720827e9b3b492dec65e3b517b46a297bcee8a5ba0d47381",
     "namespaces": {
       "public": {
         "id": "public",
@@ -396,7 +396,7 @@
                 },
                 "timestamp": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -405,7 +405,7 @@
                 },
                 "timestamptz": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -414,13 +414,13 @@
                 },
                 "date": {
                   "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false
                 },
                 "time": {
                   "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -468,7 +468,7 @@
                 },
                 "timestamptzOpt": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": true,
                   "many": false,
                   "typeParams": {

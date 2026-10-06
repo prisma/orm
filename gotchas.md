@@ -17,7 +17,7 @@ The capture workflow is documented in [`.claude/skills/record-gotchas/SKILL.md`]
 - [Demo fixture contract snapshots fail to deserialize during `migrate` (PN-CLI-4003)](#demo-fixture-contract-snapshots-fail-to-deserialize-during-migrate-pn-cli-4003)
 - [`migration plan` silently planned from an empty database when no `db` ref existed (resolved)](#migration-plan-silently-planned-from-an-empty-database-when-no-db-ref-existed-resolved)
 - [`migration plan --from db` fails with MIGRATION.NO_TARGET once a rollback cycle exists](#migration-plan---from-db-fails-with-migrationno_target-once-a-rollback-cycle-exists)
-- [`DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal`](#datetime-columns-come-back-as-temporalplaindatetime-and-node-24-has-no-temporal)
+- [`DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal` (resolved)](#datetime-columns-come-back-as-temporalplaindatetime-and-node-24-has-no-temporal-resolved)
 - [`@prisma/client@7`'s peer on `prisma` makes `prisma` resolve to Prisma 7 beside Prisma 8](#prismaclient7s-peer-on-prisma-makes-prisma-resolve-to-prisma-7-beside-prisma-8)
 - [pnpm's `no-downgrade` trust policy refuses `prisma@7.10.0`](#pnpms-no-downgrade-trust-policy-refuses-prisma7100)
 - [Every Prisma 7 command needs `--config prisma7.config.ts` once Prisma 8 owns `prisma.config.ts`](#every-prisma-7-command-needs---config-prisma7configts-once-prisma-8-owns-prismaconfigts)
@@ -119,7 +119,7 @@ The same command with `--from 20260707T1005_init` (a migration directory name) s
 
 ---
 
-## `DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal`
+## `DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal` (resolved)
 
 **Filed upstream:** pending — authored in a session without Linear access; please file in [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) and replace this line.
 **Product:** Prisma 8
@@ -130,14 +130,16 @@ The same command with `--from 20260707T1005_init` (a migration directory name) s
 
 **Cause.** Prisma 8's temporal codecs return `Temporal.PlainDateTime` (`timestamp`) and `Temporal.Instant` (`timestamptz`); nothing in the client installs a polyfill. A Prisma 7 user expects a `Date`.
 
-**Workaround.** `import 'temporal-polyfill/full/global'` before the client is created (the example does it at the top of `src/db.ts`), or author the column with the `*String` presets to receive PostgreSQL's text.
+**Workaround.** `import 'temporal-polyfill/full/global'` before the client is created (the example did so in `src/db.ts` before the fix), or author the column with the `*String` presets to receive PostgreSQL's text.
+
+**Resolved.** `prisma7Schema(...)` and `contract infer` now write `TimestampString(3)`, `TimestamptzString(p)`, `DateString` and `TimeString(p)` for these columns, so they read as PostgreSQL's text, `@updatedAt` writes UTC text, and the application needs no `Temporal`. A column written by hand as `DateTime`, `Timestamp(p)`, `Date` or `Time(p)` still reads as a `Temporal` value and still needs one.
 
 **Reproduction.**
 1. `cd examples/prisma7-adoption && pnpm db:start`, then `pnpm v7:migrate && pnpm emit && pnpm sign && pnpm seed`.
-2. Remove the polyfill import from `src/db.ts` and run `pnpm start`.
+2. Before the fix: remove the polyfill import from `src/db.ts` and run `pnpm start`.
 
 **References.**
-- Workaround source: [`examples/prisma7-adoption/src/db.ts`](examples/prisma7-adoption/src/db.ts)
+- Fix: [`packages/3-targets/3-targets/postgres/src/core/prisma7-type-map.ts`](packages/3-targets/3-targets/postgres/src/core/prisma7-type-map.ts)
 - Codec: [`packages/3-targets/3-targets/postgres/src/core/temporal-codec-helpers.ts`](packages/3-targets/3-targets/postgres/src/core/temporal-codec-helpers.ts)
 
 ---

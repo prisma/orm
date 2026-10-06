@@ -110,11 +110,11 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawDefaults {
-          id       Int          @id
-          stamp    Timestamp(3) @default("2024-01-01T00:00:00")
-          day      Date         @default("2024-01-01")
-          jsonNull Jsonb?       @default(json\`null\`)
-          textNull VarChar(32)? @default(sql\`NULL::character varying\`)
+          id       Int                @id
+          stamp    TimestampString(3) @default("2024-01-01T00:00:00")
+          day      DateString         @default("2024-01-01")
+          jsonNull Jsonb?             @default(json\`null\`)
+          textNull VarChar(32)?       @default(sql\`NULL::character varying\`)
 
           @@map("raw_defaults")
         }
@@ -254,8 +254,8 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawListDefaults {
-          id         Int             @id
-          timestamps Timestamp(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
+          id         Int                   @id
+          timestamps TimestampString(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
 
           @@map("raw_list_defaults")
         }

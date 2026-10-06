@@ -1646,13 +1646,14 @@ interface OutputSettings {
   readonly timeZone: string;
   readonly dateStyle: string;
   readonly intervalStyle: string;
+  readonly byteaOutput: string;
 }
 
-/** Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals. */
 const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
   timeZone: 'UTC',
   dateStyle: 'ISO, MDY',
   intervalStyle: 'postgres',
+  byteaOutput: 'hex',
 };
 
 async function readOutputSettings(
@@ -1661,7 +1662,8 @@ async function readOutputSettings(
   const { rows } = await driver.query<OutputSettings>(
     `SELECT current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
-            current_setting('IntervalStyle') AS "intervalStyle"`,
+            current_setting('IntervalStyle') AS "intervalStyle",
+            current_setting('bytea_output') AS "byteaOutput"`,
   );
   return rows[0];
 }
@@ -1672,24 +1674,28 @@ async function applyOutputSettings(
   local: boolean,
 ): Promise<void> {
   await driver.query(
-    `SELECT set_config('TimeZone', $1, $4),
-            set_config('DateStyle', $2, $4),
-            set_config('IntervalStyle', $3, $4)`,
-    [settings.timeZone, settings.dateStyle, settings.intervalStyle, local],
+    `SELECT set_config('TimeZone', $1, $5),
+            set_config('DateStyle', $2, $5),
+            set_config('IntervalStyle', $3, $5),
+            set_config('bytea_output', $4, $5)`,
+    [settings.timeZone, settings.dateStyle, settings.intervalStyle, settings.byteaOutput, local],
   );
 }
 
 function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
   return (
-    a?.timeZone === b.timeZone && a.dateStyle === b.dateStyle && a.intervalStyle === b.intervalStyle
+    a?.timeZone === b.timeZone &&
+    a.dateStyle === b.dateStyle &&
+    a.intervalStyle === b.intervalStyle &&
+    a.byteaOutput === b.byteaOutput
   );
 }
 
 /**
  * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
  * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
- * dates and intervals in the session styles, so pinning them gives the same text whatever the
- * server, the role, or the caller set.
+ * dates, intervals and bytea in the session styles, so pinning them gives the same text whatever
+ * the server, the role, or the caller set.
  *
  * The settings are first set locally. A local setting outlives its own statement only inside a
  * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they

@@ -27,9 +27,36 @@ const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
   Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
-  Timestamptz: {
+  TimestampString: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/timestamp-string@1',
+      nativeType: 'timestamp',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
+  TimestamptzString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/timestamptz-string@1',
+      nativeType: 'timestamptz',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
+  DateString: {
+    kind: 'typeConstructor',
+    output: { codecId: 'pg/date-string@1', nativeType: 'date' },
+  },
+  TimeString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/time-string@1',
+      nativeType: 'time',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
   },
   VarChar: {
     kind: 'typeConstructor',
@@ -128,7 +155,7 @@ function parseAndEmit(source: string) {
 }
 
 describe('Postgres PSL inference round trip', () => {
-  it('preserves unparameterized, parameterized, json, and jsonb storage', () => {
+  it('preserves unparameterized, parameterized, json, jsonb, and date and time storage', () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         sample: {
@@ -142,6 +169,9 @@ describe('Postgres PSL inference round trip', () => {
             json_value: { name: 'json_value', nativeType: 'json', nullable: false },
             jsonb_value: { name: 'jsonb_value', nativeType: 'jsonb', nullable: false },
             occurred_at: { name: 'occurred_at', nativeType: 'timestamptz', nullable: false },
+            logged_at: { name: 'logged_at', nativeType: 'timestamp(3)', nullable: false },
+            due_on: { name: 'due_on', nativeType: 'date', nullable: false },
+            opens_at: { name: 'opens_at', nativeType: 'time', nullable: false },
             label: { name: 'label', nativeType: 'varchar(191)', nullable: false },
           },
           primaryKey: { columns: ['id'] },
@@ -161,7 +191,10 @@ describe('Postgres PSL inference round trip', () => {
     expect(inferred).not.toContain('bareAmount Numeric()');
     expect(inferred).toMatch(/jsonValue\s+Json/);
     expect(inferred).toMatch(/jsonbValue\s+Jsonb/);
-    expect(inferred).toMatch(/occurredAt\s+Timestamptz/);
+    expect(inferred).toMatch(/occurredAt\s+TimestamptzString\s/);
+    expect(inferred).toMatch(/loggedAt\s+TimestampString\(3\)/);
+    expect(inferred).toMatch(/dueOn\s+DateString\s/);
+    expect(inferred).toMatch(/opensAt\s+TimeString\s/);
     expect(inferred).toMatch(/label\s+VarChar\(191\)/);
 
     const emitted = parseAndEmit(inferred);
@@ -215,8 +248,27 @@ describe('Postgres PSL inference round trip', () => {
                 many: false,
               },
               occurred_at: {
-                codecId: 'pg/timestamptz-temporal@1',
+                codecId: 'pg/timestamptz-string@1',
                 nativeType: 'timestamptz',
+                nullable: false,
+                many: false,
+              },
+              logged_at: {
+                codecId: 'pg/timestamp-string@1',
+                nativeType: 'timestamp',
+                nullable: false,
+                many: false,
+                typeParams: { precision: 3 },
+              },
+              due_on: {
+                codecId: 'pg/date-string@1',
+                nativeType: 'date',
+                nullable: false,
+                many: false,
+              },
+              opens_at: {
+                codecId: 'pg/time-string@1',
+                nativeType: 'time',
                 nullable: false,
                 many: false,
               },

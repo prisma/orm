@@ -138,13 +138,13 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${output(infer)}`).toBe(0);
         expect(printedDefaultFields(ctx)).toEqual([
-          'a Timestamptz @default("2024-01-01T00:00:00Z")',
-          'b Timestamptz @default("2024-01-01T00:00:00Z")',
-          'c Timestamptz @default("2024-01-01T00:00:00Z")',
-          'clock Time @default("12:34:00")',
-          'day Date @default("2024-01-01")',
-          'history Timestamptz[] @default(["2024-01-01T00:00:00Z", "2024-06-30T12:34:56Z"])',
-          'localAt Timestamp(3) @default("2024-01-01T12:34:56.5")',
+          'a TimestamptzString @default("2024-01-01T00:00:00Z")',
+          'b TimestamptzString @default("2024-01-01T00:00:00Z")',
+          'c TimestamptzString @default("2024-01-01T00:00:00Z")',
+          'clock TimeString @default("12:34:00")',
+          'day DateString @default("2024-01-01")',
+          'history TimestamptzString[] @default(["2024-01-01T00:00:00Z", "2024-06-30T12:34:56Z"])',
+          'localAt TimestampString(3) @default("2024-01-01T12:34:56.5")',
           'zoned Timetz @default("12:34:56+02:00")',
         ]);
 

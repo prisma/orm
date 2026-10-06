@@ -23,7 +23,7 @@ import {
   numeralText,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
-import { canonicalUuid, fitsFloat4, pgIntervalCanonical } from './codec-helpers';
+import { canonicalUuid, fitsFloat4, pgByteaCanonical, pgIntervalCanonical } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -137,7 +137,6 @@ export const pgUuid: DataType = dataType('pg/uuid', { casts: { [pgText.id]: asUu
 export const pgInet: DataType = dataType('pg/inet', { casts: fromText });
 export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });
-export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
 
 const POSTGRES_YEAR = /^(\d{4,6})(-.*?)( BC)?$/;
 
@@ -215,18 +214,22 @@ const canonicalFromText =
   (value) =>
     typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
 
-/** A date or time type: its canonical form, and a cast from text that gives it. */
-function dateTimeType(id: string, canonical: (text: string) => string): DataType {
+/** A type whose canonical form reads text: that canonical form, and the same function as its cast from text. */
+function typeCanonicalFromText(id: string, canonical: (text: string) => string): DataType {
   const toCanonicalForm = canonicalFromText(canonical);
   return dataType(id, { toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
 }
 
-export const pgTimetz: DataType = dateTimeType('pg/timetz', pgTimetzCanonical);
-export const pgInterval: DataType = dateTimeType('pg/interval', pgIntervalCanonical);
-export const pgDate: DataType = dateTimeType('pg/date', pgDateCanonical);
-export const pgTime: DataType = dateTimeType('pg/time', pgTimeCanonical);
-export const pgTimestamp: DataType = dateTimeType('pg/timestamp', pgTimestampCanonical);
-export const pgTimestamptz: DataType = dateTimeType('pg/timestamptz', pgTimestamptzCanonical);
+export const pgTimetz: DataType = typeCanonicalFromText('pg/timetz', pgTimetzCanonical);
+export const pgInterval: DataType = typeCanonicalFromText('pg/interval', pgIntervalCanonical);
+export const pgDate: DataType = typeCanonicalFromText('pg/date', pgDateCanonical);
+export const pgTime: DataType = typeCanonicalFromText('pg/time', pgTimeCanonical);
+export const pgTimestamp: DataType = typeCanonicalFromText('pg/timestamp', pgTimestampCanonical);
+export const pgTimestamptz: DataType = typeCanonicalFromText(
+  'pg/timestamptz',
+  pgTimestamptzCanonical,
+);
+export const pgBytea: DataType = typeCanonicalFromText('pg/bytea', pgByteaCanonical);
 
 /** Every data type this target registers. */
 export const postgresDataTypes: readonly DataType[] = [
