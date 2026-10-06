@@ -71,6 +71,7 @@ describe('validatePostgresUrl', () => {
   it('drops empty userinfo so driver defaults apply', () => {
     expect(validatePostgresUrl('postgresql://localhost/mydb')).toBe('postgresql://localhost/mydb');
     expect(validatePostgresUrl('postgresql://@localhost/mydb')).toBe('postgresql://localhost/mydb');
+    expect(validatePostgresUrl('postgresql://@/mydb')).toBe('postgresql:///mydb');
   });
 
   it('keeps provided credentials, host, and port', () => {
