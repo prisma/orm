@@ -171,6 +171,19 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - ':\s*AuthoringEntityContext\s*=\s*\{'
+  - id: mongo-derive-json-schema-takes-lookups
+    summary: |
+      `deriveJsonSchema` and `derivePolymorphicJsonSchema` (from `@internal/mongo-contract-psl`)
+      take a required `lookups: MongoTypeLookups` (from `@internal/mongo-contract/data-type`)
+      directly after their fields: `{ codecLookup, dataTypeLookup }`. The optional `codecLookup`
+      argument is removed; the codec lookup moves into `lookups`, and the validator reads each
+      field's BSON types from the data type its codec represents. Extensions that author Mongo
+      contracts through `defineContract(...)` or PSL need no change.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - '\bderiveJsonSchema\s*\('
+        - '\bderivePolymorphicJsonSchema\s*\('
   - id: validate-scalar-type-codec-ids-removed
     summary: |
       `validateScalarTypeCodecIds` is removed. Stack assembly now refuses, with an `InternalError`,
@@ -754,6 +767,27 @@ const ctx: AuthoringEntityContext = {
 ```
 
 Pass the lookups of the stack the context serves; `createDataTypeLookup` from `@internal/framework-components/codec` builds a data type lookup from a list of data types, and `{ ...emptyCodecLookup, descriptorFor: () => undefined }`, with `emptyCodecLookup` from the same module, stands in where no codecs apply. A stub codec lookup that answers `descriptorFor` is typed `CodecLookupWithDescriptors`. A call of `interpretPslDocumentToMongoContract` passes `codecLookup` as well: the stack's codec lookup, or that stand-in.
+
+## `mongo-derive-json-schema-takes-lookups`
+
+```ts
+// before
+deriveJsonSchema(fields, valueObjects, codecLookup, valueSets);
+derivePolymorphicJsonSchema(baseFields, discriminator, variants, valueObjects, codecLookup, valueSets);
+
+// after
+deriveJsonSchema(fields, { codecLookup, dataTypeLookup }, valueObjects, valueSets);
+derivePolymorphicJsonSchema(
+  baseFields,
+  discriminator,
+  variants,
+  { codecLookup, dataTypeLookup },
+  valueObjects,
+  valueSets,
+);
+```
+
+`codecLookup` is a `CodecLookupWithDescriptors`, the stack's codec lookup. `dataTypeLookup` holds the stack's data types: `createDataTypeLookup(mongoDataTypes)`, with `createDataTypeLookup` from `@internal/framework-components/codec` and `mongoDataTypes` from `@internal/target-mongo/data-types`, plus any data types the extension registers. A call that passed no codec lookup passes the stack's now; without it the validator left out every scalar field's BSON type.
 
 ## `validate-scalar-type-codec-ids-removed`
 
