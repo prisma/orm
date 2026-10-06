@@ -45,9 +45,21 @@ export function validatePostgresUrl(url: string): string {
     });
   }
 
+  // libpq-style URLs may omit the host (`postgresql:///db`, `postgresql://user@/db`);
+  // a `host` query param is a Unix socket dir and must keep an empty hostname.
+  let input = trimmed;
+  const emptyHost = /^postgres(?:ql)?:\/\/([^/?#]*)/i.exec(trimmed);
+  if (emptyHost !== null && !/[?&]host=/i.test(trimmed)) {
+    const hostAndPort = emptyHost[1].slice(emptyHost[1].lastIndexOf('@') + 1);
+    if (hostAndPort === '' || hostAndPort.startsWith(':')) {
+      const insertAt = emptyHost[0].length - hostAndPort.length;
+      input = `${trimmed.slice(0, insertAt)}localhost${trimmed.slice(insertAt)}`;
+    }
+  }
+
   let parsed: URL;
   try {
-    parsed = new URL(trimmed);
+    parsed = new URL(input);
   } catch {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
       meta: { extension: 'postgres', reason: 'unparseable url' },
@@ -62,7 +74,16 @@ export function validatePostgresUrl(url: string): string {
     );
   }
 
-  return trimmed;
+  if (parsed.hostname === '') {
+    return trimmed;
+  }
+
+  const userinfo =
+    parsed.username === ''
+      ? ''
+      : `${parsed.username}${parsed.password === '' ? '' : `:${parsed.password}`}@`;
+  const port = parsed.port === '' ? '' : `:${parsed.port}`;
+  return `${parsed.protocol}//${userinfo}${parsed.hostname}${port}${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {

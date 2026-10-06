@@ -1,6 +1,11 @@
 import { Client, Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
-import { isPgClient, isPgPool, resolvePostgresBinding } from '../src/runtime/binding';
+import {
+  isPgClient,
+  isPgPool,
+  resolvePostgresBinding,
+  validatePostgresUrl,
+} from '../src/runtime/binding';
 
 function duckPool() {
   return {
@@ -55,6 +60,47 @@ describe('isPgClient', () => {
 
   it('is false for a duck-typed pool', () => {
     expect(isPgClient(duckPool() as unknown as Client)).toBe(false);
+  });
+});
+
+describe('validatePostgresUrl', () => {
+  it('defaults an empty host to localhost', () => {
+    expect(validatePostgresUrl('postgresql:///mydb')).toBe('postgresql://localhost/mydb');
+  });
+
+  it('drops empty userinfo so driver defaults apply', () => {
+    expect(validatePostgresUrl('postgresql://localhost/mydb')).toBe('postgresql://localhost/mydb');
+    expect(validatePostgresUrl('postgresql://@localhost/mydb')).toBe('postgresql://localhost/mydb');
+  });
+
+  it('keeps provided credentials, host, and port', () => {
+    expect(validatePostgresUrl('postgresql://u:p@db.example.com:5433/mydb')).toBe(
+      'postgresql://u:p@db.example.com:5433/mydb',
+    );
+  });
+
+  it('defaults only the missing host when credentials are present', () => {
+    expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@localhost/mydb');
+  });
+
+  it('leaves a socket-dir host query parameter alone', () => {
+    expect(validatePostgresUrl('postgresql:///mydb?host=/var/run/postgresql')).toBe(
+      'postgresql:///mydb?host=/var/run/postgresql',
+    );
+  });
+
+  it('preserves query params and schema', () => {
+    expect(validatePostgresUrl('postgres://u@h/mydb?schema=app&sslmode=require')).toBe(
+      'postgres://u@h/mydb?schema=app&sslmode=require',
+    );
+  });
+
+  it('rejects a non-postgres scheme', () => {
+    expect(() => validatePostgresUrl('mysql://h/db')).toThrow('postgres:// or postgresql://');
+  });
+
+  it('rejects an empty url', () => {
+    expect(() => validatePostgresUrl('   ')).toThrow('non-empty string');
   });
 });
 
