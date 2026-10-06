@@ -31,5 +31,7 @@ export type {
   ResolvedCreateInput,
   VariantCreateInput,
   VariantModelRow,
+  VariantNameForValue,
   VariantNames,
+  VariantValues,
 } from '../types';
