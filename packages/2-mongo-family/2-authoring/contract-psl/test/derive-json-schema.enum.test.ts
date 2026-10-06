@@ -3,8 +3,7 @@ import { deriveJsonSchema, type FieldValueSets } from '../src/derive-json-schema
 import {
   arrayEnumField,
   enumField,
-  mongoCodecLookup,
-  mongoDataTypeLookup,
+  mongoTypeLookups,
   scalarField,
 } from './derive-json-schema-helpers';
 
@@ -17,9 +16,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -34,9 +32,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         name: scalarField('mongo/string@1'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -51,9 +48,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role', true),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -67,9 +63,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         roles: arrayEnumField('mongo/string@1', 'Role'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -87,9 +82,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         roles: arrayEnumField('mongo/string@1', 'Role', true),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -113,9 +107,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         status: enumField('mongo/string@1', 'Status'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       { Status: { values: ['c', 'a', 'b'] } },
     );
 
@@ -129,9 +122,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'UnknownEnum'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -149,9 +141,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role'),
       },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       { Role: { values: ['from-value-set-a', 'from-value-set-b'] } },
     );
 

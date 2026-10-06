@@ -133,7 +133,7 @@ export function checkPslTypeParams(input: {
   readonly args: readonly AuthoringArgumentDescriptor[] | undefined;
   readonly template: AuthoringStorageTypeTemplate;
   readonly typeParams: Record<string, unknown> | undefined;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
 }): boolean {
@@ -143,7 +143,7 @@ export function checkPslTypeParams(input: {
       helperPath,
       input.template,
       input.typeParams,
-      input.codecLookup?.descriptorFor(input.template.codecId)?.paramsSchema,
+      input.codecLookup.descriptorFor(input.template.codecId)?.paramsSchema,
     );
     return true;
   } catch (error) {
@@ -197,7 +197,7 @@ export function getAuthoringEntity(
 export function instantiatePslTypeConstructor(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
@@ -289,7 +289,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   readonly namespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
@@ -328,7 +328,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   }
 
   const codecId = input.descriptor.output.codecId;
-  const codecDescriptor = input.codecLookup?.descriptorFor(codecId);
+  const codecDescriptor = input.codecLookup.descriptorFor(codecId);
   if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
     throw contractError(
       'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -420,7 +420,7 @@ interface FieldTypeConstructorContext {
    * constructor's descriptor declares an `entityRefArg`, to reach the
    * registered codec's `columnFromEntity` authoring hook.
    */
-  readonly codecLookup?: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
 }
 
 export function instantiateFieldTypeConstructor(
@@ -455,7 +455,7 @@ export function instantiateFieldTypeConstructor(
 function instantiateFieldPreset(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringFieldPresetDescriptor;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
@@ -701,7 +701,7 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
   readonly defaultValue?: AuthoredColumnDefault;

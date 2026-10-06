@@ -4,8 +4,7 @@ import { deriveJsonSchema, derivePolymorphicJsonSchema } from '../src/derive-jso
 import {
   arrayEnumField,
   arrayField,
-  mongoCodecLookup,
-  mongoDataTypeLookup,
+  mongoTypeLookups,
   scalarField,
   voArrayField,
   voField,
@@ -21,9 +20,7 @@ describe('deriveJsonSchema', () => {
         created: scalarField('mongo/date@1'),
         _id: scalarField('mongo/objectId@1'),
       },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -45,9 +42,7 @@ describe('deriveJsonSchema', () => {
   it('handles nullable field with bsonType array including null', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), email: scalarField('mongo/string@1', true) },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -64,9 +59,7 @@ describe('deriveJsonSchema', () => {
   it('handles array field (many: true)', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), tags: arrayField('mongo/string@1') },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -104,12 +97,7 @@ describe('deriveJsonSchema', () => {
       { bsonType: ['null', 'string'] },
     ],
   ])('derives %s independently', (_name, field, required, bsonType, items) => {
-    const result = deriveJsonSchema(
-      { tags: field },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
-    );
+    const result = deriveJsonSchema({ tags: field }, mongoTypeLookups);
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
       ...(required ? { required } : {}),
@@ -145,15 +133,9 @@ describe('deriveJsonSchema', () => {
     'derives exact %s BSON shape',
     (_name, nullable, elementNullable, bsonType, items) => {
       const field = arrayEnumField('mongo/string@1', 'Role', nullable, elementNullable);
-      const result = deriveJsonSchema(
-        { roles: field },
-        mongoDataTypeLookup,
-        undefined,
-        mongoCodecLookup,
-        {
-          Role: { values: ['user', 'admin'] },
-        },
-      );
+      const result = deriveJsonSchema({ roles: field }, mongoTypeLookups, undefined, {
+        Role: { values: ['user', 'admin'] },
+      });
       expect(result.jsonSchema).toEqual({
         bsonType: 'object',
         ...(nullable ? {} : { required: ['roles'] }),
@@ -181,9 +163,8 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       valueObjects,
-      mongoCodecLookup,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -217,9 +198,8 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), tags: voArrayField('Tag') },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       valueObjects,
-      mongoCodecLookup,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -253,12 +233,7 @@ describe('deriveJsonSchema', () => {
     const valueObjects: Record<string, ContractValueObject> = {
       Tag: { fields: { label: scalarField('mongo/string@1') } },
     };
-    const result = deriveJsonSchema(
-      { tags: field },
-      mongoDataTypeLookup,
-      valueObjects,
-      mongoCodecLookup,
-    );
+    const result = deriveJsonSchema({ tags: field }, mongoTypeLookups, valueObjects);
     const objectSchema = {
       bsonType: 'object',
       required: ['label'],
@@ -279,7 +254,7 @@ describe('deriveJsonSchema', () => {
   });
 
   it('derives a minimal closed schema from an empty field set', () => {
-    const result = deriveJsonSchema({}, mongoDataTypeLookup, undefined, mongoCodecLookup);
+    const result = deriveJsonSchema({}, mongoTypeLookups);
 
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
@@ -296,9 +271,7 @@ describe('deriveJsonSchema', () => {
         bio: scalarField('mongo/string@1', true),
         age: scalarField('mongo/int32@1'),
       },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -321,9 +294,7 @@ describe('deriveJsonSchema', () => {
         name: scalarField('mongo/string@1'),
         custom: scalarField('custom/unknown@1'),
       },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -355,9 +326,8 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       valueObjects,
-      mongoCodecLookup,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -390,9 +360,7 @@ describe('deriveJsonSchema', () => {
   it('maps Double (mongo/double@1) to bsonType "double"', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), price: scalarField('mongo/double@1') },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toEqual({
@@ -415,9 +383,8 @@ describe('deriveJsonSchema', () => {
 
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), address: voField('Address') },
-      mongoDataTypeLookup,
+      mongoTypeLookups,
       valueObjects,
-      mongoCodecLookup,
     );
 
     const properties = result.jsonSchema['properties'] as Record<string, Record<string, unknown>>;
@@ -430,9 +397,7 @@ describe('deriveJsonSchema', () => {
   it('emits the _id property from the declared field', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     const properties = result.jsonSchema['properties'] as Record<string, unknown>;
@@ -449,9 +414,7 @@ describe('derivePolymorphicJsonSchema', () => {
         { discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } },
         { discriminatorValue: 'Cat', fields: { indoor: scalarField('mongo/bool@1') } },
       ],
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     const oneOf = result.jsonSchema['oneOf'] as Record<string, unknown>[];
@@ -466,9 +429,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       '_type',
       [{ discriminatorValue: 'OnlyVariant', fields: {} }],
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     const oneOf = result.jsonSchema['oneOf'] as Record<string, unknown>[];
@@ -487,9 +448,7 @@ describe('derivePolymorphicJsonSchema', () => {
         { discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } },
         { discriminatorValue: 'Cat', fields: { indoor: scalarField('mongo/bool@1') } },
       ],
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     const oneOf = result.jsonSchema['oneOf'] as Record<string, Record<string, unknown>>[];
@@ -516,9 +475,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       '_type',
       [{ discriminatorValue: 'Dog', fields: { breed: scalarField('mongo/string@1') } }],
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).not.toHaveProperty('additionalProperties');
@@ -530,9 +487,7 @@ describe('derivePolymorphicJsonSchema', () => {
       { _id: scalarField('mongo/objectId@1'), name: scalarField('mongo/string@1') },
       'kind',
       [{ discriminatorValue: 'a', fields: { extra: scalarField('mongo/string@1') } }],
-      mongoDataTypeLookup,
-      undefined,
-      mongoCodecLookup,
+      mongoTypeLookups,
     );
 
     expect(result.jsonSchema).toHaveProperty('properties._id');

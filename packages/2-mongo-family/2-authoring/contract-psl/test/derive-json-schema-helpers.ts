@@ -6,7 +6,7 @@ import {
   createDataTypeLookup,
   type DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { mongoDataType } from '@internal/mongo-contract/data-type';
+import { type MongoTypeLookups, mongoDataType } from '@internal/mongo-contract/data-type';
 
 const bsonTypesByCodecId: Record<string, readonly string[]> = {
   'mongo/string@1': ['string'],
@@ -109,3 +109,8 @@ export function voArrayField(
 ): ContractField {
   return { type: { kind: 'valueObject', name }, nullable, many: { elementNullable } };
 }
+
+export const mongoTypeLookups: MongoTypeLookups = {
+  codecLookup: mongoCodecLookup,
+  dataTypeLookup: mongoDataTypeLookup,
+};

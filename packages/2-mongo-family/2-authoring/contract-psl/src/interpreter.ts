@@ -1702,17 +1702,15 @@ export function interpretPslDocumentToMongoContract(
         modelEntry.fields,
         modelEntry.discriminator.field,
         variantEntries,
-        input.dataTypeLookup,
+        { codecLookup, dataTypeLookup: input.dataTypeLookup },
         valueObjects,
-        codecLookup,
         storageValueSets,
       );
     } else {
       coll['validator'] = deriveJsonSchema(
         modelEntry.fields,
-        input.dataTypeLookup,
+        { codecLookup, dataTypeLookup: input.dataTypeLookup },
         valueObjects,
-        codecLookup,
         storageValueSets,
       );
     }

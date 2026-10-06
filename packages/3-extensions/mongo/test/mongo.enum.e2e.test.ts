@@ -90,9 +90,8 @@ const storageValueSets = blindCast<
 );
 const ACCOUNT_VALIDATOR = deriveJsonSchema(
   accountFields,
-  createDataTypeLookup(mongoDataTypes),
+  { codecLookup, dataTypeLookup: createDataTypeLookup(mongoDataTypes) },
   undefined,
-  codecLookup,
   storageValueSets,
 );
 
