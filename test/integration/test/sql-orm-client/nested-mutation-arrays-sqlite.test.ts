@@ -121,7 +121,7 @@ describe('integration/nested mutation arrays on SQLite', () => {
           .where({ id: 1 })
           .select('id', 'name')
           .include('posts', (posts) =>
-            posts.select('id', 'title', 'userId').orderBy((post) => post.id.asc()),
+            posts.select('id', 'title', 'userId').orderBy((post) => post['id']!.asc()),
           )
           .update({
             posts: (posts) => [
@@ -202,7 +202,7 @@ describe('integration/nested mutation arrays on SQLite', () => {
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
-          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag.id.asc()))
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
           .update({
             tags: (tags) => [
               tags.disconnect([{ id: 1 }]),
@@ -237,9 +237,9 @@ describe('integration/nested mutation arrays on SQLite', () => {
         const created = await users
           .select('id', 'name')
           .include('posts', (posts) =>
-            posts.select('id', 'title', 'userId').orderBy((post) => post.id.asc()),
+            posts.select('id', 'title', 'userId').orderBy((post) => post['id']!.asc()),
           )
-          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag.id.asc()))
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((tag) => tag['id']!.asc()))
           .create({
             id: 3,
             name: 'Carol',
@@ -274,7 +274,7 @@ describe('integration/nested mutation arrays on SQLite', () => {
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
-          .include('posts', (posts) => posts.select('id').orderBy((post) => post.id.asc()))
+          .include('posts', (posts) => posts.select('id').orderBy((post) => post['id']!.asc()))
           .update({ name: 'Renamed', posts: () => [] });
 
         expect(updated).toEqual({ id: 1, name: 'Renamed', posts: [{ id: 10 }, { id: 11 }] });
