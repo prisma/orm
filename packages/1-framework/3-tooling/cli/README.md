@@ -1155,7 +1155,7 @@ prisma migration status [--db <url>] [--to <contract>] [--from <contract>] [--sp
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output
 
-`@db` in either `--to` or `--from` resolves to the database marker, so the command reads the database and needs a connection. `--to` and `--from` apply to the app space; each extension space is checked from its own marker to its own head.
+`@db` in either `--to` or `--from` resolves to the database marker, so the command reads the database and needs a connection. `--from` and `--to` apply to the app space. Each extension space goes to its own head: from its own marker when the command reads the database for the origin (no `--from`, or `--from @db`), and from the empty contract when `--from` names a contract.
 
 **What it does:**
 1. Reads migration packages from disk and reconstructs each space's migration graph

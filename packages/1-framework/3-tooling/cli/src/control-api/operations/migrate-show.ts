@@ -174,10 +174,9 @@ export async function executeMigrateShowPlan(
     if (!fromResult.ok) {
       return notOk(fromResult.failure);
     }
-    // Offline hypothetical: the --from ref only carries a hash (no live invariants).
-    // Apply the from-hash marker to the APP space only. Extension spaces are left
-    // absent from markerBySpace (treated as null / greenfield by planSpacePath),
-    // so they plan from their own marker → own head — exactly as executeMigrate does.
+    // The --from contract carries a hash and no invariants, and applies to the app
+    // space only. Extension spaces stay out of markerBySpace, so they plan from the
+    // empty contract to their own head.
     const fromHash = fromResult.value.hash;
     const offlineMarker: LiveMarker | null =
       fromHash === EMPTY_CONTRACT_HASH ? null : { storageHash: fromHash, invariants: [] };

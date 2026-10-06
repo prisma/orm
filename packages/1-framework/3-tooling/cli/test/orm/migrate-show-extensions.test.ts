@@ -19,7 +19,7 @@ afterEach(removeMigrateShowProjects);
 beforeEach(resetMigrateShowMocks);
 
 describe('migrate --show with extension spaces', () => {
-  it('plans extensions from their own state, never from the app --from hash', async () => {
+  it('plans extensions from the empty contract, never from the app --from hash', async () => {
     const cwd = await buildProject();
     const extDirName = await addExtensionSpace(cwd);
 
