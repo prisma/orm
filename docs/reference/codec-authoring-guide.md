@@ -434,7 +434,7 @@ An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and
 
 `dataType(id, spec)` from `@internal/framework-components/codec` declares a data type with its casts and, optionally, its parameters. The id is `owner/name` in lower case and carries no version; a versioned id such as `pg/int8@1` names a codec, and `dataType` refuses anything that is not the `owner/name` shape.
 
-A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type`. It takes the same `params`, `casts` and `listCast`, and adds how the database writes and reports the type. Migrations, schema verification and PostgreSQL's parameter casts all read the type's name from this declaration, and from nowhere else. In a SQL stack every codec must represent a type declared with `sqlDataType`, because a codec is how a column stores its values; the SQL family refuses a codec that represents a type declared with plain `dataType` when it creates its control instance (item 9 under [Assembly is strict](#assembly-is-strict)). The SQL family's own `sql/expression` is such a plain type: it is the type of a written SQL expression, and no codec or column has it. A Mongo data type is declared with `mongoDataType(id, { bsonTypes })` instead; see [Target-owned Mongo codecs](#target-owned-mongo-codecs).
+A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type`. It takes the same `params`, `casts` and `listCast`, and adds how the database writes and reports the type. Migrations, schema verification and PostgreSQL's parameter casts all read the type's name from this declaration, and from nowhere else. In a SQL stack every codec must represent a type declared with `sqlDataType`, because a codec is how a column stores its values; the SQL family refuses a codec that represents a type declared with plain `dataType` when it creates its control instance (item 9 under [Checks on the assembled stack](#checks-on-the-assembled-stack)). The SQL family's own `sql/expression` is such a plain type: it is the type of a written SQL expression, and no codec or column has it. A Mongo data type is declared with `mongoDataType(id, { bsonTypes })` instead; see [Target-owned Mongo codecs](#target-owned-mongo-codecs).
 
 ```ts
 import { sqlDataType } from '@internal/sql-contract/data-type';
@@ -638,7 +638,7 @@ A data type need not be a column's type. `sql/expression` has an authoring entry
 
 Checks that depend on a column's parameters belong in the codec instance, on the canonical form: `vector(3)` refuses four elements, `numeric(10,2)` refuses a third decimal place, and a limit of the stored representation is the codec's to refuse too — on SQLite, `sqlite/real@1` and `sql/float@1` refuse `NaN`, because SQLite cannot store it.
 
-### Assembly is strict
+### Checks on the assembled stack
 
 The control stack assembles every pack's data types, codec descriptors and authoring entries into one stack and checks them against each other. Each failure names the contributing component and the id at fault:
 
