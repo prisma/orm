@@ -1,0 +1,33 @@
+// use prisma-8
+
+model ModelA {
+  id     Int     @id
+  b_id_1 String
+  b_id_2 String
+  c_id_1 String?
+  c_id_2 String?
+  b      ModelB  @relation(fields: [b_id_1, b_id_2], references: [uniq_1, uniq_2])
+  c      ModelC? @relation(fields: [c_id_1, c_id_2], references: [uniq_1, uniq_2])
+
+  @@map("ModelA")
+}
+
+model ModelB {
+  id     Int      @id
+  uniq_1 String
+  uniq_2 String
+  a      ModelA[]
+
+  @@unique([uniq_1, uniq_2])
+  @@map("ModelB")
+}
+
+model ModelC {
+  id     Int      @id
+  uniq_1 String
+  uniq_2 String
+  a      ModelA[]
+
+  @@unique([uniq_1, uniq_2])
+  @@map("ModelC")
+}

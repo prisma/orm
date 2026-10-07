@@ -499,7 +499,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `queries::filters::filter_regression::work_with_nulls` — m:n none/every relation filters with nullable fields [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filter_regression/filter_regression.test.ts` › `work_with_nulls (many-to-many)`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/queries/filters/filter_unwrap.rs
-- [x] `queries::filters::filter_unwrap::many_filter` — nested deleteMany with in filter on subItems succeeds [connectors: all] → non-ported `test/integration/test/ports/engines/non-ported/queries/filters/filter_unwrap/filter_unwrap.md`
+- [x] `queries::filters::filter_unwrap::many_filter` — nested deleteMany with in filter on subItems succeeds [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filter_unwrap/filter_unwrap.test.ts` › `nested deleteMany with an in filter on the child rows succeeds (many_filter)`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/queries/filters/filters.rs
 - [x] `queries::filters::filters::no_filter` — findMany with empty filter returns all rows for each model [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filters/filters.test.ts` › `no_filter`

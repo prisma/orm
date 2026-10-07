@@ -1,0 +1,18 @@
+// use prisma-8
+
+model Item {
+  id       String    @id @default(cuid(2))
+  name     String?   @unique
+  subItems SubItem[]
+
+  @@map("Item")
+}
+
+model SubItem {
+  id      String  @id @default(cuid(2))
+  name    String? @unique
+  item_id String?
+  item    Item?   @relation(fields: [item_id], references: [id])
+
+  @@map("SubItem")
+}

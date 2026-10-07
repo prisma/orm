@@ -1,0 +1,19 @@
+// use prisma-8
+
+model Order {
+  id          String      @id
+  order_lines OrderLine[]
+
+  @@map("Order")
+}
+
+model OrderLine {
+  id          String               @id
+  external_id String
+  created_at  DateTime             @default(now())
+  updated_at  temporal.updatedAt()
+  order_id    String
+  order       Order                @relation(fields: [order_id], references: [id])
+
+  @@map("OrderLine")
+}
