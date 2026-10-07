@@ -785,3 +785,34 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** When a dispatch changes an API with many callers, the brief names the helper or entry point the callers move onto, or makes deciding it the first step. The implementer applies the decided shape itself or hands helpers a reference implementation to copy exactly. Sizing pattern: "mechanical fan-out + design judgment in one dispatch".
 
 **Reference incident.** 2026-09-30, lsp-go-to-definition slice 1 dispatch 4: four parallel helpers migrated ~33 test files to build a binder; the diff grew by ~2,500 lines and a second round introduced one shared function.
+
+### F42. A spec or design discussion states a gap or precondition taken from an earlier project's spec, and the code does not behave that way
+
+**Symptom.** The operator spends a turn on a limitation that cannot occur, or a spec says a component is unchanged and the first dispatch has to change it.
+
+**Root cause.** Specs under `projects/` describe the code at the time they were written. A later spec that copies a statement from one ("X is not resolved", "without Y there is no Z") carries it forward without anyone reading the code path again.
+
+**Mitigation.** Before a discussion or a spec states a gap, a precondition, or "this component is unchanged", read the code path that would produce it. A gap that the type system or the current code rules out is not mentioned. A statement taken from an older spec is quoted as that spec's claim until the code confirms it.
+
+**Reference incident.** 2026-10-06, lsp-find-references. Three statements came from the go-to-definition spec or from assumption and were wrong: `fieldRef` in a block spec was presented as an unresolved reference (a block spec cannot declare one), "no binder for a project" was listed as a case to handle (`ProjectArtifacts` always builds one), and the binder was said to need no change (namespace block names had no resolution).
+
+### F43. A spec requires a check that no input can exercise, and tests named after it pass with the check deleted
+
+**Symptom.** Review finds a rule in the implementation that never changes a result. The tests written for it assert the outcome, and another rule already produces that outcome.
+
+**Root cause.** The rule was added to the design as a precaution, without an input that separates "with the rule" from "without it". The implementer builds what the spec says and writes tests from the spec's wording.
+
+**Mitigation.** For every filtering or rejecting rule in a spec's chosen design, the spec gives one input whose result differs when the rule is removed. If none can be found, the rule is left out. A reviewer who suspects a rule is redundant deletes it in a scratch copy and reruns the tests named after it.
+
+**Reference incident.** 2026-10-06, lsp-find-references. The slice spec required a last-segment rule and an exact-identifier-token filter on text matches. Symbol identity already rejected every candidate those rules rejected. The first was removed after the implementer's report, the second after a reviewer ran the tests without it.
+
+### F44. A pull request that conflicts with `main` starts no CI run, and the missing run reads as "pending"
+
+**Symptom.** After a push, `gh pr checks` shows one or two checks and nothing fails; the test jobs never appear.
+
+**Root cause.** `pull_request` workflows do not start while the PR has a merge conflict. The earlier run for the previous commit stays visible, so the PR looks as if CI is in progress.
+
+**Mitigation.** After every push to an open PR, check `gh pr view <n> --json mergeable,mergeStateStatus`. `CONFLICTING` means merge `origin/main`, resolve, rerun the touched packages' gates, and push again. Tie any "CI is green" statement to the head commit of the run.
+
+**Reference incident.** 2026-10-06, lsp-find-references (#30621): a README section added on `main` by another close-out conflicted with the branch; the push after it ran no CI until the merge.
+

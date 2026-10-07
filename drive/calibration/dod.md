@@ -69,6 +69,8 @@ In addition to the canonical slice DoD:
 - If the slice touches `packages/3-*-extensions/**`, the slice plan must include a `pnpm fixtures:check` dispatch step.
 - If the slice touches package boundaries / imports, the slice plan must include `pnpm lint:deps`.
 - If the slice changes typed surfaces consumed elsewhere, the slice plan must include a downstream `pnpm typecheck` after the producing package's `pnpm build`.
+- If the slice changes what the PSL binder records, the brief's scope includes the SQL and Mongo `contract-psl` `test/create-binder.test.ts` files, which list every resolution of a document in order. (Added 2026-10-07, lsp-find-references: a new `namespace` resolution failed the SQL list, which the brief had left out of scope.)
+- If a dispatch adds a script anywhere in the repo, `projects/` included, the gate includes the root lint scripts CI runs on every file (`pnpm lint:throws`, `pnpm lint:casts`). (Added 2026-10-07, lsp-find-references: a QA driver under `projects/` failed CI's Lint job on a bare `throw new Error`.)
 
 ### PR-side items
 
