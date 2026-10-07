@@ -33,8 +33,7 @@ function listed(items: readonly string[], conjunction: 'and' | 'or'): string {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} ${conjunction} ${last}` : last;
 }
 
-const HIDDEN_BY_A_SCOPE =
-  'A scope applied with apply can add one without showing it at the call site.';
+const HIDDEN_BY_A_SCOPE = 'A scope passed to with can add one without showing it at the call site.';
 
 /** Throws `ORM.ARGUMENT_INVALID` when the collection has a limit, an offset, a cursor or a distinct selection, which `method`, a write of every matching row, would ignore. */
 export function assertBulkWriteIgnoresNothing(

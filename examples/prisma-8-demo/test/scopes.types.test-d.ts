@@ -63,29 +63,29 @@ describe('CodecField', () => {
 
 describe('db.orm.scope', () => {
   test('fits every model with the field, keeps its class and records the filter', () => {
-    expectTypeOf(db.User.apply(createdSince(since))).toEqualTypeOf<Filtered<typeof db.User>>();
-    expectTypeOf(db.Post.apply(createdSince(since))).toEqualTypeOf<Filtered<typeof db.Post>>();
-    db.Task.apply(createdSince(since)).bugs();
-    db.Task.bugs().apply(createdSince(since));
-    db.Post.apply(createdSince(since)).updateAll({ title: 'x' });
+    expectTypeOf(db.User.with(createdSince(since))).toEqualTypeOf<Filtered<typeof db.User>>();
+    expectTypeOf(db.Post.with(createdSince(since))).toEqualTypeOf<Filtered<typeof db.Post>>();
+    db.Task.with(createdSince(since)).bugs();
+    db.Task.bugs().with(createdSince(since));
+    db.Post.with(createdSince(since)).updateAll({ title: 'x' });
   });
 
   test('is refused for a model without the field', () => {
     // @ts-expect-error Tag has no createdAt
-    db.Tag.apply(createdSince(since));
+    db.Tag.with(createdSince(since));
   });
 
   test('takes the preset field builders exported by the contract-builder entry', () => {
-    expectTypeOf(db.Post.apply(ownedBy('u'))).toEqualTypeOf<Filtered<typeof db.Post>>();
-    db.Task.apply(ownedBy('u'));
+    expectTypeOf(db.Post.with(ownedBy('u'))).toEqualTypeOf<Filtered<typeof db.Post>>();
+    db.Task.with(ownedBy('u'));
     // @ts-expect-error User has no userId
-    db.User.apply(ownedBy('u'));
+    db.User.with(ownedBy('u'));
     const titled = dbFacade.orm.scope({ title: field.text() }, (rows) =>
       rows.where((r) => r.title.eq('x')),
     );
-    db.Post.apply(titled);
+    db.Post.with(titled);
     // @ts-expect-error Post.title is not nullable
-    db.Post.apply(dbFacade.orm.scope({ title: field.text().optional() }, (rows) => rows.limit(1)));
+    db.Post.with(dbFacade.orm.scope({ title: field.text().optional() }, (rows) => rows.limit(1)));
   });
 });
 
@@ -101,9 +101,9 @@ describe('db.orm.public.Post.scope', () => {
 
   test('is refused after select and for another model', () => {
     // @ts-expect-error the rows no longer have every Post field
-    db.Post.select('id').apply(postSummary);
+    db.Post.select('id').with(postSummary);
     // @ts-expect-error a Tag collection is not a Post collection
-    db.Tag.apply(postSummary);
+    db.Tag.with(postSummary);
   });
 });
 

@@ -50,7 +50,7 @@ declare const scopeNamespaceClient: ReturnType<typeof orm<ScopeNamespaceContract
 
 class LivePostCollection extends Collection<Contract, 'Post'> {
   live() {
-    return this.apply(notDeleted);
+    return this.with(notDeleted);
   }
 }
 
@@ -84,20 +84,20 @@ describe('client.scope', () => {
   });
 
   test('is accepted on every model that has the fields and keeps the receiver type', () => {
-    expectTypeOf(plain.Post.apply(notDeleted)).toEqualTypeOf<Filtered<typeof plain.Post>>();
-    expectTypeOf(plain.Comment.apply(notDeleted)).toEqualTypeOf<Filtered<typeof plain.Comment>>();
-    expectTypeOf(db.Post.apply(notDeleted)).toEqualTypeOf<Filtered<SoftPostCollection>>();
-    expectTypeOf(db.Post.apply(notDeleted).popular()).toEqualTypeOf<
+    expectTypeOf(plain.Post.with(notDeleted)).toEqualTypeOf<Filtered<typeof plain.Post>>();
+    expectTypeOf(plain.Comment.with(notDeleted)).toEqualTypeOf<Filtered<typeof plain.Comment>>();
+    expectTypeOf(db.Post.with(notDeleted)).toEqualTypeOf<Filtered<SoftPostCollection>>();
+    expectTypeOf(db.Post.with(notDeleted).popular()).toEqualTypeOf<
       Filtered<Filtered<SoftPostCollection>>
     >();
   });
 
   test('works after where, after select, in an include refinement and on this', async () => {
     const filtered = db.Post.where({ title: 'x' });
-    expectTypeOf(filtered.apply(notDeleted)).toEqualTypeOf<Filtered<typeof filtered>>();
+    expectTypeOf(filtered.with(notDeleted)).toEqualTypeOf<Filtered<typeof filtered>>();
     const selected = plain.Post.select('id', 'title');
-    expectTypeOf(selected.apply(notDeleted)).toEqualTypeOf<Filtered<typeof selected>>();
-    const user = await plain.User.include('posts', (posts) => posts.apply(notDeleted)).first();
+    expectTypeOf(selected.with(notDeleted)).toEqualTypeOf<Filtered<typeof selected>>();
+    const user = await plain.User.include('posts', (posts) => posts.with(notDeleted)).first();
     expectTypeOf(user!.posts[0]!.title).toEqualTypeOf<string>();
     expectTypeOf<ReturnType<LivePostCollection['live']>>().toEqualTypeOf<
       Filtered<LivePostCollection>
@@ -105,33 +105,33 @@ describe('client.scope', () => {
   });
 
   test('records the filter and the order the body applied', () => {
-    expectTypeOf(plain.Post.apply(deletedLast)).toEqualTypeOf<Ordered<typeof plain.Post>>();
-    expectTypeOf(plain.Post.apply(liveNewestFirst)).toEqualTypeOf<
+    expectTypeOf(plain.Post.with(deletedLast)).toEqualTypeOf<Ordered<typeof plain.Post>>();
+    expectTypeOf(plain.Post.with(liveNewestFirst)).toEqualTypeOf<
       Ordered<Filtered<typeof plain.Post>>
     >();
-    plain.Post.apply(notDeleted).update({ title: 'x' });
-    plain.Post.apply(deletedLast).cursor({ id: 1 });
+    plain.Post.with(notDeleted).update({ title: 'x' });
+    plain.Post.with(deletedLast).cursor({ id: 1 });
     // @ts-expect-error the body applied no filter, so update is refused
-    plain.Post.apply(deletedLast).update({ title: 'x' });
+    plain.Post.with(deletedLast).update({ title: 'x' });
     // @ts-expect-error the body applied no order, so cursor is refused
-    plain.Post.apply(notDeleted).cursor({ id: 1 });
+    plain.Post.with(notDeleted).cursor({ id: 1 });
   });
 
   test('a scope with a parameter is a function that returns a scope', () => {
-    expectTypeOf(plain.Post.apply(titled('orm'))).toEqualTypeOf<Filtered<typeof plain.Post>>();
+    expectTypeOf(plain.Post.with(titled('orm'))).toEqualTypeOf<Filtered<typeof plain.Post>>();
     // @ts-expect-error Comment has no title field
-    plain.Comment.apply(titled('orm'));
+    plain.Comment.with(titled('orm'));
   });
 
   test('refuses a model that lacks a declared field', () => {
     // @ts-expect-error Tag has no deletedAt field
-    plain.Tag.apply(notDeleted);
+    plain.Tag.with(notDeleted);
   });
 
   test('refuses a field of another column type', () => {
     const viewsAsText = client.scope({ views: field.column(textColumn) }, (rows) => rows.limit(1));
     // @ts-expect-error Post.views is an int4 column, not text
-    plain.Post.apply(viewsAsText);
+    plain.Post.with(viewsAsText);
   });
 
   test('refuses a field of another nullability', () => {
@@ -140,19 +140,19 @@ describe('client.scope', () => {
       (rows) => rows.where((r) => r.createdAt.isNull()),
     );
     // @ts-expect-error Post.createdAt is not nullable
-    plain.Post.apply(createdAtNullable);
+    plain.Post.with(createdAtNullable);
     const deletedAtRequired = client.scope(
       { deletedAt: field.column(timestamptzTemporalColumn) },
       (rows) => rows.limit(1),
     );
     // @ts-expect-error Post.deletedAt is nullable
-    plain.Post.apply(deletedAtRequired);
+    plain.Post.with(deletedAtRequired);
   });
 
   test('refuses a relation declared as a field', () => {
     const byUser = client.scope({ user: field.column(int4Column) }, (rows) => rows.limit(1));
     // @ts-expect-error user is a relation of Post, not a field
-    plain.Post.apply(byUser);
+    plain.Post.with(byUser);
   });
 
   test('refuses a field that only a variant has', () => {
@@ -160,9 +160,9 @@ describe('client.scope', () => {
       rows.where((r) => r.severity.eq('high')),
     );
     // @ts-expect-error severity is a field of the Bug variant, not of Task
-    tasks.apply(bySeverity);
+    tasks.with(bySeverity);
     // @ts-expect-error severity is a field of the Bug variant, not of Task
-    tasks.variant('bug').apply(bySeverity);
+    tasks.variant('bug').with(bySeverity);
   });
 
   test('a body cannot claim a filter it may not have applied', () => {
@@ -180,9 +180,9 @@ describe('client.scope', () => {
       if (flag) query = query.where((r) => r.deletedAt.isNull());
       return query;
     });
-    expectTypeOf(plain.Post.apply(maybeFiltered)).toEqualTypeOf<typeof plain.Post>();
+    expectTypeOf(plain.Post.with(maybeFiltered)).toEqualTypeOf<typeof plain.Post>();
     // @ts-expect-error the scope may not have filtered, so deleteAll is refused
-    plain.Post.apply(maybeFiltered).deleteAll();
+    plain.Post.with(maybeFiltered).deleteAll();
     client.scope<typeof deletedAt, { readonly hasWhere: true; readonly hasOrderBy: true }>(
       deletedAt,
       // @ts-expect-error the body applied no filter, so it cannot be typed as filtering
@@ -220,9 +220,9 @@ describe('client.scope', () => {
       },
       (rows) => rows.limit(1),
     );
-    plain.Post.apply(deletedTitled);
+    plain.Post.with(deletedTitled);
     // @ts-expect-error Comment has deletedAt but no title, and the message names title
-    plain.Comment.apply(deletedTitled);
+    plain.Comment.with(deletedTitled);
   });
 
   test('refuses a codec the contract does not have, at the declaration', () => {
@@ -252,10 +252,10 @@ describe('client.scope', () => {
     >().toEqualTypeOf<'the model has no field that matches the declaration in the scope'>();
     // @ts-expect-error call cannot infer the scope's type parameters, so the model cannot be read
     notDeleted.call(undefined, plain.Post);
-    // @ts-expect-error apply cannot infer the scope's type parameters, so the model cannot be read
-    notDeleted.apply(undefined, [plain.Post]);
+    // @ts-expect-error with cannot infer the scope's type parameters, so the model cannot be read
+    notDeleted.with(undefined, [plain.Post]);
     // @ts-expect-error the type of the collection names no single model
-    anyModel.apply(notDeleted);
+    anyModel.with(notDeleted);
     expectTypeOf(notDeleted.bind(undefined)(plain.Post)).toEqualTypeOf<
       Filtered<typeof plain.Post>
     >();
@@ -266,38 +266,38 @@ describe('client.scope', () => {
       { deletedAt: field.column(timestamptzTemporalColumn).optional() },
       (rows) => rows.where((r) => r.deletedAt.isNull()),
     );
-    expectTypeOf(plain.Post.apply(flag ? notDeleted : alsoNotDeleted)).toEqualTypeOf<
+    expectTypeOf(plain.Post.with(flag ? notDeleted : alsoNotDeleted)).toEqualTypeOf<
       Filtered<typeof plain.Post>
     >();
     // @ts-expect-error one scope filters and the other orders, so the union has no single result
-    plain.Post.apply(flag ? notDeleted : deletedLast);
+    plain.Post.with(flag ? notDeleted : deletedLast);
   });
 
   test('a declaration of one value does not match a list field, and a list declaration matches only a list field', () => {
     const labelled = client.scope({ labels: field.column(textColumn) }, (rows) => rows.limit(1));
     // @ts-expect-error Tag.labels is a list of text values, not one
-    plain.Tag.apply(labelled);
+    plain.Tag.with(labelled);
     const titles = client.scope({ title: field.column(textColumn).many() }, (rows) =>
       rows.limit(1),
     );
     // @ts-expect-error Post.title holds one text value, not a list
-    plain.Post.apply(titles);
+    plain.Post.with(titles);
     const titlesDeclared = client.scope(
       { title: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
       (rows) => rows.limit(1),
     );
     // @ts-expect-error Post.title holds one text value, not a list
-    plain.Post.apply(titlesDeclared);
+    plain.Post.with(titlesDeclared);
   });
 
   test('.many() matches a list whose elements are never null, and not one whose elements may be null', () => {
     const labels = client.scope({ labels: field.column(textColumn).many() }, (rows) =>
       rows.limit(1),
     );
-    expectTypeOf(plain.Tag.apply(labels)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(labels)).toEqualTypeOf<typeof plain.Tag>();
     const notes = client.scope({ notes: field.column(textColumn).many() }, (rows) => rows.limit(1));
     // @ts-expect-error the elements of Tag.notes may be null
-    plain.Tag.apply(notes);
+    plain.Tag.with(notes);
   });
 
   test('.many({ elementsNullable: true }) matches a list whose elements may be null, and not one whose elements are never null', () => {
@@ -305,13 +305,13 @@ describe('client.scope', () => {
       { notes: field.column(textColumn).many({ elementsNullable: true }) },
       (rows) => rows.limit(1),
     );
-    expectTypeOf(plain.Tag.apply(notes)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(notes)).toEqualTypeOf<typeof plain.Tag>();
     const labels = client.scope(
       { labels: field.column(textColumn).many({ elementsNullable: true }) },
       (rows) => rows.limit(1),
     );
     // @ts-expect-error the elements of Tag.labels are never null
-    plain.Tag.apply(labels);
+    plain.Tag.with(labels);
   });
 
   test('the package form declares a list with many: { elementNullable }', () => {
@@ -319,24 +319,24 @@ describe('client.scope', () => {
       { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
       (rows) => rows.limit(1),
     );
-    plain.Tag.apply(labels);
+    plain.Tag.with(labels);
     const notesAsStrict = client.scope(
       { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: false } } },
       (rows) => rows.limit(1),
     );
     // @ts-expect-error the elements of Tag.notes may be null
-    plain.Tag.apply(notesAsStrict);
+    plain.Tag.with(notesAsStrict);
     const notes = client.scope(
       { notes: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
       (rows) => rows.limit(1),
     );
-    plain.Tag.apply(notes);
+    plain.Tag.with(notes);
     const labelsAsNullable = client.scope(
       { labels: { codecId: 'pg/text@1', nullable: false, many: { elementNullable: true } } },
       (rows) => rows.limit(1),
     );
     // @ts-expect-error the elements of Tag.labels are never null
-    plain.Tag.apply(labelsAsNullable);
+    plain.Tag.with(labelsAsNullable);
     client.scope(
       // @ts-expect-error many: true is not a declaration; a list declares its element nullability
       { labels: { codecId: 'pg/text@1', nullable: false, many: true } },
@@ -348,17 +348,17 @@ describe('client.scope', () => {
     const asList = client.scope({ addresses: field.column(jsonbColumn).many() }, (rows) =>
       rows.limit(1),
     );
-    expectTypeOf(plain.Tag.apply(asList)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(asList)).toEqualTypeOf<typeof plain.Tag>();
     const asDeclaredList = client.scope(
       { addresses: { codecId: 'pg/jsonb@1', nullable: false, many: { elementNullable: false } } },
       (rows) => rows.limit(1),
     );
-    expectTypeOf(plain.Tag.apply(asDeclaredList)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(asDeclaredList)).toEqualTypeOf<typeof plain.Tag>();
     const asOneValue = client.scope({ addresses: field.column(jsonbColumn) }, (rows) =>
       rows.limit(1),
     );
     // @ts-expect-error Tag.addresses is a list of value objects, not one value
-    plain.Tag.apply(asOneValue);
+    plain.Tag.with(asOneValue);
   });
 
   test('the refusal compares the element nullability of a list', () => {
@@ -440,9 +440,9 @@ describe('client.scope', () => {
 
   test('a union of collections is accepted when every model in it has the fields', () => {
     const either = flag ? plain.Post : plain.Comment;
-    expectTypeOf(either.apply(notDeleted)).toEqualTypeOf<Filtered<typeof either>>();
+    expectTypeOf(either.with(notDeleted)).toEqualTypeOf<Filtered<typeof either>>();
     const postOrTag = flag ? plain.Post : plain.Tag;
     // @ts-expect-error Tag, one of the models in the union, has no deletedAt
-    postOrTag.apply(notDeleted);
+    postOrTag.with(notDeleted);
   });
 });

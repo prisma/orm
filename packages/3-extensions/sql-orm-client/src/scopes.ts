@@ -177,7 +177,7 @@ export type WithFacts<C, Facts extends ScopeFacts> = Facts['hasOrderBy'] extends
     : C;
 
 /**
- * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, checked against the collection's own contract, model and namespace, and returns that collection with what the body established. `apply` reads the result from the receiver's type and the scope's facts.
+ * A scope made by the client's `scope` method: it accepts a collection of any model that has the declared fields, checked against the collection's own contract, model and namespace, and returns that collection with what the body established. `with` reads the result from the receiver's type and the scope's facts.
  */
 export interface FieldScope<
   TContract extends Contract<SqlStorage>,
@@ -366,7 +366,7 @@ export function assertScopeReceiver(value: unknown): asserts value is RuntimeMod
       'Cannot apply the scope: it was not given a collection',
       {
         why: `A scope is applied to a collection, such as db.orm.public.Post; received ${describeReceived(value)}.`,
-        fix: 'Run the scope with apply on a collection: collection.apply(scope).',
+        fix: 'Pass the scope to with on a collection: collection.with(scope).',
         meta: { argument: 'collection' },
       },
     );

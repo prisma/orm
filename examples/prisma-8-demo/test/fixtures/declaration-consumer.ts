@@ -147,16 +147,16 @@ export function queryFragments(now: Temporal.Instant) {
   >();
   type Summary = ReturnType<typeof titleSummary>;
   expectTypeOf(posts.summaries()).toEqualTypeOf<Summary>();
-  expectTypeOf(posts.apply(titleSummary)).toEqualTypeOf<Summary>();
+  expectTypeOf(posts.with(titleSummary)).toEqualTypeOf<Summary>();
   // @ts-expect-error the rows no longer have every Post field
-  posts.select('id').apply(titleSummary);
+  posts.select('id').with(titleSummary);
   expectTypeOf(posts.unexpired(now)).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
-  expectTypeOf(posts.apply(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  expectTypeOf(posts.with(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
   // @ts-expect-error User has no expiresAt field
-  users.apply(unexpired(now));
-  expectTypeOf(posts.apply(firstPage)).toEqualTypeOf<PostLibrary>();
+  users.with(unexpired(now));
+  expectTypeOf(posts.with(firstPage)).toEqualTypeOf<PostLibrary>();
   // @ts-expect-error firstPage applied no filter, so delete is refused
-  posts.apply(firstPage).deleteAll();
+  posts.with(firstPage).deleteAll();
   expectTypeOf(unexpiredPosts(now)).not.toBeAny();
   unexpiredPosts(now).cursor({ id: 'x' });
   unexpiredPosts(now).deleteAll();
@@ -186,5 +186,5 @@ export function listFragments() {
     >
   >();
   // @ts-expect-error Post has no list field labels
-  posts.apply(labelled(['a']));
+  posts.with(labelled(['a']));
 }

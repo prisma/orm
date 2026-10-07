@@ -12,13 +12,13 @@ export async function ormClientGetRecentUsers(
   runtime: Runtime,
 ) {
   const db = createOrmClient(runtime);
-  return db.User.apply(createdSince(since))
+  return db.User.with(createdSince(since))
     .select('id', 'email')
     .include('posts', (posts) =>
       posts
-        .apply(createdSince(since))
+        .with(createdSince(since))
         .orderBy((post) => post.createdAt.asc())
-        .apply(postSummary),
+        .with(postSummary),
     )
     .orderBy((user) => user.createdAt.asc())
     .limit(limit)

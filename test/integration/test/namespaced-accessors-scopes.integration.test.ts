@@ -36,28 +36,28 @@ describe('scopes on a contract with the same model name in two namespaces', () =
           expectTypeOf<keyof CollectionRowOf<ReturnType<typeof tokens>>>().toEqualTypeOf<
             'id' | 'token'
           >();
-          expect(await orm.auth.User.apply(tokens).all()).toEqual([
+          expect(await orm.auth.User.with(tokens).all()).toEqual([
             { id: 1, token: 'tok-1' },
             { id: 2, token: 'tok-2' },
           ]);
           const _wrongNamespace = () => {
             // @ts-expect-error public.User has no token, so its rows are not the rows of auth.User
-            orm.public.User.apply(tokens);
+            orm.public.User.with(tokens);
           };
           void _wrongNamespace;
 
           const withToken = (token: string) =>
             orm.scope({ token: field.text() }, (rows) => rows.where((r) => r.token.eq(token)));
-          expect(await orm.auth.User.apply(withToken('tok-2')).all()).toEqual([
+          expect(await orm.auth.User.with(withToken('tok-2')).all()).toEqual([
             { id: 2, token: 'tok-2' },
           ]);
           const _noTokenInPublic = () => {
             // @ts-expect-error public.User has no token field
-            orm.public.User.apply(withToken('tok-2'));
+            orm.public.User.with(withToken('tok-2'));
           };
           void _noTokenInPublic;
           expect(() =>
-            (orm.public.User.apply as (scope: unknown) => unknown)(withToken('tok-2')),
+            (orm.public.User.with as (scope: unknown) => unknown)(withToken('tok-2')),
           ).toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
 
           await client.query(
@@ -69,15 +69,13 @@ describe('scopes on a contract with the same model name in two namespaces', () =
           await client.query(`insert into "public"."notes" values (1, 'public note')`);
           await client.query(`insert into "auth"."notes" values (1, 'auth note')`);
           const authNotes = orm.auth.Note.scope((notes) => notes.orderBy((n) => n.id.asc()));
-          expect(await orm.auth.Note.apply(authNotes).all()).toEqual([
-            { id: 1, body: 'auth note' },
-          ]);
+          expect(await orm.auth.Note.with(authNotes).all()).toEqual([{ id: 1, body: 'auth note' }]);
           const _sameFieldsOtherNamespace = () => {
             // @ts-expect-error public.Note has the same fields, but the scope was made from auth.Note
-            orm.public.Note.apply(authNotes);
+            orm.public.Note.with(authNotes);
           };
           void _sameFieldsOtherNamespace;
-          expect(() => (orm.public.Note.apply as (scope: unknown) => unknown)(authNotes)).toThrow(
+          expect(() => (orm.public.Note.with as (scope: unknown) => unknown)(authNotes)).toThrow(
             expect.objectContaining({
               code: 'ORM.ARGUMENT_INVALID',
               message: 'Cannot apply a scope for auth.Note to a collection of public.Note',
@@ -86,10 +84,10 @@ describe('scopes on a contract with the same model name in two namespaces', () =
           const withBody = orm.scope({ body: field.text() }, (rows) =>
             rows.where((r) => r.body.like('%note')),
           );
-          expect(await orm.public.Note.apply(withBody).all()).toEqual([
+          expect(await orm.public.Note.with(withBody).all()).toEqual([
             { id: 1, body: 'public note' },
           ]);
-          expect(await orm.auth.Note.apply(withBody).all()).toEqual([{ id: 1, body: 'auth note' }]);
+          expect(await orm.auth.Note.with(withBody).all()).toEqual([{ id: 1, body: 'auth note' }]);
         } finally {
           await db.close();
           await client.end();

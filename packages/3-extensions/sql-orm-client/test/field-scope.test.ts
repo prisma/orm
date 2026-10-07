@@ -32,7 +32,7 @@ describe('client.scope', () => {
   it('puts the filter of the body in the plan, through the field to column mapping', async () => {
     const { plain, runtime, notDeleted } = scopes();
     await plain.Post.where((p) => p.deletedAt.isNull()).all();
-    await plain.Post.apply(notDeleted).all();
+    await plain.Post.with(notDeleted).all();
     await plain.Post.all();
     const [inline, applied, unfiltered] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
@@ -45,7 +45,7 @@ describe('client.scope', () => {
     await plain.Comment.orderBy((c) => c.deletedAt.desc())
       .limit(5)
       .all();
-    await plain.Comment.apply(deletedLast).all();
+    await plain.Comment.with(deletedLast).all();
     const [inline, applied] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
@@ -56,9 +56,9 @@ describe('client.scope', () => {
     await db.Post.where({ title: 'x' })
       .where((p) => p.deletedAt.isNull())
       .all();
-    await db.Post.where({ title: 'x' }).apply(notDeleted).all();
+    await db.Post.where({ title: 'x' }).with(notDeleted).all();
     await plain.User.include('posts', (posts) => posts.where((p) => p.deletedAt.isNull())).all();
-    await plain.User.include('posts', (posts) => posts.apply(notDeleted)).all();
+    await plain.User.include('posts', (posts) => posts.with(notDeleted)).all();
     const [inline, applied, inlineInclude, appliedInclude] = runtime.executions;
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
     expect(appliedInclude?.plan.ast).toBeDefined();
@@ -200,8 +200,8 @@ describe('client.scope', () => {
         (rows) => rows.where((r) => r.labels.eq(['a'])),
       );
       await plain.Tag.where((t) => t.labels.eq(['a'])).all();
-      await plain.Tag.apply(built).all();
-      await plain.Tag.apply(literal).all();
+      await plain.Tag.with(built).all();
+      await plain.Tag.with(literal).all();
       const [inline, fromBuilder, fromLiteral] = runtime.executions;
       expect(fromBuilder?.plan.ast).toBeDefined();
       expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
@@ -248,8 +248,8 @@ describe('client.scope', () => {
         (rows) => rows.where((r) => r.notes.eq(['a', null])),
       );
       await plain.Tag.where((t) => t.notes.eq(['a', null])).all();
-      await plain.Tag.apply(built).all();
-      await plain.Tag.apply(literal).all();
+      await plain.Tag.with(built).all();
+      await plain.Tag.with(literal).all();
       const [inline, fromBuilder, fromLiteral] = runtime.executions;
       expect(fromBuilder?.plan.ast).toBeDefined();
       expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);
@@ -288,8 +288,8 @@ describe('client.scope', () => {
         (rows) => rows.limit(1),
       );
       await plain.Tag.limit(1).all();
-      await plain.Tag.apply(built).all();
-      await plain.Tag.apply(literal).all();
+      await plain.Tag.with(built).all();
+      await plain.Tag.with(literal).all();
       const [inline, fromBuilder, fromLiteral] = runtime.executions;
       expect(fromBuilder?.plan.ast).toBeDefined();
       expect(fromBuilder?.plan.ast).toEqual(inline?.plan.ast);

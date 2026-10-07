@@ -34,7 +34,7 @@ export type Ordered<C> = C & HasOrderBy;
 /** A collection whose rows also have the fields of `Added`, such as an included relation. */
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
 
-/** A scope: a function from one collection to another. `collection.apply(scope)` runs it. */
+/** A scope: a function from one collection to another. `collection.with(scope)` runs it. */
 export type Scope<In, Out> = (collection: In) => Out;
 
 /** What a scope made by `collection.scope` accepts: a collection of the model, in the same namespace when the scope's collection names one, whose rows have every field of the model and that is not narrowed to a variant. */

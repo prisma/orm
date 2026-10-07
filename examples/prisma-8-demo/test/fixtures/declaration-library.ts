@@ -32,7 +32,7 @@ export const titleSummary = client.public.Post.scope((posts) =>
 
 export const firstPage = client.scope({ title: field.text() }, (rows) => rows.limit(10).offset(0));
 
-export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.apply(unexpired(now));
+export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.with(unexpired(now));
 
 export const labelled = (labels: readonly string[]) =>
   client.scope({ labels: field.text().many() }, (rows) =>
@@ -50,11 +50,11 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
   }
 
   summaries() {
-    return this.apply(titleSummary);
+    return this.with(titleSummary);
   }
 
   unexpired(now: Temporal.Instant) {
-    return this.apply(unexpired(now));
+    return this.with(unexpired(now));
   }
 
   orderedBy(name: string) {
@@ -94,7 +94,7 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
   }
 
   applied() {
-    return this.apply((posts) => posts.filtered().orderBy((post) => post.createdAt.desc()));
+    return this.with((posts) => posts.filtered().orderBy((post) => post.createdAt.desc()));
   }
 
   allRows() {

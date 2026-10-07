@@ -531,7 +531,7 @@ describe('ORM client integration examples', () => {
             .select('id', 'userId')
             .orderBy((post) => post.id.asc())
             .all();
-          const scoped = await ormClient.Post.apply(ownedBy(seededUserIds.admin))
+          const scoped = await ormClient.Post.with(ownedBy(seededUserIds.admin))
             .select('id', 'userId')
             .orderBy((post) => post.id.asc())
             .all();

@@ -9,7 +9,7 @@ describe('collection.scope', () => {
   it('runs the body on the collection it is applied to', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.select('id', 'title').include('author').all();
-    await db.Post.apply(summary).all();
+    await db.Post.with(summary).all();
     await db.Post.all();
     const [inline, applied, unchanged] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
@@ -23,7 +23,7 @@ describe('collection.scope', () => {
       .select('id', 'title')
       .include('author')
       .all();
-    await db.Post.published().apply(summary).all();
+    await db.Post.published().with(summary).all();
     const [inline, applied] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
@@ -35,8 +35,8 @@ describe('collection.scope', () => {
       .select('id', 'title')
       .include('author')
       .all();
-    await db.Post.recent().apply(summary).all();
-    await db.Post.apply(summary).all();
+    await db.Post.recent().with(summary).all();
+    await db.Post.with(summary).all();
     const [inline, applied, unordered] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);
@@ -46,7 +46,7 @@ describe('collection.scope', () => {
   it('runs inside an include refinement', async () => {
     const { db, runtime } = createChainingOrm();
     await db.User.include('posts', (posts) => posts.select('id', 'title').include('author')).all();
-    await db.User.include('posts', (posts) => posts.apply(summary)).all();
+    await db.User.include('posts', (posts) => posts.with(summary)).all();
     const [inline, applied] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();
     expect(applied?.plan.ast).toEqual(inline?.plan.ast);

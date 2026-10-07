@@ -18,11 +18,11 @@ declare const posts: Collection<TestContract, 'Post'>;
 
 class SummaryPostCollection extends Collection<TestContract, 'Post'> {
   summaries() {
-    return this.apply(summary);
+    return this.with(summary);
   }
 
   publishedSummaries() {
-    return this.where((p) => p.views.gte(100)).apply(summary);
+    return this.where((p) => p.views.gte(100)).with(summary);
   }
 }
 
@@ -45,30 +45,30 @@ describe('collection.scope', () => {
   });
 
   test('returns the body result for a collection of the model', () => {
-    expectTypeOf(plain.Post.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
-    expectTypeOf(db.Post.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
-    expectTypeOf(posts.apply(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
+    expectTypeOf(plain.Post.with(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
+    expectTypeOf(db.Post.with(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
+    expectTypeOf(posts.with(summary)).toEqualTypeOf<ReturnType<typeof summary>>();
   });
 
   test('accepts a filtered, ordered or included collection', () => {
-    expectTypeOf(db.Post.where({ title: 'x' }).apply(summary)).toEqualTypeOf<
+    expectTypeOf(db.Post.where({ title: 'x' }).with(summary)).toEqualTypeOf<
       ReturnType<typeof summary>
     >();
     expectTypeOf(
       db.Post.orderBy((p) => p.id.asc())
         .limit(5)
-        .apply(summary),
+        .with(summary),
     ).toEqualTypeOf<ReturnType<typeof summary>>();
-    expectTypeOf(db.Post.include('comments').published().apply(summary)).toEqualTypeOf<
+    expectTypeOf(db.Post.include('comments').published().with(summary)).toEqualTypeOf<
       ReturnType<typeof summary>
     >();
   });
 
   test('accepts an include refinement', async () => {
-    const users = db.User.include('posts', (userPosts) => userPosts.apply(summary));
+    const users = db.User.include('posts', (userPosts) => userPosts.with(summary));
     const user = await users.first();
     expectTypeOf(user!.posts).toEqualTypeOf<PostSummary[]>();
-    db.User.include('posts', (userPosts) => userPosts.where({ title: 'x' }).apply(summary));
+    db.User.include('posts', (userPosts) => userPosts.where({ title: 'x' }).with(summary));
   });
 
   test('accepts this in a custom class', () => {
@@ -82,29 +82,29 @@ describe('collection.scope', () => {
 
   test('the result has the default state when the body changes the row', () => {
     // @ts-expect-error update needs a where; the scope does not record the earlier one
-    db.Post.where({ title: 'x' }).apply(summary).update({ title: 'y' });
+    db.Post.where({ title: 'x' }).with(summary).update({ title: 'y' });
     // @ts-expect-error cursor needs an orderBy; the scope does not record the earlier one
     db.Post.orderBy((p) => p.id.asc())
-      .apply(summary)
+      .with(summary)
       .cursor({ id: 1 });
   });
 
   test('refuses a collection of another model', () => {
     // @ts-expect-error a User collection is not a Post collection
-    db.User.apply(summary);
+    db.User.with(summary);
   });
 
   test('refuses a collection whose rows were narrowed by select', () => {
     // @ts-expect-error the rows no longer have every Post field
-    db.Post.select('id').apply(summary);
+    db.Post.select('id').with(summary);
     // @ts-expect-error the rows no longer have every Post field
-    db.User.include('posts', (userPosts) => userPosts.select('id').apply(summary));
+    db.User.include('posts', (userPosts) => userPosts.select('id').with(summary));
   });
 
   test('refuses a collection narrowed to a variant', () => {
-    expectTypeOf(tasks.apply(taskTitles)).toEqualTypeOf<ReturnType<typeof taskTitles>>();
+    expectTypeOf(tasks.with(taskTitles)).toEqualTypeOf<ReturnType<typeof taskTitles>>();
     // @ts-expect-error the collection is narrowed to the Bug variant
-    tasks.variant('bug').apply(taskTitles);
+    tasks.variant('bug').with(taskTitles);
   });
 
   test('does not make a collection of one model unassignable to a collection of any model', () => {
@@ -114,10 +114,10 @@ describe('collection.scope', () => {
 
   test('types its result against the plain collection, also when the body keeps the row', () => {
     const published = db.Post.scope((posts) => posts.where((p) => p.views.gte(100)));
-    expectTypeOf(db.Post.apply(published)).toEqualTypeOf<
+    expectTypeOf(db.Post.with(published)).toEqualTypeOf<
       Filtered<Collection<TestContract, 'Post'>>
     >();
     // @ts-expect-error the class's own methods are not carried through a scope for one model
-    db.Post.apply(published).published();
+    db.Post.with(published).published();
   });
 });

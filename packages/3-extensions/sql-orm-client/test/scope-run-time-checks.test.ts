@@ -42,6 +42,7 @@ describe('a scope for any model checks what it is given and what its body return
         code: 'ORM.ARGUMENT_INVALID',
         message: 'Cannot apply the scope: it was not given a collection',
         why: `A scope is applied to a collection, such as db.orm.public.Post; received ${received}.`,
+        fix: 'Pass the scope to with on a collection: collection.with(scope).',
       }),
     );
   });
@@ -148,11 +149,11 @@ describe('bulk writes refuse what they would ignore', () => {
 
   it('refuses deleteAll after a scope with a limit, before any statement runs', () => {
     const { plain, runtime } = createScopesOrm();
-    expect(() => plain.Post.apply(recentTen()).deleteAll()).toThrow(
+    expect(() => plain.Post.with(recentTen()).deleteAll()).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: 'Cannot deleteAll Post: the collection has a limit',
-        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.',
+        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, so it would change more rows than the chain asks for. A scope passed to with can add one without showing it at the call site.',
         fix: 'Remove limit() before deleteAll, or read the rows first and change them by their ids.',
         meta: { model: 'Post', method: 'deleteAll', limit: 10 },
       }),
@@ -203,7 +204,7 @@ describe('bulk writes refuse what they would ignore', () => {
         await expect((async () => write())()).rejects.toMatchObject({
           code: 'ORM.ARGUMENT_INVALID',
           message: `Cannot ${method} Post: the collection has ${noun}`,
-          why: `${method} changes every row that matches the filter. The statement it runs cannot apply ${noun}, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.`,
+          why: `${method} changes every row that matches the filter. The statement it runs cannot apply ${noun}, so it would change more rows than the chain asks for. A scope passed to with can add one without showing it at the call site.`,
           fix: `Remove ${call} before ${method}, or read the rows first and change them by their ids.`,
           meta: { model: 'Post', method, ...meta },
         });
@@ -217,7 +218,7 @@ describe('bulk writes refuse what they would ignore', () => {
     expect(() => afterCursor(plain).limit(3).offset(2).deleteAll()).toThrow(
       expect.objectContaining({
         message: 'Cannot deleteAll Post: the collection has a limit, an offset and a cursor',
-        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, an offset or a cursor, so it would change more rows than the chain asks for. A scope applied with apply can add one without showing it at the call site.',
+        why: 'deleteAll changes every row that matches the filter. The statement it runs cannot apply a limit, an offset or a cursor, so it would change more rows than the chain asks for. A scope passed to with can add one without showing it at the call site.',
         fix: 'Remove limit(), offset() and cursor() before deleteAll, or read the rows first and change them by their ids.',
       }),
     );
@@ -333,7 +334,7 @@ describe('update and delete change the row first() returns', () => {
     ).rejects.toMatchObject({
       code: 'ORM.ARGUMENT_INVALID',
       message: `Cannot update Post with a relation mutation: the collection has ${noun}`,
-      why: `An update that changes a relation finds its row by the filter alone. It would ignore ${noun}, and could change another row than first() returns. A scope applied with apply can add one without showing it at the call site.`,
+      why: `An update that changes a relation finds its row by the filter alone. It would ignore ${noun}, and could change another row than first() returns. A scope passed to with can add one without showing it at the call site.`,
     });
     expect(runtime.executions).toEqual([]);
   });

@@ -20,7 +20,7 @@ export function ownedBy(userId: string) {
 }
 
 /**
- * The fields of a post that a list of posts shows, run with `apply` on any collection of posts.
+ * The fields of a post that a list of posts shows, run with `with` on any collection of posts.
  */
 export const postSummary = db.orm.public.Post.scope((posts) =>
   posts.select('id', 'title', 'createdAt').include('tags'),

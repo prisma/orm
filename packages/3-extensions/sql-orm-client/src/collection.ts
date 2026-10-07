@@ -466,14 +466,14 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
+   * Call `fn` with this collection and return its result. A pure filter is `where(rowFragment)`; `with` runs a scope for what `where` cannot express, such as a shared `select` and `include`, an order or a limit. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
    */
-  apply<Self, Facts extends ScopeFacts>(
+  with<Self, Facts extends ScopeFacts>(
     this: Self,
     scope: ((collection: NoInfer<Self>) => unknown) & { readonly [ScopeFactsType]: Facts },
   ): WithFacts<Self, Facts>;
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
-  apply(fn: (collection: unknown) => unknown): unknown {
+  with<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  with(fn: (collection: unknown) => unknown): unknown {
     return fn(this);
   }
 
@@ -482,7 +482,7 @@ export class CollectionBase<
    *
    * ```ts
    * const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
-   * db.User.include('posts', (posts) => posts.apply(summary));
+   * db.User.include('posts', (posts) => posts.with(summary));
    * ```
    */
   scope<Self extends ScopeSource, NsId extends string, Result>(

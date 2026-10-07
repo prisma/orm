@@ -107,7 +107,7 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
    *   { deletedAt: field.temporal.timestamptz().optional() },
    *   (rows) => rows.where((r) => r.deletedAt.isNull()),
    * );
-   * db.orm.public.Post.apply(notDeleted).deleteAll();
+   * db.orm.public.Post.with(notDeleted).deleteAll();
    * ```
    */
   scope<
