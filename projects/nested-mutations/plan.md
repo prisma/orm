@@ -11,7 +11,7 @@ Four slices. Three have no dependency on each other and can be built in parallel
 
 ### Stack (deliver in order)
 
-1. **Slice `filtered-many-writes`** — `projects/nested-mutations/slices/filtered-many-writes/`
+1. **Slice `filtered-many-writes`** — `projects/nested-mutations/slices/filtered-many-writes/` — PR [#30634](https://github.com/prisma/orm/pull/30634), open
    - **Outcome:** Inside `update()`, a relation callback can return `r.where(w).updateAll(data)` and `r.where(w).deleteAll()`, with `where` optional, on one-to-many and many-to-many relations; and a relation callback can return an array of operations, applied in order, in both `create()` and `update()`. Only rows related to the parent are changed or deleted.
    - **Builds on:** None.
    - **Hands to:** A relation callback that accepts an array, and a mutator with a `where` step, in the types and the executor. Slice 2 adds `upsert` as another operation alongside these and uses the array form in its ports.
