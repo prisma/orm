@@ -37,7 +37,21 @@ changes:
     detection:
       glob: "**/contract.json"
       matches:
-        - '::(?:text|numeric)\[\], NULL\) <@ ARRAY\['
+        - '::(?:text|numeric)\[\](?:, NULL\))? <@ ARRAY\['
+  - id: sqlite-integer-text-enum-members-refused
+    summary: |
+      A PSL enum block typed `@@type("sqlite/bigint@1")`, `@@type("sqlite/bigintnumber@1")`, `@@type("sqlite/integer@1")` or `@@type("sql/int@1")` on SQLite is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is written as text with a leading zero or as negative zero, such as "007" or "-0". The message says the text to write. Earlier versions stored the member as "7" or "0", so write it that way and re-emit; the contract is unchanged.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '@@type\(\s*"(?:sqlite/(?:bigint|bigintnumber|integer)|sql/int)@1"\s*\)'
+  - id: integer-text-in-contract-json-refused
+    summary: |
+      A `contract.json` value on a SQLite integer codec or on `mongo/int64@1` or `mongo/int64Number@1` that is digit text with a leading zero or a minus sign on zero, such as "007" or "-0", now fails to load with `RUNTIME.DECODE_FAILED`, naming the text to write. `contract emit` never wrote such a value, so only a hand-written or edited `contract.json` is affected. Rewrite the value as the message says, or re-emit the contract.
+    detection:
+      glob: "**/contract.json"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*"(?:sqlite/(?:bigint|bigintnumber|integer)|sql/int|mongo/int64(?:Number)?)@1")[\s\S]*"(?:-0|-?0\d+)"'
 ---
 
 ## `ts-numeric-inet-enum-members-written-as-postgres-prints`
@@ -128,3 +142,19 @@ array_remove("hosts", NULL) <@ '{"127.0.0.1","10.0.0.0/8"}'
 The detection for this change looks in `contract.json` for the old expression. If you do not keep `contract.json` in the project, look for list fields typed by an enum.
 
 A numeric enum's CHECK constraint, on a scalar or a list column, compares values as numbers, so the column also takes a value equal to a member but written with another scale, such as `0.50` for the member `0.5`, which reads back as `0.50` and which `db.enums` does not find (TML-3479).
+
+## `sqlite-integer-text-enum-members-refused`
+
+The SQLite integer codecs store an integer as digit text, and now read only the text the database writes: no leading zeros and no minus sign on zero. A PSL enum member written another way is refused:
+
+```text
+PSL_EXTENSION_INVALID_VALUE: enum "BigLevel" member "Low" was rejected by codec "sqlite/bigint@1": sqlite/bigint@1 JSON value must be "7", as the database writes this value
+```
+
+Earlier versions stored such a member as the database writes it, so rewrite it as the message says, `"7"` for `"007"` and `"0"` for `"-0"`, and re-emit. `contract.json`, the CHECK constraint and every hash are unchanged.
+
+## `integer-text-in-contract-json-refused`
+
+The same rule holds when a contract is loaded. `contract emit` writes these values as the database writes them, so a `contract.json` holds another spelling only when it was written or edited by hand. Loading it fails with `RUNTIME.DECODE_FAILED`, as in `mongo/int64@1 JSON value must be "7", as the database writes this value`. Rewrite each value the message names, or re-emit the contract from its source.
+
+The detection for this change matches a `contract.json` that names one of these codecs and holds a string such as `"007"` or `"-0"` anywhere, even on another codec. Check only the values typed by these codecs.

@@ -98,7 +98,7 @@ describe.each([
     ['two zeros', '00', '0'],
   ])('refuses %s, naming the text PostgreSQL prints for the value', (_name, json, printed) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      `${codecId} JSON value must be "${printed}", as PostgreSQL writes this value`,
+      `${codecId} JSON value must be "${printed}", as the database writes this value`,
     );
   });
 

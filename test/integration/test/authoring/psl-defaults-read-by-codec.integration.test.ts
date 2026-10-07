@@ -248,7 +248,7 @@ model Task {
         'an int8 member with a leading zero',
         '  @@type("pg/int8@1")\n  Low = "007"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8@1 JSON value must be "7", as PostgreSQL writes this value',
+        'enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8@1 JSON value must be "7", as the database writes this value',
       ],
       [
         'a string timestamp codec, which an enum cannot use',
