@@ -126,3 +126,5 @@ array_remove("hosts", NULL) <@ '{"127.0.0.1","10.0.0.0/8"}'
 2. Plan and apply a migration: it drops the old CHECK constraint and adds the new one. Dropping a constraint is a destructive operation, so the plan needs the destructive operation class allowed.
 
 The detection for this change looks in `contract.json` for the old expression. If you do not keep `contract.json` in the project, look for list fields typed by an enum.
+
+A numeric enum's CHECK constraint, on a scalar or a list column, compares values as numbers, so the column also takes a value equal to a member but written with another scale, such as `0.50` for the member `0.5`, which reads back as `0.50` and which `db.enums` does not find (TML-3479).
