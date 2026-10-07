@@ -21,10 +21,10 @@ export interface PrepareRenameResult {
 }
 
 export function providePrepareRename(input: ProvidePrepareRenameInput): PrepareRenameResult | null {
-  if (provideReferences({ ...input, includeDeclaration: true }).length === 0) return null;
   const { sourceFile } = input;
   const token = identTokenAt(input.document.syntax, sourceFile.offsetAt(input.position));
   if (token === undefined) return null;
+  if (provideReferences({ ...input, includeDeclaration: true }).length === 0) return null;
   return {
     range: {
       start: sourceFile.positionAt(token.offset),

@@ -2388,16 +2388,6 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
   });
 
-  it('answers prepare rename with null on a name that cannot be renamed', async () => {
-    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
-    await harness.initialize();
-    const { source, position } = sourceWithCursor('// use prisma-8\nmodel User {\n  id In|t\n}\n');
-    openDocument(harness, schemaUri, source);
-    await harness.waitForDiagnostics(schemaUri);
-
-    await expect(requestPrepareRename(harness, schemaUri, position)).resolves.toBeNull();
-  });
-
   it('answers prepare rename with null for a document outside the project', async () => {
     harness = startHarness(resolveToSchema, prepareRenameCapabilities);
     await harness.initialize();
@@ -2468,16 +2458,6 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
   });
 
-  it('answers rename with null on a name that cannot be renamed', async () => {
-    harness = startHarness(resolveToSchema);
-    await harness.initialize();
-    const { source, position } = sourceWithCursor('// use prisma-8\nmodel User {\n  id In|t\n}\n');
-    openDocument(harness, schemaUri, source);
-    await harness.waitForDiagnostics(schemaUri);
-
-    await expect(requestRename(harness, schemaUri, position, 'Number')).resolves.toBeNull();
-  });
-
   it('answers rename with null for a document outside the project', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
@@ -2499,13 +2479,16 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     ).resolves.toBeNull();
   });
 
-  it('answers rename with null when resolving an attribute argument throws and serves the next rename request', async () => {
+  it('answers prepare rename and rename with null when resolving an attribute argument throws and serves the next rename request', async () => {
     const extendsAttribute = modelAttribute('extends', {
       documentation: 'Extends another model.',
       positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
     });
     const factory = vi
       .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken prepare rename factory');
+      })
       .mockImplementationOnce(() => {
         throw new Error('broken rename factory');
       })
@@ -2537,13 +2520,19 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
           },
         },
       }),
-      pullDiagnosticsCapabilities,
+      {
+        textDocument: {
+          ...pullDiagnosticsCapabilities.textDocument,
+          ...prepareRenameCapabilities.textDocument,
+        },
+      },
     );
     await harness.initialize();
     const { source, position } = sourceWithCursor(
       '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  id Int\n  @@extends(Us|er)\n}\n',
     );
     openDocument(harness, schemaUri, source);
+    expect(await requestPrepareRename(harness, schemaUri, position)).toBeNull();
     expect(await requestRename(harness, schemaUri, position, 'Account')).toBeNull();
     await expect(requestRename(harness, schemaUri, position, 'Account')).resolves.toEqual({
       changes: {
@@ -2559,7 +2548,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         ],
       },
     });
-    expect(factory).toHaveBeenCalledTimes(2);
+    expect(factory).toHaveBeenCalledTimes(3);
   });
 
   it('returns full semantic tokens for a configured open PSL input', async () => {

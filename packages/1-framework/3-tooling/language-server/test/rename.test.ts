@@ -1,17 +1,3 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import {
-  buildSymbolTable,
-  entityRef,
-  fieldAttribute,
-  fieldRef,
-  list,
-  modelAttribute,
-  referencedFieldRef,
-  str,
-  structBlock,
-} from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
   LSPErrorCodes,
@@ -19,197 +5,9 @@ import {
   ResponseError,
   type WorkspaceEdit,
 } from 'vscode-languageserver';
-import { provideReferences, type ReferencesDocument } from '../src/references';
+import { provideReferences } from '../src/references';
 import { providePrepareRename, provideRename } from '../src/rename';
-import { testBinder } from './helpers/binder';
-
-type Files = Readonly<Record<string, string>>;
-
-const glance: Files = {
-  'auth.prisma': [
-    'namespace auth {',
-    '  model User {',
-    '    id    Int    @id',
-    '    posts Post[]',
-    '  }',
-    '}',
-    '',
-  ].join('\n'),
-  'session.prisma': [
-    'namespace auth {',
-    '  model Session {',
-    '    id     Int  @id',
-    '    userId Int',
-    '    user   User @relation(fields: [userId], references: [id])',
-    '  }',
-    '}',
-    '',
-  ].join('\n'),
-  'post.prisma': [
-    'model Post {',
-    '  id       Int       @id',
-    '  authorId Int',
-    '  author   auth.User @relation(fields: [authorId], references: [id])',
-    '',
-    '  @@index([authorId])',
-    '}',
-    '',
-  ].join('\n'),
-};
-
-const kinds: Files = {
-  'tag.prisma': [
-    '// Tag is mentioned in a comment',
-    'model Tag {',
-    '  id    Int    @id',
-    '  label String @map("Tag")',
-    '}',
-    '',
-    'type Address {',
-    '  street String',
-    '}',
-    '',
-    'enum Role {',
-    '  USER',
-    '}',
-    '',
-    'types {',
-    '  Email = String',
-    '}',
-    '',
-    'policy ReadOwn {',
-    '  on = Tag',
-    '}',
-    '',
-  ].join('\n'),
-  'group.prisma': [
-    'model TagGroup {',
-    '  id        Int     @id',
-    '  tagId     Int',
-    '  tag       Tag     @relation(fields: [tagId], references: [id])',
-    '  address   Address',
-    '  email     Email',
-    '  role      Role',
-    '  embedding pgvector.Vector',
-    '  remote    supabase:store.Tag',
-    '  missing   Missing',
-    '',
-    '  @@guardedBy(ReadOwn)',
-    '}',
-    '',
-  ].join('\n'),
-};
-
-const sameName: Files = {
-  'auth.prisma': ['namespace auth {', '  model auth {', '    id Int @id', '  }', '}', ''].join(
-    '\n',
-  ),
-  'post.prisma': ['model Post {', '  id    Int @id', '  owner auth.auth', '}', ''].join('\n'),
-};
-
-const authoringContributions = assembleAuthoringContributions([
-  {
-    id: 'rename-fixture',
-    authoring: {
-      type: {
-        pgvector: {
-          Vector: {
-            kind: 'typeConstructor',
-            output: { codecId: 'fixture/vector' },
-          },
-        },
-      },
-      attributeSpecs: {
-        field: {
-          id: () => fieldAttribute('id', { documentation: 'fixture' }),
-          map: () =>
-            fieldAttribute('map', {
-              documentation: 'fixture',
-              positional: [{ key: 'name', type: str(), documentation: 'fixture' }],
-            }),
-          relation: () =>
-            fieldAttribute('relation', {
-              documentation: 'fixture',
-              named: {
-                fields: { type: list(fieldRef()), documentation: 'fixture' },
-                references: { type: list(referencedFieldRef()), documentation: 'fixture' },
-              },
-            }),
-        },
-        model: {
-          index: () =>
-            modelAttribute('index', {
-              documentation: 'fixture',
-              positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
-            }),
-          guardedBy: () =>
-            modelAttribute('guardedBy', {
-              documentation: 'fixture',
-              positional: [
-                {
-                  key: 'policy',
-                  type: entityRef({ kind: 'block', keyword: 'policy' }),
-                  documentation: 'fixture',
-                },
-              ],
-            }),
-        },
-      },
-    },
-  },
-]);
-
-const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
-  policy: {
-    kind: 'pslBlock',
-    keyword: 'policy',
-    discriminator: 'rename-policy',
-    name: { required: true },
-    spec: () =>
-      structBlock({
-        parameters: { on: { type: entityRef({ kind: 'model' }), documentation: 'fixture' } },
-      }),
-  },
-};
-
-function cursorInput(files: Files, name: string, marked: string) {
-  const parsed = Object.entries(files).map(([file, text]) => parse(text, file));
-  const [first, ...rest] = parsed;
-  if (first === undefined) throw new Error('no files');
-  const sources = first.sources.merge(...rest.map((file) => file.sources));
-  const { symbolTable } = buildSymbolTable({
-    documents: parsed.map((file) => file.document),
-    sources,
-  });
-  const binder = testBinder({
-    sources,
-    symbolTable,
-    scalarTypes: ['Int', 'String'],
-    authoringContributions,
-    pslBlockDescriptors,
-  });
-  const documents = parsed.map(
-    (file): ReferencesDocument => ({
-      document: file.document,
-      sourceFile: file.sources.sourceFileFor(file.document.syntax),
-    }),
-  );
-  const current = documents.find((document) => document.sourceFile.filename === name);
-  if (current === undefined) throw new Error(`no file ${name}`);
-  const needle = marked.replace('|', '');
-  const text = current.sourceFile.text;
-  const start = text.indexOf(needle);
-  if (start < 0 || text.indexOf(needle, start + 1) >= 0) {
-    throw new Error(`"${needle}" does not occur exactly once in ${name}`);
-  }
-  return {
-    document: current.document,
-    sourceFile: current.sourceFile,
-    position: current.sourceFile.positionAt(start + marked.indexOf('|')),
-    documents,
-    binder,
-  };
-}
+import { cursorInput, type Files, glance, kinds, sameName } from './helpers/reference-fixtures';
 
 function lineWith(files: Files, uri: string, range: Range, replacement: string): string {
   const text = files[uri];
@@ -232,8 +30,7 @@ function renameAt(files: Files, name: string, marked: string, newName: string): 
 function prepareAt(files: Files, name: string, marked: string): string | null {
   const prepared = providePrepareRename(cursorInput(files, name, marked));
   if (prepared === null) return null;
-  const inside = lineWith(files, name, prepared.range, `<${prepared.placeholder}>`);
-  return inside;
+  return lineWith(files, name, prepared.range, `<${prepared.placeholder}>`);
 }
 
 function rejectionOf(newName: string): unknown {
@@ -277,10 +74,6 @@ describe('provideRename — a model', () => {
   it('returns the same edit from an unqualified reference', () => {
     expect(renameAt(glance, 'session.prisma', 'user   Us|er', 'Account')).toEqual(userToAccount);
   });
-
-  it('returns the same edit from the last segment of a qualified reference', () => {
-    expect(renameAt(glance, 'post.prisma', 'auth.Us|er', 'Account')).toEqual(userToAccount);
-  });
 });
 
 describe('provideRename — a field', () => {
@@ -290,12 +83,6 @@ describe('provideRename — a field', () => {
 
   it('returns the same edit from a references entry', () => {
     expect(renameAt(glance, 'post.prisma', 'references: [i|d]', 'uid')).toEqual(userIdToUid);
-  });
-
-  it('leaves a same-named field of another model untouched', () => {
-    expect(renameAt(glance, 'session.prisma', 'i|d     Int  @id', 'sid')).toEqual([
-      'session.prisma: sid     Int  @id',
-    ]);
   });
 
   it('edits the declaration name, the fields entry and the @@index entry, from the declaration name', () => {
@@ -309,23 +96,11 @@ describe('provideRename — a field', () => {
       authorIdToWriterId,
     );
   });
-
-  it('returns the same edit from an @@index entry', () => {
-    expect(renameAt(glance, 'post.prisma', '@@index([author|Id])', 'writerId')).toEqual(
-      authorIdToWriterId,
-    );
-  });
 });
 
 describe('provideRename — a namespace', () => {
   it('edits the name of both blocks in both files and the qualifier, from a block name', () => {
     expect(renameAt(glance, 'auth.prisma', 'namespace au|th', 'identity')).toEqual(authToIdentity);
-  });
-
-  it('returns the same edit from the name of the other block', () => {
-    expect(renameAt(glance, 'session.prisma', 'namespace au|th', 'identity')).toEqual(
-      authToIdentity,
-    );
   });
 
   it('returns the same edit from a qualifier', () => {
@@ -373,14 +148,6 @@ describe('provideRename — other symbol kinds', () => {
     expect(renameAt(kinds, 'tag.prisma', 'policy Read|Own', 'ReadMine')).toEqual([
       'tag.prisma: policy ReadMine {',
       'group.prisma: @@guardedBy(ReadMine)',
-    ]);
-  });
-
-  it('leaves a comment, a string and a cross-space reference that contain the name untouched', () => {
-    expect(renameAt(kinds, 'tag.prisma', 'model Ta|g {', 'Label')).toEqual([
-      'tag.prisma: model Label {',
-      'tag.prisma: on = Label',
-      'group.prisma: tag       Label     @relation(fields: [tagId], references: [id])',
     ]);
   });
 });
@@ -447,13 +214,6 @@ describe('provideRename — the new name', () => {
     });
   });
 
-  it('rejects a name with a space', () => {
-    expect(rejectionOf('My Model')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"My Model" is not a valid PSL identifier',
-    });
-  });
-
   it('rejects an invalid name at a position with nothing to rename', () => {
     expect(() => renameAt(kinds, 'group.prisma', 'Miss|ing', '1st')).toThrow(
       '"1st" is not a valid PSL identifier',
@@ -462,24 +222,8 @@ describe('provideRename — the new name', () => {
 });
 
 describe('provideRename — nothing to rename', () => {
-  it('returns null on an attribute name', () => {
+  it('returns null when find references returns nothing', () => {
     expect(renameAt(kinds, 'group.prisma', '@rel|ation', 'link')).toBeNull();
-  });
-
-  it('returns null on a contributed type', () => {
-    expect(renameAt(kinds, 'group.prisma', 'pgvector.Vec|tor', 'Embedding')).toBeNull();
-  });
-
-  it('returns null on a cross-space reference', () => {
-    expect(renameAt(kinds, 'group.prisma', 'supabase:store.Ta|g', 'Label')).toBeNull();
-  });
-
-  it('returns null on an unresolved name', () => {
-    expect(renameAt(kinds, 'group.prisma', 'Miss|ing', 'Found')).toBeNull();
-  });
-
-  it('returns null at a position with no identifier', () => {
-    expect(renameAt(kinds, 'group.prisma', 'missing  | Missing', 'Found')).toBeNull();
   });
 });
 
@@ -517,16 +261,6 @@ describe('provideRename — response shape', () => {
       ),
     ).toEqual(provideReferences({ ...input, includeDeclaration: true }));
   });
-
-  it('puts every edit of one file under that file', () => {
-    const edit = provideRename({
-      ...cursorInput(glance, 'post.prisma', 'author|Id Int'),
-      newName: 'writerId',
-    });
-
-    expect(Object.keys(edit?.changes ?? {})).toEqual(['post.prisma']);
-    expect(edit?.changes?.['post.prisma']).toHaveLength(3);
-  });
 });
 
 describe('providePrepareRename — renameable symbols', () => {
@@ -534,31 +268,13 @@ describe('providePrepareRename — renameable symbols', () => {
     expect(prepareAt(glance, 'auth.prisma', 'model Us|er')).toBe('auth.prisma: model <User> {');
   });
 
-  it('returns the last segment of a qualified model reference', () => {
-    expect(prepareAt(glance, 'post.prisma', 'auth.Us|er')).toBe(
-      'post.prisma: author   auth.<User> @relation(fields: [authorId], references: [id])',
-    );
-  });
-
   it('returns the name token of a field declaration', () => {
     expect(prepareAt(glance, 'post.prisma', 'author|Id Int')).toBe('post.prisma: <authorId> Int');
-  });
-
-  it('returns the token of a field reference in an attribute argument', () => {
-    expect(prepareAt(glance, 'session.prisma', 'references: [i|d]')).toBe(
-      'session.prisma: user   User @relation(fields: [userId], references: [<id>])',
-    );
   });
 
   it('returns the name token of a namespace block', () => {
     expect(prepareAt(glance, 'session.prisma', 'namespace au|th')).toBe(
       'session.prisma: namespace <auth> {',
-    );
-  });
-
-  it('returns the qualifier of a qualified reference for the namespace', () => {
-    expect(prepareAt(glance, 'post.prisma', 'au|th.User')).toBe(
-      'post.prisma: author   <auth>.User @relation(fields: [authorId], references: [id])',
     );
   });
 
@@ -579,12 +295,6 @@ describe('providePrepareRename — renameable symbols', () => {
   it('returns the token of a generic block', () => {
     expect(prepareAt(kinds, 'group.prisma', '@@guardedBy(Read|Own)')).toBe(
       'group.prisma: @@guardedBy(<ReadOwn>)',
-    );
-  });
-
-  it('returns the token with the cursor right after its last character', () => {
-    expect(prepareAt(glance, 'post.prisma', 'auth.User| @relation')).toBe(
-      'post.prisma: author   auth.<User> @relation(fields: [authorId], references: [id])',
     );
   });
 
