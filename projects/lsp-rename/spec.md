@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Let a schema author rename a model, type, block, field or namespace once and have the declaration and every reference across the project change with it. The set of edited positions is exactly the list find references returns, so a rename never touches a token that go-to-definition would not take to the renamed declaration.
+Let a schema author rename a model, type, block, field or namespace once and have the declaration and every reference across the project change with it. The set of edited positions is exactly the list find references returns, so a rename never touches a token that go-to-definition would not take to the renamed declaration. A rename that would change a database name also adds `@map` / `@@map` with the old name to the declaration, so the database keeps its names.
 
 ## At a glance
 
@@ -45,13 +45,39 @@ model Post {
 | field `authorId` → `writerId` | `authorId Int`, `fields: [authorId]`, `@@index([authorId])` |
 | namespace `auth` → `identity` | the name of both `namespace auth` blocks, and `auth` in `auth.User` |
 
+Three of these renames would change a database name, so the edit also adds a map attribute with the old name to the declaration:
+
+```prisma
+// model User → Account                 // field authorId → writerId
+namespace auth {                        model Post {
+  model Account {                         id       Int       @id
+    id    Int    @id                      writerId Int       @map("authorId")
+    posts Post[]                          author   auth.User @relation(fields: [writerId], references: [id])
+
+    @@map("User")                         @@index([writerId])
+  }                                     }
+}
+```
+
+| Rename | Map attribute added |
+|---|---|
+| model `User` → `Account` | `@@map("User")` in `model Account` |
+| field `id` of `User` → `uid` | `@map("id")` on the field |
+| field `authorId` → `writerId` | `@map("authorId")` on the field |
+| field `posts` of `User` → `articles` | none: a relation field has no database name |
+| namespace `auth` → `identity` | none: a namespace has no map attribute |
+
+A declaration that already has a map attribute gets none.
+
 `textDocument/prepareRename` answers whether the position can be renamed: the range of the identifier token under the cursor for the symbols above, `null` anywhere else.
 
 The server computes the edit; the client applies it. The server writes no file.
 
 ## Non-goals
 
-- **Keeping the storage name.** Rename edits names only. It does not add `@map` / `@@map`, which Prisma 7's language server does. A model or field without an explicit mapping gets a different storage name after the rename, and the next migration plan reflects that. Decided by the operator on 2026-10-06; `@map` is a SQL-family attribute and the language server is framework-level.
+- **Database names that no map attribute can keep.** A namespace (the schema name on Postgres), a member of a composite type (the stored key) and a block not marked `mappable` (Postgres `role` and `policy_*`) are renamed without a map attribute. The database name changes with the rename and the next migration plan reflects that.
+- **A map attribute other than `@map` / `@@map`.** The attribute name is fixed. A block cannot name a different attribute for this purpose.
+- **A family-contributed rule for models and fields.** The rule for when a model or field gets a map attribute is written in the language server. Decided by the operator on 2026-10-07, over a function contributed by each family.
 - **Collision checks.** Renaming to a name that is already declared, or to one that changes how another reference resolves, is not rejected. The result is reported by the existing diagnostics (`Duplicate declaration of "…"`), and the user undoes the edit. Decided by the operator on 2026-10-07; TypeScript and Prisma 7 do the same (see References).
 - **Enum members.** The binder records no resolution for them, so find references does not list them and rename cannot edit them.
 - **Symbols with no declaration in the schema sources**: attributes, parameters, functions, constants, contributed types and namespaces, cross-space references. `prepareRename` returns `null` on them.
@@ -63,6 +89,12 @@ The server computes the edit; the client applies it. The server writes no file.
 
 - **Find references** (`packages/1-framework/3-tooling/language-server/src/references.ts`, PR #30621). `provideReferences` with `includeDeclaration: true` returns one `Location` per identifier token of the symbol at the cursor, over every schema input of the project. For a namespace it returns every block name. Rename replaces the text of exactly these ranges. This project's branch is based on that PR's branch until it merges.
 - **Language server wiring.** `Project.references` and `referencesForDocument` in `server.ts` are the pattern the two new requests follow: same membership checks, same `ProjectArtifacts.documents()` snapshot, same binder.
+- **Attribute specs.** The language server already resolves the attribute specs the active family and target contribute (`attribute-spec-resolution.ts`). Both the SQL and the Mongo family define `map` for models and for fields. Rename adds a map attribute only where the resolver finds one at that level.
+- **Family interpreters** (SQL and Mongo `contract-psl`). They decide what a map attribute means; three of their rules are restated in the language server (see Cross-cutting requirements):
+  - a model with `@@base` and no `@@map` is stored with its base, and adding `@@map` would give it its own table in SQL and is an error in Mongo;
+  - a relation field has no database name;
+  - a composite type member does not take `@map`.
+- **Block descriptors** (`AuthoringPslBlockDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts`). The descriptor gains an optional `mappable` flag, set by whoever contributes the block: a target or an extension pack. Postgres sets it on `native_enum`, whose block name is the database type name unless `@@map` replaces it.
 - **Tokenizer** (`psl-parser/src/tokenizer.ts`). `isPslIdentifier`, exported from `@internal/psl-parser`, decides whether a new name is accepted.
 - **Symbol table** (`psl-parser/src/symbol-table.ts`). It already reports duplicate declarations; rename relies on that instead of its own check.
 - **Playground** (`apps/lsp-playground`). Its editor sends rename to the language server and applies the returned edit. Scratch files are opened in the editor lazily, on first selection, so an edit can target a file the editor has not opened yet. Rename has to work there too; the playground client is changed if it does not.
@@ -70,11 +102,11 @@ The server computes the edit; the client applies it. The server writes no file.
 
 ### Contract impact
 
-None. No contract entity, kind, or emitted artifact changes. A rename the user applies changes their contract the same way a manual edit of the same names would.
+No contract entity, kind, or emitted artifact changes. `AuthoringPslBlockDescriptor` gains the optional `mappable` flag; existing descriptors are valid without it. A rename the user applies changes their contract the same way a manual edit of the same text would.
 
 ### Adapter impact
 
-None.
+The Postgres target sets `mappable` on its `native_enum` block descriptor. No other target or adapter changes.
 
 ### Failure states
 
@@ -88,8 +120,15 @@ The server edits nothing itself, so a failed request leaves every file as it was
 
 ## Cross-cutting requirements
 
-- **Edits equal references.** For any position, the ranges in the rename edit are the ranges find references returns from that position with `includeDeclaration` set. Rename has no symbol lookup, text search or filtering of its own.
-- **One token per edit.** Each `TextEdit` replaces one identifier token with the new name: the last segment of a qualified name for an entity, the qualifier for a namespace.
+- **Name edits equal references.** For any position, the ranges whose text is replaced are the ranges find references returns from that position with `includeDeclaration` set. Rename has no symbol lookup, text search or filtering of its own for them.
+- **One token per name edit.** Each of these `TextEdit`s replaces one identifier token with the new name: the last segment of a qualified name for an entity, the qualifier for a namespace.
+- **At most one insertion.** Besides the name edits, the edit holds at most one insertion: a map attribute on the renamed declaration, in the declaration's file, whatever position the rename was started from.
+- **When a map attribute is added.** The attribute is `@map("<old name>")` on a field and `@@map("<old name>")` on a model or block. It is added when the declaration has no `map` attribute and is one of:
+  - a model without `@@base`, when the attribute specs define `map` for models;
+  - a field of a model whose type does not resolve to a model, when the attribute specs define `map` for fields;
+  - a block whose descriptor is `mappable`.
+- **Nothing else gets one.** A composite type, a composite type member, a named type, an enum block, a namespace, a model with `@@base`, a relation field and a block that is not `mappable` are renamed by name only.
+- **The inserted text is in the formatter's normal form.** Formatting the file after the rename does not move or reindent the attribute. On a field it follows the last attribute after one space, or sits where a first attribute sits. In a model or block it is on its own line before the closing brace, after the existing `@@` attributes, separated from the last field by a blank line.
 - **Whole project.** The edit covers every schema input of the project, including files not open in the editor, each under its own URI.
 - **Cursor position does not change the answer.** A cursor on the declaration name and a cursor on any reference to the same symbol produce the same edit.
 - **`prepareRename` and `rename` agree.** `prepareRename` returns a range exactly when `rename` from the same position would return a non-empty edit for a valid name.
@@ -106,6 +145,12 @@ N/A — single-slice project.
 - [ ] The language server declares `renameProvider`, with `prepareProvider` when the client declares `prepareSupport`.
 - [ ] Tests cover every row of the table in [At a glance](#at-a-glance), with the files split as shown, once from the declaration name and once from a reference.
 - [ ] Tests cover the remaining symbol kinds: a composite type, a named type, a generic block and an enum block.
+- [ ] Tests cover the map attribute, each from the declaration name and from a reference in another file:
+  - added for a model, a scalar field, a list of scalars, a field typed by an enum, a field typed by a composite type, and a `mappable` block;
+  - not added for a model, field or block that already has one, a model with `@@base`, a relation field in both directions, a composite type member, a composite type, an enum block, a named type, a namespace, a block that is not `mappable`, and a model or field when the attribute specs define no `map`.
+- [ ] Tests cover the position of the inserted text: a field with no attribute, with attributes, and with a trailing comment; a model whose last member is a field, and one that already has `@@` attributes. For each, formatting the edited file changes nothing in the attribute's line.
+- [ ] After a rename with a map attribute is applied, the contract the SQL interpreter emits has the same storage names as before the rename, covered by a test for a model and a field. The same for the Mongo interpreter.
+- [ ] The Postgres `native_enum` descriptor is `mappable`, and renaming a `native_enum` block adds `@@map`.
 - [ ] Tests cover `prepareRename`: a range on each renameable kind, `null` on an attribute name, a contributed type, a cross-space reference, an unresolved name and a position with no identifier.
 - [ ] Tests cover a rejected new name (not an identifier).
 - [ ] Manual check in VS Code: F2 on a model, a field, a namespace and a block, from a declaration and from a reference, with edits in more than one file including one that is not open; F2 on an attribute name is refused.
@@ -121,4 +166,5 @@ None.
 - Linear Project: none.
 - Predecessor: find references, PR #30621 (`projects/lsp-find-references/`), whose spec names rename as the project built on it.
 - Collision handling in other servers, read from source on 2026-10-06. No check: TypeScript v5.9.2 (`src/services/rename.ts`; `findRenameLocations` in `services.ts` never receives the new name), Prisma 7 (`handleRenameRequest` in `prisma/language-tools`), rust-analyzer (applies the rename; for local variables only, marks the edit as needing confirmation). Reject a conflict with a sibling declaration: gopls (`rename_check.go`), clangd (`Rename.cpp`, `checkName`).
+- Map attribute on rename, decided by the operator on 2026-10-07, reversing the names-only decision of 2026-10-06: every rename that affects a database name gets `@map` / `@@map` with the old name unless the declaration has one; the rule for models and fields is written in the language server; blocks opt in with a flag; the attribute is always `map`.
 - Prisma 7 rename, for comparison: `prisma/language-tools`, `packages/language-server/src/lib/code-actions/rename.ts`.

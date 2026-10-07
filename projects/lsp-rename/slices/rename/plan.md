@@ -28,3 +28,20 @@ Review: one reviewer round after Dispatch 2, covering both code dispatches. Disp
 - **Builds on:** Dispatch 2.
 - **Hands to:** Slice DoD.
 - **Focus:** QA artefacts under `projects/lsp-rename/qa/`, reusing the find-references driver (`projects/lsp-find-references/qa/driver/`). Code changes only if QA finds a defect, routed back through review.
+
+### Dispatch 4: map attribute on rename (added 2026-10-07)
+
+- **Outcome:** a rename of a model, a scalar field or a `mappable` block adds `@map` / `@@map` with the old name to the declaration unless it has one, as the amended slice spec describes; the Postgres `native_enum` descriptor is `mappable`. Tests cover the amended Definition of Done.
+- **Builds on:** Dispatches 1–3.
+- **Hands to:** review, then the QA rerun.
+- **Focus:** `language-server/src/rename.ts`, `project.ts`, `test/rename.test.ts`, `test/server.test.ts`; `framework-components` `framework-authoring.ts`; the Postgres target's `native_enum` descriptor and its test; one test each in SQL and Mongo `contract-psl`.
+- **Validation gate:**
+  - during the dispatch: the changed test files, `typecheck` and `lint` for the changed packages;
+  - once at the end: full tests of the language server, `pnpm lint:deps`, `pnpm test:packages`.
+
+### Dispatch 5: QA rerun (added 2026-10-07)
+
+- **Outcome:** the QA script gains the map-attribute scenarios and a new run report records them, with the earlier scenarios rerun.
+- **Builds on:** Dispatch 4, after review.
+- **Hands to:** Slice DoD and the updated PR description.
+- **Focus:** `projects/lsp-rename/qa/`.
