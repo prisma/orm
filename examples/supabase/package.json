@@ -12,20 +12,20 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-supabase": "workspace:8.0.0-rc.15",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.15",
+    "@prisma/orm-extension-supabase": "workspace:8.0.0-rc.16",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.16",
     "jose": "^6",
     "pg": "catalog:"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.6.3",
-    "@repo/test-utils": "workspace:8.0.0-rc.15",
-    "@repo/tsconfig": "workspace:8.0.0-rc.15",
+    "@repo/test-utils": "workspace:8.0.0-rc.16",
+    "@repo/tsconfig": "workspace:8.0.0-rc.16",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.15"
+  "version": "8.0.0-rc.16"
 }
