@@ -4,6 +4,7 @@ import { defineContract, enumType, member } from '../../src/exports/contract-bui
 const pgNumeric = { codecId: 'pg/numeric@1' as const, nativeType: 'numeric' };
 const pgInet = { codecId: 'pg/inet@1' as const, nativeType: 'inet' };
 const pgTimestampString = { codecId: 'pg/timestamp-string@1' as const, nativeType: 'timestamp' };
+const pgJson = { codecId: 'pg/json@1' as const, nativeType: 'json' };
 const pgTimestamptzString = {
   codecId: 'pg/timestamptz-string@1' as const,
   nativeType: 'timestamptz',
@@ -106,6 +107,11 @@ describe('values in a Postgres contract are the text Postgres returns', () => {
       'pg/timestamptz-string@1',
       enumType('Stamp', pgTimestamptzString, member('A', '2024-01-02T03:04:05Z')),
       `A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member.`,
+    ],
+    [
+      'pg/json@1',
+      enumType('Stamp', pgJson, member('A', 'low')),
+      'The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.',
     ],
   ])('refuses an enum over %s, saying why', (codecId, handle, reason) => {
     expect(() => contractWithEnum(handle)).toThrow(

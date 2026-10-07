@@ -257,6 +257,12 @@ model Task {
         'enum "Priority" cannot use the codec "pg/timestamp-string@1". A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member.',
       ],
       [
+        'a json codec, which an enum cannot use',
+        '  @@type("pg/json@1")\n  Low = "low"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" cannot use the codec "pg/json@1". The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.',
+      ],
+      [
         'an inet member with /32',
         '  @@type("pg/inet@1")\n  Low = "10.0.0.1/32"',
         'PSL_EXTENSION_INVALID_VALUE',
@@ -299,7 +305,6 @@ model Task {
       ['pg/int8number@1', '"42"', '42'],
       ['pg/unboundedint@1', '"9223372036854775808"', '9223372036854775808'],
       ['pg/numeric@1', '"1.50"', '1.50'],
-      ['pg/json@1', '"low"', 'low'],
       ['pg/jsonb@1', '"low"', 'low'],
     ])('accepts a %s member written as %s', async (codecId, written, stored) => {
       expect(await storedEnumValues(codecId, [`Low = ${written}`])).toEqual({ values: [stored] });

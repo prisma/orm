@@ -1516,6 +1516,8 @@ export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgJson.id;
   override readonly codecId = PG_JSON_CODEC_ID;
   override readonly traits = [] as const;
+  override readonly enumRefusal =
+    'The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.';
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgJsonCodec {
     return () => new PgJsonCodec(this);

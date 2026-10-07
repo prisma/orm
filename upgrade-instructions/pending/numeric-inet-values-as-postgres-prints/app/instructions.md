@@ -31,6 +31,14 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)[\s\S]*?(?:[''"]pg/timestamp(?:tz)?-string@1[''"]|\b(?:PG_TIMESTAMP(?:TZ)?_STRING_CODEC_ID|pgTimestamp(?:tz)?StringColumn)\b)'
+  - id: enum-json-codec-refused
+    summary: |
+      An enum typed by `pg/json@1` is now refused: `defineContract` refuses its `enumType` with `CONTRACT.ENUM_INVALID`, and PSL refuses its `@@type("pg/json@1")` with `PSL_EXTENSION_INVALID_VALUE`. The `json` type has no equality operator, so a scalar column never applied and a list column's new CHECK constraint refuses every insert. Type the enum with `pg/jsonb@1` and re-emit.
+    detection:
+      glob: "**/*.{prisma,ts,tsx,mts,cts}"
+      matches:
+        - '@@type\(\s*"pg/json@1"\s*\)'
+        - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)(?=[\s\S]*\benumType\()[\s\S]*?(?:[''"]pg/json@1[''"]|\b(?:PG_JSON_CODEC_ID|jsonColumn)\b)'
   - id: enum-list-check-compares-in-column-type
     summary: |
       The CHECK constraint on a Postgres list column typed by an enum now compares each element with the members in the column's own type, not as text, so an inet enum list takes a host address such as "127.0.0.1". The constraint's expression and name change, so re-emit the contract and apply a migration that replaces the constraint.
@@ -121,6 +129,21 @@ CONTRACT.ENUM_INVALID: enumType("Stamp"): an enum cannot use the codec pg/timest
 PSL refuses an enum block typed by either codec with the same reason, as `PSL_EXTENSION_INVALID_VALUE` at its `@@type`; it used to report the codec as unknown.
 
 Type the enum with the Temporal codec of the same column type, `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1`, and write each member as a `Temporal.PlainDateTime` or a `Temporal.Instant`. `db.enums` then holds Temporal values and finds a value read back. Re-emit the contract; the enum's codec changes, and with it the storage hash. Plan and apply a migration, or run `prisma db sign` for a project kept with `db init` or `db update`.
+
+## `enum-json-codec-refused`
+
+The `json` type has no equality operator, so Postgres cannot compare a `json` value with an enum's members. A scalar column typed by a `pg/json@1` enum never applied: its CHECK constraint failed with `operator does not exist: json = unknown`. A list column applied, but with the CHECK constraint described under `enum-list-check-compares-in-column-type` every insert fails with `could not identify an equality operator for type json`, an empty list included. An enum typed by `pg/json@1` is now refused when the contract is authored:
+
+```text
+CONTRACT.ENUM_INVALID: enumType("Payload"): an enum cannot use the codec pg/json@1. The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.
+```
+
+PSL refuses an enum block with `@@type("pg/json@1")` with the same reason, as `PSL_EXTENSION_INVALID_VALUE`.
+
+1. Type the enum with `pg/jsonb@1`: change `@@type("pg/json@1")` to `@@type("pg/jsonb@1")` in PSL, or pass `{ codecId: 'pg/jsonb@1' }` (or `jsonbColumn`) to `enumType` in TypeScript. The members stay as they are.
+2. Re-emit the contract. The enum's codec and its columns' type change from `json` to `jsonb`, and with them the storage hash. Plan and apply a migration, which changes each column's type.
+
+The TypeScript detection matches a file that calls `enumType(` and names the json codec anywhere, even on a column that is not an enum. Check only the enums.
 
 ## `enum-list-check-compares-in-column-type`
 
