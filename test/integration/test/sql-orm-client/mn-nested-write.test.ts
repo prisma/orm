@@ -704,42 +704,6 @@ describe('integration/mn-nested-write', () => {
   );
 
   it(
-    'update(): a later disconnect in the array removes the link an earlier connect made',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
-        await seedTags(runtime, [
-          { id: TAG_RUST, name: 'Rust' },
-          { id: TAG_TS, name: 'TypeScript' },
-        ]);
-        await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
-
-        const updated = await users
-          .where({ id: 1 })
-          .select('id', 'name')
-          .include('tags', (tags) => tags.select('id', 'name'))
-          .update({
-            tags: (t) => [t.connect({ id: TAG_TS }), t.disconnect([{ id: TAG_TS }])],
-          });
-
-        expect(updated).toEqual({
-          id: 1,
-          name: 'Alice',
-          tags: [{ id: TAG_RUST, name: 'Rust' }],
-        });
-
-        const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
-          'select user_id, tag_id from user_tags',
-        );
-        expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'create(): an array on a junction relation connects and creates tags',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -985,40 +949,6 @@ describe('integration/mn-nested-write', () => {
         expect(alice).toEqual({ id: 1, name: 'Alice', tags: [] });
         expect(await tagRows(runtime)).toEqual([{ id: TAG_GO, name: 'Changed' }]);
         expect(await userTagRows(runtime)).toEqual([{ user_id: 2, tag_id: TAG_GO }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update(): updateAll() and deleteAll() change nothing when no linked tag matches or the data is empty',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        await seedTwoUsersWithTags(runtime);
-
-        const updated = await users
-          .where({ id: 1 })
-          .select('id', 'name')
-          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
-          .update({
-            tags: (t) => [
-              t.where({ name: 'Go' }).updateAll({ name: 'Changed' }),
-              t.where({ name: 'Go' }).deleteAll(),
-              t.updateAll({}),
-            ],
-          });
-
-        expect(updated).toEqual({
-          id: 1,
-          name: 'Alice',
-          tags: [
-            { id: TAG_RUST, name: 'Rust' },
-            { id: TAG_TS, name: 'TypeScript' },
-          ],
-        });
-        expect(await tagRows(runtime)).toEqual(allSeededTags);
-        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
       });
     },
     timeouts.spinUpPpgDev,

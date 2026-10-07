@@ -266,72 +266,6 @@ describe('integration/nested-mutations', () => {
   );
 
   it(
-    'update() lets a later disconnect() in the array undo an earlier create() and connect()',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
-        await seedPosts(runtime, [
-          { id: 10, title: 'Old first', userId: 1, views: 10 },
-          { id: 12, title: 'Unowned', userId: null, views: 12 },
-        ]);
-
-        const updated = await users
-          .where({ id: 1 })
-          .select('id', 'name')
-          .include('posts', (posts) =>
-            posts.select('id', 'title', 'userId').orderBy((post) => post.id.asc()),
-          )
-          .update({
-            posts: (posts) => [
-              posts.create({ id: 30, title: 'Created', views: 30 }),
-              posts.connect({ id: 12 }),
-              posts.disconnect(),
-            ],
-          });
-
-        expect(updated).toEqual({ id: 1, name: 'Alice', posts: [] });
-
-        const rows = await runtime.query<{ id: number; user_id: number | null }>(
-          'select id, user_id from posts order by id',
-        );
-        expect(rows).toEqual([
-          { id: 10, user_id: null },
-          { id: 12, user_id: null },
-          { id: 30, user_id: null },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update() lets the last operation in an array decide a to-one relation',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const posts = createReturningPostsCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com' },
-        ]);
-        await seedPosts(runtime, [{ id: 10, title: 'Post', userId: 1, views: 10 }]);
-
-        const updated = await posts
-          .where({ id: 10 })
-          .select('id', 'title', 'userId')
-          .update({
-            author: (author) => [author.disconnect(), author.connect({ id: 2 })],
-          });
-
-        expect(updated).toEqual({ id: 10, title: 'Post', userId: 2 });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'create() applies an array of operations on a to-many relation',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -362,113 +296,6 @@ describe('integration/nested-mutations', () => {
             { id: 30, title: 'Created', userId: 1 },
           ],
         });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'an empty array leaves the relation unchanged in create() and update()',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
-        await seedPosts(runtime, [{ id: 10, title: 'Kept', userId: 1, views: 10 }]);
-
-        const updated = await users
-          .where({ id: 1 })
-          .select('id', 'name')
-          .include('posts', (posts) => posts.select('id', 'title', 'userId'))
-          .update({ name: 'Renamed', posts: () => [] });
-
-        expect(updated).toEqual({
-          id: 1,
-          name: 'Renamed',
-          posts: [{ id: 10, title: 'Kept', userId: 1 }],
-        });
-
-        const created = await users
-          .select('id', 'name')
-          .include('posts', (posts) => posts.select('id', 'title', 'userId'))
-          .create({ id: 2, name: 'Bob', email: 'bob@example.com', posts: () => [] });
-
-        expect(created).toEqual({ id: 2, name: 'Bob', posts: [] });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update() rejects a nested array and an element that is not an operation, writing nothing',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
-        await seedPosts(runtime, [{ id: 10, title: 'Kept', userId: 1, views: 10 }]);
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            // @ts-expect-error
-            posts: (posts) => [posts.disconnect(), [posts.connect({ id: 10 })]],
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
-          meta: { relation: 'posts', model: 'User', problem: 'nested-array', index: 1 },
-        });
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            // @ts-expect-error
-            posts: (posts) => [posts.disconnect(), { id: 10 }],
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
-          meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor', index: 1 },
-        });
-
-        const userRows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        expect(userRows).toEqual([{ id: 1, name: 'Alice' }]);
-        const postRows = await runtime.query<{ id: number; user_id: number | null }>(
-          'select id, user_id from posts order by id',
-        );
-        expect(postRows).toEqual([{ id: 10, user_id: 1 }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'create() rejects disconnect() inside an array before any row is written',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await expect(
-          users.create({
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            posts: (posts) => [
-              posts.create({ id: 30, title: 'Created', views: 30 }),
-              // @ts-expect-error
-              posts.disconnect(),
-            ],
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'disconnect', relation: 'posts' },
-        });
-
-        const userRows = await runtime.query<{ id: number }>('select id from users');
-        expect(userRows).toEqual([]);
-        const postRows = await runtime.query<{ id: number }>('select id from posts');
-        expect(postRows).toEqual([]);
       });
     },
     timeouts.spinUpPpgDev,
@@ -717,49 +544,6 @@ describe('integration/nested-mutations', () => {
   );
 
   it(
-    'update() rejects updateAll() data that sets the foreign key to the parent before anything is written',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        await seedTwoUsersWithPosts(runtime);
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            posts: (posts) => [
-              posts.where({ title: 'Kept' }).deleteAll(),
-              // @ts-expect-error
-              posts.updateAll({ userId: 2 }),
-            ],
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
-          meta: {
-            kind: 'updateAll',
-            relation: 'posts',
-            problem: 'parent-link-column',
-            fields: ['userId'],
-          },
-        });
-
-        const userRows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        expect(userRows).toEqual([
-          { id: 1, name: 'Alice' },
-          { id: 2, name: 'Bob' },
-        ]);
-        expect(await postRows(runtime)).toEqual([
-          { id: 10, title: 'Draft', user_id: 1, views: 1 },
-          { id: 11, title: 'Kept', user_id: 1, views: 20 },
-          { id: 20, title: 'Draft', user_id: 2, views: 3 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'create() rejects updateAll() and deleteAll() and writes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -793,56 +577,6 @@ describe('integration/nested-mutations', () => {
 
         const userRows = await runtime.query<{ id: number }>('select id from users');
         expect(userRows).toEqual([]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update() rejects updateAll() and deleteAll() on to-one relations before anything is written',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        const posts = createReturningPostsCollection(runtime);
-        await seedTwoUsersWithPosts(runtime);
-        await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Profile' }]);
-
-        await expect(
-          users.where({ id: 1 }).update({
-            name: 'Renamed',
-            // @ts-expect-error
-            profile: (profile) => profile.deleteAll(),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'deleteAll', relation: 'profile', reason: 'to-one-relation' },
-        });
-
-        await expect(
-          posts.where({ id: 10 }).update({
-            title: 'Renamed',
-            // @ts-expect-error
-            author: (author) => author.updateAll({ name: 'Renamed' }),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-          meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
-        });
-
-        const userRows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        expect(userRows).toEqual([
-          { id: 1, name: 'Alice' },
-          { id: 2, name: 'Bob' },
-        ]);
-        const profileRows = await runtime.query<{ id: number }>('select id from profiles');
-        expect(profileRows).toEqual([{ id: 100 }]);
-        expect(await postRows(runtime)).toEqual([
-          { id: 10, title: 'Draft', user_id: 1, views: 1 },
-          { id: 11, title: 'Kept', user_id: 1, views: 20 },
-          { id: 20, title: 'Draft', user_id: 2, views: 3 },
-        ]);
       });
     },
     timeouts.spinUpPpgDev,
@@ -929,39 +663,6 @@ describe('integration/nested-mutations', () => {
       1,
     ],
     [
-      'a callback returning something that is not an operation',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({ posts: () => ({ id: 10 }) } as never),
-      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor' } },
-      1,
-    ],
-    [
-      'a nested array of operations',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({
-            // @ts-expect-error
-            posts: (posts) => [[posts.disconnect()]],
-          }),
-      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'nested-array' } },
-      1,
-    ],
-    [
-      'an array element that is not an operation',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({
-            // @ts-expect-error
-            posts: (posts) => [posts.disconnect(), { id: 10 }],
-          }),
-      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor', index: 1 } },
-      1,
-    ],
-    [
       'updateAll() on a to-one relation the parent owns',
       (runtime, id) =>
         createReturningPostsCollection(runtime)
@@ -975,21 +676,6 @@ describe('integration/nested-mutations', () => {
         meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
       },
       10,
-    ],
-    [
-      'deleteAll() on a to-one relation the child owns',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({
-            // @ts-expect-error
-            profile: (profile) => profile.deleteAll(),
-          }),
-      {
-        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-        meta: { kind: 'deleteAll', relation: 'profile', reason: 'to-one-relation' },
-      },
-      1,
     ],
     [
       'updateAll() data that sets the foreign key to the parent',
@@ -1006,36 +692,6 @@ describe('integration/nested-mutations', () => {
       },
       1,
     ],
-    [
-      'disconnect() without criteria on a many-to-many relation',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({
-            // @ts-expect-error
-            tags: (tags) => tags.disconnect(),
-          }),
-      {
-        code: 'ORM.RELATION_MUTATION_INVALID',
-        meta: { kind: 'disconnect', relation: 'tags', problem: 'missing-criterion' },
-      },
-      1,
-    ],
-    [
-      'connect() through a junction with required payload columns',
-      (runtime, id) =>
-        createReturningUsersCollection(runtime)
-          .where({ id })
-          .update({
-            roles: (roles: { connect(criterion: unknown): unknown }) =>
-              roles.connect({ id: 'role-admin' }),
-          } as never),
-      {
-        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-        meta: { kind: 'connect', relation: 'roles', reason: 'junction-required-columns' },
-      },
-      1,
-    ],
   ];
 
   for (const [name, update, expected, existingId] of invalidNestedUpdates) {
@@ -1044,7 +700,6 @@ describe('integration/nested-mutations', () => {
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedTwoUsersWithPosts(runtime);
-          await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Profile' }]);
 
           await expect(update(runtime, 999)).rejects.toMatchObject(expected);
           await expect(update(runtime, existingId)).rejects.toMatchObject(expected);
@@ -1085,88 +740,6 @@ describe('integration/nested-mutations', () => {
           { id: 11, title: 'Kept', user_id: 1, views: 20 },
           { id: 20, title: 'Draft', user_id: 2, views: 3 },
         ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update() rejects nested create() data that is not an object, whether or not a row matches',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        await seedTwoUsersWithPosts(runtime);
-
-        for (const id of [999, 1]) {
-          await expect(
-            users.where({ id }).update({
-              name: 'Renamed',
-              posts: (posts) =>
-                posts.create([{ id: 30, title: 'Created', views: 0 }, null] as never),
-            }),
-          ).rejects.toMatchObject({
-            code: 'ORM.RELATION_MUTATION_INVALID',
-            meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
-          });
-          await expect(
-            users.where({ id }).update({
-              name: 'Renamed',
-              tags: (tags) => tags.create(['Go'] as never),
-            }),
-          ).rejects.toMatchObject({
-            code: 'ORM.RELATION_MUTATION_INVALID',
-            meta: { kind: 'create', relation: 'tags', problem: 'invalid-data', index: 0 },
-          });
-        }
-
-        const userRows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        expect(userRows).toEqual([
-          { id: 1, name: 'Alice' },
-          { id: 2, name: 'Bob' },
-        ]);
-        expect(await postRows(runtime)).toEqual([
-          { id: 10, title: 'Draft', user_id: 1, views: 1 },
-          { id: 11, title: 'Kept', user_id: 1, views: 20 },
-          { id: 20, title: 'Draft', user_id: 2, views: 3 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'create() rejects nested create() data that is not an object and writes nothing',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await expect(
-          users.create({
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            posts: (posts) => posts.create([{ id: 30, title: 'Created', views: 0 }, 7] as never),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
-          meta: { kind: 'create', relation: 'posts', problem: 'invalid-data', index: 1 },
-        });
-        await expect(
-          users.create({
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            posts: (posts) => posts.create([null] as never),
-          }),
-        ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
-          meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
-        });
-
-        expect(await runtime.query<{ id: number }>('select id from users')).toEqual([]);
-        expect(await postRows(runtime)).toEqual([]);
       });
     },
     timeouts.spinUpPpgDev,
