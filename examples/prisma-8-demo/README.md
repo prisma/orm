@@ -106,8 +106,8 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientGetDashboardUsers(emailDomain, postTitleTerm, limit, postsPerUser, runtime)` — compound `and/or/not` filters + relation filters + `select()` and `include()` composition
 - `ormClientGetPostFeed(postTitleTerm, limit, runtime)` — to-one include (`post -> user`) with projected fields
 - `ormClientGetUserTaskBoard(limit, runtime)` — **polymorphic-target include**: `User.include('tasks')` where `Task` is a discriminated base; each included row is decoded into its variant shape (`Bug` → `severity`/`stepsToRepro`, `Feature` → `priority`/`targetRelease`) in a single read
-- `ormClientGetUserBugTriage(severity, limit, runtime)` — `.variant('Bug')`-narrowed include filtered by the Bug-only `severity` column
-- `ormClientGetFeatureRoadmap(targetRelease, limit, runtime)` — `.variant('Feature')`-narrowed include filtered by the Feature-only `targetRelease` column (a multi-table-inheritance variant column reached through the variant join)
+- `ormClientGetUserBugTriage(severity, limit, runtime)` — `.variant('bug')`-narrowed include filtered by the Bug-only `severity` column
+- `ormClientGetFeatureRoadmap(targetRelease, limit, runtime)` — `.variant('feature')`-narrowed include filtered by the Feature-only `targetRelease` column (a multi-table-inheritance variant column reached through the variant join)
 - `ormClientGetPostTags(postId, runtime)` — **many-to-many include**: `Post.include('tags', …)` traversing the `post_tag` junction transparently
 - `ormClientGetTagPosts(tagId, runtime)` — the same junction walked from the other side (`Tag.include('posts', …)`)
 - `ormClientGetPostsByTagFilter(mode, label, runtime)` — `some`/`none`/`every` relation filter predicates on the N:M `tags` relation (EXISTS through the junction)

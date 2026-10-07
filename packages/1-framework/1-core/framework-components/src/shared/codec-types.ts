@@ -48,12 +48,10 @@ export interface CodecCallContext {
  * Codec-id-keyed read surface threaded into emit and authoring paths.
  *
  * - `get(id)` returns a representative {@link Codec} instance for the codec id (used where a caller reads or encodes a value by codec id and the codec takes no type parameters). For parameterized codecs whose factory requires concrete params, this may return `undefined` — use `CodecRegistry.forCodecRef` instead.
- * - `targetTypesFor(id)` exposes the codec-id-keyed `targetTypes` metadata the runtime instance no longer carries (TML-2357). Returns the same array `CodecDescriptor.targetTypes` would; for Mongo (whose registration doesn't yet resolve through the unified descriptor map — TML-2324) the family-side assembly populates this directly from the contributor's codec metadata.
  * - `renderOutputTypeFor(id, params)` exposes the codec-id-keyed `renderOutputType` renderer the runtime instance no longer carries. Returns `undefined` when the codec doesn't render a custom type or when the codec id is unknown.
  */
 export interface CodecLookup {
   get(id: string): Codec | undefined;
-  targetTypesFor(id: string): readonly string[] | undefined;
   renderOutputTypeFor(id: string, params: Record<string, unknown>): string | undefined;
   /** Codec-id-keyed `renderInputType` renderer for the `contract.d.ts` input position. Optional so existing lookups need not provide it; returns `undefined` when the codec renders no custom input type or the id is unknown. */
   renderInputTypeFor?(id: string, params: Record<string, unknown>): string | undefined;
@@ -96,7 +94,6 @@ export interface CodecRegistry extends CodecLookupWithDescriptors {
 /** A lookup with no codecs. It has no `descriptorFor`, so a stub that adds codecs to it through `get` cannot pass for a lookup of descriptors that answers nothing. */
 export const emptyCodecLookup: CodecLookup = {
   get: () => undefined,
-  targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
 };
 

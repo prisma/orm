@@ -67,17 +67,17 @@
               "columns": {
                 "appId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "createdAt": {
                   "codecId": "pg/date-temporal@1",
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "nullable": false
                 },
                 "value": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -97,11 +97,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a60cd237f46459d3cdd8d0afabbd1f682f377517ea746c88cc008378c2ced089"
+    "storageHash": "716cc4e05ded747a1bcd559160bcbe8bae1b20719ac753171cffa802c21d4017"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -112,9 +114,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

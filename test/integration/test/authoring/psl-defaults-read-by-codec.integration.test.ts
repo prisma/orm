@@ -1,7 +1,9 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { float4Column, int4Column } from '@internal/adapter-postgres/column-types';
+import type { Contract } from '@internal/contract/types';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -13,18 +15,48 @@ import { authorSqlContractFromPsl, findStorageColumn } from '../scalar-lists/psl
 
 const stack = composePostgresStack();
 
-/** The diagnostics of a schema loaded the way `defineConfig` loads it, enum inference included. */
-async function diagnosticsOf(schema: string) {
+/** A schema loaded the way `defineConfig` loads it, enum inference included. */
+async function load(schema: string) {
   const path = join(mkdtempSync(join(tmpdir(), 'psl-codec-reads-')), 'schema.prisma');
   writeFileSync(path, `// use prisma-8\n\n${schema}`, 'utf-8');
-  const result = await prismaContract(path, {
+  return prismaContract(path, {
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
     enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
   }).source.load(sourceContext(stack, [path]));
+}
+
+async function diagnosticsOf(schema: string) {
+  const result = await load(schema);
   return result.ok
     ? []
     : result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
+}
+
+/** The values an enum typed by `codecId` stores for `members`, or the diagnostics that refuse it. */
+async function storedEnumValues(codecId: string, members: readonly string[]) {
+  const result = await load(`
+enum Priority {
+  @@type("${codecId}")
+${members.map((line) => `  ${line}`).join('\n')}
+}
+
+model Task {
+  id       Int      @id
+  priority Priority
+}
+`);
+  if (!result.ok) {
+    return {
+      diagnostics: result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+    };
+  }
+  const { storage } = result.value as Contract<SqlStorage>;
+  return {
+    values: Object.values(storage.namespaces).flatMap(
+      (namespace) => namespace.entries.valueSet?.['Priority']?.values ?? [],
+    ),
+  };
 }
 
 describe('PSL defaults read by the Postgres codecs', () => {
@@ -165,7 +197,7 @@ model Task {
       {
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message:
-          'enum "Priority" member "Low" was rejected by codec "pg/int@1": pg/int@1 JSON value must be an integer from -2147483648 to 2147483647',
+          'enum "Priority" member "Low": pg/int4 has no cast from pg/int8; it casts from pg/int2',
       },
     ]);
   });
@@ -198,7 +230,7 @@ model Task {
         'a number member under a text codec',
         '  @@type("pg/text@1")\n  Low = 1',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/text@1": pg/text@1 JSON value must be a string',
+        'enum "Priority" member "Low": pg/text has no cast from pg/int2; it casts from nothing',
       ],
       [
         'a numeric member with a leading zero',
@@ -240,10 +272,37 @@ model Task {
         'a fraction under an integer codec',
         '  @@type("pg/int4@1")\n  Low = 1.5',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/int4@1": pg/int4@1 JSON value must be an integer from -2147483648 to 2147483647',
+        'enum "Priority" member "Low": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
       ],
     ])('refuses %s', async (_name, members, code, message) => {
       expect(await diagnosticsOf(enumOf(members))).toEqual([{ code, message }]);
+    });
+  });
+
+  describe('an enum member written as a number literal, read from its source text', () => {
+    it('stores a pg/int8@1 member past 2^53 with every digit, so the integer below it is not a duplicate', async () => {
+      expect(
+        await storedEnumValues('pg/int8@1', ['A = 9007199254740993', 'B = 9007199254740992']),
+      ).toEqual({ values: ['9007199254740993', '9007199254740992'] });
+    });
+
+    it('stores every digit of a pg/numeric@1 member', async () => {
+      expect(await storedEnumValues('pg/numeric@1', ['A = 0.12345678901234567890'])).toEqual({
+        values: ['0.12345678901234567890'],
+      });
+    });
+  });
+
+  describe('an enum member written as a string literal, read by its codec', () => {
+    it.each([
+      ['pg/int8@1', '"9007199254740993"', '9007199254740993'],
+      ['pg/int8number@1', '"42"', '42'],
+      ['pg/unboundedint@1', '"9223372036854775808"', '9223372036854775808'],
+      ['pg/numeric@1', '"1.50"', '1.50'],
+      ['pg/json@1', '"low"', 'low'],
+      ['pg/jsonb@1', '"low"', 'low'],
+    ])('accepts a %s member written as %s', async (codecId, written, stored) => {
+      expect(await storedEnumValues(codecId, [`Low = ${written}`])).toEqual({ values: [stored] });
     });
   });
 
@@ -264,7 +323,7 @@ model Task {
         {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message:
-            'enum "Priority" member "Low" was rejected by codec "sql/int@1": sql/int@1 JSON value must be an integer from -2147483648 to 2147483647',
+            'enum "Priority" member "Low": pg/int4 has no cast from pg/int8; it casts from pg/int2',
         },
       ]);
     });
@@ -295,7 +354,7 @@ model Tag {
       ],
       [
         'a bit default of two bits on a bit column with no length, which holds one',
-        () => field.column({ codecId: 'pg/bit@1', nativeType: 'bit' } as const).default('01'),
+        () => field.column({ codecId: 'pg/bit@1' } as const).default('01'),
         'pg/bit@1',
         'Field "Reading.value" has a default that its codec refuses: pg/bit@1 JSON value must be a string of exactly 1 bit',
       ],

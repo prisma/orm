@@ -17,7 +17,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'302d84ab4139f90dc83498056a6472496c58ce9543d6ebe7b98e4a2b39e9e4e9'>;
+  StorageHashBase<'73aeab611cbe82524b5388c8f8db1981ef1415dbd49508f11ce6a7eb52ec00c7'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -51,8 +51,10 @@ export type AggregateTypes = {
   };
   readonly max: {
     readonly byCodec: {
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
       readonly 'sql/float@1': { readonly output: 'sql/float@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'sql/int@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
       readonly 'sqlite/bigint@1': { readonly output: 'sqlite/bigint@1'; readonly nullable: true };
       readonly 'sqlite/bigintnumber@1': {
         readonly output: 'sqlite/bigintnumber@1';
@@ -71,8 +73,10 @@ export type AggregateTypes = {
   };
   readonly min: {
     readonly byCodec: {
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
       readonly 'sql/float@1': { readonly output: 'sql/float@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'sql/int@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
       readonly 'sqlite/bigint@1': { readonly output: 'sqlite/bigint@1'; readonly nullable: true };
       readonly 'sqlite/bigintnumber@1': {
         readonly output: 'sqlite/bigintnumber@1';
@@ -207,31 +211,31 @@ type ContractBase = Omit<
             readonly readings: {
               columns: {
                 readonly big: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigint@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly real: {
-                  readonly nativeType: 'real';
+                  readonly dataType: 'sqlite/real';
                   readonly codecId: 'sqlite/real@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly text: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly when: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly many: false;

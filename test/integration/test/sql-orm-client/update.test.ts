@@ -1,5 +1,11 @@
-import type { SqlMiddleware } from '@internal/sql-runtime';
+import { Collection } from '@internal/sql-orm-client';
+import {
+  type SqlMiddleware,
+  type TransactionContext,
+  withTransaction,
+} from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
+import { getTestContext } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
@@ -8,6 +14,22 @@ import {
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
+
+function recordAfterTransaction(stages: string[]): SqlMiddleware {
+  return {
+    name: 'after-transaction-recorder',
+    familyId: 'sql',
+    async afterTransaction(_exec, result) {
+      stages.push(result.outcome);
+    },
+  };
+}
+
+function usersIn(tx: TransactionContext) {
+  return new Collection({ runtime: tx, context: getTestContext() }, 'User', {
+    namespaceId: 'public',
+  });
+}
 
 describe('integration/update', () => {
   it(
@@ -211,6 +233,118 @@ describe('integration/update', () => {
           /requires contract capability "returning"/,
         );
       });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() fires afterTransaction with committed once for its UPDATE, after its transaction commits',
+    async () => {
+      const events: Array<{ readonly hook: string; readonly sql: string; readonly scope: string }> =
+        [];
+      const observer: SqlMiddleware = {
+        name: 'after-transaction-observer',
+        familyId: 'sql',
+        async afterQuery(exec, _result, ctx) {
+          events.push({ hook: 'afterQuery', sql: exec.sql, scope: ctx.scope });
+        },
+        async afterTransaction(exec, result, ctx) {
+          events.push({
+            hook: `afterTransaction:${result.outcome}`,
+            sql: exec.sql,
+            scope: ctx.scope,
+          });
+        },
+      };
+      await withCollectionRuntime(
+        async (runtime) => {
+          const users = createReturningUsersCollection(runtime);
+          await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
+          events.length = 0;
+
+          await users.where({ id: 1 }).update({ name: 'Updated' });
+
+          const updateEvents = events.filter((event) =>
+            event.sql.toLowerCase().startsWith('update'),
+          );
+          expect(updateEvents.map(({ hook, scope }) => ({ hook, scope }))).toEqual([
+            { hook: 'afterQuery', scope: 'transaction' },
+            { hook: 'afterTransaction:committed', scope: 'transaction' },
+          ]);
+          expect(events.map((event) => event.hook)).toEqual([
+            'afterQuery',
+            'afterQuery',
+            'afterTransaction:committed',
+            'afterTransaction:committed',
+          ]);
+        },
+        undefined,
+        [],
+        [observer],
+      );
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a statement that fails inside a transaction, caught by the callback, makes the commit report unknown',
+    async () => {
+      const stages: string[] = [];
+      await withCollectionRuntime(
+        async (runtime) => {
+          await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
+
+          await withTransaction(runtime, async (tx) => {
+            const users = usersIn(tx);
+            await users.where({ id: 1 }).updateAndCount({ name: 'Updated' });
+            await expect(
+              users.createAndCount([{ id: 1, name: 'Duplicate', email: 'b@example.com' }]),
+            ).rejects.toThrow(/duplicate key value violates unique constraint/);
+          });
+
+          const rows = await runtime.query('select name from users where id = 1');
+          expect({ stages, rows }).toEqual({
+            stages: ['unknown', 'unknown'],
+            rows: [{ name: 'Stale' }],
+          });
+        },
+        undefined,
+        [],
+        [recordAfterTransaction(stages)],
+      );
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'the runtime does not count a row stream the caller stopped inside a transaction as a failed query, so the commit reports committed',
+    async () => {
+      const stages: string[] = [];
+      await withCollectionRuntime(
+        async (runtime) => {
+          await seedUsers(runtime, [
+            { id: 1, name: 'Stale', email: 'a@example.com' },
+            { id: 2, name: 'Stale', email: 'b@example.com' },
+          ]);
+
+          await withTransaction(runtime, async (tx) => {
+            const users = usersIn(tx);
+            for await (const _user of users.all()) {
+              break;
+            }
+            await users.where({ id: 1 }).updateAndCount({ name: 'Updated' });
+          });
+
+          const rows = await runtime.query('select name from users where id = 1');
+          expect({ stages, rows }).toEqual({
+            stages: ['committed', 'committed'],
+            rows: [{ name: 'Updated' }],
+          });
+        },
+        undefined,
+        [],
+        [recordAfterTransaction(stages)],
+      );
     },
     timeouts.spinUpPpgDev,
   );

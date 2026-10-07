@@ -17,13 +17,13 @@ import {
   rel,
 } from '@internal/postgres/contract-builder';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 
 const types = {
   Email: {
     kind: 'codec-instance',
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     typeParams: {},
   },
 } as const;

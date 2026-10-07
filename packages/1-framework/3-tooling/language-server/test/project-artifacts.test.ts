@@ -55,7 +55,7 @@ const interpretContext = {
   composedExtensions: [],
   authoringContributions: {
     type: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1', nativeType: 'Int' } },
+      Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1' } },
     },
     field: {},
     entityTypes: {},
@@ -74,7 +74,7 @@ const controlStack = {
       id: 'fixture',
       authoring: {
         type: {
-          Int: { kind: 'typeConstructor', output: { codecId: 'int', nativeType: 'integer' } },
+          Int: { kind: 'typeConstructor', output: { codecId: 'int' } },
         },
         attributeSpecs: {
           model: {},
@@ -165,7 +165,7 @@ describe('ProjectArtifacts binder', () => {
           id: 'replacement',
           authoring: {
             type: {
-              Int: { kind: 'typeConstructor', output: { codecId: 'other', nativeType: 'bigint' } },
+              Int: { kind: 'typeConstructor', output: { codecId: 'other' } },
             },
           },
         },
@@ -176,7 +176,7 @@ describe('ProjectArtifacts binder', () => {
       next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int'),
     ).toMatchObject({
       kind: 'contributedType',
-      symbol: { descriptor: { output: { codecId: 'other', nativeType: 'bigint' } } },
+      symbol: { descriptor: { output: { codecId: 'other' } } },
     });
   });
 
@@ -245,7 +245,7 @@ describe('ProjectArtifacts binder', () => {
               temporal: {
                 createdAt: {
                   kind: 'fieldPreset',
-                  output: { codecId: 'timestamp', nativeType: 'timestamp' },
+                  output: { codecId: 'timestamp' },
                 },
               },
             },

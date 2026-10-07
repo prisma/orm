@@ -81,7 +81,7 @@
               "columns": {
                 "color": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "Color",
+                  "dataType": "pg/enum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Color"
@@ -95,12 +95,12 @@
                 },
                 "group": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -129,11 +129,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e0722f61a0cd0e1a8bb052ef89b230f9c5df0430b6ff18f6fa0807e296ee0e1c"
+    "storageHash": "e0da5b004fedaaa1baf7971e9bb282957feed3fe7f91e21df8c5b8029008879a"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -144,9 +146,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

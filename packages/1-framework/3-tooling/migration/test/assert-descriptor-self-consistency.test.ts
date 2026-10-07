@@ -8,8 +8,8 @@ const STORAGE_BODY = {
   tables: {
     test_box: {
       columns: {
-        x: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
-        y: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+        x: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+        y: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
       },
       uniques: [],
       indexes: [],

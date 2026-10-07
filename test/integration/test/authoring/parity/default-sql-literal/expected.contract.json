@@ -107,51 +107,52 @@
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "(now() + interval '1 hour')",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "digest": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "md5(random()::text)",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "escaped": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "E'\\n'",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "expires": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "(now() + '00:03:00'::interval)",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "gen_random_uuid()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "tags": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "'{}'::text[]",
                     "kind": "function"
@@ -159,7 +160,6 @@
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -175,11 +175,13 @@
         "id": "public"
       }
     },
-    "storageHash": "a5033988ed83823f67e96704dd9a180788a49efc78a7fe89bbe31fac626c85ba"
+    "storageHash": "fa6c280c91c6a46f498d22ebdec2bafc7da680b8957ab3f6bf54097d4ff8889b"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -190,9 +192,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

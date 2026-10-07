@@ -37,9 +37,9 @@ const contract: Contract<SqlStorage> = {
           table: {
             event: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 at: {
-                  nativeType: 'timestamptz',
+                  dataType: 'pg/timestamptz',
                   codecId: 'pg/timestamptz-temporal@1',
                   nullable: false,
                   default: { kind: 'literal', value: '2024-01-01 00:00:00' },

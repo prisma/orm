@@ -15,13 +15,14 @@ This package provides TypeScript type definitions, Arktype validators, and facto
 
 ## StorageColumn Structure
 
-Each `StorageColumn` in SQL contracts includes both:
-- **`nativeType`** (required): Native database type identifier (e.g., `'int4'`, `'text'`, `'vector'`) - used for database structure verification and migration planning
+Each `StorageColumn` in SQL contracts includes:
 - **`codecId`** (required): Codec identifier (e.g., `'pg/int4@1'`, `'pg/text@1'`, `'pg/vector@1'`) - used for query builders and runtime codecs
+- **`dataType`** (required): the id of the data type the codec represents (e.g., `'pg/int4'`, `'pg/text'`, `'pgvector/vector'`). The contract build writes it from the codec. Migration planning and verification write the column's type name from this data type and `typeParams`; the contract stores no type name
+- **`typeParams`** (optional): the type's parameters, for example `{ length: 1536 }` for `vector(1536)`
 - **`nullable`** (required): Whether the column is nullable
 - **`default`** (optional): Uses the shared `ColumnDefault` type from `@internal/contract` for db-agnostic defaults (literal or function). Client-generated defaults live in `execution.mutations.defaults`.
 
-Both `nativeType` and `codecId` are required to ensure contracts are consumable by both the application (via codec IDs) and the database (via native types). See `docs/briefs/Sql-Contract-Native-and-Codec-Types.md` for details.
+The database type a column holds comes from the data type its codec represents; see [ADR 254 — Data types and casts](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md). The SQL data type declarations and the functions that write their names are exported from `@internal/sql-contract/data-type`.
 
 ## Package Contents
 
@@ -137,14 +138,14 @@ Use factory functions to construct contract IR structures in tests:
 ```typescript
 import { col, table, storage, model, contract, pk, unique, index, fk } from '@internal/sql-contract/factories';
 
-// Create a column (nativeType, codecId, nullable)
-const idColumn = col('int4', 'pg/int4@1', false);
+// Create a column (dataType, codecId, nullable)
+const idColumn = col('pg/int4', 'pg/int4@1', false);
 
 // Create a table
 const userTable = table(
   {
-    id: col('int4', 'pg/int4@1'),
-    email: col('text', 'pg/text@1'),
+    id: col('pg/int4', 'pg/int4@1'),
+    email: col('pg/text', 'pg/text@1'),
   },
   {
     pk: pk('id'),
@@ -177,6 +178,8 @@ const c = contract({
 - `./validators`: Arktype validators for structural validation
 - `./factories`: Factory functions for constructing contract IR
 - `./pack-types`: Shared extension/pack typing helpers
+- `./data-type`: SQL data type declarations (`sqlDataType`) and the functions that write a type name, print its catalog text, and recognise a reported type from those declarations (`renderSqlTypeName`, `renderSqlCatalogText`, `sqlBaseName`, `dataTypeParams`, `resolveReportedSqlType`)
+- `./data-type-support`: the helpers SQL targets share to implement their data types and PSL entries (ADR 254): the number classifier, the JSON body reader and printer, `escapePslString`, the 64-bit integer canonical form, and `canonicalDateTime`, the reader the date and time types build their canonical form with
 
 ## Architecture
 

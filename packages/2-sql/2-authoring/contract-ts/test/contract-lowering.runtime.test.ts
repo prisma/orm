@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
 import { field, rel } from '../src/contract-builder';
 import { ContractModelBuilder, ScalarFieldBuilder } from '../src/contract-dsl';
@@ -28,6 +29,7 @@ const int4Column = columnDescriptor('pg/int4@1');
 const textColumn = columnDescriptor('pg/text@1');
 
 const { model } = createComposedAuthoringHelpers({
+  ...testTypeLookups,
   family: bareFamilyPack,
   target: postgresTargetPack,
   extensions: { testIndexes: testIndexPack },
@@ -52,7 +54,6 @@ describe('contract definition lowering runtime checks', () => {
     const localVector = {
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     } as const;
 

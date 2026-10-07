@@ -24,6 +24,7 @@ import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'items';
 const stubLowerer: ExecuteRequestLowerer = {
@@ -59,9 +60,9 @@ function buildContract(looseIndexes: readonly LooseIndexInput[]): Contract<SqlSt
       table: {
         [TABLE_NAME]: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            value: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+            value: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
@@ -142,7 +143,7 @@ async function planOpIds(
     schema,
     policy: { allowedOperationClasses: [...policy.allowedOperationClasses] },
     fromContract: null,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });

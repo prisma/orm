@@ -17,7 +17,7 @@ function storageWithColumn(control?: unknown) {
             user: {
               columns: {
                 id: {
-                  nativeType: 'int4',
+                  dataType: 'pg/int4',
                   codecId: 'pg/int4@1',
                   nullable: false,
                   ...(control !== undefined ? { control } : {}),
@@ -44,7 +44,7 @@ function storageWithTable(control?: unknown) {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -72,7 +72,7 @@ function minimalContract(defaultControlPolicy?: unknown) {
 describe('StorageColumn control field', () => {
   it('retains control when set', () => {
     const col = new StorageColumn({
-      nativeType: 'int4',
+      dataType: 'pg/int4',
       codecId: 'pg/int4@1',
       nullable: false,
       control: 'external',
@@ -81,7 +81,7 @@ describe('StorageColumn control field', () => {
   });
 
   it('omits control when unset', () => {
-    const col = new StorageColumn({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: false });
+    const col = new StorageColumn({ dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false });
     expect(Object.hasOwn(col, 'control')).toBe(false);
     expect('control' in JSON.parse(JSON.stringify(col))).toBe(false);
   });
@@ -91,7 +91,7 @@ describe('StorageTable control field', () => {
   it('retains control when set', () => {
     const t = new StorageTable({
       columns: {
-        id: new StorageColumn({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: false }),
+        id: new StorageColumn({ dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false }),
       },
       uniques: [],
       indexes: [],
@@ -104,7 +104,7 @@ describe('StorageTable control field', () => {
   it('omits control when unset', () => {
     const t = new StorageTable({
       columns: {
-        id: new StorageColumn({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: false }),
+        id: new StorageColumn({ dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false }),
       },
       uniques: [],
       indexes: [],

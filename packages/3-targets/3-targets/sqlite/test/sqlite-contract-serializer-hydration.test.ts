@@ -16,7 +16,7 @@ function makeContractWithTablesJson() {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'INTEGER', codecId: 'sqlite/integer@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

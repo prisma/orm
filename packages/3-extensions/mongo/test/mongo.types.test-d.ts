@@ -51,9 +51,15 @@ test('db.orm.users.all() yields rows via AsyncIterableResult', () => {
   expectTypeOf(all).toEqualTypeOf<AsyncIterableResult<UserRow>>();
 });
 
-test('db.orm.tasks.variant("Bug").where(...) narrows to the variant', () => {
-  const bugChain = db.orm.tasks.variant('Bug').where({ title: 'X' });
+test('db.orm.tasks.variant("bug").where(...) narrows to the variant', () => {
+  const bugChain = db.orm.tasks.variant('bug').where({ title: 'X' });
   expectTypeOf(bugChain).not.toBeNever();
+  expectTypeOf(bugChain).toEqualTypeOf<MongoCollection<Contract, 'Task', NoIncludes, 'Bug'>>();
+});
+
+test('db.orm.tasks.variant() rejects a variant model name', () => {
+  // @ts-expect-error variant() takes a discriminator value, not a model name
+  db.orm.tasks.variant('Bug');
 });
 
 test('db.orm key set matches the emitted roots (lowercased plurals only)', () => {
@@ -128,7 +134,7 @@ test('db.enums.Role.members.User is the literal "user"', () => {
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -162,7 +168,7 @@ test('TS DSL defineContract: namespace enum slot is typed without a cast', () =>
 
 const R5Role = enumType(
   'R5Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );

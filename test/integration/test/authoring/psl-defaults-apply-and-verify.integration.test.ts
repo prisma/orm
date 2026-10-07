@@ -315,7 +315,7 @@ model Counter {
 });
 
 /** `sql/char@1` as PostgreSQL names its column type, the way the PSL `Char` type writes it. */
-const sqlCharacter = { codecId: 'sql/char@1', nativeType: 'character' } as const;
+const sqlCharacter = { codecId: 'sql/char@1' } as const;
 
 describe('a fixed-length column written without a length', () => {
   it(
@@ -409,6 +409,33 @@ model Flag {
           { kind: 'literal', value: 7 },
           { kind: 'literal', value: 1.5 },
         ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('a numeric column written with a precision and no scale', () => {
+  it(
+    'applies, verifies strictly and plans no change, though the database reports numeric(10,0)',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Amount {
+  id     Int            @id
+  whole  Numeric(10)
+  scaled Numeric(10, 2)
+}
+`,
+          ['whole', 'scaled'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [undefined, undefined],
         applied: true,
         issues: [],
         replannedOperations: [],

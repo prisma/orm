@@ -7,11 +7,16 @@ import type { SqliteContract } from '../src/core/types';
 
 const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup());
 
-function lower(nativeType: string, codecId: string, value: readonly (string | number)[]) {
+function lower(typeText: string, codecId: string, value: string | readonly (string | number)[]) {
   return adapter.lowerToExecuteRequest(
     new SqliteCreateTable({
       table: 't',
-      columns: [col('c', nativeType, { default: lit([...value]), codecRef: { codecId } })],
+      columns: [
+        col('c', typeText, {
+          default: lit(typeof value === 'string' ? value : [...value]),
+          codecRef: { codecId },
+        }),
+      ],
     }),
     { contract: {} as SqliteContract },
   );
@@ -33,8 +38,8 @@ describe('a list default in SQLite DDL, which the column codec reads as one valu
     );
   });
 
-  it('is written as its document on a JSON column', async () => {
-    expect((await lower('text', 'sqlite/json@1', ['a', 1])).sql).toBe(
+  it('is written as the JSON text a JSON column stores for the list document', async () => {
+    expect((await lower('text', 'sqlite/json@1', '["a",1]')).sql).toBe(
       `CREATE TABLE "t" (\n  "c" text DEFAULT '["a",1]'\n)`,
     );
   });

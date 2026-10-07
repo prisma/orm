@@ -72,13 +72,15 @@ import {
 import { ormError } from './orm-errors';
 import type {
   DefaultModelRow,
+  DiscriminatorValues,
   IncludedRow,
   MongoIncludeSpec,
   MongoWhereFilter,
   NoIncludes,
   ReferenceRelationKeys,
   ResolvedCreateInput,
-  VariantNames,
+  VariantNameForValue,
+  VariantSelectable,
 } from './types';
 import { upsertPipeline } from './upsert-pipeline';
 
@@ -94,10 +96,15 @@ export interface MongoCollection<
   TVariant extends string = never,
 > {
   readonly _row?: SimplifyDeep<IncludedRow<TContract, ModelName, TIncludes>>;
-  /** Narrows to a specific variant, injecting a discriminator filter. */
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
-  ): MongoCollection<TContract, ModelName, TIncludes, V>;
+  /**
+   * Narrows to the variant declared with the given discriminator value,
+   * injecting a discriminator filter. Call it once, on the base collection:
+   * a collection that already has a variant selected refuses it.
+   */
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    this: VariantSelectable<TVariant>,
+    value: V,
+  ): MongoCollection<TContract, ModelName, TIncludes, VariantNameForValue<TContract, ModelName, V>>;
   /** Appends equality filters from a plain object. Values are encoded through codecs. */
   where(
     filter: MongoWhereFilter<TContract, ModelName>,
@@ -292,36 +299,67 @@ class MongoCollectionImpl<
     this.#state = emptyCollectionState();
   }
 
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
-  ): MongoCollection<TContract, ModelName, TIncludes, V> {
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    value: V,
+  ): MongoCollection<
+    TContract,
+    ModelName,
+    TIncludes,
+    VariantNameForValue<TContract, ModelName, V>
+  > {
     const model = blindCast<
       MongoModelDefinition | undefined,
       'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
     >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
-    if (!model?.discriminator || !model.variants) {
-      // No polymorphism metadata on this model — return unchanged. Cast required
-      // because TS cannot verify TVariant (the current variant) is assignable to V.
-      return blindCast<
-        MongoCollection<TContract, ModelName, TIncludes, V>,
-        'no-op variant refinement preserves runtime state while changing only the type-level variant'
-      >(this);
+    const discriminator = model?.discriminator;
+    const selectedVariantName = this.#variantName;
+
+    if (selectedVariantName !== undefined) {
+      const selectedValue = model?.variants?.[selectedVariantName]?.value;
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `variant("${value}") cannot be called on model "${this.#modelName}" because variant("${selectedValue}") is already selected; call variant() on the base collection instead`,
+        {
+          meta: {
+            method: 'variant',
+            model: this.#modelName,
+            variant: selectedVariantName,
+            selectedValue,
+            reason: 'variant-already-selected',
+          },
+        },
+      );
     }
 
-    const variantEntry = model.variants[variantName];
-    if (!variantEntry) {
-      // Unknown variant name at runtime — return unchanged. Same cast rationale.
-      return blindCast<
-        MongoCollection<TContract, ModelName, TIncludes, V>,
-        'unknown variant fallback preserves runtime state while changing only the type-level variant'
-      >(this);
+    const variantEntries = Object.entries(model?.variants ?? {});
+    const variantName = discriminator
+      ? variantEntries.find(([, entry]) => entry.value === value)?.[0]
+      : undefined;
+
+    if (!discriminator || variantName === undefined) {
+      const declaredValues = discriminator ? variantEntries.map(([, entry]) => entry.value) : [];
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        declaredValues.length === 0
+          ? `variant("${value}") cannot narrow model "${this.#modelName}": it declares no discriminator values`
+          : `variant("${value}") cannot narrow model "${this.#modelName}": the declared discriminator values are ${declaredValues.map((declared) => `"${declared}"`).join(', ')}`,
+        {
+          meta: {
+            method: 'variant',
+            argument: 'value',
+            model: this.#modelName,
+            value,
+            declaredValues,
+          },
+        },
+      );
     }
 
-    const filter = MongoFieldFilter.eq(
-      model.discriminator.field,
-      new MongoParamRef(variantEntry.value),
+    const filter = MongoFieldFilter.eq(discriminator.field, new MongoParamRef(value));
+    return this.#cloneWithVariant<VariantNameForValue<TContract, ModelName, V>>(
+      { filters: [...this.#state.filters, filter] },
+      variantName,
     );
-    return this.#cloneWithVariant<V>({ filters: [...this.#state.filters, filter] }, variantName);
   }
 
   where(

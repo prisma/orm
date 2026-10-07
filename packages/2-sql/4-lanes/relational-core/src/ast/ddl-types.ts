@@ -6,27 +6,8 @@ import type { CodecRef } from './codec-types';
 import type { OpaqueSql } from './opaque-sql';
 import type { AnyParamRef } from './types';
 
-/**
- * Render-time context the column-default visitor needs to make dialect
- * decisions that depend on the parent column. Today only the parent
- * column's native type (`"jsonb"`, `"text"`, …) — the Postgres renderer
- * uses it to decide whether to emit a `::jsonb` / `::json` cast on JSON
- * literal defaults so the emitted DDL matches the column type without
- * relying on Postgres's implicit text → jsonb cast at default-evaluation
- * time. Additional fields can join without re-shaping the interface.
- */
-export interface DdlColumnRenderContext {
-  readonly nativeType: string;
-}
-
-export interface DdlColumnDefaultVisitor<R> {
-  literal(node: LiteralColumnDefault, ctx: DdlColumnRenderContext): R;
-  function(node: FunctionColumnDefault, ctx: DdlColumnRenderContext): R;
-}
-
 export abstract class DdlColumnDefault {
   abstract readonly kind: string;
-  abstract accept<R>(visitor: DdlColumnDefaultVisitor<R>, ctx: DdlColumnRenderContext): R;
 
   protected freeze(): void {
     Object.freeze(this);
@@ -45,10 +26,6 @@ export class LiteralColumnDefault extends DdlColumnDefault {
     this.value = value;
     this.freeze();
   }
-
-  override accept<R>(visitor: DdlColumnDefaultVisitor<R>, ctx: DdlColumnRenderContext): R {
-    return visitor.literal(this, ctx);
-  }
 }
 
 export class FunctionColumnDefault extends DdlColumnDefault {
@@ -59,10 +36,6 @@ export class FunctionColumnDefault extends DdlColumnDefault {
     super();
     this.expression = expression;
     this.freeze();
-  }
-
-  override accept<R>(visitor: DdlColumnDefaultVisitor<R>, ctx: DdlColumnRenderContext): R {
-    return visitor.function(this, ctx);
   }
 }
 

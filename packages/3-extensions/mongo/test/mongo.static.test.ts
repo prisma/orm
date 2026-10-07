@@ -14,7 +14,7 @@ type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMap
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );

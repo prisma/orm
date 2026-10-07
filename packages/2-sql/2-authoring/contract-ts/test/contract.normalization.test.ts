@@ -22,7 +22,7 @@ describe('SqlContractSerializer structural validation', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             indexes: [],
@@ -41,7 +41,7 @@ describe('SqlContractSerializer structural validation', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -60,7 +60,7 @@ describe('SqlContractSerializer structural validation', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -139,7 +139,7 @@ describe('SqlContractSerializer structural validation', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -204,14 +204,14 @@ describe('SqlContractSerializer structural validation', () => {
         storageHash: 'test',
         tables: {
           user: {
-            columns: { id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false } },
+            columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
             foreignKeys: [],
           },
           post: {
-            columns: { id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false } },
+            columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -261,7 +261,7 @@ describe('SqlContractSerializer structural validation', () => {
         storageHash: 'test',
         tables: {
           User: {
-            columns: { id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false } },
+            columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -269,8 +269,8 @@ describe('SqlContractSerializer structural validation', () => {
           },
           Post: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -331,7 +331,7 @@ describe('SqlContractSerializer structural validation', () => {
         storageHash: 'test',
         tables: {
           User: {
-            columns: { id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false } },
+            columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -339,8 +339,8 @@ describe('SqlContractSerializer structural validation', () => {
           },
           Post: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -377,7 +377,7 @@ describe('SqlContractSerializer structural validation', () => {
         storageHash: 'test',
         tables: {
           user: {
-            columns: { id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false } },
+            columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -385,8 +385,8 @@ describe('SqlContractSerializer structural validation', () => {
           },
           post: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],

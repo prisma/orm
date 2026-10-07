@@ -43,6 +43,16 @@ describe('table() — handle structure', () => {
   });
 });
 
+describe('ColumnProxy — list columns', () => {
+  it('binds a value of a list column with the codec and many', () => {
+    const lists = table(TableSource.named('lists'), {
+      tags: { codecId: 'test/text@1', nullable: false, many: true },
+    });
+    const right = (lists.tags.eq(['a']).ast as unknown as BinaryExpr).right as unknown as ParamRef;
+    expect(right.codec).toEqual({ codecId: 'test/text@1', many: true });
+  });
+});
+
 describe('ColumnProxy — expression methods', () => {
   it('.eq(value) wraps a plain JS value in a ParamRef with the column codec', () => {
     const expr = tbl.name.eq('alice');

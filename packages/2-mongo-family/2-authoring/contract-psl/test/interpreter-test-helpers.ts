@@ -5,7 +5,12 @@ import type {
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+  type DataTypeLookup,
+  emptyCodecLookup,
+} from '@internal/framework-components/codec';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import type { Result } from '@internal/utils/result';
@@ -19,25 +24,23 @@ import {
 } from '../src/mongo-attribute-specs';
 import { mongoContextInput } from '../src/test';
 
+type InterpretOptionsWithDefaultLookups = Omit<
+  InterpretPslDocumentToMongoContractInput,
+  'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup' | 'dataTypeLookup'
+> & {
+  readonly codecLookup?: CodecLookupWithDescriptors;
+  readonly dataTypeLookup?: DataTypeLookup;
+};
+
 function contextForInterpretOptions(
-  options: Omit<
-    Pick<
-      InterpretPslDocumentToMongoContractInput,
-      | 'authoringContributions'
-      | 'controlMutationDefaults'
-      | 'codecLookup'
-      | 'scalarTypeCodecIds'
-      | 'reportWarning'
-    >,
-    'codecLookup'
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  options: InterpretOptionsWithDefaultLookups,
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};
   for (const [name, codecId] of options.scalarTypeCodecIds ?? []) {
     scalarsFromCodecIds[name] = {
       kind: 'typeConstructor',
-      output: { codecId, nativeType: codecId },
+      output: { codecId },
     };
   }
   return {
@@ -56,13 +59,8 @@ function contextForInterpretOptions(
       describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
       describeUnresolvedType: describeUnresolvedMongoType,
     },
-    codecLookup: options.codecLookup ?? {
-      get: () => undefined,
-      targetTypesFor: () => undefined,
-      renderOutputTypeFor: () => undefined,
-      descriptorFor: () => undefined,
-    },
-    dataTypeLookup: { has: () => false, get: () => undefined },
+    codecLookup: options.codecLookup ?? { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypeLookup: options.dataTypeLookup ?? createDataTypeLookup([]),
     controlMutationDefaults: {
       defaultFunctionRegistry:
         options.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
@@ -76,10 +74,7 @@ function contextForInterpretOptions(
 
 export function interpretMongoContract(
   schema: string,
-  options: Omit<
-    InterpretPslDocumentToMongoContractInput,
-    'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup'
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  options: InterpretOptionsWithDefaultLookups,
   sourceId = 'schema.prisma',
 ): Result<Contract, ContractSourceDiagnostics> {
   const bound = bindPslSchema(schema, { sourceId, context: contextForInterpretOptions(options) });

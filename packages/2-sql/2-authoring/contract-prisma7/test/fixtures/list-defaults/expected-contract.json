@@ -177,7 +177,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "a99157bf9e60ec64c7e9137cb8fde15c71c50b9a47c15561671facbecfc0fa4f",
+    "storageHash": "32051d4c4ec616e12702c1d37a4889a6e39a7249ced7d48d43c7096abf29b331",
     "namespaces": {
       "public": {
         "id": "public",
@@ -187,13 +187,13 @@
             "Lists": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "bl": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
                   "many": {
@@ -206,7 +206,7 @@
                   }
                 },
                 "blEmpty": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
                   "many": {
@@ -219,7 +219,7 @@
                   }
                 },
                 "dl": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
@@ -235,7 +235,7 @@
                   }
                 },
                 "dlEmpty": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
@@ -251,7 +251,7 @@
                   }
                 },
                 "tzl": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-string@1",
                   "nullable": true,
                   "many": {
@@ -267,7 +267,7 @@
                   }
                 },
                 "datel": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-string@1",
                   "nullable": true,
                   "many": {
@@ -280,7 +280,7 @@
                   }
                 },
                 "timel": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-string@1",
                   "nullable": true,
                   "many": {
@@ -296,7 +296,7 @@
                   }
                 },
                 "timetzl": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": true,
                   "many": {
@@ -312,7 +312,7 @@
                   }
                 },
                 "ts6l": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {

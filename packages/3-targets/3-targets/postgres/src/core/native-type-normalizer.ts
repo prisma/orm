@@ -49,14 +49,6 @@ export function normalizeSchemaNativeType(nativeType: string): string {
   return `${TYPE_NAME_ALIASES.get(base) ?? base}${modifier}`;
 }
 
-/** The types PostgreSQL stores with a length of 1 when none is written, and reports that way. */
-const LENGTH_ONE_WHEN_BARE: ReadonlySet<string> = new Set(['character', 'bit']);
-
-/** A normalized type name with the length PostgreSQL gives `character` and `bit` when none is written. */
-export function withLengthOneWhenBare(typeName: string): string {
-  return LENGTH_ONE_WHEN_BARE.has(typeName) ? `${typeName}(1)` : typeName;
-}
-
 /**
  * The type columns introspection reads for one column: `format_type(atttypid, atttypmod)` and the
  * `information_schema.columns` type fields.

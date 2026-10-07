@@ -4,7 +4,13 @@ import type {
   AuthoringEntityContext,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type AnyCodecDescriptor,
+  type Codec,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
+import { mongoDataType } from '@internal/mongo-contract/data-type';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { mongoFamilyEnumEntityDescriptor } from '../src/core/authoring-entity-types';
@@ -103,7 +109,30 @@ const brokenCodec: Codec = {
   },
 };
 
-const testCodecLookup: CodecLookup = {
+const dataTypeIdByCodecId: Record<string, string> = {
+  [TEXT_CODEC_ID]: 'test/text',
+  [INT_CODEC_ID]: 'test/int',
+  'mongo/json@1': 'test/mongo-json',
+  'mongo/bson@1': 'test/mongo-bson',
+  [JSON_CODEC_ID]: 'test/json',
+  [FOLDING_CODEC_ID]: 'test/folding-text',
+  [ENCODE_FOLDING_CODEC_ID]: 'test/folding-text',
+  [BROKEN_CODEC_ID]: 'test/folding-text',
+  'test/orphan@1': 'test/unregistered',
+};
+
+const testDataTypes = createDataTypeLookup([
+  mongoDataType('test/text', { bsonTypes: ['string'] }),
+  mongoDataType('test/int', { bsonTypes: ['int'] }),
+  mongoDataType('test/mongo-json', {
+    bsonTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+  }),
+  mongoDataType('test/mongo-bson', { bsonTypes: [] }),
+  mongoDataType('test/json', { bsonTypes: ['object'] }),
+  mongoDataType('test/folding-text', { bsonTypes: ['string'] }),
+]);
+
+const testCodecLookup: CodecLookupWithDescriptors = {
   get(id: string): Codec | undefined {
     if (id === TEXT_CODEC_ID) return textCodec;
     if (id === INT_CODEC_ID) return intCodec;
@@ -113,18 +142,10 @@ const testCodecLookup: CodecLookup = {
     if (id === BROKEN_CODEC_ID) return brokenCodec;
     return undefined;
   },
-  targetTypesFor(id: string): readonly string[] | undefined {
-    if (id === TEXT_CODEC_ID) return ['string'];
-    if (id === INT_CODEC_ID) return ['int'];
-    if (id === 'mongo/json@1') {
-      return ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'];
-    }
-    if (id === 'mongo/bson@1') return [];
-    if (id === JSON_CODEC_ID) return ['object'];
-    if (id === FOLDING_CODEC_ID) return ['string'];
-    if (id === ENCODE_FOLDING_CODEC_ID) return ['string'];
-    if (id === BROKEN_CODEC_ID) return ['string'];
-    return undefined;
+  descriptorFor(id: string) {
+    const dataTypeId = dataTypeIdByCodecId[id];
+    if (dataTypeId === undefined) return undefined;
+    return { codecId: id, dataType: dataTypeId } as unknown as AnyCodecDescriptor;
   },
   renderOutputTypeFor: () => undefined,
 };
@@ -137,6 +158,7 @@ function makeContext(diagnostics: unknown[]): AuthoringEntityContext {
     family: 'mongo',
     target: 'mongo',
     codecLookup: testCodecLookup,
+    dataTypeLookup: testDataTypes,
     sourceId: 'schema.prisma',
     diagnostics: sink,
     enumInferenceCodecs: { text: TEXT_CODEC_ID, int: INT_CODEC_ID },
@@ -156,7 +178,6 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'string',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -171,7 +192,6 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'string',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -184,7 +204,7 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'string' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID });
   });
 
   it('integer members infer the int codec', () => {
@@ -197,7 +217,6 @@ describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: INT_CODEC_ID,
-      nativeType: 'int',
       members: { low: 1, high: 2 },
     });
   });
@@ -288,7 +307,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'string' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID });
   });
 
   it('an explicit codec receives structured JSON media through the shared grammar', () => {
@@ -335,6 +354,25 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC' }),
+    ]);
+  });
+
+  it('reports a known codec whose data type no component registers', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Role', values: { admin: 'admin' }, typeCodecId: 'test/orphan@1' }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message:
+          'enum "Role" @@type codec "test/orphan@1" represents data type "test/unregistered", which no component registers',
+        sourceId: 'schema.prisma',
+        span: SPAN,
+      },
     ]);
   });
 

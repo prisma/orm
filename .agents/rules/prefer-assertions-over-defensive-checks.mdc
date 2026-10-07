@@ -69,7 +69,7 @@ it('builds plan without codecId when column codecId is missing', () => {
   const contractWithoutCodecId = {
     ...contract,
     storage: { tables: { user: { columns: {
-      email: { nativeType: 'text', nullable: true } as { nativeType: string; nullable: true; codecId?: string },
+      email: { dataType: 'pg/text', nullable: true } as { dataType: string; nullable: true; codecId?: string },
     } } } },
   } as SqlContract<SqlStorage>; // type assertion bypasses validation
 });
@@ -84,7 +84,7 @@ Arktype).
 // ❌ WRONG: re-validating properties Arktype's StorageColumnSchema already validates as required
 for (const [colName, col] of Object.entries(table.columns)) {
   if (typeof col.nullable !== 'boolean') throw new Error(`Column "${colName}" missing "nullable"`);
-  if (!col.nativeType) throw new Error(`Column "${colName}" missing "nativeType"`);
+  if (!col.dataType) throw new Error(`Column "${colName}" missing "dataType"`);
   if (!col.codecId) throw new Error(`Column "${colName}" missing "codecId"`);
 }
 ```

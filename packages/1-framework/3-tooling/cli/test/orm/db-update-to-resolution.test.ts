@@ -139,6 +139,85 @@ function harness(cwd: string) {
 }
 
 describe('db update --to bundle resolution', () => {
+  it.each(['@empty', '@contract', '@db'])(
+    'refuses the reserved reference %s with a structured envelope',
+    async (input) => {
+      const { cwd } = await setupFixture();
+
+      const run = await harness(cwd).run(['db', 'update', '--to', input, '--dry-run', '--json'], {
+        cwd,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.REF_WRONG_GRAMMAR',
+            why: `"${input}" is a reserved reference; --to takes a migration destination recorded in the migrations directory (hash, prefix, ref name, migration dir name, or <dir>^)`,
+            meta: { input, expectedGrammar: 'contract' },
+          },
+        },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+      expect(mocks.dbUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses @db before it asks for a connection', async () => {
+    const { cwd } = await setupFixture();
+
+    const run = await createOrmTestCli({
+      commands,
+      groups: BIN_GROUPS,
+      orm: { ...ormConfig(cwd), db: undefined },
+    }).run(['db', 'update', '--to', '@db', '--json'], { cwd });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'MIGRATION.REF_WRONG_GRAMMAR' } },
+    });
+  });
+
+  it.each([
+    { flags: [], command: 'db update', after: '' },
+    { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
+    { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
+  ])(
+    'keeps --to and $flags in the retry command when no connection is configured',
+    async ({ flags, command, after }) => {
+      const { cwd, dirNext } = await setupFixture();
+
+      const run = await createOrmTestCli({
+        commands,
+        groups: BIN_GROUPS,
+        orm: { ...ormConfig(cwd), db: undefined },
+      }).run(['db', 'update', '--to', dirNext, ...flags, '--json'], { cwd });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CONFIG.DB_CONNECTION_REQUIRED',
+            meta: { missingFlags: ['--db'] },
+            nextActions: [
+              expect.objectContaining({
+                label: expect.stringContaining(
+                  `Run \`prisma-test ${command} --to ${dirNext}${after} --db $DATABASE_URL\``,
+                ),
+              }),
+            ],
+          },
+        },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+    },
+  );
+
   it('errors on an invalid --advance-ref name with the structured ref envelope', async () => {
     const { cwd, dirNext } = await setupFixture();
     mocks.dbUpdate.mockResolvedValue(

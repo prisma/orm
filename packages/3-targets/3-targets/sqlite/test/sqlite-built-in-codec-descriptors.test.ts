@@ -2,6 +2,7 @@ import type {
   AnyCodecDescriptorTemplate,
   CodecInstanceContext,
   CodecRef,
+  DataType,
 } from '@internal/framework-components/codec';
 import {
   BinaryExpr,
@@ -34,6 +35,12 @@ import {
   sqliteSqlVarcharDescriptor,
   sqliteTextDescriptor,
 } from '../src/core/codecs';
+import {
+  sqliteCharacter,
+  sqliteCharacterVarying,
+  sqliteInteger,
+  sqliteReal,
+} from '../src/core/data-types';
 import { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../src/core/registry';
 
 const EXPECTED_CODEC_IDS = [
@@ -86,6 +93,10 @@ describe('SQLite built-in codec descriptors', () => {
         refFor(sqliteSqlCharDescriptor, { length: 12 }),
       ),
     ).toEqual(FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]));
+    expect({
+      dataType: sqliteSqlCharDescriptor.dataType,
+      paramsSchema: sqliteSqlCharDescriptor.paramsSchema,
+    }).toEqual({ dataType: sqliteCharacter.id, paramsSchema: sqliteCharacter.params });
   });
 
   it('adapts the other generic SQL descriptors with identity projection and scalar-only semantics', () => {
@@ -93,21 +104,27 @@ describe('SQLite built-in codec descriptors', () => {
     const cases: ReadonlyArray<{
       descriptor: AnySqliteCodecDescriptor;
       rawDescriptor: AnyCodecDescriptorTemplate;
+      dataType: DataType;
       typeParams?: CodecRef['typeParams'];
     }> = [
       {
         descriptor: sqliteSqlVarcharDescriptor,
         rawDescriptor: sqlVarcharDescriptor,
+        dataType: sqliteCharacterVarying,
         typeParams: { length: 120 },
       },
-      { descriptor: sqliteSqlIntDescriptor, rawDescriptor: sqlIntDescriptor },
     ];
 
-    for (const { descriptor, rawDescriptor, typeParams } of cases) {
+    for (const { descriptor, rawDescriptor, dataType, typeParams } of cases) {
       expect(descriptor.codecId).toBe(rawDescriptor.codecId);
-      expect(descriptor.paramsSchema).toBe(rawDescriptor.paramsSchema);
+      expect(descriptor.dataType).toBe(dataType.id);
+      expect(descriptor.paramsSchema).toBe(dataType.params);
       expect(descriptor.projectJson(expression, refFor(descriptor, typeParams))).toBe(expression);
     }
+
+    expect(sqliteSqlIntDescriptor.codecId).toBe(sqlIntDescriptor.codecId);
+    expect(sqliteSqlIntDescriptor.dataType).toBe(sqliteInteger.id);
+    expect(sqliteSqlIntDescriptor.paramsSchema).toBeUndefined();
 
     expect(() =>
       sqliteSqlIntDescriptor.projectJson(expression, {
@@ -119,7 +136,7 @@ describe('SQLite built-in codec descriptors', () => {
 
   it("projects identity where SQLite's own JSON conversion is already canonical", () => {
     const expression = ColumnRef.of('records', 'value');
-    const descriptors = [sqliteTextDescriptor, sqliteIntegerDescriptor, sqliteDatetimeDescriptor];
+    const descriptors = [sqliteTextDescriptor, sqliteDatetimeDescriptor, sqliteJsonDescriptor];
 
     for (const descriptor of descriptors) {
       expect(descriptor.projectJson(expression, refFor(descriptor))).toBe(expression);
@@ -157,24 +174,28 @@ describe('SQLite built-in codec descriptors', () => {
       real: sqliteRealDescriptor.projectJson(expression, refFor(sqliteRealDescriptor)),
       sqlFloat: sqliteSqlFloatDescriptor.projectJson(expression, refFor(sqliteSqlFloatDescriptor)),
     }).toEqual({ real: infinityAsText, sqlFloat: infinityAsText });
-    expect(sqliteSqlFloatDescriptor.paramsSchema).toBe(sqlFloatDescriptor.paramsSchema);
+    expect({
+      dataType: sqliteSqlFloatDescriptor.dataType,
+      paramsSchema: sqliteSqlFloatDescriptor.paramsSchema,
+    }).toEqual({ dataType: sqliteReal.id, paramsSchema: sqliteReal.params });
     // An INTEGER reaching JSON as a number does not survive the int64 range.
     expect(sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor))).toEqual(
       CastExpr.as(expression, 'TEXT'),
     );
-    // A document loses SQLite's JSON subtype across a derived table and would
-    // embed as a string containing JSON; the retag re-applies it.
-    expect(sqliteJsonDescriptor.projectJson(expression, refFor(sqliteJsonDescriptor))).toEqual(
-      FunctionCallExpr.of('json', [expression]),
-    );
-    // The canonical JSON is the decimal text every codec of sqlite/bigint
+    // The canonical JSON is the decimal text every codec of sqlite/integer
     // carries, whichever storage class the projected expression holds.
-    expect(
-      sqliteBigintNumberDescriptor.projectJson(expression, refFor(sqliteBigintNumberDescriptor)),
-    ).toEqual(CastExpr.as(expression, 'TEXT'));
+    for (const descriptor of [
+      sqliteIntegerDescriptor,
+      sqliteSqlIntDescriptor,
+      sqliteBigintNumberDescriptor,
+    ]) {
+      expect(descriptor.projectJson(expression, refFor(descriptor))).toEqual(
+        CastExpr.as(expression, 'TEXT'),
+      );
+    }
   });
 
-  it('keeps authored registries complete while preserving the control metadata filter boundary', () => {
+  it('keeps authored registries complete, with no codec rendering a named TypeScript type', () => {
     expect(Object.isFrozen(sqliteCodecDescriptorRegistry)).toBe(true);
     expect([...sqliteCodecDescriptorRegistry.values()]).toEqual(codecDescriptors);
 
@@ -183,15 +204,11 @@ describe('SQLite built-in codec descriptors', () => {
       expect(sqliteCodecRegistry.descriptorFor(descriptor.codecId)).toBe(descriptor);
     }
 
-    const filteredControlDescriptors = codecDescriptors.filter(
-      (descriptor) => descriptor.renderOutputType === undefined,
-    );
-    expect(filteredControlDescriptors.map((descriptor) => descriptor.codecId)).toEqual(
-      EXPECTED_CODEC_IDS.filter(
-        (codecId) =>
-          codecId !== sqlCharDescriptor.codecId && codecId !== sqlVarcharDescriptor.codecId,
-      ),
-    );
+    expect(
+      codecDescriptors
+        .filter((descriptor) => descriptor.renderOutputType !== undefined)
+        .map((descriptor) => descriptor.codecId),
+    ).toEqual([]);
     expect(sqliteCodecDescriptorRegistry.descriptorFor(sqlCharDescriptor.codecId)).toBe(
       sqliteSqlCharDescriptor,
     );
@@ -200,7 +217,7 @@ describe('SQLite built-in codec descriptors', () => {
     );
   });
 
-  it('preserves current BLOB, bigint, real, datetime, and structured JSON behavior', () => {
+  it('writes and reads each data type’s canonical form', () => {
     const blobCodec = sqliteBlobDescriptor.factory()(codecContext);
     expect(blobCodec.encodeJson(new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
     expect(blobCodec.decodeJson('0ABC')).toEqual(new Uint8Array([0x0a, 0xbc]));
@@ -222,7 +239,7 @@ describe('SQLite built-in codec descriptors', () => {
 
     const jsonCodec = sqliteJsonDescriptor.factory()(codecContext);
     const value = { nested: ['value', 1, true, null] };
-    expect(jsonCodec.encodeJson(value)).toEqual(value);
-    expect(jsonCodec.decodeJson(value)).toEqual(value);
+    expect(jsonCodec.encodeJson(value)).toBe('{"nested":["value",1,true,null]}');
+    expect(jsonCodec.decodeJson('{"nested":["value",1,true,null]}')).toEqual(value);
   });
 });

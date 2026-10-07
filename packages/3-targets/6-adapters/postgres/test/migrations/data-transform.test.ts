@@ -11,6 +11,7 @@ import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
 import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { pgTable } from '@internal/target-postgres/contract-free';
 import { dataTransform } from '@internal/target-postgres/data-transform';
+import { createPostgresBuiltinDataTypeLookup, pgText } from '@internal/target-postgres/data-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 import { encodeControlQueryParams } from '../../src/core/control-codecs';
@@ -228,14 +229,12 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: TEST_CODEC_ID,
   dataType: dataTypeId('demo/fixture'),
   traits: [],
-  targetTypes: ['text'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => transformingCodec,
 };
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
-  dataType: dataTypeId('demo/fixture'),
-  nativeType: () => 'text',
+  dataType: pgText,
   jsonProjection: (expression: ProjectionExpr) => expression,
 });
 const transformingCodecRegistry = createPostgresCodecRegistryWithBuiltins([transformingDescriptor]);
@@ -255,7 +254,10 @@ const testTable = pgTable(
   },
 );
 
-const testAdapter = new PostgresControlAdapter(transformingCodecRegistry);
+const testAdapter = new PostgresControlAdapter(
+  transformingCodecRegistry,
+  createPostgresBuiltinDataTypeLookup(),
+);
 
 describe('dataTransform — codec-encoded params via lowerToExecuteRequest', () => {
   it('execute step params carry the codec-encoded wire value (not raw JS value)', async () => {

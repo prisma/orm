@@ -16,13 +16,13 @@ import { testBuildContext } from './build-context';
 
 export const INT_COLUMN = {
   many: false,
-  nativeType: 'int4',
+  dataType: 'pg/int4',
   codecId: 'pg/int4@1',
   nullable: false,
 } as const;
 export const TEXT_COLUMN = {
   many: false,
-  nativeType: 'text',
+  dataType: 'pg/text',
   codecId: 'pg/text@1',
   nullable: false,
 } as const;
@@ -61,7 +61,7 @@ const INT_FIELD: ContractField = {
 
 export interface ColumnShape {
   readonly [key: string]: unknown;
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
   readonly many?: ContractField['many'];

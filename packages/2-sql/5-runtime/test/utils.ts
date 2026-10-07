@@ -287,7 +287,7 @@ export function buildTestContractCodecs(
 
 /**
  * Synthesize `CodecDescriptor`s from a codec array of non-parameterized codec instances. Test-only: the production synthesis bridge was retired under TML-2357. Lets the existing `createTestAdapterDescriptor` pattern keep wrapping a stub `Adapter` (whose `__codecs` slot still exposes the codec set) into the descriptor-list shape that `SqlStaticContributions.codecs:` now expects. The `Codec` instances carry
- * `traits`/`targetTypes` via the SQL family extension; the structural narrow reads those fields directly.
+ * `traits` via the SQL family extension; the structural narrow reads those fields directly.
  */
 export function descriptorsFromCodecs(
   codecs: ReadonlyArray<Codec<string>>,
@@ -314,13 +314,11 @@ export function descriptorsFromCodecs(
   for (const instance of codecs) {
     const legacy = instance as {
       readonly traits?: readonly CodecTrait[];
-      readonly targetTypes?: readonly string[];
     };
     descriptors.push({
       codecId: instance.id,
       dataType: dataTypeId('demo/fixture'),
       traits: legacy.traits ?? [],
-      targetTypes: legacy.targetTypes ?? [],
       paramsSchema: acceptAnyParamsSchema,
       isParameterized: true,
       factory: () => () => instance,
@@ -425,41 +423,37 @@ export function createStubAdapter(): StubAdapter {
   // the stub adapter never executes against a real driver.
   // The encode/decode bodies pass through; widen TInput to a JSON-safe type
   // so `defineTestCodec` does not require explicit JSON round-trip helpers.
-  const passthroughCodec = (typeId: string, targetType: string): Codec<string> =>
+  const passthroughCodec = (typeId: string): Codec<string> =>
     defineTestCodec({
       typeId,
-      targetTypes: [targetType],
       encode: (value: string | number | boolean | null) => value,
       decode: (wire: string | number | boolean | null) => wire,
     });
   const codecs: ReadonlyArray<Codec<string>> = [
-    passthroughCodec('pg/bit@1', 'bit'),
-    passthroughCodec('pg/bool@1', 'bool'),
-    passthroughCodec('pg/bytea@1', 'bytea'),
-    passthroughCodec('pg/float4@1', 'float4'),
-    passthroughCodec('pg/float8@1', 'float8'),
-    passthroughCodec('pg/int2@1', 'int2'),
+    passthroughCodec('pg/bit@1'),
+    passthroughCodec('pg/bool@1'),
+    passthroughCodec('pg/bytea@1'),
+    passthroughCodec('pg/float4@1'),
+    passthroughCodec('pg/float8@1'),
+    passthroughCodec('pg/int2@1'),
     defineTestCodec({
       typeId: 'pg/int4@1',
-      targetTypes: ['int4'],
       encode: (value: number) => value,
       decode: (wire: number) => wire,
     }),
-    passthroughCodec('pg/int8@1', 'int8'),
-    passthroughCodec('pg/interval@1', 'interval'),
-    passthroughCodec('pg/json@1', 'json'),
-    passthroughCodec('pg/jsonb@1', 'jsonb'),
-    passthroughCodec('pg/numeric@1', 'numeric'),
+    passthroughCodec('pg/int8@1'),
+    passthroughCodec('pg/interval@1'),
+    passthroughCodec('pg/json@1'),
+    passthroughCodec('pg/jsonb@1'),
+    passthroughCodec('pg/numeric@1'),
     defineTestCodec({
       typeId: 'pg/text@1',
-      targetTypes: ['text'],
       encode: (value: string) => value,
       decode: (wire: string) => wire,
     }),
-    passthroughCodec('pg/time-temporal@1', 'time'),
+    passthroughCodec('pg/time-temporal@1'),
     defineTestCodec({
       typeId: 'pg/timestamp-temporal@1',
-      targetTypes: ['timestamp'],
       encode: (value: Date) => value,
       decode: (wire: Date) => wire,
       encodeJson: (value: Date) => value.toISOString(),
@@ -470,7 +464,6 @@ export function createStubAdapter(): StubAdapter {
     }),
     defineTestCodec({
       typeId: 'pg/timestamptz-temporal@1',
-      targetTypes: ['timestamptz'],
       encode: (value: Date) => value,
       decode: (wire: Date) => wire,
       // Date is not assignable to JsonValue, so the JSON round-trip pair must be supplied explicitly.
@@ -480,11 +473,11 @@ export function createStubAdapter(): StubAdapter {
         return new Date(json);
       },
     }),
-    passthroughCodec('pg/timetz@1', 'timetz'),
-    passthroughCodec('pg/varbit@1', 'varbit'),
-    passthroughCodec('pg/uuid@1', 'uuid'),
-    passthroughCodec('sql/char@1', 'char'),
-    passthroughCodec('sql/varchar@1', 'varchar'),
+    passthroughCodec('pg/timetz@1'),
+    passthroughCodec('pg/varbit@1'),
+    passthroughCodec('pg/uuid@1'),
+    passthroughCodec('sql/char@1'),
+    passthroughCodec('sql/varchar@1'),
   ];
 
   return {

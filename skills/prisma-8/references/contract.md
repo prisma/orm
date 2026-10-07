@@ -280,7 +280,7 @@ model User {
 }
 ```
 
-Emitted `contract.json` carries `domain.namespaces.<ns>.valueObjects.Address` with its field descriptors, and the `address` column lands as `codecId: "pg/jsonb@1"` / `nativeType: "jsonb"` in `storage`.
+Emitted `contract.json` carries `domain.namespaces.<ns>.valueObjects.Address` with its field descriptors, and the `address` column lands as `codecId: "pg/jsonb@1"` / `dataType: "pg/jsonb"` in `storage`.
 
 Canonical worked example: `examples/prisma-8-demo/src/prisma/contract.prisma`.
 

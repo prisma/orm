@@ -21,7 +21,6 @@ describe('Postgres Date codec wiring', () => {
     expect(codecs).toHaveProperty('pgTimestamptzDateDescriptor', descriptor);
     expect(codecDescriptorMap).toHaveProperty('timestamptz-date', descriptor);
     expect(codecDescriptors.filter((entry) => entry.codecId === codecId)).toEqual([descriptor]);
-    expect(descriptor?.targetTypes).toEqual([]);
     expect(descriptor?.renderOutputType?.({ precision: 3 })).toBe('Date');
   });
 
@@ -44,7 +43,7 @@ describe('Postgres Date codec wiring', () => {
     for (const name of ['timestamptzDate', 'createdAtDate', 'updatedAtDate']) {
       expect(postgresAuthoringFieldPresets.temporal).not.toHaveProperty(name);
     }
-    const input = { codecId, nativeType: 'timestamptz' };
+    const input = { codecId };
     const convenience = temporalAuthoringPresets(input);
     expect(postgresAuthoringFieldPresets.temporal).toMatchObject({
       timestamptzJsDate: temporalCodecPresetWithPrecision(input),

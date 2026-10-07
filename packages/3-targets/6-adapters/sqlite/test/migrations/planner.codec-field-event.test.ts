@@ -10,11 +10,23 @@ import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
+import { sqliteComponents, textCodecDescriptor } from './fixtures/sqlite-components';
+
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'cs/string@1': 'cs/string',
+  'sqlite/text@1': 'sqlite/text',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
 
 const HOOKED_CODEC = 'cs/string@1';
 
 function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
-  return { many: false, nativeType: 'text', nullable: false, ...overrides };
+  return { many: false, dataType: dataTypeOf(overrides.codecId), nullable: false, ...overrides };
 }
 
 function table(columns: Record<string, StorageColumn>): StorageTable {
@@ -58,13 +70,19 @@ function makeFrameworkComponents(
   hooks: CodecControlHooks,
 ): ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> {
   return [
+    ...sqliteComponents,
     {
       kind: 'adapter',
       id: 'test-codec',
       familyId: 'sql',
       targetId: 'sqlite',
       version: '0.0.0-test',
-      types: { codecTypes: { controlPlaneHooks: { [HOOKED_CODEC]: hooks } } },
+      types: {
+        codecTypes: {
+          codecDescriptors: [textCodecDescriptor(HOOKED_CODEC)],
+          controlPlaneHooks: { [HOOKED_CODEC]: hooks },
+        },
+      },
     } as TargetBoundComponentDescriptor<'sql', string>,
   ];
 }
@@ -188,7 +206,7 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

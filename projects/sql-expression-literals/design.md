@@ -2,7 +2,7 @@
 
 This document fixes every name, signature, message and file the project changes. An implementer follows it and makes no design decisions. If the code contradicts this document, stop and raise it; do not improvise. The reasons behind each decision are in [design-notes.md](design-notes.md). Which slice delivers which section is in [plan.md](plan.md).
 
-The project builds on PR #30381 ("Generic block values bind the shared typed expression grammar", ADR 255). Paths are repo-relative. Line numbers are from `47d727b70d` (the head of #30381) and are only a guide; find the code by name. The code survey behind this document is in [research/](research/); [research/rebase-delta.md](research/rebase-delta.md) and [research/block-specs.md](research/block-specs.md) describe the #30381 base.
+The project builds on PR #30381 ("Generic block values bind the shared typed expression grammar", ADR 262). Paths are repo-relative. Line numbers are from `47d727b70d` (the head of #30381) and are only a guide; find the code by name. The code survey behind this document is in [research/](research/); [research/rebase-delta.md](research/rebase-delta.md) and [research/block-specs.md](research/block-specs.md) describe the #30381 base.
 
 Slice 2t (sections 4 to 7) is the argument type that other projects reuse; it ships before the six places.
 
@@ -339,9 +339,9 @@ Serhii, the author of #30381, agreed (2026-09-25) that block specs may receive t
 - `lowerRlsPolicyFromBlock` reads `const using = block.values.using === undefined ? undefined : sqlTextFromCanonical(block.values.using.value)`, and likewise `withCheck`. Everything else in the lowering is unchanged.
 - A refused value reports the codes and messages of section 6 at the value, through the block diagnostics path #30381 already has.
 
-### 9.3 ADR 255
+### 9.3 ADR 262
 
-Amend ADR 255 (in slice 2b): a block spec may depend on the stack's data types. Admitting a value of a data type chooses no codec and no stored representation, so ADR 255's reason for keeping codecs out of parsing does not apply.
+Amend ADR 262 (in slice 2b): a block spec may depend on the stack's data types. Admitting a value of a data type chooses no codec and no stored representation, so ADR 262's reason for keeping codecs out of parsing does not apply.
 
 ## 10. `@default` consumes a `sql/expression` value (slice 2a)
 
@@ -692,7 +692,7 @@ A new ADR 256, "Raw SQL is a value of the data type `sql/expression`", written i
 | ADR 254 | 3 | The TypeScript paragraph gains `SqlExpression`, the TypeScript value of a type that has no codec |
 | ADR 231 | 2b | Add `taggedLiteral`, `jsonValue` and `dataTypeValue` to the combinator kit; `dataTypeValue` decides literal-to-type compatibility for positions with a fixed receiving type (its "follow-up" item); `@default` still casts in lowering because its type comes from the column; the `oneOf` rule |
 | ADR 249 | 2b | `index` and `check` are built from the context; the context carries `dataTypes`; `ControlDefaultRegistries` holds only the function registry |
-| ADR 255 | 2b | Section 9.3 |
+| ADR 262 | 2b | Section 9.3 |
 | ADR 195 | 5 | The recorded exception (section 17.2) |
 | ADRs 234, 236, 243, 244 | 2b, 3 | PSL examples in 2b, TS examples in 3 |
 | `docs/architecture docs/ADR-INDEX.md` | 2a, 2b | Rows for ADR 129, 254 and the new 256 |

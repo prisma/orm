@@ -10,6 +10,27 @@ import type {
 } from './types';
 import { findEdgeByDirName, isFullHash, isHexPrefix } from './types';
 
+export const WORKING_CONTRACT_REF = '@contract';
+export const LIVE_MARKER_REF = '@db';
+export const EMPTY_CONTRACT_REF = '@empty';
+
+/** The reserved references, in a fixed order: `@contract`, `@db`, `@empty`. */
+export const RESERVED_CONTRACT_REFS: readonly string[] = [
+  WORKING_CONTRACT_REF,
+  LIVE_MARKER_REF,
+  EMPTY_CONTRACT_REF,
+];
+
+/** True for a reserved reference, which resolves from contract.json, the database, or the empty contract rather than from a contract recorded in the migrations directory. */
+export function isReservedContractRef(input: string): boolean {
+  return RESERVED_CONTRACT_REFS.includes(input);
+}
+
+/** True for `@db`, the only reserved reference that needs a database read to resolve. */
+export function isLiveMarkerRef(input: string | undefined): boolean {
+  return input === LIVE_MARKER_REF;
+}
+
 /**
  * Resolve a user-supplied string to a contract hash using the unified
  * contract-reference grammar.
@@ -17,9 +38,9 @@ import { findEdgeByDirName, isFullHash, isHexPrefix } from './types';
  * Accepted forms:
  * - `@contract` — the on-disk working contract hash (offline; requires
  *   `ctx.contractHash` to be set)
- * - `@db` — the live database marker (connection-required); callers MUST
- *   check `result.value.provenance.kind === 'reserved-db'` and resolve the
- *   actual hash via `readAllMarkers()` before using `result.value.hash`
+ * - `@db` — the live database marker. Callers that accept `@db` test
+ *   `isLiveMarkerRef(input)` before parsing and resolve it from the marker;
+ *   the `reserved-db` result carries a placeholder hash that must not be used
  * - `@empty` — the empty contract (offline; resolves to
  *   `EMPTY_CONTRACT_HASH`, the origin with no prior storage state)
  * - Full storage hash (64 hex chars or `empty`)
@@ -36,7 +57,7 @@ export function parseContractRef(
     return notOk({ kind: 'invalid-format', input, reason: 'Reference cannot be empty' });
   }
 
-  if (input === '@contract') {
+  if (input === WORKING_CONTRACT_REF) {
     if (ctx.contractHash === undefined) {
       return notOk({
         kind: 'not-found',
@@ -47,16 +68,11 @@ export function parseContractRef(
     return ok({ hash: ctx.contractHash, provenance: { kind: 'reserved-contract' } });
   }
 
-  if (input === '@db') {
-    // The live DB marker is not available offline. Return a sentinel result with
-    // a `reserved-db` provenance; callers must resolve the actual hash via
-    // `readAllMarkers()`. The `hash` placeholder is intentionally empty — it
-    // must NOT be used directly. This is enforced by convention; callers
-    // should check `provenance.kind` before using the hash.
+  if (input === LIVE_MARKER_REF) {
     return ok({ hash: '', provenance: { kind: 'reserved-db' } });
   }
 
-  if (input === '@empty') {
+  if (input === EMPTY_CONTRACT_REF) {
     return ok({ hash: EMPTY_CONTRACT_HASH, provenance: { kind: 'reserved-empty' } });
   }
 

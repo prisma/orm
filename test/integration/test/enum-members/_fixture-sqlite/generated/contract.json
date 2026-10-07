@@ -165,7 +165,7 @@
               "columns": {
                 "big": {
                   "codecId": "sqlite/bigint@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -176,12 +176,12 @@
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "real": {
                   "codecId": "sqlite/real@1",
-                  "nativeType": "real",
+                  "dataType": "sqlite/real",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -192,7 +192,7 @@
                 },
                 "text": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -203,7 +203,7 @@
                 },
                 "when": {
                   "codecId": "sqlite/datetime@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -257,7 +257,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "302d84ab4139f90dc83498056a6472496c58ce9543d6ebe7b98e4a2b39e9e4e9"
+    "storageHash": "73aeab611cbe82524b5388c8f8db1981ef1415dbd49508f11ce6a7eb52ec00c7"
   },
   "capabilities": {
     "sql": {

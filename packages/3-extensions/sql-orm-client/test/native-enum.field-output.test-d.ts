@@ -61,7 +61,7 @@ type NativeEnumStorage = {
             columns: {
               aal: {
                 readonly many: false;
-                nativeType: 'aal_level';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: false;
               };

@@ -1,12 +1,9 @@
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 
-export type ResolvedColumnTypeMetadata = Pick<
-  StorageColumn,
-  'nativeType' | 'codecId' | 'typeParams'
->;
+export type ResolvedColumnTypeMetadata = Pick<StorageColumn, 'codecId' | 'typeParams'>;
 
 export function resolveColumnTypeMetadata(
-  column: Pick<StorageColumn, 'nativeType' | 'codecId' | 'typeParams' | 'typeRef'>,
+  column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef'>,
   storageTypes: Readonly<Record<string, StorageTypeInstance>>,
 ): ResolvedColumnTypeMetadata {
   if (!column.typeRef) {
@@ -20,7 +17,6 @@ export function resolveColumnTypeMetadata(
 
   return {
     codecId: referencedType.codecId,
-    nativeType: referencedType.nativeType,
     typeParams: referencedType.typeParams,
   };
 }

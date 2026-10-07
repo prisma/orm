@@ -1,4 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import { Binary, BSON, Decimal128, Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,6 +17,7 @@ import {
   mongoJsonCodec,
   mongoStandardCodecs,
 } from '../src/core/codecs';
+import { mongoDataTypes } from '../src/core/data-types';
 
 const decodeFailed = expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' });
 const encodeFailed = expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' });
@@ -266,8 +269,14 @@ describe('BSON scalar descriptors', () => {
       ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
       [],
     ],
-  ])('%s declares its BSON type and traits', (codecId, targetTypes, traits) => {
-    expect(mongoDescriptorById(codecId)).toMatchObject({ codecId, targetTypes, traits });
+  ])('%s declares its BSON type and traits', (codecId, bsonTypes, traits) => {
+    expect(mongoDescriptorById(codecId)).toMatchObject({ codecId, traits });
+    expect(
+      bsonTypesOfCodec(codecId, {
+        codecLookup: { descriptorFor: mongoDescriptorById },
+        dataTypeLookup: createDataTypeLookup(mongoDataTypes),
+      }),
+    ).toEqual(bsonTypes);
   });
 
   it('registers each codec in the standard set', () => {

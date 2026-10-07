@@ -367,7 +367,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bd8b756e9ef0a90be8946817f6d517faff5356260d067a2174a3ee62dd648f4f",
+    "storageHash": "53afd58a57587efd4161e5258222ae97de61193f5f5e40e66b4974344b2dba1e",
     "namespaces": {
       "public": {
         "id": "public",
@@ -377,19 +377,19 @@
             "Scalars": {
               "columns": {
                 "string": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
                 },
                 "stringOpt": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": true,
                   "many": false
                 },
                 "stringList": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": true,
                   "many": {
@@ -398,19 +398,19 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "boolean": {
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "codecId": "pg/bool@1",
                   "nullable": false,
                   "many": false
                 },
                 "booleanOpt": {
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "codecId": "pg/bool@1",
                   "nullable": true,
                   "many": false
                 },
                 "booleanList": {
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "codecId": "pg/bool@1",
                   "nullable": true,
                   "many": {
@@ -419,19 +419,19 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "int": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "intOpt": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": true,
                   "many": false
                 },
                 "intList": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": true,
                   "many": {
@@ -440,19 +440,19 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "bigInt": {
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
                   "many": false
                 },
                 "bigIntOpt": {
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "codecId": "pg/int8@1",
                   "nullable": true,
                   "many": false
                 },
                 "bigIntList": {
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "codecId": "pg/int8@1",
                   "nullable": true,
                   "many": {
@@ -461,19 +461,19 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "float": {
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "codecId": "pg/float8@1",
                   "nullable": false,
                   "many": false
                 },
                 "floatOpt": {
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "codecId": "pg/float8@1",
                   "nullable": true,
                   "many": false
                 },
                 "floatList": {
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "codecId": "pg/float8@1",
                   "nullable": true,
                   "many": {
@@ -482,7 +482,7 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "decimal": {
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
                   "many": false,
@@ -492,7 +492,7 @@
                   }
                 },
                 "decimalOpt": {
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": true,
                   "many": false,
@@ -502,7 +502,7 @@
                   }
                 },
                 "decimalList": {
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": true,
                   "many": {
@@ -515,7 +515,7 @@
                   }
                 },
                 "dateTime": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -524,7 +524,7 @@
                   }
                 },
                 "dateTimeOpt": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": false,
@@ -533,7 +533,7 @@
                   }
                 },
                 "dateTimeList": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": true,
                   "many": {
@@ -545,19 +545,19 @@
                   }
                 },
                 "json": {
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "codecId": "pg/jsonb@1",
                   "nullable": false,
                   "many": false
                 },
                 "jsonOpt": {
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "codecId": "pg/jsonb@1",
                   "nullable": true,
                   "many": false
                 },
                 "jsonList": {
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "codecId": "pg/jsonb@1",
                   "nullable": true,
                   "many": {
@@ -566,19 +566,19 @@
                   "noCheck": ["elementNotNull"]
                 },
                 "bytes": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": false,
                   "many": false
                 },
                 "bytesOpt": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
                   "many": false
                 },
                 "bytesList": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
                   "many": {

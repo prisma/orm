@@ -15,24 +15,24 @@ import { buildSymbolTable } from '../src/symbol-table';
 
 const createdAt: AuthoringFieldPresetDescriptor = {
   kind: 'fieldPreset',
-  output: { codecId: 'fixture/timestamp@1', nativeType: 'timestamp' },
+  output: { codecId: 'fixture/timestamp@1' },
 };
 
 const uuid: AuthoringFieldPresetDescriptor = {
   kind: 'fieldPreset',
   args: [{ kind: 'number', name: 'version' }],
-  output: { codecId: 'fixture/uuid@1', nativeType: 'uuid', id: true },
+  output: { codecId: 'fixture/uuid@1', id: true },
 };
 
 const text: AuthoringTypeConstructorDescriptor = {
   kind: 'typeConstructor',
-  output: { codecId: 'fixture/text@1', nativeType: 'text' },
+  output: { codecId: 'fixture/text@1' },
 };
 
 const varchar: AuthoringTypeConstructorDescriptor = {
   kind: 'typeConstructor',
   args: [{ kind: 'number', name: 'length' }],
-  output: { codecId: 'fixture/varchar@1', nativeType: 'varchar' },
+  output: { codecId: 'fixture/varchar@1' },
 };
 
 function context(): BinderContext {

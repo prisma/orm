@@ -127,6 +127,10 @@ export type AfterExecuteResult = AfterResultBase &
       }
   );
 
+export interface AfterTransactionResult {
+  readonly outcome: 'committed' | 'rolled-back' | 'unknown';
+}
+
 export interface QueryInterceptResult {
   readonly rows: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>;
 }
@@ -293,6 +297,16 @@ export interface RuntimeMiddleware<
   afterExecute?(
     plan: TPlan,
     result: AfterExecuteResult,
+    ctx: RuntimeMiddlewareContext,
+  ): Promise<void>;
+  /**
+   * The query's last hook. Fires exactly once for every query whose before-hooks and parameter encoding succeeded, when the transaction enclosing the query has ended, with its outcome. Outside a transaction it fires when the query ends: `committed` when it completed, `unknown` when it failed or the caller stopped reading its rows. A query is inside a transaction when it is sent on the transaction or on its connection after the transaction has begun and before its `commit()` or `rollback()` is called. A query sent on the connection while the transaction is still beginning counts as outside, although the database may run it inside. Inside a transaction, a resolved commit reports `unknown` when one of the transaction's queries failed. When the transaction ends while the query still runs, this fires at the end, before the query's after-hook, with the transaction's outcome, which may not be the query's: the query may reach the database after the transaction ends and run outside it, and its own failure is not counted. Receives the same plan and context as `afterQuery` or `afterExecute`. The runner logs and swallows thrown errors.
+   *
+   * Inside a transaction the hooks run one after another while its connection is still checked out, so their time adds to how long it is held. The hook must not use the connection, and must not wait on a connection from the same pool, for example by awaiting a query through the same runtime. A write it sends through the same runtime gets its own `afterTransaction`.
+   */
+  afterTransaction?(
+    plan: TPlan,
+    result: AfterTransactionResult,
     ctx: RuntimeMiddlewareContext,
   ): Promise<void>;
 }

@@ -10,35 +10,28 @@ import {
 
 export const textColumn = {
   codecId: SQLITE_TEXT_CODEC_ID,
-  nativeType: 'text',
 } as const;
 
 export const integerColumn = {
   codecId: SQLITE_INTEGER_CODEC_ID,
-  nativeType: 'integer',
 } as const;
 
 export const realColumn = {
   codecId: SQLITE_REAL_CODEC_ID,
-  nativeType: 'real',
 } as const;
 
 export const blobColumn = {
   codecId: SQLITE_BLOB_CODEC_ID,
-  nativeType: 'blob',
 } as const;
 
 export const datetimeColumn = {
   codecId: SQLITE_DATETIME_CODEC_ID,
-  nativeType: 'text',
 } as const;
 
 export const jsonColumn = {
   codecId: SQLITE_JSON_CODEC_ID,
-  nativeType: 'text',
 } as const;
 
 export const bigintColumn = {
   codecId: SQLITE_BIGINT_CODEC_ID,
-  nativeType: 'integer',
 } as const;

@@ -327,7 +327,7 @@
               "columns": {
                 "day": {
                   "codecId": "pg/date-temporal@1",
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -338,7 +338,7 @@
                 },
                 "float8": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -349,12 +349,12 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int4": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -365,7 +365,7 @@
                 },
                 "int8": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -376,7 +376,7 @@
                 },
                 "special": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -387,7 +387,7 @@
                 },
                 "stamp": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -398,7 +398,7 @@
                 },
                 "text": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -409,7 +409,7 @@
                 },
                 "uuid": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -493,11 +493,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c31a795355037b2fc97ecb27661bfa6b76eede1c6ffd168bcab9a3d0b9878060"
+    "storageHash": "c45dba024cecc6a0f3a12a204207217875ce0fc985e5aada283dea73ef9e672d"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -508,9 +510,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

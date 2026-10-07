@@ -116,8 +116,8 @@ function buildExtensionWithCrossSpaceFK(opts: {
 
   const tables = {
     [localTable]: {
-      id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
-      ref_id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+      ref_id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
     },
   };
 
@@ -204,7 +204,7 @@ describe('cross-space FK reverse-reference rejection', () => {
     // ext-a depends on ext-b; ext-a has FK pointing at ext-b — correct direction
     const extB = buildExtension({
       id: 'ext-b',
-      tables: { users: { id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false } } },
+      tables: { users: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } } },
     });
     const extA = buildExtensionWithCrossSpaceFK({
       id: 'ext-a',
@@ -222,7 +222,7 @@ describe('cross-space FK reverse-reference rejection', () => {
     });
     const extB = buildExtension({
       id: 'ext-b',
-      tables: { users: { id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false } } },
+      tables: { users: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } } },
       extensions: { 'ext-a': {} },
     });
     expect(() => createSqlFamilyInstance(makeStack([extA, extB]))).toThrow(/ext-a/);
@@ -236,7 +236,7 @@ describe('cross-space FK reverse-reference rejection', () => {
     });
     const extB = buildExtension({
       id: 'ext-b',
-      tables: { users: { id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false } } },
+      tables: { users: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } } },
       extensions: { 'ext-a': {} },
     });
     const msg = (() => {
@@ -259,7 +259,7 @@ describe('cross-space FK reverse-reference rejection', () => {
     });
     const extB = buildExtension({
       id: 'ext-b',
-      tables: { users: { id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false } } },
+      tables: { users: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } } },
       extensions: { 'ext-a': {} },
     });
     const error = (() => {
@@ -282,10 +282,10 @@ describe('cross-space FK reverse-reference rejection', () => {
       id: 'ext-a',
       tables: {
         posts: {
-          id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
-          user_id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+          id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+          user_id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
         },
-        users: { id: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false } },
+        users: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } },
       },
       foreignKeys: [
         {

@@ -22,11 +22,17 @@ import {
   varcharColumn,
 } from '@prisma/orm-postgres/adapter/column-types';
 import postgresAdapter from '@prisma/orm-postgres/adapter/control';
+import { createDataTypeLookup } from '@prisma/orm-postgres/components/codec';
 import { extractCodecLookup } from '@prisma/orm-postgres/components/control';
 import { autoincrement, defineContract, now } from '@prisma/orm-postgres/contract-builder';
+import postgresTargetPack from '@prisma/orm-postgres/target/pack';
 import { type } from 'arktype';
 
 const postgresCodecLookup = extractCodecLookup([postgresAdapter, pgvectorPack, arktypeJsonPack]);
+const postgresDataTypeLookup = createDataTypeLookup([
+  ...postgresTargetPack.dataTypes,
+  ...pgvectorPack.dataTypes,
+]);
 
 const profileSchema = type({
   name: 'string',
@@ -34,7 +40,7 @@ const profileSchema = type({
 });
 
 export const contract = defineContract(
-  { codecLookup: postgresCodecLookup },
+  { codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
   ({ field, model, rel }) => {
     const UserBase = model('User', {
       fields: {

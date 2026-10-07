@@ -13,6 +13,7 @@ import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../src/contract-builder';
 
 /**
@@ -141,6 +142,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -167,6 +169,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -197,6 +200,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
     const entity = new TestNativeEnum({ typeName: 'aal_level', members: ['aal1'] });
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -207,6 +211,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -227,6 +232,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -243,6 +249,7 @@ describe('generic pack-entity attachment via the entities channel', () => {
 
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

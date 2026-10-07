@@ -2,7 +2,7 @@ import { structBlock } from '@internal/psl-parser';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   documentScopedTypes,
   interpretSqlContract,
@@ -13,7 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -153,7 +153,6 @@ model Post {
                 args: [{ kind: 'string' }, { kind: 'stringArray' }],
                 output: {
                   codecId: 'custom/enum@1',
-                  nativeType: 'enum',
                   typeParams: {
                     name: { kind: 'arg', index: 0 },
                     values: { kind: 'arg', index: 1 },
@@ -171,7 +170,6 @@ model Post {
     expect(documentScopedTypes(result.value)).toMatchObject({
       Tag: {
         codecId: 'custom/enum@1',
-        nativeType: 'enum',
         typeParams: { name: 'Tag', values: ['hello, world', 'a,b,c', 'plain'] },
       },
     });
@@ -201,7 +199,6 @@ model Document {
                 args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
                 output: {
                   codecId: 'custom/varchar@1',
-                  nativeType: 'character varying',
                   typeParams: {
                     length: { kind: 'arg', index: 0 },
                   },
@@ -216,7 +213,6 @@ model Document {
                 ],
                 output: {
                   codecId: 'custom/vector@1',
-                  nativeType: 'vector',
                   typeParams: {
                     length: { kind: 'arg', index: 0 },
                   },
@@ -233,12 +229,10 @@ model Document {
     expect(documentScopedTypes(result.value)).toMatchObject({
       ShortName: {
         codecId: 'custom/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: 35 },
       },
       Embedding1536: {
         codecId: 'custom/vector@1',
-        nativeType: 'vector',
         typeParams: { length: 1536 },
       },
     });
@@ -263,7 +257,6 @@ model Document {
                 args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
                 output: {
                   codecId: 'custom/varchar@1',
-                  nativeType: 'character varying',
                   typeParams: {
                     length: { kind: 'arg', index: 0 },
                   },
@@ -278,7 +271,6 @@ model Document {
                 ],
                 output: {
                   codecId: 'custom/vector@1',
-                  nativeType: 'vector',
                   typeParams: {
                     length: { kind: 'arg', index: 0 },
                   },
@@ -302,12 +294,12 @@ model Document {
                 columns: {
                   shortName: {
                     codecId: 'custom/varchar@1',
-                    nativeType: 'character varying',
+                    dataType: 'custom/varchar',
                     nullable: false,
                   },
                   embedding: {
                     codecId: 'custom/vector@1',
-                    nativeType: 'vector',
+                    dataType: 'custom/vector',
                     nullable: true,
                   },
                 },
@@ -348,7 +340,6 @@ model Document {
                 ],
                 output: {
                   codecId: 'custom/varchar@1',
-                  nativeType: 'character varying',
                   typeParams: {
                     length: { kind: 'arg', index: 0, path: ['length'] },
                     label: { kind: 'arg', index: 0, path: ['label'] },
@@ -366,7 +357,6 @@ model Document {
     expect(documentScopedTypes(result.value)).toMatchObject({
       ShortName: {
         codecId: 'custom/varchar@1',
-        nativeType: 'character varying',
         typeParams: {
           length: 35,
           label: 'short',
@@ -392,7 +382,6 @@ model Document {
             ],
             output: {
               codecId: 'custom/varchar@1',
-              nativeType: 'character varying',
               typeParams: {
                 length: { kind: 'arg' as const, index: 0, path: ['length'] },
                 label: { kind: 'arg' as const, index: 0, path: ['label'] },
@@ -559,7 +548,7 @@ namespace public {
 }
 `,
       {
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureTypeLookups,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
@@ -624,7 +613,7 @@ model Foo {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          ...fixtureTypeLookups,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -668,7 +657,7 @@ namespace auth {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          ...fixtureTypeLookups,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -713,7 +702,7 @@ namespace auth {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          ...fixtureTypeLookups,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),

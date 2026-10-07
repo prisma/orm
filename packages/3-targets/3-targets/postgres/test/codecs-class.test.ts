@@ -329,21 +329,14 @@ describe('codecs-class', () => {
   });
 
   describe('descriptor metadata', () => {
-    it('exposes traits and targetTypes for each codec', () => {
+    it('exposes traits for each codec', () => {
       expect(pgTextDescriptor.traits).toEqual(['equality', 'order', 'textual']);
       expect(pgInt4Descriptor.traits).toEqual(['equality', 'order', 'numeric']);
       expect(pgBoolDescriptor.traits).toEqual(['equality', 'boolean']);
       expect(pgJsonDescriptor.traits).toEqual([]);
       expect(pgJsonbDescriptor.traits).toEqual(['equality']);
-
-      expect(pgTextDescriptor.targetTypes).toEqual(['text']);
-      expect(pgNumericDescriptor.targetTypes).toEqual(['numeric', 'decimal']);
-      expect(pgBitDescriptor.targetTypes).toEqual(['bit']);
-      expect(pgVarbitDescriptor.targetTypes).toEqual(['bit varying']);
       expect(pgUuidDescriptor.traits).toEqual(['equality', 'order']);
-      expect(pgUuidDescriptor.targetTypes).toEqual(['uuid']);
       expect(pgInetDescriptor.traits).toEqual(['equality', 'order']);
-      expect(pgInetDescriptor.targetTypes).toEqual(['inet']);
     });
   });
 });

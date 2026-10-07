@@ -1,9 +1,9 @@
 /**
  * Codec descriptor interface (consumer surface) and abstract `CodecDescriptorImpl` base (codec-author surface).
  *
- * Consumers depend on the {@link CodecDescriptor} interface — it is the codec-id-keyed source of truth for static metadata (`traits`, `targetTypes`) and registration concerns (`paramsSchema`; optional `renderOutputType`). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
+ * Consumers depend on the {@link CodecDescriptor} interface — it is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema`; optional `renderOutputType`). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
  *
- * Codec authors `extend` the {@link CodecDescriptorImpl} abstract class to declare their codec id, traits, target types, params schema, the `factory(params)` that materializes a typed `Codec<...>`, and (optionally) a `renderOutputType(params)` for the emit path.
+ * Codec authors `extend` the {@link CodecDescriptorImpl} abstract class to declare their codec id, traits, params schema, the `factory(params)` that materializes a typed `Codec<...>`, and (optionally) a `renderOutputType(params)` for the emit path.
  *
  * The factory's method-level generic is the load-bearing piece for literal preservation: per-codec column helpers invoke `descriptor.factory(...)` *directly*, and the direct call binds the generic at its call site. Type extraction (`ReturnType<D['factory']>`, structural matching) widens method generics to their constraint — that's why the column-helper surface is per-codec, not polymorphic.
  */
@@ -12,12 +12,12 @@ import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import type { CodecInstanceContext, CodecTrait } from './codec-types';
-import type { DataTypeId } from './data-type';
+import type { DataTypeId, DataTypeLookup, ToCanonicalForm } from './data-type';
 
 /**
  * Unified codec descriptor. Every codec in the framework registers through this shape — non-parameterized codecs use `P = void` and a constant factory that returns the same shared codec instance for every column; parameterized codecs use a non-empty `P` and a curried higher-order factory that returns a per-instance codec.
  *
- * The descriptor is the codec-id-keyed source of truth for static metadata (`traits`, `targetTypes`) and registration concerns (`paramsSchema` for JSON-boundary validation; optional `renderOutputType` for the `contract.d.ts` emit path). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
+ * The descriptor is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema` for JSON-boundary validation; optional `renderOutputType` for the `contract.d.ts` emit path). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
  *
  * Whether a codec id "is parameterized" stops being a registration-time distinction — it's a property of `P` on the descriptor. The descriptor map indexes every descriptor by `codecId`; both `descriptorFor(codecId)` and `forColumn(table, column)` resolve through the same map without branching on parameterization.
  *
@@ -30,8 +30,6 @@ export interface CodecDescriptorTemplate<P = void> {
   readonly codecId: string;
   /** Semantic traits for operator gating (e.g. equality, order, numeric). */
   readonly traits: readonly CodecTrait[];
-  /** Database-native type names this codec handles (e.g. `['timestamptz']`). */
-  readonly targetTypes: readonly string[];
   /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). `undefined` for a codec that takes no params (`P = void`), which then rejects any `typeParams`. */
   readonly paramsSchema: StandardSchemaV1<P> | undefined;
   /** Whether this descriptor takes params, i.e. has a `paramsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
@@ -53,6 +51,10 @@ export interface CodecDescriptorTemplate<P = void> {
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
   /** Why an enum cannot use this codec, as a sentence an enum's refusal quotes; absent when one can. A codec sets it when no value a query reads back equals a member as the contract stores it. */
   readonly enumRefusal?: string;
+  /**
+   * Gives a value this codec reads its canonical form, for a codec whose data type stores several codecs' values in one form and so declares none for them: a SQLite datetime, which `sqlite/text` stores. Read it through {@link canonicalFormOf}, which takes it in place of the data type's. ADR 254.
+   */
+  readonly toCanonicalForm?: ToCanonicalForm;
   /** The curried higher-order codec. For non-parameterized codecs, the factory is constant — every call returns the same shared codec instance. For parameterized codecs, the factory is called once per `storage.types` instance (or once per inline-`typeParams` column), with `ctx` carrying the column set the resulting codec serves. */
   readonly factory: (params: P) => (ctx: CodecInstanceContext) => Codec;
 }
@@ -67,6 +69,16 @@ export interface CodecDescriptorTemplate<P = void> {
 export interface CodecDescriptor<P = void> extends CodecDescriptorTemplate<P> {
   /** The data type this codec is one representation of. */
   readonly dataType: DataTypeId;
+}
+
+/**
+ * The canonical form of the values of a column whose codec is `codec` (ADR 254): the codec's own when it declares one, else its data type's. Whatever reads, compares or writes a stored value of a column takes its canonical form from here.
+ */
+export function canonicalFormOf(
+  codec: Pick<CodecDescriptor, 'dataType' | 'toCanonicalForm'>,
+  dataTypes: Pick<DataTypeLookup, 'get'>,
+): ToCanonicalForm | undefined {
+  return codec.toCanonicalForm ?? dataTypes.get(codec.dataType)?.toCanonicalForm;
 }
 
 /**
@@ -87,7 +99,7 @@ export type AnyCodecDescriptor = CodecDescriptor<any>;
 /**
  * Abstract base class for concrete codec descriptors.
  *
- * Codec authors extend this class with their typed `TParams` and declare `codecId`, `traits`, `targetTypes`, `paramsSchema`, the curried `factory(params)`, and (optionally) `renderOutputType`.
+ * Codec authors extend this class with their typed `TParams` and declare `codecId`, `traits`, `paramsSchema`, the curried `factory(params)`, and (optionally) `renderOutputType`.
  *
  * Implements the {@link CodecDescriptor} interface so a concrete subclass instance is directly usable wherever the framework expects a `CodecDescriptor<P>`.
  */
@@ -96,7 +108,6 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
 {
   abstract readonly codecId: string;
   abstract readonly traits: readonly CodecTrait[];
-  abstract readonly targetTypes: readonly string[];
 
   abstract readonly paramsSchema: StandardSchemaV1<TParams> | undefined;
 
@@ -115,6 +126,8 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
 
   /** See {@link CodecDescriptorTemplate.enumRefusal}. */
   declare readonly enumRefusal?: string;
+  /** Optional canonical form of the codec's values. See {@link CodecDescriptorTemplate.toCanonicalForm}. */
+  readonly toCanonicalForm?: ToCanonicalForm;
 
   /**
    * Materialize a curried codec factory for the given params. Concrete subclasses override with a typed return type (e.g. `factory<N>(params: { length: N }): (ctx) => VectorCodec<N>`); per-codec helpers read the typed return at the *direct* call site, which is what preserves method-level generics. Type extraction (e.g. `ReturnType<D['factory']>`) widens method generics to their constraint — that's why the column-helper surface is per-codec, not polymorphic.

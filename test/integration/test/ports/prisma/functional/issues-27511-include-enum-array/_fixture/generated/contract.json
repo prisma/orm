@@ -222,7 +222,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 30
@@ -242,12 +242,12 @@
               "columns": {
                 "memberId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "roleId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -327,7 +327,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 30
@@ -335,15 +335,15 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "permissions": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -377,11 +377,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "662035ba79aad4ffa7c278a5c26940194c92c01a2eea918871640bee521e3f0e"
+    "storageHash": "6cfb0c8ca972725b4a736582c313692cb7522518b4158a82507209db4ffa4248"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -392,9 +394,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

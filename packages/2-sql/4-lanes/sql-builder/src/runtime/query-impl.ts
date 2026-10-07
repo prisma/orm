@@ -4,9 +4,17 @@ import type {
   ValidAnnotations,
 } from '@internal/framework-components/runtime';
 import { assertAnnotationsApplicable } from '@internal/framework-components/runtime';
-import { DerivedTableSource, type SelectAst } from '@internal/sql-relational-core/ast';
+import {
+  DerivedTableSource,
+  LockingClause,
+  type LockStrength,
+  type LockWaitPolicy,
+  type SelectAst,
+} from '@internal/sql-relational-core/ast';
 import { toExpr } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { ifDefined } from '@internal/utils/defined';
+import { structuredError } from '@internal/utils/structured-error';
 import type {
   AggregateFunctions,
   BooleanCodecType,
@@ -35,6 +43,8 @@ import type { GroupedQuery } from '../types/grouped-query';
 import type { SelectQuery } from '../types/select-query';
 import type { PaginationValue } from '../types/shared';
 import {
+  assertCapability,
+  assertNotLocked,
   BuilderBase,
   type BuilderContext,
   type BuilderState,
@@ -141,6 +151,7 @@ abstract class QueryBase<
   }
 
   as<Alias extends string>(alias: Alias): JoinSource<RowType, Alias> {
+    assertNotLocked(this.state);
     const ast = buildSelectAst(this.state);
     const derivedSource = DerivedTableSource.as(alias, ast);
     const scope = {
@@ -163,6 +174,7 @@ abstract class QueryBase<
   }
 
   buildAst(): SelectAst {
+    assertNotLocked(this.state);
     return buildSelectAst(this.state);
   }
 
@@ -243,6 +255,75 @@ export class SelectQueryImpl<
     );
     return this.clone(cloneState(this.state, { orderBy: [...this.state.orderBy, item] }));
   }
+
+  forUpdate = this._gate(
+    { sql: { forUpdate: true } },
+    'forUpdate',
+    (options?: LockRequest): SelectQuery<QC, AvailableScope, RowType> =>
+      this.lock('forUpdate', options),
+  );
+
+  forNoKeyUpdate = this._gate(
+    { postgres: { forNoKeyUpdate: true } },
+    'forNoKeyUpdate',
+    (options?: LockRequest): SelectQuery<QC, AvailableScope, RowType> =>
+      this.lock('forNoKeyUpdate', options),
+  );
+
+  forShare = this._gate(
+    { sql: { forShare: true } },
+    'forShare',
+    (options?: LockRequest): SelectQuery<QC, AvailableScope, RowType> =>
+      this.lock('forShare', options),
+  );
+
+  forKeyShare = this._gate(
+    { postgres: { forKeyShare: true } },
+    'forKeyShare',
+    (options?: LockRequest): SelectQuery<QC, AvailableScope, RowType> =>
+      this.lock('forKeyShare', options),
+  );
+
+  private lock(strength: LockStrength, options: LockRequest | undefined): this {
+    const of = options?.of !== undefined && options.of.length > 0 ? options.of : undefined;
+    if (of !== undefined) {
+      assertCapability(this.ctx, { sql: { lockOf: true } }, strength);
+    }
+    const waitPolicy = lockWaitPolicyOf(strength, options);
+    if (waitPolicy === 'nowait') {
+      assertCapability(this.ctx, { sql: { lockNowait: true } }, strength);
+    }
+    if (waitPolicy === 'skipLocked') {
+      assertCapability(this.ctx, { sql: { lockSkipLocked: true } }, strength);
+    }
+    const clause = LockingClause.of(strength, {
+      ...ifDefined('of', of),
+      ...ifDefined('waitPolicy', waitPolicy),
+    });
+    return this.clone(cloneState(this.state, { locking: [...(this.state.locking ?? []), clause] }));
+  }
+}
+
+interface LockRequest {
+  readonly of?: ReadonlyArray<string>;
+  readonly nowait?: true;
+  readonly skipLocked?: true;
+}
+
+function lockWaitPolicyOf(
+  methodName: string,
+  options: LockRequest | undefined,
+): LockWaitPolicy | undefined {
+  if (options?.nowait && options.skipLocked) {
+    throw structuredError(
+      'ORM.ARGUMENT_INVALID',
+      `${methodName}() takes nowait or skipLocked, not both`,
+      { meta: { method: methodName } },
+    );
+  }
+  if (options?.nowait) return 'nowait';
+  if (options?.skipLocked) return 'skipLocked';
+  return undefined;
 }
 
 export class GroupedQueryImpl<

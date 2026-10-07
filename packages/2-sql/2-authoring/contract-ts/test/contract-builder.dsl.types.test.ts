@@ -1,9 +1,9 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
-
 import { columnDescriptor } from './helpers/column-descriptor';
 
 const bareFamilyPack: FamilyPackRef<'sql'> = {
@@ -27,6 +27,7 @@ const int4Column = columnDescriptor('pg/int4@1');
 describe('contract DSL type surface', () => {
   it('preserves the typed contract result at the defineContract boundary', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -49,6 +50,7 @@ describe('contract DSL type surface', () => {
   it('rejects invalid defaultControlPolicy at compile time', () => {
     if (false as boolean) {
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -62,6 +64,7 @@ describe('contract DSL type surface', () => {
   it('rejects invalid per-table control at compile time', () => {
     if (false as boolean) {
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,

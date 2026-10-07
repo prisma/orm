@@ -24,12 +24,12 @@ import {
 import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
-import type { RowSelection } from './collection-internal-types';
+import type { HasRow } from './collection-types';
 import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 
-export interface IncludeScalar<Result> extends RowSelection<Result> {
+export interface IncludeScalar<Result> extends HasRow<Result> {
   readonly kind: 'includeScalar';
   /** An operation name from the contract's emitted aggregate map — an open vocabulary. */
   readonly fn: string;
@@ -50,7 +50,7 @@ export interface IncludeScalarBranch {
 export type IncludeCombineBranch = IncludeRowsBranch | IncludeScalarBranch;
 
 export interface IncludeCombine<ResultShape extends Record<string, unknown>>
-  extends RowSelection<ResultShape> {
+  extends HasRow<ResultShape> {
   readonly kind: 'includeCombine';
   readonly branches: Readonly<Record<string, IncludeCombineBranch>>;
 }
@@ -160,9 +160,9 @@ export interface CollectionTypeState {
 export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
 
 export type DefaultCollectionTypeState = {
-  readonly hasOrderBy: false;
-  readonly hasWhere: false;
-  readonly hasUniqueFilter: false;
+  readonly hasOrderBy: boolean;
+  readonly hasWhere: boolean;
+  readonly hasUniqueFilter: boolean;
   readonly variantName: undefined;
   readonly nsId: never;
 };
@@ -552,8 +552,8 @@ export type ModelAccessor<
 /**
  * The predicate accessor for a collection narrowed to a variant. When a real
  * variant is selected its (possibly MTI) fields and relations are merged onto
- * the base accessor so `t.variant('Feature').where(x => x.priority…)` and
- * `t.variant('Feature').where(x => x.assignee.some(…))` type-check; with no
+ * the base accessor so `t.variant('feature').where(x => x.priority…)` and
+ * `t.variant('feature').where(x => x.assignee.some(…))` type-check; with no
  * variant the accessor is the plain base `ModelAccessor` and is unchanged.
  */
 export type VariantAwareModelAccessor<
@@ -634,6 +634,31 @@ export type VariantNames<
     readonly variants: infer V extends Record<string, unknown>;
   }
     ? keyof V & string
+    : never;
+
+export type DiscriminatorValues<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  ModelDef<TContract, ModelName, NsId> extends {
+    readonly variants: infer V extends Record<string, { readonly value: string }>;
+  }
+    ? V[keyof V]['value']
+    : never;
+
+export type VariantNameForValue<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  Value extends string,
+  NsId extends string = never,
+> =
+  ModelDef<TContract, ModelName, NsId> extends {
+    readonly variants: infer V extends Record<string, { readonly value: string }>;
+  }
+    ? {
+        [K in keyof V & string]: [V[K]['value'] & Value] extends [never] ? never : K;
+      }[keyof V & string]
     : never;
 
 export type VariantModelRow<

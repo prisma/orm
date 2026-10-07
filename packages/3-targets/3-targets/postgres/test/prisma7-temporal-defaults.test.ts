@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pgDate, pgTime, pgTimestamp, pgTimestamptz, pgTimetz } from '../src/core/data-types';
 import { storedTemporalText } from '../src/core/prisma7-temporal-defaults';
 
 /**
@@ -287,11 +288,11 @@ const storedByPostgres: readonly (readonly [
 describe('storedTemporalText', () => {
   it.each(storedByPostgres)('gives the default Postgres stores for %s', (written, stored) => {
     expect({
-      timestamp: storedTemporalText(written, 'timestamp'),
-      timestamptz: storedTemporalText(written, 'timestamptz'),
-      date: storedTemporalText(written, 'date'),
-      time: storedTemporalText(written, 'time'),
-      timetz: storedTemporalText(written, 'timetz'),
+      timestamp: storedTemporalText(written, pgTimestamp.id),
+      timestamptz: storedTemporalText(written, pgTimestamptz.id),
+      date: storedTemporalText(written, pgDate.id),
+      time: storedTemporalText(written, pgTime.id),
+      timetz: storedTemporalText(written, pgTimetz.id),
     }).toEqual(stored);
   });
 
@@ -303,7 +304,7 @@ describe('storedTemporalText', () => {
         '2024-01-02T03:04Z',
         '2024-01-02T03:04:05+0200',
         '+002024-01-02T03:04:05Z',
-      ].map((text) => storedTemporalText(text, 'timestamp')),
+      ].map((text) => storedTemporalText(text, pgTimestamp.id)),
     ).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 });

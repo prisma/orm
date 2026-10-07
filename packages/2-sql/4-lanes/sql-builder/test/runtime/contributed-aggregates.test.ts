@@ -32,7 +32,6 @@ const codecs = buildCodecDescriptorRegistry([
   {
     codecId: 'pg/int4@1',
     traits: ['numeric', 'order', 'equality'],
-    targetTypes: [],
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: 'pg/int4@1' }),
@@ -40,7 +39,6 @@ const codecs = buildCodecDescriptorRegistry([
   {
     codecId: 'lib/int8@1',
     traits: ['numeric', 'order', 'equality'],
-    targetTypes: [],
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: 'lib/int8@1' }),
@@ -48,7 +46,6 @@ const codecs = buildCodecDescriptorRegistry([
   {
     codecId: 'lib/float8@1',
     traits: ['numeric', 'order', 'equality'],
-    targetTypes: [],
     isParameterized: false,
     paramsSchema: undefined,
     factory: () => () => ({ id: 'lib/float8@1' }),

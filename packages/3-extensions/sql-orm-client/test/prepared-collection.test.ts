@@ -100,7 +100,7 @@ describe('prepared collection', () => {
     const runtime = createMockRuntime();
     const context = { ...getTestContext(), contract: buildStiPolyContract() };
     const collection = new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
-    const selected = collection.variant('Admin' as never).select('name', 'role' as never);
+    const selected = collection.variant('admin' as never).select('name', 'role' as never);
     const prepared = prepareRows(selected.prepared.all(), () => [
       { name: 'Admin', kind: 'admin', role: 'owner', plan: null },
     ]);

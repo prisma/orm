@@ -75,7 +75,7 @@ describe('snapshot-read shape fixtures — per-kind round-trip (TML-2536)', () =
     expect(entry).toMatchObject({
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
+      dataType: 'pgvector/vector',
       typeParams: { length: 1536 },
     });
   });

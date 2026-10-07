@@ -38,7 +38,7 @@ describe('a variant collection', () => {
   it("encodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
     await createMongoCollection(contract, 'Task', executor, noEnumCodecs)
-      .variant('Bug')
+      .variant('bug')
       .create({ title: 'Crash', assigneeId: 'a1', severity: 'high', comments: [] });
 
     const severity = paramRefs(plans[0]?.command).find((ref) => ref.name === 'severity');
@@ -54,7 +54,7 @@ describe('a variant collection', () => {
   it("decodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
     await createMongoCollection(contract, 'Task', executor, noEnumCodecs)
-      .variant('Bug')
+      .variant('bug')
       .all()
       .toArray();
 

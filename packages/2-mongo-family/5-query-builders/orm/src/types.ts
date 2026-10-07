@@ -135,6 +135,33 @@ export type VariantNames<
   ? keyof V & string
   : never;
 
+export type DiscriminatorValues<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = MongoModelsMap<TContract>[ModelName] extends {
+  readonly variants: infer V extends Record<string, { readonly value: string }>;
+}
+  ? V[keyof V]['value']
+  : never;
+
+export type VariantNameForValue<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+  Value extends string,
+> = MongoModelsMap<TContract>[ModelName] extends {
+  readonly variants: infer V extends Record<string, { readonly value: string }>;
+}
+  ? {
+      [K in keyof V & string]: [V[K]['value'] & Value] extends [never] ? never : K;
+    }[keyof V & string]
+  : never;
+
+export type VariantSelectable<TVariant extends string> = [TVariant] extends [never]
+  ? unknown
+  : {
+      readonly 'variant() needs a collection with no variant selected; call it on the base collection': never;
+    };
+
 export type VariantModelRow<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,

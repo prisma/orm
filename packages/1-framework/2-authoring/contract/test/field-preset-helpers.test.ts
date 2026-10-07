@@ -7,7 +7,7 @@ import {
 
 const createdAtPreset = {
   kind: 'fieldPreset',
-  output: { codecId: 'test/timestamp@1', nativeType: 'timestamp' },
+  output: { codecId: 'test/timestamp@1' },
 } as const;
 
 const nestedFieldNamespace = {

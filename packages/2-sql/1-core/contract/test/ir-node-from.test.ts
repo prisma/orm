@@ -9,7 +9,7 @@ import { StorageColumn } from '../src/ir/storage-column';
 import { StorageTable } from '../src/ir/storage-table';
 import { UniqueConstraint } from '../src/ir/unique-constraint';
 
-const columnInput = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } as const;
+const columnInput = { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } as const;
 const referenceInput = {
   namespaceId: UNBOUND_NAMESPACE_ID,
   tableName: 'user',

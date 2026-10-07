@@ -1,5 +1,5 @@
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -16,11 +16,13 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -28,14 +30,14 @@ const assembled = assembleAuthoringContributions([
       entityTypes: postgresAuthoringEntityTypes,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
       type: {
-        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
+        Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
       },
     },
   },
 ]);
 
-const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarTypeDescriptors = new Map<string, { codecId: string }>([
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
@@ -58,7 +60,7 @@ function interpret(source: string) {
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       dataTypeLookup: postgresDataTypeLookup,
       resolvedInputs: [],

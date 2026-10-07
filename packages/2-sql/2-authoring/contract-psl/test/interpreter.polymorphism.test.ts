@@ -5,7 +5,7 @@ import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -31,6 +31,7 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       | 'createNamespace'
       | 'capabilities'
       | 'dataTypeLookup'
+      | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -39,7 +40,7 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
@@ -170,7 +171,6 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
     expect(documentScopedTypes(result.value)).toMatchObject({
       Email: {
         codecId: 'pg/text@1',
-        nativeType: 'text',
       },
     });
   });
@@ -523,7 +523,7 @@ model Bug {
       const tasks = tablesOf(result.value)['tasks'];
       expect(tasks?.columns['severity']).toMatchObject({
         codecId: 'pg/text@1',
-        nativeType: 'text',
+        dataType: 'pg/text',
         nullable: true,
       });
 

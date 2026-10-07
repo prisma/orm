@@ -15,6 +15,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresSchema } from '../../src/core/postgres-schema';
 import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-contract';
+import { postgresCodecRegistry } from '../../src/core/registry';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
@@ -568,6 +569,7 @@ function makeRealPostgresStack(
       version: '0.0.1',
       familyId: TARGET_FAMILY,
       targetId: TARGET,
+      types: { codecTypes: { codecDescriptors: Array.from(postgresCodecRegistry.values()) } },
       create: () => ({ familyId: TARGET_FAMILY, targetId: TARGET }),
     },
     extensions: extensions,

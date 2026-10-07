@@ -3,8 +3,8 @@ import type {
   PslExtensionBlock,
   PslExtensionBlockPrintEntry,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { StorageColumn } from '@internal/sql-contract/types';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import { buildNativeEnumBlock } from '../psl-build/native-enum-block';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
@@ -86,8 +86,9 @@ export function buildNativeEnumBlocksForNamespace(input: {
   const valueSetNamesByTypeName = new Map<string, string>();
   for (const column of input.columns) {
     const valueSetName = column.valueSet?.entityName;
-    if (valueSetName === undefined) continue;
-    valueSetNamesByTypeName.set(column.nativeType, valueSetName);
+    const typeName = column.typeParams?.['typeName'];
+    if (valueSetName === undefined || typeof typeName !== 'string') continue;
+    valueSetNamesByTypeName.set(typeName, valueSetName);
   }
   const claimed = new Set(valueSetNamesByTypeName.values());
 

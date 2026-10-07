@@ -39,15 +39,6 @@ export interface StorageTypePlanResult<TTargetDetails> {
 }
 
 /**
- * Input for expanding parameterized native types.
- */
-export interface ExpandNativeTypeInput {
-  readonly nativeType: string;
-  readonly codecId?: string;
-  readonly typeParams?: Record<string, unknown>;
-}
-
-/**
  * Input for resolving an identity-value SQL literal used to backfill existing rows when
  * adding a NOT NULL column without an explicit default.
  *
@@ -55,7 +46,8 @@ export interface ExpandNativeTypeInput {
  * (0 for numbers, '' for strings, false for booleans, etc.).
  */
 export interface ResolveIdentityValueInput {
-  readonly nativeType: string;
+  /** The id of the data type the column's codec represents. */
+  readonly dataType: string;
   readonly codecId?: string;
   readonly typeParams?: Record<string, unknown>;
 }
@@ -125,17 +117,6 @@ export interface CodecControlHooks<TTargetDetails = unknown> {
     readonly driver: SqlControlDriverInstance<string>;
     readonly schemaName?: string;
   }) => Promise<Record<string, StorageTypeInstance>>;
-  /**
-   * Expands a parameterized native type to its full SQL representation.
-   * Used by schema verification to compare contract types against database types.
-   *
-   * For example, expands:
-   * - { nativeType: 'character varying', typeParams: { length: 255 } } -> 'character varying(255)'
-   * - { nativeType: 'numeric', typeParams: { precision: 10, scale: 2 } } -> 'numeric(10,2)'
-   *
-   * Returns the expanded type string, or the original nativeType if no expansion is needed.
-   */
-  expandNativeType?: (input: ExpandNativeTypeInput) => string;
   /**
    * Resolves the identity value (monoid neutral element) as a SQL literal for safely adding
    * a NOT NULL column without an explicit default to a non-empty table.
@@ -405,7 +386,6 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
    * The runner validates each operation against this policy before execution.
    */
   readonly policy: MigrationOperationPolicy;
-  readonly schemaName?: string;
   readonly strictVerification?: boolean;
   readonly callbacks?: SqlMigrationRunnerExecuteCallbacks<TTargetDetails>;
   readonly context?: OperationContext;

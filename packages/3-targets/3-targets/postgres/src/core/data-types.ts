@@ -1,6 +1,7 @@
 /**
- * The data types this target owns, one per PostgreSQL type its codecs represent, with the casts
- * that say which other types' values each one takes and how.
+ * The data types this target owns, one per PostgreSQL type its codecs represent: the texts each
+ * one is written and reported with, its parameters and their normal form, and the casts that say
+ * which other types' values each one takes and how.
  *
  * A cast is declared by the type that receives, never by the source, so there is at most one cast
  * for any pair. Each one is a pure function from the source type's canonical form to this type's.
@@ -10,21 +11,29 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
+  assembleDataTypes,
   type Cast,
   type DataType,
-  dataType,
+  type DataTypeLookup,
   isNonFiniteText,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import {
+  numeralText,
+  type ReportedSqlType,
+  type SqlTypeText,
+  sqlDataType,
+} from '@internal/sql-contract/data-type';
+import {
   type CanonicalDateTimeOptions,
   canonicalDateTime,
   integerTextCanonicalForm,
-  numeralText,
-} from '@internal/sql-relational-core/ast';
+} from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
+import { type as arktype } from 'arktype';
 import { canonicalInet } from './canonical-inet';
-import { canonicalUuid, fitsFloat4, pgIntervalCanonical } from './codec-helpers';
+import { canonicalUuid, fitsFloat4, pgByteaCanonical, pgIntervalCanonical } from './codec-helpers';
+import { quoteIdentifier } from './sql-utils';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -66,22 +75,98 @@ const asFloat: Cast = (value) => {
   );
 };
 
-export const pgText: DataType = dataType('pg/text', {});
-export const pgTextArray: DataType = dataType('pg/text-array', {});
-export const pgEnum: DataType = dataType('pg/enum', {});
-export const pgInt2: DataType = dataType('pg/int2', {});
-export const pgBool: DataType = dataType('pg/bool', {});
-export const pgJson: DataType = dataType('pg/json', {});
-export const pgTsquery: DataType = dataType('pg/tsquery', {});
+const written = (text: string): SqlTypeText => ({ text, written: true });
+const catalog = (text: string): SqlTypeText => ({ text, catalog: true });
+const writtenAndCatalog = (text: string): SqlTypeText => ({ text, written: true, catalog: true });
+const claimsOnly = (text: string): SqlTypeText => ({ text });
 
-export const pgInt4: DataType = dataType('pg/int4', { casts: { [pgInt2.id]: unchanged } });
+/** The precision and scale of `numeric`. PostgreSQL 15 and later take a negative scale and one above the precision. */
+export const pgNumericParams = arktype({
+  'precision?': 'number.integer >= 1 & number.integer <= 1000',
+  'scale?': 'number.integer >= -1000 & number.integer <= 1000',
+}).narrow(
+  (params, ctx) =>
+    params.scale === undefined ||
+    params.precision !== undefined ||
+    ctx.reject({ path: ['scale'], message: 'scale requires a precision' }),
+);
 
-export const pgInt8: DataType = dataType('pg/int8', {
+/** The length of `char` and `varchar`. */
+export const pgCharacterLengthParams = arktype({
+  'length?': 'number.integer >= 1 & number.integer <= 10485760',
+});
+
+/** The length of `bit` and `bit varying`. */
+export const pgBitLengthParams = arktype({
+  'length?': 'number.integer >= 1 & number.integer <= 83886080',
+});
+
+/** The fractional-second precision of the time, timestamp and interval types. */
+export const pgPrecisionParams = arktype({
+  'precision?': 'number.integer >= 0 & number.integer <= 6',
+});
+
+export const pgEnumParams = arktype({ typeName: 'string > 0' });
+
+/** A type with no parameters that is written and reported by its own name. */
+const namedOnly = (id: string, name: string, casts: Readonly<Record<string, Cast>> = {}) =>
+  sqlDataType(id, { texts: [writtenAndCatalog(name)], casts });
+
+const withDefaultLength = <Params extends { readonly length?: number }>(params: Params) =>
+  params.length === undefined ? { ...params, length: 1 } : params;
+
+export const pgText = namedOnly('pg/text', 'text');
+export const pgTextArray = sqlDataType('pg/text-array', {});
+
+/** The enum's `typeName`: its name in `public` or with no schema, its schema-qualified name elsewhere. */
+function qualifiedEnumName(reported: ReportedSqlType): string {
+  const name = reported.name ?? '';
+  return reported.schema === undefined || reported.schema === 'public'
+    ? name
+    : `${reported.schema}.${name}`;
+}
+
+export const pgEnum = sqlDataType('pg/enum', {
+  params: pgEnumParams,
+  claimsKind: 'enum',
+  render: ({ typeName }) => {
+    const dot = typeName.indexOf('.');
+    return dot === -1
+      ? quoteIdentifier(typeName)
+      : `${quoteIdentifier(typeName.slice(0, dot))}.${quoteIdentifier(typeName.slice(dot + 1))}`;
+  },
+  fromReported: (reported) => ({ typeName: qualifiedEnumName(reported) }),
+});
+
+export const pgInt2 = sqlDataType('pg/int2', { texts: [written('int2'), catalog('smallint')] });
+
+export const pgBool = sqlDataType('pg/bool', { texts: [written('bool'), catalog('boolean')] });
+export const pgJson = namedOnly('pg/json', 'json');
+export const pgTsquery = namedOnly('pg/tsquery', 'tsquery');
+
+export const pgInt4 = sqlDataType('pg/int4', {
+  texts: [written('int4'), catalog('integer'), claimsOnly('int')],
+  casts: { [pgInt2.id]: unchanged },
+});
+
+export const pgInt8 = sqlDataType('pg/int8', {
+  texts: [written('int8'), catalog('bigint')],
   toCanonicalForm: integerTextCanonicalForm,
   casts: { [pgInt2.id]: asNumeralText, [pgInt4.id]: asNumeralText },
 });
 
-export const pgNumeric: DataType = dataType('pg/numeric', {
+export const pgNumeric = sqlDataType('pg/numeric', {
+  params: pgNumericParams,
+  texts: [
+    writtenAndCatalog('numeric'),
+    written('numeric({precision})'),
+    writtenAndCatalog('numeric({precision},{scale})'),
+    claimsOnly('decimal'),
+    claimsOnly('decimal({precision})'),
+    claimsOnly('decimal({precision},{scale})'),
+  ],
+  normalize: (params) =>
+    params.precision !== undefined && params.scale === undefined ? { ...params, scale: 0 } : params,
   casts: {
     [pgInt2.id]: asNumeralText,
     [pgInt4.id]: asNumeralText,
@@ -110,15 +195,43 @@ const floatCastsOf = (cast: Cast): Readonly<Record<string, Cast>> => ({
   [pgNumeric.id]: cast,
 });
 
-export const pgFloat4: DataType = dataType('pg/float4', { casts: floatCastsOf(asFloat4) });
-export const pgFloat8: DataType = dataType('pg/float8', { casts: floatCastsOf(asFloat) });
+export const pgFloat4 = sqlDataType('pg/float4', {
+  texts: [written('float4'), catalog('real')],
+  casts: floatCastsOf(asFloat4),
+});
 
-export const pgJsonb: DataType = dataType('pg/jsonb', { casts: { [pgJson.id]: unchanged } });
+export const pgFloat8 = sqlDataType('pg/float8', {
+  texts: [written('float8'), catalog('double precision'), claimsOnly('float')],
+  casts: floatCastsOf(asFloat),
+});
+
+export const pgJsonb = namedOnly('pg/jsonb', 'jsonb', { [pgJson.id]: unchanged });
 
 const fromText: Readonly<Record<string, Cast>> = { [pgText.id]: unchanged };
 
-export const pgChar: DataType = dataType('pg/char', { casts: fromText });
-export const pgVarchar: DataType = dataType('pg/varchar', { casts: fromText });
+export const pgChar = sqlDataType('pg/char', {
+  params: pgCharacterLengthParams,
+  texts: [
+    written('character'),
+    writtenAndCatalog('character({length})'),
+    claimsOnly('char'),
+    claimsOnly('char({length})'),
+  ],
+  normalize: withDefaultLength,
+  casts: fromText,
+});
+
+export const pgVarchar = sqlDataType('pg/varchar', {
+  params: pgCharacterLengthParams,
+  texts: [
+    writtenAndCatalog('character varying'),
+    writtenAndCatalog('character varying({length})'),
+    claimsOnly('varchar'),
+    claimsOnly('varchar({length})'),
+  ],
+  casts: fromText,
+});
+
 /** Text in any form PostgreSQL reads as a UUID, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
 const asUuid: Cast = (value) => {
   if (typeof value !== 'string') return wrongShape(value, 'text');
@@ -134,26 +247,28 @@ const asUuid: Cast = (value) => {
   );
 };
 
-export const pgUuid: DataType = dataType('pg/uuid', { casts: { [pgText.id]: asUuid } });
-/** Text PostgreSQL reads as an IP address, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
-const asInet: Cast = (value) => {
-  if (typeof value !== 'string') return wrongShape(value, 'text');
-  const inet = canonicalInet(value);
-  if (inet !== undefined) return inet;
-  throw structuredError(
-    'CONTRACT.CAST_REFUSED',
-    `${JSON.stringify(value)} is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.`,
-    {
-      why: 'An inet column takes only text PostgreSQL reads as an IP address.',
-      fix: 'Write an address such as 192.168.0.1 or 2001:db8::1/64.',
-    },
-  );
-};
+export const pgUuid = sqlDataType('pg/uuid', {
+  texts: [writtenAndCatalog('uuid')],
+  casts: { [pgText.id]: asUuid },
+});
 
-export const pgInet: DataType = dataType('pg/inet', { casts: { [pgText.id]: asInet } });
-export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
-export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });
-export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
+export const pgBit = sqlDataType('pg/bit', {
+  params: pgBitLengthParams,
+  texts: [written('bit'), writtenAndCatalog('bit({length})')],
+  normalize: withDefaultLength,
+  casts: fromText,
+});
+
+export const pgVarbit = sqlDataType('pg/varbit', {
+  params: pgBitLengthParams,
+  texts: [
+    writtenAndCatalog('bit varying'),
+    writtenAndCatalog('bit varying({length})'),
+    claimsOnly('varbit'),
+    claimsOnly('varbit({length})'),
+  ],
+  casts: fromText,
+});
 
 const POSTGRES_YEAR = /^(\d{4,6})(-.*?)( BC)?$/;
 
@@ -198,20 +313,20 @@ function postgresDateTime(
 export const pgDateCanonical = postgresDateTime(
   {
     shape: 'date',
-    dataTypeId: 'pg/date',
+    ownerId: 'pg/date',
     range: { earliest: '-004713-11-24', latest: '+275760-09-13' },
   },
   true,
 );
-export const pgTimeCanonical = postgresDateTime({ shape: 'time', dataTypeId: 'pg/time' }, false);
+export const pgTimeCanonical = postgresDateTime({ shape: 'time', ownerId: 'pg/time' }, false);
 export const pgTimetzCanonical = postgresDateTime(
-  { shape: 'timeWithOffset', dataTypeId: 'pg/timetz', maxOffsetHours: 15 },
+  { shape: 'timeWithOffset', ownerId: 'pg/timetz', maxOffsetHours: 15 },
   false,
 );
 export const pgTimestampCanonical = postgresDateTime(
   {
     shape: 'dateTime',
-    dataTypeId: 'pg/timestamp',
+    ownerId: 'pg/timestamp',
     range: { earliest: '-004713-11-24T00:00:00', latest: '+275760-09-13T23:59:59.999999' },
   },
   true,
@@ -219,7 +334,7 @@ export const pgTimestampCanonical = postgresDateTime(
 export const pgTimestamptzCanonical = postgresDateTime(
   {
     shape: 'instant',
-    dataTypeId: 'pg/timestamptz',
+    ownerId: 'pg/timestamptz',
     range: { earliest: '-004713-11-24T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
   },
   true,
@@ -231,18 +346,86 @@ const canonicalFromText =
   (value) =>
     typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
 
-/** A date or time type: its canonical form, and a cast from text that gives it. */
-function dateTimeType(id: string, canonical: (text: string) => string): DataType {
+/** A type whose canonical form reads text: that canonical form, and the same function as its cast from text. */
+function typeCanonicalFromText(
+  id: string,
+  canonical: (text: string) => string,
+  spec: { readonly texts: readonly SqlTypeText[]; readonly params?: typeof pgPrecisionParams },
+) {
   const toCanonicalForm = canonicalFromText(canonical);
-  return dataType(id, { toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
+  return sqlDataType(id, { ...spec, toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
 }
 
-export const pgTimetz: DataType = dateTimeType('pg/timetz', pgTimetzCanonical);
-export const pgInterval: DataType = dateTimeType('pg/interval', pgIntervalCanonical);
-export const pgDate: DataType = dateTimeType('pg/date', pgDateCanonical);
-export const pgTime: DataType = dateTimeType('pg/time', pgTimeCanonical);
-export const pgTimestamp: DataType = dateTimeType('pg/timestamp', pgTimestampCanonical);
-export const pgTimestamptz: DataType = dateTimeType('pg/timestamptz', pgTimestamptzCanonical);
+export const pgTimetz = typeCanonicalFromText('pg/timetz', pgTimetzCanonical, {
+  params: pgPrecisionParams,
+  texts: [
+    written('timetz'),
+    written('timetz({precision})'),
+    catalog('time with time zone'),
+    catalog('time({precision}) with time zone'),
+  ],
+});
+
+export const pgInterval = typeCanonicalFromText('pg/interval', pgIntervalCanonical, {
+  params: pgPrecisionParams,
+  texts: [writtenAndCatalog('interval'), writtenAndCatalog('interval({precision})')],
+});
+
+export const pgBytea = typeCanonicalFromText('pg/bytea', pgByteaCanonical, {
+  texts: [writtenAndCatalog('bytea')],
+});
+
+/** Text PostgreSQL reads as an IP address, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
+function pgInetCanonical(text: string): string {
+  const inet = canonicalInet(text);
+  if (inet !== undefined) return inet;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${JSON.stringify(text)} is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.`,
+    {
+      why: 'An inet column takes only text PostgreSQL reads as an IP address.',
+      fix: 'Write an address such as 192.168.0.1 or 2001:db8::1/64.',
+    },
+  );
+}
+
+export const pgInet = typeCanonicalFromText('pg/inet', pgInetCanonical, {
+  texts: [writtenAndCatalog('inet')],
+});
+
+export const pgDate = typeCanonicalFromText('pg/date', pgDateCanonical, {
+  texts: [writtenAndCatalog('date')],
+});
+
+export const pgTime = typeCanonicalFromText('pg/time', pgTimeCanonical, {
+  params: pgPrecisionParams,
+  texts: [
+    written('time'),
+    written('time({precision})'),
+    catalog('time without time zone'),
+    catalog('time({precision}) without time zone'),
+  ],
+});
+
+export const pgTimestamp = typeCanonicalFromText('pg/timestamp', pgTimestampCanonical, {
+  params: pgPrecisionParams,
+  texts: [
+    written('timestamp'),
+    written('timestamp({precision})'),
+    catalog('timestamp without time zone'),
+    catalog('timestamp({precision}) without time zone'),
+  ],
+});
+
+export const pgTimestamptz = typeCanonicalFromText('pg/timestamptz', pgTimestamptzCanonical, {
+  params: pgPrecisionParams,
+  texts: [
+    written('timestamptz'),
+    written('timestamptz({precision})'),
+    catalog('timestamp with time zone'),
+    catalog('timestamp({precision}) with time zone'),
+  ],
+});
 
 /** Every data type this target registers. */
 export const postgresDataTypes: readonly DataType[] = [
@@ -273,3 +456,8 @@ export const postgresDataTypes: readonly DataType[] = [
   pgTimestamp,
   pgTimestamptz,
 ];
+
+/** A lookup of the data types this target registers. */
+export function createPostgresBuiltinDataTypeLookup(): DataTypeLookup {
+  return assembleDataTypes([{ id: 'postgres', dataTypes: postgresDataTypes }]).lookup;
+}

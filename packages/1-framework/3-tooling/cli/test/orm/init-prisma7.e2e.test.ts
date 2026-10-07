@@ -200,7 +200,11 @@ describe('init on the Prisma 7 fixture, end to end', () => {
         expect(sign.envelope).toMatchObject({
           ok: true,
           diagnostics: [],
-          result: { ok: true, marker: { created: true }, advancedRef: { name: 'db' } },
+          result: {
+            ok: true,
+            spaces: [{ space: 'app', status: 'created' }],
+            advancedRefs: [{ space: 'app', name: 'db' }],
+          },
         });
         expect(sign.exitCode).toBe(0);
         expect(existsSync(join(projectDir, 'migrations/app/refs/db.json'))).toBe(true);

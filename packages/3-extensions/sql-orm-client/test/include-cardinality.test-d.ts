@@ -1,19 +1,8 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
+import type { CollectionRowOf } from '../src/collection-types';
 import { createMockRuntime, type TestContract } from './helpers';
-
-type RowOf<TCollection> =
-  TCollection extends Collection<
-    infer _Contract extends Contract<SqlStorage>,
-    infer _ModelName extends string,
-    infer Row,
-    infer _State
-  >
-    ? Row
-    : never;
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -59,17 +48,19 @@ postCollection.include('author', (author) => {
   return author;
 });
 
-type UsersWithPostsRow = RowOf<typeof usersWithPosts>;
-type UsersWithProfileRow = RowOf<typeof usersWithProfile>;
-type UsersWithInvitedByRow = RowOf<typeof usersWithInvitedBy>;
-type PostsWithAuthorRow = RowOf<typeof postsWithAuthor>;
-type ProfilesWithUserRow = RowOf<typeof profilesWithUser>;
-type ArticlesWithReviewerRow = RowOf<typeof articlesWithReviewer>;
-type UsersWithPostCountRow = RowOf<typeof usersWithPostCount>;
-type UsersWithSelectedPostsRow = RowOf<typeof usersWithSelectedPosts>;
+type UsersWithPostsRow = CollectionRowOf<typeof usersWithPosts>;
+type UsersWithProfileRow = CollectionRowOf<typeof usersWithProfile>;
+type UsersWithInvitedByRow = CollectionRowOf<typeof usersWithInvitedBy>;
+type PostsWithAuthorRow = CollectionRowOf<typeof postsWithAuthor>;
+type ProfilesWithUserRow = CollectionRowOf<typeof profilesWithUser>;
+type ArticlesWithReviewerRow = CollectionRowOf<typeof articlesWithReviewer>;
+type UsersWithPostCountRow = CollectionRowOf<typeof usersWithPostCount>;
+type UsersWithSelectedPostsRow = CollectionRowOf<typeof usersWithSelectedPosts>;
 
 export type IncludeCardinalityTypeAssertions = [
-  Assert<Equal<UsersWithPostsRow['posts'], Array<RowOf<Collection<TestContract, 'Post'>>>>>,
+  Assert<
+    Equal<UsersWithPostsRow['posts'], Array<CollectionRowOf<Collection<TestContract, 'Post'>>>>
+  >,
   // An include count reads through the target's count codec, like any other
   // aggregate — PostgreSQL counts as `pg/int8number@1`, whose value is a
   // number.

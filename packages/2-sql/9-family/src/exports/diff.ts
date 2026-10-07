@@ -21,5 +21,4 @@ export {
   computeStorageTypeVerdict,
   verifySqlSchemaByDiff,
 } from '../core/diff/schema-verify';
-export type { NativeTypeNormalizer } from '../core/diff/sql-schema-diff';
 export { arraysEqual } from '../core/diff/sql-schema-diff';

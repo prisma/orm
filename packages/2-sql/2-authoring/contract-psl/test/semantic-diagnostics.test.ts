@@ -33,7 +33,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     symbolTable,
     sources,
     binder: createBinder({ symbolTable, sources, context }).binder,
-    columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
+    columnDescriptor: { codecId: 'pg/text@1' },
     isListColumn: false,
     valueObjectDefault: undefined,
     generatorDescriptorById: new Map(),

@@ -382,13 +382,23 @@ describe('control-api', () => {
               });
               expect(initResult.ok).toBe(true);
 
-              // Then sign it (should be idempotent since marker already written)
-              const signResult = await client.sign({
-                contract: contractJson,
+              const familyInstance = sql.create(
+                createControlStack({
+                  family: sql,
+                  target: postgres,
+                  adapter: postgresAdapter,
+                  driver: postgresDriver,
+                  extensions: [],
+                }),
+              );
+              const signResult = await client.dbSign({
+                contract: familyInstance.deserializeContract(contractJson),
+                migrationsDir: resolve(testDir, 'migrations'),
               });
 
-              expect(signResult.ok).toBe(true);
-              expect(signResult.contract.storageHash).toBeDefined();
+              expect(signResult.assertOk().spaces).toMatchObject([
+                { space: 'app', status: 'unchanged' },
+              ]);
             } finally {
               await client.close();
             }

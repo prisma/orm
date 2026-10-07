@@ -13,7 +13,7 @@ import type { AuthoringFieldPresetDescriptor } from '@internal/framework-compone
  *
  * It is kept honest by `family-sql/test/temporal-codec-presets.test.ts`, which
  * imports this mirror and asserts it deep-equals the factory output. The
- * factory is generic over codecId/nativeType, so the invented codec id anchors
+ * factory is generic over codecId, so the invented codec id anchors
  * exactly as a real one would.
  */
 const NOW_PHASE = { kind: 'generator', id: 'timestampNow' } as const;
@@ -21,13 +21,12 @@ const NOW_PHASE = { kind: 'generator', id: 'timestampNow' } as const;
 export const sqlTimestampPresetMirror = {
   kind: 'fieldPreset',
   args: [
-    { name: 'precision', kind: 'number', optional: true, integer: true, minimum: 0 },
+    { name: 'precision', kind: 'number', optional: true, integer: true },
     { name: 'onCreate', kind: 'option', values: ['now'], optional: true },
     { name: 'onUpdate', kind: 'option', values: ['now'], optional: true },
   ],
   output: {
     codecId: 'test/timestamp@1',
-    nativeType: 'timestamp',
     typeParams: { precision: { kind: 'arg', index: 0 } },
     executionDefaults: {
       onCreate: { kind: 'select', index: 1, cases: { now: NOW_PHASE } },

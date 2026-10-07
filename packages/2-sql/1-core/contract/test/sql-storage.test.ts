@@ -16,7 +16,7 @@ import { createTestSqlNamespace } from './test-support';
 describe('SqlStorage — polymorphic storage.types normalisation', () => {
   const baseTable = new StorageTable({
     columns: {
-      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -37,7 +37,7 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
         Score: {
           kind: 'codec-instance',
           codecId: 'pg/int4@1',
-          nativeType: 'int4',
+          dataType: 'pg/int4',
           typeParams: {},
         },
       },
@@ -45,7 +45,7 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
     expect(storage.types?.['Score']).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/int4@1',
-      nativeType: 'int4',
+      dataType: 'pg/int4',
       typeParams: {},
     });
   });
@@ -58,7 +58,7 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
       types: {
         Score: toStorageTypeInstance({
           codecId: 'pg/int4@1',
-          nativeType: 'int4',
+          dataType: 'pg/int4',
           typeParams: {},
         }),
       },
@@ -69,7 +69,6 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
   it('throws on a raw untagged codec triple (no discriminator)', () => {
     const untagged = {
       codecId: 'pg/vector@1',
-      nativeType: 'vector(1536)',
       typeParams: { dimensions: 1536 },
     } as unknown as SqlStorageTypeEntry;
     expect(
@@ -85,7 +84,6 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
   it('mentions the missing-`kind` diagnostic when the discriminator is absent', () => {
     const untagged = {
       codecId: 'pg/int4@1',
-      nativeType: 'int4',
       typeParams: {},
     } as unknown as SqlStorageTypeEntry;
     expect(
@@ -117,7 +115,7 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
     const onDiskShape = {
       kind: 'codec-instance',
       codecId: 'pg/int4@1',
-      nativeType: 'int4',
+      dataType: 'pg/int4',
       // typeParams omitted — the on-disk canonical form strips empty typeParams
     } as unknown as SqlStorageTypeEntry;
     const storage = new SqlStorage({
@@ -132,7 +130,7 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
     const rawPostgresEnum = {
       kind: 'postgres-enum',
       name: 'user_type',
-      nativeType: 'user_type',
+      dataType: 'app/user-type',
       values: ['admin', 'user'],
       codecId: 'app/test-enum@1',
     } as unknown as SqlStorageTypeEntry;

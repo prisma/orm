@@ -53,7 +53,7 @@ $ pnpm prisma-next migrate --to prod --db $DB --config fixtures/diamond/prisma.c
 3. `pnpm prisma-next migrate --to prod --db <url> --config fixtures/diamond/prisma.config.ts` → PN-CLI-4003 as above.
 
 **References.**
-- Fixture snapshot: [`examples/prisma-8-demo/fixtures/diamond/migrations/snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract.json`](examples/prisma-8-demo/fixtures/diamond/migrations/snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract.json)
+- Fixture snapshot: [`examples/prisma-8-demo/fixtures/diamond/migrations/snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract.json`](examples/prisma-8-demo/fixtures/diamond/migrations/snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract.json)
 - Restructure that moved the format: #894
 
 ---

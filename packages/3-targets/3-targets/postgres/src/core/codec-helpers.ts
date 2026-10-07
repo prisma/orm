@@ -16,11 +16,9 @@ import {
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
-import { numeralText } from '@internal/sql-relational-core/ast';
+import { numeralText } from '@internal/sql-contract/data-type';
 import { structuredError } from '@internal/utils/structured-error';
 import { withoutTrailing } from '@internal/utils/text';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
 
 /**
@@ -57,10 +55,6 @@ export function fitsFloat4(value: number): boolean {
 
 export type PrecisionParams = { readonly precision?: number };
 
-export const precisionParamsSchema = arktype({
-  'precision?': 'number.integer >= 0 & number.integer <= 6',
-}) satisfies StandardSchemaV1<PrecisionParams>;
-
 export function renderLength(
   typeName: string,
   typeParams: { readonly length?: unknown },
@@ -73,7 +67,7 @@ export function renderLength(
     throw postgresError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       `renderOutputType: expected integer "length" in typeParams for ${typeName}, got ${String(length)}`,
-      { meta: { nativeType: typeName, param: 'length', received: String(length) } },
+      { meta: { typeName, param: 'length', received: String(length) } },
     );
   }
   return `${typeName}<${length}>`;
@@ -95,7 +89,7 @@ export function renderPrecision(
     throw postgresError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       `renderOutputType: expected integer "precision" in typeParams for ${typeName}, got ${String(precision)}`,
-      { meta: { nativeType: typeName, param: 'precision', received: String(precision) } },
+      { meta: { typeName, param: 'precision', received: String(precision) } },
     );
   }
   return `${typeName}<${precision}>`;
@@ -297,7 +291,7 @@ export const pgNumericRenderOutputType = (typeParams: {
     throw postgresError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       `renderOutputType: expected integer "precision" in typeParams for Numeric, got ${String(precision)}`,
-      { meta: { nativeType: 'Numeric', param: 'precision', received: String(precision) } },
+      { meta: { typeName: 'Numeric', param: 'precision', received: String(precision) } },
     );
   }
   const scale = typeParams.scale;
@@ -306,7 +300,7 @@ export const pgNumericRenderOutputType = (typeParams: {
     throw postgresError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       `renderOutputType: expected integer "scale" in typeParams for Numeric, got ${String(scale)}`,
-      { meta: { nativeType: 'Numeric', param: 'scale', received: String(scale) } },
+      { meta: { typeName: 'Numeric', param: 'scale', received: String(scale) } },
     );
   }
   return `Numeric<${precision}, ${scale}>`;
@@ -446,7 +440,7 @@ function postgresIntervalFields(text: string): PgInterval | undefined {
   const fraction = match[8] ?? '';
   const magnitude =
     (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
-    BigInt(fraction.padEnd(6, '0') || '0');
+    microsFromFraction(fraction, sign === '-');
   return {
     months: Number(years) * 12 + Number(months),
     days: Number(days),
@@ -493,14 +487,21 @@ export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoD
 export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
   intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
 
-/**
- * Reads the driver's wire value into the application value. `pg` parses an
- * interval into a component object, which is the same three fields under other
- * names; a text wire value is an ISO-8601 duration, because that is what the
- * codec writes.
- */
+const intervalTextFields = (text: string): PgInterval => {
+  if (ISO_DURATION.test(text)) return intervalFieldsOf(text);
+  const fields = postgresIntervalFields(text);
+  if (fields === undefined) {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      `pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got ${text}`,
+      { meta: { codecId: 'pg/interval@1', received: text } },
+    );
+  }
+  return fields;
+};
+
 export const pgIntervalDecode = (wire: string | Record<string, unknown>): PgInterval => {
-  if (typeof wire === 'string') return intervalFieldsOf(wire);
+  if (typeof wire === 'string') return intervalTextFields(wire);
   const part = (name: string): number => {
     const raw = wire[name];
     return typeof raw === 'number' ? raw : 0;
@@ -528,9 +529,36 @@ export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 
+const BYTEA_FORMS = String.raw`Write base64, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`;
+
+function byteaRefused(message: string): never {
+  throw structuredError('CONTRACT.CAST_REFUSED', message, {
+    why: 'pg/bytea stores its bytes as base64 (ADR 254), and reads base64 and the hex text PostgreSQL prints.',
+    fix: BYTEA_FORMS,
+  });
+}
+
 /**
- * Scalar pg bytea values arrive as Uint8Array/Buffer; target-parsed bytea list elements arrive as PostgreSQL hex text.
+ * The canonical form of `pg/bytea` (ADR 254), the base64 its codec writes, from base64 or the hex
+ * text PostgreSQL prints under `bytea_output = 'hex'`.
  */
+export function pgByteaCanonical(text: string): string {
+  if (text.startsWith('\\x')) {
+    if (!BYTEA_TEXT.test(text)) {
+      byteaRefused(
+        `${JSON.stringify(text)} is not PostgreSQL hex, which has two hexadecimal digits for each byte. ${BYTEA_FORMS}`,
+      );
+    }
+    return Buffer.from(text.slice(2), 'hex').toString('base64');
+  }
+  if (!BASE64_TEXT.test(text)) {
+    byteaRefused(
+      `pg/bytea cannot read ${JSON.stringify(text)}. Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\\\x68656c6c6f" in a PSL string.`,
+    );
+  }
+  return Buffer.from(text, 'base64').toString('base64');
+}
+
 export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
   if (wire instanceof Uint8Array) {
     return wire.constructor === Uint8Array

@@ -60,8 +60,8 @@ function buildAppContract(): Contract<SqlStorage> {
             table: {
               profile: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/text@1', nullable: false },
-                  username: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                  username: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],

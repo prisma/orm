@@ -1,5 +1,6 @@
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -54,7 +55,10 @@ describe('PostgresControlAdapter column defaults', () => {
   it('stores raw default expressions from database', {
     timeout: timeouts.databaseOperation,
   }, async () => {
-    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
     const mockDriver = createMockDriver([
       {
         column_name: 'id',

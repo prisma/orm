@@ -2,12 +2,19 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
+import { sqlDataType } from '@internal/sql-contract/data-type';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
+import {
+  testSqlTypeLookups,
+  testTypeLookups,
+} from '../../../1-core/contract/test/test-type-lookups';
 import {
   createFieldPresetHelper,
   createTypeHelpersFromNamespace,
@@ -18,7 +25,7 @@ import { nanoidIdPresetMirror } from './nanoid-preset-mirror';
 
 const textPreset = {
   kind: 'fieldPreset',
-  output: { codecId: 'sql/text@1', nativeType: 'text' },
+  output: { codecId: 'sql/text@1' },
 } as const;
 
 const bareFamilyPack = {
@@ -41,10 +48,9 @@ const nestedTypeNamespace = {
   pgvector: {
     Vector: {
       kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
+      args: [{ kind: 'number', name: 'length', integer: true }],
       output: {
         codecId: 'pg/vector@1',
-        nativeType: 'vector',
         typeParams: {
           length: { kind: 'arg', index: 0 },
         },
@@ -89,11 +95,10 @@ describe('authoring helper runtime', () => {
   });
 
   it('creates nested type helpers and instantiates storage types', () => {
-    const helpers = createTypeHelpersFromNamespace(nestedTypeNamespace) as {
+    const helpers = createTypeHelpersFromNamespace(nestedTypeNamespace, testTypeLookups) as {
       readonly pgvector: {
         readonly Vector: (length: number) => {
           readonly codecId: string;
-          readonly nativeType: string;
           readonly typeParams: { readonly length: number };
         };
       };
@@ -102,7 +107,6 @@ describe('authoring helper runtime', () => {
     expect(helpers.pgvector.Vector(1536)).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     });
   });
@@ -114,10 +118,10 @@ describe('authoring helper runtime', () => {
       }),
     } as unknown as AuthoringTypeNamespace;
 
-    expect(() => createTypeHelpersFromNamespace(unsafeNamespace)).toThrow(
+    expect(() => createTypeHelpersFromNamespace(unsafeNamespace, testTypeLookups)).toThrow(
       'Invalid authoring helper "nested.__proto__". Helper path segments must not use "__proto__".',
     );
-    expect(() => createTypeHelpersFromNamespace(unsafeNamespace)).toThrow(
+    expect(() => createTypeHelpersFromNamespace(unsafeNamespace, testTypeLookups)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }),
     );
   });
@@ -126,6 +130,7 @@ describe('authoring helper runtime', () => {
     const helper = createFieldPresetHelper({
       helperPath: 'field.id.nanoid',
       descriptor: nanoidIdPresetMirror,
+      codecLookup: testTypeLookups.codecLookup,
       build: ({ args, namedConstraintOptions }) => ({
         args,
         namedConstraintOptions,
@@ -142,6 +147,7 @@ describe('authoring helper runtime', () => {
     const helper = createFieldPresetHelper({
       helperPath: 'field.id.nanoid',
       descriptor: nanoidIdPresetMirror,
+      codecLookup: testTypeLookups.codecLookup,
       build: ({ args, namedConstraintOptions }) => ({
         args,
         namedConstraintOptions,
@@ -160,6 +166,7 @@ describe('authoring helper runtime', () => {
     const helper = createFieldPresetHelper({
       helperPath: 'field.id.nanoid',
       descriptor: nanoidIdPresetMirror,
+      codecLookup: testTypeLookups.codecLookup,
       build: ({ args, namedConstraintOptions }) => ({
         args,
         namedConstraintOptions,
@@ -186,6 +193,7 @@ describe('createComposedAuthoringHelpers', () => {
     } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
 
     const helpers = createComposedAuthoringHelpers({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: bareTargetPack,
       extensions: {
@@ -220,6 +228,7 @@ describe('createComposedAuthoringHelpers', () => {
 
     expect(() =>
       createComposedAuthoringHelpers({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: targetPack,
         extensions: {
@@ -247,6 +256,7 @@ describe('createComposedAuthoringHelpers', () => {
 
     expect(() =>
       createComposedAuthoringHelpers({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: bareTargetPack,
         extensions: {
@@ -284,7 +294,7 @@ describe('createComposedAuthoringHelpers', () => {
           shared: {
             thing: {
               kind: 'typeConstructor',
-              output: { codecId: 'sql/text@1', nativeType: 'text' },
+              output: { codecId: 'sql/text@1' },
             },
           },
         },
@@ -293,6 +303,7 @@ describe('createComposedAuthoringHelpers', () => {
 
     expect(() =>
       createComposedAuthoringHelpers({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: targetWithFieldPreset,
         extensions: {
@@ -300,5 +311,67 @@ describe('createComposedAuthoringHelpers', () => {
         },
       }),
     ).toThrow('Ambiguous authoring registry path "shared.thing"');
+  });
+
+  describe('type helpers read the codec’s data type', () => {
+    const varchar = sqlDataType('t/varchar', {
+      params: type({ 'length?': 'number.integer >= 1 & number.integer <= 10485760' }),
+      texts: [
+        { text: 'character varying', written: true },
+        { text: 'character varying({length})', written: true },
+      ],
+    });
+    const lookups = {
+      ...testSqlTypeLookups(),
+      dataTypeLookup: createDataTypeLookup([varchar]),
+      codecLookup: {
+        ...testTypeLookups.codecLookup,
+        descriptorFor: (codecId: string) => ({
+          ...testTypeLookups.codecLookup.descriptorFor(codecId),
+          codecId,
+          dataType: varchar.id,
+          traits: [],
+          paramsSchema: varchar.params,
+          isParameterized: true,
+          factory: () => () => {
+            throw new Error('not used');
+          },
+        }),
+      },
+    };
+    const namespace = {
+      VarChar: {
+        kind: 'typeConstructor',
+        args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
+        output: { codecId: 't/varchar@1', typeParams: { length: { kind: 'arg', index: 0 } } },
+      },
+    } as const satisfies AuthoringTypeNamespace;
+    const helpers = createTypeHelpersFromNamespace(namespace, lookups) as {
+      readonly VarChar: (length?: number) => unknown;
+    };
+
+    it('names the storage type from the codec’s data type', () => {
+      expect(helpers.VarChar(255)).toEqual({
+        kind: 'codec-instance',
+        codecId: 't/varchar@1',
+        typeParams: { length: 255 },
+      });
+    });
+
+    it('accepts an argument at the edges of the data type’s bounds', () => {
+      expect(() => helpers.VarChar(1)).not.toThrow();
+      expect(() => helpers.VarChar(10485760)).not.toThrow();
+    });
+
+    it.each([0, 10485761])('refuses %s, outside the data type’s bounds', (length) => {
+      expect(() => helpers.VarChar(length)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message: expect.stringMatching(
+            /^Authoring helper argument at VarChar\[0\] is invalid: length must be/,
+          ),
+        }),
+      );
+    });
   });
 });

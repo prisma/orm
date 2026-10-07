@@ -19,13 +19,6 @@ export type DefaultNormalizer = (
 ) => ColumnDefault | undefined;
 
 /**
- * Function type for normalizing schema native types to canonical form for comparison.
- * Target-specific implementations handle dialect-specific type name variations
- * (e.g., Postgres 'varchar' → 'character varying', 'timestamptz' normalization).
- */
-export type NativeTypeNormalizer = (nativeType: string) => string;
-
-/**
  * Compares two arrays of strings for equality (order-sensitive).
  */
 export function arraysEqual(a: readonly string[], b: readonly string[]): boolean {

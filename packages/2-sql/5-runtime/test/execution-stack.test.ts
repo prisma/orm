@@ -15,7 +15,6 @@ function createStubAdapterDescriptor(): SqlRuntimeAdapterDescriptor<'postgres'> 
   const registry: ReadonlyArray<Codec<string>> = [
     defineTestCodec({
       typeId: 'pg/text@1',
-      targetTypes: ['text'],
       encode: (value: string) => value,
       decode: (wire: string) => wire,
     }),
@@ -69,7 +68,6 @@ function createStubExtensionDescriptor(): SqlRuntimeExtensionDescriptor<'postgre
   const registry: ReadonlyArray<Codec<string>> = [
     defineTestCodec({
       typeId: 'pg/uuid@1',
-      targetTypes: ['uuid'],
       encode: (value: string) => value,
       decode: (wire: string) => wire,
     }),

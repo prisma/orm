@@ -34,6 +34,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../2-sql/1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../2-sql/1-core/contract/test/test-type-lookups';
 import contractJson from '../src/contract/contract.json' with { type: 'json' };
 import { AuthIdentity, AuthUser, StorageBucket, StorageObject } from '../src/exports/contract';
 import supabasePack from '../src/exports/pack';
@@ -111,8 +112,8 @@ describe('lowering smoke test — FK + relation to AuthUser via real supabasePac
   function buildProfileContract() {
     const Profile = model('Profile', {
       fields: {
-        id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4', nullable: false }).id(),
-        userId: field.column({ codecId: 'pg/text@1', nativeType: 'uuid', nullable: false }),
+        id: field.column({ codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false }).id(),
+        userId: field.column({ codecId: 'pg/text@1', dataType: 'pg/text', nullable: false }),
       },
       relations: {
         user: rel.belongsTo(AuthUser, { from: 'userId', to: 'id' }),
@@ -123,6 +124,7 @@ describe('lowering smoke test — FK + relation to AuthUser via real supabasePac
     }));
 
     return defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       extensions: { supabase: supabasePack },
@@ -252,7 +254,7 @@ describe('handle↔contract.json consistency', () => {
 // ---------------------------------------------------------------------------
 
 describe('extensionModel factory', () => {
-  const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+  const pgText = { codecId: 'pg/text@1' } as const;
 
   it('produces a handle with the same brand/coordinate as a hand-constructed one', () => {
     const handle = extensionModel(

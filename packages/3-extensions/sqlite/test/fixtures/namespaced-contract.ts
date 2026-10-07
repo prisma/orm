@@ -46,13 +46,13 @@ type Storage = {
             columns: {
               readonly id: {
                 readonly many: false;
-                readonly nativeType: 'integer';
+                readonly dataType: 'sqlite/integer';
                 readonly codecId: 'sqlite/integer@1';
                 readonly nullable: false;
               };
               readonly name: {
                 readonly many: false;
-                readonly nativeType: 'text';
+                readonly dataType: 'sqlite/text';
                 readonly codecId: 'sqlite/text@1';
                 readonly nullable: false;
               };

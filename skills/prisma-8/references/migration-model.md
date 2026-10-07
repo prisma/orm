@@ -55,7 +55,7 @@ pnpm prisma migration ref delete <name>
 | Command | Ref advancement |
 |---|---|
 | `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed whenever `--db` is passed without `--advance-ref`, regardless of the URL — even `--db $DATABASE_URL` pointing at the default database) |
-| `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRef` carries name and hash only). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
+| `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRefs` lists `{ space, name, hash }` for each contract space it advanced). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
 | `db migrate --advance-ref <name>` | The **only** apply-time advancement |
 | plain `db migrate` | **Never advances anything** — deliberate: deploy and CI applies must not infer dev intent |
 | `migration plan` | Never advances anything — chaining discipline is yours |
@@ -65,7 +65,7 @@ pnpm prisma migration ref delete <name>
 
 `migration plan` resolves its origin in exactly this order:
 
-1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @empty>` — `@empty` names the empty database deliberately. The reserved forms `@db` and `@contract` exist in the shared ref grammar but do not resolve here: `migration plan` is offline, so `@db` (the live marker) has nothing to read, and `@contract` needs a contract hash the plan resolver does not pass. Use them with `db migrate --show` / `migration status`, not with `plan`.
+1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | @empty>` — `@empty` names the empty database deliberately. The reserved forms `@db` and `@contract` exist in the shared ref grammar but do not resolve here: `migration plan` is offline, so `@db` (the live marker) has nothing to read, and `@contract` needs a contract hash the plan resolver does not pass. Use them with `db migrate --show` / `migration status`, not with `plan`.
 2. No `--from` → the `db` ref (`migrations/app/refs/db.json`).
 3. No `db` ref → **greenfield: the plan starts from the empty database.** On an empty graph the human output adds a muted notice beneath the summary — `No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.` — and the JSON document carries `fromDefaulted: true`, so this case is distinguishable from an explicit `--from @empty`.
 

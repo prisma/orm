@@ -40,7 +40,6 @@ const numericCodecDescriptor: AnyCodecDescriptor = {
   codecId: 'test/int@1',
   dataType: dataTypeId('test/int'),
   traits: ['numeric', 'order'],
-  targetTypes: ['int'],
   isParameterized: false,
   paramsSchema: {
     '~standard': {
@@ -60,7 +59,6 @@ const numericCodecDescriptor: AnyCodecDescriptor = {
 const bigintCodecDescriptor: AnyCodecDescriptor = {
   ...numericCodecDescriptor,
   codecId: 'test/bigint@1',
-  targetTypes: ['bigint'],
   factory: () => () =>
     defineTestCodec({
       typeId: 'test/bigint@1',

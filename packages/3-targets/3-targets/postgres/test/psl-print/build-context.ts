@@ -3,21 +3,18 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import {
   type CodecDescriptorTemplate,
   createDataTypeLookup,
+  type DataType,
 } from '@internal/framework-components/codec';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/codec-descriptor';
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
-import {
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
-} from '../../src/core/type-constructors';
+import { postgresPslTypeConstructors } from '../../src/core/type-constructors';
 
 const citextTemplate: CodecDescriptorTemplate = {
   codecId: 'ext/citext@1',
   traits: [],
-  targetTypes: ['citext'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => {
@@ -25,10 +22,9 @@ const citextTemplate: CodecDescriptorTemplate = {
   },
 };
 
-/** A codec the target does not own, as an extension would contribute it: text stored as `citext`. */
+/** A codec the target does not own, as an extension would contribute it, representing text. */
 export const extensionCodec: AnyPostgresCodecDescriptor = postgresCodec(citextTemplate, {
-  dataType: pgText.id,
-  nativeType: () => 'citext',
+  dataType: pgText,
   jsonProjection: (expression) => expression,
 });
 
@@ -40,6 +36,7 @@ export function testBuildContext(
   extra: {
     readonly types?: AuthoringTypeNamespace;
     readonly codecs?: readonly AnyPostgresCodecDescriptor[];
+    readonly dataTypes?: readonly DataType[];
   } = {},
 ): SqlPslBuildContext {
   const extraCodecs = new Map((extra.codecs ?? []).map((codec) => [codec.codecId, codec]));
@@ -47,19 +44,17 @@ export function testBuildContext(
     authoringContributions: {
       type: {
         ...postgresAuthoringTypes,
-        ...postgresScalarAuthoringTypes,
-        ...postgresNativeAuthoringTypes,
+        ...postgresPslTypeConstructors,
         ...extra.types,
       },
       dataTypes: postgresDataTypeEntries(),
     },
     codecLookup: {
       get: () => undefined,
-      targetTypesFor: () => undefined,
       renderOutputTypeFor: () => undefined,
       descriptorFor: (codecId) =>
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),
     },
-    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    dataTypeLookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
   };
 }

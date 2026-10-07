@@ -36,11 +36,10 @@ test('pgVector: column helper preserves typed codecFactory + length literal', ()
   expectTypeOf(col.typeParams).toEqualTypeOf<{ length: 1536 }>();
 });
 
-test('pgVector: column helper carries bare nativeType (family layer expands at emit/verify)', () => {
+test('pgVector: column helper carries the codec id and the length', () => {
   const col = pgVectorColumn(1536);
-  expectTypeOf(col.nativeType).toEqualTypeOf<string>();
-  if (col.nativeType !== 'vector' || col.codecId !== 'pg/vector@1') {
-    throw new Error(`nativeType / codecId mismatch: ${col.nativeType} / ${col.codecId}`);
+  if (col.codecId !== 'pg/vector@1') {
+    throw new Error(`codecId mismatch: ${col.codecId}`);
   }
   if (col.typeParams.length !== 1536) {
     throw new Error(`length literal not preserved: ${col.typeParams.length}`);
@@ -52,12 +51,9 @@ pgVectorColumn satisfies ColumnHelperForStrict<PgVectorDescriptor>;
 
 test('coarse satisfies catches wrong typeParams shape on pgVectorColumn', () => {
   const brokenHelper = (length: number) =>
-    column(
-      pgVectorDescriptor.factory({ length }),
-      pgVectorDescriptor.codecId,
-      { wrongKey: length },
-      'vector',
-    );
+    column(pgVectorDescriptor.factory({ length }), pgVectorDescriptor.codecId, {
+      wrongKey: length,
+    });
   // @ts-expect-error -- typeParams shape doesn't satisfy ColumnHelperFor<PgVectorDescriptor>
   brokenHelper satisfies ColumnHelperFor<PgVectorDescriptor>;
   // @ts-expect-error -- strict shape catches the same mismatch

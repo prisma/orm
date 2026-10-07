@@ -1,6 +1,7 @@
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { DdlNode } from '@internal/sql-relational-core/ast';
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
+import { SQLITE_NOW_EXPRESSION } from '../core/datetime-text';
 import { createTable } from './ddl';
 
 const markerColumns = [
@@ -9,7 +10,7 @@ const markerColumns = [
   col('profile_hash', 'TEXT', { notNull: true }),
   col('contract_json', 'TEXT'),
   col('canonical_version', 'INTEGER'),
-  col('updated_at', 'TEXT', { notNull: true, default: fn("datetime('now')") }),
+  col('updated_at', 'TEXT', { notNull: true, default: fn(SQLITE_NOW_EXPRESSION) }),
   col('app_tag', 'TEXT'),
   col('meta', 'TEXT', { notNull: true, default: lit('{}') }),
   col('invariants', 'TEXT', { notNull: true, default: lit('[]') }),
@@ -19,7 +20,7 @@ const ledgerColumns = [
   col('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
   col('created_at', 'TEXT', {
     notNull: true,
-    default: fn("strftime('%Y-%m-%dT%H:%M:%fZ','now')"),
+    default: fn(SQLITE_NOW_EXPRESSION),
   }),
   col('space', 'TEXT', { notNull: true }),
   col('migration_name', 'TEXT', { notNull: true }),

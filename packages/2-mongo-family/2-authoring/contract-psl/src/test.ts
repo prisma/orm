@@ -7,6 +7,7 @@ export type MongoContextInput = Pick<
   | 'scalarTypeCodecIds'
   | 'controlMutationDefaults'
   | 'codecLookup'
+  | 'dataTypeLookup'
   | 'authoringContributions'
   | 'reportWarning'
 >;
@@ -23,6 +24,7 @@ export function mongoContextInput(context: ContractSourceContext): MongoContextI
       dataTypeEntries: context.authoringContributions.dataTypes,
     },
     codecLookup: context.codecLookup,
+    dataTypeLookup: context.dataTypeLookup,
     authoringContributions: context.authoringContributions,
     ...(context.reportWarning ? { reportWarning: context.reportWarning } : {}),
   };

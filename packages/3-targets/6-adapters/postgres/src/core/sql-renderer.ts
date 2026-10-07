@@ -1,6 +1,9 @@
+import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecRef } from '@internal/framework-components/codec';
+import type { CodecRef, DataTypeLookup } from '@internal/framework-components/codec';
+import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
+import { dataTypeParams, sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import {
   type AggregateExpr,
   type AnyExpression,
@@ -24,6 +27,9 @@ import {
   type JsonValueProjectionVisitor,
   type ListExpression,
   LiteralExpr,
+  type LockingClause,
+  type LockStrength,
+  type LockWaitPolicy,
   type LoweredParam,
   type NullCheckExpr,
   type OperationExpr,
@@ -39,54 +45,64 @@ import {
   type WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import type { PostgresCodecDescriptorRegistry } from '@internal/target-postgres/codec-descriptor';
-import { isPgEnumParams } from '@internal/target-postgres/codecs';
 import {
-  escapeLiteral,
-  quoteIdentifier,
-  quoteQualifiedName,
-} from '@internal/target-postgres/sql-utils';
+  pgBit,
+  pgBool,
+  pgChar,
+  pgFloat4,
+  pgFloat8,
+  pgInt2,
+  pgInt4,
+  pgInt8,
+  pgInterval,
+  pgNumeric,
+  pgText,
+  pgTime,
+  pgTimestamp,
+  pgTimestamptz,
+  pgTimetz,
+  pgVarbit,
+  pgVarchar,
+} from '@internal/target-postgres/data-types';
+import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { adapterError } from './adapter-errors';
 import type { PostgresContract } from './types';
 
 /**
- * Postgres native types whose unknown-OID parameter inference is reliable in arbitrary expression positions. Parameters bound to a descriptor whose `nativeTypeFor` result falls in this set are emitted as plain `$N`; everything else (including `json`, `jsonb`, extension types like `vector`, and unknown user types) is emitted as `$N::<nativeType>` so the planner picks an unambiguous overload.
+ * Data types whose unknown-OID parameter inference is reliable in arbitrary expression positions. A parameter whose codec represents one of these is emitted as plain `$N`; everything else (including `pg/json`, `pg/jsonb`, extension types like `pgvector/vector`, and enums) is emitted as `$N::<base name>` so the planner picks an unambiguous overload.
  *
- * `json` / `jsonb` are intentionally excluded despite being Postgres builtins: their operator overloads make context inference unreliable in expression positions (e.g. `$1 -> 'key'` is ambiguous between the two).
- *
- * Spellings match the target descriptors' `nativeTypeFor` results, not the `udt_name` abbreviations that ADR 205 used as illustrative shorthand. The registry-based cast policy compares against these strings directly.
+ * `pg/json` / `pg/jsonb` are intentionally excluded: their operator overloads make context inference unreliable in expression positions (e.g. `$1 -> 'key'` is ambiguous between the two).
  */
-const POSTGRES_INFERRABLE_NATIVE_TYPES: ReadonlySet<string> = new Set([
-  // Numeric
-  'integer',
-  'smallint',
-  'bigint',
-  'real',
-  'double precision',
-  'numeric',
-  // Boolean
-  'boolean',
-  // Strings
-  'text',
-  'character',
-  'character varying',
-  // Temporal
-  'timestamp',
-  'timestamp without time zone',
-  'timestamp with time zone',
-  'time',
-  'timetz',
-  'interval',
-  // Bit strings
-  'bit',
-  'bit varying',
+const POSTGRES_INFERRABLE_DATA_TYPES: ReadonlySet<string> = new Set([
+  pgInt2.id,
+  pgInt4.id,
+  pgInt8.id,
+  pgFloat4.id,
+  pgFloat8.id,
+  pgNumeric.id,
+  pgBool.id,
+  pgText.id,
+  pgChar.id,
+  pgVarchar.id,
+  pgTimestamp.id,
+  pgTimestamptz.id,
+  pgTime.id,
+  pgTimetz.id,
+  pgInterval.id,
+  pgBit.id,
+  pgVarbit.id,
 ]);
 
+/**
+ * A parameter's cast names its data type's base name, never its parameters: an explicit cast to
+ * `varchar(n)` truncates and to `numeric(p,s)` rounds.
+ */
 function renderTypedParam(
   index: number,
   codecId: string | undefined,
-  codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
+  types: RenderTypes,
   many?: boolean,
   typeParams?: JsonValue,
   forceCast = false,
@@ -94,7 +110,7 @@ function renderTypedParam(
   if (codecId === undefined) {
     return `$${index}`;
   }
-  const descriptor = codecDescriptorRegistry.descriptorFor(codecId);
+  const descriptor = types.codecDescriptorRegistry.descriptorFor(codecId);
   if (descriptor === undefined) {
     throw adapterError(
       'RUNTIME.PARAM_REF_MISSING_CODEC',
@@ -107,18 +123,15 @@ function renderTypedParam(
       { meta: { codecId } },
     );
   }
-  const ref: CodecRef = {
-    codecId,
-    ...ifDefined('many', many),
-    ...ifDefined('typeParams', typeParams),
-  };
-  const nativeType = descriptor.nativeTypeFor(ref);
+  const dataType = sqlDataTypeOfCodec(codecId, {
+    codecLookup: types.codecDescriptorRegistry,
+    dataTypeLookup: types.dataTypeLookup,
+  });
   const arraySuffix = many ? '[]' : '';
-  if (isPgEnumParams(typeParams)) {
-    return `$${index}::${quoteQualifiedName(nativeType)}${arraySuffix}`;
-  }
-  if (forceCast || !POSTGRES_INFERRABLE_NATIVE_TYPES.has(nativeType) || many) {
-    return `$${index}::${nativeType}${arraySuffix}`;
+  if (forceCast || !POSTGRES_INFERRABLE_DATA_TYPES.has(dataType.id) || many) {
+    const params = isPlainRecord(typeParams) ? typeParams : undefined;
+    const baseName = sqlBaseName(dataType, dataTypeParams(dataType, params));
+    return `$${index}::${baseName}${arraySuffix}`;
   }
   return `$${index}`;
 }
@@ -141,7 +154,13 @@ function unreachableKind(value: never): string {
  */
 interface ParamIndexMap {
   readonly indexMap: Map<AnyParamRef, number>;
+  readonly types: RenderTypes;
+  readonly capabilities: CapabilityMatrix;
+}
+
+interface RenderTypes {
   readonly codecDescriptorRegistry: PostgresCodecDescriptorRegistry;
+  readonly dataTypeLookup: DataTypeLookup;
 }
 
 /**
@@ -153,6 +172,8 @@ export function renderLoweredSql(
   ast: AnyQueryAst,
   contract: PostgresContract,
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
+  dataTypeLookup: DataTypeLookup,
+  capabilities: CapabilityMatrix,
 ): { readonly sql: string; readonly params: readonly LoweredParam[] } {
   const orderedRefs = collectOrderedParamRefs(ast);
   const indexMap = new Map<AnyParamRef, number>();
@@ -162,7 +183,11 @@ export function renderLoweredSql(
       ? { kind: 'bind', name: ref.name }
       : { kind: 'literal', value: ref.value };
   });
-  const pim: ParamIndexMap = { indexMap, codecDescriptorRegistry };
+  const pim: ParamIndexMap = {
+    indexMap,
+    types: { codecDescriptorRegistry, dataTypeLookup },
+    capabilities,
+  };
 
   const node = ast;
   let sql: string;
@@ -223,6 +248,9 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     : '';
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
+  const lockingClause = (ast.locking ?? [])
+    .map((clause) => renderLockingClause(clause, pim.capabilities))
+    .join(' ');
 
   const clauses = [
     selectClause,
@@ -234,10 +262,73 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     orderClause,
     limitClause,
     offsetClause,
+    lockingClause,
   ]
     .filter((part) => part.length > 0)
     .join(' ');
   return clauses.trim();
+}
+
+function lockStrengthSql(strength: LockStrength): {
+  readonly keyword: string;
+  readonly capability: readonly [string, string];
+} {
+  switch (strength) {
+    case 'forUpdate':
+      return { keyword: 'FOR UPDATE', capability: ['sql', 'forUpdate'] };
+    case 'forNoKeyUpdate':
+      return { keyword: 'FOR NO KEY UPDATE', capability: ['postgres', 'forNoKeyUpdate'] };
+    case 'forShare':
+      return { keyword: 'FOR SHARE', capability: ['sql', 'forShare'] };
+    case 'forKeyShare':
+      return { keyword: 'FOR KEY SHARE', capability: ['postgres', 'forKeyShare'] };
+    default:
+      return assertNever(strength, `Unsupported lock strength: ${String(strength)}`);
+  }
+}
+
+function lockWaitPolicySql(waitPolicy: LockWaitPolicy): {
+  readonly keyword: string;
+  readonly capability: readonly [string, string];
+} {
+  switch (waitPolicy) {
+    case 'nowait':
+      return { keyword: 'NOWAIT', capability: ['sql', 'lockNowait'] };
+    case 'skipLocked':
+      return { keyword: 'SKIP LOCKED', capability: ['sql', 'lockSkipLocked'] };
+    default:
+      return assertNever(waitPolicy, `Unsupported lock wait policy: ${String(waitPolicy)}`);
+  }
+}
+
+function requireCapability(
+  capabilities: CapabilityMatrix,
+  [group, flag]: readonly [string, string],
+): void {
+  if (capabilities[group]?.[flag] !== true) {
+    const capability = `${group}.${flag}`;
+    throw adapterError(
+      'RUNTIME.AST_UNSUPPORTED',
+      `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
+      { meta: { target: 'postgres', feature: 'locking-clause', capability } },
+    );
+  }
+}
+
+function renderLockingClause(clause: LockingClause, capabilities: CapabilityMatrix): string {
+  const strength = lockStrengthSql(clause.strength);
+  requireCapability(capabilities, strength.capability);
+  const parts = [strength.keyword];
+  if (clause.of !== undefined) {
+    requireCapability(capabilities, ['sql', 'lockOf']);
+    parts.push(`OF ${clause.of.map((name) => quoteIdentifier(name)).join(', ')}`);
+  }
+  if (clause.waitPolicy !== undefined) {
+    const waitPolicy = lockWaitPolicySql(clause.waitPolicy);
+    requireCapability(capabilities, waitPolicy.capability);
+    parts.push(waitPolicy.keyword);
+  }
+  return parts.join(' ');
 }
 
 function renderProjection(
@@ -594,7 +685,7 @@ function projectJsonThroughCodec(
   codec: CodecRef,
   pim: ParamIndexMap,
 ): ProjectionExpr {
-  const descriptor = pim.codecDescriptorRegistry.descriptorFor(codec.codecId);
+  const descriptor = pim.types.codecDescriptorRegistry.descriptorFor(codec.codecId);
   if (descriptor === undefined) {
     throw adapterError(
       'RUNTIME.PARAM_REF_MISSING_CODEC',
@@ -737,7 +828,7 @@ function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap, forceCast = false)
     return renderTypedParam(
       index,
       ref.codec.codecId,
-      pim.codecDescriptorRegistry,
+      pim.types,
       ref.codec.many,
       ref.codec.typeParams,
       forceCast,
@@ -755,7 +846,7 @@ function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap, forceCast = false)
   return renderTypedParam(
     index,
     ref.codec.codecId,
-    pim.codecDescriptorRegistry,
+    pim.types,
     ref.codec.many,
     ref.codec.typeParams,
   );

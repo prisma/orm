@@ -17,6 +17,7 @@ export default defineConfig({
     'src/exports/errors.ts',
     'src/exports/full-text.ts',
     'src/exports/issue-planner.ts',
+    'src/exports/marker-lock.ts',
     'src/exports/migration.ts',
     'src/exports/native-type-normalizer.ts',
     'src/exports/op-factory-call.ts',

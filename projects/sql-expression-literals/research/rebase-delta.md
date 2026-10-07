@@ -4,7 +4,7 @@ The design (`design.md`) was written against `6a5b58ecb7`. The branch now sits o
 
 ## What changed on the new base, in short
 
-- **Block specs replace block parameter tables (ADR 255, new).** A block descriptor now carries `spec: unknown` (a factory `(ctx: BlockSpecContext) => BlockSpec`) instead of `parameters` and `variadicParameters`. `buildSymbolTable` interprets every registered block with its spec after collecting all declarations, and returns `parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>` (typed envelopes). `block-reconstruction.ts` and `psl-extension-block-validator.ts` are deleted. `PslExtensionBlock` is now a print-only shape with `parameters: Record<string, PslExtensionBlockSourceEntry>` (`{ expression?: string; span }`).
+- **Block specs replace block parameter tables (ADR 262, new).** A block descriptor now carries `spec: unknown` (a factory `(ctx: BlockSpecContext) => BlockSpec`) instead of `parameters` and `variadicParameters`. `buildSymbolTable` interprets every registered block with its spec after collecting all declarations, and returns `parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>` (typed envelopes). `block-reconstruction.ts` and `psl-extension-block-validator.ts` are deleted. `PslExtensionBlock` is now a print-only shape with `parameters: Record<string, PslExtensionBlockSourceEntry>` (`{ expression?: string; span }`).
 - **A block spec context exists.** `BlockSpecContext = { symbols: SymbolTable; block: BlockSymbol }` (`psl-parser/src/block-spec/types.ts:10-13`). Block attribute factories now also take it (`spec-context.ts:42-44`).
 - **`AttributeSpecContext` gained an optional field** `parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>` (`spec-context.ts:17`). `ControlDefaultRegistries` is unchanged.
 - **Postgres policy blocks are `fixedBlock` specs** whose `using` and `withCheck` are `optional(str())` and `permissive` is `optional(bool())` (`postgres/src/core/authoring.ts:151-205`). The predicate matrix is now expressed by keyword-specific specs.
@@ -130,7 +130,7 @@ No file changed. Still true.
 
 ### Outside the sections, for awareness
 
-- New ADR 255 ("Block specs bind top-level block values") rejects "carry block values through the codec JSON medium" because "parsing must not depend on codec registries". Putting data types into `BlockSpecContext` makes block parsing depend on a stack registry (data types, not codecs). The section 9 replacement should say why that is acceptable.
+- New ADR 262 ("Block specs bind top-level block values") rejects "carry block values through the codec JSON medium" because "parsing must not depend on codec registries". Putting data types into `BlockSpecContext` makes block parsing depend on a stack registry (data types, not codecs). The section 9 replacement should say why that is acceptable.
 - New pending fragment `upgrade-instructions/pending/typed-block-value-specs/extension/` already removes `validateExtensionBlock` and the printer's `codecLookup`. Section 19's `print-psl-takes-no-codec-lookup` and `validate-extension-block-takes-data-types` changes are obsolete.
 
 ## Part B — facts for A01 (`dataTypes: DataTypeSupport` on the spec contexts)

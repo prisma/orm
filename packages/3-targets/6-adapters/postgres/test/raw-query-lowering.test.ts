@@ -1,12 +1,17 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { ColumnRef } from '@internal/sql-relational-core/ast';
 import { buildOperation, createRawSql, param } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { postgresRawCodecInferer } from '../src/core/adapter';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
@@ -25,8 +30,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -43,7 +48,13 @@ const contract = new SqlContractSerializer().deserializeContract({
 const rawSql = createRawSql(postgresRawCodecInferer, { contract });
 
 function lower(plan: { readonly ast: Parameters<typeof renderLoweredSql>[0] }) {
-  return renderLoweredSql(plan.ast, contract, postgresCodecDescriptorRegistry);
+  return renderLoweredSql(
+    plan.ast,
+    contract,
+    postgresCodecDescriptorRegistry,
+    postgresDataTypeLookup,
+    postgresAdapterCapabilities,
+  );
 }
 
 describe('raw-query postgres lowering', () => {

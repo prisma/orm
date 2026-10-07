@@ -36,8 +36,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                vector: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                vector: { codecId: 'pg/vector@1', dataType: 'pgvector/vector', nullable: false },
               },
               uniques: [],
               indexes: [],

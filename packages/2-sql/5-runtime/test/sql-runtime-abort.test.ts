@@ -327,7 +327,6 @@ describe('SqlRuntime operations with signals — abort semantics', () => {
 
     const observingCodec = defineTestCodec({
       typeId: 'test/observe-signal@1',
-      targetTypes: ['text'],
       encode: (v: string) => v,
       decode: async (w: string, ctx?: SqlCodecCallContext) => {
         // Mimic an SDK that registers an abort listener on the supplied signal. The runtime threads the same AbortSignal into every codec call; codec authors who forward it observe true cancellation.
@@ -379,7 +378,6 @@ describe('SqlRuntime operations with signals — abort semantics', () => {
     const release = deferred<string>();
     const ignoringCodec = defineTestCodec({
       typeId: 'test/ignore-signal@1',
-      targetTypes: ['text'],
       encode: (v: string) => v,
       decode: async (w: string) => {
         // Signal we're inside the decode body and deliberately ignore ctx.signal.

@@ -46,6 +46,7 @@ import {
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
+import { assembleDataTypes } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -1191,7 +1192,12 @@ function composeMongoAuthoringHelpers<
     'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
-      ctx: { family: family.familyId, target: target.targetId },
+      ctx: {
+        family: family.familyId,
+        target: target.targetId,
+        codecLookup: extractCodecLookup(components),
+        dataTypeLookup: assembleDataTypes(components).lookup,
+      },
     }),
     field: composeMongoFieldHelpers(fieldNamespace),
     index,
@@ -2074,6 +2080,8 @@ function buildModels(
       );
     }
 
+    assertUniqueDiscriminatorValues(modelBuilder);
+
     const storage = {
       ...(modelBuilder.__collection ? { collection: modelBuilder.__collection } : {}),
       ...(modelBuilder.__storageRelations ? { relations: modelBuilder.__storageRelations } : {}),
@@ -2095,6 +2103,28 @@ function buildModels(
   }
 
   return builtModels;
+}
+
+function assertUniqueDiscriminatorValues(modelBuilder: AnyModelBuilder): void {
+  const variantsByValue = new Map<string, string>();
+  for (const [variantName, { value }] of Object.entries(modelBuilder.__variants ?? {})) {
+    const existingVariant = variantsByValue.get(value);
+    if (existingVariant !== undefined) {
+      throw contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `Discriminator value "${value}" is used by both "${existingVariant}" and "${variantName}" on base model "${modelBuilder.__name}".`,
+        {
+          meta: {
+            modelName: modelBuilder.__name,
+            value,
+            variants: [existingVariant, variantName],
+            reason: 'duplicate-discriminator-value',
+          },
+        },
+      );
+    }
+    variantsByValue.set(value, variantName);
+  }
 }
 
 function deriveRoots(

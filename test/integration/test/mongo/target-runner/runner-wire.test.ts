@@ -423,7 +423,15 @@ describe('MongoMigrationRunner', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.failure.code).toBe('MIGRATION.MARKER_CAS_FAILURE');
+      expect(result.failure).toMatchObject({
+        code: 'MIGRATION.MARKER_CAS_FAILURE',
+        meta: {
+          space: 'app',
+          expectedStorageHash: 'origin',
+          foundStorageHash: 'tampered-by-other-process',
+          destinationStorageHash: contract.storage.storageHash,
+        },
+      });
     }
   });
 

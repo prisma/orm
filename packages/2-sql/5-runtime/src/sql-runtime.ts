@@ -1,12 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import {
+  type AfterTransactionResult,
   AsyncIterableResult,
   checkAborted,
   checkMiddlewareCompatibility,
+  onQueryEndOutsideTransaction,
+  type QueryEnding,
   RuntimeCore,
   type RuntimeExecuteOptions,
   type RuntimeLog,
   type RuntimeMiddlewareContext,
+  reportExecuteEnding,
+  reportQueryEnding,
   runBeforeExecuteChain,
   runBeforeQueryChain,
   runExecuteWithMiddleware,
@@ -159,6 +164,11 @@ export interface TransactionContext extends RuntimeQueryable {
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
 
+// Remembers a query's afterTransaction stage on an open transaction, and returns what the query calls when it ends, which tells the transaction whether the query failed.
+type RememberOnTransaction = (
+  runStage: (result: AfterTransactionResult) => Promise<void>,
+) => (ending: QueryEnding) => Promise<void>;
+
 function isExecutionPlan(plan: SqlExecutionPlan | SqlQueryPlan): plan is SqlExecutionPlan {
   return 'sql' in plan;
 }
@@ -202,6 +212,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
   readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
+  // For each open transaction this runtime wrapped, and its connection, how a query run on it is remembered until the transaction's commit() or rollback() is called.
+  readonly #openTransactions = new WeakMap<SqlQueryable, RememberOnTransaction>();
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
 
@@ -420,23 +432,62 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.#inFlight.begin();
   }
 
+  // Returns what to call when the query ends. Outside a transaction that runs the query's stage. On an open transaction the stage is remembered until it ends, and the query's end only tells the transaction whether it failed.
+  private scheduleAfterTransaction(
+    queryable: SqlQueryable,
+    exec: SqlExecutionPlan,
+    ctx: RuntimeMiddlewareContext,
+  ): ((ending: QueryEnding) => Promise<void>) | undefined {
+    const runStage = this.afterTransactionStageFor(exec, ctx);
+    if (runStage === undefined) return undefined;
+    const rememberOnTransaction = this.#openTransactions.get(queryable);
+    return rememberOnTransaction === undefined
+      ? onQueryEndOutsideTransaction(runStage)
+      : rememberOnTransaction(runStage);
+  }
+
   protected getListDecoder(): ListDecoder {
     return sqlNativeArrayListDecoder;
   }
 
-  private async *streamRows<Row>(
+  private streamRows<Row>(
     exec: SqlExecutionPlan,
-    decodeContext: DecodeContext,
+    createDecodeContext: () => DecodeContext,
+    driverCall: () => AsyncIterable<Record<string, unknown>>,
+    codecCtx: SqlCodecCallContext,
+    execMiddlewareCtx: RuntimeMiddlewareContext,
+    queryable: SqlQueryable,
+    onDriverAnswered: () => void,
+  ): AsyncIterable<Row> {
+    return reportQueryEnding(
+      this.scheduleAfterTransaction(queryable, exec, execMiddlewareCtx),
+      () =>
+        this.streamDecodedRows<Row>(
+          exec,
+          createDecodeContext,
+          driverCall,
+          codecCtx,
+          execMiddlewareCtx,
+          queryable,
+          onDriverAnswered,
+        ),
+    );
+  }
+
+  private async *streamDecodedRows<Row>(
+    exec: SqlExecutionPlan,
+    createDecodeContext: () => DecodeContext,
     driverCall: () => AsyncIterable<Record<string, unknown>>,
     codecCtx: SqlCodecCallContext,
     execMiddlewareCtx: RuntimeMiddlewareContext,
     queryable: SqlQueryable,
     onDriverAnswered: () => void,
   ): AsyncGenerator<Row, void, unknown> {
+    const rowDecodeContext = createDecodeContext();
     await this.setupDriverExecution(exec, queryable);
 
     const startedAt = Date.now();
-    let outcome: TelemetryOutcome | null = null;
+    let telemetryOutcome: TelemetryOutcome | null = null;
 
     try {
       const stream = runQueryWithMiddleware<SqlExecutionPlan, Record<string, unknown>>(
@@ -460,12 +511,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             ? await iterator.next()
             : await iterator.next().finally(onDriverAnswered);
           answered = true;
-          if (next.done) {
-            break;
-          }
+          if (next.done) break;
           const decodedRow = await decodeRow(
             next.value,
-            decodeContext,
+            rowDecodeContext,
             codecCtx,
             this.getListDecoder(),
           );
@@ -478,13 +527,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         await iterator.return?.();
       }
 
-      outcome = 'success';
+      telemetryOutcome = 'success';
     } catch (error) {
-      outcome = 'runtime-error';
+      telemetryOutcome = 'runtime-error';
       throw error;
     } finally {
-      if (outcome !== null) {
-        this.recordTelemetry(exec, outcome, Date.now() - startedAt);
+      if (telemetryOutcome !== null) {
+        this.recordTelemetry(exec, telemetryOutcome, Date.now() - startedAt);
       }
     }
   }
@@ -572,10 +621,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       const endOperation = self.beginOperation(queryable);
       try {
         const exec = await self.prepareQueryExecution(plan, codecCtx, middlewareCtx);
-        const decodeContext = buildDecodeContext(exec.ast, self.contractCodecs);
         yield* self.streamRows<Row>(
           exec,
-          decodeContext,
+          () => buildDecodeContext(exec.ast, self.contractCodecs),
           () => queryable.query<Record<string, unknown>>({ sql: exec.sql, params: exec.params }),
           codecCtx,
           middlewareCtx,
@@ -613,21 +661,36 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const exec = await this.prepareExecuteExecution(plan, codecCtx, middlewareCtx);
-    await this.setupDriverExecution(exec, queryable);
-    checkAborted(codecCtx, 'stream');
+    return this.executeEncodedPlan(exec, queryable, codecCtx, middlewareCtx, () =>
+      queryable.execute({ sql: exec.sql, params: exec.params }),
+    );
+  }
 
-    const startedAt = Date.now();
-    let outcome: TelemetryOutcome = 'success';
-    try {
-      return await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
-        queryable.execute({ sql: exec.sql, params: exec.params }),
-      );
-    } catch (error) {
-      outcome = 'runtime-error';
-      throw error;
-    } finally {
-      this.recordTelemetry(exec, outcome, Date.now() - startedAt);
-    }
+  private executeEncodedPlan(
+    exec: SqlExecutionPlan,
+    queryable: SqlQueryable,
+    codecCtx: SqlCodecCallContext,
+    middlewareCtx: RuntimeMiddlewareContext,
+    driverCall: () => Promise<SqlStatementStats>,
+  ): Promise<SqlStatementStats> {
+    return reportExecuteEnding(
+      this.scheduleAfterTransaction(queryable, exec, middlewareCtx),
+      async () => {
+        await this.setupDriverExecution(exec, queryable);
+        checkAborted(codecCtx, 'stream');
+
+        const startedAt = Date.now();
+        let telemetryOutcome: TelemetryOutcome = 'success';
+        try {
+          return await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, driverCall);
+        } catch (error) {
+          telemetryOutcome = 'runtime-error';
+          throw error;
+        } finally {
+          this.recordTelemetry(exec, telemetryOutcome, Date.now() - startedAt);
+        }
+      },
+    );
   }
 
   async prepare<D extends Declaration<CT>, Row, CT extends CodecTypesBase = CodecTypesBase>(
@@ -776,7 +839,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     yield* this.streamRows<Row>(
       exec,
-      ps.decodeContext,
+      () => ps.decodeContext,
       () => queryable.query<Record<string, unknown>>(request),
       codecCtx,
       execMiddlewareCtx,
@@ -841,9 +904,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       ast: ps.ast,
       meta: ps.meta,
     };
-    await this.setupDriverExecution(exec, queryable);
-    checkAborted(codecCtx, 'stream');
-
     const handles = this.#preparedStatementHandles;
     const request: PreparedExecuteRequest = {
       sql: exec.sql,
@@ -856,18 +916,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
     };
 
-    const startedAt = Date.now();
-    let outcome: TelemetryOutcome = 'success';
-    try {
-      return await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
-        queryable.execute(request),
-      );
-    } catch (error) {
-      outcome = 'runtime-error';
-      throw error;
-    } finally {
-      this.recordTelemetry(exec, outcome, Date.now() - startedAt);
-    }
+    return this.executeEncodedPlan(exec, queryable, codecCtx, middlewareCtx, () =>
+      queryable.execute(request),
+    );
   }
 
   async connection(): Promise<RuntimeConnection> {
@@ -886,7 +937,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementExecuteTarget = {
       async transaction(): Promise<RuntimeTransaction> {
         const driverTx = await self.#inFlight.track(() => driverConn.beginTransaction());
-        return self.wrapTransaction(driverTx);
+        self.#heldQueryables.add(driverTx);
+        return self.wrapTransaction(driverTx, driverConn);
       },
       async release(): Promise<void> {
         await self.#inFlight.track(() => driverConn.release());
@@ -947,17 +999,39 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return wrappedConnection;
   }
 
-  private wrapTransaction(driverTx: SqlTransaction): RuntimeTransaction {
-    this.#heldQueryables.add(driverTx);
+  /**
+   * Wraps a driver transaction so every query run on it passes through the runtime with `scope: 'transaction'`, and fires each query's `afterTransaction` stage once when the transaction ends. `connection` is the connection `driverTx` was begun on. A query sent on it, or on the transaction, from now until `commit()` or `rollback()` is called runs inside the transaction, so its stage also fires when the transaction ends. A subclass that begins a driver transaction itself returns it through this wrapper. A transaction a subclass wraps reads the contract marker through the driver; only the connections and transactions this class hands out read it through themselves.
+   */
+  protected wrapTransaction(
+    driverTx: SqlTransaction,
+    connection: SqlConnection,
+  ): RuntimeTransaction {
+    const remembered = this.anyMiddlewareDeclaresAfterTransaction
+      ? this.rememberQueriesUntilEnd([driverTx, connection])
+      : undefined;
+    let commitAttempted = false;
     const self = this;
     const wrappedTransaction: RuntimeTransaction &
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       async commit(): Promise<void> {
-        await self.#inFlight.track(() => driverTx.commit());
+        commitAttempted = true;
+        remembered?.stopRemembering();
+        try {
+          await self.#inFlight.track(() => driverTx.commit());
+        } catch (error) {
+          await remembered?.end('unknown');
+          throw error;
+        }
+        await remembered?.end('committed');
       },
       async rollback(): Promise<void> {
-        await self.#inFlight.track(() => driverTx.rollback());
+        remembered?.stopRemembering();
+        try {
+          await self.#inFlight.track(() => driverTx.rollback());
+        } finally {
+          await remembered?.end(commitAttempted ? 'unknown' : 'rolled-back');
+        }
       },
       query<Row>(
         plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
@@ -1009,6 +1083,39 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
     };
     return wrappedTransaction;
+  }
+
+  // Remembers the stage of each query run on the queryables, and whether one failed, until stopRemembering() is called. commit() and rollback() call it at once, because a statement sent after that call reaches the database after the COMMIT or ROLLBACK (see SqlTransaction). end() runs each remembered stage once, in execution order; a resolved commit reports unknown if a query failed.
+  private rememberQueriesUntilEnd(queryables: readonly SqlQueryable[]): {
+    readonly stopRemembering: () => void;
+    readonly end: (outcome: AfterTransactionResult['outcome']) => Promise<void>;
+  } {
+    const awaitingTransactionEnd: Array<(result: AfterTransactionResult) => Promise<void>> = [];
+    let aQueryFailed = false;
+    const remember: RememberOnTransaction = (runStage) => {
+      awaitingTransactionEnd.push(runStage);
+      return async (ending) => {
+        if (ending === 'failed') aQueryFailed = true;
+      };
+    };
+    for (const queryable of queryables) {
+      this.#openTransactions.set(queryable, remember);
+    }
+    return {
+      stopRemembering: () => {
+        for (const queryable of queryables) {
+          if (this.#openTransactions.get(queryable) === remember) {
+            this.#openTransactions.delete(queryable);
+          }
+        }
+      },
+      end: async (outcome) => {
+        const reported = outcome === 'committed' && aQueryFailed ? 'unknown' : outcome;
+        for (const runStage of awaitingTransactionEnd.splice(0)) {
+          await runStage({ outcome: reported });
+        }
+      },
+    };
   }
 
   telemetry(): RuntimeTelemetryEvent | null {

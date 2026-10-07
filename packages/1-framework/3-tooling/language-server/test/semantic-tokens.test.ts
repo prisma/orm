@@ -290,6 +290,86 @@ policy Probe { target = Invoice\n value = Int }`);
     ]);
   });
 
+  it('classifies a qualifier from its binder resolution', () => {
+    const source = `namespace pgvector { model Vector { id Int } }
+model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.Vector\n remote other:pgvector.Vector }`;
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const typeConstructor = {
+      kind: 'typeConstructor',
+      output: { codecId: 'fixture/scalar', nativeType: 'fixture' },
+    } as const;
+    const binder = testBinder({
+      sources,
+      symbolTable,
+      authoringContributions: {
+        field: {},
+        type: {
+          pgvector: { Vector: typeConstructor },
+          postgis: { Geometry: typeConstructor },
+        },
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: { model: {}, field: {} },
+        dataTypes: {},
+      },
+    });
+    const details = collectDetails({
+      binder,
+      document,
+      sourceFile: sources.sourceFileFor(document.syntax),
+      symbolTable,
+      scalarTypes,
+    });
+
+    expect(
+      details
+        .filter(({ line }) => line > 0)
+        .filter(({ text }) => ['pgvector', 'Vector', 'postgis', 'Geometry', 'Doc'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Doc', tokenType: 'class', modifiers: ['declaration'] },
+      { text: 'pgvector', tokenType: 'namespace', modifiers: [] },
+      { text: 'Vector', tokenType: 'class', modifiers: [] },
+      { text: 'postgis', tokenType: 'namespace', modifiers: [] },
+      { text: 'Geometry', tokenType: 'type', modifiers: ['defaultLibrary'] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('classifies the qualifier of a qualified entity reference as a namespace', () => {
+    const source = parseSemanticTokenSource(
+      `namespace auth { model User { id Int } }
+model Top { id Int }
+policy Probe { on = auth.User\n other = Top.User }`,
+      {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: () =>
+            structBlock({
+              parameters: {
+                on: { type: entityRef({ kind: 'model' }), documentation: '' },
+                other: { type: entityRef({ kind: 'model' }), documentation: '' },
+              },
+            }),
+        },
+      },
+    );
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line >= 2 && ['auth', 'Top'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'auth', tokenType: 'namespace', modifiers: [] },
+      { text: 'Top', tokenType: 'property', modifiers: [] },
+    ]);
+  });
+
   it('keeps the semantic token legend stable', () => {
     expect(semanticTokenTypes).toEqual([
       'keyword',

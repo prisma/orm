@@ -10,15 +10,12 @@
  */
 interface ColumnTypeDescriptor {
   readonly codecId: string;
-  readonly nativeType: string;
 }
 
 export const int4Column: ColumnTypeDescriptor = {
   codecId: 'pg/int4@1',
-  nativeType: 'int4',
 };
 
 export const textColumn: ColumnTypeDescriptor = {
   codecId: 'pg/text@1',
-  nativeType: 'text',
 };

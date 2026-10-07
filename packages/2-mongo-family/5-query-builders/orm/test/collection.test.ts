@@ -18,7 +18,7 @@ import type {
   Contract,
 } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
-import { createMongoCollection } from '../src/collection';
+import { createMongoCollection, type MongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import {
   compileFieldOperations,
@@ -479,13 +479,13 @@ describe('MongoCollection variant()', () => {
   it('returns a new instance from variant()', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs);
-    const narrowed = col.variant('Bug');
+    const narrowed = col.variant('bug');
     expect(narrowed).not.toBe(col);
   });
 
   it('injects discriminator eq filter for the variant value', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('bug');
     col.all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('field');
@@ -498,7 +498,7 @@ describe('MongoCollection variant()', () => {
   it('does not mutate original collection', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs);
-    col.variant('Bug');
+    col.variant('bug');
     col.all();
     expect(executor.lastStages!).toHaveLength(0);
   });
@@ -506,24 +506,99 @@ describe('MongoCollection variant()', () => {
   it('composes with where()', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs)
-      .variant('Feature')
+      .variant('feature')
       .where(MongoFieldFilter.eq('title', 'Login'));
     col.all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('and');
   });
 
-  it('returns self when model has no discriminator (non-polymorphic)', () => {
+  it('throws when a variant is already selected', () => {
+    const executor = createMockExecutor();
+    const bugs = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant(
+      'bug',
+    ) as unknown as MongoCollection<Contract, 'Task'>;
+
+    expect(() => bugs.variant('feature')).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'variant("feature") cannot be called on model "Task" because variant("bug") is already selected; call variant() on the base collection instead',
+        meta: {
+          method: 'variant',
+          model: 'Task',
+          variant: 'Bug',
+          selectedValue: 'bug',
+          reason: 'variant-already-selected',
+        },
+      }),
+    );
+  });
+
+  it('keeps a discriminator where() written before variant()', () => {
+    const executor = createMockExecutor();
+    createMongoCollection(contract, 'Task', executor, noEnumCodecs)
+      .where(MongoFieldFilter.eq('type', 'feature'))
+      .variant('bug')
+      .all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter.kind).toBe('and');
+    if (match.filter.kind === 'and') {
+      expect(match.filter.exprs).toEqual([
+        MongoFieldFilter.eq(
+          'type',
+          new MongoParamRef('feature', {
+            codecId: 'mongo/string@1',
+            name: 'type',
+            collection: 'tasks',
+          }),
+        ),
+        MongoFieldFilter.eq('type', new MongoParamRef('bug')),
+      ]);
+    }
+  });
+
+  it('throws when the model has no discriminator', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'User', executor, noEnumCodecs);
-    // @ts-expect-error VariantNames<Contract, 'User'> is never
-    const result = col.variant('NonExistent');
-    expect(result).toBe(col);
+    expect(() => col.variant('bug' as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: 'variant("bug") cannot narrow model "User": it declares no discriminator values',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'bug',
+          declaredValues: [],
+        },
+      }),
+    );
+  });
+
+  it('throws for an undeclared discriminator value', () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs);
+    const variantModelName = 'Bug';
+    expect(() => col.variant(variantModelName as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'variant("Bug") cannot narrow model "Task": the declared discriminator values are "bug", "feature"',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'Task',
+          value: 'Bug',
+          declaredValues: ['bug', 'feature'],
+        },
+      }),
+    );
   });
 
   it('create() injects discriminator value into the document', async () => {
     const executor = createMockExecutor([{ insertedId: 'new-id', document: { _id: 'new-id' } }]);
-    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('bug');
     await col.create({ title: 'Fix crash', severity: 'high', assigneeId: 'u1' } as never);
     const command = executor.plans[0]!.command;
     expect(command.kind).toBe('insertOne');
@@ -536,7 +611,7 @@ describe('MongoCollection variant()', () => {
     const executor = createMockExecutor([
       { insertedId: 'new-id', document: { _id: 'new-id', title: 'Fix crash', type: 'bug' } },
     ]);
-    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('bug');
     const result = await col.create({
       title: 'Fix crash',
       severity: 'high',
@@ -556,7 +631,7 @@ describe('MongoCollection variant()', () => {
         ],
       },
     ]);
-    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnumCodecs).variant('bug');
     const rows: unknown[] = [];
     for await (const row of col.createAll([
       { title: 'Bug 1', severity: 'low', assigneeId: 'u1' },

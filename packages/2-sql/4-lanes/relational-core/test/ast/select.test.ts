@@ -277,6 +277,7 @@ describe('ast/select', () => {
         having: undefined,
         limit: undefined,
         offset: undefined,
+        locking: undefined,
         selectAllIntent: undefined,
       };
       expect(() => new SelectAst({ ...options, limit: -5 })).toThrow(invalidArgument('limit', -5));

@@ -18,7 +18,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b6889b25d703bad28616269bbf0e53eb9b2b3adad9e57ec8a97ff2d3192ca922'>;
+  StorageHashBase<'807e03732ae5434489af644d245976970aabf407d2ee18f380b4d5adb8899514'>;
 export type ExecutionHash =
   ExecutionHashBase<'e1fd6fb878ecc8f9edcd821737664e5fb50ddf5380a9dca4a48200cd6e2e6d98'>;
 export type ProfileHash =
@@ -275,7 +275,7 @@ type ContractBase = Omit<
             readonly Note: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
@@ -329,6 +329,8 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly postgres: {
       readonly distinctOn: true;
+      readonly forKeyShare: true;
+      readonly forNoKeyUpdate: true;
       readonly jsonAgg: true;
       readonly lateral: true;
       readonly limit: true;
@@ -339,9 +341,14 @@ type ContractBase = Omit<
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
       readonly enums: true;
+      readonly forShare: true;
+      readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
+      readonly lockNowait: true;
+      readonly lockOf: true;
+      readonly lockSkipLocked: true;
       readonly returning: true;
       readonly scalarList: true;
     };

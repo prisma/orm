@@ -5,10 +5,9 @@ const namedTypes = {
   Short: {
     kind: 'codec-instance',
     codecId: 'sql/varchar@1',
-    nativeType: 'character varying',
     typeParams: { length: 10 },
   },
-  Email: { kind: 'codec-instance', codecId: 'pg/text@1', nativeType: 'text', typeParams: {} },
+  Email: { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} },
 } as const;
 
 describe('resolvedTypeParams', () => {

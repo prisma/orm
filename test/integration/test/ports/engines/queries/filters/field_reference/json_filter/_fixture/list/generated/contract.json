@@ -95,28 +95,28 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "json": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "json_list": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "json_list2": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 }
               },
@@ -135,11 +135,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "94da78f8dcb9bc6ca653282a89157284290ec310863cabb852c6ca8b7954d826"
+    "storageHash": "59166da4efdaa8687c1d63da442d0445b965bc7add3ed03ad069f7a8a48b5fc9"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -150,9 +152,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

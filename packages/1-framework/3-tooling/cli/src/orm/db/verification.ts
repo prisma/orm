@@ -156,7 +156,10 @@ export function issueLabel(issue: SchemaDiffIssue): string {
   return issue.explanation === undefined ? label : `${label}. ${issue.explanation}`;
 }
 
-function issueNodes(issues: readonly SchemaDiffIssue[], status: 'error' | 'warn'): TreeNode[] {
+export function issueNodes(
+  issues: readonly SchemaDiffIssue[],
+  status: 'error' | 'warn',
+): TreeNode[] {
   return issues.map((issue) => ({ label: issueLabel(issue), status }));
 }
 

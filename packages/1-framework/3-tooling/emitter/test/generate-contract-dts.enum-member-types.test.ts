@@ -30,7 +30,6 @@ const codecs: Record<string, Codec> = {
 
 const codecLookup: CodecLookup = {
   get: (id) => codecs[id],
-  targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
 };
 

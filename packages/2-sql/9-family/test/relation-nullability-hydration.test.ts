@@ -17,7 +17,7 @@ const int = {
 };
 
 function column(nullable: boolean) {
-  return { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable };
+  return { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable };
 }
 
 /** A to-one relation as an rc.9 `contract.json` wrote it: no `nullable` key unless given. */

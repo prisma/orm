@@ -35,16 +35,29 @@
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  */
 
+import { assembleDataTypes } from '@internal/framework-components/codec';
 import { defineContract } from '@internal/postgres/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './core/constants';
 import { POSTGIS_NATIVE_TYPE } from './core/contract-space-constants';
+import { postgisDataTypes } from './core/data-types';
+import { postgisCodecRegistry } from './core/registry';
 
-export const contract = defineContract({}, () => ({
+const dataTypeLookup = assembleDataTypes([
+  { id: 'postgres', dataTypes: postgresDataTypes },
+  { id: 'postgis', dataTypes: postgisDataTypes },
+]).lookup;
+const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
+  [{ types: { codecTypes: { codecDescriptors: [...postgisCodecRegistry.values()] } } }],
+  dataTypeLookup,
+);
+
+export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
   types: {
     [POSTGIS_NATIVE_TYPE]: {
       kind: 'codec-instance',
       codecId: POSTGIS_GEOMETRY_CODEC_ID,
-      nativeType: POSTGIS_NATIVE_TYPE,
       typeParams: {},
     },
   },
