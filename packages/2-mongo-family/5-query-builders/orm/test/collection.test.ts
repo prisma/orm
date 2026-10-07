@@ -722,6 +722,45 @@ describe('MongoCollection terminal methods', () => {
       | undefined;
     expect(limitStage?.limit).toBe(1);
   });
+
+  it('firstOrThrow() returns the first row', async () => {
+    const executor = createMockExecutor([
+      { _id: '1', name: 'Alice', email: 'a@b.c' },
+      { _id: '2', name: 'Bob', email: 'b@b.c' },
+    ]);
+    const col = createMongoCollection(contract, 'User', executor);
+    expect(await col.firstOrThrow()).toEqual({ _id: '1', name: 'Alice', email: 'a@b.c' });
+  });
+
+  it('firstOrThrow() rejects with RUNTIME.NO_ROWS when no results', async () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'User', executor);
+    await expect(col.firstOrThrow()).rejects.toMatchObject({
+      code: 'RUNTIME.NO_ROWS',
+      message: 'Expected at least one row, but none were returned',
+      details: {},
+    });
+  });
+
+  it('firstOrThrow() issues the plan of first()', async () => {
+    const row = { _id: '1', title: 'Crash', type: 'bug', assigneeId: '2' };
+    const executor = createMockExecutor([row], [row], [row], [row]);
+    const users = createMongoCollection(contract, 'User', executor).where({ name: 'Alice' });
+    const bugs = createMongoCollection(contract, 'Task', executor)
+      .variant('Bug')
+      .include('assignee')
+      .limit(99);
+    await users.first();
+    await users.firstOrThrow();
+    await bugs.first();
+    await bugs.firstOrThrow();
+    const [usersFirst, usersFirstOrThrow, bugsFirst, bugsFirstOrThrow] = executor.plans;
+    expect(usersFirstOrThrow).toEqual(usersFirst);
+    expect(bugsFirstOrThrow).toEqual(bugsFirst);
+    expect(executor.lastStages!.filter((stage) => stage.kind === 'limit')).toEqual([
+      expect.objectContaining({ limit: 1 }),
+    ]);
+  });
 });
 
 describe('MongoCollection write methods', () => {

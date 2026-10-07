@@ -126,6 +126,7 @@ export interface MongoCollection<
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
   first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null>;
+  firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Inserts the document and returns it as stored, decoded like a read, without reading it back. */
   create(
     data: ResolvedCreateInput<TContract, ModelName, TVariant>,
@@ -449,6 +450,10 @@ class MongoCollectionImpl<
       return row;
     }
     return null;
+  }
+
+  async firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
+    return this.#clone({ limit: 1 }).#query().firstOrThrow();
   }
 
   async create(
