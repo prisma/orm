@@ -46,6 +46,7 @@ import type {
   MutationUpdateInput,
   RelationCardinalityTag,
   RelationMutation,
+  RelationMutationCreate,
   RelationMutationDeleteAll,
   RelationMutationFilter,
   RelationMutationUpdateAll,
@@ -88,6 +89,11 @@ interface ParsedRelationMutation {
   readonly mutations: readonly RelationMutation<Contract<SqlStorage>, string>[];
 }
 
+interface ResolvedNestedInput {
+  readonly createRows: Map<object, (ParsedMutationInput | undefined)[]>;
+  readonly filters: Map<object, readonly AnyExpression[]>;
+}
+
 interface ParsedMutationInput {
   readonly scalarData: Record<string, unknown>;
   readonly relationMutations: readonly ParsedRelationMutation[];
@@ -126,7 +132,14 @@ export async function executeNestedCreateMutation(options: {
   data: MutationCreateInput<Contract<SqlStorage>, string>;
 }): Promise<Record<string, unknown>> {
   return withMutationScope(options.runtime, async (scope) =>
-    createGraph(scope, options.context, options.namespaceId, options.modelName, options.data),
+    createGraph(
+      scope,
+      options.context,
+      newResolvedNestedInput(),
+      options.namespaceId,
+      options.modelName,
+      options.data,
+    ),
   );
 }
 
@@ -230,12 +243,29 @@ async function runInTransaction<T>(
 async function createGraph(
   scope: RuntimeScope,
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   namespaceId: string,
   modelName: string,
   input: MutationCreateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown>> {
-  const contract = context.contract;
-  const parsed = parseMutationInput(contract, namespaceId, modelName, input);
+  return createParsedGraph(
+    scope,
+    context,
+    resolved,
+    namespaceId,
+    modelName,
+    parseMutationInput(context.contract, namespaceId, modelName, input),
+  );
+}
+
+async function createParsedGraph(
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  resolved: ResolvedNestedInput,
+  namespaceId: string,
+  modelName: string,
+  parsed: ParsedMutationInput,
+): Promise<Record<string, unknown>> {
   const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(parsed.relationMutations);
 
   const scalarData = { ...parsed.scalarData };
@@ -247,6 +277,7 @@ async function createGraph(
       await applyParentOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         scalarData,
@@ -273,6 +304,7 @@ async function createGraph(
       await applyChildOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         parentRow,
@@ -287,6 +319,7 @@ async function createGraph(
       await applyJunctionOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         parentRow,
@@ -308,8 +341,9 @@ async function updateFirstGraph(
   input: MutationUpdateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
+  const resolved = newResolvedNestedInput();
   const parsed = parseMutationInput(contract, namespaceId, modelName, input);
-  validateRelationMutations(context, parsed.relationMutations, 'update');
+  validateRelationMutations(context, resolved, parsed.relationMutations, 'update');
 
   const existingRow = await findFirstByFilters(scope, contract, namespaceId, modelName, filters);
   if (!existingRow) {
@@ -325,6 +359,7 @@ async function updateFirstGraph(
       await applyParentOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         scalarData,
@@ -391,6 +426,7 @@ async function updateFirstGraph(
       await applyChildOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         parentRow,
@@ -405,6 +441,7 @@ async function updateFirstGraph(
       await applyJunctionOwnedMutation(
         scope,
         context,
+        resolved,
         namespaceId,
         modelName,
         parentRow,
@@ -644,6 +681,7 @@ function childLinkColumns(relation: RelationDefinition): ReadonlySet<string> {
 
 function validateRelationMutations(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relationMutations: readonly ParsedRelationMutation[],
   operation: 'create' | 'update',
 ): void {
@@ -654,7 +692,7 @@ function validateRelationMutations(
       if (operation === 'create') {
         assertAllowedInCreate(relation, mutation);
       }
-      validateParentOwnedMutation(context, relation, mutation);
+      validateParentOwnedMutation(context, resolved, relation, mutation);
     }
   }
 
@@ -663,7 +701,7 @@ function validateRelationMutations(
       if (operation === 'create') {
         assertAllowedInCreate(relation, mutation);
       }
-      validateJunctionOwnedMutation(context, relation, mutation);
+      validateJunctionOwnedMutation(context, resolved, relation, mutation);
     }
   }
 
@@ -672,34 +710,90 @@ function validateRelationMutations(
       if (operation === 'create') {
         assertAllowedInCreate(relation, mutation);
       }
-      validateChildOwnedMutation(context, relation, mutation);
+      validateChildOwnedMutation(context, resolved, relation, mutation);
     }
   }
 }
 
-function validateNestedCreateInput(
+function newResolvedNestedInput(): ResolvedNestedInput {
+  return { createRows: new Map(), filters: new Map() };
+}
+
+function parsedCreateRow(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: RelationDefinition,
-  input: MutationCreateInput<Contract<SqlStorage>, string>,
-): void {
+  mutation: RelationMutationCreate<Contract<SqlStorage>, string>,
+  index: number,
+): ParsedMutationInput | undefined {
+  let rows = resolved.createRows.get(mutation);
+  if (!rows) {
+    rows = [];
+    resolved.createRows.set(mutation, rows);
+  }
+  const cached = rows[index];
+  if (cached) {
+    return cached;
+  }
+  const input = mutation.data[index];
+  if (!input) {
+    return undefined;
+  }
   const parsed = parseMutationInput(
     context.contract,
     relation.relatedNamespaceId,
     relation.relatedModelName,
     input,
   );
-  validateRelationMutations(context, parsed.relationMutations, 'create');
+  rows[index] = parsed;
+  return parsed;
+}
+
+function parsedCreateRows(
+  context: ExecutionContext,
+  resolved: ResolvedNestedInput,
+  relation: RelationDefinition,
+  mutation: RelationMutationCreate<Contract<SqlStorage>, string>,
+): ParsedMutationInput[] {
+  const rows: ParsedMutationInput[] = [];
+  mutation.data.forEach((_input, index) => {
+    const parsed = parsedCreateRow(context, resolved, relation, mutation, index);
+    if (parsed) {
+      rows.push(parsed);
+    }
+  });
+  return rows;
+}
+
+function resolvedFilters(
+  context: ExecutionContext,
+  resolved: ResolvedNestedInput,
+  relation: RelationDefinition,
+  mutation: FilteredWriteMutation,
+): readonly AnyExpression[] {
+  const cached = resolved.filters.get(mutation);
+  if (cached) {
+    return cached;
+  }
+  const filters: AnyExpression[] = [];
+  for (const input of mutation.filters) {
+    const filter = resolveRelationFilter(context, relation, input);
+    if (filter) {
+      filters.push(filter);
+    }
+  }
+  resolved.filters.set(mutation, filters);
+  return filters;
 }
 
 function validateFilteredWrite(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: RelationDefinition,
   mutation: FilteredWriteMutation,
   parentLinkColumns: ReadonlySet<string>,
 ): void {
-  for (const input of mutation.filters) {
-    resolveRelationFilter(context, relation, input);
-  }
+  resolvedFilters(context, resolved, relation, mutation);
   if (mutation.kind === 'updateAll') {
     assertNoParentLinkColumn(
       context.contract,
@@ -717,6 +811,7 @@ function validateFilteredWrite(
 
 function validateParentOwnedMutation(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: RelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): void {
@@ -725,11 +820,11 @@ function validateParentOwnedMutation(
   }
 
   if (mutation.kind === 'create') {
-    const row = mutation.data[0];
+    const row = parsedCreateRow(context, resolved, relation, mutation, 0);
     if (!row) {
       throw createMissingDataError(relation);
     }
-    validateNestedCreateInput(context, relation, row);
+    validateRelationMutations(context, resolved, row.relationMutations, 'create');
     return;
   }
 
@@ -749,6 +844,7 @@ function validateParentOwnedMutation(
 
 function validateChildOwnedMutation(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: RelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): void {
@@ -756,13 +852,13 @@ function validateChildOwnedMutation(
     if (relation.cardinality === '1:1') {
       throw toOneFilteredWriteError(relation, mutation.kind);
     }
-    validateFilteredWrite(context, relation, mutation, childLinkColumns(relation));
+    validateFilteredWrite(context, resolved, relation, mutation, childLinkColumns(relation));
     return;
   }
 
   if (mutation.kind === 'create') {
-    for (const childInput of mutation.data) {
-      validateNestedCreateInput(context, relation, childInput);
+    for (const row of parsedCreateRows(context, resolved, relation, mutation)) {
+      validateRelationMutations(context, resolved, row.relationMutations, 'create');
     }
     return;
   }
@@ -774,6 +870,7 @@ function validateChildOwnedMutation(
 
 function validateJunctionOwnedMutation(
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: JunctionRelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): void {
@@ -781,13 +878,13 @@ function validateJunctionOwnedMutation(
   assertJunctionPayloadWritable(relation, mutation.kind);
 
   if (isFilteredWrite(mutation)) {
-    validateFilteredWrite(context, relation, mutation, new Set());
+    validateFilteredWrite(context, resolved, relation, mutation, new Set());
     return;
   }
 
   if (mutation.kind === 'create') {
-    for (const childInput of mutation.data) {
-      validateNestedCreateInput(context, relation, childInput);
+    for (const row of parsedCreateRows(context, resolved, relation, mutation)) {
+      validateRelationMutations(context, resolved, row.relationMutations, 'create');
     }
     return;
   }
@@ -841,6 +938,7 @@ function partitionByOwnership(relationMutations: readonly ParsedRelationMutation
 async function applyParentOwnedMutation(
   scope: RuntimeScope,
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   parentNamespaceId: string,
   parentModelName: string,
   scalarData: Record<string, unknown>,
@@ -866,17 +964,18 @@ async function applyParentOwnedMutation(
   }
 
   if (mutation.kind === 'create') {
-    const row = mutation.data[0];
+    const row = parsedCreateRow(context, resolved, relation, mutation, 0);
     if (!row) {
       throw createMissingDataError(relation);
     }
 
-    const relatedRow = await createGraph(
+    const relatedRow = await createParsedGraph(
       scope,
       context,
+      resolved,
       relation.relatedNamespaceId,
       relation.relatedModelName,
-      castAs<MutationCreateInput<Contract<SqlStorage>, string>>(row),
+      row,
     );
     copyRelatedValuesToParent(
       contract,
@@ -948,6 +1047,7 @@ function copyRelatedValuesToParent(
 async function applyChildOwnedMutation(
   scope: RuntimeScope,
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   parentNamespaceId: string,
   parentModelName: string,
   parentRow: Record<string, unknown>,
@@ -970,6 +1070,7 @@ async function applyChildOwnedMutation(
     await applyFilteredWrite(
       scope,
       context,
+      resolved,
       relation,
       buildChildJoinWhere(relation, parentValues),
       new Set(parentValues.keys()),
@@ -979,8 +1080,8 @@ async function applyChildOwnedMutation(
   }
 
   if (mutation.kind === 'create') {
-    for (const childInput of mutation.data) {
-      const payload: Record<string, unknown> = { ...castAs<Record<string, unknown>>(childInput) };
+    for (const row of parsedCreateRows(context, resolved, relation, mutation)) {
+      const scalarData: Record<string, unknown> = { ...row.scalarData };
 
       for (const [childColumn, parentValue] of parentValues.entries()) {
         const childFieldName = toFieldName(
@@ -989,15 +1090,16 @@ async function applyChildOwnedMutation(
           relation.relatedModelName,
           childColumn,
         );
-        payload[childFieldName] = parentValue;
+        scalarData[childFieldName] = parentValue;
       }
 
-      await createGraph(
+      await createParsedGraph(
         scope,
         context,
+        resolved,
         relation.relatedNamespaceId,
         relation.relatedModelName,
-        castAs<MutationCreateInput<Contract<SqlStorage>, string>>(payload),
+        { scalarData, relationMutations: row.relationMutations },
       );
     }
     return;
@@ -1060,6 +1162,7 @@ async function applyChildOwnedMutation(
 async function applyFilteredWrite(
   scope: RuntimeScope,
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   relation: RelationDefinition,
   relatedToParent: AnyExpression,
   parentLinkColumns: ReadonlySet<string>,
@@ -1068,13 +1171,7 @@ async function applyFilteredWrite(
   const contract = context.contract;
   const namespaceId = relation.relatedNamespaceId;
   const tableName = relation.relatedTableName;
-  const filters = [relatedToParent];
-  for (const input of mutation.filters) {
-    const filter = resolveRelationFilter(context, relation, input);
-    if (filter) {
-      filters.push(filter);
-    }
-  }
+  const filters = [relatedToParent, ...resolvedFilters(context, resolved, relation, mutation)];
 
   if (mutation.kind === 'deleteAll') {
     await scope.execute(compileDeleteCount(contract, namespaceId, tableName, filters));
@@ -1124,6 +1221,7 @@ function resolveRelationFilter(
 async function applyJunctionOwnedMutation(
   scope: RuntimeScope,
   context: ExecutionContext,
+  resolved: ResolvedNestedInput,
   parentNamespaceId: string,
   parentModelName: string,
   parentRow: Record<string, unknown>,
@@ -1145,6 +1243,7 @@ async function applyJunctionOwnedMutation(
     await applyFilteredWrite(
       scope,
       context,
+      resolved,
       relation,
       buildJunctionMembershipWhere(contract, relation, parentPkValues),
       new Set(),
@@ -1154,13 +1253,14 @@ async function applyJunctionOwnedMutation(
   }
 
   if (mutation.kind === 'create') {
-    for (const childInput of mutation.data) {
-      const relatedRow = await createGraph(
+    for (const row of parsedCreateRows(context, resolved, relation, mutation)) {
+      const relatedRow = await createParsedGraph(
         scope,
         context,
+        resolved,
         relation.relatedNamespaceId,
         relation.relatedModelName,
-        castAs<MutationCreateInput<Contract<SqlStorage>, string>>(childInput),
+        row,
       );
       const targetPkValues = readJunctionTargetValues(contract, relation, relatedRow);
       await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'create');

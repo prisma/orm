@@ -2757,4 +2757,145 @@ describe('mutation-executor', () => {
     expect(updated).toBeNull();
     expect(statementTrace(runtime)).toEqual(['select users']);
   });
+
+  it('executeNestedUpdateMutation() calls each where() callback and each nested create() relation callback once', async () => {
+    const whereCallback = vi.fn((post: LoosePostAccessor) => post.views.gt(10));
+    const commentsCallback = vi.fn((comments: LooseMutator) =>
+      comments.create({ id: 40, body: 'First' }),
+    );
+    const runtime = createMockRuntime();
+    runtime.setNextResults([
+      [aliceRow],
+      [{ id: 20, title: 'New', user_id: 1, views: 0 }],
+      [{ id: 40, body: 'First', post_id: 20 }],
+    ]);
+
+    await executeNestedUpdateMutation({
+      context: getTestContext(),
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      filters: [userIdFilter],
+      data: {
+        posts: (posts: LooseMutator) => [
+          posts.where(whereCallback).updateAll({ views: 1 }),
+          posts.where(whereCallback).deleteAll(),
+          posts.create({ id: 20, title: 'New', views: 0, comments: commentsCallback }),
+        ],
+      } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual([
+      'select users',
+      'update posts',
+      'delete posts',
+      'insert posts',
+      'insert comments',
+    ]);
+    expect(whereCallback).toHaveBeenCalledTimes(2);
+    expect(commentsCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('executeNestedUpdateMutation() calls relation callbacks in nested create() data once on parent-owned and junction relations', async () => {
+    const postsCallback = vi.fn((posts: LooseMutator) => posts.connect({ id: 11 }));
+    const parentOwned = createMockRuntime();
+    parentOwned.setNextResults([
+      [{ id: 1, title: 'Post', user_id: 5, views: 10 }],
+      [{ id: 7, name: 'Bob', email: 'bob@example.com' }],
+      [{ id: 1, title: 'Post', user_id: 7, views: 10 }],
+    ]);
+
+    await executeNestedUpdateMutation({
+      context: getTestContext(),
+      runtime: parentOwned,
+      namespaceId: 'public',
+      modelName: 'Post',
+      filters: [postIdFilter],
+      data: {
+        author: (author: LooseMutator) =>
+          author.create({ id: 7, name: 'Bob', email: 'bob@example.com', posts: postsCallback }),
+      } as never,
+    });
+
+    expect(postsCallback).toHaveBeenCalledTimes(1);
+
+    const ownerCallback = vi.fn((owner: LooseMutator) => owner.connect({ id: 3 }));
+    const whereCallback = vi.fn((child: LooseChildAccessor) => child.id.gt(5));
+    const junctionOwned = createMockRuntime();
+    junctionOwned.setNextResults([[{ id: 1 }], [{ id: 3 }], [{ id: 20, owner_id: 3 }]]);
+
+    await executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract: buildManyToManyContractWithTargetRelation() },
+      runtime: junctionOwned,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: {
+        children: (children: LooseMutator) => [
+          children.where(whereCallback).deleteAll(),
+          children.create({ id: 20, owner: ownerCallback }),
+        ],
+      } as never,
+    });
+
+    expect(ownerCallback).toHaveBeenCalledTimes(1);
+    expect(whereCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('executeNestedUpdateMutation() calls each callback once when validation rejects a later operation', async () => {
+    const whereCallback = vi.fn((post: LoosePostAccessor) => post.views.gt(10));
+    const commentsCallback = vi.fn((comments: LooseMutator) =>
+      comments.create({ id: 40, body: 'First' }),
+    );
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow]]);
+
+    await expect(
+      executeNestedUpdateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        filters: [userIdFilter],
+        data: {
+          posts: (posts: LooseMutator) => [
+            posts.where(whereCallback).deleteAll(),
+            posts.create({ id: 20, title: 'New', views: 0, comments: commentsCallback }),
+            posts.updateAll({ userId: 2 }),
+          ],
+        } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'ORM.RELATION_MUTATION_INVALID' });
+
+    expect(runtime.executions).toEqual([]);
+    expect(whereCallback).toHaveBeenCalledTimes(1);
+    expect(commentsCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('executeNestedCreateMutation() calls relation callbacks in nested create() data once', async () => {
+    const commentsCallback = vi.fn((comments: LooseMutator) =>
+      comments.create({ id: 40, body: 'First' }),
+    );
+    const postsCallback = vi.fn((posts: LooseMutator) =>
+      posts.create({ id: 20, title: 'New', views: 0, comments: commentsCallback }),
+    );
+    const runtime = createMockRuntime();
+    runtime.setNextResults([
+      [aliceRow],
+      [{ id: 20, title: 'New', user_id: 1, views: 0 }],
+      [{ id: 40, body: 'First', post_id: 20 }],
+    ]);
+
+    await executeNestedCreateMutation({
+      context: getTestContext(),
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      data: { ...aliceRow, posts: postsCallback } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual(['insert users', 'insert posts', 'insert comments']);
+    expect(postsCallback).toHaveBeenCalledTimes(1);
+    expect(commentsCallback).toHaveBeenCalledTimes(1);
+  });
 });
