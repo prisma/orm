@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import type { PortContext } from '../../../../../../_harness/postgres';
-import type { Contract } from './_fixture/parent_to_many_child_to_one_required__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
+import type { Contract } from '../_fixture/parent_to_many_child_to_one_required__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
 
 export type SharedParentKey = 'p' | 'p_1_p_2' | 'id';
 

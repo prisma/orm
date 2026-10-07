@@ -1,9 +1,9 @@
 import { describe, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
-import parentIdSimpleChildIdSimpleJunction from './_fixture/many_to_many__parent_id_simple__child_id_simple__junction/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleJunction from '../_fixture/many_to_many__parent_id_simple__child_id_simple__junction/generated/contract.json' with {
   type: 'json',
 };
-import type { Contract } from './_fixture/parent_to_many_child_to_one_required__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
+import type { Contract } from '../_fixture/parent_to_many_child_to_one_required__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
 import * as sharedKey from './nested_update_many_inside_update.to_many';
 
 type ParentIdShape = 'simple' | 'compound' | 'none';

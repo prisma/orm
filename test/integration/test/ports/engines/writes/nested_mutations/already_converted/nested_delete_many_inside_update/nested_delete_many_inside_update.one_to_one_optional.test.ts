@@ -1,101 +1,101 @@
 import { describe, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
-import type { Contract as CompoundParentContract } from './_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract';
-import parentIdCompoundChildIdCompoundChildReferencesParentCompoundId from './_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract.json' with {
+import type { Contract as CompoundParentContract } from '../_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract';
+import parentIdCompoundChildIdCompoundChildReferencesParentCompoundId from '../_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdCompoundChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_p/generated/contract.json' with {
+import parentIdCompoundChildIdCompoundChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdCompoundChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdCompoundChildIdCompoundChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdNoneChildReferencesParentCompoundId from './_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_compound_id/generated/contract.json' with {
+import parentIdCompoundChildIdNoneChildReferencesParentCompoundId from '../_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_compound_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdNoneChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_p/generated/contract.json' with {
+import parentIdCompoundChildIdNoneChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdNoneChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdCompoundChildIdNoneChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_compound__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdSimpleChildReferencesParentCompoundId from './_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_compound_id/generated/contract.json' with {
+import parentIdCompoundChildIdSimpleChildReferencesParentCompoundId from '../_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_compound_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdSimpleChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_p/generated/contract.json' with {
+import parentIdCompoundChildIdSimpleChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdCompoundChildIdSimpleChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdCompoundChildIdSimpleChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_compound__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdCompoundChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_none__child_id_compound__child_references_parent_p/generated/contract.json' with {
+import parentIdNoneChildIdCompoundChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_none__child_id_compound__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdCompoundChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_none__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdNoneChildIdCompoundChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_none__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdNoneChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_none__child_id_none__child_references_parent_p/generated/contract.json' with {
+import parentIdNoneChildIdNoneChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_none__child_id_none__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdNoneChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_none__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdNoneChildIdNoneChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_none__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdSimpleChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_none__child_id_simple__child_references_parent_p/generated/contract.json' with {
+import parentIdNoneChildIdSimpleChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_none__child_id_simple__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdNoneChildIdSimpleChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_none__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdNoneChildIdSimpleChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_none__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundChildReferencesParentId from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_id/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundChildReferencesParentId from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_p/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundParentReferencesChildC from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_c/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundParentReferencesChildC from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_c/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundParentReferencesChildC1C2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_c_1_c_2/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundParentReferencesChildC1C2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_c_1_c_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdCompoundParentReferencesChildCompoundId from './_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_compound_id/generated/contract.json' with {
+import parentIdSimpleChildIdCompoundParentReferencesChildCompoundId from '../_fixture/one_to_one_optional__parent_id_simple__child_id_compound__parent_references_child_compound_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdNoneChildReferencesParentId from './_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_id/generated/contract.json' with {
+import parentIdSimpleChildIdNoneChildReferencesParentId from '../_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdNoneChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_p/generated/contract.json' with {
+import parentIdSimpleChildIdNoneChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdNoneChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdSimpleChildIdNoneChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_none__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdNoneParentReferencesChildC from './_fixture/one_to_one_optional__parent_id_simple__child_id_none__parent_references_child_c/generated/contract.json' with {
+import parentIdSimpleChildIdNoneParentReferencesChildC from '../_fixture/one_to_one_optional__parent_id_simple__child_id_none__parent_references_child_c/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdNoneParentReferencesChildC1C2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_none__parent_references_child_c_1_c_2/generated/contract.json' with {
+import parentIdSimpleChildIdNoneParentReferencesChildC1C2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_none__parent_references_child_c_1_c_2/generated/contract.json' with {
   type: 'json',
 };
-import type { Contract } from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
-import parentIdSimpleChildIdSimpleChildReferencesParentId from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract.json' with {
+import type { Contract } from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract';
+import parentIdSimpleChildIdSimpleChildReferencesParentId from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_id/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdSimpleChildReferencesParentP from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_p/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleChildReferencesParentP from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_p/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdSimpleChildReferencesParentP1P2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleChildReferencesParentP1P2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__child_references_parent_p_1_p_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdSimpleParentReferencesChildC from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_c/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleParentReferencesChildC from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_c/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdSimpleParentReferencesChildC1C2 from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_c_1_c_2/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleParentReferencesChildC1C2 from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_c_1_c_2/generated/contract.json' with {
   type: 'json',
 };
-import parentIdSimpleChildIdSimpleParentReferencesChildId from './_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_id/generated/contract.json' with {
+import parentIdSimpleChildIdSimpleParentReferencesChildId from '../_fixture/one_to_one_optional__parent_id_simple__child_id_simple__parent_references_child_id/generated/contract.json' with {
   type: 'json',
 };
 import * as sharedKey from './nested_delete_many_inside_update.to_one';

@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import type { PortContext } from '../../../../../../_harness/postgres';
-import type { Contract } from './_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract';
+import type { Contract } from '../_fixture/one_to_one_optional__parent_id_compound__child_id_compound__child_references_parent_compound_id/generated/contract';
 
 type Db = PortContext<Contract>['db'];
 type ParentData = Parameters<Db['public']['Parent']['create']>[0];
