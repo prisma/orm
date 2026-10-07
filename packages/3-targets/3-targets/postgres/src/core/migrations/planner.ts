@@ -71,8 +71,10 @@ import {
 import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
-import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
-import { emissionSchemaForNamespace } from './table-rename-calls';
+import {
+  emissionSchemaForNamespace,
+  resolveDdlSchemaForNamespaceStorage,
+} from './resolve-ddl-schema';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
 type PlannerFrameworkComponents = SqlMigrationPlannerPlanOptions extends {

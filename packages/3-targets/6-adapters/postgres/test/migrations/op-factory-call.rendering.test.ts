@@ -57,7 +57,7 @@ describe('Postgres call classes - renderTypeScript + importRequirements', () => 
 
   it('SetDefaultCall emits this.setDefault({...}) with the column and never the operation class', () => {
     const column = col('created_at', 'timestamptz', { default: fn('now()') });
-    const additive = new SetDefaultCall('public', 'user', column);
+    const additive = new SetDefaultCall('public', 'user', column, 'additive');
     const widening = new SetDefaultCall('public', 'user', column, 'widening');
     expect({
       additive: additive.renderTypeScript(),

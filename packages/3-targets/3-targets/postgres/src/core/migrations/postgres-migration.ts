@@ -50,7 +50,8 @@ import { installExtension } from './operations/dependencies';
 import type { CreateIndexExtras } from './operations/indexes';
 import type { ForeignKeySpec } from './operations/shared';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
-import { emissionSchemaForNamespace, postgresTableRenameCalls } from './table-rename-calls';
+import { emissionSchemaForNamespace } from './resolve-ddl-schema';
+import { postgresTableRenameCalls } from './table-rename-calls';
 
 /**
  * Target-owned base class for Postgres migrations.
@@ -440,13 +441,16 @@ export abstract class PostgresMigration<
       options.schema,
       options.table,
       options.column,
-      this.startColumnHasDefault(options.schema, options.table, options.column.name)
+      this.columnHasDefaultInStartContract(options.schema, options.table, options.column.name)
         ? 'widening'
         : 'additive',
     ).toOp(this.controlAdapterFor('setDefault'));
   }
 
-  private startColumnHasDefault(schema: string, table: string, column: string): boolean {
+  /**
+   * Whether this migration's start contract gives the column, found by schema, table and column name, a default. A table renamed earlier in the same migration is not found under its new name, so a `setDefault` on it is additive.
+   */
+  private columnHasDefaultInStartContract(schema: string, table: string, column: string): boolean {
     const start = this.startContract;
     if (start === null) return false;
     return Object.entries(start.storage.namespaces).some(

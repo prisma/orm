@@ -357,7 +357,7 @@ describe('SetDefaultCall', () => {
 
   it('sets the default clause the adapter writes for the column, and lowers typed checks', async () => {
     const { lowerer, received, rendered } = renderingLowerer();
-    const call = new SetDefaultCall('public', 'user', status);
+    const call = new SetDefaultCall('public', 'user', status, 'additive');
     const op = await call.toOp(lowerer);
 
     expect({
@@ -404,12 +404,12 @@ describe('SetDefaultCall', () => {
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
-    const call = new SetDefaultCall('public', 'user', status);
+    const call = new SetDefaultCall('public', 'user', status, 'additive');
     await expect(async () => call.toOp()).rejects.toThrow('createPostgresMigrationPlanner');
   });
 
   it('renders this.setDefault with the column and never the operation class, which the migration derives from its start contract', () => {
-    const additive = new SetDefaultCall('public', 'user', status);
+    const additive = new SetDefaultCall('public', 'user', status, 'additive');
     const widening = new SetDefaultCall('public', 'user', status, 'widening');
     const column =
       'col("status", "text", { default: lit("pending"), codecRef: { codecId: "pg/text@1" } })';
@@ -426,7 +426,7 @@ describe('SetDefaultCall', () => {
 
   it('renders a default holding both quote kinds as a template literal', () => {
     const meta = col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) });
-    const call = new SetDefaultCall('public', 'user', meta);
+    const call = new SetDefaultCall('public', 'user', meta, 'additive');
     expect(call.renderTypeScript()).toBe(
       'this.setDefault({ schema: "public", table: "user", column: col("meta", "jsonb", { default: fn(`\'{"a": 1}\'::jsonb`) }) })',
     );

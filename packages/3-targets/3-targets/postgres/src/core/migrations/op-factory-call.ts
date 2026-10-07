@@ -689,7 +689,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
     schemaName: string,
     tableName: string,
     column: DdlColumn,
-    operationClass: 'additive' | 'widening' = 'additive',
+    operationClass: 'additive' | 'widening',
   ) {
     super();
     this.schemaName = schemaName;

@@ -209,7 +209,7 @@ export async function setDefault(
   tableName: string,
   column: DdlColumn,
   lowerer: ExecuteRequestLowerer,
-  operationClass: 'additive' | 'widening' = 'additive',
+  operationClass: 'additive' | 'widening',
 ): Promise<Op> {
   refuseUnwritableSetDefault(tableName, column);
   const columnName = column.name;

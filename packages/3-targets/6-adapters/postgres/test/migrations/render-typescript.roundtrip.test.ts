@@ -278,6 +278,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
         'public',
         'user',
         col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) }),
+        'additive',
       ),
       new CreateIndexCall('public', 'user', 'user_email_idx', { columns: ['email'] }),
       new CreateIndexCall(

@@ -6,7 +6,6 @@ import {
   type TableRename,
 } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { assertDefined } from '@internal/utils/assertions';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -16,19 +15,13 @@ import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import { type PostgresOpFactoryCall, RenameTableCall } from './op-factory-call';
 import { postgresContractToSchema } from './postgres-contract-to-schema';
 import { renameRlsReferences } from './rename-rls-references';
-import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
+import {
+  emissionSchemaForNamespace,
+  resolveDdlSchemaForNamespaceStorage,
+} from './resolve-ddl-schema';
 import { constraintRenamesForTableRename } from './table-rename-constraint-renames';
 
 const RENAME_POLICY: MigrationOperationPolicy = { allowedOperationClasses: ['widening'] };
-
-export function emissionSchemaForNamespace(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-): string {
-  return namespaceId === UNBOUND_NAMESPACE_ID
-    ? UNBOUND_NAMESPACE_ID
-    : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
-}
 
 function renamedTableNode(
   schema: PostgresDatabaseSchemaNode,

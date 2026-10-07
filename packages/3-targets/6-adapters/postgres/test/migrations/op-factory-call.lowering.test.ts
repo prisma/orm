@@ -99,6 +99,7 @@ describe('renderOps', () => {
         'public',
         'user',
         col('created_at', 'timestamptz', { default: fn('now()') }),
+        'additive',
       ),
       new DropDefaultCall('public', 'user', 'updated_at'),
       new AddPrimaryKeyCall('public', 'user', 'user_pkey', ['id']),
@@ -337,7 +338,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
 describe('SetDefaultCall', () => {
   it('refuses a column with no default, which SET DEFAULT has nothing to write for', async () => {
     await expect(
-      new SetDefaultCall('public', 'user', col('name', 'text')).toOp(testAdapter),
+      new SetDefaultCall('public', 'user', col('name', 'text'), 'additive').toOp(testAdapter),
     ).rejects.toMatchObject({
       code: 'CONTRACT.DEFAULT_INVALID',
       message:
@@ -354,6 +355,7 @@ describe('SetDefaultCall', () => {
           'public',
           'user',
           col('id', type, { default: fn('autoincrement()') }),
+          'additive',
         ).toOp(testAdapter),
       ).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
