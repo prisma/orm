@@ -308,12 +308,14 @@ async function updateFirstGraph(
   input: MutationUpdateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
+  const parsed = parseMutationInput(contract, namespaceId, modelName, input);
+  validateRelationMutations(context, parsed.relationMutations, 'update');
+
   const existingRow = await findFirstByFilters(scope, contract, namespaceId, modelName, filters);
   if (!existingRow) {
     return null;
   }
 
-  const parsed = parseMutationInput(contract, namespaceId, modelName, input);
   const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(parsed.relationMutations);
 
   const scalarData = { ...parsed.scalarData };
@@ -533,6 +535,272 @@ function toOneFilteredWriteError(
   );
 }
 
+function createMissingDataError(relation: RelationDefinition) {
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `create() nested mutation for relation "${relation.relationName}" requires data`,
+    { meta: { kind: 'create', relation: relation.relationName, problem: 'missing-data' } },
+  );
+}
+
+function connectMissingCriterionError(relation: RelationDefinition) {
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `connect() nested mutation for relation "${relation.relationName}" requires criterion`,
+    { meta: { kind: 'connect', relation: relation.relationName, problem: 'missing-criterion' } },
+  );
+}
+
+function junctionDisconnectMissingCriteriaError(relation: RelationDefinition) {
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `disconnect() nested mutation for relation "${relation.relationName}" requires criterion`,
+    {
+      meta: { kind: 'disconnect', relation: relation.relationName, problem: 'missing-criterion' },
+    },
+  );
+}
+
+function relationCriterionWhere(
+  context: ExecutionContext,
+  relation: RelationDefinition,
+  kind: 'connect' | 'disconnect',
+  criterion: Record<string, unknown>,
+): AnyExpression {
+  const criterionWhere = shorthandToWhereExpr(
+    context,
+    relation.relatedNamespaceId,
+    relation.relatedModelName,
+    castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+  );
+  if (!criterionWhere) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `${kind}() nested mutation for relation "${relation.relationName}" requires non-empty criterion`,
+      { meta: { kind, relation: relation.relationName, problem: 'empty-criterion' } },
+    );
+  }
+  return criterionWhere;
+}
+
+function modelCriterionWhere(
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  criterion: Record<string, unknown>,
+): AnyExpression {
+  const whereExpr = shorthandToWhereExpr(
+    context,
+    namespaceId,
+    modelName,
+    castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+  );
+  if (!whereExpr) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `Nested connect for model "${modelName}" requires non-empty criterion`,
+      { meta: { kind: 'connect', model: modelName, problem: 'empty-criterion' } },
+    );
+  }
+  return whereExpr;
+}
+
+function assertNoParentLinkColumn(
+  contract: Contract<SqlStorage>,
+  relation: RelationDefinition,
+  setValues: Record<string, unknown>,
+  parentLinkColumns: ReadonlySet<string>,
+): void {
+  const parentLinkFields = Object.keys(setValues)
+    .filter((column) => parentLinkColumns.has(column))
+    .map((column) =>
+      toFieldName(contract, relation.relatedNamespaceId, relation.relatedModelName, column),
+    );
+  if (parentLinkFields.length > 0) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `updateAll() nested mutation for relation "${relation.relationName}" cannot set ${parentLinkFields.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
+      {
+        meta: {
+          kind: 'updateAll',
+          relation: relation.relationName,
+          problem: 'parent-link-column',
+          fields: parentLinkFields,
+        },
+      },
+    );
+  }
+}
+
+function childLinkColumns(relation: RelationDefinition): ReadonlySet<string> {
+  const columns = new Set<string>();
+  relation.targetColumns.forEach((targetColumn, index) => {
+    if (targetColumn && relation.localColumns[index]) {
+      columns.add(targetColumn);
+    }
+  });
+  return columns;
+}
+
+function validateRelationMutations(
+  context: ExecutionContext,
+  relationMutations: readonly ParsedRelationMutation[],
+  operation: 'create' | 'update',
+): void {
+  const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(relationMutations);
+
+  for (const { relation, mutations } of parentOwned) {
+    for (const mutation of mutations) {
+      if (operation === 'create') {
+        assertAllowedInCreate(relation, mutation);
+      }
+      validateParentOwnedMutation(context, relation, mutation);
+    }
+  }
+
+  for (const { relation, mutations } of junctionOwned) {
+    for (const mutation of mutations) {
+      if (operation === 'create') {
+        assertAllowedInCreate(relation, mutation);
+      }
+      validateJunctionOwnedMutation(context, relation, mutation);
+    }
+  }
+
+  for (const { relation, mutations } of childOwned) {
+    for (const mutation of mutations) {
+      if (operation === 'create') {
+        assertAllowedInCreate(relation, mutation);
+      }
+      validateChildOwnedMutation(context, relation, mutation);
+    }
+  }
+}
+
+function validateNestedCreateInput(
+  context: ExecutionContext,
+  relation: RelationDefinition,
+  input: MutationCreateInput<Contract<SqlStorage>, string>,
+): void {
+  const parsed = parseMutationInput(
+    context.contract,
+    relation.relatedNamespaceId,
+    relation.relatedModelName,
+    input,
+  );
+  validateRelationMutations(context, parsed.relationMutations, 'create');
+}
+
+function validateFilteredWrite(
+  context: ExecutionContext,
+  relation: RelationDefinition,
+  mutation: FilteredWriteMutation,
+  parentLinkColumns: ReadonlySet<string>,
+): void {
+  for (const input of mutation.filters) {
+    resolveRelationFilter(context, relation, input);
+  }
+  if (mutation.kind === 'updateAll') {
+    assertNoParentLinkColumn(
+      context.contract,
+      relation,
+      mapModelDataToStorageRow(
+        context.contract,
+        relation.relatedNamespaceId,
+        relation.relatedModelName,
+        mutation.data,
+      ),
+      parentLinkColumns,
+    );
+  }
+}
+
+function validateParentOwnedMutation(
+  context: ExecutionContext,
+  relation: RelationDefinition,
+  mutation: RelationMutation<Contract<SqlStorage>, string>,
+): void {
+  if (isFilteredWrite(mutation)) {
+    throw toOneFilteredWriteError(relation, mutation.kind);
+  }
+
+  if (mutation.kind === 'create') {
+    const row = mutation.data[0];
+    if (!row) {
+      throw createMissingDataError(relation);
+    }
+    validateNestedCreateInput(context, relation, row);
+    return;
+  }
+
+  if (mutation.kind === 'connect') {
+    const criterion = mutation.criteria[0];
+    if (!criterion) {
+      throw connectMissingCriterionError(relation);
+    }
+    modelCriterionWhere(
+      context,
+      relation.relatedNamespaceId,
+      relation.relatedModelName,
+      castAs<Record<string, unknown>>(criterion),
+    );
+  }
+}
+
+function validateChildOwnedMutation(
+  context: ExecutionContext,
+  relation: RelationDefinition,
+  mutation: RelationMutation<Contract<SqlStorage>, string>,
+): void {
+  if (isFilteredWrite(mutation)) {
+    if (relation.cardinality === '1:1') {
+      throw toOneFilteredWriteError(relation, mutation.kind);
+    }
+    validateFilteredWrite(context, relation, mutation, childLinkColumns(relation));
+    return;
+  }
+
+  if (mutation.kind === 'create') {
+    for (const childInput of mutation.data) {
+      validateNestedCreateInput(context, relation, childInput);
+    }
+    return;
+  }
+
+  for (const criterion of mutation.criteria ?? []) {
+    relationCriterionWhere(context, relation, mutation.kind, criterion);
+  }
+}
+
+function validateJunctionOwnedMutation(
+  context: ExecutionContext,
+  relation: JunctionRelationDefinition,
+  mutation: RelationMutation<Contract<SqlStorage>, string>,
+): void {
+  assertJunctionMetadataShape(relation);
+  assertJunctionPayloadWritable(relation, mutation.kind);
+
+  if (isFilteredWrite(mutation)) {
+    validateFilteredWrite(context, relation, mutation, new Set());
+    return;
+  }
+
+  if (mutation.kind === 'create') {
+    for (const childInput of mutation.data) {
+      validateNestedCreateInput(context, relation, childInput);
+    }
+    return;
+  }
+
+  if (mutation.kind === 'disconnect' && (!mutation.criteria || mutation.criteria.length === 0)) {
+    throw junctionDisconnectMissingCriteriaError(relation);
+  }
+
+  for (const criterion of mutation.criteria ?? []) {
+    modelCriterionWhere(context, relation.relatedNamespaceId, relation.relatedModelName, criterion);
+  }
+}
+
 interface JunctionParsedRelationMutation extends ParsedRelationMutation {
   readonly relation: JunctionRelationDefinition;
 }
@@ -600,11 +868,7 @@ async function applyParentOwnedMutation(
   if (mutation.kind === 'create') {
     const row = mutation.data[0];
     if (!row) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `create() nested mutation for relation "${relation.relationName}" requires data`,
-        { meta: { kind: 'create', relation: relation.relationName, problem: 'missing-data' } },
-      );
+      throw createMissingDataError(relation);
     }
 
     const relatedRow = await createGraph(
@@ -627,11 +891,7 @@ async function applyParentOwnedMutation(
 
   const criterion = mutation.criteria[0];
   if (!criterion) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `connect() nested mutation for relation "${relation.relationName}" requires criterion`,
-      { meta: { kind: 'connect', relation: relation.relationName, problem: 'missing-criterion' } },
-    );
+    throw connectMissingCriterionError(relation);
   }
 
   const relatedRow = await findRowByCriterion(
@@ -745,21 +1005,7 @@ async function applyChildOwnedMutation(
 
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
-      const criterionWhere = shorthandToWhereExpr(
-        context,
-        relation.relatedNamespaceId,
-        relation.relatedModelName,
-        castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
-      );
-      if (!criterionWhere) {
-        throw ormError(
-          'ORM.RELATION_MUTATION_INVALID',
-          `connect() nested mutation for relation "${relation.relationName}" requires non-empty criterion`,
-          {
-            meta: { kind: 'connect', relation: relation.relationName, problem: 'empty-criterion' },
-          },
-        );
-      }
+      const criterionWhere = relationCriterionWhere(context, relation, 'connect', criterion);
 
       const setValues: Record<string, unknown> = {};
       for (const [childColumn, parentValue] of parentValues.entries()) {
@@ -797,21 +1043,7 @@ async function applyChildOwnedMutation(
   }
 
   for (const criterion of mutation.criteria) {
-    const criterionWhere = shorthandToWhereExpr(
-      context,
-      relation.relatedNamespaceId,
-      relation.relatedModelName,
-      castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
-    );
-    if (!criterionWhere) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `disconnect() nested mutation for relation "${relation.relationName}" requires non-empty criterion`,
-        {
-          meta: { kind: 'disconnect', relation: relation.relationName, problem: 'empty-criterion' },
-        },
-      );
-    }
+    const criterionWhere = relationCriterionWhere(context, relation, 'disconnect', criterion);
 
     const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
     await executeUpdateCount(
@@ -855,23 +1087,7 @@ async function applyFilteredWrite(
     relation.relatedModelName,
     mutation.data,
   );
-  const parentLinkFields = Object.keys(setValues)
-    .filter((column) => parentLinkColumns.has(column))
-    .map((column) => toFieldName(contract, namespaceId, relation.relatedModelName, column));
-  if (parentLinkFields.length > 0) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `updateAll() nested mutation for relation "${relation.relationName}" cannot set ${parentLinkFields.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
-      {
-        meta: {
-          kind: 'updateAll',
-          relation: relation.relationName,
-          problem: 'parent-link-column',
-          fields: parentLinkFields,
-        },
-      },
-    );
-  }
+  assertNoParentLinkColumn(contract, relation, setValues, parentLinkColumns);
   if (Object.keys(setValues).length === 0) {
     return;
   }
@@ -967,13 +1183,7 @@ async function applyJunctionOwnedMutation(
   }
 
   if (!mutation.criteria || mutation.criteria.length === 0) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `disconnect() nested mutation for relation "${relation.relationName}" requires criterion`,
-      {
-        meta: { kind: 'disconnect', relation: relation.relationName, problem: 'missing-criterion' },
-      },
-    );
+    throw junctionDisconnectMissingCriteriaError(relation);
   }
 
   for (const criterion of mutation.criteria) {
@@ -1425,19 +1635,7 @@ async function findRowByCriterion(
   criterion: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
-  const whereExpr = shorthandToWhereExpr(
-    context,
-    namespaceId,
-    modelName,
-    castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
-  );
-  if (!whereExpr) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `Nested connect for model "${modelName}" requires non-empty criterion`,
-      { meta: { kind: 'connect', model: modelName, problem: 'empty-criterion' } },
-    );
-  }
+  const whereExpr = modelCriterionWhere(context, namespaceId, modelName, criterion);
 
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const state: CollectionState = {

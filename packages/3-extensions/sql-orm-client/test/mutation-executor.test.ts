@@ -1685,7 +1685,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_INVALID',
       meta: { relation: 'posts', model: 'User', problem: 'nested-array', index: 1 },
     });
-    expect(statementTrace(runtime)).toEqual(['select users']);
+    expect(statementTrace(runtime)).toEqual([]);
   });
 
   it('executeNestedCreateMutation() rejects a nested array of operations', async () => {
@@ -1730,7 +1730,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_INVALID',
       meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor', index: 1 },
     });
-    expect(statementTrace(runtime)).toEqual(['select users']);
+    expect(statementTrace(runtime)).toEqual([]);
   });
 
   it('executeNestedCreateMutation() rejects an array element that is not an operation', async () => {
@@ -2022,7 +2022,7 @@ describe('mutation-executor', () => {
         fields: ['userId'],
       },
     });
-    expect(statementTrace(runtime)).toEqual(['select users']);
+    expect(statementTrace(runtime)).toEqual([]);
   });
 
   it('updateAll() may set the foreign key of another relation', async () => {
@@ -2166,7 +2166,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
       meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
     });
-    expect(statementTrace(updateAllRuntime)).toEqual(['select posts']);
+    expect(statementTrace(updateAllRuntime)).toEqual([]);
 
     const deleteAllRuntime = createMockRuntime();
     deleteAllRuntime.setNextResults([[postRow]]);
@@ -2185,7 +2185,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
       meta: { kind: 'deleteAll', relation: 'author', reason: 'to-one-relation' },
     });
-    expect(statementTrace(deleteAllRuntime)).toEqual(['select posts']);
+    expect(statementTrace(deleteAllRuntime)).toEqual([]);
   });
 
   it('executeNestedUpdateMutation() rejects updateAll() and deleteAll() on a to-one relation the child owns', async () => {
@@ -2206,7 +2206,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
       meta: { kind: 'updateAll', relation: 'profile', reason: 'to-one-relation' },
     });
-    expect(statementTrace(updateAllRuntime)).toEqual(['select users']);
+    expect(statementTrace(updateAllRuntime)).toEqual([]);
 
     const deleteAllRuntime = createMockRuntime();
     deleteAllRuntime.setNextResults([[aliceRow]]);
@@ -2223,7 +2223,7 @@ describe('mutation-executor', () => {
       code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
       meta: { kind: 'deleteAll', relation: 'profile', reason: 'to-one-relation' },
     });
-    expect(statementTrace(deleteAllRuntime)).toEqual(['select users']);
+    expect(statementTrace(deleteAllRuntime)).toEqual([]);
   });
 
   type WhereShape =
@@ -2503,5 +2503,258 @@ describe('mutation-executor', () => {
       'delete parent_child',
       'delete children',
     ]);
+  });
+
+  interface NoRowCase {
+    readonly name: string;
+    readonly modelName: string;
+    readonly filter: AnyExpression;
+    readonly contract?: ReturnType<typeof manyToManyContract>;
+    readonly data: unknown;
+    readonly expected: { code: string; meta?: Record<string, unknown> };
+  }
+
+  const invalidNestedInputCases: readonly NoRowCase[] = [
+    {
+      name: 'a relation field that is not a callback',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: { kind: 'connect' } },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'missing-callback' } },
+    },
+    {
+      name: 'a callback returning something that is not an operation',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: () => ({ invalid: true }) },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor' } },
+    },
+    {
+      name: 'a nested array of operations',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => [[posts.disconnect()]] },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'nested-array' } },
+    },
+    {
+      name: 'an array element that is not an operation',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => [posts.disconnect(), null] },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { problem: 'invalid-descriptor', index: 1 },
+      },
+    },
+    {
+      name: 'updateAll() on a to-one relation the parent owns',
+      modelName: 'Post',
+      filter: postIdFilter,
+      data: { author: (author: LooseMutator) => author.updateAll({ name: 'Bob' }) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'updateAll', reason: 'to-one-relation' },
+      },
+    },
+    {
+      name: 'deleteAll() on a to-one relation the child owns',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { profile: (profile: LooseMutator) => profile.where({ id: 1 }).deleteAll() },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'deleteAll', reason: 'to-one-relation' },
+      },
+    },
+    {
+      name: 'updateAll() data that sets the column linking the child to the parent',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => posts.updateAll({ userId: 2 }) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { problem: 'parent-link-column', fields: ['userId'] },
+      },
+    },
+    {
+      name: 'a where() callback that returns null',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => posts.where(() => null).deleteAll() },
+      expected: { code: 'ORM.ARGUMENT_INVALID' },
+    },
+    {
+      name: 'disconnect() without criteria on a many-to-many relation',
+      modelName: 'Parent',
+      filter: parentIdFilter,
+      contract: manyToManyContract(),
+      data: { children: (children: LooseMutator) => children.disconnect() },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'disconnect', problem: 'missing-criterion' },
+      },
+    },
+    {
+      name: 'connect() through a junction with required payload columns',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { roles: (roles: LooseMutator) => roles.connect({ id: 'admin' }) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'connect', reason: 'junction-required-columns' },
+      },
+    },
+    {
+      name: 'create() through a junction with required payload columns',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { roles: (roles: LooseMutator) => roles.create({ id: 'admin', name: 'Admin' }) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'create', reason: 'junction-required-columns' },
+      },
+    },
+    {
+      name: 'connect() with an empty criterion on a many-to-many relation',
+      modelName: 'Parent',
+      filter: parentIdFilter,
+      contract: manyToManyContract(),
+      data: { children: (children: LooseMutator) => children.connect({}) },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'empty-criterion' } },
+    },
+    {
+      name: 'disconnect() with an empty criterion on a many-to-many relation',
+      modelName: 'Parent',
+      filter: parentIdFilter,
+      contract: manyToManyContract(),
+      data: { children: (children: LooseMutator) => children.disconnect([{}]) },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'empty-criterion' } },
+    },
+    {
+      name: 'create() without data on a to-one relation the parent owns',
+      modelName: 'Post',
+      filter: postIdFilter,
+      data: { author: (author: LooseMutator) => author.create([]) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'create', problem: 'missing-data' },
+      },
+    },
+    {
+      name: 'connect() without a criterion on a to-one relation the parent owns',
+      modelName: 'Post',
+      filter: postIdFilter,
+      data: { author: (author: LooseMutator) => author.connect([]) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'connect', problem: 'missing-criterion' },
+      },
+    },
+    {
+      name: 'connect() with an empty criterion on a to-one relation the parent owns',
+      modelName: 'Post',
+      filter: postIdFilter,
+      data: { author: (author: LooseMutator) => author.connect({}) },
+      expected: { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'empty-criterion' } },
+    },
+    {
+      name: 'connect() with an empty criterion on a one-to-many relation',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => posts.connect([{}]) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'connect', problem: 'empty-criterion' },
+      },
+    },
+    {
+      name: 'disconnect() with an empty criterion on a one-to-many relation',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: { posts: (posts: LooseMutator) => posts.disconnect([{}]) },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'disconnect', problem: 'empty-criterion' },
+      },
+    },
+    {
+      name: 'a nested create() whose own relation field is not a callback',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: {
+        posts: (posts: LooseMutator) =>
+          posts.create({ id: 20, title: 'New', views: 0, comments: { kind: 'create' } }),
+      },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { relation: 'comments', model: 'Post', problem: 'missing-callback' },
+      },
+    },
+    {
+      name: 'a nested create() that contains disconnect()',
+      modelName: 'User',
+      filter: userIdFilter,
+      data: {
+        posts: (posts: LooseMutator) =>
+          posts.create({
+            id: 20,
+            title: 'New',
+            views: 0,
+            comments: (comments: LooseMutator) => comments.disconnect(),
+          }),
+      },
+      expected: {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'disconnect', relation: 'comments' },
+      },
+    },
+  ];
+
+  it.each(invalidNestedInputCases)(
+    'executeNestedUpdateMutation() rejects $name before it looks up the row',
+    async ({ modelName, filter, contract, data, expected }) => {
+      const context = contract ? { ...getTestContext(), contract } : getTestContext();
+
+      const noRow = createMockRuntime();
+      noRow.setNextResults([[]]);
+      await expect(
+        executeNestedUpdateMutation({
+          context,
+          runtime: noRow,
+          namespaceId: 'public',
+          modelName,
+          filters: [filter],
+          data: data as never,
+        }),
+      ).rejects.toMatchObject(expected);
+      expect(noRow.executions).toEqual([]);
+    },
+  );
+
+  it('executeNestedUpdateMutation() with valid nested input and no matching row resolves null and writes nothing', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[]]);
+
+    const updated = await executeNestedUpdateMutation({
+      context: getTestContext(),
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      filters: [userIdFilter],
+      data: {
+        name: 'Renamed',
+        posts: (posts: LooseMutator) => [
+          posts.create({ id: 20, title: 'New', views: 0 }),
+          posts.where({ title: 'Draft' }).updateAll({ views: 1 }),
+          posts.deleteAll(),
+          posts.connect({ id: 11 }),
+          posts.disconnect([{ id: 12 }]),
+        ],
+        tags: (tags: LooseMutator) => [tags.disconnect([{ id: 'tag-1' }]), tags.deleteAll()],
+      } as never,
+    });
+
+    expect(updated).toBeNull();
+    expect(statementTrace(runtime)).toEqual(['select users']);
   });
 });
