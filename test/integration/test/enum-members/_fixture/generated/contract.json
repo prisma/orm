@@ -4,6 +4,10 @@
   "target": "postgres",
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
+    "gauges": {
+      "model": "Gauge",
+      "namespace": "public"
+    },
     "networks": {
       "model": "Network",
       "namespace": "public"
@@ -40,6 +44,19 @@
               {
                 "name": "Whole",
                 "value": 2.25
+              }
+            ]
+          },
+          "FloatMixed": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": 1.5
+              },
+              {
+                "name": "Nan",
+                "value": "NaN"
               }
             ]
           },
@@ -157,6 +174,62 @@
           }
         },
         "models": {
+          "Gauge": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "level": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatMixed",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "levels": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatMixed",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "level": {
+                  "column": "level"
+                },
+                "levels": {
+                  "column": "levels"
+                }
+              },
+              "namespaceId": "public",
+              "table": "gauges"
+            }
+          },
           "Network": {
             "fields": {
               "hosts": {
@@ -390,6 +463,65 @@
       "public": {
         "entries": {
           "table": {
+            "gauges": {
+              "checks": [
+                {
+                  "expression": "\"level\" IN (1.5, 'NaN')",
+                  "name": "gauges_level_check_fdbff8e6",
+                  "prefix": "gauges_level_check"
+                },
+                {
+                  "expression": "array_remove(\"levels\", NULL) <@ '{1.5,\"NaN\"}'",
+                  "name": "gauges_levels_check_87d87ba5",
+                  "prefix": "gauges_levels_check"
+                },
+                {
+                  "expression": "array_position(\"levels\", NULL) IS NULL",
+                  "name": "gauges_levels_elem_not_null_965aa1cc",
+                  "prefix": "gauges_levels_elem_not_null"
+                }
+              ],
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "level": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatMixed",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "levels": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatMixed",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "networks": {
               "checks": [
                 {
@@ -636,6 +768,13 @@
                 2.25
               ]
             },
+            "FloatMixed": {
+              "kind": "valueSet",
+              "values": [
+                1.5,
+                "NaN"
+              ]
+            },
             "FloatSpecial": {
               "kind": "valueSet",
               "values": [
@@ -700,7 +839,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "211447d69f87329212f4dfe9e68eb03c85de33e22da707af2ba1dbd9f26f5df3"
+    "storageHash": "be9475adfc1f3ec93eb848359bf149e224bc38825dd407ac9031991169c71e87"
   },
   "capabilities": {
     "postgres": {

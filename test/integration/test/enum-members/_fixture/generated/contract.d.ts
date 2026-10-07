@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'211447d69f87329212f4dfe9e68eb03c85de33e22da707af2ba1dbd9f26f5df3'>;
+  StorageHashBase<'be9475adfc1f3ec93eb848359bf149e224bc38825dd407ac9031991169c71e87'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -233,6 +233,11 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 
 export type FieldOutputTypes = {
   readonly public: {
+    readonly Gauge: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly level: CodecTypes['pg/float8@1']['output'];
+      readonly levels: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    };
     readonly Network: {
       readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -254,6 +259,11 @@ export type FieldOutputTypes = {
 };
 export type FieldInputTypes = {
   readonly public: {
+    readonly Gauge: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly level: CodecTypes['pg/float8@1']['input'];
+      readonly levels: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
+    };
     readonly Network: {
       readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['input']>;
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -275,6 +285,11 @@ export type FieldInputTypes = {
 };
 export type StorageColumnTypes = {
   readonly public: {
+    readonly gauges: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly level: CodecTypes['pg/float8@1']['output'];
+      readonly levels: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    };
     readonly networks: {
       readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -296,6 +311,11 @@ export type StorageColumnTypes = {
 };
 export type StorageColumnInputTypes = {
   readonly public: {
+    readonly gauges: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly level: CodecTypes['pg/float8@1']['input'];
+      readonly levels: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
+    };
     readonly networks: {
       readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['input']>;
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -317,6 +337,12 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Gauge = {
+    id: CodecTypes['pg/int4@1']['output'];
+    level: CodecTypes['pg/float8@1']['output'];
+    levels: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    readonly [RelationKeys]?: never;
+  };
   export type public_Network = {
     hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
     id: CodecTypes['pg/int4@1']['output'];
@@ -340,6 +366,7 @@ export namespace Models {
 
 export declare const models: {
   public: {
+    Gauge: Models.public_Gauge;
     Network: Models.public_Network;
     Reading: Models.public_Reading;
   };
@@ -363,6 +390,32 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly gauges: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly level: {
+                  readonly dataType: 'pg/float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly levels: {
+                  readonly dataType: 'pg/float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly networks: {
               columns: {
                 readonly hosts: {
@@ -467,6 +520,10 @@ type ContractBase = Omit<
               readonly kind: 'valueSet';
               readonly values: readonly [1.5, 2.25];
             };
+            readonly FloatMixed: {
+              readonly kind: 'valueSet';
+              readonly values: readonly [1.5, 'NaN'];
+            };
             readonly FloatSpecial: {
               readonly kind: 'valueSet';
               readonly values: readonly ['NaN', 'Infinity', '-Infinity'];
@@ -510,6 +567,7 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly gauges: { readonly namespace: 'public' & NamespaceId; readonly model: 'Gauge' };
     readonly networks: { readonly namespace: 'public' & NamespaceId; readonly model: 'Network' };
     readonly readings: { readonly namespace: 'public' & NamespaceId; readonly model: 'Reading' };
   };
@@ -517,6 +575,33 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly public: {
         readonly models: {
+          readonly Gauge: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly level: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+              };
+              readonly levels: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly many: { readonly elementNullable: false };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'gauges';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly level: { readonly column: 'level' };
+                readonly levels: { readonly column: 'levels' };
+              };
+            };
+          };
           readonly Network: {
             readonly fields: {
               readonly hosts: {
@@ -625,6 +710,13 @@ type ContractBase = Omit<
               { readonly name: 'Whole'; readonly value: 2.25 },
             ];
           };
+          readonly FloatMixed: {
+            readonly codecId: 'pg/float8@1';
+            readonly members: readonly [
+              { readonly name: 'Half'; readonly value: 1.5 },
+              { readonly name: 'Nan'; readonly value: 'NaN' },
+            ];
+          };
           readonly FloatSpecial: {
             readonly codecId: 'pg/float8@1';
             readonly members: readonly [
@@ -692,6 +784,10 @@ type ContractBase = Omit<
           readonly Float8Level: readonly [
             { readonly name: 'Half'; readonly value: 1.5 },
             { readonly name: 'Whole'; readonly value: 2.25 },
+          ];
+          readonly FloatMixed: readonly [
+            { readonly name: 'Half'; readonly value: 1.5 },
+            { readonly name: 'Nan'; readonly value: CodecTypes['pg/float8@1']['output'] },
           ];
           readonly FloatSpecial: readonly [
             { readonly name: 'Nan'; readonly value: CodecTypes['pg/float8@1']['output'] },

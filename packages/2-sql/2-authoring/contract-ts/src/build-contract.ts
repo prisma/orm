@@ -620,13 +620,6 @@ function checkMemberValues(
         { meta: { enumName: handle.enumName, reason: 'unsupported-member-value' } },
       );
     }
-    if (typeof value !== typeof encoded[0]) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): CHECK constraint members must encode to the same primitive type; mixed strings and numbers are not supported.`,
-        { meta: { enumName: handle.enumName, reason: 'mixed-member-types' } },
-      );
-    }
     values.push(value);
   }
   return values;

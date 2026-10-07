@@ -49,6 +49,12 @@ enum FloatSpecial {
   Negative = "-Infinity"
 }
 
+enum FloatMixed {
+  @@type("pg/float8@1")
+  Half = 1.5
+  Nan  = "NaN"
+}
+
 enum Host {
   @@type("pg/inet@1")
   Loopback = "127.0.0.1"
@@ -83,4 +89,12 @@ model Reading {
   special FloatSpecial
 
   @@map("readings")
+}
+
+model Gauge {
+  id     Int          @id
+  level  FloatMixed
+  levels FloatMixed[]
+
+  @@map("gauges")
 }

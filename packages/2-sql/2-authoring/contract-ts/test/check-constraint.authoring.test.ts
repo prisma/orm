@@ -478,52 +478,43 @@ describe('check emission — guards', () => {
     },
   );
 
-  it.each([
-    { first: 1, second: 'two', many: false },
-    { first: 'one', second: 2, many: false },
-    { first: 1, second: 'two', many: true },
-    { first: 'one', second: 2, many: true },
-  ])(
-    'rejects mixed members $first/$second with many=$many before rendering',
-    ({ first, second, many }) => {
-      const Mixed = enumType('Mixed', pgText, member('First', first), member('Second', second));
+  it.each([false, true])(
+    'passes members that store as a number and as text to the check renderer, with many=%s',
+    (many) => {
+      const Special = enumType(
+        'Special',
+        { codecId: 'pg/float8@1' },
+        member('Half', 1.5),
+        member('Nan', 'NaN'),
+      );
       hookCalls.length = 0;
-
-      expect(() =>
-        defineContract(
-          {
-            ...testTypeLookups,
-            family: sqlFamilyPack,
-            target: postgresTargetPack,
-            createNamespace: createTestSqlNamespace,
-            enums: { Mixed },
+      defineContract(
+        {
+          ...testTypeLookups,
+          family: sqlFamilyPack,
+          target: postgresTargetPack,
+          createNamespace: createTestSqlNamespace,
+          enums: { Special },
+        },
+        ({ field: f, model: m }) => ({
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                special: many ? f.namedType(Special).many() : f.namedType(Special),
+              },
+            }),
           },
-          ({ field: f, model: m }) => ({
-            models: {
-              User: m('User', {
-                fields: {
-                  id: f.text().id(),
-                  mixed: many ? f.namedType(Mixed).many() : f.namedType(Mixed),
-                },
-              }),
-            },
-          }),
-        ),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'CONTRACT.ENUM_INVALID',
-          meta: { enumName: 'Mixed', reason: 'mixed-member-types' },
         }),
       );
-      expect(hookCalls).toEqual([
-        {
-          tableName: 'User',
-          columnName: 'id',
-          many: false,
-          elementNullable: false,
-          memberValues: undefined,
-        },
-      ]);
+
+      expect(hookCalls.at(-1)).toEqual({
+        tableName: 'User',
+        columnName: 'special',
+        many,
+        elementNullable: false,
+        memberValues: [1.5, 'NaN'],
+      });
     },
   );
 
