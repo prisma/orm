@@ -30,7 +30,7 @@ function mapAttributeEdit(symbol, ...): { uri: string; edit: TextEdit } | undefi
 ```
 
 - **Model** (`symbol.kind === 'model'`): insert when the resolver has a model-level `map`, and the model has neither a `map` nor a `base` attribute.
-- **Field** (`symbol.kind === 'field'`): insert when the owner is a model, the resolver has a field-level `map`, the field has no `map` attribute, and the binder's resolution of the field's type is not a model.
+- **Field** (`symbol.kind === 'field'`): insert when the owner is a model, the resolver has a field-level `map`, the field has no `map` attribute, and the binder's resolution of the field's type is neither `model` nor `crossSpace`.
 - **Block** (`symbol.kind === 'block'`): insert when the block's descriptor in `pslBlockDescriptors` has `nameIsStorageName: true` and the block has no `map` attribute.
 - **Anything else**: no insertion.
 
@@ -84,7 +84,10 @@ The provider is a mapping from the find-references result to edits, and it has n
 
 | Edge case | Disposition | Notes |
 | --------- | ----------- | ----- |
-| New name equals the current name | Returned as an ordinary edit | Every edit replaces a token with the same text; no special case |
+| New name equals the current name | Name edits are returned as usual; no map attribute | Every name edit replaces a token with the same text; no database name changes |
+| Field typed by a type of another contract space (`remote supabase:store.Tag`) | No attribute | Only a relation field can name such a type |
+| File with CRLF line endings | The inserted `@@map` line ends in CRLF | |
+| Model with no closing brace | Name edits only | Nowhere to put the line |
 | Rename started from a reference in another file | The map attribute is inserted in the declaration's file | One insertion, on the declaration |
 | Model renamed a second time (`User` → `Account` → `Member`) | No second attribute; `@@map("User")` stays | "Unless it already has one" |
 | Model renamed back to its old name | `@@map("User")` stays on `model User` | It is redundant and harmless; removing it is not rename's job |

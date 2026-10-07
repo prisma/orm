@@ -125,8 +125,10 @@ The server edits nothing itself, so a failed request leaves every file as it was
 - **At most one insertion.** Besides the name edits, the edit holds at most one insertion: a map attribute on the renamed declaration, in the declaration's file, whatever position the rename was started from.
 - **When a map attribute is added.** The attribute is `@map("<old name>")` on a field and `@@map("<old name>")` on a model or block. It is added when the declaration has no `map` attribute and is one of:
   - a model without `@@base`, when the attribute specs define `map` for models;
-  - a field of a model whose type does not resolve to a model, when the attribute specs define `map` for fields;
+  - a field of a model whose type resolves neither to a model nor to a type of another contract space (both are relation fields), when the attribute specs define `map` for fields;
   - a block whose descriptor sets `nameIsStorageName`.
+- **A rename to the current name adds nothing.** No database name changes, so no map attribute is added.
+- **Line endings.** Inserted lines end the way the file's lines end.
 - **Nothing else gets one.** A composite type, a composite type member, a named type, an enum block, a namespace, a model with `@@base`, a relation field and a block that does not set `nameIsStorageName` are renamed by name only.
 - **Where the attribute goes.** On a field it follows the field's last attribute, or its type when it has none, after one space, before any trailing comment. In a model or block it is on its own line before the closing brace, at the indent of the block's members, after the existing `@@` attributes, and separated from the last field by a blank line. Column alignment of field attributes is left to the formatter: a rename changes name widths, so the formatter may realign the block's rows anyway.
 - **Whole project.** The edit covers every schema input of the project, including files not open in the editor, each under its own URI.
