@@ -27,6 +27,8 @@ function readEmittedWithoutRowLockingCapabilities(path: string): string {
   return readFileSync(path, 'utf8').replace(rowLockingCapabilityLine, '');
 }
 
+const enumMemberTypesBlock = /^(\s*)readonly enumMemberTypes\?: \{\n[\s\S]*?^\1\};\n/m;
+
 const releaseProjects = [
   {
     name: 'rc14-lists',
@@ -145,7 +147,7 @@ describe('a Postgres project from 8.0.0-rc.14 with a list column of an enum', ()
     });
   });
 
-  it("keeps rc.14's membership check, so it differs from emission only in that check, the storage hash and the row-locking capabilities rc.14 did not report", () => {
+  it("keeps rc.14's membership check, so it differs from emission only in that check, the storage hash, and the row-locking capabilities and enum member types rc.14 did not write", () => {
     const upgradedContract = JSON.parse(tree['prisma/contract.json'] ?? 'null');
     const emittedContract = JSON.parse(
       readEmittedWithoutRowLockingCapabilities(join(emitted, 'contract.json')),
@@ -168,7 +170,10 @@ describe('a Postgres project from 8.0.0-rc.14 with a list column of an enum', ()
         prefix: 'user_plans_check',
       },
       withEmittedCheckAndHash: emittedContract,
-      dts: readEmittedWithoutRowLockingCapabilities(join(emitted, 'contract.d.ts')),
+      dts: readEmittedWithoutRowLockingCapabilities(join(emitted, 'contract.d.ts')).replace(
+        enumMemberTypesBlock,
+        '',
+      ),
     });
   });
 
