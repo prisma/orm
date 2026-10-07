@@ -9,11 +9,11 @@ changes:
         - '\benumType\('
   - id: psl-numeric-inet-enum-members-refused
     summary: |
-      A PSL enum block typed `@@type("pg/numeric@1")`, `@@type("pg/inet@1")` or `@@type("pg/int8@1")` is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is not written as Postgres prints it, such as "01.5", "-0", "10.0.0.1/32", "::FFFF:10.0.0.1" or, on int8, "007", or is not an address. The message says the text to write. Rewrite each refused member and re-emit. A numeric or inet enum's CHECK constraint changes, so apply a migration that replaces it; an int8 enum's contract is unchanged.
+      A PSL enum block typed `@@type("pg/numeric@1")`, `@@type("pg/inet@1")`, `@@type("pg/int8@1")`, `@@type("pg/int8number@1")` or `@@type("pg/unboundedint@1")` is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is not written as Postgres prints it, such as "01.5", "-0", "10.0.0.1/32", "::FFFF:10.0.0.1" or, on the integer codecs, "007", or is not an address. The message says the text to write. Rewrite each refused member and re-emit. A numeric or inet enum's CHECK constraint changes, so apply a migration that replaces it; an integer enum's contract is unchanged.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '@@type\(\s*"pg/(?:numeric|inet|int8)@1"\s*\)'
+        - '@@type\(\s*"pg/(?:numeric|inet|int8|int8number|unboundedint)@1"\s*\)'
   - id: numeric-inet-defaults-stored-as-postgres-prints
     summary: |
       A numeric default written with a leading zero or as negative zero in a TypeScript `.default()`, and an inet default written in a form Postgres prints differently, in PSL or in a TypeScript `.default()`, are now stored as Postgres prints them, so emitting the contract again changes its storage hash. An inet default that is not an address is now refused. Earlier versions could not apply most such contracts: the command that applied them failed and changed nothing. Emit the contract again, then run that command again.
@@ -76,7 +76,7 @@ Creating a client from a `contract.json` emitted by an earlier version that stil
 
 ## `psl-numeric-inet-enum-members-refused`
 
-The same rule holds in PSL. An enum block typed by `pg/numeric@1`, `pg/inet@1` or `pg/int8@1` whose member is not written as Postgres prints it is refused at `contract emit`:
+The same rule holds in PSL. An enum block typed by `pg/numeric@1`, `pg/inet@1`, `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1` whose member is not written as Postgres prints it is refused at `contract emit`:
 
 ```text
 PSL_EXTENSION_INVALID_VALUE: enum "Ratio" member "Half" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "1.5", as PostgreSQL writes this value
@@ -85,7 +85,7 @@ PSL_EXTENSION_INVALID_VALUE: enum "Ratio" member "Half" was rejected by codec "p
 Rewrite each member as the message says.
 
 - For a numeric or inet enum, the contract held the member as written, so follow steps 2 and 3 of `ts-numeric-inet-enum-members-written-as-postgres-prints`.
-- For an int8 enum, such as a member written `"007"` or `"-0"`, earlier versions stored it as Postgres prints it, `"7"` or `"0"`. Write it that way and re-emit; `contract.json`, the CHECK constraint and every hash are unchanged.
+- For an enum typed by `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1`, such as a member written `"007"` or `"-0"`, earlier versions stored it as Postgres prints it, `"7"` or `"0"`. Write it that way and re-emit; `contract.json`, the CHECK constraint and every hash are unchanged. The message for these codecs ends `as the database writes this value`.
 
 ## `numeric-inet-defaults-stored-as-postgres-prints`
 
