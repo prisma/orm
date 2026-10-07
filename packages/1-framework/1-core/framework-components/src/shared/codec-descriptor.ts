@@ -49,7 +49,7 @@ export interface CodecDescriptorTemplate<P = void> {
    * per permitted value; the caller joins the results with `|`.
    */
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
-  /** Why an enum cannot use this codec, as sentences an enum's refusal quotes, ending with what to use instead. A codec sets it when no value a query reads back equals a member as the contract stores it. Read it through {@link enumRefusalOf}, which also refuses a codec without the `equality` trait. */
+  /** Why an enum cannot use this codec, as sentences an enum's refusal quotes, ending with what to use instead. A codec with the `equality` trait sets it when no value a query reads back equals a member as the contract stores it. A codec without the trait may set it to give a more specific reason than the generic one. Read it through {@link enumRefusalOf}, which also refuses a codec without the `equality` trait. */
   readonly enumRefusal?: string;
   /**
    * Gives a value this codec reads its canonical form, for a codec whose data type stores several codecs' values in one form and so declares none for them: a SQLite datetime, which `sqlite/text` stores. Read it through {@link canonicalFormOf}, which takes it in place of the data type's. ADR 254.
