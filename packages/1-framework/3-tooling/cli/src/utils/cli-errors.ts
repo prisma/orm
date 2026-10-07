@@ -594,7 +594,7 @@ function noOperationsConflict(origin: PlanOrigin, destination: PlanDestination):
       return {
         kind: 'nothingToBaseline',
         summary: `The migrations directory is empty, so migration plan starts the migration history with a baseline migration to the contract the db ref points at, ${origin.hash}. That contract describes nothing migration plan can create, so there is no baseline to plan.`,
-        why: 'No command writes a baseline migration with no operations. If you manage the database with `prisma db init` or `prisma db update`, keep using `prisma db update`. No command can start a migration history from this database yet (TML-3511); report it with the output of `prisma migration plan --json`.',
+        why: 'No command writes a baseline migration with no operations. If you manage the database with `prisma db init` or `prisma db update`, keep using `prisma db update`. No command can start a migration history from this database yet; report it with the output of `prisma migration plan --json`.',
       };
     case 'contract':
       return {
