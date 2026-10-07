@@ -1885,11 +1885,7 @@ export interface FilteredRelationMutator<
   ParentLinkFields extends string = never,
 > {
   where(
-    fn: (model: ModelAccessor<TContract, ModelName>) => WhereArg,
-  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields>;
-  where(input: WhereArg): FilteredRelationMutator<TContract, ModelName, ParentLinkFields>;
-  where(
-    filters: ShorthandWhereFilter<TContract, never, ModelName>,
+    filter: RelationMutationFilter<TContract, ModelName>,
   ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields>;
   updateAll(
     data: RelationMutationUpdateAllData<TContract, ModelName, ParentLinkFields>,

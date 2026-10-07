@@ -131,16 +131,13 @@ export async function executeNestedCreateMutation(options: {
   modelName: string;
   data: MutationCreateInput<Contract<SqlStorage>, string>;
 }): Promise<Record<string, unknown>> {
-  return withMutationScope(options.runtime, async (scope) =>
-    createGraph(
-      scope,
-      options.context,
-      newResolvedNestedInput(),
-      options.namespaceId,
-      options.modelName,
-      options.data,
-    ),
-  );
+  const { context, namespaceId, modelName } = options;
+  return withMutationScope(options.runtime, async (scope) => {
+    const resolved = newResolvedNestedInput();
+    const parsed = parseMutationInput(context.contract, namespaceId, modelName, options.data);
+    validateRelationMutations(context, resolved, parsed.relationMutations, 'create');
+    return createParsedGraph(scope, context, resolved, namespaceId, modelName, parsed);
+  });
 }
 
 export async function executeNestedUpdateMutation(options: {
@@ -240,19 +237,6 @@ async function runInTransaction<T>(
   }
 }
 
-async function createGraph(
-  scope: RuntimeScope,
-  context: ExecutionContext,
-  resolved: ResolvedNestedInput,
-  namespaceId: string,
-  modelName: string,
-  input: MutationCreateInput<Contract<SqlStorage>, string>,
-): Promise<Record<string, unknown>> {
-  const parsed = parseMutationInput(context.contract, namespaceId, modelName, input);
-  validateRelationMutations(context, resolved, parsed.relationMutations, 'create');
-  return createParsedGraph(scope, context, resolved, namespaceId, modelName, parsed);
-}
-
 async function createParsedGraph(
   scope: RuntimeScope,
   context: ExecutionContext,
@@ -267,8 +251,6 @@ async function createParsedGraph(
 
   for (const { relation, mutations } of parentOwned) {
     for (const mutation of mutations) {
-      assertAllowedInCreate(relation, mutation);
-
       await applyParentOwnedMutation(
         scope,
         context,
@@ -284,8 +266,6 @@ async function createParsedGraph(
 
   for (const { relation, mutations } of junctionOwned) {
     for (const mutation of mutations) {
-      assertAllowedInCreate(relation, mutation);
-
       await preflightJunctionOwnedCreateMutation(scope, context, relation, mutation);
     }
   }
@@ -294,8 +274,6 @@ async function createParsedGraph(
 
   for (const { relation, mutations } of childOwned) {
     for (const mutation of mutations) {
-      assertAllowedInCreate(relation, mutation);
-
       await applyChildOwnedMutation(
         scope,
         context,
@@ -1086,16 +1064,12 @@ async function applyChildOwnedMutation(
   );
 
   if (isFilteredWrite(mutation)) {
-    if (relation.cardinality === '1:1') {
-      throw toOneFilteredWriteError(relation, mutation.kind);
-    }
     await applyFilteredWrite(
       scope,
       context,
       resolved,
       relation,
       buildChildJoinWhere(relation, parentValues),
-      new Set(parentValues.keys()),
       mutation,
     );
     return;
@@ -1187,7 +1161,6 @@ async function applyFilteredWrite(
   resolved: ResolvedNestedInput,
   relation: RelationDefinition,
   relatedToParent: AnyExpression,
-  parentLinkColumns: ReadonlySet<string>,
   mutation: FilteredWriteMutation,
 ): Promise<void> {
   const contract = context.contract;
@@ -1206,7 +1179,6 @@ async function applyFilteredWrite(
     relation.relatedModelName,
     mutation.data,
   );
-  assertNoParentLinkColumn(contract, relation, setValues, parentLinkColumns);
   if (Object.keys(setValues).length === 0) {
     return;
   }
@@ -1259,8 +1231,6 @@ async function applyJunctionOwnedMutation(
     parentRow,
   );
 
-  assertJunctionPayloadWritable(relation, mutation.kind);
-
   if (isFilteredWrite(mutation)) {
     await applyFilteredWrite(
       scope,
@@ -1268,7 +1238,6 @@ async function applyJunctionOwnedMutation(
       resolved,
       relation,
       buildJunctionMembershipWhere(contract, relation, parentPkValues),
-      new Set(),
       mutation,
     );
     return;
@@ -1304,11 +1273,7 @@ async function applyJunctionOwnedMutation(
     return;
   }
 
-  if (!mutation.criteria || mutation.criteria.length === 0) {
-    throw junctionDisconnectMissingCriteriaError(relation);
-  }
-
-  for (const criterion of mutation.criteria) {
+  for (const criterion of mutation.criteria ?? []) {
     const targetPkValues = await resolveJunctionTargetValues(
       scope,
       context,
@@ -1326,9 +1291,6 @@ async function preflightJunctionOwnedCreateMutation(
   relation: JunctionRelationDefinition,
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): Promise<void> {
-  assertJunctionMetadataShape(relation);
-  assertJunctionPayloadWritable(relation, mutation.kind);
-
   if (mutation.kind !== 'connect') {
     return;
   }
