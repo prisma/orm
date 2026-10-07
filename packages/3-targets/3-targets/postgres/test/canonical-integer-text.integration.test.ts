@@ -62,7 +62,7 @@ describe('the integer codecs that carry digit text, against Postgres', () => {
               expected[key] =
                 printed === spelling
                   ? `reads, writes ${JSON.stringify(printed)}`
-                  : `${codec.id} JSON value must be "${printed}", as the database writes this value`;
+                  : `${codec.id} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`;
             }
           }
           expect(observed).toEqual(expected);

@@ -88,7 +88,7 @@ export const SAFE_INTEGER_BIGINT_RANGE: BigIntRange = {
 const DECIMAL_INTEGER_TEXT = /^-?\d+$/;
 
 /**
- * Reads an integer a codec writes as decimal text, because a JSON number cannot hold every value of its type. The text must be as the database writes the value, with no leading zeros and no minus sign on zero; another spelling is refused with the text to write, as `"7"` for `"007"`.
+ * Reads an integer a codec writes as decimal text, because a JSON number cannot hold every value of its type. The text must be the integer's decimal text, with no leading zeros and no minus sign on zero; another spelling is refused with the text to write, as `"7"` for `"007"`.
  */
 export function decodeJsonIntegerText(
   codecId: string,
@@ -105,7 +105,11 @@ export function decodeJsonIntegerText(
   }
   const written = value.toString();
   if (json !== written) {
-    return refuseJsonValue(codecId, `"${written}", as the database writes this value`, json);
+    return refuseJsonValue(
+      codecId,
+      `"${written}", the integer's decimal text without leading zeros or a minus sign on zero`,
+      json,
+    );
   }
   return value;
 }

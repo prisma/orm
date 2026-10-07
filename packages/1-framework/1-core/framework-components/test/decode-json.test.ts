@@ -147,7 +147,11 @@ describe('decodeJsonIntegerText', () => {
   ])('refuses %s, naming the text the database writes', (_name, json, printed) => {
     for (const bounds of [range, undefined]) {
       expect(() => decodeJsonIntegerText('demo/big@1', json, bounds)).toThrow(
-        refusal('demo/big@1', `"${printed}", as the database writes this value`, `"${json}"`),
+        refusal(
+          'demo/big@1',
+          `"${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+          `"${json}"`,
+        ),
       );
     }
   });

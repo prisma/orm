@@ -95,7 +95,7 @@ PSL_EXTENSION_INVALID_VALUE: enum "Ratio" member "Half" was rejected by codec "p
 Rewrite each member as the message says.
 
 - For a numeric or inet enum, the contract held the member as written, so follow steps 2 and 3 of `ts-numeric-inet-enum-members-written-as-postgres-prints`.
-- For an enum typed by `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1`, such as a member written `"007"` or `"-0"`, earlier versions stored it as Postgres prints it, `"7"` or `"0"`. Write it that way and re-emit; `contract.json`, the CHECK constraint and every hash are unchanged. The message for these codecs ends `as the database writes this value`.
+- For an enum typed by `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1`, such as a member written `"007"` or `"-0"`, earlier versions stored it as Postgres prints it, `"7"` or `"0"`. Write it that way and re-emit; `contract.json`, the CHECK constraint and every hash are unchanged. The message for these codecs ends `the integer's decimal text without leading zeros or a minus sign on zero`.
 
 ## `numeric-inet-defaults-stored-as-postgres-prints`
 
@@ -182,16 +182,16 @@ A numeric enum's CHECK constraint, on a scalar or a list column, compares values
 
 ## `sqlite-integer-text-enum-members-refused`
 
-The SQLite integer codecs store an integer as digit text, and now read only the text the database writes: no leading zeros and no minus sign on zero. A PSL enum member written another way is refused:
+The SQLite integer codecs store an integer as digit text, and now read only the integer's decimal text: no leading zeros and no minus sign on zero. A PSL enum member written another way is refused:
 
 ```text
-PSL_EXTENSION_INVALID_VALUE: enum "BigLevel" member "Low" was rejected by codec "sqlite/bigint@1": sqlite/bigint@1 JSON value must be "7", as the database writes this value
+PSL_EXTENSION_INVALID_VALUE: enum "BigLevel" member "Low" was rejected by codec "sqlite/bigint@1": sqlite/bigint@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero
 ```
 
-Earlier versions stored such a member as the database writes it, so rewrite it as the message says, `"7"` for `"007"` and `"0"` for `"-0"`, and re-emit. `contract.json`, the CHECK constraint and every hash are unchanged.
+Earlier versions stored such a member in that form, so rewrite it as the message says, `"7"` for `"007"` and `"0"` for `"-0"`, and re-emit. `contract.json`, the CHECK constraint and every hash are unchanged.
 
 ## `integer-text-in-contract-json-refused`
 
-The same rule holds when a contract is loaded. `contract emit` writes these values as the database writes them, so a `contract.json` holds another spelling only when it was written or edited by hand. Loading it fails with `RUNTIME.DECODE_FAILED`, as in `mongo/int64@1 JSON value must be "7", as the database writes this value`. Rewrite each value the message names, or re-emit the contract from its source.
+The same rule holds when a contract is loaded. `contract emit` writes these values without leading zeros or a minus sign on zero, so a `contract.json` holds another spelling only when it was written or edited by hand. Loading it fails with `RUNTIME.DECODE_FAILED`, as in `mongo/int64@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero`. Rewrite each value the message names, or re-emit the contract from its source.
 
 The detection for this change matches a `contract.json` that names one of these codecs and holds a string such as `"007"` or `"-0"` anywhere, even on another codec. Check only the values typed by these codecs.

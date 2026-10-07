@@ -179,7 +179,7 @@ describe('decodeJson reads the stored JSON form of its type and refuses any othe
 });
 
 describe.each([mongoInt64Codec, mongoInt64NumberCodec])(
-  '$id digit text as the database writes it',
+  '$id digit text without leading zeros or a minus sign on zero',
   (codec) => {
     it.each([
       ['a leading zero', '007', '7'],
@@ -188,7 +188,7 @@ describe.each([mongoInt64Codec, mongoInt64NumberCodec])(
       ['two zeros', '00', '0'],
     ])('refuses %s, naming the text to write', (_name, json, printed) => {
       expect(() => codec.decodeJson(json)).toThrow(
-        `${codec.id} JSON value must be "${printed}", as the database writes this value`,
+        `${codec.id} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
       );
     });
   },
