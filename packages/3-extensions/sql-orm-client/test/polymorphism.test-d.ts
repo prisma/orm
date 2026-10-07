@@ -3,6 +3,7 @@ import type { AsyncIterableResult } from '@internal/framework-components/runtime
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
+import { bindCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import type {
   CreateInput,
@@ -349,14 +350,25 @@ test('orderBy after variant("feature") on an include refinement exposes the MTI 
 });
 
 test('createModelAccessor with a selected variant returns a variant-aware accessor', () => {
-  const task = createModelAccessor(executionContext, '__unbound__', 'Task', 'Feature');
+  const task = createModelAccessor(
+    executionContext,
+    '__unbound__',
+    'Task',
+    bindCollectionTables(executionContext.contract, '__unbound__', 'Task'),
+    'Feature',
+  );
   expectTypeOf(task).toHaveProperty('priority');
   expectTypeOf(task).toHaveProperty('title');
   task.priority.gte(3);
 });
 
 test('createModelAccessor without a selected variant returns the base accessor', () => {
-  const task = createModelAccessor(executionContext, '__unbound__', 'Task');
+  const task = createModelAccessor(
+    executionContext,
+    '__unbound__',
+    'Task',
+    bindCollectionTables(executionContext.contract, '__unbound__', 'Task'),
+  );
   expectTypeOf(task).toHaveProperty('title');
   // @ts-expect-error priority is an MTI variant field, absent without a selected variant
   task.priority;

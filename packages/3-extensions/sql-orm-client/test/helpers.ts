@@ -24,7 +24,12 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import type { RuntimeQueryable } from '../src/types';
+import {
+  bindCollectionTables,
+  bindStatementTable,
+  type CollectionTables,
+} from '../src/collection-tables';
+import { type CollectionState, emptyState, type RuntimeQueryable } from '../src/types';
 import type { TableReferences } from '../src/where-binding';
 import { defineContract, field, model, rel, type ScalarFieldBuilder } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
@@ -33,6 +38,39 @@ import { defineTestCodec } from './test-codec';
 
 export function publicTables(...tableNames: string[]): TableReferences {
   return new Map(tableNames.map((tableName) => [tableName, { namespaceId: 'public', tableName }]));
+}
+
+export function tablesForTable(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  namespaceId = 'public',
+): CollectionTables {
+  const models = Object.entries(contract.domain.namespaces[namespaceId]?.models ?? {}).filter(
+    ([, model]) => model.storage['table'] === tableName,
+  );
+  const [modelName] = models.find(([, model]) => model.base === undefined) ?? models[0] ?? [];
+  return modelName === undefined
+    ? bindStatementTable({ namespaceId, tableName })
+    : bindCollectionTables(contract, namespaceId, modelName, tableName);
+}
+
+export type StateFields = Partial<Omit<CollectionState, 'tables'>>;
+
+export function tableState(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  fields: StateFields = {},
+  namespaceId = 'public',
+): CollectionState {
+  return { ...emptyState(tablesForTable(contract, tableName, namespaceId)), ...fields };
+}
+
+export function emptyTableState(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  namespaceId = 'public',
+): CollectionState {
+  return tableState(contract, tableName, {}, namespaceId);
 }
 
 export function isSelectAst(ast: unknown): ast is SelectAst {

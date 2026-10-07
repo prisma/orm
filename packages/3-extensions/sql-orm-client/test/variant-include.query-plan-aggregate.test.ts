@@ -8,9 +8,14 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan';
-import { emptyState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
-import { buildMixedPolyContract, getTestAggregates, isSelectAst, publicTables } from './helpers';
+import {
+  buildMixedPolyContract,
+  getTestAggregates,
+  isSelectAst,
+  publicTables,
+  tableState,
+} from './helpers';
 import { featureJoin } from './variant-include.query-plan-fixtures';
 
 function expectSelectAst(ast: unknown): asserts ast is SelectAst {
@@ -40,9 +45,7 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter] },
+      tableState(contract, 'tasks', { variantName: 'Feature', filters: [filter] }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -62,9 +65,7 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter], limit: 10 },
+      tableState(contract, 'tasks', { variantName: 'Feature', filters: [filter], limit: 10 }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -85,14 +86,11 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      {
-        ...emptyState(),
+      tableState(contract, 'tasks', {
         variantName: 'Feature',
         orderBy: [OrderByItem.desc(ColumnRef.of('features', 'priority'))],
         limit: 10,
-      },
+      }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -114,15 +112,12 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      {
-        ...emptyState(),
+      tableState(contract, 'tasks', {
         variantName: 'Feature',
         distinct: ['title'],
         orderBy: [OrderByItem.desc(ColumnRef.of('features', 'priority'))],
         limit: 10,
-      },
+      }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -150,9 +145,7 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Bug', filters: [filter] },
+      tableState(contract, 'tasks', { variantName: 'Bug', filters: [filter] }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -179,9 +172,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const plan = compileGroupedAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter], limit: 10 },
+      tableState(contract, 'tasks', { variantName: 'Feature', filters: [filter], limit: 10 }),
       ['project_id'],
       { total: { kind: 'aggregate', fn: 'count' } },
       undefined,
@@ -205,9 +196,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const plan = compileGroupedAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter] },
+      tableState(contract, 'tasks', { variantName: 'Feature', filters: [filter] }),
       ['project_id'],
       { total: { kind: 'aggregate', fn: 'count' } },
       undefined,
@@ -229,9 +218,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const plan = compileGroupedAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Bug', filters: [filter] },
+      tableState(contract, 'tasks', { variantName: 'Bug', filters: [filter] }),
       ['project_id'],
       { total: { kind: 'aggregate', fn: 'count' } },
       undefined,

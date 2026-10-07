@@ -32,6 +32,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { Expression } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
+import { bindCollectionTables } from '../src/collection-tables';
 import { shorthandToWhereExpr } from '../src/filters';
 import { COMPARISON_METHODS_META } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
@@ -289,9 +290,15 @@ describe('structured nullable prepared comparisons', () => {
     expect(() => comparison([id, optional])).toThrow(/nullable prepared parameter/i);
   });
   it('creates null-safe shorthand equality before binding', () => {
-    expect(shorthandToWhereExpr(getTestContext(), 'public', 'User', { id: optional })).toEqual(
-      new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()),
-    );
+    expect(
+      shorthandToWhereExpr(
+        getTestContext(),
+        'public',
+        'User',
+        { id: optional },
+        bindCollectionTables(getTestContext().contract, 'public', 'User').root,
+      ),
+    ).toEqual(new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()));
   });
   it.each(['eq', 'neq'] as const)('preserves explicitly authored %s', (op) => {
     for (const [left, right] of [

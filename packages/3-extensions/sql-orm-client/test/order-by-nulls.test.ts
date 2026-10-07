@@ -24,7 +24,7 @@ describe('orderBy null placement', () => {
       .orderBy((user) => user.id.asc({ nulls: 'first' }))
       .select('id').state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, state);
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('users', 'name'), { nulls: 'last' }),
@@ -38,13 +38,7 @@ describe('orderBy null placement', () => {
       posts.orderBy((post) => post.title.desc({ nulls: 'last' })).limit(2),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('posts', 'title'), { nulls: 'last' }),
@@ -62,13 +56,7 @@ describe('orderBy null placement', () => {
         .sum('views'),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('posts', 'views'), { nulls: 'last' }),
@@ -84,13 +72,7 @@ describe('orderBy null placement', () => {
       posts.distinct('title').orderBy((post) => post.views.desc({ nulls: 'last' })),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('posts', 'views'), { nulls: 'last' }),
@@ -108,13 +90,7 @@ describe('orderBy null placement', () => {
         .include('comments'),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('posts', 'views'), { nulls: 'last' }),

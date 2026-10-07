@@ -21,7 +21,7 @@ import {
   compileUpsertReturning,
 } from '../src/query-plan';
 import { withReturningCapability } from './collection-fixtures';
-import { getTestContract } from './helpers';
+import { getTestContract, tablesForTable } from './helpers';
 import { unboundTables } from './unbound-tables';
 
 function assertInsertAst(ast: unknown): asserts ast is InsertAst {
@@ -392,12 +392,21 @@ describe('query plan mutations', () => {
   it('compileUpdateCount() and compileDeleteCount() omit WHERE when filters are empty', () => {
     const contract = getTestContract();
 
-    const updatePlan = compileUpdateCount(contract, 'public', 'users', { name: 'Alice' }, []);
+    const updatePlan = compileUpdateCount(
+      contract,
+      tablesForTable(contract, 'users', 'public'),
+      { name: 'Alice' },
+      [],
+    );
     expect(updatePlan.ast.kind).toBe('update');
     expect((updatePlan.ast as UpdateAst).where).toBeUndefined();
     expect(updatePlan.params).toEqual(['Alice']);
 
-    const deletePlan = compileDeleteCount(contract, 'public', 'users', []);
+    const deletePlan = compileDeleteCount(
+      contract,
+      tablesForTable(contract, 'users', 'public'),
+      [],
+    );
     expect(deletePlan.ast.kind).toBe('delete');
     expect((deletePlan.ast as DeleteAst).where).toBeUndefined();
     expect(deletePlan.params).toEqual([]);
@@ -434,8 +443,7 @@ describe('query plan mutations', () => {
       const contract = withReturningCapability(getTestContract());
       const plan = compileUpdateReturning(
         contract,
-        'public',
-        'users',
+        tablesForTable(contract, 'users', 'public'),
         { name: 'Alice' },
         [eqOnUserId(7)],
         undefined,
@@ -447,9 +455,12 @@ describe('query plan mutations', () => {
 
     it('compileUpdateCount() preserves WHERE when filters are present', () => {
       const contract = getTestContract();
-      const plan = compileUpdateCount(contract, 'public', 'users', { name: 'Bob' }, [
-        eqOnUserId(9),
-      ]);
+      const plan = compileUpdateCount(
+        contract,
+        tablesForTable(contract, 'users', 'public'),
+        { name: 'Bob' },
+        [eqOnUserId(9)],
+      );
       expect((plan.ast as UpdateAst).where).toBeDefined();
       expect(plan.params).toEqual(['Bob', 9]);
     });
@@ -458,15 +469,19 @@ describe('query plan mutations', () => {
       const contract = withReturningCapability(getTestContract());
       const planWithWhere = compileDeleteReturning(
         contract,
-        'public',
-        'users',
+        tablesForTable(contract, 'users', 'public'),
         [eqOnUserId(3)],
         undefined,
       );
       expect((planWithWhere.ast as DeleteAst).where).toBeDefined();
       expect(planWithWhere.params).toEqual([3]);
 
-      const planNoWhere = compileDeleteReturning(contract, 'public', 'users', [], undefined);
+      const planNoWhere = compileDeleteReturning(
+        contract,
+        tablesForTable(contract, 'users', 'public'),
+        [],
+        undefined,
+      );
       expect((planNoWhere.ast as DeleteAst).where).toBeUndefined();
       expect(planNoWhere.params).toEqual([]);
     });
@@ -476,14 +491,24 @@ describe('query plan mutations', () => {
     it('compileUpdateCount() rejects an unknown table', () => {
       const contract = getTestContract();
       expect(() =>
-        compileUpdateCount(contract, 'public', 'missing_table', { name: 'X' }, []),
+        compileUpdateCount(
+          contract,
+          tablesForTable(contract, 'missing_table', 'public'),
+          { name: 'X' },
+          [],
+        ),
       ).toThrowError(/Unknown table "missing_table"/);
     });
 
     it('compileUpdateCount() rejects an unknown column for the table', () => {
       const contract = getTestContract();
       expect(() =>
-        compileUpdateCount(contract, 'public', 'users', { not_a_real_column: 'X' }, []),
+        compileUpdateCount(
+          contract,
+          tablesForTable(contract, 'users', 'public'),
+          { not_a_real_column: 'X' },
+          [],
+        ),
       ).toThrowError(/Unknown column "not_a_real_column" in table "users"/);
     });
 

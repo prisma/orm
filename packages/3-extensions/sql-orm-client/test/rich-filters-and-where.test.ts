@@ -9,6 +9,7 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { bindCollectionTables } from '../src/collection-tables';
 import { all, and, not, or } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
 import { normalizeWhereArg } from '../src/where-interop';
@@ -30,7 +31,12 @@ describe('SQL ORM rich AST filters', () => {
   const context = getTestContext();
 
   it('builds scalar and relation filters as AST instances', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      bindCollectionTables(context.contract, 'public', 'User'),
+    );
     const expr = and(
       user['name']!.eq('Alice'),
       user['posts']!.some((post) => post['views']!.gt(10)),

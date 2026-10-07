@@ -40,7 +40,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -71,7 +70,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -103,7 +101,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('invitedBy', (user) => user.select('name')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -134,7 +131,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -151,7 +147,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -171,7 +166,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -222,7 +216,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -262,7 +255,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -292,7 +284,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -322,7 +313,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -343,7 +333,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -377,7 +366,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -397,7 +385,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows<{ userId: number }>({
       context: collection.ctx.context,
       state: collection.select('userId').state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -429,7 +416,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });

@@ -8,8 +8,8 @@ import { baseContract, createCollectionFor } from './collection-fixtures';
 
 const adapter = createPostgresAdapter();
 
-function sqlOf(tableName: string, state: CollectionState): string {
-  const plan = compileSelect(baseContract, 'public', tableName, state);
+function sqlOf(state: CollectionState): string {
+  const plan = compileSelect(baseContract, state);
   return adapter.lower(plan.ast, {
     contract: baseContract as unknown as PostgresContract,
     params: plan.params,
@@ -26,7 +26,7 @@ describe('table references in relation filters', () => {
       ),
     ).state;
 
-    expect(sqlOf('users', state)).toMatchInlineSnapshot(
+    expect(sqlOf(state)).toMatchInlineSnapshot(
       `"SELECT "users"."id" AS "id" FROM "public"."users" WHERE (EXISTS (SELECT "posts"."user_id" AS "_exists" FROM "public"."posts" WHERE ("posts"."user_id" = "users"."id" AND "posts"."views" > $1)) AND NOT EXISTS (SELECT "posts_2"."user_id" AS "_exists" FROM "public"."posts" AS "posts_2" WHERE ("posts_2"."user_id" = "users"."id" AND "posts_2"."views" > $2)))"`,
     );
   });
@@ -41,7 +41,7 @@ describe('table references in relation filters', () => {
         ),
       ).state;
 
-    expect(sqlOf('users', state)).toMatchInlineSnapshot(
+    expect(sqlOf(state)).toMatchInlineSnapshot(
       `"SELECT "users"."id" AS "id" FROM "public"."users" WHERE EXISTS (SELECT "users_2"."invited_by_id" AS "_exists" FROM "public"."users" AS "users_2" WHERE ("users_2"."invited_by_id" = "users"."id" AND EXISTS (SELECT "users_3"."invited_by_id" AS "_exists" FROM "public"."users" AS "users_3" WHERE ("users_3"."invited_by_id" = "users_2"."id" AND "users_3"."name" = $1))))"`,
     );
   });

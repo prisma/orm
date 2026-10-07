@@ -17,15 +17,16 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { expect } from 'vitest';
-import {
-  type CollectionState,
-  emptyState,
-  type IncludeExpr,
-  type IncludeScalar,
-  type IncludeThroughDescriptor,
-  type RelationCardinalityTag,
+import type {
+  CollectionState,
+  IncludeExpr,
+  IncludeScalar,
+  IncludeThroughDescriptor,
+  RelationCardinalityTag,
 } from '../src/types';
-import { isSelectAst } from './helpers';
+import { buildMixedPolyContract, isSelectAst, type StateFields, tableState } from './helpers';
+
+const fixtureContract = buildMixedPolyContract();
 
 export function includeExpr(options: {
   relationName: string;
@@ -35,7 +36,7 @@ export function includeExpr(options: {
   targetColumn: string;
   localColumn: string;
   cardinality: RelationCardinalityTag;
-  nested?: CollectionState;
+  nested?: StateFields;
   scalar?: IncludeScalar<unknown>;
   through?: IncludeThroughDescriptor;
 }): IncludeExpr {
@@ -49,14 +50,14 @@ export function includeExpr(options: {
     localColumns: [options.localColumn],
     cardinality: options.cardinality,
     ...ifDefined('through', options.through),
-    nested: options.nested ?? emptyState(),
+    nested: tableState(fixtureContract, options.relatedTableName, options.nested),
     scalar: options.scalar,
     combine: undefined,
   };
 }
 
-export function selectedState(...fields: string[]): CollectionState {
-  return { ...emptyState(), selectedFields: fields };
+export function selectedState(...fields: string[]): StateFields {
+  return { selectedFields: fields };
 }
 
 export function rootState(
@@ -64,12 +65,11 @@ export function rootState(
   variantName: string,
   ...fields: string[]
 ): CollectionState {
-  return {
-    ...emptyState(),
+  return tableState(fixtureContract, 'tasks', {
     includes: [include],
     selectedFields: fields,
     variantName,
-  };
+  });
 }
 
 export function assigneeInclude(localTableName: string): IncludeExpr {
@@ -85,7 +85,7 @@ export function assigneeInclude(localTableName: string): IncludeExpr {
   });
 }
 
-export function tasksInclude(nested: CollectionState): IncludeExpr {
+export function tasksInclude(nested: StateFields): IncludeExpr {
   return includeExpr({
     relationName: 'tasks',
     relatedModelName: 'Task',

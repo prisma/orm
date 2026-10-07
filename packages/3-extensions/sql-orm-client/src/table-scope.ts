@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ColumnRef, type TableSource } from '@internal/sql-relational-core/ast';
+import { InternalError } from '@internal/utils/internal-error';
 import { tableSourceForContract } from './storage-resolution';
 
 const MAX_NAME_BYTES = 63;
@@ -37,7 +38,18 @@ function shortenToBytes(value: string, maxBytes: number): string {
 }
 
 class TableScopeImpl implements TableScope {
-  readonly #names = new Set<string>();
+  readonly #names: Set<string>;
+
+  constructor(names: Iterable<string> = []) {
+    this.#names = new Set(names);
+  }
+
+  static copyOf(scope: TableScope): TableScope {
+    if (!(scope instanceof TableScopeImpl)) {
+      throw new InternalError('copyTableScope() requires a scope made by createTableScope()');
+    }
+    return new TableScopeImpl(scope.#names);
+  }
 
   name(preferred: string): string {
     for (let n = 1; ; n += 1) {
@@ -53,6 +65,10 @@ class TableScopeImpl implements TableScope {
 
 export function createTableScope(): TableScope {
   return new TableScopeImpl();
+}
+
+export function copyTableScope(scope: TableScope): TableScope {
+  return TableScopeImpl.copyOf(scope);
 }
 
 export function bindTable(scope: TableScope, storage: TableStorageCoordinate): TableBinding {

@@ -3,17 +3,17 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   AndExpr,
   type AnyExpression,
-  ColumnRef,
   LiteralExpr,
   NullCheckExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { getFieldToColumnMap, modelOf, resolveModelTableName } from './collection-contract';
+import { getFieldToColumnMap, modelOf } from './collection-contract';
 import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
+import type { TableBinding } from './table-scope';
 import type { ShorthandWhereFilter } from './types';
 
 export function and(...exprs: AnyExpression[]): AndExpr {
@@ -41,9 +41,9 @@ export function shorthandToWhereExpr<
   namespaceId: NsId,
   modelName: ModelName,
   filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
+  table: TableBinding,
 ): AnyExpression | undefined {
   const contract = context.contract;
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
 
   const exprs: AnyExpression[] = [];
@@ -53,7 +53,7 @@ export function shorthandToWhereExpr<
     }
 
     const columnName = fieldToColumn[fieldName] ?? fieldName;
-    const left = ColumnRef.of(tableName, columnName);
+    const left = table.column(columnName);
 
     if (value === null) {
       exprs.push(NullCheckExpr.isNull(left));

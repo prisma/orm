@@ -32,15 +32,18 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
-import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
+import type { CollectionState, IncludeExpr } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollection, createCollectionFor } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   buildStiPolyContract,
+  emptyTableState,
   getTestAggregates,
   isSelectAst,
   publicTables,
+  type StateFields,
+  tableState,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
 
@@ -83,11 +86,11 @@ function expectDerivedTableSource(source: unknown): asserts source is DerivedTab
 describe('compileSelectWithIncludes', () => {
   it('binds unbound state filters at the select-plan boundary', () => {
     const state: CollectionState = {
-      ...emptyState(),
+      ...emptyTableState(baseContract, 'users'),
       filters: [BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@example.com'))],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, state);
 
     expectSelectAst(plan.ast);
     expect(plan.ast.where).toEqual(
@@ -105,13 +108,7 @@ describe('compileSelectWithIncludes', () => {
       .where((user) => user.name.eq('Alice'))
       .include('posts', (posts) => posts.where((post) => post.views.gte(100))).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
     expect(plan.params).toEqual([100, 'Alice']);
     expect(paramCodecs(plan)).toEqual([
       codecForColumn('posts', 'views'),
@@ -158,7 +155,7 @@ describe('compileSelectWithIncludes', () => {
       .offset(3)
       .select('id').state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, state);
     expectSelectAst(plan.ast);
     expect(plan.params).toEqual(['Alice', 'Alice', 7]);
     expect(paramCodecs(plan)).toEqual([
@@ -193,7 +190,7 @@ describe('compileSelectWithIncludes', () => {
     const { collection } = createCollection();
     const state = collection.orderBy((user) => user.id.asc()).cursor({ id: 9 }).state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, state);
     expectSelectAst(plan.ast);
     expect(plan.params).toEqual([9]);
     expect(paramCodecs(plan)).toEqual([codecForColumn('users', 'id')]);
@@ -209,7 +206,7 @@ describe('compileSelectWithIncludes', () => {
       ...collection.orderBy((user) => user.id.asc()).state,
       cursor: {},
     };
-    expect(() => compileSelect(baseContract, 'public', 'users', invalidState)).toThrow(
+    expect(() => compileSelect(baseContract, invalidState)).toThrow(
       'Missing cursor value for orderBy column "id"',
     );
   });
@@ -229,7 +226,7 @@ describe('compileSelectWithIncludes', () => {
       orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'id')), OrderByItem.desc(opExpr)],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, state);
     expectSelectAst(plan.ast);
 
     expect(plan.ast.orderBy).toEqual([
@@ -259,7 +256,7 @@ describe('compileSelectWithIncludes', () => {
       cursor: { id: 5 },
     };
 
-    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow(
+    expect(() => compileSelect(baseContract, state)).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: expect.stringContaining('orderBy item 2'),
@@ -284,7 +281,7 @@ describe('compileSelectWithIncludes', () => {
       filters: [whereExpr],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, state);
     expectSelectAst(plan.ast);
 
     expect(plan.params).toEqual([[1, 2, 3]]);
@@ -322,7 +319,7 @@ describe('compileSelectWithIncludes', () => {
       orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'id')), OrderByItem.asc(orderOpExpr)],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, state);
     expectSelectAst(plan.ast);
 
     expect(plan.ast.orderBy).toEqual([
@@ -346,13 +343,7 @@ describe('compileSelectWithIncludes', () => {
         .limit(2),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
     expectSelectAst(plan.ast);
     expect(plan.ast.joins ?? []).toHaveLength(0);
 
@@ -381,7 +372,7 @@ describe('compileSelectWithIncludes', () => {
       posts.select('embedding').distinct('embedding'),
     ).state;
 
-    const plan = compileSelectWithIncludes(contract, getTestAggregates(), 'public', 'users', state);
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), state);
     expectSelectAst(plan.ast);
 
     const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
@@ -439,13 +430,7 @@ describe('compileSelectWithIncludes', () => {
       const { collection } = createCollection();
       const state = collection.include('posts', (posts) => posts.count()).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
       expectAggregateProjection(subquery, 'posts', AggregateExpr.count(), 'pg/int8number@1');
@@ -464,13 +449,7 @@ describe('compileSelectWithIncludes', () => {
         posts.where((post) => post.views.gte(100)).count(),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
       expectAggregateProjection(subquery, 'posts', AggregateExpr.count(), 'pg/int8number@1');
@@ -495,13 +474,7 @@ describe('compileSelectWithIncludes', () => {
         posts.orderBy((post) => post.id.asc()).count(),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
       expect(subquery.orderBy).toBeUndefined();
     });
@@ -518,13 +491,7 @@ describe('compileSelectWithIncludes', () => {
           .count(),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
       expectAggregateProjection(subquery, 'posts', AggregateExpr.count(), 'pg/int8number@1');
@@ -563,13 +530,7 @@ describe('compileSelectWithIncludes', () => {
           .sum('views'),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
       expectAggregateProjection(
@@ -619,13 +580,7 @@ describe('compileSelectWithIncludes', () => {
               return posts.max('views');
           }
         }).state;
-        const plan = compileSelectWithIncludes(
-          baseContract,
-          getTestAggregates(),
-          'public',
-          'users',
-          state,
-        );
+        const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
         const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
         expectAggregateProjection(subquery, 'posts', expected, resultCodecId);
       }
@@ -639,13 +594,7 @@ describe('compileSelectWithIncludes', () => {
         posts.include('comments', (comments) => comments.count()),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const postsSubquery = extractScalarCorrelatedSubquery(plan, 'posts');
       // The posts subquery's FROM is the child-rows derived table; its
       // inner SELECT carries the nested comments correlated subquery as
@@ -694,13 +643,7 @@ describe('compileSelectWithIncludes', () => {
         }),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
       // Outer projection is json_build_object referencing per-branch
@@ -741,13 +684,7 @@ describe('compileSelectWithIncludes', () => {
         }),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
       expectDerivedTableSource(subquery.from);
@@ -792,13 +729,7 @@ describe('compileSelectWithIncludes', () => {
         }),
       ).state;
 
-      const plan = compileSelectWithIncludes(
-        baseContract,
-        getTestAggregates(),
-        'public',
-        'users',
-        state,
-      );
+      const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
       const fkExpr = BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id'));
@@ -848,13 +779,7 @@ describe('M:N include correlated subquery', () => {
     //   user_tags.user_id -> users.id (correlation), user_tags.tag_id -> tags.id (join).
     const { collection } = createCollectionFor('User');
     const state = collection.include('tags').state;
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     const tagRows = SelectAst.from(TableSource.named('tags', undefined, 'public'))
       .withJoins([
@@ -916,13 +841,7 @@ describe('M:N include correlated subquery', () => {
     // join: project_links.dst_* -> related__child.*.
     const { collection } = createCollectionFor('Project');
     const state = collection.include('related').state;
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'projects',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     const relatedRows = SelectAst.from(TableSource.named('projects', 'related__child', 'public'))
       .withJoins([
@@ -1013,13 +932,7 @@ describe('M:N include correlated subquery', () => {
     const { collection } = createCollection();
     const state = collection.include('posts').state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
     expectSelectAst(plan.ast);
 
     const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
@@ -1049,13 +962,7 @@ describe('M:N include correlated subquery', () => {
     const state = collection.include('related', (related) =>
       related.distinct('name').include('related'),
     ).state;
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'projects',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     const junctionJoinOnto = (childRef: string): JoinAst =>
       JoinAst.inner(
@@ -1286,19 +1193,15 @@ describe('compileSelect MTI JOINs', () => {
       ),
     ];
 
-    const implicitPlan = compileSelect(contract, 'public', 'tasks', emptyState(), 'Task');
+    const implicitPlan = compileSelect(contract, emptyTableState(contract, 'tasks'), 'Task');
     const omittedMtiPlan = compileSelect(
       contract,
-      'public',
-      'tasks',
-      { ...emptyState(), selectedFields: ['id', 'title'] },
+      tableState(contract, 'tasks', { selectedFields: ['id', 'title'] }),
       'Task',
     );
     const selectedMtiPlan = compileSelect(
       contract,
-      'public',
-      'tasks',
-      { ...emptyState(), selectedFields: ['id', 'priority'] },
+      tableState(contract, 'tasks', { selectedFields: ['id', 'priority'] }),
       'Task',
     );
 
@@ -1328,7 +1231,7 @@ describe('compileSelect MTI JOINs', () => {
 
   it('variant query INNER JOINs the specific MTI variant table', () => {
     const contract = buildMixedPolyContract();
-    const state = { ...emptyState(), variantName: 'Feature' };
+    const state = tableState(contract, 'tasks', { variantName: 'Feature' });
     const tasksBaseProjection = projectionFor(contract, 'tasks', [
       'id',
       'title',
@@ -1351,7 +1254,7 @@ describe('compileSelect MTI JOINs', () => {
       ),
     ];
 
-    const plan = compileSelect(contract, 'public', 'tasks', state, 'Task');
+    const plan = compileSelect(contract, state, 'Task');
 
     expect(plan.ast).toEqual(
       SelectAst.from(TableSource.named('tasks', undefined, 'public'))
@@ -1365,7 +1268,7 @@ describe('compileSelect MTI JOINs', () => {
 
   it('STI-only variant query produces no JOINs', () => {
     const contract = buildMixedPolyContract();
-    const state = { ...emptyState(), variantName: 'Bug' };
+    const state = tableState(contract, 'tasks', { variantName: 'Bug' });
     const tasksBaseProjection = projectionFor(contract, 'tasks', [
       'id',
       'title',
@@ -1376,7 +1279,7 @@ describe('compileSelect MTI JOINs', () => {
       'assignee_id',
     ]);
 
-    const plan = compileSelect(contract, 'public', 'tasks', state, 'Task');
+    const plan = compileSelect(contract, state, 'Task');
 
     expect(plan.ast).toEqual(
       SelectAst.from(TableSource.named('tasks', undefined, 'public'))
@@ -1386,7 +1289,7 @@ describe('compileSelect MTI JOINs', () => {
   });
 
   it('non-polymorphic model produces no JOINs', () => {
-    const plan = compileSelect(baseContract, 'public', 'users', emptyState(), 'User');
+    const plan = compileSelect(baseContract, emptyTableState(baseContract, 'users'), 'User');
 
     expect(plan.ast).toEqual(
       SelectAst.from(TableSource.named('users', undefined, 'public'))
@@ -1403,7 +1306,7 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     contract: Contract<SqlStorage>,
     parentModel: string,
     relationName: string,
-    nested: CollectionState = emptyState(),
+    nested: StateFields = {},
     namespaceId = 'public',
   ): IncludeExpr {
     const relation = resolveIncludeRelation(contract, namespaceId, parentModel, relationName);
@@ -1416,14 +1319,14 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
       targetColumns: relation.targetColumns,
       localColumns: relation.localColumns,
       cardinality: relation.cardinality,
-      nested,
+      nested: tableState(contract, relation.relatedTableName, nested, relation.relatedNamespaceId),
       scalar: undefined,
       combine: undefined,
     };
   }
 
-  function stateWithInclude(include: IncludeExpr): CollectionState {
-    return { ...emptyState(), includes: [include] };
+  function stateWithInclude(contract: Contract<SqlStorage>, include: IncludeExpr): CollectionState {
+    return tableState(contract, include.localTableName, { includes: [include] });
   }
 
   function childRowsSelectFor(plan: { ast: unknown }, relationName: string): SelectAst {
@@ -1441,16 +1344,9 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
 
   it('STI-target include projects discriminator and variant base-table columns, no joins', () => {
     const contract = buildStiPolyContract();
-    const state = stateWithInclude(includeFor(contract, 'Account', 'members'));
+    const state = stateWithInclude(contract, includeFor(contract, 'Account', 'members'));
 
-    const plan = compileSelectWithIncludes(
-      contract,
-      getTestAggregates(),
-      'public',
-      'accounts',
-      state,
-      'Account',
-    );
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Account');
     const childRows = childRowsSelectFor(plan, 'members');
 
     expect(childRows.joins ?? []).toHaveLength(0);
@@ -1462,25 +1358,19 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
 
   it('MTI-target include selection controls variant projections while implicit selection retains them', () => {
     const contract = buildMixedPolyContract();
-    const implicitState = stateWithInclude(includeFor(contract, 'Project', 'tasks'));
+    const implicitState = stateWithInclude(contract, includeFor(contract, 'Project', 'tasks'));
     const omittedMtiState = stateWithInclude(
-      includeFor(contract, 'Project', 'tasks', {
-        ...emptyState(),
-        selectedFields: ['id', 'title'],
-      }),
+      contract,
+      includeFor(contract, 'Project', 'tasks', { selectedFields: ['id', 'title'] }),
     );
     const selectedMtiState = stateWithInclude(
-      includeFor(contract, 'Project', 'tasks', {
-        ...emptyState(),
-        selectedFields: ['id', 'priority'],
-      }),
+      contract,
+      includeFor(contract, 'Project', 'tasks', { selectedFields: ['id', 'priority'] }),
     );
 
     const implicitPlan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'projects_tbl',
       implicitState,
       'Project',
     );
@@ -1507,8 +1397,6 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     const omittedMtiPlan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'projects_tbl',
       omittedMtiState,
       'Project',
     );
@@ -1520,8 +1408,6 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     const selectedMtiPlan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'projects_tbl',
       selectedMtiState,
       'Project',
     );
@@ -1534,20 +1420,10 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
 
   it('variant-narrowed MTI-target include inner-joins only the named variant', () => {
     const contract = buildMixedPolyContract();
-    const include = includeFor(contract, 'Project', 'tasks', {
-      ...emptyState(),
-      variantName: 'Feature',
-    });
-    const state = stateWithInclude(include);
+    const include = includeFor(contract, 'Project', 'tasks', { variantName: 'Feature' });
+    const state = stateWithInclude(contract, include);
 
-    const plan = compileSelectWithIncludes(
-      contract,
-      getTestAggregates(),
-      'public',
-      'projects_tbl',
-      state,
-      'Project',
-    );
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Project');
     const childRows = childRowsSelectFor(plan, 'tasks');
 
     expect(childRows.joins).toEqual([
@@ -1564,16 +1440,9 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     // `subtasks` is a Task→Task self relation; the child base table is
     // aliased, so the variant join ON must reference the alias rather
     // than the unaliased base table name.
-    const state = stateWithInclude(includeFor(contract, 'Task', 'subtasks'));
+    const state = stateWithInclude(contract, includeFor(contract, 'Task', 'subtasks'));
 
-    const plan = compileSelectWithIncludes(
-      contract,
-      getTestAggregates(),
-      'public',
-      'tasks',
-      state,
-      'Task',
-    );
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Task');
     const childRows = childRowsSelectFor(plan, 'subtasks');
 
     expect(childRows.joins).toEqual([

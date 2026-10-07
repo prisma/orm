@@ -2,9 +2,8 @@ import { soleDomainNamespaceId } from '@internal/contract/types';
 import { ColumnRef, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
-import { emptyState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { createMockRuntime, getTestContext, withCapabilities } from './helpers';
+import { createMockRuntime, emptyTableState, getTestContext, withCapabilities } from './helpers';
 
 // Mirrors the sql-builder lane's proof shape for the identical gate
 // (`test/e2e/framework/test/sqlite/sql-builder.test.ts:345-352`): a
@@ -46,7 +45,7 @@ describe('distinctOn() capability gate', () => {
     const collection = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },
@@ -67,7 +66,7 @@ describe('distinctOn() capability gate', () => {
     const collection = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },
@@ -87,7 +86,7 @@ describe('distinctOn() capability gate', () => {
     const userCollection = new Collection({ runtime, context }, 'User', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'users'),
         orderBy: [OrderByItem.asc(ColumnRef.of('users', 'name'))],
         distinctOn: ['name'],
       },
@@ -114,7 +113,7 @@ describe('distinctOn() capability gate', () => {
     const unrelated = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },
@@ -143,7 +142,7 @@ describe('distinctOn() capability gate', () => {
       namespaceId: soleDomainNamespaceId(contract.domain),
       includeRefinementMode: true,
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },

@@ -2,12 +2,9 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
-  type AstRewriter,
   BinaryExpr,
-  ColumnRef,
   DefaultValueExpr,
   DeleteAst,
-  EqColJoinOn,
   ExistsExpr,
   InsertAst,
   InsertOnConflict,
@@ -15,26 +12,31 @@ import {
   ParamRef,
   ProjectionItem,
   SelectAst,
-  TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { resolvePolymorphismInfo, resolvePrimaryKeyColumns } from './collection-contract';
+import { resolvePrimaryKeyColumns } from './collection-contract';
+import type { CollectionTables } from './collection-tables';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
-import { storageTableForContract, tableSourceForContract } from './storage-resolution';
+import { storageTableForContract } from './storage-resolution';
+import { bindTable, copyTableScope, createTableScope, type TableBinding } from './table-scope';
 import { combineWhereExprs } from './where-utils';
+
+function bindTarget(namespaceId: string, tableName: string): TableBinding {
+  return bindTable(createTableScope(), { namespaceId, tableName });
+}
 
 function buildReturningColumns(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  target: TableBinding,
   returningColumns: readonly string[] | undefined,
 ): ReadonlyArray<ProjectionItem> {
+  const { namespaceId, tableName } = target.storage;
   const columns =
     returningColumns && returningColumns.length > 0
       ? [...returningColumns]
@@ -43,7 +45,7 @@ function buildReturningColumns(
   return columns.map((column) =>
     ProjectionItem.of(
       column,
-      ColumnRef.of(tableName, column),
+      target.column(column),
       codecRefForStorageColumn(contract.storage, namespaceId, tableName, column),
     ),
   );
@@ -143,13 +145,13 @@ export interface InsertConflictSkip {
 }
 
 function conflictSkipClause(
-  tableName: string,
+  target: TableBinding,
   conflictSkip: InsertConflictSkip | undefined,
 ): InsertOnConflict | undefined {
   if (!conflictSkip) return undefined;
   if (conflictSkip.columns.length === 0) return InsertOnConflict.doNothing();
   return InsertOnConflict.on(
-    conflictSkip.columns.map((column) => ColumnRef.of(tableName, column)),
+    conflictSkip.columns.map((column) => target.column(column)),
   ).doNothing();
 }
 
@@ -161,11 +163,12 @@ export function compileInsertReturning(
   returningColumns: readonly string[] | undefined,
   conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
+  const target = bindTarget(namespaceId, tableName);
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
-  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+  const ast = InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
-    .withOnConflict(conflictSkipClause(tableName, conflictSkip))
-    .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
+    .withOnConflict(conflictSkipClause(target, conflictSkip))
+    .withReturning(buildReturningColumns(contract, target, returningColumns));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -177,10 +180,11 @@ export function compileInsertCount(
   rows: readonly Record<string, unknown>[],
   conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
+  const target = bindTarget(namespaceId, tableName);
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
-  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+  const ast = InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
-    .withOnConflict(conflictSkipClause(tableName, conflictSkip));
+    .withOnConflict(conflictSkipClause(target, conflictSkip));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -195,59 +199,35 @@ function stripUndefinedValues(row: Record<string, unknown>): Record<string, unkn
   return result;
 }
 
-function createTableRefRemapper(fromTable: string, toTable: string): AstRewriter {
-  return {
-    columnRef: (col) => (col.table === fromTable ? ColumnRef.of(toTable, col.column) : col),
-    tableSource: (source) => {
-      if (source.alias === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      if (!source.alias && source.name === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      return source;
-    },
-    eqColJoinOn: (on) =>
-      EqColJoinOn.of(
-        on.left.table === fromTable ? ColumnRef.of(toTable, on.left.column) : on.left,
-        on.right.table === fromTable ? ColumnRef.of(toTable, on.right.column) : on.right,
-      ),
-  };
-}
-
 function buildCountMutationWhere(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
-  variantName?: string | undefined,
-  modelName?: string | undefined,
+  variantName: string | undefined,
 ): AnyExpression | undefined {
-  if (!variantName || !modelName) {
+  const variantTable = variantName === undefined ? undefined : tables.variants.get(variantName);
+  if (variantTable === undefined) {
     return combineWhereExprs(filters);
   }
 
-  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
-  const variant = polyInfo?.variants.get(variantName);
-  if (!polyInfo || !variant || variant.strategy !== 'mti') {
-    return combineWhereExprs(filters);
-  }
-
-  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, tableName);
-  const baseTableRef = `${tableName}__write_filter`;
-  const remapper = createTableRefRemapper(tableName, baseTableRef);
-  const innerFilters = filters.map((filter) => filter.rewrite(remapper));
-  const correlation = pkColumns.map((column) =>
-    BinaryExpr.eq(ColumnRef.of(baseTableRef, column), ColumnRef.of(tableName, column)),
+  const { root } = tables;
+  const pkColumns = resolvePrimaryKeyColumns(
+    contract,
+    root.storage.namespaceId,
+    root.storage.tableName,
   );
-  const where = combineWhereExprs([...correlation, ...innerFilters]);
-  const joinOn = buildPrimaryKeyJoinOn(baseTableRef, variant.table, pkColumns);
-  let subquery = SelectAst.from(TableSource.named(tableName, baseTableRef, namespaceId))
-    .withProjection(
-      pkColumns.map((column) => ProjectionItem.of(column, ColumnRef.of(baseTableRef, column))),
-    )
+  const rootCopy = bindTable(copyTableScope(tables.scope), root.storage);
+  const correlation = pkColumns.map((column) =>
+    BinaryExpr.eq(rootCopy.column(column), root.column(column)),
+  );
+  const where = combineWhereExprs([...correlation, ...filters]);
+  let subquery = SelectAst.from(rootCopy.tableSource(contract))
+    .withProjection(pkColumns.map((column) => ProjectionItem.of(column, rootCopy.column(column))))
     .withJoins([
-      JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn),
+      JoinAst.inner(
+        variantTable.tableSource(contract),
+        buildPrimaryKeyJoinOn(rootCopy, variantTable, pkColumns),
+      ),
     ]);
 
   if (where) {
@@ -334,18 +314,18 @@ export function compileUpsertReturning(
   const updateAssignments = hasUpdateValues
     ? toParamAssignments(contract, namespaceId, tableName, updateValues)
     : undefined;
+  const target = bindTarget(namespaceId, tableName);
+  const conflictTarget = InsertOnConflict.on(
+    conflictColumns.map((column) => target.column(column)),
+  );
   const onConflict = updateAssignments
-    ? InsertOnConflict.on(
-        conflictColumns.map((column) => ColumnRef.of(tableName, column)),
-      ).doUpdateSet(updateAssignments.assignments)
-    : InsertOnConflict.on(
-        conflictColumns.map((column) => ColumnRef.of(tableName, column)),
-      ).doNothing();
+    ? conflictTarget.doUpdateSet(updateAssignments.assignments)
+    : conflictTarget.doNothing();
 
-  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+  const ast = InsertAst.into(target.tableSource(contract))
     .withRows([createAssignments.assignments])
     .withOnConflict(onConflict)
-    .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
+    .withReturning(buildReturningColumns(contract, target, returningColumns));
 
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
@@ -353,17 +333,18 @@ export function compileUpsertReturning(
 
 export function compileUpdateReturning(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   setValues: Record<string, unknown>,
   filters: readonly AnyExpression[],
   returningColumns: readonly string[] | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
+  const { root } = tables;
+  const { namespaceId, tableName } = root.storage;
   const where = combineWhereExprs(filters);
   const { assignments } = toParamAssignments(contract, namespaceId, tableName, setValues);
-  let ast = UpdateAst.table(tableSourceForContract(contract, namespaceId, tableName))
+  let ast = UpdateAst.table(root.tableSource(contract))
     .withSet(assignments)
-    .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
+    .withReturning(buildReturningColumns(contract, root, returningColumns));
   if (where) {
     ast = ast.withWhere(where);
   }
@@ -373,25 +354,16 @@ export function compileUpdateReturning(
 
 export function compileUpdateCount(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   setValues: Record<string, unknown>,
   filters: readonly AnyExpression[],
   variantName?: string | undefined,
-  modelName?: string | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = buildCountMutationWhere(
-    contract,
-    namespaceId,
-    tableName,
-    filters,
-    variantName,
-    modelName,
-  );
+  const { root } = tables;
+  const { namespaceId, tableName } = root.storage;
+  const where = buildCountMutationWhere(contract, tables, filters, variantName);
   const { assignments } = toParamAssignments(contract, namespaceId, tableName, setValues);
-  let ast = UpdateAst.table(tableSourceForContract(contract, namespaceId, tableName)).withSet(
-    assignments,
-  );
+  let ast = UpdateAst.table(root.tableSource(contract)).withSet(assignments);
   if (where) {
     ast = ast.withWhere(where);
   }
@@ -401,14 +373,14 @@ export function compileUpdateCount(
 
 export function compileDeleteReturning(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
   returningColumns: readonly string[] | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
+  const { root } = tables;
   const where = combineWhereExprs(filters);
-  let ast = DeleteAst.from(tableSourceForContract(contract, namespaceId, tableName)).withReturning(
-    buildReturningColumns(contract, namespaceId, tableName, returningColumns),
+  let ast = DeleteAst.from(root.tableSource(contract)).withReturning(
+    buildReturningColumns(contract, root, returningColumns),
   );
   if (where) {
     ast = ast.withWhere(where);
@@ -419,21 +391,12 @@ export function compileDeleteReturning(
 
 export function compileDeleteCount(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
   variantName?: string | undefined,
-  modelName?: string | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = buildCountMutationWhere(
-    contract,
-    namespaceId,
-    tableName,
-    filters,
-    variantName,
-    modelName,
-  );
-  let ast = DeleteAst.from(tableSourceForContract(contract, namespaceId, tableName));
+  const where = buildCountMutationWhere(contract, tables, filters, variantName);
+  let ast = DeleteAst.from(tables.root.tableSource(contract));
   if (where) {
     ast = ast.withWhere(where);
   }

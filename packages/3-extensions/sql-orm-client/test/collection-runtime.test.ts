@@ -17,6 +17,7 @@ import {
   mapStorageRowToModelFields,
   stripHiddenMappedFields,
 } from '../src/collection-runtime';
+import { bindCollectionTables } from '../src/collection-tables';
 import { buildMixedPolyContract, getTestContract } from './helpers';
 
 describe('collection-runtime', () => {
@@ -171,8 +172,21 @@ describe('mapPolymorphicRow()', () => {
     const contract = buildMixedPolyContract();
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
     const lookup = vi.spyOn(collectionContract, 'getCompleteColumnToFieldMap');
-    const map = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo);
-    const pinned = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo, 'Feature');
+    const map = createPolymorphicRowMapper(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+    );
+    const pinned = createPolymorphicRowMapper(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      'Feature',
+    );
     expect(lookup).toHaveBeenCalledWith(contract, 'public', 'Task');
     const calls = lookup.mock.calls.length;
     for (let invocation = 0; invocation < 2; invocation++) {
@@ -211,7 +225,14 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'critical' };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
   });
@@ -221,7 +242,14 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'critical', priority: null };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
     expect(result).not.toHaveProperty('priority');
@@ -238,7 +266,14 @@ describe('mapPolymorphicRow()', () => {
       severity: null,
       features__priority: 1,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 2, title: 'Dark mode', type: 'feature', priority: 1 });
     expect(result).not.toHaveProperty('severity');
@@ -253,7 +288,14 @@ describe('mapPolymorphicRow()', () => {
       [POLYMORPHIC_DISCRIMINATOR_ALIAS]: 'feature',
       features__priority: 1,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 2, priority: 1 });
   });
@@ -263,7 +305,15 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'high' };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row, 'Bug');
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+      'Bug',
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'high' });
   });
@@ -279,7 +329,14 @@ describe('mapPolymorphicRow()', () => {
       severity: null,
       features__priority: null,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      bindCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 3, title: 'Unknown', type: 'epic' });
   });
@@ -307,7 +364,16 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const stiRow = { id: 1, title: 'Crash', type: 'bug', severity: 'high' };
-    expect(mapPolymorphicRow(contract, 'public', 'Task', polyInfo, stiRow)).toEqual({
+    expect(
+      mapPolymorphicRow(
+        contract,
+        'public',
+        'Task',
+        polyInfo,
+        bindCollectionTables(contract, 'public', 'Task'),
+        stiRow,
+      ),
+    ).toEqual({
       id: 1,
       title: 'Crash',
       type: 'bug',
@@ -315,7 +381,16 @@ describe('mapPolymorphicRow()', () => {
     });
 
     const mtiRow = { id: 2, title: 'Feature', type: 'feature', features__priority: 5 };
-    expect(mapPolymorphicRow(contract, 'public', 'Task', polyInfo, mtiRow)).toEqual({
+    expect(
+      mapPolymorphicRow(
+        contract,
+        'public',
+        'Task',
+        polyInfo,
+        bindCollectionTables(contract, 'public', 'Task'),
+        mtiRow,
+      ),
+    ).toEqual({
       id: 2,
       title: 'Feature',
       type: 'feature',
@@ -323,7 +398,16 @@ describe('mapPolymorphicRow()', () => {
     });
 
     const unknownRow = { id: 3, title: 'Unknown', type: 'epic' };
-    expect(mapPolymorphicRow(contract, 'public', 'Task', polyInfo, unknownRow)).toEqual({
+    expect(
+      mapPolymorphicRow(
+        contract,
+        'public',
+        'Task',
+        polyInfo,
+        bindCollectionTables(contract, 'public', 'Task'),
+        unknownRow,
+      ),
+    ).toEqual({
       id: 3,
       title: 'Unknown',
       type: 'epic',

@@ -17,6 +17,7 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import { bindCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
@@ -26,8 +27,8 @@ import { getEmptyAggregates, getTestAggregates, getTestContext } from './helpers
 
 const adapter = createPostgresAdapter();
 
-function planOf(tableName: string, state: CollectionState): SqlQueryPlan<unknown> {
-  return compileSelect(baseContract, 'public', tableName, state);
+function planOf(state: CollectionState): SqlQueryPlan<unknown> {
+  return compileSelect(baseContract, state);
 }
 
 function sqlOf(plan: SqlQueryPlan<unknown>): string {
@@ -57,7 +58,6 @@ describe('orderBy through a to-one relation', () => {
   it('orders by the related column through a correlated scalar subquery', () => {
     const { collection } = createCollectionFor('Post');
     const plan = planOf(
-      'posts',
       collection.orderBy([(post) => post.author.name.asc(), (post) => post.id.asc()]).select('id')
         .state,
     );
@@ -80,7 +80,6 @@ describe('orderBy through a to-one relation', () => {
   it('aliases the inner table of a self-relation so the correlation is unambiguous', () => {
     const { collection } = createCollectionFor('User');
     const plan = planOf(
-      'users',
       collection.orderBy((user) => user.invitedBy.name.desc({ nulls: 'last' })).select('id').state,
     );
 
@@ -113,7 +112,12 @@ describe('a to-one relation accessor', () => {
 
   it('resolves no related field when only a relation filter is used', () => {
     const { context, descriptorFor } = countingContext();
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      bindCollectionTables(context.contract, 'public', 'Post'),
+    );
 
     post.author.some();
 
@@ -122,7 +126,12 @@ describe('a to-one relation accessor', () => {
 
   it('resolves only the related field that is read', () => {
     const { context, descriptorFor } = countingContext();
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      bindCollectionTables(context.contract, 'public', 'Post'),
+    );
 
     post.author.name.asc();
 
@@ -130,7 +139,12 @@ describe('a to-one relation accessor', () => {
   });
 
   it('yields nothing for a name that is not a related field', () => {
-    const post = createModelAccessor(getTestContext(), 'public', 'Post');
+    const post = createModelAccessor(
+      getTestContext(),
+      'public',
+      'Post',
+      bindCollectionTables(getTestContext().contract, 'public', 'Post'),
+    );
 
     expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
       [undefined, undefined],
@@ -138,7 +152,12 @@ describe('a to-one relation accessor', () => {
   });
 
   it('offers no count', () => {
-    const post = createModelAccessor(getTestContext(), 'public', 'Post');
+    const post = createModelAccessor(
+      getTestContext(),
+      'public',
+      'Post',
+      bindCollectionTables(getTestContext().contract, 'public', 'Post'),
+    );
 
     expect(Object.hasOwn(post.author, 'count')).toBe(false);
     expect(Reflect.get(post.author, 'count')).toBeUndefined();
@@ -148,10 +167,7 @@ describe('a to-one relation accessor', () => {
 describe('orderBy a to-many relation count', () => {
   it('orders by a correlated count of the related rows', () => {
     const { collection } = createCollectionFor('User');
-    const plan = planOf(
-      'users',
-      collection.orderBy((user) => user.posts.count().desc()).select('id').state,
-    );
+    const plan = planOf(collection.orderBy((user) => user.posts.count().desc()).select('id').state);
 
     expect(orderByOf(plan)).toEqual([
       OrderByItem.desc(
@@ -170,7 +186,6 @@ describe('orderBy a to-many relation count', () => {
   it('counts only the related rows matching the predicate, bound like some()', () => {
     const { collection } = createCollectionFor('User');
     const plan = planOf(
-      'users',
       collection
         .orderBy((user) => user.posts.count((post) => post.views.gt(10)).desc())
         .select('id').state,
@@ -202,7 +217,6 @@ describe('orderBy a to-many relation count', () => {
   it('numbers the count predicate parameter after the WHERE parameters', () => {
     const { collection } = createCollectionFor('User');
     const plan = planOf(
-      'users',
       collection
         .where((user) => user.name.eq('a'))
         .orderBy((user) => user.posts.count((post) => post.views.gt(10)).desc())
@@ -217,7 +231,12 @@ describe('orderBy a to-many relation count', () => {
 
   it('offers count whatever the target declares for projected counts', () => {
     const context = { ...getTestContext(), aggregateDescriptors: getEmptyAggregates() };
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      bindCollectionTables(context.contract, 'public', 'User'),
+    );
 
     expect(user.posts.count().desc()).toEqual(
       OrderByItem.desc(
@@ -232,10 +251,7 @@ describe('orderBy a to-many relation count', () => {
 
   it('counts an N:M relation through the junction table', () => {
     const { collection } = createCollectionFor('User');
-    const plan = planOf(
-      'users',
-      collection.orderBy((user) => user.tags.count().asc()).select('id').state,
-    );
+    const plan = planOf(collection.orderBy((user) => user.tags.count().asc()).select('id').state);
 
     expect(orderByOf(plan)).toEqual([
       OrderByItem.asc(
@@ -264,7 +280,6 @@ describe('orderBy null placement on a scalar field', () => {
   it('renders NULLS LAST after the direction', () => {
     const { collection } = createCollectionFor('Post');
     const plan = planOf(
-      'posts',
       collection.orderBy((post) => post.title.desc({ nulls: 'last' })).select('id').state,
     );
 
@@ -284,13 +299,7 @@ describe('orderBy a relation inside an include', () => {
       posts.select('id').orderBy((post) => post.comments.count().desc()),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "posts__rows"."id") ORDER BY "posts__rows"."posts__order_0" DESC), json_build_array()) AS "posts" FROM (SELECT "posts"."id" AS "id", (SELECT COUNT(*) AS "count" FROM "public"."comments" WHERE "comments"."post_id" = "posts"."id") AS "posts__order_0" FROM "public"."posts" WHERE "posts"."user_id" = "users"."id" ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."comments" WHERE "comments"."post_id" = "posts"."id") DESC) AS "posts__rows") AS "posts" FROM "public"."users""`,
@@ -303,13 +312,7 @@ describe('orderBy a relation inside an include', () => {
       invited.select('id').orderBy((user) => user.invitedBy.name.asc()),
     ).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id") ORDER BY "invitedUsers__rows"."invitedUsers__order_0" ASC), json_build_array()) AS "invitedUsers" FROM (SELECT "invitedUsers__child"."id" AS "id", (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "invitedUsers__child"."invited_by_id") AS "invitedUsers__order_0" FROM "public"."users" AS "invitedUsers__child" WHERE "invitedUsers__child"."invited_by_id" = "users"."id" ORDER BY (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "invitedUsers__child"."invited_by_id") ASC) AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users""`,
@@ -325,8 +328,6 @@ describe('orderBy a relation under a paginated aggregate', () => {
     const plan = compileAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
       state,
       { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
       'Post',
@@ -349,8 +350,6 @@ describe('orderBy a relation under an aggregate over distinct rows', () => {
     const plan = compileAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
       state,
       { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
       'Post',
@@ -368,8 +367,6 @@ describe('orderBy a relation under an aggregate over distinct rows', () => {
     const plan = compileGroupedAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
       state,
       ['user_id'],
       { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },

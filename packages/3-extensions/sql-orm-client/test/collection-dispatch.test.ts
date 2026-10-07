@@ -5,7 +5,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { dispatchCollectionRows } from '../src/collection-dispatch';
-import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
+import type { CollectionState, IncludeExpr } from '../src/types';
 import { createCollectionFor } from './collection-fixtures';
 import type { MockRuntime, TestContract } from './helpers';
 import {
@@ -15,6 +15,8 @@ import {
   createMockRuntime,
   getTestContract,
   isSelectAst,
+  type StateFields,
+  tableState,
   withCapabilities,
 } from './helpers';
 
@@ -22,7 +24,7 @@ function includeFor(
   contract: Contract<SqlStorage>,
   parentModel: string,
   relationName: string,
-  nested: CollectionState = emptyState(),
+  nested: StateFields = {},
   namespaceId = 'public',
 ): IncludeExpr {
   const relation = resolveIncludeRelation(contract, namespaceId, parentModel, relationName);
@@ -35,14 +37,14 @@ function includeFor(
     targetColumns: relation.targetColumns,
     localColumns: relation.localColumns,
     cardinality: relation.cardinality,
-    nested,
+    nested: tableState(contract, relation.relatedTableName, nested, relation.relatedNamespaceId),
     scalar: undefined,
     combine: undefined,
   };
 }
 
-function stateWithInclude(include: IncludeExpr): CollectionState {
-  return { ...emptyState(), includes: [include] };
+function stateWithInclude(contract: Contract<SqlStorage>, include: IncludeExpr): CollectionState {
+  return tableState(contract, include.localTableName, { includes: [include] });
 }
 
 function withSingleQueryCapabilities(contract: TestContract) {
@@ -108,7 +110,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: collection.state,
-      tableName: collection.tableName,
       namespaceId: 'public',
       modelName: collection.modelName,
     }).toArray();
@@ -132,7 +133,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -172,7 +172,6 @@ describe('collection-dispatch', () => {
         context: collection.ctx.context,
         runtime,
         state: scoped.state,
-        tableName: scoped.tableName,
         namespaceId: 'public',
         modelName: scoped.modelName,
       }).toArray();
@@ -214,7 +213,6 @@ describe('collection-dispatch', () => {
         context: collection.ctx.context,
         runtime,
         state: scoped.state,
-        tableName: scoped.tableName,
         namespaceId: 'public',
         modelName: scoped.modelName,
       }).toArray(),
@@ -243,7 +241,6 @@ describe('collection-dispatch', () => {
         context: collection.ctx.context,
         runtime,
         state: scoped.state,
-        tableName: scoped.tableName,
         namespaceId: 'public',
         modelName: scoped.modelName,
       }).toArray(),
@@ -288,7 +285,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -339,7 +335,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -381,7 +376,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime: runtimeWithConnection,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -409,7 +403,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime: callerScope,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -443,7 +436,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime: runtimeWithConnection,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     };
@@ -497,7 +489,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -547,7 +538,6 @@ describe('collection-dispatch', () => {
         context: collection.ctx.context,
         runtime,
         state: scoped.state,
-        tableName: scoped.tableName,
         namespaceId: 'public',
         modelName: scoped.modelName,
       }).toArray(),
@@ -577,7 +567,6 @@ describe('collection-dispatch', () => {
       context: collection.ctx.context,
       runtime,
       state: scoped.state,
-      tableName: scoped.tableName,
       namespaceId: 'public',
       modelName: scoped.modelName,
     }).toArray();
@@ -602,7 +591,7 @@ describe('collection-dispatch', () => {
     const contract = withSingleQueryCapabilities(buildStiPolyContract());
     const context = buildTestContextFromContract(contract);
     const runtime = createMockRuntime();
-    const state = stateWithInclude(includeFor(contract, 'Account', 'members'));
+    const state = stateWithInclude(contract, includeFor(contract, 'Account', 'members'));
     // Both STI variant columns live in the base table, so the child SELECT
     // projects both for every row; the non-matching variant's column is NULL.
     // Decoding by discriminator must keep the matching variant's field and
@@ -622,7 +611,6 @@ describe('collection-dispatch', () => {
       context,
       runtime,
       state,
-      tableName: 'accounts',
       modelName: 'Account',
       namespaceId: 'public',
     });
@@ -648,7 +636,7 @@ describe('collection-dispatch', () => {
     const contract = withSingleQueryCapabilities(buildMixedPolyContract());
     const context = buildTestContextFromContract(contract);
     const runtime = createMockRuntime();
-    const state = stateWithInclude(includeFor(contract, 'Project', 'tasks'));
+    const state = stateWithInclude(contract, includeFor(contract, 'Project', 'tasks'));
     runtime.setNextResults([
       [
         {
@@ -664,7 +652,6 @@ describe('collection-dispatch', () => {
       context,
       runtime,
       state,
-      tableName: 'projects_tbl',
       modelName: 'Project',
       namespaceId: 'public',
     }).toArray();
@@ -699,8 +686,8 @@ describe('collection-dispatch', () => {
     const context = buildTestContextFromContract(contract);
     const runtime = createMockRuntime();
     const state = stateWithInclude(
+      contract,
       includeFor(contract, 'Project', 'tasks', {
-        ...emptyState(),
         includes: [includeFor(contract, 'Task', 'subtasks')],
       }),
     );
@@ -743,7 +730,6 @@ describe('collection-dispatch', () => {
       context,
       runtime,
       state,
-      tableName: 'projects_tbl',
       modelName: 'Project',
       namespaceId: 'public',
     }).toArray();
@@ -782,7 +768,8 @@ describe('collection-dispatch', () => {
     // state. The decode side reads that to map every child row to the named
     // variant rather than resolving per-row by discriminator.
     const state = stateWithInclude(
-      includeFor(contract, 'Project', 'tasks', { ...emptyState(), variantName: 'Feature' }),
+      contract,
+      includeFor(contract, 'Project', 'tasks', { variantName: 'Feature' }),
     );
 
     runtime.setNextResults([
@@ -800,7 +787,6 @@ describe('collection-dispatch', () => {
       context,
       runtime,
       state,
-      tableName: 'projects_tbl',
       modelName: 'Project',
       namespaceId: 'public',
     }).toArray();

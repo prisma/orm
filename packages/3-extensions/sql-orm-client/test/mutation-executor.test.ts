@@ -7,6 +7,7 @@ import {
   LiteralExpr,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
+import { bindCollectionTables } from '../src/collection-tables';
 import {
   assertJunctionParentMetadataLength,
   assertJunctionTargetMetadataLength,
@@ -735,6 +736,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'Parent',
+      tables: bindCollectionTables(contract, 'public', 'Parent'),
       filters: [BinaryExpr.eq(ColumnRef.of('parents', 'id'), LiteralExpr.of(1))],
       data: {
         children: (children: { connect: (criterion: Record<string, unknown>) => unknown }) =>
@@ -778,6 +780,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'Parent',
+        tables: bindCollectionTables(contract, 'public', 'Parent'),
         filters: [BinaryExpr.eq(ColumnRef.of('parents', 'id'), LiteralExpr.of(1))],
         data: {
           children: (children: { connect: (criterion: Record<string, unknown>) => unknown }) =>
@@ -817,6 +820,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'Parent',
+        tables: bindCollectionTables(contract, 'public', 'Parent'),
         filters: [BinaryExpr.eq(ColumnRef.of('parents', 'id'), LiteralExpr.of(1))],
         data: {
           children: (children: { connect: (criterion: Record<string, unknown>) => unknown }) =>
@@ -852,6 +856,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'Parent',
+        tables: bindCollectionTables(contract, 'public', 'Parent'),
         filters: [BinaryExpr.eq(ColumnRef.of('parents', 'id'), LiteralExpr.of(1))],
         data: {
           children: (children: { connect: (criterion: Record<string, unknown>) => unknown }) =>
@@ -878,6 +883,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'Parent',
+      tables: bindCollectionTables(contract, 'public', 'Parent'),
       filters: [BinaryExpr.eq(ColumnRef.of('parents', 'id'), LiteralExpr.of(1))],
       data: {
         children: (children: {
@@ -908,6 +914,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'Parent',
+        tables: bindCollectionTables(contract, 'public', 'Parent'),
         filters: [BinaryExpr.eq(ColumnRef.of('parents', 'tenant_id'), LiteralExpr.of(7))],
         data: {
           children: (children: {
@@ -939,6 +946,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'Parent',
+      tables: bindCollectionTables(contract, 'public', 'Parent'),
       filters: [BinaryExpr.eq(ColumnRef.of('parents', 'tenant_id'), LiteralExpr.of(7))],
       data: {
         children: (children: {
@@ -1076,6 +1084,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'User',
+        tables: bindCollectionTables(contract, 'public', 'User'),
         filters: [userIdFilter],
         data: {
           name: 'Alice Updated',
@@ -1107,6 +1116,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(contract, 'public', 'User'),
       filters: [userIdFilter],
       data: {
         roles: (roles: { disconnect: (criteria: readonly Record<string, unknown>[]) => unknown }) =>
@@ -1231,6 +1241,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(contract, 'public', 'User'),
       filters: [userIdFilter],
       data: { name: 'Alice Updated' } as never,
     });
@@ -1251,6 +1262,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'Post',
+      tables: bindCollectionTables(contract, 'public', 'Post'),
       filters: [postIdFilter],
       data: {
         author: (author: { disconnect: () => unknown }) => author.disconnect(),
@@ -1270,6 +1282,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(contract, 'public', 'User'),
       filters: [userIdFilter],
       data: { name: 'Updated' } as never,
     });
@@ -1288,6 +1301,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'User',
+        tables: bindCollectionTables(contract, 'public', 'User'),
         filters: [userIdFilter],
         data: {
           posts: (posts: { connect: (criteria: readonly Record<string, unknown>[]) => unknown }) =>
@@ -1302,6 +1316,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(contract, 'public', 'User'),
       filters: [userIdFilter],
       data: {
         posts: (posts: { connect: (criterion: Record<string, unknown>) => unknown }) =>
@@ -1317,6 +1332,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(contract, 'public', 'User'),
       filters: [userIdFilter],
       data: {
         posts: (posts: { disconnect: () => unknown }) => posts.disconnect(),
@@ -1332,6 +1348,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'User',
+        tables: bindCollectionTables(contract, 'public', 'User'),
         filters: [userIdFilter],
         data: {
           posts: (posts: {
@@ -1371,6 +1388,7 @@ describe('mutation-executor', () => {
       runtime,
       namespaceId: 'public',
       modelName: 'User',
+      tables: bindCollectionTables(compositeRelationContract, 'public', 'User'),
       filters: [userIdFilter],
       data: {
         posts: (posts: { disconnect: () => unknown }) => posts.disconnect(),
@@ -1391,6 +1409,7 @@ describe('mutation-executor', () => {
         runtime,
         namespaceId: 'public',
         modelName: 'User',
+        tables: bindCollectionTables(contract, 'public', 'User'),
         filters: [userIdFilter],
         data: {
           posts: (posts: { connect: (criterion: Record<string, unknown>) => unknown }) =>

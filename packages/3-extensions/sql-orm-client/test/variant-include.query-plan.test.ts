@@ -12,8 +12,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { createIncludeScalar } from '../src/include-descriptors';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import { emptyState } from '../src/types';
-import { buildMixedPolyContract, getTestAggregates } from './helpers';
+import { buildMixedPolyContract, emptyTableState, getTestAggregates } from './helpers';
 import {
   assigneeInclude,
   assigneeRows,
@@ -36,8 +35,6 @@ describe('variant-owned include parent correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
       rootState(include, 'Feature', 'title'),
       'Task',
     );
@@ -61,8 +58,6 @@ describe('variant-owned include parent correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
       rootState(include, 'Bug', 'title'),
       'Task',
     );
@@ -91,8 +86,6 @@ describe('variant-owned include parent correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
       rootState(include, 'Feature', 'title'),
       'Task',
     );
@@ -132,8 +125,6 @@ describe('variant-owned include child alias collisions', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
       rootState(include, 'Feature', 'title'),
       'Task',
     );
@@ -150,7 +141,7 @@ describe('variant-owned include child alias collisions', () => {
 
   it('aliases a scalar child that shares the resolved MTI parent table', () => {
     const contract = buildMixedPolyContract();
-    const scalar = createIncludeScalar<number>('count', emptyState());
+    const scalar = createIncludeScalar<number>('count', emptyTableState(contract, 'labels'));
     const include = includeExpr({
       relationName: 'featureCount',
       relatedModelName: 'Feature',
@@ -187,8 +178,6 @@ describe('variant-owned include child alias collisions', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
       rootState(include, 'Feature', 'title'),
       'Task',
     );

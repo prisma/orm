@@ -1,4 +1,6 @@
 export { Collection } from '../collection';
+export type { CollectionTables } from '../collection-tables';
+export { bindCollectionTables } from '../collection-tables';
 export type {
   CollectionRowOf,
   CollectionTypeStateOf,
@@ -32,6 +34,7 @@ export {
   type PreparedRowQuery,
   prepareQuery,
 } from '../prepared-row-query';
+export type { TableBinding, TableScope, TableStorageCoordinate } from '../table-scope';
 export type {
   AggregateBuilder,
   AggregateIncludeReducers,

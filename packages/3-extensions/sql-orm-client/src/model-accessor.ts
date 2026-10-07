@@ -24,15 +24,15 @@ import {
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
-  resolvePolymorphismInfo,
   resolveVariantFieldColumns,
   type VariantColumnRef,
 } from './collection-contract';
+import type { CollectionTables } from './collection-tables';
 import { codecTraits, hasTrait, resolveColumn } from './column-codec';
 import { and, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { bindTable, createTableScope, type TableBinding, type TableScope } from './table-scope';
+import { bindTable, type TableBinding, type TableScope } from './table-scope';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
@@ -74,17 +74,17 @@ export function createModelAccessor<
   context: ExecutionContext<TContract>,
   namespaceId: NsId,
   modelName: ModelName,
+  tables: CollectionTables,
   variantName?: VariantName,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
-  const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
-  const scope = createTableScope();
   return createModelAccessorInScope(
     context,
     namespaceId,
     modelName,
     variantName,
-    scope,
-    bindTable(scope, { namespaceId, tableName }),
+    tables.scope,
+    tables.root,
+    variantName === undefined ? undefined : tables.variants.get(variantName),
   );
 }
 
@@ -100,6 +100,7 @@ function createModelAccessorInScope<
   variantName: VariantName | undefined,
   scope: TableScope,
   binding: TableBinding,
+  variantTable: TableBinding | undefined,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
@@ -125,15 +126,9 @@ function createModelAccessorInScope<
     ? {
         name: variantName,
         relations: resolveModelRelations(contract, namespaceId, variantName),
-        tableName:
-          resolvePolymorphismInfo(contract, namespaceId, modelName)?.variants.get(variantName)
-            ?.table ?? tableName,
       }
     : undefined;
-  const variantBinding =
-    variantCoordinates === undefined || variantCoordinates.tableName === tableName
-      ? binding
-      : bindTable(scope, { namespaceId, tableName: variantCoordinates.tableName });
+  const variantBinding = variantTable ?? binding;
 
   const opsByCodecId = new Map<string, NamedOp[]>();
 
@@ -610,6 +605,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
     undefined,
     scope,
     binding,
+    undefined,
   );
 
   if (typeof predicate === 'function') {
