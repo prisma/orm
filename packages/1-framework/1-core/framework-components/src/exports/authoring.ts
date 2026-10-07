@@ -85,3 +85,29 @@ export {
   temporalCodecPreset,
   temporalPhaseTemplate,
 } from '../shared/temporal-presets';
+export type {
+  CastRefusal,
+  DataTypeSupport,
+  ReadRefusal,
+  RefusalDescription,
+  RefusalGuidance,
+  TypedValue,
+  WrittenForm,
+  WrittenScalar,
+  WrittenValue,
+} from '../shared/written-value';
+export {
+  admittedForms,
+  admittedTags,
+  castTypedValue,
+  describeAdmittedForms,
+  describeExpected,
+  describeRefusal,
+  describeRefusedValueType,
+  entryForPlain,
+  entryForTag,
+  exactRewrite,
+  knownTags,
+  readWrittenValue,
+  tagForm,
+} from '../shared/written-value';

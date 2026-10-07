@@ -2,6 +2,7 @@ import type {
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { fieldRef, referencedFieldRef } from '../src/attribute-spec/combinators/field-ref';
@@ -1657,6 +1658,41 @@ describe('the binder calls the real spec factories', () => {
       kind: 'field',
       symbol: user.fields['id'],
     });
+  });
+});
+
+describe('the binder gives spec factories the data types of the stack', () => {
+  it('passes the same data types to model and field factories', () => {
+    const dataTypes = { entries: {}, lookup: createDataTypeLookup([]) };
+    const seen: unknown[] = [];
+    const { sources, symbolTable } = build(
+      ['model User {', '  id Int', '  name String @contextual', '  @@index([id])', '}'].join('\n'),
+    );
+    createBinder({
+      sources,
+      symbolTable,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: {
+          model: {
+            index: (ctx: AttributeSpecContext) => {
+              seen.push(ctx.dataTypes);
+              return modelSpec('index', [fieldListParam('fields')]);
+            },
+          },
+          field: {
+            contextual: (ctx: FieldAttributeSpecContext) => {
+              seen.push(ctx.dataTypes);
+              return fieldAttribute('contextual', { documentation: 'fixture' });
+            },
+          },
+        },
+        dataTypes,
+      }),
+    });
+
+    expect(seen).toHaveLength(2);
+    expect(seen.every((received) => received === dataTypes)).toBe(true);
   });
 });
 

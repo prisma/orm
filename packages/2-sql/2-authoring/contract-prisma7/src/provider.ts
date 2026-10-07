@@ -177,7 +177,7 @@ export function prisma7Contract(
             controlMutationDefaults: context.controlMutationDefaults,
             authoringContributions: context.authoringContributions,
             codecLookup: context.codecLookup,
-            dataTypeLookup: context.dataTypeLookup,
+            dataTypes: context.dataTypes,
             composedExtensions: context.composedExtensions,
           });
           if (!interpreted.ok) return interpreted;

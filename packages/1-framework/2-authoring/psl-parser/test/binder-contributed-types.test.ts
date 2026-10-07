@@ -3,6 +3,7 @@ import type {
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import {
   type BinderContext,
   contributedTypeOf,
@@ -47,6 +48,7 @@ function context(): BinderContext {
       dataTypes: {},
     },
     controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    dataTypes: EMPTY_DATA_TYPES,
   };
 }
 

@@ -6,6 +6,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import {
   type AnyCodecDescriptor,
   type CodecLookupWithDescriptors,
@@ -216,4 +217,13 @@ export const fixtureTypeLookups: {
     get: (id) => fixtureDataTypeSupport.lookup.get(id) ?? lenient.dataTypeLookup.get(id),
     has: (id) => fixtureDataTypeSupport.lookup.has(id) || lenient.dataTypeLookup.has(id),
   },
+};
+
+/** {@link fixtureTypeLookups} as the PSL interpreter and its contract source context take them. */
+export const fixtureInterpreterTypes: {
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypes: DataTypeSupport;
+} = {
+  codecLookup: fixtureTypeLookups.codecLookup,
+  dataTypes: { entries: fixtureDataTypeSupport.entries, lookup: fixtureTypeLookups.dataTypeLookup },
 };

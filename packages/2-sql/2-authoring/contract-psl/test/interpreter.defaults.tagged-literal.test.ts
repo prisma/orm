@@ -45,8 +45,8 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
       controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: { dataTypes: entries },
-      ...fixtureTypeLookups,
+      codecLookup: fixtureTypeLookups.codecLookup,
+      dataTypes: { entries, lookup: fixtureTypeLookups.dataTypeLookup },
     });
   };
   const columnDefault = (
@@ -138,7 +138,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | null | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | sql`...` | json`...` | list of (string | number | boolean | null | sql`...` | json`...`)',
+          'Expected one of: string | number | boolean | null | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | sql`...` | json`...` | list of (string | number | boolean | null | json`...`)',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },
@@ -149,9 +149,21 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     expect(diagnostics('v String @default(pg.sql`x`)')).toEqual([
       {
         code: 'PSL_UNKNOWN_LITERAL_TAG',
-        message: 'Unknown literal tag "pg.sql". Known tags: sql, json.',
+        message: 'Field "Lit.v": Unknown literal tag "pg.sql". Known tags: sql, json.',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'pg.sql`x`'.length),
+      },
+    ]);
+  });
+
+  it('rejects an unregistered tag inside a list at that element', () => {
+    expect(diagnostics('v Jsonb[] @default([json`{}`, pg.json`[1]`])')).toEqual([
+      {
+        code: 'PSL_UNKNOWN_LITERAL_TAG',
+        message:
+          'Field "Lit.v" at element 2: Unknown literal tag "pg.json". Known tags: sql, json.',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(33, 'pg.json`[1]`'.length),
       },
     ]);
   });
@@ -247,30 +259,80 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       });
     });
 
-    it('refuses a body that is not a JSON document', () => {
+    it('refuses a body that is not a JSON document, at the literal', () => {
       expect(diagnostics('v Jsonb @default(json`{ plan }`)')).toEqual([
-        expect.objectContaining({ code: 'PSL_INVALID_LITERAL' }),
+        expect.objectContaining({
+          code: 'PSL_INVALID_LITERAL',
+          span: lineThreeSpan(20, 'json`{ plan }`'.length),
+        }),
       ]);
     });
 
-    it('refuses a JSON document on a column whose type does not cast from one', () => {
+    it('refuses a JSON document on a column whose type does not cast from one, at the literal', () => {
       expect(diagnostics('v Int @default(json`1`)')).toEqual([
-        expect.objectContaining({
+        {
           code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-          message: expect.stringContaining('pg/int4 has no cast from pg/json'),
-        }),
+          message: 'Field "Lit.v": Expected a number',
+          sourceId: 'schema.prisma',
+          span: lineThreeSpan(18, 'json`1`'.length),
+        },
       ]);
     });
   });
 
-  it('refuses a sql literal as an element of a list literal through the cast rule', () => {
+  it('refuses a sql literal as an element of a list literal through the cast rule, at the element', () => {
     expect(diagnostics('tags String[] @default([sql`md5(x)`])')).toEqual([
-      expect.objectContaining({
+      {
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message:
-          'Field "Lit.tags" at element 1: pg/text has no cast from sql/expression; it casts from nothing',
+        message: 'Field "Lit.tags" at element 1: Expected a quoted string',
         sourceId: 'schema.prisma',
-      }),
+        span: lineThreeSpan(27, 'sql`md5(x)`'.length),
+      },
+    ]);
+  });
+
+  it('reports a plain value its column has no cast from at the value, not the attribute', () => {
+    expect(diagnostics('v Int @default("x")')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Lit.v": Expected a number',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(18, '"x"'.length),
+      },
+    ]);
+  });
+
+  it('reports a refused list element at the element', () => {
+    expect(diagnostics('tags Int[] @default([1, "x"])')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Lit.tags" at element 2: Expected a number',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(27, '"x"'.length),
+      },
+    ]);
+  });
+
+  it('counts null elements when it reports a refused list element', () => {
+    expect(diagnostics('tags Int?[] @default([null, 1, "x"])')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Lit.tags" at element 3: Expected a number',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(34, '"x"'.length),
+      },
+    ]);
+  });
+
+  it('reports a default-only refusal at the attribute', () => {
+    expect(diagnostics('docs Jsonb[] @default(json`{}`)')).toEqual([
+      {
+        code: 'PSL_DEFAULT_LIST_EXPECTED',
+        message:
+          'Field "Lit.docs": this column holds a list, so its default is a list literal, as in [1, 2]',
+        sourceId: 'schema.prisma',
+        span: lineThreeSpan(16, '@default(json`{}`)'.length),
+      },
     ]);
   });
 
@@ -285,11 +347,12 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       });
     });
 
-    it.each(['TRUE', 'True', 'yes', '1', ''])('refuses the body %o', (body) => {
+    it.each(['TRUE', 'True', 'yes', '1', ''])('refuses the body %o at the literal', (body) => {
       expect(diagnostics(`v Boolean @default(bool\`${body}\`)`, withBoolTag)).toEqual([
         expect.objectContaining({
           code: 'PSL_INVALID_LITERAL',
           message: expect.stringContaining(`"${body}" is not a boolean.`),
+          span: lineThreeSpan(22, `bool\`${body}\``.length),
         }),
       ]);
     });

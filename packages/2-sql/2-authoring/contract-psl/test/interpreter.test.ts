@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -40,7 +40,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
-      | 'dataTypeLookup'
+      | 'dataTypes'
       | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
@@ -52,7 +52,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       ...input,
     });
 
@@ -71,7 +71,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         composedExtensionContracts: new Map(),
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -133,7 +133,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -157,7 +157,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         controlMutationDefaults: {
           defaultFunctionRegistry: new Map([
             [

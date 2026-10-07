@@ -129,6 +129,18 @@ Positionals are fixed slots with an output key. Variadic positionals are not sup
 
 ## The combinator kit
 
+An attribute argument is one of two kinds, and the kit has a set of combinators for each.
+
+- **A database value** is a value of a data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)): a value a column holds, such as the value of `@default(...)`, or an expression the database evaluates, such as the raw SQL of `@@index(where:)`. Its question is not "is this a string" but "which data type is this value, and does the receiving type take it", and the answer is the cast rule. `dataTypeValue(T)` reads a database value.
+- **Grammar** is everything else: a name (`@@map("users")`), a flag (`unique: true`), a keyword (`onDelete: Cascade`), a reference (`fields: [a, b]`), a DDL parameter (`VarChar(255)`, an index weight), the size of a client-side generator (`nanoid(8)`), and lists and records of these. Grammar is typed by its shape. A name reaches the database in DDL, but it is not a value of any data type, so the cast rule has nothing to say about it.
+
+| Kind | Combinators |
+| --- | --- |
+| Grammar | `str`, `num`, `int`, `bool`, `identifier`, `fieldRef`, `referencedFieldRef`, `entityRef`, `list`, `record`, `oneOf`, `funcCall`, `json` |
+| Database value | `dataTypeValue`; and the grammar-shaped readers `numLiteral`, `taggedLiteral` and `jsonValue`, which read a database value's syntax for the positions listed next and leave the type check to their interpreter |
+
+A table name is never `pg/text`, and asking which type casts into it would tie the family's grammar to a target's type registry; a column default is never "a string", because `"8"` and `8` are different values with different types. The two sets of combinators keep the two questions apart. Three database positions are still read through grammar-shaped readers, each for a reason: `@default`, because its receiving type comes from the column and the spec factory does not know it (see [SQL defaults](#sql-defaults)); an enum member's stored value (`jsonValue()`), because the enum's codec checks it; and Mongo's partial index filter (`json()`), because the Mongo family registers no data type for a filter expression.
+
 ### Scalars and pinned literals
 
 - `str()` parses any string literal; `str(value)` matches one exact string and preserves its literal type.
@@ -191,9 +203,17 @@ record(int({ min: 1, max: 99_999 }))
 
 This is intentionally narrower than an arbitrary JSON value. Its shipped use is Mongo's partial index filter, whose nested document is passed through rather than interpreted as a typed PSL record.
 
+### Values of a data type
+
+`dataTypeValue(dataType, support)` takes a value of one data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)). It applies the ADR 254 cast rule while parsing: it reads the written literal (a quoted string, a number, a boolean or a tagged literal) into a typed value through the stack's authoring entries, and admits it when that type is `dataType` or a type `dataType` casts from. It returns the canonical value with the type id and the span, so the interpreter stores it without a check of its own. It reports every refusal at the written value, with the general codes: `PSL_INVALID_ATTRIBUTE_SYNTAX` for an expression that is not a literal; `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` for a tagged literal it cannot canonicalize; and `PSL_UNKNOWN_LITERAL_TAG`, `PSL_VALUE_TYPE_INCOMPATIBLE` and `PSL_INVALID_LITERAL` from the cast rule, worded by the framework's `describeRefusal`. A refusal starts with what to write, as in `Expected a number`; it names the receiving type and the value's type only when a value of an admitted form is still refused, as in `Expected a number that pg/int4 can hold; got pg/int8`. A quoted string refused by a type that has a tag also gets the literal to write, as in ``Expected sql`...`; write sql`now()` ``, when that literal reads back as the same text and the receiving type takes it. The label of a type with a tag is its tag, as in ``sql`...` ``; the label of a type without one is the forms it admits, as in `a number`. `support` is the spec context's `dataTypes` ([ADR 249](ADR%20249%20-%20Central%20attribute-spec%20registry.md)).
+
+Building the argument never throws, because the language server builds every spec, including on stacks that lack the type. Parsing throws an internal error when the stack does not register `dataType`, or registers it with no written form: a spec that names a type its stack lacks, or one nothing writes, is a pack bug. The argument carries `tags` and `documentation` for completion.
+
+`dataTypeValue` is used as a parameter of an attribute, a block or a `funcCall`, never as a bare arm of `oneOf`, whose aggregate diagnostic would hide the message that says how to write the value. It is not a replacement for `str()`, `num()` or `bool()`, and a position whose value is not of a data type keeps those: the size in `nanoid(8)` is a parameter of a generator that runs in the client, so it is grammar, checked as an integer in a range, whatever the column's type.
+
 ### Alternatives
 
-`oneOf(first, ...rest)` tries its alternatives in order and returns the first success. If every alternative fails, it discards the branch diagnostics and emits one aggregate `Expected one of: …` diagnostic assembled from the alternatives' labels.
+`oneOf(first, ...rest)` tries its alternatives in order and returns the first success. If every alternative fails, it discards the branch diagnostics and emits one aggregate `Expected one of: …` diagnostic assembled from the alternatives' labels. An alternative may claim an argument whose shape is its own (`ArgType.claims`). When exactly one alternative claims the argument, `oneOf` returns that alternative's result, success or failure, so its diagnostics about the argument are kept. `oneOf` knows nothing about which combinators claim; each combinator decides for its own shape. `funcCall` claims a call to its name whose callee is a plain identifier: the author named the function, so `@default(nanoid("8"))` reports what is wrong with `"8"`, not the list of every default form.
 
 This trade-off keeps the leaf contract small and allows backtracking, at the cost of less specific diagnostics for malformed input that resembles one particular branch.
 
@@ -215,7 +235,7 @@ interface TypedFuncCall {
 }
 ```
 
-Every function signature requires Markdown documentation, including zero-argument functions. Function parameter declarations carry their own documentation, independent of reusable argument types. Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary.
+Every function signature requires Markdown documentation, including zero-argument functions. Function parameter declarations carry their own documentation, independent of reusable argument types. Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary. A `funcCall` claims a call to its name (see Alternatives), so inside `oneOf` its argument diagnostics are reported instead of the alternatives list.
 
 The result is typed as a normalized function-call envelope, not as a name-literal-discriminated or signature-derived object. `funcCallFrom` and an unpinned raw function-call combinator are not part of the design.
 
@@ -240,7 +260,7 @@ const enumDefault = oneOf(...enumMembers.map(identifier));
 
 The number arm is `numLiteral()`, not `num()`. `num()` yields a JavaScript number, which rounds a literal past the safe integer range and drops trailing zeros; `numLiteral()` yields the literal's source text, so a `Decimal` or `BigInt` default keeps every digit as written. What to do with that text is the lowering concern below: the plain number goes to a codec that reads one, and the decimal text to a codec that does not.
 
-Literal-to-codec compatibility remains a lowering concern. A `matchingScalarLiteral` combinator is not implemented.
+`@default` reads a database value, but through the grammar combinators above, and applies the cast rule in lowering, because its receiving type comes from the column and the spec factory does not know it. A position whose receiving type is fixed uses `dataTypeValue` instead. Once the field spec context carries the column's resolved type, `@default` can become `dataTypeValue(columnType)` and the lowering check goes; that is follow-up work. A `matchingScalarLiteral` combinator is not implemented.
 
 ### Mongo index elements
 

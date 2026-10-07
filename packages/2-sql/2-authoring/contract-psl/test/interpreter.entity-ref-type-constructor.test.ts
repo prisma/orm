@@ -42,7 +42,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 const NATIVE_ENUM_DISCRIMINATOR = 'test-native-enum';
@@ -206,7 +206,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
-  ...fixtureTypeLookups,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),

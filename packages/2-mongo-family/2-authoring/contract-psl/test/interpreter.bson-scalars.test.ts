@@ -26,9 +26,9 @@ function interpretPost() {
     SCHEMA,
     {
       scalarTypeCodecIds,
-      controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
       codecLookup: mongoCodecLookup,
-      dataTypeLookup: mongoDataTypeLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     },
     'bson-scalars.prisma',
   );
