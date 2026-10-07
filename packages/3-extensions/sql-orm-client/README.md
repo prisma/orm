@@ -218,7 +218,7 @@ await db.User.where({ id: 1 }).update({
 
 Both operations are refused with `ORM.RELATION_MUTATION_UNSUPPORTED` inside `create()` and on a to-one relation. With an emitted `contract.d.ts` these are also type errors.
 
-On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to their junction rows is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back.
+On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to their junction rows is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back. When the junction table has no foreign key to the related table, `deleteAll` deletes the related rows and their junction rows remain, holding keys of rows that no longer exist. Declare a foreign key with a cascading delete on the junction table so that the junction rows are removed with the rows they refer to.
 
 ### Several operations on one relation
 
