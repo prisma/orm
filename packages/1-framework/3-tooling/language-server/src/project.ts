@@ -288,6 +288,8 @@ export class Project {
         position,
         documents,
         binder: data.artifacts.binder(),
+        ...data.controlStack,
+        symbolTable: data.artifacts.symbolTable(),
         newName,
       });
     } catch (error) {

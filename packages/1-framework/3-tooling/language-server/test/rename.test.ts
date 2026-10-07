@@ -1,3 +1,6 @@
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import { fieldAttribute, fieldRef, list, referencedFieldRef } from '@internal/psl-parser';
+import { format } from '@internal/psl-parser/format';
 import { describe, expect, it } from 'vitest';
 import {
   LSPErrorCodes,
@@ -7,7 +10,14 @@ import {
 } from 'vscode-languageserver';
 import { provideReferences } from '../src/references';
 import { providePrepareRename, provideRename } from '../src/rename';
-import { cursorInput, type Files, glance, kinds, sameName } from './helpers/reference-fixtures';
+import {
+  cursorInput,
+  type Files,
+  type FixtureStack,
+  glance,
+  kinds,
+  sameName,
+} from './helpers/reference-fixtures';
 
 function lineWith(files: Files, uri: string, range: Range, replacement: string): string {
   const text = files[uri];
@@ -16,15 +26,65 @@ function lineWith(files: Files, uri: string, range: Range, replacement: string):
   const line = text.split('\n')[range.start.line] ?? '';
   const before = line.slice(0, range.start.character);
   const after = line.slice(range.end.character);
+  if (replacement.includes('\n')) {
+    return `${uri}: ${JSON.stringify(replacement)} before ${JSON.stringify(`${before}${after}`.trim())}`;
+  }
   return `${uri}: ${`${before}${replacement}${after}`.trim()}`;
 }
 
-function renameAt(files: Files, name: string, marked: string, newName: string): string[] | null {
-  const edit = provideRename({ ...cursorInput(files, name, marked), newName });
+function renameAt(
+  files: Files,
+  name: string,
+  marked: string,
+  newName: string,
+  stack?: FixtureStack,
+): string[] | null {
+  const edit = provideRename({ ...cursorInput(files, name, marked, stack), newName });
   if (edit === null) return null;
   return Object.entries(edit.changes ?? {}).flatMap(([uri, edits]) =>
     edits.map(({ range, newText }) => lineWith(files, uri, range, newText)),
   );
+}
+
+type Cursor = readonly [file: string, marked: string];
+
+function renameFromBoth(
+  files: Files,
+  declaration: Cursor,
+  reference: Cursor,
+  newName: string,
+  stack?: FixtureStack,
+): readonly [string[] | null, string[] | null] {
+  return [
+    renameAt(files, declaration[0], declaration[1], newName, stack),
+    renameAt(files, reference[0], reference[1], newName, stack),
+  ];
+}
+
+function pair(declaration: readonly string[], reference: readonly string[]): Files {
+  return {
+    'decl.prisma': [...declaration, ''].join('\n'),
+    'ref.prisma': [...reference, ''].join('\n'),
+  };
+}
+
+function offsetOf(text: string, position: Range['start']): number {
+  const lines = text.split('\n');
+  let offset = position.character;
+  for (let line = 0; line < position.line; line++) offset += (lines[line] ?? '').length + 1;
+  return offset;
+}
+
+function textAfterRename(files: Files, name: string, marked: string, newName: string): string {
+  const edit = provideRename({ ...cursorInput(files, name, marked), newName });
+  let text = files[name] ?? '';
+  const edits = [...(edit?.changes?.[name] ?? [])].sort(
+    (a, b) => offsetOf(text, b.range.start) - offsetOf(text, a.range.start),
+  );
+  for (const { range, newText } of edits) {
+    text = `${text.slice(0, offsetOf(text, range.start))}${newText}${text.slice(offsetOf(text, range.end))}`;
+  }
+  return text;
 }
 
 function prepareAt(files: Files, name: string, marked: string): string | null {
@@ -44,12 +104,14 @@ function rejectionOf(newName: string): unknown {
 
 const userToAccount = [
   'auth.prisma: model Account {',
+  'auth.prisma: "\\n    @@map(\\"User\\")\\n" before "}"',
   'session.prisma: user   Account @relation(fields: [userId], references: [id])',
   'post.prisma: author   auth.Account @relation(fields: [authorId], references: [id])',
 ];
 
 const userIdToUid = [
   'auth.prisma: uid    Int    @id',
+  'auth.prisma: id    Int    @id @map("id")',
   'session.prisma: user   User @relation(fields: [userId], references: [uid])',
   'post.prisma: author   auth.User @relation(fields: [authorId], references: [uid])',
 ];
@@ -58,6 +120,7 @@ const authorIdToWriterId = [
   'post.prisma: writerId Int',
   'post.prisma: author   auth.User @relation(fields: [writerId], references: [id])',
   'post.prisma: @@index([writerId])',
+  'post.prisma: authorId Int @map("authorId")',
 ];
 
 const authToIdentity = [
@@ -117,37 +180,68 @@ describe('provideRename — a namespace', () => {
   it('edits only the model tokens when a namespace has the same name', () => {
     expect(renameAt(sameName, 'post.prisma', 'owner auth.au|th', 'Account')).toEqual([
       'auth.prisma: model Account {',
+      'auth.prisma: "\\n    @@map(\\"auth\\")\\n" before "}"',
       'post.prisma: owner auth.Account',
     ]);
   });
 });
 
 describe('provideRename — other symbol kinds', () => {
-  it('renames a composite type', () => {
-    expect(renameAt(kinds, 'group.prisma', 'address   Addr|ess', 'Location')).toEqual([
-      'tag.prisma: type Location {',
-      'group.prisma: address   Location',
-    ]);
+  it('renames a composite type by name only', () => {
+    const edits = ['tag.prisma: type Location {', 'group.prisma: address   Location'];
+
+    expect(
+      renameFromBoth(
+        kinds,
+        ['tag.prisma', 'type Addr|ess'],
+        ['group.prisma', 'address   Addr|ess'],
+        'Location',
+      ),
+    ).toEqual([edits, edits]);
   });
 
-  it('renames a named type', () => {
-    expect(renameAt(kinds, 'tag.prisma', 'Em|ail = String', 'Mail')).toEqual([
-      'tag.prisma: Mail = String',
-      'group.prisma: email     Mail',
-    ]);
+  it('renames a named type by name only', () => {
+    const edits = ['tag.prisma: Mail = String', 'group.prisma: email     Mail'];
+
+    expect(
+      renameFromBoth(
+        kinds,
+        ['tag.prisma', 'Em|ail = String'],
+        ['group.prisma', 'email     Em|ail'],
+        'Mail',
+      ),
+    ).toEqual([edits, edits]);
   });
 
-  it('renames an enum block', () => {
-    expect(renameAt(kinds, 'group.prisma', 'role      Ro|le', 'Rank')).toEqual([
-      'tag.prisma: enum Rank {',
-      'group.prisma: role      Rank',
-    ]);
+  it('renames an enum block by name only', () => {
+    const edits = ['tag.prisma: enum Rank {', 'group.prisma: role      Rank'];
+
+    expect(
+      renameFromBoth(
+        kinds,
+        ['tag.prisma', 'enum Ro|le'],
+        ['group.prisma', 'role      Ro|le'],
+        'Rank',
+      ),
+    ).toEqual([edits, edits]);
   });
 
-  it('renames a generic block', () => {
-    expect(renameAt(kinds, 'tag.prisma', 'policy Read|Own', 'ReadMine')).toEqual([
-      'tag.prisma: policy ReadMine {',
-      'group.prisma: @@guardedBy(ReadMine)',
+  it('renames a block whose name is not a storage name by name only', () => {
+    const edits = ['tag.prisma: policy ReadMine {', 'group.prisma: @@guardedBy(ReadMine)'];
+
+    expect(
+      renameFromBoth(
+        kinds,
+        ['tag.prisma', 'policy Read|Own'],
+        ['group.prisma', '@@guardedBy(Read|Own)'],
+        'ReadMine',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('renames a composite type member by name only', () => {
+    expect(renameAt(kinds, 'tag.prisma', 'str|eet String', 'road')).toEqual([
+      'tag.prisma: road String',
     ]);
   });
 });
@@ -156,6 +250,7 @@ describe('provideRename — the new name', () => {
   it('returns an ordinary edit when the new name equals the current name', () => {
     expect(renameAt(glance, 'auth.prisma', 'model Us|er', 'User')).toEqual([
       'auth.prisma: model User {',
+      'auth.prisma: "\\n    @@map(\\"User\\")\\n" before "}"',
       'session.prisma: user   User @relation(fields: [userId], references: [id])',
       'post.prisma: author   auth.User @relation(fields: [authorId], references: [id])',
     ]);
@@ -173,6 +268,7 @@ describe('provideRename — the new name', () => {
       'post.prisma: writer-id Int',
       'post.prisma: author   auth.User @relation(fields: [writer-id], references: [id])',
       'post.prisma: @@index([writer-id])',
+      'post.prisma: authorId Int @map("authorId")',
     ]);
   });
 
@@ -228,7 +324,7 @@ describe('provideRename — nothing to rename', () => {
 });
 
 describe('provideRename — response shape', () => {
-  it('returns one text edit per find-references location, grouped by file', () => {
+  it('returns one name edit per find-references location, grouped by file, and the insertion last in the declaration file', () => {
     const input = cursorInput(glance, 'post.prisma', 'auth.Us|er');
 
     const edit = provideRename({ ...input, newName: 'Account' });
@@ -239,6 +335,10 @@ describe('provideRename — response shape', () => {
           {
             range: { start: { line: 1, character: 8 }, end: { line: 1, character: 12 } },
             newText: 'Account',
+          },
+          {
+            range: { start: { line: 4, character: 0 }, end: { line: 4, character: 0 } },
+            newText: '\n    @@map("User")\n',
           },
         ],
         'session.prisma': [
@@ -257,7 +357,7 @@ describe('provideRename — response shape', () => {
     });
     expect(
       Object.entries(edit?.changes ?? {}).flatMap(([uri, edits]) =>
-        edits.map(({ range }) => ({ uri, range })),
+        edits.filter(({ newText }) => newText === 'Account').map(({ range }) => ({ uri, range })),
       ),
     ).toEqual(provideReferences({ ...input, includeDeclaration: true }));
   });
@@ -342,5 +442,486 @@ describe('providePrepareRename — nothing to rename', () => {
 
   it('returns null at a position with no identifier', () => {
     expect(prepareAt(kinds, 'group.prisma', 'missing  | Missing')).toBeNull();
+  });
+});
+
+const refModel = (...members: string[]): string[] => [
+  'model Ref {',
+  '  id Int @id',
+  ...members,
+  '}',
+];
+
+const noMapStack: FixtureStack = {
+  authoringContributions: assembleAuthoringContributions([
+    {
+      id: 'rename-no-map',
+      authoring: {
+        attributeSpecs: {
+          field: {
+            id: () => fieldAttribute('id', { documentation: 'fixture' }),
+            relation: () =>
+              fieldAttribute('relation', {
+                documentation: 'fixture',
+                named: {
+                  fields: { type: list(fieldRef()), documentation: 'fixture' },
+                  references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+                },
+              }),
+          },
+          model: {},
+        },
+      },
+    },
+  ]),
+  pslBlockDescriptors: {},
+};
+
+describe('provideRename — map attribute added', () => {
+  it('adds @@map with the old name to a model', () => {
+    const files = pair(['model Item {', '  id Int @id', '}'], refModel('  item Item'));
+    const edits = [
+      'decl.prisma: model Product {',
+      'decl.prisma: "\\n  @@map(\\"Item\\")\\n" before "}"',
+      'ref.prisma: item Product',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'model It|em'],
+        ['ref.prisma', 'item It|em'],
+        'Product',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @map with the old name to a scalar field', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  code Int', '}'],
+      refModel('  item Item @relation(fields: [id], references: [code])'),
+    );
+    const edits = [
+      'decl.prisma: sku Int',
+      'decl.prisma: code Int @map("code")',
+      'ref.prisma: item Item @relation(fields: [id], references: [sku])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'co|de Int'],
+        ['ref.prisma', 'references: [co|de]'],
+        'sku',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @map to a list of scalars', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  tags String[]', '}'],
+      refModel('  item Item @relation(fields: [id], references: [tags])'),
+    );
+    const edits = [
+      'decl.prisma: labels String[]',
+      'decl.prisma: tags String[] @map("tags")',
+      'ref.prisma: item Item @relation(fields: [id], references: [labels])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'ta|gs String[]'],
+        ['ref.prisma', 'references: [ta|gs]'],
+        'labels',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @map to a field typed by an enum', () => {
+    const files = pair(
+      ['enum Kind {', '  BASIC', '}', 'model Item {', '  id Int @id', '  kind Kind', '}'],
+      refModel('  item Item @relation(fields: [id], references: [kind])'),
+    );
+    const edits = [
+      'decl.prisma: sort Kind',
+      'decl.prisma: kind Kind @map("kind")',
+      'ref.prisma: item Item @relation(fields: [id], references: [sort])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'ki|nd Kind'],
+        ['ref.prisma', 'references: [ki|nd]'],
+        'sort',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @map to a field typed by a composite type', () => {
+    const files = pair(
+      [
+        'type Place {',
+        '  street String',
+        '}',
+        'model Item {',
+        '  id Int @id',
+        '  place Place',
+        '}',
+      ],
+      refModel('  item Item @relation(fields: [id], references: [place])'),
+    );
+    const edits = [
+      'decl.prisma: spot Place',
+      'decl.prisma: place Place @map("place")',
+      'ref.prisma: item Item @relation(fields: [id], references: [spot])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'pla|ce Place'],
+        ['ref.prisma', 'references: [pla|ce]'],
+        'spot',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @map to a field whose type does not resolve', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  missing Nope', '}'],
+      refModel('  item Item @relation(fields: [id], references: [missing])'),
+    );
+    const edits = [
+      'decl.prisma: found Nope',
+      'decl.prisma: missing Nope @map("missing")',
+      'ref.prisma: item Item @relation(fields: [id], references: [found])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'miss|ing Nope'],
+        ['ref.prisma', 'references: [miss|ing]'],
+        'found',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @@map to a block whose descriptor says its name is the storage name', () => {
+    const files = pair(['label Sticker {', '}'], refModel('', '  @@labelled(Sticker)'));
+    const edits = [
+      'decl.prisma: label Badge {',
+      'decl.prisma: "  @@map(\\"Sticker\\")\\n" before "}"',
+      'ref.prisma: @@labelled(Badge)',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'label Stic|ker'],
+        ['ref.prisma', '@@labelled(Stic|ker)'],
+        'Badge',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @@map to a model that another model names as its base', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '}'],
+      ['model Special {', '  extra Int', '', '  @@base(Item)', '}'],
+    );
+    const edits = [
+      'decl.prisma: model Product {',
+      'decl.prisma: "\\n  @@map(\\"Item\\")\\n" before "}"',
+      'ref.prisma: @@base(Product)',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'model It|em'],
+        ['ref.prisma', '@@base(It|em)'],
+        'Product',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds @@map together with the name edits when the new name is already declared', () => {
+    const files = pair(['model Item {', '  id Int @id', '}'], refModel('  item Item'));
+
+    expect(renameAt(files, 'decl.prisma', 'model It|em', 'Ref')).toEqual([
+      'decl.prisma: model Ref {',
+      'decl.prisma: "\\n  @@map(\\"Item\\")\\n" before "}"',
+      'ref.prisma: item Ref',
+    ]);
+  });
+});
+
+describe('provideRename — map attribute not added', () => {
+  it('adds none to a model that has @@map, whatever it is renamed to', () => {
+    const files = pair(
+      ['model Account {', '  id Int @id', '', '  @@ map ( "User" )', '}'],
+      refModel('  account Account'),
+    );
+    const edits = ['decl.prisma: model Member {', 'ref.prisma: account Member'];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'model Acc|ount'],
+        ['ref.prisma', 'account Acc|ount'],
+        'Member',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('keeps the existing @@map when a model is renamed back to the mapped name', () => {
+    const files = pair(
+      ['model Account {', '  id Int @id', '', '  @@map("User")', '}'],
+      refModel('  account Account'),
+    );
+
+    expect(renameAt(files, 'decl.prisma', 'model Acc|ount', 'User')).toEqual([
+      'decl.prisma: model User {',
+      'ref.prisma: account User',
+    ]);
+  });
+
+  it('adds none to a field that has @map', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  code Int @map("old_code")', '}'],
+      refModel('  item Item @relation(fields: [id], references: [code])'),
+    );
+    const edits = [
+      'decl.prisma: sku Int @map("old_code")',
+      'ref.prisma: item Item @relation(fields: [id], references: [sku])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'co|de Int'],
+        ['ref.prisma', 'references: [co|de]'],
+        'sku',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to such a block that has @@map', () => {
+    const files = pair(
+      ['label Sticker {', '  @@map("stickers")', '}'],
+      refModel('', '  @@labelled(Sticker)'),
+    );
+    const edits = ['decl.prisma: label Badge {', 'ref.prisma: @@labelled(Badge)'];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'label Stic|ker'],
+        ['ref.prisma', '@@labelled(Stic|ker)'],
+        'Badge',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a model with @@base', () => {
+    const files = pair(
+      [
+        'model Item {',
+        '  id Int @id',
+        '}',
+        'model Special {',
+        '  extra Int',
+        '',
+        '  @@base(Item)',
+        '}',
+      ],
+      refModel('  special Special'),
+    );
+    const edits = ['decl.prisma: model Rare {', 'ref.prisma: special Rare'];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'model Spec|ial'],
+        ['ref.prisma', 'special Spec|ial'],
+        'Rare',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a relation field that holds the foreign key', () => {
+    const files = pair(
+      [
+        'model Owner {',
+        '  id Int @id',
+        '  items Item[]',
+        '}',
+        'model Item {',
+        '  id Int @id',
+        '  owner Owner @relation(fields: [id], references: [id])',
+        '}',
+      ],
+      refModel('  item Item @relation(fields: [id], references: [owner])'),
+    );
+    const edits = [
+      'decl.prisma: holder Owner @relation(fields: [id], references: [id])',
+      'ref.prisma: item Item @relation(fields: [id], references: [holder])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'own|er Owner'],
+        ['ref.prisma', 'references: [own|er]'],
+        'holder',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a back-relation field', () => {
+    const files = pair(
+      [
+        'model Owner {',
+        '  id Int @id',
+        '  items Item[]',
+        '}',
+        'model Item {',
+        '  id Int @id',
+        '  owner Owner @relation(fields: [id], references: [id])',
+        '}',
+      ],
+      refModel('  owner Owner @relation(fields: [id], references: [items])'),
+    );
+    const edits = [
+      'decl.prisma: things Item[]',
+      'ref.prisma: owner Owner @relation(fields: [id], references: [things])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'ite|ms Item[]'],
+        ['ref.prisma', 'references: [ite|ms]'],
+        'things',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a model when the attribute specs define no map for models', () => {
+    const files = pair(['model Item {', '  id Int @id', '}'], refModel('  item Item'));
+    const edits = ['decl.prisma: model Product {', 'ref.prisma: item Product'];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'model It|em'],
+        ['ref.prisma', 'item It|em'],
+        'Product',
+        noMapStack,
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a field when the attribute specs define no map for fields', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  code Int', '}'],
+      refModel('  item Item @relation(fields: [id], references: [code])'),
+    );
+    const edits = [
+      'decl.prisma: sku Int',
+      'ref.prisma: item Item @relation(fields: [id], references: [sku])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'co|de Int'],
+        ['ref.prisma', 'references: [co|de]'],
+        'sku',
+        noMapStack,
+      ),
+    ).toEqual([edits, edits]);
+  });
+});
+
+describe('provideRename — where the map attribute goes', () => {
+  it('puts @map after the type of a field with no attribute', () => {
+    const files = { 'a.prisma': 'model Item {\n  id   Int @id\n  code Int\n}\n' };
+
+    expect(textAfterRename(files, 'a.prisma', 'co|de Int', 'sku')).toBe(
+      'model Item {\n  id   Int @id\n  sku Int @map("code")\n}\n',
+    );
+  });
+
+  it('puts @map after the last attribute of a field', () => {
+    const files = { 'a.prisma': 'model Item {\n  id   Int @id\n  code Int @unique @db.Wide\n}\n' };
+
+    expect(textAfterRename(files, 'a.prisma', 'co|de Int', 'sku')).toBe(
+      'model Item {\n  id   Int @id\n  sku Int @unique @db.Wide @map("code")\n}\n',
+    );
+  });
+
+  it('puts @map before a trailing comment', () => {
+    const files = {
+      'a.prisma': 'model Item {\n  id   Int @id\n  code Int @unique   // the code\n}\n',
+    };
+
+    expect(textAfterRename(files, 'a.prisma', 'co|de Int', 'sku')).toBe(
+      'model Item {\n  id   Int @id\n  sku Int @unique @map("code")   // the code\n}\n',
+    );
+  });
+
+  it('puts @@map after a blank line when the last member of the model is a field', () => {
+    const files = { 'a.prisma': 'model Item {\n  id   Int @id\n  code Int\n}\n' };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
+
+    expect(renamed).toBe('model Product {\n  id   Int @id\n  code Int\n\n  @@map("Item")\n}\n');
+    expect(format(renamed)).toBe(renamed);
+  });
+
+  it('puts @@map right after the existing @@ attributes of the model', () => {
+    const files = {
+      'a.prisma': 'model Item {\n  id   Int @id\n  code Int\n\n  @@index([code])\n}\n',
+    };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
+
+    expect(renamed).toBe(
+      'model Product {\n  id   Int @id\n  code Int\n\n  @@index([code])\n  @@map("Item")\n}\n',
+    );
+    expect(format(renamed)).toBe(renamed);
+  });
+
+  it('indents @@map like the members of a model inside a namespace', () => {
+    const files = { 'a.prisma': 'namespace shop {\n  model Item {\n    id Int @id\n  }\n}\n' };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
+
+    expect(renamed).toBe(
+      'namespace shop {\n  model Product {\n    id Int @id\n\n    @@map("Item")\n  }\n}\n',
+    );
+    expect(format(renamed)).toBe(renamed);
+  });
+
+  it('gives an empty model a body that holds @@map alone', () => {
+    const files = { 'a.prisma': 'namespace shop {\n  model Item {}\n}\n' };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
+
+    expect(renamed).toBe('namespace shop {\n  model Product {\n    @@map("Item")\n  }\n}\n');
+    expect(format(renamed)).toBe(renamed);
+  });
+
+  it('puts @@map after a blank line when the last member of a block is an entry', () => {
+    const files = { 'a.prisma': 'label Sticker {\n  colour = "red"\n}\n' };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'label Stic|ker', 'Badge');
+
+    expect(renamed).toBe('label Badge {\n  colour = "red"\n\n  @@map("Sticker")\n}\n');
+    expect(format(renamed)).toBe(renamed);
   });
 });

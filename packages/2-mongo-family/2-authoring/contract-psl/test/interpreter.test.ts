@@ -451,6 +451,28 @@ model Item {
       expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
     });
 
+    it('keeps every storage name when a model and a field are renamed and mapped to their old names', () => {
+      const before = interpretOk(`
+        model User {
+          id   ObjectId @id @map("_id")
+          name String
+        }
+      `);
+      const after = interpretOk(`
+        model Account {
+          id       ObjectId @id @map("_id")
+          fullName String @map("name")
+
+          @@map("User")
+        }
+      `);
+
+      expect(after.storage).toEqual(before.storage);
+      expect(Object.keys(model(after, 'Account').fields)).toEqual(
+        Object.keys(model(before, 'User').fields),
+      );
+    });
+
     it('uses @@map() to override collection name', () => {
       const ir = interpretOk(`
         model User {

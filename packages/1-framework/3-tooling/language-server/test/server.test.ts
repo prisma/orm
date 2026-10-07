@@ -284,6 +284,43 @@ const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
   };
 };
 
+const resolveToSchemaWithMapAttributes: ResolveInputs = async () => {
+  const resolution = await resolutionForInputs([schemaPath], undefined, {
+    label: {
+      kind: 'pslBlock',
+      keyword: 'label',
+      discriminator: 'server-label',
+      name: { required: true },
+      spec: () => structBlock({ parameters: {} }),
+      nameIsStorageName: true,
+    },
+  });
+  const name = { key: 'name', type: str(), documentation: 'fixture' };
+  return {
+    ...resolution,
+    controlStack: {
+      ...resolution.controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'map-attributes',
+          authoring: {
+            type: testTypeConstructors(scalarTypes),
+            attributeSpecs: {
+              field: {
+                map: () => fieldAttribute('map', { documentation: 'fixture', positional: [name] }),
+              },
+              model: {
+                map: () => modelAttribute('map', { documentation: 'fixture', positional: [name] }),
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults: assembleControlMutationDefaults([]),
+    },
+  };
+};
+
 async function recursiveCompletionResolution(): Promise<ConfigResolution> {
   const sql = (await import(
     new URL(
@@ -2428,6 +2465,74 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
           {
             range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
             newText: 'Account',
+          },
+        ],
+      },
+    });
+  });
+
+  it('adds the map attribute to a renamed model and field when the control stack defines map', async () => {
+    harness = startHarness(resolveToSchemaWithMapAttributes);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestRename(harness, schemaUri, position, 'Account')).resolves.toEqual({
+      changes: {
+        [schemaUri]: [
+          {
+            range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+            newText: 'Account',
+          },
+          {
+            range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+            newText: 'Account',
+          },
+          {
+            range: { start: { line: 3, character: 0 }, end: { line: 3, character: 0 } },
+            newText: '\n  @@map("User")\n',
+          },
+        ],
+      },
+    });
+    await expect(
+      requestRename(harness, schemaUri, { line: 2, character: 3 }, 'uid'),
+    ).resolves.toEqual({
+      changes: {
+        [schemaUri]: [
+          {
+            range: { start: { line: 2, character: 2 }, end: { line: 2, character: 4 } },
+            newText: 'uid',
+          },
+          {
+            range: { start: { line: 2, character: 8 }, end: { line: 2, character: 8 } },
+            newText: ' @map("id")',
+          },
+        ],
+      },
+    });
+  });
+
+  it('adds the map attribute to a renamed block whose descriptor says its name is the storage name', async () => {
+    harness = startHarness(resolveToSchemaWithMapAttributes);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor('// use prisma-8\nlabel Stic|ker {\n}\n');
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestRename(harness, schemaUri, position, 'Badge')).resolves.toEqual({
+      changes: {
+        [schemaUri]: [
+          {
+            range: { start: { line: 1, character: 6 }, end: { line: 1, character: 13 } },
+            newText: 'Badge',
+          },
+          {
+            range: { start: { line: 2, character: 0 }, end: { line: 2, character: 0 } },
+            newText: '  @@map("Sticker")\n',
           },
         ],
       },

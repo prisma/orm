@@ -1,5 +1,8 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  type AssembledAuthoringContributions,
+  assembleAuthoringContributions,
+} from '@internal/framework-components/control';
 import {
   buildSymbolTable,
   entityRef,
@@ -12,7 +15,8 @@ import {
   structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
-import type { ProvideReferencesInput, ReferencesDocument } from '../../src/references';
+import type { ReferencesDocument } from '../../src/references';
+import type { ProvideRenameInput } from '../../src/rename';
 import { testBinder } from './binder';
 
 export type Files = Readonly<Record<string, string>>;
@@ -105,6 +109,11 @@ export const sameName: Files = {
   'post.prisma': ['model Post {', '  id    Int @id', '  owner auth.auth', '}', ''].join('\n'),
 };
 
+export interface FixtureStack {
+  readonly authoringContributions: AssembledAuthoringContributions;
+  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
+}
+
 const authoringContributions = assembleAuthoringContributions([
   {
     id: 'reference-fixtures',
@@ -135,6 +144,29 @@ const authoringContributions = assembleAuthoringContributions([
             }),
         },
         model: {
+          map: () =>
+            modelAttribute('map', {
+              documentation: 'fixture',
+              positional: [{ key: 'name', type: str(), documentation: 'fixture' }],
+            }),
+          base: () =>
+            modelAttribute('base', {
+              documentation: 'fixture',
+              positional: [
+                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+              ],
+            }),
+          labelled: () =>
+            modelAttribute('labelled', {
+              documentation: 'fixture',
+              positional: [
+                {
+                  key: 'label',
+                  type: entityRef({ kind: 'block', keyword: 'label' }),
+                  documentation: 'fixture',
+                },
+              ],
+            }),
           index: () =>
             modelAttribute('index', {
               documentation: 'fixture',
@@ -175,9 +207,19 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
         parameters: { on: { type: entityRef({ kind: 'model' }), documentation: 'fixture' } },
       }),
   },
+  label: {
+    kind: 'pslBlock',
+    keyword: 'label',
+    discriminator: 'references-label',
+    name: { required: true },
+    spec: () => structBlock({ parameters: {} }),
+    nameIsStorageName: true,
+  },
 };
 
-function project(files: Files) {
+const fixtureStack: FixtureStack = { authoringContributions, pslBlockDescriptors };
+
+function project(files: Files, stack: FixtureStack) {
   const parsed = Object.entries(files).map(([name, text]) => parse(text, name));
   const [first, ...rest] = parsed;
   if (first === undefined) throw new Error('no files');
@@ -190,8 +232,7 @@ function project(files: Files) {
     sources,
     symbolTable,
     scalarTypes: ['Int', 'String'],
-    authoringContributions,
-    pslBlockDescriptors,
+    ...stack,
   });
   const documents = parsed.map(
     (file): ReferencesDocument => ({
@@ -199,15 +240,16 @@ function project(files: Files) {
       sourceFile: file.sources.sourceFileFor(file.document.syntax),
     }),
   );
-  return { documents, binder };
+  return { documents, binder, symbolTable };
 }
 
 export function cursorInput(
   files: Files,
   name: string,
   marked: string,
-): Omit<ProvideReferencesInput, 'includeDeclaration'> {
-  const { documents, binder } = project(files);
+  stack: FixtureStack = fixtureStack,
+): Omit<ProvideRenameInput, 'newName'> {
+  const { documents, binder, symbolTable } = project(files, stack);
   const current = documents.find((document) => document.sourceFile.filename === name);
   if (current === undefined) throw new Error(`no file ${name}`);
   const needle = marked.replace('|', '');
@@ -222,5 +264,8 @@ export function cursorInput(
     position: current.sourceFile.positionAt(start + marked.indexOf('|')),
     documents,
     binder,
+    symbolTable,
+    ...stack,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
   };
 }
