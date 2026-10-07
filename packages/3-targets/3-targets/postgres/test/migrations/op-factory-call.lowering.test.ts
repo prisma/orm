@@ -370,7 +370,7 @@ describe('SetDefaultCall', () => {
       label: call.label,
     }).toEqual({
       rendered: [{ column: status, table: 'user' }],
-      checks: 3,
+      checks: 2,
       operationClass: 'additive',
       execute: [
         {
@@ -381,14 +381,12 @@ describe('SetDefaultCall', () => {
       precheck: [
         { description: 'ensure column "status" exists', sql: 'LOWERED 1', params: ['p1'] },
       ],
-      postcheck: [
-        { description: 'verify column "status" has a default', sql: 'LOWERED 3', params: ['p3'] },
-      ],
+      postcheck: [],
       label: 'Set default on "user"."status"',
     });
   });
 
-  it('checks no default afterwards when it changes one, since the old default would pass for the new one and the runner would skip the change', async () => {
+  it('carries no postcheck when it changes a default, because the runner would skip an operation whose postcheck the old default already passes', async () => {
     const { lowerer } = renderingLowerer();
     const call = new SetDefaultCall('public', 'user', status, 'widening');
     const op = await call.toOp(lowerer);

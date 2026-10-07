@@ -200,13 +200,9 @@ export async function dropNotNull(
  * Sets `column`'s default. The adapter writes the `DEFAULT …` clause, reading a literal default with
  * the column's codec first, as every DDL statement that writes a default does.
  *
- * `operationClass` defaults to `'additive'` (setting a default on a column
- * that currently has none). The reconciliation planner passes `'widening'`
- * when the column already has a different default — policy enforcement
- * treats that as a widening change rather than an additive one. A widening
- * change has no postcheck: the old default would pass a check for a default,
- * and the runner skips an operation whose postcheck already passes. Setting a
- * default again is harmless.
+ * `operationClass` is `'additive'` when the column has no default yet and `'widening'` when it replaces one; policy enforcement reads it.
+ *
+ * The operation carries no postcheck. The runner skips an operation whose postchecks already hold before it runs. A check that the column has a default also holds for the old default, so the runner would skip a changed default. A check that compares the value would need the text Postgres stores for the default, predicted at plan time, which is fragile. Instead the run's final schema verification compares the default's value. Running `SET DEFAULT` again on a column that already has that default is harmless.
  */
 export async function setDefault(
   schemaName: string,
@@ -224,16 +220,6 @@ export async function setDefault(
     table: tableName,
     column: columnName,
   });
-  const hasDefault =
-    operationClass === 'additive'
-      ? await lowerer.lowerToExecuteRequest(
-          columnDefaultAst({
-            schema: schemaName,
-            table: tableName,
-            column: columnName,
-          }).defaultPresent(),
-        )
-      : undefined;
   return {
     id: `setDefault.${tableName}.${columnName}`,
     label: `Set default on "${tableName}"."${columnName}"`,
@@ -246,10 +232,7 @@ export async function setDefault(
         `ALTER TABLE ${qualified} ALTER COLUMN ${quoteIdentifier(columnName)} SET ${clause}`,
       ),
     ],
-    postcheck:
-      hasDefault === undefined
-        ? []
-        : [step(`verify column "${columnName}" has a default`, hasDefault.sql, hasDefault.params)],
+    postcheck: [],
   };
 }
 

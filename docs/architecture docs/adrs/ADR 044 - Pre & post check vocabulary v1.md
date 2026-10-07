@@ -34,7 +34,7 @@ Each check has an ID and parameters. IDs are case sensitive. All parameters are 
 - **columnTypeIs(table, column, type, nullable?)**
   Ensures a column's normalized type and nullability match the contract
 - **defaultIs(table, column, normalizedExpr)**
-  Ensures a column default matches a normalized expression
+  Ensures a column default matches a normalized expression. Not built: it would need the text Postgres stores for the default, predicted at plan time, which is fragile. See the setDefault entry under Idempotency mapping
 - **indexCovers(table, columns[], unique?)**
   Ensures an index exists that covers the columns in order with optional uniqueness
 - **constraintExists(table, name?, kind?)**
@@ -102,7 +102,7 @@ Pre checks below can imply already applied when true
 - **columnExists** and **columnTypeIs** for addColumn with matching type
 - **indexCovers** for addIndex with matching columns and uniqueness
 - **constraintExists** and **foreignKeyMatches** for addConstraint and addForeignKey ops
-- **defaultIs** for setDefault ops
+- No check for setDefault ops, which carry no postcheck. A check that the column has a default also holds for the old default, so it would skip a changed default. The run's final schema verification compares the default's value instead, and running `SET DEFAULT` again is harmless
 
 When a pre check establishes already applied, runners record a no-op outcome rather than error
 
