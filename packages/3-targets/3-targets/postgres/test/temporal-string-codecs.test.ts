@@ -2,12 +2,10 @@ import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
   PG_DATE_STRING_CODEC_ID,
-  PG_JSON_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
 } from '../src/core/codec-ids';
-import { codecDescriptors } from '../src/core/codecs';
 import {
   pgDateStringDescriptor,
   pgTimeStringDescriptor,
@@ -235,15 +233,5 @@ describe('a Date written to a text timestamp codec', () => {
     await expect(timestamptz.encode(value, callCtx)).rejects.toThrow(
       PG_TIMESTAMPTZ_STRING_CODEC_ID,
     );
-  });
-});
-
-describe('the codecs an enum cannot use', () => {
-  it('are the string timestamp codecs, whose values a query reads back in a form the contract does not store, and json, which has no equality operator', () => {
-    expect(
-      codecDescriptors
-        .filter((descriptor) => descriptor.enumRefusal !== undefined)
-        .map((descriptor) => descriptor.codecId),
-    ).toEqual([PG_TIMESTAMP_STRING_CODEC_ID, PG_TIMESTAMPTZ_STRING_CODEC_ID, PG_JSON_CODEC_ID]);
   });
 });

@@ -214,6 +214,7 @@ describe('enum lowering encodes member values through the codec', () => {
         id === codec.id
           ? ({
               codecId: id,
+              traits: ['equality'],
               paramsSchema: undefined,
               factory: () => () => codec,
               enumRefusal: 'A query reads its values as text the contract does not store.',
@@ -229,6 +230,36 @@ describe('enum lowering encodes member values through the codec', () => {
         message:
           'enumType("Stamp"): an enum cannot use the codec test/printed-text@1. A query reads its values as text the contract does not store.',
         meta: { enumName: 'Stamp', codecId: 'test/printed-text@1', reason: 'codec-not-for-enums' },
+      }),
+    );
+  });
+
+  it('refuses an enum whose codec does not declare the equality trait, saying so', () => {
+    const Shape = enumType('Shape', { codecId: 'test/unequal@1' }, member('Round', 'round'));
+    const codec = stubCodec('test/unequal@1', (v) => v as JsonValue);
+    const codecLookup: CodecLookupWithDescriptors = {
+      ...emptyCodecLookup,
+      get: (id) => (id === codec.id ? codec : undefined),
+      descriptorFor: (id) =>
+        id === codec.id
+          ? ({
+              codecId: id,
+              traits: [],
+              paramsSchema: undefined,
+              factory: () => () => codec,
+            } as unknown as AnyCodecDescriptor)
+          : undefined,
+    };
+
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Shape), ...withTestTypes(codecLookup)),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Shape"): an enum cannot use the codec test/unequal@1. The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
+        fix: 'Type the enum with another codec.',
+        meta: { enumName: 'Shape', codecId: 'test/unequal@1', reason: 'codec-not-for-enums' },
       }),
     );
   });

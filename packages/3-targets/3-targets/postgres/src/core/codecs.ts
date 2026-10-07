@@ -1263,6 +1263,8 @@ export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgBytea.id;
   override readonly codecId = PG_BYTEA_CODEC_ID;
   override readonly traits = ['equality'] as const;
+  override readonly enumRefusal =
+    'The contract stores a bytea value as base64 text, which PostgreSQL reads as the bytes of that text, so no CHECK can compare a value with the members. No enum can use a bytea codec; use a text enum instead.';
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgByteaCodec {
     return () => new PgByteaCodec(this);
@@ -1415,6 +1417,8 @@ export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgTsquery.id;
   override readonly codecId = PG_TSQUERY_CODEC_ID;
   override readonly traits = [] as const;
+  override readonly enumRefusal =
+    "PostgreSQL normalises the query text, so a member as written is not the value a query reads back: it prints a & b as 'a' & 'b'. No enum can use a tsquery codec; use a text enum instead.";
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgTsqueryCodec {
     return () => new PgTsqueryCodec(this);

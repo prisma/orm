@@ -45,8 +45,8 @@ import {
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
-import { assembleDataTypes } from '@internal/framework-components/codec';
+import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { assembleDataTypes, enumRefusalOf } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -96,6 +96,23 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
     throw errorEnumCodecNotInPackStack({ codecId });
   }
   return codec.encodeJson(value);
+}
+
+function assertEnumCanUseCodec(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors,
+): void {
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
+  if (enumRefusal === undefined) return;
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
+    {
+      fix: 'Type the enum with another codec.',
+      meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
+    },
+  );
 }
 
 // `canonicalStringify` rejects non-plain objects so a `Map` or class
@@ -2548,6 +2565,7 @@ function buildContractFromDefinition<
   // The value set stores each enum's codec-encoded member values (mirroring SQL's build-contract).
   const storageValueSets: Record<string, MongoValueSetInput> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    assertEnumCanUseCodec(handle, codecLookup);
     storageValueSets[enumName] = {
       kind: 'valueSet',
       values: handle.values.map((v) => encodeEnumValue(v, handle.codecId, codecLookup)),

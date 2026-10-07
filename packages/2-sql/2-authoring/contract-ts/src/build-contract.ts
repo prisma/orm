@@ -39,6 +39,7 @@ import {
   type ColumnTypeDescriptor,
   codecForRef,
   type DataTypeLookup,
+  enumRefusalOf,
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -564,7 +565,8 @@ function encodeEnumMembers(
   handle: EnumTypeHandle,
   codecLookup: CodecLookupWithDescriptors,
 ): readonly { readonly name: string; readonly value: JsonValue }[] {
-  const enumRefusal = codecLookup.descriptorFor(handle.codecId)?.enumRefusal;
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
   if (enumRefusal !== undefined) {
     throw contractError(
       'CONTRACT.ENUM_INVALID',

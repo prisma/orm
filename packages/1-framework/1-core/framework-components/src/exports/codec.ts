@@ -18,6 +18,7 @@ export {
   CodecDescriptorImpl,
   CodecDescriptorTemplateImpl,
   canonicalFormOf,
+  enumRefusalOf,
 } from '../shared/codec-descriptor';
 export type {
   CodecCallContext,

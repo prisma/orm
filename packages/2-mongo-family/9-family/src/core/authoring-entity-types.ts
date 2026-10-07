@@ -7,6 +7,7 @@ import {
   readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { enumRefusalOf } from '@internal/framework-components/codec';
 import { isMongoDataType } from '@internal/mongo-contract/data-type';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
@@ -103,6 +104,17 @@ export const mongoFamilyEnumEntityDescriptor = {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type codec "${codecId}" stores BSON type ${bsonType}, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.`,
+          sourceId,
+          span: codecSpan,
+        });
+        return undefined;
+      }
+
+      const enumRefusal = enumRefusalOf(descriptor);
+      if (enumRefusal !== undefined) {
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" cannot use the codec "${codecId}". ${enumRefusal}`,
           sourceId,
           span: codecSpan,
         });

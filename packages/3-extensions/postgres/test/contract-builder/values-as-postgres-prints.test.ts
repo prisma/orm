@@ -5,6 +5,8 @@ const pgNumeric = { codecId: 'pg/numeric@1' as const, nativeType: 'numeric' };
 const pgInet = { codecId: 'pg/inet@1' as const, nativeType: 'inet' };
 const pgTimestampString = { codecId: 'pg/timestamp-string@1' as const, nativeType: 'timestamp' };
 const pgJson = { codecId: 'pg/json@1' as const, nativeType: 'json' };
+const pgBytea = { codecId: 'pg/bytea@1' as const, nativeType: 'bytea' };
+const pgTsquery = { codecId: 'pg/tsquery@1' as const, nativeType: 'tsquery' };
 const pgTimestamptzString = {
   codecId: 'pg/timestamptz-string@1' as const,
   nativeType: 'timestamptz',
@@ -101,23 +103,34 @@ describe('values in a Postgres contract are the text Postgres returns', () => {
     [
       'pg/timestamp-string@1',
       enumType('Stamp', pgTimestampString, member('A', '2024-01-02T03:04:05')),
-      'A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member.',
+      'A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member. Use pg/timestamp-temporal@1, whose members are Temporal values.',
     ],
     [
       'pg/timestamptz-string@1',
       enumType('Stamp', pgTimestamptzString, member('A', '2024-01-02T03:04:05Z')),
-      `A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member.`,
+      `A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member. Use pg/timestamptz-temporal@1, whose members are Temporal values.`,
     ],
     [
       'pg/json@1',
       enumType('Stamp', pgJson, member('A', 'low')),
       'The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.',
     ],
+    [
+      'pg/bytea@1',
+      enumType('Stamp', pgBytea, member('A', new Uint8Array([1, 2]))),
+      'The contract stores a bytea value as base64 text, which PostgreSQL reads as the bytes of that text, so no CHECK can compare a value with the members. No enum can use a bytea codec; use a text enum instead.',
+    ],
+    [
+      'pg/tsquery@1',
+      enumType('Stamp', pgTsquery, member('A', 'a & b' as never)),
+      "PostgreSQL normalises the query text, so a member as written is not the value a query reads back: it prints a & b as 'a' & 'b'. No enum can use a tsquery codec; use a text enum instead.",
+    ],
   ])('refuses an enum over %s, saying why', (codecId, handle, reason) => {
     expect(() => contractWithEnum(handle)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message: `enumType("Stamp"): an enum cannot use the codec ${codecId}. ${reason}`,
+        fix: 'Type the enum with another codec.',
         meta: { enumName: 'Stamp', codecId, reason: 'codec-not-for-enums' },
       }),
     );

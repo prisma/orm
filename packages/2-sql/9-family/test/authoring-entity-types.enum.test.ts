@@ -149,12 +149,20 @@ const testCodecLookup: CodecLookupWithDescriptors = {
   },
   descriptorFor(id: string): AnyCodecDescriptor | undefined {
     if (id === ORPHAN_CODEC_ID) {
-      return { codecId: id, dataType: 'test/unregistered' } as AnyCodecDescriptor;
+      return {
+        codecId: id,
+        dataType: 'test/unregistered',
+        traits: ['equality'],
+      } as unknown as AnyCodecDescriptor;
     }
     const dataType = dataTypeOfCodec[id];
     return dataType === undefined
       ? undefined
-      : ({ codecId: id, dataType: dataType.id } as AnyCodecDescriptor);
+      : ({
+          codecId: id,
+          dataType: dataType.id,
+          traits: ['equality'],
+        } as unknown as AnyCodecDescriptor);
   },
   renderOutputTypeFor: () => undefined,
 };
@@ -381,8 +389,9 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
             ? ({
                 codecId: id,
                 dataType: textType.id,
+                traits: ['equality'],
                 enumRefusal: 'A query reads its values as text the contract does not store.',
-              } as AnyCodecDescriptor)
+              } as unknown as AnyCodecDescriptor)
             : testCodecLookup.descriptorFor(id),
       },
     };
@@ -402,6 +411,39 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message:
             'enum "Stamp" cannot use the codec "test/printed-text@1". A query reads its values as text the contract does not store.',
+          sourceId: 'schema.prisma',
+          span: SPAN,
+        },
+      ],
+    });
+  });
+
+  it('a codec that does not declare the equality trait is reported, saying so', () => {
+    const UNEQUAL_CODEC_ID = 'test/unequal@1';
+    const diagnostics: unknown[] = [];
+    const context: AuthoringEntityContext = {
+      ...makeContext(diagnostics),
+      codecLookup: {
+        ...testCodecLookup,
+        get: (id) => (id === UNEQUAL_CODEC_ID ? jsonCodec : testCodecLookup.get(id)),
+        descriptorFor: (id) =>
+          id === UNEQUAL_CODEC_ID
+            ? ({ codecId: id, dataType: jsonType.id, traits: [] } as unknown as AnyCodecDescriptor)
+            : testCodecLookup.descriptorFor(id),
+      },
+    };
+    const handle = factory(
+      enumBlock({ name: 'Shape', values: { round: 'round' }, typeCodecId: UNEQUAL_CODEC_ID }),
+      context,
+    );
+
+    expect({ handle, diagnostics }).toEqual({
+      handle: undefined,
+      diagnostics: [
+        {
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message:
+            'enum "Shape" cannot use the codec "test/unequal@1". The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
           sourceId: 'schema.prisma',
           span: SPAN,
         },

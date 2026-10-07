@@ -7,7 +7,7 @@ import {
   readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import { requiredParamKeys } from '@internal/framework-components/codec';
+import { enumRefusalOf, requiredParamKeys } from '@internal/framework-components/codec';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
@@ -52,10 +52,11 @@ export const sqlFamilyEnumEntityDescriptor = {
         });
         return undefined;
       }
-      if (descriptor.enumRefusal !== undefined) {
+      const enumRefusal = enumRefusalOf(descriptor);
+      if (enumRefusal !== undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" cannot use the codec "${codecId}". ${descriptor.enumRefusal}`,
+          message: `enum "${block.name}" cannot use the codec "${codecId}". ${enumRefusal}`,
           sourceId,
           span: codecSpan,
         });

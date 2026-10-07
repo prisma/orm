@@ -109,6 +109,8 @@ const brokenCodec: Codec = {
   },
 };
 
+const UNEQUAL_CODEC_ID = 'test/unequal@1';
+
 const dataTypeIdByCodecId: Record<string, string> = {
   [TEXT_CODEC_ID]: 'test/text',
   [INT_CODEC_ID]: 'test/int',
@@ -119,6 +121,7 @@ const dataTypeIdByCodecId: Record<string, string> = {
   [ENCODE_FOLDING_CODEC_ID]: 'test/folding-text',
   [BROKEN_CODEC_ID]: 'test/folding-text',
   'test/orphan@1': 'test/unregistered',
+  [UNEQUAL_CODEC_ID]: 'test/json',
 };
 
 const testDataTypes = createDataTypeLookup([
@@ -140,12 +143,14 @@ const testCodecLookup: CodecLookupWithDescriptors = {
     if (id === FOLDING_CODEC_ID) return foldingCodec;
     if (id === ENCODE_FOLDING_CODEC_ID) return encodeFoldingCodec;
     if (id === BROKEN_CODEC_ID) return brokenCodec;
+    if (id === UNEQUAL_CODEC_ID) return jsonCodec;
     return undefined;
   },
   descriptorFor(id: string) {
     const dataTypeId = dataTypeIdByCodecId[id];
     if (dataTypeId === undefined) return undefined;
-    return { codecId: id, dataType: dataTypeId } as unknown as AnyCodecDescriptor;
+    const traits = id === UNEQUAL_CODEC_ID ? [] : ['equality'];
+    return { codecId: id, dataType: dataTypeId, traits } as unknown as AnyCodecDescriptor;
   },
   renderOutputTypeFor: () => undefined,
 };
@@ -462,6 +467,29 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
         span: SPAN,
       }),
     ]);
+  });
+});
+
+describe('mongoFamilyEnumEntityDescriptor: a codec an enum cannot use', () => {
+  it('refuses a codec that does not declare the equality trait, saying so', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Shape', values: { round: 'round' }, typeCodecId: UNEQUAL_CODEC_ID }),
+      makeContext(diagnostics),
+    );
+
+    expect({ handle, diagnostics }).toEqual({
+      handle: undefined,
+      diagnostics: [
+        {
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message:
+            'enum "Shape" cannot use the codec "test/unequal@1". The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
+          sourceId: 'schema.prisma',
+          span: SPAN,
+        },
+      ],
+    });
   });
 });
 
