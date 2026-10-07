@@ -28,7 +28,7 @@ changes:
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
-        - '\.include\('
+        - '\.include\s*[(<]'
   - id: sql-orm-table-references-renamed
     summary: |
       The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. Query results are unchanged; code and tests that match on SQL text need updating.

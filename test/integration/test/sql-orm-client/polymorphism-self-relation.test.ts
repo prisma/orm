@@ -49,7 +49,7 @@ async function taskTitles(runtime: PgIntegrationRuntime): Promise<readonly unkno
 
 describe('integration/polymorphism-self-relation', () => {
   it(
-    'include() of the same hierarchy decodes MTI variant children through their own table reference',
+    'default projection: include() of the same hierarchy decodes MTI variant children through their own table reference',
     async () => {
       await withTaskTree(async (runtime, tasks) => {
         const rows = await tasks
@@ -115,7 +115,7 @@ describe('integration/polymorphism-self-relation', () => {
   );
 
   it(
-    'include() from a selected MTI variant to its own hierarchy keeps parent and child variant rows apart',
+    'default projection: include() from a selected MTI variant to its own hierarchy keeps parent and child variant rows apart',
     async () => {
       await withTaskTree(async (_runtime, tasks) => {
         const rows = await tasks
@@ -169,7 +169,7 @@ describe('integration/polymorphism-self-relation', () => {
   );
 
   it(
-    'include() of a variant-declared relation to the same hierarchy correlates to the parent variant row',
+    'default projection: include() of a variant-declared relation to the same hierarchy correlates to the parent variant row',
     async () => {
       await withTaskTree(async (runtime, tasks) => {
         const rows = await tasks
