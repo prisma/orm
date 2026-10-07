@@ -444,7 +444,7 @@ describe('integration/nested-mutations', () => {
   );
 
   it(
-    'create() rejects disconnect() inside an array and rolls back the rows written before it',
+    'create() rejects disconnect() inside an array before any row is written',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -717,7 +717,7 @@ describe('integration/nested-mutations', () => {
   );
 
   it(
-    'update() rejects updateAll() data that sets the foreign key to the parent and rolls back',
+    'update() rejects updateAll() data that sets the foreign key to the parent before anything is written',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -799,7 +799,7 @@ describe('integration/nested-mutations', () => {
   );
 
   it(
-    'update() rejects updateAll() and deleteAll() on to-one relations and rolls back',
+    'update() rejects updateAll() and deleteAll() on to-one relations before anything is written',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);

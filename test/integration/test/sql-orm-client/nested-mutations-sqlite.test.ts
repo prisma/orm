@@ -340,7 +340,7 @@ describe('integration/nested mutations on SQLite', () => {
   );
 
   it(
-    'create() rejects disconnect() inside an array and rolls back the rows written before it',
+    'create() rejects disconnect() inside an array before any row is written',
     async () => {
       await withSqlite(seedSql, async ({ users, rows }) => {
         await expect(
@@ -578,7 +578,7 @@ describe('integration/nested mutations on SQLite', () => {
   );
 
   it(
-    'update() rejects updateAll() data that sets the foreign key to the parent and rolls back',
+    'update() rejects updateAll() data that sets the foreign key to the parent before anything is written',
     async () => {
       await withSqlite(twoParentsSeedSql, async ({ users, rows }) => {
         await expect(
