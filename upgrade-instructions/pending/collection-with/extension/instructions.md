@@ -40,6 +40,8 @@ The same holds inside an include refinement and inside a scope's body:
 
 Do not rename `Function.prototype.apply` or `Reflect.apply`. A call such as `fn.apply(this, args)`, `scope.apply(undefined, [collection])` or `Reflect.apply(fn, target, args)` calls a function, not a collection; leave it as it is. When a match is unclear, rename it only if its receiver's type is a collection: `db.orm.<namespace>.<Model>`, a chain on one, a custom class that extends `Collection`, or the collection an include refinement or a scope's body receives.
 
+Also rename `apply` to `with` in comments and documentation that name it as the collection method, such as "run with `apply` on any collection of posts".
+
 `with` is a reserved word in JavaScript, but a valid method name. `collection.with(scope)` works; destructuring it as `const { with } = collection` does not.
 
 The error a scope raises when it is given something that is not a collection now says `Pass the scope to with on a collection: collection.with(scope).`, and the refused bulk writes say `A scope passed to with can add one without showing it at the call site.` Update tests that assert on the old text.
