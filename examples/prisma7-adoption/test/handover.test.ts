@@ -272,6 +272,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
               .find((operation) => operation.id === 'setDefault.Post.viewCount')
               ?.execute.map((step) => step.sql),
           ).toEqual([
+            'ALTER SEQUENCE IF EXISTS "public"."Post_viewCount_seq" AS integer',
             'CREATE SEQUENCE IF NOT EXISTS "public"."Post_viewCount_seq" AS integer',
             `ALTER TABLE "public"."Post" ALTER COLUMN "viewCount" SET DEFAULT nextval('"public"."Post_viewCount_seq"'::regclass)`,
             'ALTER SEQUENCE "public"."Post_viewCount_seq" OWNED BY "public"."Post"."viewCount"',
