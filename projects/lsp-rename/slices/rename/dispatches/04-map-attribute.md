@@ -23,7 +23,7 @@ Make rename add `@map("<old>")` / `@@map("<old>")` to the renamed declaration wh
 ## Completed when
 
 - [ ] Every item of the project spec's Definition of Done that mentions the map attribute has tests, and every row added to the slice spec's edge-case table on 2026-10-07 has a test. Tests were written before the implementation they cover. Plain `it` per case; no `it.each` over booleans; no "should".
-- [ ] For every position test, the test formats the edited text with the package's formatter and asserts the attribute's line is unchanged.
+- [ ] For the two model position tests, the test formats the edited text with the package's formatter and asserts the `@@map` line and the lines around it are unchanged. Field insertions are one space and the attribute, with no alignment.
 - [ ] The existing rename tests still pass; expectations change only where a map attribute is now part of the edit, and you list each changed expectation in your report.
 - [ ] No comment added except the doc comment on `mappable`. No bare `as` in `src/`. No word flagged by the framework vocabulary lint in `packages/1-framework/**` (`table`, `column`, `sql`, `mongo`, `postgres`, …): check with the lint.
 - [ ] `typecheck`, `lint` and the changed tests pass for every changed package; then, once: full language-server tests, `pnpm lint:deps`, `pnpm test:packages` (three tarball tests fail with `ERR_PNPM_TRUST_DOWNGRADE` for reasons outside this branch; confirm the error text if you see them).
@@ -46,6 +46,6 @@ Stay focused on the goal; control scope. Anything that pulls you off the goal ha
 
 - **Time-box:** 90 minutes.
 - **Halt conditions:**
-  - a statement in the specs turns out to be false in the code (for example: a field's type resolution does not tell a relation field apart, or the formatter's normal form cannot be produced by an insertion alone);
+  - a statement in the specs turns out to be false in the code (for example: a field's type resolution does not tell a relation field apart, or the end of a field node is not before its trailing comment);
   - the rule needs a fact about a model, field or block that the language server cannot get from the binder, the attribute-spec resolver or the block descriptors;
   - a file outside "Scope: In" needs a change.

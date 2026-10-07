@@ -36,10 +36,10 @@ function mapAttributeEdit(symbol, ...): { uri: string; edit: TextEdit } | undefi
 
 The attribute names `map` and `base` are written in this function. No keyword of a target block is.
 
-Text and position, chosen so that the formatter leaves the result unchanged:
+Text and position:
 
-- Field: ` @map("<old>")` inserted at the end of the field node, which is after the last attribute and before a trailing comment. When the field has no attribute, the insertion is padded to the column where the block's other first attributes start, as the formatter would place it.
-- Model or block: a line `@@map("<old>")` at the indent of the block's members, inserted before the line of the closing brace. When the last member is a field, a blank line precedes it; when the block already has `@@` attributes, it follows them with no blank line.
+- Field: ` @map("<old>")`, one space and the attribute, inserted at the end of the field node, which is after the last attribute (or the type) and before a trailing comment. No column alignment: the rename changes name widths, so alignment is the formatter's to redo.
+- Model or block: a line `@@map("<old>")` at the indent of the block's members, inserted before the line of the closing brace. When the last member is a field, a blank line precedes it; when the block already has `@@` attributes, it follows them with no blank line. This is the layout the formatter produces, so formatting leaves these lines unchanged.
 - The old name is an identifier, so it needs no escaping.
 - The indent is taken from the block's existing members, not from formatter options.
 

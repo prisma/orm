@@ -128,7 +128,7 @@ The server edits nothing itself, so a failed request leaves every file as it was
   - a field of a model whose type does not resolve to a model, when the attribute specs define `map` for fields;
   - a block whose descriptor is `mappable`.
 - **Nothing else gets one.** A composite type, a composite type member, a named type, an enum block, a namespace, a model with `@@base`, a relation field and a block that is not `mappable` are renamed by name only.
-- **The inserted text is in the formatter's normal form.** Formatting the file after the rename does not move or reindent the attribute. On a field it follows the last attribute after one space, or sits where a first attribute sits. In a model or block it is on its own line before the closing brace, after the existing `@@` attributes, separated from the last field by a blank line.
+- **Where the attribute goes.** On a field it follows the field's last attribute, or its type when it has none, after one space, before any trailing comment. In a model or block it is on its own line before the closing brace, at the indent of the block's members, after the existing `@@` attributes, and separated from the last field by a blank line. Column alignment of field attributes is left to the formatter: a rename changes name widths, so the formatter may realign the block's rows anyway.
 - **Whole project.** The edit covers every schema input of the project, including files not open in the editor, each under its own URI.
 - **Cursor position does not change the answer.** A cursor on the declaration name and a cursor on any reference to the same symbol produce the same edit.
 - **`prepareRename` and `rename` agree.** `prepareRename` returns a range exactly when `rename` from the same position would return a non-empty edit for a valid name.
@@ -148,7 +148,7 @@ N/A — single-slice project.
 - [ ] Tests cover the map attribute, each from the declaration name and from a reference in another file:
   - added for a model, a scalar field, a list of scalars, a field typed by an enum, a field typed by a composite type, and a `mappable` block;
   - not added for a model, field or block that already has one, a model with `@@base`, a relation field in both directions, a composite type member, a composite type, an enum block, a named type, a namespace, a block that is not `mappable`, and a model or field when the attribute specs define no `map`.
-- [ ] Tests cover the position of the inserted text: a field with no attribute, with attributes, and with a trailing comment; a model whose last member is a field, and one that already has `@@` attributes. For each, formatting the edited file changes nothing in the attribute's line.
+- [ ] Tests cover the position of the inserted text: a field with no attribute, with attributes, and with a trailing comment; a model whose last member is a field, and one that already has `@@` attributes. For the two model cases, formatting the edited file leaves the `@@map` line and the lines around it unchanged.
 - [ ] After a rename with a map attribute is applied, the contract the SQL interpreter emits has the same storage names as before the rename, covered by a test for a model and a field. The same for the Mongo interpreter.
 - [ ] The Postgres `native_enum` descriptor is `mappable`, and renaming a `native_enum` block adds `@@map`.
 - [ ] Tests cover `prepareRename`: a range on each renameable kind, `null` on an attribute name, a contributed type, a cross-space reference, an unresolved name and a position with no identifier.
