@@ -345,6 +345,16 @@ export function describeCollectionFirst<Row>(
   };
 }
 
+export function describeCollectionFirstOrThrow<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, Promise<Row>> {
+  const rows = describeCollectionRows<Row>(options);
+  return {
+    ...rows,
+    consume: (source) => rows.consume(source).firstOrThrow(),
+  };
+}
+
 export function dispatchCollectionRows<Row>(
   options: DescribeCollectionRowsOptions & {
     runtime: CollectionContext<Contract<SqlStorage>>['runtime'];

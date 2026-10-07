@@ -32,4 +32,13 @@ export interface PreparedCollection<
     filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<Row | null>>;
+  firstOrThrow(): Preparable<Record<string, unknown>, Promise<Row>>;
+  firstOrThrow(
+    filter: undefined,
+    configure: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<Record<string, unknown>, Promise<Row>>;
+  firstOrThrow(
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<Record<string, unknown>, Promise<Row>>;
 }
