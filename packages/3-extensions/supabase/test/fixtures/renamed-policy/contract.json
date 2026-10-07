@@ -241,7 +241,7 @@
       "id": "supabase",
       "kind": "extension",
       "targetId": "postgres",
-      "version": "8.0.0-rc.15"
+      "version": "8.0.0-rc.16"
     }
   },
   "meta": {},
