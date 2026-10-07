@@ -67,7 +67,7 @@ describe('ports/engines/writes/unchecked_writes/unchecked_nested_update_many', (
     timeouts.spinUpPpgDev,
   );
 
-  it.fails(
+  it(
     'nested updateMany is refused when it sets the foreign key to the parent (disallow_write_parent_inline_rel_sclrs)',
     () =>
       withPostgresPort<ParentKeyContract>({ contractJson: parentKeyJson }, async ({ db }) => {
