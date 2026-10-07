@@ -26,7 +26,7 @@ SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT COUNT(*) AS "
 
 SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."tags" INNER JOIN "public"."user_tags" ON "user_tags"."tag_id" = "tags"."id" WHERE "user_tags"."user_id" = "users"."id") ASC
 
-SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "users"."invited_by_id") DESC NULLS LAST
+SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "users"."invited_by_id") DESC NULLS LAST
 ```
 
 ## Decision

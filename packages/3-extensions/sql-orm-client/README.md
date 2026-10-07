@@ -256,6 +256,29 @@ The reach is one hop: the related model's own relations are not exposed. A to-on
 
 `cursor()` builds its keyset from plain columns only. It throws `ORM.ARGUMENT_INVALID`, naming the `orderBy` position, when an active order is a relation column, a relation count, an extension-operation result, or sets `nulls`. `distinctOn()` throws the same error when one of its leading orders (as many as there are `distinctOn` columns) is not a plain column, because Postgres needs those orders to match the `DISTINCT ON` columns; a relation order after them is accepted. Paginate such orders with `.limit(...)` / `.offset(...)`.
 
+## Table names in generated SQL
+
+Every table a collection chain puts in a statement gets a reference from one scope. The first use of a table keeps its table name. Each later use of the same name gets `<table>_<n>`, with `n` starting at 2. A reference is at most 63 bytes; a longer name is shortened to fit.
+
+The scope covers the whole chain: the collection's own table and its multi-table-inheritance variant tables, every relation filter and relation order, and every include at any depth, including the junction table of a many-to-many relation. A name is taken when the call that needs it runs, so the names follow the order of the chain.
+
+```ts
+db.User
+  .where((user) => user.posts.some())          // "posts"
+  .include('posts')                            // "posts_2"
+  .include('invitedUsers', (invited) =>        // "users_2"
+    invited.where((user) => user.name.eq('Bob')),
+  );
+```
+
+The filter in the `invitedUsers` refinement reads `"users_2"."name"`. A ready-made expression passed to `where()` on such a collection may name the bare table: references to it are moved to the collection's own reference, except inside a subquery that itself reads that table.
+
+Collections are immutable, and so are their names. Two collections derived from the same parent get the same names for the same calls, and neither sees the names the other took. `combine()` branches read the related table under one shared reference.
+
+The derived tables an include is built from (`<relation>__rows`, `<relation>__distinct`, `<relation>__ranked`, `<relation>__scalar`, `<relation>__scalar_distinct`, `<relation>__combine__<branch>`) are named from the same scope, and get a `_<n>` suffix when the same name is needed twice in a statement. The column of a variant table is projected under the label `<variant table reference>__<column>`.
+
+`CollectionState.tables` holds the scope and the bindings of the collection's root table and variant tables. Build it with `bindCollectionTables(contract, namespaceId, modelName)` and pass it to `emptyState(tables)` and `createModelAccessor(context, namespaceId, modelName, tables)`. A `TableScope` is created by `bindCollectionTables` and by the collection methods; it cannot be implemented outside the package.
+
 ## Codec Roundtrip
 
 Included JSON payloads use synchronous `codec.decodeJson`, including nested relations and scalar/combine branches. Their consumers do not introduce per-include async boundaries. Prepared descriptions precompute nested codec bindings and row mappers. Fixed non-polymorphic child selections decode directly into model-field names, without an intermediate decoded storage object. Polymorphic or unexpected row shapes retain generic decoding and mapping. Envelope snapshots remain intact; root-row `codec.decode` retains asynchronous support in SQL runtime.

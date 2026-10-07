@@ -961,7 +961,7 @@ A `groupBy().having()` expression uses a kind the grouped-having compiler does n
 
 ### ORM.INCLUDE_INVALID
 
-An `include()` usage is structurally invalid: the refinement callback returned something that is not a collection, include-scalar selector, or `combine()` descriptor; a `combine()` branch is invalid or empty; or an include-only action was called outside an `include()` refinement callback. Payload: `relation`, `branch`, `action`.
+An `include()` usage is structurally invalid: the refinement callback returned something that is not a collection, include-scalar selector, or `combine()` descriptor; the refinement returned a collection, selector, or `combine()` branch that was not derived from the collection the callback was handed (`reason: 'foreign-collection'`); a `combine()` branch is invalid or empty; or an include-only action was called outside an `include()` refinement callback. Payload: `relation`, `branch`, `action`, `reason`.
 
 ### ORM.INCLUDE_UNSUPPORTED
 
