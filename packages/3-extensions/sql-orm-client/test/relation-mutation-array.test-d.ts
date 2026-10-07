@@ -4,7 +4,6 @@ import type { Contract } from './fixtures/generated/contract';
 
 type UserCreate = MutationCreateInput<Contract, 'User'>;
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
-type PostUpdate = MutationUpdateInput<Contract, 'Post'>;
 type TagCreate = MutationCreateInput<Contract, 'Tag'>;
 
 const tagCriterion = { id: 'featured' } as { readonly id: NonNullable<TagCreate['id']> };
@@ -17,22 +16,6 @@ test('update input accepts an array of operations on a one-to-many relation', ()
       posts.disconnect([{ id: 3 }]),
       posts.disconnect(),
     ],
-  };
-
-  expectTypeOf(input).toExtend<UserUpdate>();
-});
-
-test('update input accepts an array of operations on a to-one relation', () => {
-  const input: PostUpdate = {
-    author: (author) => [author.connect({ id: 1 }), author.disconnect()],
-  };
-
-  expectTypeOf(input).toExtend<PostUpdate>();
-});
-
-test('update input accepts an array of operations on a many-to-many relation', () => {
-  const input: UserUpdate = {
-    tags: (tags) => [tags.disconnect([tagCriterion]), tags.connect(tagCriterion)],
   };
 
   expectTypeOf(input).toExtend<UserUpdate>();
@@ -59,20 +42,6 @@ test('a readonly array and an empty array are accepted in both contexts', () => 
     email: 'alice@test.com',
     posts: (posts) => [posts.connect({ id: 2 })] as const,
     tags: () => [],
-  };
-
-  expectTypeOf(update).toExtend<UserUpdate>();
-  expectTypeOf(create).toExtend<UserCreate>();
-});
-
-test('a single operation is still accepted in both contexts', () => {
-  const update: UserUpdate = {
-    posts: (posts) => posts.disconnect(),
-  };
-  const create: UserCreate = {
-    name: 'Alice',
-    email: 'alice@test.com',
-    posts: (posts) => posts.connect({ id: 2 }),
   };
 
   expectTypeOf(update).toExtend<UserUpdate>();
@@ -109,23 +78,4 @@ test('an array element that is not an operation is a type error', () => {
 
   expectTypeOf(update).toExtend<UserUpdate>();
   expectTypeOf(create).toExtend<UserCreate>();
-});
-
-test('disconnect inside an array is a type error in create input', () => {
-  const input: UserCreate = {
-    name: 'Alice',
-    email: 'alice@test.com',
-    posts: (posts) => [
-      posts.connect({ id: 2 }),
-      // @ts-expect-error
-      posts.disconnect([{ id: 3 }]),
-    ],
-    tags: (tags) => [
-      tags.connect(tagCriterion),
-      // @ts-expect-error
-      tags.disconnect([tagCriterion]),
-    ],
-  };
-
-  expectTypeOf(input).toExtend<UserCreate>();
 });

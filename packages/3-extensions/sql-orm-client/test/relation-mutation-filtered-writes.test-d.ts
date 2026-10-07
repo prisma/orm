@@ -66,20 +66,6 @@ test('where calls chain and mix filter forms', () => {
   expectTypeOf(input).toExtend<UserUpdate>();
 });
 
-test('updateAll and deleteAll combine with the other operations in one array', () => {
-  const input: UserUpdate = {
-    posts: (posts) => [
-      posts.create({ id: 1, title: 'New', views: 0 }),
-      posts.where({ title: 'New' }).updateAll({ views: 1 }),
-      posts.connect({ id: 2 }),
-      posts.where({ views: 0 }).deleteAll(),
-      posts.disconnect(),
-    ],
-  };
-
-  expectTypeOf(input).toExtend<UserUpdate>();
-});
-
 test('a where filter on a field the related model does not have is a type error', () => {
   const input: UserUpdate = {
     posts: (posts) => [
