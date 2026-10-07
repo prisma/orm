@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { type PortContext, timeouts, withPostgresPort } from '../_harness/postgres';
-import type { Contract } from './_fixture/generated/contract';
-import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
+import type { Contract } from './_fixture-postgres/generated/contract';
+import contractJson from './_fixture-postgres/generated/contract.json' with { type: 'json' };
 
 const uuidA = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 const uuidB = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12';

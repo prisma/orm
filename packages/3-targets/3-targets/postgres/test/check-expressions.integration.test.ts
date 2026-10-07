@@ -113,4 +113,57 @@ describe('list membership checks in Postgres', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'takes text members that need array-literal quoting, on a scalar and a list column, and refuses a near miss of each',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await withClient(connectionString, async (client) => {
+          const members = ['a,b', '{brace}', '', 'NULL', ' lead'];
+          const nearMisses = ['a', 'brace', ' ', 'Null', 'lead'];
+          const checks = [false, true].flatMap((many) =>
+            postgresRenderCheckExpressions({
+              tableName: 'labels',
+              columnName: many ? 'list' : 'scalar',
+              many: many ? { elementNullable: false } : false,
+              memberValues: members,
+            }),
+          );
+          await client.query(
+            `CREATE TABLE labels (id serial, scalar text, list text[], ${checks.map(({ expression }) => `CHECK (${expression})`).join(', ')})`,
+          );
+          for (const member of members) {
+            await client.query('INSERT INTO labels (scalar, list) VALUES ($1, $2)', [
+              member,
+              [member],
+            ]);
+          }
+          await client.query('INSERT INTO labels (scalar, list) VALUES ($1, $2)', ['a,b', members]);
+          const refused = await Promise.all(
+            nearMisses.flatMap((nearMiss) =>
+              [
+                [nearMiss, []],
+                ['a,b', [nearMiss]],
+              ].map((values) =>
+                client.query('INSERT INTO labels (scalar, list) VALUES ($1, $2)', values).then(
+                  () => `accepted ${JSON.stringify(values)}`,
+                  (error: { code?: string }) => error.code,
+                ),
+              ),
+            ),
+          );
+          const { rows } = await client.query('SELECT scalar, list FROM labels ORDER BY id');
+
+          expect({ rows, refused }).toEqual({
+            rows: [
+              ...members.map((member) => ({ scalar: member, list: [member] })),
+              { scalar: 'a,b', list: members },
+            ],
+            refused: nearMisses.flatMap(() => ['23514', '23514']),
+          });
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

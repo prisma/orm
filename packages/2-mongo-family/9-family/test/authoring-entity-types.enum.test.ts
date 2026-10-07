@@ -1,176 +1,17 @@
-import type { JsonValue } from '@internal/contract/types';
-import type {
-  AuthoringDiagnosticSink,
-  AuthoringEntityContext,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/authoring';
-import {
-  type AnyCodecDescriptor,
-  type Codec,
-  type CodecLookupWithDescriptors,
-  createDataTypeLookup,
-} from '@internal/framework-components/codec';
-import { mongoDataType } from '@internal/mongo-contract/data-type';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
-import { mongoFamilyEnumEntityDescriptor } from '../src/core/authoring-entity-types';
-
-const SPAN = {
-  start: { offset: 0, line: 1, column: 1 },
-  end: { offset: 0, line: 1, column: 1 },
-};
-
-function enumBlock(input: {
-  readonly name: string;
-  readonly values: Record<string, JsonValue | undefined>;
-  readonly typeCodecId?: string;
-}): ParsedPslExtensionBlock<Record<string, JsonValue | undefined>> {
-  return {
-    kind: 'enum',
-    keyword: 'enum',
-    name: input.name,
-    values: input.values,
-    parameterSpans: Object.fromEntries(Object.keys(input.values).map((key) => [key, SPAN])),
-    attributes:
-      input.typeCodecId !== undefined
-        ? { type: { args: { codecId: input.typeCodecId }, span: SPAN } }
-        : {},
-    span: SPAN,
-  };
-}
-
-const TEXT_CODEC_ID = 'mongo/string@1';
-const INT_CODEC_ID = 'mongo/int32@1';
-const JSON_CODEC_ID = 'test/json@1';
-const FOLDING_CODEC_ID = 'test/folding-text@1';
-const ENCODE_FOLDING_CODEC_ID = 'test/encode-folding-text@1';
-const BROKEN_CODEC_ID = 'test/broken@1';
-
-const textCodec: Codec = {
-  id: TEXT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-const intCodec: Codec = {
-  id: INT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
-    return json;
-  },
-};
-
-const jsonCodec: Codec = {
-  id: JSON_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (json === null) throw new Error('expected a non-null JSON value');
-    return json;
-  },
-};
-
-const foldingCodec: Codec = {
-  id: FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json.toLowerCase();
-  },
-};
-
-const encodeFoldingCodec: Codec = {
-  id: ENCODE_FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => String(value).toLowerCase(),
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-const brokenCodec: Codec = {
-  ...textCodec,
-  id: BROKEN_CODEC_ID,
-  decodeJson() {
-    throw new InternalError('a codec broke an invariant');
-  },
-};
-
-const UNEQUAL_CODEC_ID = 'test/unequal@1';
-
-const dataTypeIdByCodecId: Record<string, string> = {
-  [TEXT_CODEC_ID]: 'test/text',
-  [INT_CODEC_ID]: 'test/int',
-  'mongo/json@1': 'test/mongo-json',
-  'mongo/bson@1': 'test/mongo-bson',
-  [JSON_CODEC_ID]: 'test/json',
-  [FOLDING_CODEC_ID]: 'test/folding-text',
-  [ENCODE_FOLDING_CODEC_ID]: 'test/folding-text',
-  [BROKEN_CODEC_ID]: 'test/folding-text',
-  'test/orphan@1': 'test/unregistered',
-  [UNEQUAL_CODEC_ID]: 'test/json',
-};
-
-const testDataTypes = createDataTypeLookup([
-  mongoDataType('test/text', { bsonTypes: ['string'] }),
-  mongoDataType('test/int', { bsonTypes: ['int'] }),
-  mongoDataType('test/mongo-json', {
-    bsonTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
-  }),
-  mongoDataType('test/mongo-bson', { bsonTypes: [] }),
-  mongoDataType('test/json', { bsonTypes: ['object'] }),
-  mongoDataType('test/folding-text', { bsonTypes: ['string'] }),
-]);
-
-const testCodecLookup: CodecLookupWithDescriptors = {
-  get(id: string): Codec | undefined {
-    if (id === TEXT_CODEC_ID) return textCodec;
-    if (id === INT_CODEC_ID) return intCodec;
-    if (id === JSON_CODEC_ID) return jsonCodec;
-    if (id === FOLDING_CODEC_ID) return foldingCodec;
-    if (id === ENCODE_FOLDING_CODEC_ID) return encodeFoldingCodec;
-    if (id === BROKEN_CODEC_ID) return brokenCodec;
-    if (id === UNEQUAL_CODEC_ID) return jsonCodec;
-    return undefined;
-  },
-  descriptorFor(id: string) {
-    const dataTypeId = dataTypeIdByCodecId[id];
-    if (dataTypeId === undefined) return undefined;
-    const traits = id === UNEQUAL_CODEC_ID ? [] : ['equality'];
-    return { codecId: id, dataType: dataTypeId, traits } as unknown as AnyCodecDescriptor;
-  },
-  renderOutputTypeFor: () => undefined,
-};
-
-function makeContext(diagnostics: unknown[]): AuthoringEntityContext {
-  const sink: AuthoringDiagnosticSink = {
-    push: (d) => diagnostics.push(d),
-  };
-  return {
-    family: 'mongo',
-    target: 'mongo',
-    codecLookup: testCodecLookup,
-    dataTypeLookup: testDataTypes,
-    sourceId: 'schema.prisma',
-    diagnostics: sink,
-    enumInferenceCodecs: { text: TEXT_CODEC_ID, int: INT_CODEC_ID },
-  };
-}
-
-const factory = mongoFamilyEnumEntityDescriptor.output.factory;
+import {
+  BROKEN_CODEC_ID,
+  ENCODE_FOLDING_CODEC_ID,
+  enumBlock,
+  FOLDING_CODEC_ID,
+  factory,
+  INT_CODEC_ID,
+  JSON_CODEC_ID,
+  makeContext,
+  SPAN,
+  TEXT_CODEC_ID,
+} from './enum-entity-fixtures';
 
 describe('mongoFamilyEnumEntityDescriptor: @@type omitted, inferred from members', () => {
   it('bare members infer the text codec and decode from their key', () => {
@@ -446,50 +287,6 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
 
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_ENUM_MISSING_TYPE' })]);
-  });
-});
-
-describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage type', () => {
-  it.each([
-    ['mongo/json@1', 8],
-    ['mongo/bson@1', 0],
-  ])('refuses @@type("%s"), which declares %i BSON types', (codecId, count) => {
-    const diagnostics: unknown[] = [];
-    const handle = factory(
-      enumBlock({ name: 'Shape', values: { a: undefined }, typeCodecId: codecId }),
-      makeContext(diagnostics),
-    );
-
-    expect(handle).toBeUndefined();
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one. Use a codec with one BSON type, such as mongo/string@1.`,
-        span: SPAN,
-      }),
-    ]);
-  });
-});
-
-describe('mongoFamilyEnumEntityDescriptor: a codec an enum cannot use', () => {
-  it('refuses a codec that does not declare the equality trait, saying so', () => {
-    const diagnostics: unknown[] = [];
-    const handle = factory(
-      enumBlock({ name: 'Shape', values: { round: 'round' }, typeCodecId: UNEQUAL_CODEC_ID }),
-      makeContext(diagnostics),
-    );
-
-    expect({ handle, diagnostics }).toEqual({
-      handle: undefined,
-      diagnostics: [
-        {
-          code: 'PSL_EXTENSION_INVALID_VALUE',
-          message:
-            'enum "Shape" cannot use the codec "test/unequal@1". The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
-          sourceId: 'schema.prisma',
-          span: SPAN,
-        },
-      ],
-    });
   });
 });
 
