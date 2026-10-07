@@ -1,9 +1,12 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { LedgerEntryRecord } from '@internal/contract/types';
-import type {
-  AggregateContractSpace,
-  ContractMarkerRecordLike,
+import {
+  type AggregateContractSpace,
+  type ContractMarkerRecordLike,
+  contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
+import { isInSpaceHistory } from '@internal/migration-tools/migration-graph';
+import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
@@ -35,13 +38,16 @@ import {
 import {
   appliedHashesFromLedger,
   deriveStatusEdgeAnnotations,
-  originHashForStatus,
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
-import { resolveContractRef } from '../../control-api/operations/ref-resolution';
+import {
+  liveMarkerUse,
+  requireDatabaseForLiveMarkerUse,
+  resolveContractRef,
+} from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
-import { requireLiveDatabase } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
+import { ALL_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { renderMigrationGraphLegend } from '../../utils/formatters/migration-graph-labels';
 import { TONE_MIGRATION_GRAPH_PALETTE } from '../../utils/formatters/migration-graph-palette';
 import {
@@ -112,23 +118,54 @@ async function readDatabaseState(inputs: {
   }
 }
 
+/** Where a space's status path starts: the marker the database holds, or a contract `--from` names. */
+export type StatusOrigin =
+  | { readonly kind: 'database'; readonly marker: ContractMarkerRecordLike | undefined }
+  | { readonly kind: 'offline'; readonly hash: string };
+
+function originHashOf(origin: StatusOrigin | undefined): string {
+  return origin?.kind === 'offline' ? origin.hash : contractHashAtMarker(origin?.marker);
+}
+
+function currentContractOf(origin: StatusOrigin | undefined): string | null {
+  return origin?.kind === 'offline' ? origin.hash : (origin?.marker?.storageHash ?? null);
+}
+
+function describeOrigin(origin: StatusOrigin): string {
+  if (origin.kind === 'offline') {
+    return `the --from contract (${shortDisplayHash(origin.hash)})`;
+  }
+  return origin.marker !== undefined
+    ? `the database state (${shortDisplayHash(origin.marker.storageHash)})`
+    : 'the database state';
+}
+
+/** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
+export type StatusTarget =
+  | {
+      readonly kind: 'app';
+      readonly explicitTarget: boolean;
+      readonly refName: string | undefined;
+    }
+  | { readonly kind: 'extension'; readonly spaceId: string };
+
 export function buildNoPathSummary(args: {
-  readonly markerHash: string | undefined;
+  readonly origin: StatusOrigin;
   readonly targetHash: string;
-  readonly explicitTarget: boolean;
-  readonly refName: string | undefined;
+  readonly target: StatusTarget;
 }): string {
-  const markerPart =
-    args.markerHash !== undefined
-      ? `the database state (${shortDisplayHash(args.markerHash)})`
-      : 'the database state';
+  const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
-  if (!args.explicitTarget) {
+  const { target } = args;
+  if (target.kind === 'extension') {
+    return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
+  }
+  if (!target.explicitTarget) {
     return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
   }
   const targetLabel =
-    args.refName !== undefined
-      ? `the target (${targetShort} via \`${args.refName}\`)`
+    target.refName !== undefined
+      ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
   return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
 }
@@ -210,10 +247,10 @@ export const migrationStatusCommand = defineOrmCommand({
     summary: 'Show migration path and pending status',
     description:
       'Shows which migrations are pending between the database marker and the\n' +
-      'target contract. Requires a database connection. Pass --from for an\n' +
-      'offline path preview without a database. Use `migration graph` for\n' +
-      'topology, `migration log` for history, and `migration list` for on-disk\n' +
-      'enumeration.',
+      'target contract. Reads the database marker by default. --from names the\n' +
+      'origin instead and runs offline, unless --from or --to is @db, which reads\n' +
+      'the database. Use `migration graph` for topology, `migration log` for\n' +
+      'history, and `migration list` for on-disk enumeration.',
     examples: [
       'migration status',
       'migration status --db $DATABASE_URL',
@@ -228,13 +265,11 @@ export const migrationStatusCommand = defineOrmCommand({
       db: dbFlag,
       space: flag.string({ brief: 'Narrow output to a single contract space', placeholder: 'id' }),
       to: flag.string({
-        brief:
-          'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+        brief: `Target contract reference (${ALL_CONTRACT_REF_FORMS})`,
         placeholder: 'contract',
       }),
       from: flag.string({
-        brief:
-          'Origin contract reference; same grammar as --to. Supplying it switches to offline path computation',
+        brief: `Origin contract reference (${ALL_CONTRACT_REF_FORMS}). With --from the path is computed offline, unless --from or --to is @db`,
         placeholder: 'contract',
       }),
       legend: flag.boolean({ brief: 'Print a key for the tree glyphs and lane colors' }),
@@ -246,18 +281,17 @@ export const migrationStatusCommand = defineOrmCommand({
     const migrationsDir = migrationsDirFor(ctx.config);
     const dbConnection = args.flags.db ?? ctx.config.db?.connection;
     const hasDriver = ctx.config.driver !== undefined;
-    const usingFromOverride = args.flags.from !== undefined;
-
-    if (!usingFromOverride) {
-      const missingDb = requireLiveDatabase({
-        dbConnection,
-        hasDriver,
-        why: 'migration status needs a database connection to read the marker and ledger (or pass --from for an offline path preview)',
-        retryCommand: '{bin} migration status --from <contract>',
-      });
-      if (missingDb !== null) {
-        return notOk(normalizeError(missingDb));
-      }
+    const { from, to } = args.flags;
+    const { liveOrigin, liveTarget, needsDatabase } = liveMarkerUse({ from, to });
+    const missingDb = requireDatabaseForLiveMarkerUse({
+      from,
+      to,
+      dbConnection,
+      hasDriver,
+      commandName: 'migration status',
+    });
+    if (missingDb !== null) {
+      return notOk(normalizeError(missingDb));
     }
 
     const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config));
@@ -293,25 +327,20 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appGraph = aggregate.app.graph();
+    const refContext = { graph: appGraph, refs, contractHash };
 
-    let activeRefHash: string | undefined;
-    let activeRefName: string | undefined;
-    let activeRefEntry: RefEntry | undefined;
-    if (args.flags.to !== undefined) {
-      const resolved = resolveContractRef(args.flags.to, { graph: appGraph, refs });
+    let toRef: ContractRef | undefined;
+    if (to !== undefined && !liveTarget) {
+      const resolved = resolveContractRef(to, refContext);
       if (!resolved.ok) {
         return notOk(normalizeError(resolved.failure));
       }
-      activeRefHash = resolved.value.hash;
-      if (resolved.value.provenance.kind === 'ref') {
-        activeRefName = resolved.value.provenance.refName;
-        activeRefEntry = refs[activeRefName];
-      }
+      toRef = resolved.value;
     }
 
     let fromOverrideHash: string | undefined;
-    if (args.flags.from !== undefined) {
-      const resolved = resolveContractRef(args.flags.from, { graph: appGraph, refs });
+    if (from !== undefined && !liveOrigin) {
+      const resolved = resolveContractRef(from, refContext);
       if (!resolved.ok) {
         return notOk(normalizeError(resolved.failure));
       }
@@ -328,7 +357,7 @@ export const migrationStatusCommand = defineOrmCommand({
     }
     const scopedSpaces = listed.value.spaces;
 
-    const connects = dbConnection !== undefined && hasDriver && !usingFromOverride;
+    const connects = needsDatabase && dbConnection !== undefined && hasDriver;
     let database: DatabaseState = NO_DATABASE_STATE;
     if (connects) {
       const read = await readDatabaseState({
@@ -349,7 +378,11 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appMarker = database.markersBySpace.get(aggregate.app.spaceId);
-    if (activeRefEntry !== undefined && activeRefEntry.invariants.length > 0 && connects) {
+    const activeRefHash = liveTarget ? contractHashAtMarker(appMarker) : toRef?.hash;
+    const activeRefName = toRef?.provenance.kind === 'ref' ? toRef.provenance.refName : undefined;
+    const activeRefEntry: RefEntry | undefined =
+      activeRefName === undefined ? undefined : refs[activeRefName];
+    if (activeRefEntry !== undefined && activeRefEntry.invariants.length > 0 && liveOrigin) {
       const unknown = refuseUnknownInvariants({
         graph: appGraph,
         markerInvariants: appMarker?.invariants ?? [],
@@ -371,7 +404,11 @@ export const migrationStatusCommand = defineOrmCommand({
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
     let noPath:
-      | { readonly markerHash: string | undefined; readonly targetHash: string }
+      | {
+          readonly origin: StatusOrigin;
+          readonly targetHash: string;
+          readonly target: StatusTarget;
+        }
       | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
@@ -383,30 +420,43 @@ export const migrationStatusCommand = defineOrmCommand({
       }
       const graph = space.graph();
       const spaceContractHash = space.contract().storage.storageHash;
-      const targetHash = activeRefHash ?? spaceContractHash;
-      if (entry.space === aggregate.app.spaceId) {
+      const isAppSpace = entry.space === aggregate.app.spaceId;
+      const targetHash = isAppSpace ? (activeRefHash ?? spaceContractHash) : spaceContractHash;
+      if (isAppSpace) {
         headlineTargetHash = targetHash;
       }
 
-      const markerHash = usingFromOverride
-        ? fromOverrideHash
-        : database.markersBySpace.get(entry.space)?.storageHash;
-      const originHash = originHashForStatus(markerHash);
-      const markerInGraph =
-        markerHash === undefined || graph.nodes.has(markerHash) || markerHash === spaceContractHash;
+      const origin: StatusOrigin | undefined = liveOrigin
+        ? { kind: 'database', marker: database.markersBySpace.get(entry.space) }
+        : isAppSpace && fromOverrideHash !== undefined
+          ? { kind: 'offline', hash: fromOverrideHash }
+          : undefined;
+      const originHash = originHashOf(origin);
+      const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
+      const readMarker =
+        origin?.kind === 'database' ? origin.marker : markerRead ? appMarker : undefined;
+      const markerDiverged =
+        readMarker !== undefined &&
+        !isInSpaceHistory(readMarker.storageHash, { graph, headHash: space.headRef?.hash });
 
+      if (markerDiverged) {
+        divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
+        findings.push(markerNotInHistoryFinding(entry.space));
+      }
       if (
-        connects &&
-        markerInGraph &&
+        origin !== undefined &&
+        !markerDiverged &&
         originHash !== targetHash &&
         noPath === undefined &&
         !hasMigrationPath(graph, originHash, targetHash)
       ) {
-        noPath = { markerHash, targetHash };
-      }
-      if (connects && markerHash !== undefined && !markerInGraph) {
-        divergedMarker ??= { space: entry.space, markerHash };
-        findings.push(markerNotInHistoryFinding(entry.space));
+        noPath = {
+          origin,
+          targetHash,
+          target: isAppSpace
+            ? { kind: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            : { kind: 'extension', spaceId: entry.space },
+        };
       }
 
       const ledger = database.ledgersBySpace.get(entry.space) ?? [];
@@ -414,8 +464,8 @@ export const migrationStatusCommand = defineOrmCommand({
         graph,
         targetHash,
         originHash,
-        appliedMigrationHashes: connects ? appliedHashesFromLedger(ledger) : new Set<string>(),
-        showAppliedOverlay: connects,
+        appliedMigrationHashes: liveOrigin ? appliedHashesFromLedger(ledger) : new Set<string>(),
+        showAppliedOverlay: liveOrigin,
       });
       const migrations = entry.migrations.map((migration: MigrationListEntry) => ({
         ...migration,
@@ -425,7 +475,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
       statusSpaces.push({
         space: entry.space,
-        currentContract: markerHash ?? null,
+        currentContract: currentContractOf(origin),
         targetContract: targetHash,
         migrations,
       });
@@ -445,13 +495,13 @@ export const migrationStatusCommand = defineOrmCommand({
         glyphMode,
         styler,
         palette: TONE_MIGRATION_GRAPH_PALETTE,
-        isAppSpace: entry.space === aggregate.app.spaceId,
-        ...(connects && markerHash !== undefined ? { dbHash: markerHash } : {}),
+        isAppSpace,
+        ...(markerRead ? { dbHash: contractHashAtMarker(readMarker) } : {}),
       });
     }
 
     const requiredInvariants = [...(activeRefEntry?.invariants ?? [])].sort();
-    if (connects && requiredInvariants.length > 0) {
+    if (liveOrigin && requiredInvariants.length > 0) {
       const held = new Set(appMarker?.invariants ?? []);
       const missing = requiredInvariants.filter((id) => !held.has(id));
       if (missing.length > 0) {
@@ -459,7 +509,7 @@ export const migrationStatusCommand = defineOrmCommand({
         if (activeRefHash !== undefined) {
           const unreachable = refuseMissingInvariantPath({
             graph: appGraph,
-            originHash: originHashForStatus(appMarker?.storageHash),
+            originHash: contractHashAtMarker(appMarker),
             targetHash: activeRefHash,
             missing,
             ...ifDefined('refName', activeRefName),
@@ -489,12 +539,7 @@ export const migrationStatusCommand = defineOrmCommand({
     const summary = everySpaceEmpty
       ? 'No migrations found'
       : noPath !== undefined
-        ? buildNoPathSummary({
-            markerHash: noPath.markerHash,
-            targetHash: noPath.targetHash,
-            explicitTarget: args.flags.to !== undefined,
-            refName: activeRefName,
-          })
+        ? buildNoPathSummary(noPath)
         : buildStatusHeadline({
             pendingCount: totalPending,
             targetHash: headlineTargetHash,

@@ -301,6 +301,44 @@ namespace scoped {
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {
+    it('diagnoses duplicate discriminator values', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  String
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+
+        model OtherBug {
+          id          ObjectId @id @map("_id")
+          description String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
+            message:
+              'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task"',
+          }),
+        ]),
+      );
+    });
+
     it('diagnoses orphaned @@discriminator (no @@base declarations)', () => {
       const result = interpret(`
         model Task {

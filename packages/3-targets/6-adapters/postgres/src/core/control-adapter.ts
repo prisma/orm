@@ -104,6 +104,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { adapterError } from './adapter-errors';
+import { postgresAdapterCapabilities } from './capabilities';
 import { encodeControlQueryParams } from './control-codecs';
 import {
   execute,
@@ -225,6 +226,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       ),
       this.codecRegistry,
       this.dataTypeLookup,
+      postgresAdapterCapabilities,
     );
   }
 
@@ -262,7 +264,13 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'Caller must supply matching contract'>(
       context?.contract,
     );
-    const lowered = renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      this.codecRegistry,
+      this.dataTypeLookup,
+      postgresAdapterCapabilities,
+    );
     const codecRegistry = blindCast<
       ContractCodecRegistry,
       'framework CodecRegistry: its descriptors materialise SQL codecs; the framework Codec type erases to BaseCodec at this boundary'

@@ -13,9 +13,11 @@ import {
   type AnyExpression as AstExpression,
   collectOrderedParamRefs,
   IdentifierRef,
+  isAggregateProjection,
   isOrderByDirection,
   isOrderByNulls,
   type LimitOffsetValue,
+  type LockingClause,
   OrderByItem,
   ProjectionItem,
   SelectAst,
@@ -80,6 +82,7 @@ export interface BuilderState {
   readonly offset: LimitOffsetValue | undefined;
   readonly distinct: true | undefined;
   readonly distinctOn: readonly AstExpression[] | undefined;
+  readonly locking: readonly LockingClause[] | undefined;
   readonly scope: Scope;
   readonly rowFields: Record<string, ScopeField>;
   /**
@@ -142,6 +145,7 @@ export function emptyState(from: TableSource, scope: Scope): BuilderState {
     offset: undefined,
     distinct: undefined,
     distinctOn: undefined,
+    locking: undefined,
     scope,
     rowFields: {},
     annotations: new Map(),
@@ -158,7 +162,46 @@ export function combineWhereExprs(exprs: readonly AstExpression[]): AstExpressio
   return AndExpr.of(exprs);
 }
 
+function lockConflictOf(state: BuilderState): string | undefined {
+  const conflicts = {
+    distinct: state.distinct !== undefined,
+    distinctOn: state.distinctOn !== undefined && state.distinctOn.length > 0,
+    groupBy: state.groupBy.length > 0,
+    having: state.having !== undefined,
+  };
+  return Object.entries(conflicts).find(([, present]) => present)?.[0];
+}
+
+function assertLockable(state: BuilderState): void {
+  if (state.locking === undefined) return;
+  const conflict = lockConflictOf(state);
+  if (conflict !== undefined) {
+    throw structuredError(
+      'ORM.LOCK_INCOMPATIBLE',
+      `A locking clause cannot be combined with ${conflict}`,
+      { meta: { conflict } },
+    );
+  }
+  const item = state.projections.find(isAggregateProjection);
+  if (item !== undefined) {
+    throw structuredError(
+      'ORM.LOCK_INCOMPATIBLE',
+      `A locking clause cannot be combined with an aggregate or window function in the projection (column "${item.alias}")`,
+      { meta: { conflict: 'aggregate' } },
+    );
+  }
+}
+
+export function assertNotLocked(state: BuilderState): void {
+  if (state.locking !== undefined) {
+    throw structuredError('ORM.LOCK_INCOMPATIBLE', 'A locked select cannot be used as a subquery', {
+      meta: { conflict: 'subquery' },
+    });
+  }
+}
+
 export function buildSelectAst(state: BuilderState): SelectAst {
+  assertLockable(state);
   const where = combineWhereExprs(state.where);
   return new SelectAst({
     from: state.from,
@@ -172,6 +215,7 @@ export function buildSelectAst(state: BuilderState): SelectAst {
     having: state.having,
     limit: state.limit,
     offset: state.offset,
+    locking: state.locking,
     selectAllIntent: undefined,
   });
 }

@@ -1,6 +1,6 @@
 # Cache invalidation on write — spec
 
-Linear: [TML-3399](https://linear.app/prisma-company/issue/TML-3399) (slice 1, `afterTransaction`), [TML-3400](https://linear.app/prisma-company/issue/TML-3400) (slice 2, `invalidateAnnotation`, blocked by slice 1). Design of the cache middleware itself: [ADR 259](../../docs/architecture%20docs/adrs/ADR%20259%20-%20The%20cache%20middleware%20passes%20data%20to%20its%20store%2C%20and%20the%20store%20decides%20how%20to%20cache.md).
+Linear: [TML-3399](https://linear.app/prisma-company/issue/TML-3399) (slice 1, `afterTransaction`), [TML-3400](https://linear.app/prisma-company/issue/TML-3400) (slice 2, `invalidateAnnotation`, blocked by slice 1). Design of the cache middleware itself: [ADR 266](../../docs/architecture%20docs/adrs/ADR%20266%20-%20The%20cache%20middleware%20passes%20data%20to%20its%20store%2C%20and%20the%20store%20decides%20how%20to%20cache.md).
 
 ## At a glance
 
@@ -21,7 +21,7 @@ This is the second half of the cache work. The first half shipped the cache midd
 
 That needs a point in a query's lifecycle where the query's effects are final, which the runtime does not have yet. Slice 1 adds it as a new middleware stage, `afterTransaction`. Slice 2 builds the write annotation on it.
 
-The write annotation belongs in `@internal/middleware-cache` even though ADR 259 keeps policy out of core. It decides nothing about what to invalidate. The annotation names its own target, which reaches the same `invalidate` call as the manual form. What the package adds is the timing: the middleware already holds the store, so it is the one place that calls `invalidate` once the write is final, instead of every extension doing it again.
+The write annotation belongs in `@internal/middleware-cache` even though ADR 266 keeps policy out of core. It decides nothing about what to invalidate. The annotation names its own target, which reaches the same `invalidate` call as the manual form. What the package adds is the timing: the middleware already holds the store, so it is the one place that calls `invalidate` once the write is final, instead of every extension doing it again.
 
 ## Why the write annotation waits for slice 1
 
@@ -190,7 +190,7 @@ A store error from `invalidate` propagates out of the hook. The runner logs it a
 
 ### Docs
 
-The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, when it runs, and the known limits. ADR 259's consequence about the runtime hook, and its paragraph on invalidation that comes with a write, are updated in the same PR.
+The package README's Scope section stops listing write-side invalidation as missing and documents the annotation, when it runs, and the known limits. ADR 266's consequence about the runtime hook, and its paragraph on invalidation that comes with a write, are updated in the same PR.
 
 ## Non-goals
 
@@ -202,4 +202,4 @@ The package README's Scope section stops listing write-side invalidation as miss
 
 - `afterTransaction` fires exactly once per query with the right outcome: right after the query outside a transaction, and when the transaction ends inside one, including for ORM writes.
 - An annotated write invalidates after its transaction commits or ends with an unknown outcome, never before, and never after a rollback.
-- The ADR for the stage is merged, the runtime subsystem doc, the runtime skill reference, ADR 259 and the package README describe the shipped behaviour, and this folder is deleted at close-out.
+- The ADR for the stage is merged, the runtime subsystem doc, the runtime skill reference, ADR 266 and the package README describe the shipped behaviour, and this folder is deleted at close-out.

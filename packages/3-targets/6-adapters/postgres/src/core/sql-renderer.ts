@@ -1,6 +1,7 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef, DataTypeLookup } from '@internal/framework-components/codec';
+import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
 import { dataTypeParams, sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import {
@@ -26,6 +27,9 @@ import {
   type JsonValueProjectionVisitor,
   type ListExpression,
   LiteralExpr,
+  type LockingClause,
+  type LockStrength,
+  type LockWaitPolicy,
   type LoweredParam,
   type NullCheckExpr,
   type OperationExpr,
@@ -151,6 +155,7 @@ function unreachableKind(value: never): string {
 interface ParamIndexMap {
   readonly indexMap: Map<AnyParamRef, number>;
   readonly types: RenderTypes;
+  readonly capabilities: CapabilityMatrix;
 }
 
 interface RenderTypes {
@@ -168,6 +173,7 @@ export function renderLoweredSql(
   contract: PostgresContract,
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   dataTypeLookup: DataTypeLookup,
+  capabilities: CapabilityMatrix,
 ): { readonly sql: string; readonly params: readonly LoweredParam[] } {
   const orderedRefs = collectOrderedParamRefs(ast);
   const indexMap = new Map<AnyParamRef, number>();
@@ -177,7 +183,11 @@ export function renderLoweredSql(
       ? { kind: 'bind', name: ref.name }
       : { kind: 'literal', value: ref.value };
   });
-  const pim: ParamIndexMap = { indexMap, types: { codecDescriptorRegistry, dataTypeLookup } };
+  const pim: ParamIndexMap = {
+    indexMap,
+    types: { codecDescriptorRegistry, dataTypeLookup },
+    capabilities,
+  };
 
   const node = ast;
   let sql: string;
@@ -238,6 +248,9 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     : '';
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
+  const lockingClause = (ast.locking ?? [])
+    .map((clause) => renderLockingClause(clause, pim.capabilities))
+    .join(' ');
 
   const clauses = [
     selectClause,
@@ -249,10 +262,73 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     orderClause,
     limitClause,
     offsetClause,
+    lockingClause,
   ]
     .filter((part) => part.length > 0)
     .join(' ');
   return clauses.trim();
+}
+
+function lockStrengthSql(strength: LockStrength): {
+  readonly keyword: string;
+  readonly capability: readonly [string, string];
+} {
+  switch (strength) {
+    case 'forUpdate':
+      return { keyword: 'FOR UPDATE', capability: ['sql', 'forUpdate'] };
+    case 'forNoKeyUpdate':
+      return { keyword: 'FOR NO KEY UPDATE', capability: ['postgres', 'forNoKeyUpdate'] };
+    case 'forShare':
+      return { keyword: 'FOR SHARE', capability: ['sql', 'forShare'] };
+    case 'forKeyShare':
+      return { keyword: 'FOR KEY SHARE', capability: ['postgres', 'forKeyShare'] };
+    default:
+      return assertNever(strength, `Unsupported lock strength: ${String(strength)}`);
+  }
+}
+
+function lockWaitPolicySql(waitPolicy: LockWaitPolicy): {
+  readonly keyword: string;
+  readonly capability: readonly [string, string];
+} {
+  switch (waitPolicy) {
+    case 'nowait':
+      return { keyword: 'NOWAIT', capability: ['sql', 'lockNowait'] };
+    case 'skipLocked':
+      return { keyword: 'SKIP LOCKED', capability: ['sql', 'lockSkipLocked'] };
+    default:
+      return assertNever(waitPolicy, `Unsupported lock wait policy: ${String(waitPolicy)}`);
+  }
+}
+
+function requireCapability(
+  capabilities: CapabilityMatrix,
+  [group, flag]: readonly [string, string],
+): void {
+  if (capabilities[group]?.[flag] !== true) {
+    const capability = `${group}.${flag}`;
+    throw adapterError(
+      'RUNTIME.AST_UNSUPPORTED',
+      `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
+      { meta: { target: 'postgres', feature: 'locking-clause', capability } },
+    );
+  }
+}
+
+function renderLockingClause(clause: LockingClause, capabilities: CapabilityMatrix): string {
+  const strength = lockStrengthSql(clause.strength);
+  requireCapability(capabilities, strength.capability);
+  const parts = [strength.keyword];
+  if (clause.of !== undefined) {
+    requireCapability(capabilities, ['sql', 'lockOf']);
+    parts.push(`OF ${clause.of.map((name) => quoteIdentifier(name)).join(', ')}`);
+  }
+  if (clause.waitPolicy !== undefined) {
+    const waitPolicy = lockWaitPolicySql(clause.waitPolicy);
+    requireCapability(capabilities, waitPolicy.capability);
+    parts.push(waitPolicy.keyword);
+  }
+  return parts.join(' ');
 }
 
 function renderProjection(

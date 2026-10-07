@@ -289,7 +289,7 @@ The middleware bypasses the cache entirely when `RuntimeMiddlewareContext.scope`
 
 ## Scope
 
-This package caches annotated reads in a store and passes data between the annotations and the store without interpreting it; the store decides how to cache. [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20The%20cache%20middleware%20passes%20data%20to%20its%20store%2C%20and%20the%20store%20decides%20how%20to%20cache.md) records this design and the alternatives it rejected. Its primitives are:
+This package caches annotated reads in a store and passes data between the annotations and the store without interpreting it; the store decides how to cache. [ADR 266](../../../docs/architecture%20docs/adrs/ADR%20266%20-%20The%20cache%20middleware%20passes%20data%20to%20its%20store%2C%20and%20the%20store%20decides%20how%20to%20cache.md) records this design and the alternatives it rejected. Its primitives are:
 
 - keys: the annotation `key`, and the `deriveKey` option with its default `deriveKeyFromContentHash`;
 - `meta` on the annotation, handed to the store's `get` and `set`;

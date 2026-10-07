@@ -37,6 +37,7 @@
  */
 
 import { isDeepStrictEqual } from 'node:util';
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { renderLoweredSql } from '@internal/adapter-postgres/sql-renderer';
 import type { PostgresContract } from '@internal/adapter-postgres/types';
 import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
@@ -296,6 +297,7 @@ export function buildProjectionSql(conformanceCase: PostgresCodecConformanceCase
     conformanceContract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
+    postgresAdapterCapabilities,
   ).sql;
 }
 

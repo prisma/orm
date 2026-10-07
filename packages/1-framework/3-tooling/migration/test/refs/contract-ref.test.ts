@@ -3,7 +3,12 @@ import { EMPTY_CONTRACT_HASH } from '../../src/constants';
 import { reconstructGraph } from '../../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../../src/package';
 import type { Refs } from '../../src/refs';
-import { parseContractRef } from '../../src/refs/contract-ref';
+import {
+  isLiveMarkerRef,
+  isReservedContractRef,
+  parseContractRef,
+  RESERVED_CONTRACT_REFS,
+} from '../../src/refs/contract-ref';
 import type { RefResolutionContext, RefResolutionError } from '../../src/refs/types';
 
 const HASH_A = `${'a'.repeat(64)}`;
@@ -224,7 +229,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@contract reserved token', () => {
+  describe('@contract reserved reference', () => {
     it('resolves @contract to the contractHash in context', () => {
       const ctx = createContext();
       const result = parseContractRef('@contract', { ...ctx, contractHash: HASH_B });
@@ -242,7 +247,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@db reserved token', () => {
+  describe('@db reserved reference', () => {
     it('returns a reserved-db provenance that callers must resolve via readAllMarkers', () => {
       const ctx = createContext();
       const result = parseContractRef('@db', ctx);
@@ -264,7 +269,7 @@ describe('parseContractRef', () => {
     });
   });
 
-  describe('@empty reserved token', () => {
+  describe('@empty reserved reference', () => {
     it('resolves @empty to the empty contract hash offline', () => {
       const ctx = createContext();
       const result = parseContractRef('@empty', ctx);
@@ -314,5 +319,28 @@ describe('parseContractRef', () => {
       const byCaret = parseContractRef('20260102-add-posts^', ctx);
       expect(byCaret.ok && byCaret.value.hash).toBe(byCaretTarget);
     });
+  });
+});
+
+describe('reserved contract references', () => {
+  it('keeps the reserved references in a fixed order', () => {
+    expect(RESERVED_CONTRACT_REFS).toEqual(['@contract', '@db', '@empty']);
+  });
+
+  it.each(['@contract', '@db', '@empty'])('%s is reserved', (input) => {
+    expect(isReservedContractRef(input)).toBe(true);
+  });
+
+  it.each(['contract', 'db', '@other', HASH_A])('%s is not reserved', (input) => {
+    expect(isReservedContractRef(input)).toBe(false);
+  });
+
+  it('only @db names the live marker', () => {
+    expect([undefined, '@contract', '@db', '@empty'].map(isLiveMarkerRef)).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ]);
   });
 });

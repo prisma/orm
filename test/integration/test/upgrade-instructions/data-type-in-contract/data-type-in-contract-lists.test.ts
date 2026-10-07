@@ -20,6 +20,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const sqlOrmClientFixtures = join(here, '../../sql-orm-client/fixtures');
 const portFixtures = join(here, '../../ports/prisma/functional');
 
+const rowLockingCapabilityLine =
+  /^\s*(?:readonly )?"?(?:forKeyShare|forNoKeyUpdate|forShare|forUpdate|lockNowait|lockOf|lockSkipLocked)"?: true[,;]\n/gm;
+
+function readEmittedWithoutRowLockingCapabilities(path: string): string {
+  return readFileSync(path, 'utf8').replace(rowLockingCapabilityLine, '');
+}
+
 const releaseProjects = [
   {
     name: 'rc14-lists',
@@ -101,10 +108,10 @@ for (const project of releaseProjects) {
       });
     });
 
-    it('writes contract.json and contract.d.ts as the current emitter writes them', () => {
+    it('writes contract.json and contract.d.ts as the current emitter writes them, without the row-locking capabilities rc.14 did not report', () => {
       expect([tree['prisma/contract.json'], tree['prisma/contract.d.ts']]).toEqual([
-        readFileSync(join(project.emitted, 'contract.json'), 'utf8'),
-        readFileSync(join(project.emitted, 'contract.d.ts'), 'utf8'),
+        readEmittedWithoutRowLockingCapabilities(join(project.emitted, 'contract.json')),
+        readEmittedWithoutRowLockingCapabilities(join(project.emitted, 'contract.d.ts')),
       ]);
     });
 
@@ -138,9 +145,11 @@ describe('a Postgres project from 8.0.0-rc.14 with a list column of an enum', ()
     });
   });
 
-  it("keeps rc.14's membership check, so it differs from emission only in that check and the storage hash", () => {
+  it("keeps rc.14's membership check, so it differs from emission only in that check, the storage hash and the row-locking capabilities rc.14 did not report", () => {
     const upgradedContract = JSON.parse(tree['prisma/contract.json'] ?? 'null');
-    const emittedContract = JSON.parse(readFileSync(join(emitted, 'contract.json'), 'utf8'));
+    const emittedContract = JSON.parse(
+      readEmittedWithoutRowLockingCapabilities(join(emitted, 'contract.json')),
+    );
     const checksOf = (contract: typeof emittedContract) =>
       contract.storage.namespaces.public.entries.table.user.checks;
     const membershipCheck = checksOf(upgradedContract)[0];
@@ -159,7 +168,7 @@ describe('a Postgres project from 8.0.0-rc.14 with a list column of an enum', ()
         prefix: 'user_plans_check',
       },
       withEmittedCheckAndHash: emittedContract,
-      dts: readFileSync(join(emitted, 'contract.d.ts'), 'utf8'),
+      dts: readEmittedWithoutRowLockingCapabilities(join(emitted, 'contract.d.ts')),
     });
   });
 

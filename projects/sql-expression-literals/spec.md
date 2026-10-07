@@ -56,7 +56,7 @@ The complete list is in [design.md](design.md) section 21.
 
 - **ADR 129** defined the tagged-literal syntax and the `sql` tag for `@default`, and left these places as "a separate decision". This project is that decision. It removes the prefixed aliases `pg.sql` and `sqlite.sql` and adopts two alternatives ADR 129 had rejected, with new reasons.
 - **ADR 254** gave every written value a data type, with `sql` as the one exception: a "lowering entry" that names no type. This project removes the exception, widens the definition of a data type to include `sql/expression`, and builds the argument building block ADR 254 promised.
-- **ADR 255 and PR #30381** make block values use the same argument building blocks as attributes. This project builds on #30381 and gives policy predicates the same type as the attribute places.
+- **ADR 262 and PR #30381** make block values use the same argument building blocks as attributes. This project builds on #30381 and gives policy predicates the same type as the attribute places.
 - **ADR 231 and ADR 249** describe the argument building blocks and the spec context, which gains the stack's data types.
 - **ADR 195** renders planner IR to TypeScript migration files; the stretch slice records an exception to its "same argument shapes" rule.
 - **ADR 234, 243 and 244** name indexes, policies and checks by a hash of their SQL. The hash keeps line breaks in bodies that contain `--`; nothing else about it changes.
@@ -111,7 +111,7 @@ None. Serhii, the author of #30381, agreed on 2026-09-25 that block specs may re
 ## References
 
 - [TML-3282](https://linear.app/prisma-company/issue/TML-3282): the decision ticket.
-- PR #30381 and ADR 255: block specs.
+- PR #30381 and ADR 262: block specs.
 - [ADR 129](../../docs/architecture%20docs/adrs/ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md), [ADR 254](../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 231](../../docs/architecture%20docs/adrs/ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 249](../../docs/architecture%20docs/adrs/ADR%20249%20-%20Central%20attribute-spec%20registry.md), [ADR 195](../../docs/architecture%20docs/adrs/ADR%20195%20-%20Planner%20IR%20with%20two%20renderers.md), [ADR 234](../../docs/architecture%20docs/adrs/ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md), [ADR 243](../../docs/architecture%20docs/adrs/ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md), [ADR 244](../../docs/architecture%20docs/adrs/ADR%20244%20-%20Check%20constraints%20are%20opaque%20wire-named%20expressions.md).
 - [prisma/orm#30350](https://github.com/prisma/orm/pull/30350): data types and casts.
 - Reviews of the first design: [research/design-review-architect.md](research/design-review-architect.md), [research/design-review-principal-engineer.md](research/design-review-principal-engineer.md).

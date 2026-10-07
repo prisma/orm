@@ -9,7 +9,7 @@ export function createViewProductEvent(
   db: Db,
   event: EventBase & FieldInputTypes['__unbound__']['ViewProductEvent'],
 ) {
-  return db.orm.events.variant('ViewProductEvent').create({
+  return db.orm.events.variant('view-product').create({
     userId: event.userId,
     sessionId: event.sessionId,
     timestamp: event.timestamp,
@@ -24,7 +24,7 @@ export function createSearchEvent(
   db: Db,
   event: EventBase & FieldInputTypes['__unbound__']['SearchEvent'],
 ) {
-  return db.orm.events.variant('SearchEvent').create({
+  return db.orm.events.variant('search').create({
     userId: event.userId,
     sessionId: event.sessionId,
     timestamp: event.timestamp,
@@ -36,7 +36,7 @@ export function createAddToCartEvent(
   db: Db,
   event: EventBase & FieldInputTypes['__unbound__']['AddToCartEvent'],
 ) {
-  return db.orm.events.variant('AddToCartEvent').create({
+  return db.orm.events.variant('add-to-cart').create({
     userId: event.userId,
     sessionId: event.sessionId,
     timestamp: event.timestamp,
@@ -50,7 +50,7 @@ export function findEventsByUser(db: Db, userId: string) {
 }
 
 export function findSearchEventsByUser(db: Db, userId: string) {
-  return db.orm.events.variant('SearchEvent').where(MongoFieldFilter.eq('userId', userId)).all();
+  return db.orm.events.variant('search').where(MongoFieldFilter.eq('userId', userId)).all();
 }
 
 interface EventTypeCount {

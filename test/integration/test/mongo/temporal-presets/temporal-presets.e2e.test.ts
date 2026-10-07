@@ -223,8 +223,8 @@ describe('Mongo temporal presets end to end', () => {
     'a preset on a polymorphic base model fills every variant create',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
-        const click = await db.events.variant('Click').create({ url: '/a' });
-        const view = await db.events.variant('View').create({ path: '/b' });
+        const click = await db.events.variant('click').create({ url: '/a' });
+        const view = await db.events.variant('view').create({ path: '/b' });
         expect(click.createdAt).toBeInstanceOf(Date);
         expect(view.createdAt).toBeInstanceOf(Date);
 

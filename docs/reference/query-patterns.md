@@ -154,6 +154,77 @@ const plan = db.sql
 type JoinedRow = ResultType<typeof plan>;
 ```
 
+## Locking the rows a select reads
+
+A read followed by a write races with other transactions doing the same. At Postgres's default isolation level, two transactions can both read `stock = 1`, both decide there is stock, and both write `stock = 0`. Lock the row when you read it, so the second transaction waits until the first commits and then reads what the first left behind.
+
+**✅ CORRECT: Read then write inside one transaction, with the row locked**
+
+```typescript
+import { db } from '../prisma/db';
+
+await db.transaction(async (tx) => {
+  const [product] = await tx.query(
+    tx.sql.public.product
+      .select('id', 'stock')
+      .where((f, fns) => fns.eq(f.id, productId))
+      .forUpdate()
+      .build(),
+  );
+  if (product !== undefined && product.stock > 0) {
+    await tx.execute(
+      tx.sql.public.product
+        .update({ stock: product.stock - 1 })
+        .where((f, fns) => fns.eq(f.id, productId))
+        .build(),
+    );
+  }
+});
+// SELECT "id" AS "id", "stock" AS "stock" FROM "public"."product" WHERE "id" = $1 FOR UPDATE
+```
+
+**✅ CORRECT: Work queue, each worker claims the next unclaimed job**
+
+```typescript
+await db.transaction(async (tx) => {
+  const [job] = await tx.query(
+    tx.sql.public.job
+      .select('id')
+      .where((f, fns) => fns.eq(f.state, 'queued'))
+      .orderBy('createdAt')
+      .limit(1)
+      .forUpdate({ skipLocked: true })
+      .build(),
+  );
+  // ... process the job and mark it done through tx
+});
+// ... ORDER BY "createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED
+```
+
+The four methods are named after the SQL they render:
+
+| Method | SQL | What it blocks |
+|---|---|---|
+| `forUpdate()` | `FOR UPDATE` | every write and every other lock on the row |
+| `forNoKeyUpdate()` | `FOR NO KEY UPDATE` | writes, but not the `FOR KEY SHARE` lock a foreign-key check takes |
+| `forShare()` | `FOR SHARE` | writes only; other readers may share-lock at the same time |
+| `forKeyShare()` | `FOR KEY SHARE` | only deletes and changes to key columns |
+
+Each method takes an optional object:
+
+- `nowait: true` renders `NOWAIT`: the statement fails at once if a row is already locked, with SQLSTATE `55P03` (`lock_not_available`).
+- `skipLocked: true` renders `SKIP LOCKED`: locked rows are left out of the result. `nowait` and `skipLocked` exclude each other.
+- `of: ['c']` renders `OF "c"`: only the rows of the named tables or aliases are locked, when the select joins several. The names are the tables or aliases in scope, never schema-qualified.
+
+Each method and each option exists only when the adapter reports its capability (see [Capabilities](capabilities.md)). Postgres reports all of them; SQLite reports none, because SQLite has no row locks.
+
+**What to know:**
+- A lock lasts until the transaction ends, so use it inside `db.transaction(...)`. Outside a transaction the lock is released as soon as the statement ends.
+- Prefer `forNoKeyUpdate()` when other transactions insert or update rows that reference the locked row. Every such write takes `FOR KEY SHARE` on the referenced row to check the foreign key. `forUpdate()` conflicts with that lock and can deadlock two transactions that lock a parent and write a child in opposite orders; `forNoKeyUpdate()` does not.
+- `skipLocked` with `limit` is the work-queue pattern. On a sharded target it can lock up to `limit` rows per shard.
+- Under `nowait` a locked row fails the statement with SQLSTATE `55P03`.
+- A lock is refused together with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection, because Postgres refuses those statements. A locked select cannot be used as a subquery.
+
 ## Anti-Patterns
 
 **❌ WRONG: Don't create extra aliases for one-off usage**
@@ -199,3 +270,4 @@ const plan = sql
 3. **Extract variables** when tables/columns are reused multiple times
 4. **Use `ResultType<typeof plan>`** to extract row types from plans
 5. **Use direct access** for single-use queries to keep code concise
+6. **Lock rows you read then write** with `forUpdate()` or `forNoKeyUpdate()` inside a transaction

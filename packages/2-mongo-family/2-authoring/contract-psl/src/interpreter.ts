@@ -474,8 +474,19 @@ function resolvePolymorphism(input: {
     }
 
     const variants: Record<string, { readonly value: string }> = {};
+    const seenValues = new Map<string, string>();
     for (const [variant, baseDecl] of baseDeclarations) {
       if (baseDecl.base !== declaration) continue;
+      const existingVariant = seenValues.get(baseDecl.value);
+      if (existingVariant !== undefined) {
+        diagnostics.push({
+          code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
+          message: `Discriminator value "${baseDecl.value}" is used by both "${existingVariant}" and "${variant.name}" on base model "${modelName}"`,
+          ...baseDecl.source.at(baseDecl.span),
+        });
+        continue;
+      }
+      seenValues.set(baseDecl.value, variant.name);
       variants[variant.name] = { value: baseDecl.value };
     }
 

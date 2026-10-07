@@ -13,6 +13,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { postgresRawCodecInferer } from '../src/core/adapter';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -73,6 +74,7 @@ function lowerWhere(query: unknown) {
     contract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
+    postgresAdapterCapabilities,
   );
 }
 
