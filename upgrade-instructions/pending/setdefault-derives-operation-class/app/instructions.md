@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/migration.ts"
       matches:
-        - '\bsetDefault\(\{(?:(?!\bthis\.)[\s\S])*?\boperationClass\s*:'
+        - '\bsetDefault\(\{(?:(?!\bthis\.|\brawSql\s*\()[\s\S])*?\boperationClass\s*:'
   - id: setdefault-has-no-postcheck
     summary: |
       On PostgreSQL, a `setDefault` operation no longer checks afterwards that the column has a default, so the runner no longer skips it when the column already has a different default. A package planned by 8.0.0-rc.15 or 8.0.0-rc.16 whose `migration.ts` has a hand-written `setDefault` that changes an existing default still carries the old check in `ops.json`; write its `ops.json` again before you apply it.
