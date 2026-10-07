@@ -117,6 +117,19 @@ describe('createEnumAccessor() hands out a fresh object for each read of an obje
     });
   });
 
+  it('keeps a member unchanged when the codec reads it as a frozen date', () => {
+    const frozenDates = createEnumAccessor(launchEnum, {
+      ...lenientDateCodec,
+      decodeJson: (json: JsonValue) => Object.freeze(new Date(String(json))),
+    });
+    (frozenDates.members['Launch'] as Date).setTime(0);
+    (frozenDates.values[0] as Date).setTime(0);
+    expect({ member: frozenDates.members['Launch'], value: frozenDates.values[0] }).toEqual({
+      member: new Date(launch),
+      value: new Date(launch),
+    });
+  });
+
   it('keeps a stored object unchanged without a codec', () => {
     const shapes = createEnumAccessor({
       codecId: 'test/json@1',

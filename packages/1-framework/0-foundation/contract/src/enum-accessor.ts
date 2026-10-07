@@ -41,9 +41,9 @@ function kindOf(value: object): string {
 }
 
 function isImmutable(value: unknown): boolean {
-  return (
-    !isObject(value) || Object.isFrozen(value) || kindOf(value).startsWith('[object Temporal.')
-  );
+  if (!isObject(value)) return true;
+  if (value instanceof Date || value instanceof Uint8Array) return false;
+  return Object.isFrozen(value) || kindOf(value).startsWith('[object Temporal.');
 }
 
 /**
