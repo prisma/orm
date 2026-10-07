@@ -247,10 +247,9 @@ describe('provideRename — other symbol kinds', () => {
 });
 
 describe('provideRename — the new name', () => {
-  it('returns an ordinary edit when the new name equals the current name', () => {
+  it('returns the name edits and no map attribute when the new name equals the current name', () => {
     expect(renameAt(glance, 'auth.prisma', 'model Us|er', 'User')).toEqual([
       'auth.prisma: model User {',
-      'auth.prisma: "\\n    @@map(\\"User\\")\\n" before "}"',
       'session.prisma: user   User @relation(fields: [userId], references: [id])',
       'post.prisma: author   auth.User @relation(fields: [authorId], references: [id])',
     ]);
@@ -478,45 +477,6 @@ const noMapStack: FixtureStack = {
 };
 
 describe('provideRename — map attribute added', () => {
-  it('adds @@map with the old name to a model', () => {
-    const files = pair(['model Item {', '  id Int @id', '}'], refModel('  item Item'));
-    const edits = [
-      'decl.prisma: model Product {',
-      'decl.prisma: "\\n  @@map(\\"Item\\")\\n" before "}"',
-      'ref.prisma: item Product',
-    ];
-
-    expect(
-      renameFromBoth(
-        files,
-        ['decl.prisma', 'model It|em'],
-        ['ref.prisma', 'item It|em'],
-        'Product',
-      ),
-    ).toEqual([edits, edits]);
-  });
-
-  it('adds @map with the old name to a scalar field', () => {
-    const files = pair(
-      ['model Item {', '  id Int @id', '  code Int', '}'],
-      refModel('  item Item @relation(fields: [id], references: [code])'),
-    );
-    const edits = [
-      'decl.prisma: sku Int',
-      'decl.prisma: code Int @map("code")',
-      'ref.prisma: item Item @relation(fields: [id], references: [sku])',
-    ];
-
-    expect(
-      renameFromBoth(
-        files,
-        ['decl.prisma', 'co|de Int'],
-        ['ref.prisma', 'references: [co|de]'],
-        'sku',
-      ),
-    ).toEqual([edits, edits]);
-  });
-
   it('adds @map to a list of scalars', () => {
     const files = pair(
       ['model Item {', '  id Int @id', '  tags String[]', '}'],
@@ -810,6 +770,35 @@ describe('provideRename — map attribute not added', () => {
     ).toEqual([edits, edits]);
   });
 
+  it('adds none to a field typed by a model of another contract space', () => {
+    const files = pair(
+      ['model Item {', '  id Int @id', '  remote supabase:store.Tag', '}'],
+      refModel('  item Item @relation(fields: [id], references: [remote])'),
+    );
+    const edits = [
+      'decl.prisma: far supabase:store.Tag',
+      'ref.prisma: item Item @relation(fields: [id], references: [far])',
+    ];
+
+    expect(
+      renameFromBoth(
+        files,
+        ['decl.prisma', 'rem|ote supabase'],
+        ['ref.prisma', 'references: [rem|ote]'],
+        'far',
+      ),
+    ).toEqual([edits, edits]);
+  });
+
+  it('adds none to a model with no closing brace', () => {
+    const files = pair(refModel('  item Item'), ['model Item {', '  id Int @id']);
+
+    expect(renameAt(files, 'decl.prisma', 'item It|em', 'Product')).toEqual([
+      'decl.prisma: item Product',
+      'ref.prisma: model Product {',
+    ]);
+  });
+
   it('adds none to a model when the attribute specs define no map for models', () => {
     const files = pair(['model Item {', '  id Int @id', '}'], refModel('  item Item'));
     const edits = ['decl.prisma: model Product {', 'ref.prisma: item Product'];
@@ -896,15 +885,38 @@ describe('provideRename — where the map attribute goes', () => {
     expect(format(renamed)).toBe(renamed);
   });
 
-  it('indents @@map like the members of a model inside a namespace', () => {
-    const files = { 'a.prisma': 'namespace shop {\n  model Item {\n    id Int @id\n  }\n}\n' };
+  it('adds no second blank line when one already precedes the closing brace', () => {
+    const files = { 'a.prisma': 'model Item {\n  id Int @id\n\n}\n' };
 
     const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
 
-    expect(renamed).toBe(
-      'namespace shop {\n  model Product {\n    id Int @id\n\n    @@map("Item")\n  }\n}\n',
-    );
+    expect(renamed).toBe('model Product {\n  id Int @id\n\n  @@map("Item")\n}\n');
     expect(format(renamed)).toBe(renamed);
+  });
+
+  it('puts @@map after a comment that follows the last field, keeping the comment', () => {
+    const files = { 'a.prisma': 'model Item {\n  id Int @id\n  // note\n}\n' };
+
+    expect(textAfterRename(files, 'a.prisma', 'model It|em', 'Product')).toBe(
+      'model Product {\n  id Int @id\n  // note\n\n  @@map("Item")\n}\n',
+    );
+  });
+
+  it('ends the inserted @@map line the way the lines of a CRLF file end', () => {
+    const files = { 'a.prisma': 'model Item {\r\n  id Int @id\r\n}\r\n' };
+
+    expect(textAfterRename(files, 'a.prisma', 'model It|em', 'Product')).toBe(
+      'model Product {\r\n  id Int @id\r\n\r\n  @@map("Item")\r\n}\r\n',
+    );
+  });
+
+  it('moves the closing brace of a one-line model to its own line after @@map', () => {
+    const files = { 'a.prisma': 'model Item { id Int }\n' };
+
+    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
+
+    expect(renamed).toBe('model Product { id Int\n\n  @@map("Item")\n}\n');
+    expect(format(renamed)).toBe('model Product {\n  id Int\n\n  @@map("Item")\n}\n');
   });
 
   it('gives an empty model a body that holds @@map alone', () => {

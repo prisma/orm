@@ -85,7 +85,7 @@ interface MapAttributeEdit {
 
 function mapAttributeEdit(input: ProvideRenameInput): MapAttributeEdit | undefined {
   const symbol = renamedSymbol(input);
-  if (symbol === undefined) return undefined;
+  if (symbol === undefined || symbol.name === input.newName) return undefined;
   switch (symbol.kind) {
     case 'model':
       return modelTakesMap(symbol, input) ? blockMapEdit(symbol, input) : undefined;
@@ -120,7 +120,8 @@ function fieldTakesMap(field: FieldSymbol, source: AttributeSpecSource): boolean
   if (model === undefined) return false;
   if (hasAttribute(field.node.attributes(), 'map')) return false;
   const type = typeReferenceNode(field);
-  if (type !== undefined && source.binder.symbolForNode(type)?.kind === 'model') return false;
+  const typeKind = type === undefined ? undefined : source.binder.symbolForNode(type)?.kind;
+  if (typeKind === 'model' || typeKind === 'crossSpace') return false;
   const resolve = attributeSpecResolver({ ownerKind: 'field', field: field.node, model }, source);
   return resolve('map') !== undefined;
 }
@@ -156,23 +157,48 @@ function blockMapEdit(
   const sourceFile = sourceFileOf(symbol.node, input);
   const rbrace = symbol.node.rbrace();
   if (sourceFile === undefined || rbrace === undefined) return undefined;
-  const declarationIndent = indentBefore(symbol.node.syntax);
+  const newline = sourceFile.text.includes('\r\n') ? '\r\n' : '\n';
+  const declarationIndent = lineIndent(symbol.node.syntax) ?? '';
   const members = lastAndFirstMember(symbol.node);
-  const indent =
-    members === undefined ? `${declarationIndent}  ` : indentBefore(members.first.syntax);
-  const separation = members === undefined || members.last instanceof ModelAttributeAst ? '' : '\n';
-  const line = `${indent}@@map("${symbol.name}")\n`;
+  const memberIndent = members === undefined ? undefined : lineIndent(members.first.syntax);
+  const line = `${memberIndent ?? `${declarationIndent}  `}@@map("${symbol.name}")${newline}`;
+  const afterField = members !== undefined && !(members.last instanceof ModelAttributeAst);
   const closingIndent = whitespaceBefore(rbrace);
-  const ownLine = (closingIndent ?? rbrace).prevSiblingOrToken?.kind === 'Newline';
-  const offset = ownLine ? (closingIndent ?? rbrace).offset : rbrace.offset;
-  const at = sourceFile.positionAt(offset);
+  const closingLineStart = closingIndent ?? rbrace;
+  if (startsLine(closingLineStart)) {
+    const blank = afterField && !followsBlankLine(closingLineStart) ? newline : '';
+    const at = sourceFile.positionAt(closingLineStart.offset);
+    return {
+      uri: sourceFile.filename,
+      edit: { range: { start: at, end: at }, newText: `${blank}${line}` },
+    };
+  }
   return {
     uri: sourceFile.filename,
     edit: {
-      range: { start: at, end: at },
-      newText: ownLine ? `${separation}${line}` : `\n${separation}${line}${declarationIndent}`,
+      range: {
+        start: sourceFile.positionAt(closingLineStart.offset),
+        end: sourceFile.positionAt(rbrace.offset),
+      },
+      newText: `${newline}${afterField ? newline : ''}${line}${declarationIndent}`,
     },
   };
+}
+
+function startsLine(element: SyntaxElement): boolean {
+  const before = element.prevSiblingOrToken;
+  return before === undefined || before.kind === 'Newline';
+}
+
+function followsBlankLine(lineStart: SyntaxElement): boolean {
+  const lineBreak = lineStart.prevSiblingOrToken;
+  const before = lineBreak?.prevSiblingOrToken;
+  return (before?.kind === 'Whitespace' ? before.prevSiblingOrToken : before)?.kind === 'Newline';
+}
+
+function lineIndent(element: SyntaxElement): string | undefined {
+  const whitespace = whitespaceBefore(element);
+  return startsLine(whitespace ?? element) ? (whitespace?.text ?? '') : undefined;
 }
 
 function lastAndFirstMember(
@@ -190,10 +216,6 @@ function lastAndFirstMember(
 function whitespaceBefore(element: SyntaxElement): SyntaxToken | undefined {
   const before = element.prevSiblingOrToken;
   return before instanceof SyntaxToken && before.kind === 'Whitespace' ? before : undefined;
-}
-
-function indentBefore(element: SyntaxElement): string {
-  return whitespaceBefore(element)?.text ?? '';
 }
 
 function sourceFileOf(node: AstNode, input: ProvideRenameInput): SourceFile | undefined {
