@@ -2591,4 +2591,37 @@ describe('mutation-executor', () => {
     });
     expect(runtime.executions).toEqual([]);
   });
+
+  it('executeNestedUpdateMutation() inspects each row of a nested create() a bounded number of times', async () => {
+    const rowCount = 200;
+    const reads = new Array<number>(rowCount).fill(0);
+    const rows = Array.from({ length: rowCount }, (_unused, index) => ({
+      id: 100 + index,
+      title: `Post ${index}`,
+      views: 0,
+    }));
+    const countedRows = new Proxy(rows, {
+      get(target, property, receiver) {
+        const index = typeof property === 'string' ? Number(property) : Number.NaN;
+        if (Number.isInteger(index)) {
+          reads[index] = (reads[index] ?? 0) + 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[]]);
+
+    const updated = await executeNestedUpdateMutation({
+      context: getTestContext(),
+      runtime,
+      namespaceId: 'public',
+      modelName: 'User',
+      filters: [userIdFilter],
+      data: { posts: () => ({ kind: 'create', data: countedRows }) } as never,
+    });
+
+    expect(updated).toBeNull();
+    expect(Math.max(...reads)).toBeLessThanOrEqual(4);
+  });
 });

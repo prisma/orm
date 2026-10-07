@@ -727,6 +727,7 @@ function parsedCreateRow(
 ): ParsedMutationInput | undefined {
   let rows = resolved.createRows.get(mutation);
   if (!rows) {
+    assertCreateRowsAreObjects(relation, mutation);
     rows = [];
     resolved.createRows.set(mutation, rows);
   }
@@ -734,7 +735,6 @@ function parsedCreateRow(
   if (cached) {
     return cached;
   }
-  assertCreateRowsAreObjects(relation, mutation);
   const input = mutation.data[index];
   if (!input) {
     return undefined;
