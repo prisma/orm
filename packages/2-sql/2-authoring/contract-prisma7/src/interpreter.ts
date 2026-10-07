@@ -60,7 +60,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
-import { prisma7PrimaryKeyName, statedConstraintName } from './constraint-names';
+import {
+  checkStatedConstraintNameLength,
+  prisma7PrimaryKeyName,
+  statedConstraintName,
+} from './constraint-names';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
 import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -310,7 +314,7 @@ export function interpretPrisma7Documents(
         sourceId,
         sources,
         defaultNamespaceId,
-        binding.indexTypes,
+        binding,
         diagnostics,
       );
       if (declaration === undefined) {
@@ -608,9 +612,10 @@ function readModelDeclaration(
   sourceId: string,
   sources: PslSources,
   defaultNamespaceId: string,
-  indexTypes: Prisma7TargetBinding['indexTypes'],
+  binding: Pick<Prisma7TargetBinding, 'indexTypes' | 'identifierMaxBytes'>,
   diagnostics: ContractSourceDiagnostic[],
 ): ModelDeclaration | undefined {
+  const { indexTypes } = binding;
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
@@ -618,6 +623,15 @@ function readModelDeclaration(
   const uniqueIndexes: IndexAttribute[] = [];
   const indexes: IndexAttribute[] = [];
   for (const attribute of symbol.attributes) {
+    if (['id', 'unique', 'index'].includes(attribute.name)) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: `Model "${symbol.name}"`,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     switch (attribute.name) {
       case 'map':
         tableName =
@@ -958,6 +972,17 @@ function readField(args: ReadFieldArgs): void {
   let defaultAttribute: ResolvedAttribute | undefined;
   let updatedAt: ResolvedAttribute | undefined;
   for (const attribute of field.attributes) {
+    if (
+      isRelationField ? attribute.name === 'relation' : ['id', 'unique'].includes(attribute.name)
+    ) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: label,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     if (attribute.name === 'map' && !isRelationField) {
       columnName = requireStringArgument(attribute, label, sourceId, diagnostics) ?? columnName;
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
