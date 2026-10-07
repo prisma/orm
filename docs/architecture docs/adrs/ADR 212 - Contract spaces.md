@@ -154,9 +154,9 @@ Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migra
 
 A handful of extensions need **Path B** — scaffolding an empty migration and writing its operations by hand — when the contract declares only `storage.types` (no tables / models). For such contracts the planner returns no operations and `migration plan` refuses with `MIGRATION.PLANNING_FAILED`: "This contract describes nothing migration plan can create, so there is no first migration to plan." The author instead:
 
-1. Runs `prisma-next migration new`, which writes `migrations/<timestamp>_<name>/` with `migration.json` (`from: null`, `to: <storageHash from contract.json>`), an empty `ops.json`, a `migration.ts` stub, and the contract snapshot.
+1. Runs `prisma-next migration new`, which writes `migrations/app/<timestamp>_<name>/` (the app space's directory under the configured `migrations.dir`) with `migration.json` (`from: null`, `to: <storageHash from contract.json>`), an empty `ops.json`, a `migration.ts` stub, and the contract snapshot.
 2. Hand-authors `migration.ts` as a `Migration` subclass returning the production op list (typically a single `rawSql` op installing the underlying database extension) via the `operations` getter.
-3. Runs `pnpm tsx migrations/<dirName>/migration.ts` to canonicalize `ops.json` + `migration.json` from the subclass output.
+3. Runs `pnpm tsx migrations/app/<dirName>/migration.ts` to canonicalize `ops.json` + `migration.json` from the subclass output.
 
 pgvector (whose contract declares only `vector(N)` under `storage.types`) is the exemplar. Future migrations on a Path-B-bootstrapped extension that *do* add tables / models can use `migration plan` (Path A) directly — the path choice is per-migration, not per-extension.
 

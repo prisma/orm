@@ -564,45 +564,56 @@ export function errorPlanOriginUnknown(
   );
 }
 
-/** Where a `migration plan` leg that produced no operations planned from. */
-export type NoOperationsOrigin =
+/** Where a `migration plan` leg plans from: an empty database, an empty database toward the `db` ref's contract (the automatic baseline), or an earlier contract. */
+export type PlanOrigin =
   | { readonly kind: 'empty' }
   | { readonly kind: 'baseline'; readonly hash: string }
-  | { readonly kind: 'contract'; readonly hash: string; readonly destinationIsEmitted: boolean };
+  | { readonly kind: 'contract'; readonly hash: string };
+
+/** Where a `migration plan` leg plans to; only the emitted contract can be the destination of `migration new`. */
+export interface PlanDestination {
+  readonly hash: string;
+  readonly isEmitted: boolean;
+}
 
 const REPORT_MISSED_CHANGE =
   'If you expected the database to change, migration plan missed it: report it with the output of `prisma migration plan --json`.';
 
-function noOperationsConflict(origin: NoOperationsOrigin): CliErrorConflict {
+function noOperationsConflict(origin: PlanOrigin, destination: PlanDestination): CliErrorConflict {
   switch (origin.kind) {
     case 'empty':
       return {
         kind: 'nothingToCreate',
         summary:
           'This contract describes nothing migration plan can create, so there is no first migration to plan.',
-        why: 'If the database needs something the contract does not describe, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.',
+        why: destination.isEmitted
+          ? 'If the database needs something the contract does not describe, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.'
+          : '`prisma migration new` writes a migration only to the emitted contract. If the database needs something this contract does not describe, emit it, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.',
       };
     case 'baseline':
       return {
         kind: 'nothingToBaseline',
         summary: `The migrations directory is empty, so migration plan starts the migration history with a baseline migration to the contract the db ref points at, ${origin.hash}. That contract describes nothing migration plan can create, so there is no baseline to plan.`,
-        why: 'No command writes a baseline migration with no operations. If you manage the database with `prisma db init` or `prisma db update`, keep using `prisma db update`. To start a migration history from this database, report it with the output of `prisma migration plan --json`.',
+        why: 'No command writes a baseline migration with no operations. If you manage the database with `prisma db init` or `prisma db update`, keep using `prisma db update`. No command can start a migration history from this database yet (TML-3511); report it with the output of `prisma migration plan --json`.',
       };
     case 'contract':
       return {
         kind: 'noDatabaseChange',
         summary:
           'The contract changed, but migration plan found nothing to change in the database. That is expected after a Prisma upgrade that changes how contract.json records values, after you switch a field to another codec of the same type, or after you change a control policy.',
-        why: origin.destinationIsEmitted
+        why: destination.isEmitted
           ? `If you deploy with migrations, run \`prisma migration new --from ${origin.hash}\` to write a migration with no operations, then \`prisma db migrate\`. If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign\` on each database instead. ${REPORT_MISSED_CHANGE}`
-          : `If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign\` on each database. ${REPORT_MISSED_CHANGE}`,
+          : `\`prisma migration new\` writes a migration only to the emitted contract; to write one to this target, emit it first. If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign ${destination.hash}\` on each database. ${REPORT_MISSED_CHANGE}`,
       };
   }
 }
 
 /** `migration plan` refuses a leg whose planner produced no operations, and says how to proceed from where it planned. */
-export function errorPlanProducedNoOperations(origin: NoOperationsOrigin): CliStructuredError {
-  return errorMigrationPlanningFailed({ conflicts: [noOperationsConflict(origin)] });
+export function errorPlanProducedNoOperations(
+  origin: PlanOrigin,
+  destination: PlanDestination,
+): CliStructuredError {
+  return errorMigrationPlanningFailed({ conflicts: [noOperationsConflict(origin, destination)] });
 }
 
 export function errorMarkerMismatch(

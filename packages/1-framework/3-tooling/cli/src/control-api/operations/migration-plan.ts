@@ -36,6 +36,8 @@ import {
   errorMigrationPlanningFailed,
   errorPlanProducedNoOperations,
   errorTargetMigrationNotSupported,
+  type PlanDestination,
+  type PlanOrigin,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -109,23 +111,18 @@ type PlannerSuccess = {
 
 type TargetMigrationsApi = NonNullable<ReturnType<typeof getTargetMigrations>>;
 
-/** Where a planner leg plans from: an empty database, an empty database toward the `db` ref's contract (the automatic baseline), or an earlier contract. */
-type PlanOrigin =
-  | { readonly kind: 'empty' }
-  | { readonly kind: 'baseline'; readonly hash: string }
-  | {
-      readonly kind: 'contract';
-      readonly hash: string;
-      readonly contract: Contract;
-      readonly destinationIsEmitted: boolean;
-    };
+/** A plan origin whose earlier contract the planner diffs against. */
+type PlannerLegOrigin =
+  | Exclude<PlanOrigin, { readonly kind: 'contract' }>
+  | (Extract<PlanOrigin, { readonly kind: 'contract' }> & { readonly contract: Contract });
 
 async function runPlannerLeg(
   planner: ReturnType<TargetMigrationsApi['createPlanner']>,
   migrations: TargetMigrationsApi,
   frameworkComponents: ReturnType<typeof assertFrameworkComponentsCompatible>,
   contract: Contract,
-  origin: PlanOrigin,
+  origin: PlannerLegOrigin,
+  destination: PlanDestination,
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
@@ -161,7 +158,7 @@ async function runPlannerLeg(
   try {
     plannedOps = await Promise.all(plannerResult.plan.operations);
     if (plannedOps.length === 0) {
-      return notOk(errorPlanProducedNoOperations(origin));
+      return notOk(errorPlanProducedNoOperations(origin, destination));
     }
   } catch (e) {
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
@@ -493,14 +490,13 @@ async function executeMigrationPlanCommandInner(
       break;
   }
   const resolvedFrom = resolutionResult.value;
-  const fromOrigin: PlanOrigin =
+  const fromOrigin: PlannerLegOrigin =
     resolvedFrom.kind === 'greenfield'
       ? { kind: 'empty' }
       : {
           kind: 'contract',
           hash: resolvedFrom.fromHash,
           contract: resolvedFrom.fromContract,
-          destinationIsEmitted: options.to === undefined,
         };
 
   // `--to <ref>` swaps the planner destination to an arbitrary resolved
@@ -634,6 +630,10 @@ async function executeMigrationPlanCommandInner(
 
   try {
     const planner = migrations.createPlanner(controlAdapter);
+    const planDestination: PlanDestination = {
+      hash: toStorageHash,
+      isEmitted: options.to === undefined,
+    };
 
     if (isAutoBaseline && fromHash !== null && fromContract !== null && fromContractInStore) {
       const deltaTimestamp = new Date();
@@ -649,6 +649,7 @@ async function executeMigrationPlanCommandInner(
         frameworkComponents,
         fromContract,
         { kind: 'baseline', hash: fromHash },
+        { hash: fromHash, isEmitted: false },
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
@@ -726,6 +727,7 @@ async function executeMigrationPlanCommandInner(
         frameworkComponents,
         aggregate.app.contract(),
         fromOrigin,
+        planDestination,
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
@@ -811,6 +813,7 @@ async function executeMigrationPlanCommandInner(
       frameworkComponents,
       aggregate.app.contract(),
       fromOrigin,
+      planDestination,
       aggregate.app.spaceId,
       aggregate,
       snapshotsImportPathFrom(packageDir, migrationsDir),
