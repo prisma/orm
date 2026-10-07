@@ -120,7 +120,7 @@ describe('ORM row locking, rendered SQL', () => {
       const runtime = createMockRuntime();
 
       await tasksWith(runtime)
-        .variant('Feature' as never)
+        .variant('feature' as never)
         .forUpdate()
         .all()
         .toArray();
@@ -134,7 +134,7 @@ describe('ORM row locking, rendered SQL', () => {
       const runtime = createMockRuntime();
 
       await tasksWith(runtime)
-        .variant('Bug' as never)
+        .variant('bug' as never)
         .forUpdate()
         .all()
         .toArray();
