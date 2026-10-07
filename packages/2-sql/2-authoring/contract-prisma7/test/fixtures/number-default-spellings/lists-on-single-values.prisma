@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Lists {
+  id    Int   @id
+  count Int   @default([1, 2])
+  ratio Float @default([1, "x"])
+}

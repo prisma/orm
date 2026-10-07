@@ -1,5 +1,8 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import type {
   ControlDefaultRegistries,
   ControlMutationDefaults,
@@ -76,6 +79,7 @@ import {
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
 import type { SyntaxNode } from './syntax/red';
+import { readWrittenScalar } from './written-scalar';
 
 export const PSL_UNRESOLVED_REFERENCE =
   'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
@@ -154,7 +158,7 @@ export interface UnresolvedTypeReference {
 export type DescribeUnresolvedType = (unresolved: UnresolvedTypeReference) => string | undefined;
 
 export interface BinderContext
-  extends Pick<ContractSourceContext, 'authoringContributions' | 'pslDiagnostics'> {
+  extends Pick<ContractSourceContext, 'authoringContributions' | 'pslDiagnostics' | 'dataTypes'> {
   readonly controlMutationDefaults: Pick<ControlMutationDefaults, 'defaultFunctionRegistry'>;
 }
 
@@ -170,6 +174,7 @@ interface BindingInputs {
   readonly contributedTypes: ContributedTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
   readonly describeUnresolvedType?: DescribeUnresolvedType | undefined;
@@ -288,8 +293,8 @@ export function createBinder(input: CreateBinderInput): BinderResult {
     pslBlockDescriptors: contributions.pslBlockDescriptors,
     controlMutationDefaults: {
       defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
-      dataTypeEntries: contributions.dataTypes,
     },
+    dataTypes: context.dataTypes,
     ...(describeUnsupportedAttributeFactory !== undefined
       ? { describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources) }
       : {}),
@@ -306,6 +311,7 @@ function bind(options: BindingInputs): BinderResult {
     contributedTypes,
     attributeSpecs,
     controlMutationDefaults,
+    dataTypes,
     describeUnsupportedAttribute,
     describeUnresolvedType,
   } = options;
@@ -401,7 +407,7 @@ function bind(options: BindingInputs): BinderResult {
     };
     const specContext =
       entity.kind === 'model'
-        ? { symbols: symbolTable, model: entity, controlMutationDefaults }
+        ? { symbols: symbolTable, model: entity, controlMutationDefaults, dataTypes }
         : undefined;
     bindAttributes(
       entity,
@@ -693,6 +699,11 @@ function tryBindExpression(
     }
     case 'taggedLiteral': {
       const matched = TaggedLiteralExprAst.cast(expression.syntax) !== undefined;
+      return { matched, references, diagnostics };
+    }
+    case 'dataTypeValue': {
+      const literal = readWrittenScalar(expression);
+      const matched = literal.ok || literal.reason !== 'not-a-literal';
       return { matched, references, diagnostics };
     }
     case 'rejecting':

@@ -4,13 +4,15 @@ import type {
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import type {
+  AuthoringTypeConstructorDescriptor,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import {
   type CodecLookupWithDescriptors,
-  createDataTypeLookup,
-  type DataTypeLookup,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import type { Result } from '@internal/utils/result';
@@ -26,10 +28,10 @@ import { mongoContextInput } from '../src/test';
 
 type InterpretOptionsWithDefaultLookups = Omit<
   InterpretPslDocumentToMongoContractInput,
-  'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup' | 'dataTypeLookup'
+  'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup' | 'dataTypes'
 > & {
   readonly codecLookup?: CodecLookupWithDescriptors;
-  readonly dataTypeLookup?: DataTypeLookup;
+  readonly dataTypes?: DataTypeSupport;
 };
 
 function contextForInterpretOptions(
@@ -60,7 +62,7 @@ function contextForInterpretOptions(
       describeUnresolvedType: describeUnresolvedMongoType,
     },
     codecLookup: options.codecLookup ?? { ...emptyCodecLookup, descriptorFor: () => undefined },
-    dataTypeLookup: options.dataTypeLookup ?? createDataTypeLookup([]),
+    dataTypes: options.dataTypes ?? EMPTY_DATA_TYPES,
     controlMutationDefaults: {
       defaultFunctionRegistry:
         options.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),

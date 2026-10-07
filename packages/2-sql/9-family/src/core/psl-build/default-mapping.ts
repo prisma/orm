@@ -14,7 +14,10 @@ import type {
   ColumnDefaultLiteralInputValue,
   JsonValue,
 } from '@internal/contract/types';
-import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import type {
+  DataTypeAuthoringEntry,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import { authoringEntryType, printTaggedLiteral } from '@internal/framework-components/authoring';
 import type {
   CodecDescriptor,
@@ -34,10 +37,8 @@ const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
 
 export interface DefaultMappingOptions {
   readonly functionAttributes?: Readonly<Record<string, string>>;
-  /** PSL support for the stack's data types, keyed by data type id. */
-  readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>> | undefined;
-  /** The stack's data types, whose casts say which other types' values each one takes. */
-  readonly dataTypeLookup?: DataTypeLookup | undefined;
+  /** The stack's data types, whose casts say which other types' values each one takes, with the authoring entries that write them. */
+  readonly dataTypes?: DataTypeSupport | undefined;
   /** The column's codec: the data type a default is written in, and the canonical form of its values. */
   readonly columnCodec?: Pick<CodecDescriptor, 'dataType' | 'toCanonicalForm'> | undefined;
   /**
@@ -145,10 +146,10 @@ function classifications(value: JsonValue, surface: WritingSurface): readonly Ty
 function admitted(
   candidate: TypedValue,
   columnDataType: DataTypeId,
-  dataTypeLookup: DataTypeLookup,
+  lookup: DataTypeLookup,
 ): JsonValue | undefined {
   if (candidate.type === columnDataType) return candidate.value;
-  const cast = dataTypeLookup.get(columnDataType)?.casts[candidate.type];
+  const cast = lookup.get(columnDataType)?.casts[candidate.type];
   if (cast === undefined) return undefined;
   try {
     return cast(candidate.value);
@@ -157,8 +158,8 @@ function admitted(
   }
 }
 
-/** The body of the literal: what the entry prints, before the syntax that fences it. */
-function printedBody(entry: DataTypeAuthoringEntry, value: JsonValue): string | undefined {
+/** The text of the literal: what the entry prints, before the syntax that fences it. */
+function printedText(entry: DataTypeAuthoringEntry, value: JsonValue): string | undefined {
   try {
     return entry.print(value);
   } catch {
@@ -166,26 +167,26 @@ function printedBody(entry: DataTypeAuthoringEntry, value: JsonValue): string | 
   }
 }
 
-/** What the entry reads the printed body back as, which for a number is the classifier's answer. */
+/** What the entry reads the printed text back as, which for a number is the classifier's answer. */
 function readBack(
   entry: DataTypeAuthoringEntry,
   type: DataTypeId,
-  body: string,
+  text: string,
 ): TypedValue | undefined {
   const written = entry.written;
   try {
     return written.kind === 'plain' && written.syntax === 'number'
-      ? written.classify(body)
-      : { type, value: written.parse(body) };
+      ? written.classify(text)
+      : { type, value: written.parse(text) };
   } catch {
     return undefined;
   }
 }
 
-function literalText(entry: DataTypeAuthoringEntry, body: string): string {
+function literalText(entry: DataTypeAuthoringEntry, text: string): string {
   const written = entry.written;
-  if (written.kind === 'tag') return printTaggedLiteral(written.tag, body);
-  return written.syntax === 'string' ? `"${escapePslString(body)}"` : body;
+  if (written.kind === 'tag') return printTaggedLiteral(written.tag, text);
+  return written.syntax === 'string' ? `"${escapePslString(text)}"` : text;
 }
 
 /** One element of a written list: its source text and the canonical form the list cast receives. */
@@ -201,21 +202,21 @@ interface WrittenElement {
 function writeScalar(
   value: JsonValue,
   columnDataType: DataTypeId,
-  dataTypeLookup: DataTypeLookup,
+  lookup: DataTypeLookup,
   surface: WritingSurface,
 ): string | undefined {
   for (const candidate of classifications(value, surface)) {
     const entry = surface.entryOf.get(candidate.type);
     if (entry === undefined) continue;
-    const stored = admitted(candidate, columnDataType, dataTypeLookup);
+    const stored = admitted(candidate, columnDataType, lookup);
     if (stored === undefined || !sameForm(stored, value)) continue;
-    const body = printedBody(entry, candidate.value);
-    if (body === undefined) continue;
-    const reread = readBack(entry, candidate.type, body);
+    const text = printedText(entry, candidate.value);
+    if (text === undefined) continue;
+    const reread = readBack(entry, candidate.type, text);
     if (reread === undefined) continue;
-    const restored = admitted(reread, columnDataType, dataTypeLookup);
+    const restored = admitted(reread, columnDataType, lookup);
     if (restored === undefined || !sameForm(restored, value)) continue;
-    return literalText(entry, body);
+    return literalText(entry, text);
   }
   return undefined;
 }
@@ -230,11 +231,11 @@ function writeElement(
     if (!of.includes(candidate.type)) continue;
     const entry = surface.entryOf.get(candidate.type);
     if (entry === undefined) continue;
-    const body = printedBody(entry, candidate.value);
-    if (body === undefined) continue;
-    const reread = readBack(entry, candidate.type, body);
+    const text = printedText(entry, candidate.value);
+    if (text === undefined) continue;
+    const reread = readBack(entry, candidate.type, text);
     if (reread === undefined || !of.includes(reread.type)) continue;
-    return { text: literalText(entry, body), value: reread.value };
+    return { text: literalText(entry, text), value: reread.value };
   }
   return undefined;
 }
@@ -246,10 +247,10 @@ function writeElement(
 function writeListCast(
   value: readonly JsonValue[],
   columnDataType: DataTypeId,
-  dataTypeLookup: DataTypeLookup,
+  lookup: DataTypeLookup,
   surface: WritingSurface,
 ): string | undefined {
-  const listCast = dataTypeLookup.get(columnDataType)?.listCast;
+  const listCast = lookup.get(columnDataType)?.listCast;
   if (listCast === undefined) return undefined;
   const parts: string[] = [];
   const elements: JsonValue[] = [];
@@ -272,33 +273,30 @@ function writeDefaultLiteral(
   options: DefaultMappingOptions | undefined,
 ): string | undefined {
   if (stored instanceof Date) return undefined;
-  const { dataTypeEntries, dataTypeLookup, columnCodec } = options ?? {};
-  if (dataTypeEntries === undefined || dataTypeLookup === undefined || columnCodec === undefined) {
-    return undefined;
-  }
+  const { dataTypes, columnCodec } = options ?? {};
+  if (dataTypes === undefined || columnCodec === undefined) return undefined;
+  const { entries, lookup } = dataTypes;
   const columnDataType = columnCodec.dataType;
   const { value } = defaultInCanonicalForm(
     stored,
-    canonicalFormOf(columnCodec, dataTypeLookup),
+    canonicalFormOf(columnCodec, lookup),
     options?.list === true,
   );
   if (value instanceof Date) return undefined;
-  const surface = writingSurface(dataTypeEntries);
+  const surface = writingSurface(entries);
   if (options?.list === true) {
     if (!Array.isArray(value)) return undefined;
     const parts: string[] = [];
     for (const element of value) {
-      const written = writeScalar(element, columnDataType, dataTypeLookup, surface);
+      const written = writeScalar(element, columnDataType, lookup, surface);
       if (written === undefined) return undefined;
       parts.push(written);
     }
     return `[${parts.join(', ')}]`;
   }
-  const written = writeScalar(value, columnDataType, dataTypeLookup, surface);
+  const written = writeScalar(value, columnDataType, lookup, surface);
   if (written !== undefined) return written;
-  return Array.isArray(value)
-    ? writeListCast(value, columnDataType, dataTypeLookup, surface)
-    : undefined;
+  return Array.isArray(value) ? writeListCast(value, columnDataType, lookup, surface) : undefined;
 }
 
 /** Whether two canonical forms are the same JSON value, member by member and element by element. */

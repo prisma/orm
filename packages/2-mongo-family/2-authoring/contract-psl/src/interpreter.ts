@@ -22,6 +22,7 @@ import type {
   AuthoringEntityContext,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
+  DataTypeSupport,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
@@ -29,10 +30,7 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -119,8 +117,8 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly binder: Binder;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
@@ -1352,6 +1350,7 @@ export function interpretPslDocumentToMongoContract(
     symbols: symbolTable,
     model,
     controlMutationDefaults: input.controlMutationDefaults,
+    dataTypes: input.dataTypes,
   });
   const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();
   for (const model of allModels) {
@@ -1387,7 +1386,7 @@ export function interpretPslDocumentToMongoContract(
       target: 'mongo',
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
       codecLookup,
-      dataTypeLookup: input.dataTypeLookup,
+      dataTypeLookup: input.dataTypes.lookup,
       diagnostics: {
         push: (d) => {
           diagnostics.pushExternal(
@@ -1713,14 +1712,14 @@ export function interpretPslDocumentToMongoContract(
         modelEntry.fields,
         modelEntry.discriminator.field,
         variantEntries,
-        { codecLookup, dataTypeLookup: input.dataTypeLookup },
+        { codecLookup, dataTypeLookup: input.dataTypes.lookup },
         valueObjects,
         storageValueSets,
       );
     } else {
       coll['validator'] = deriveJsonSchema(
         modelEntry.fields,
-        { codecLookup, dataTypeLookup: input.dataTypeLookup },
+        { codecLookup, dataTypeLookup: input.dataTypes.lookup },
         valueObjects,
         storageValueSets,
       );

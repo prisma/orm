@@ -125,6 +125,8 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientUpsertUser(data, runtime)` — `upsert()` for create-or-update by primary key
 - `ormClientFindUserByIdCached(id, runtime, options?)` — opt-in cached `first({ id })` lookup via `cacheAnnotation({ bypass? })` from `@internal/middleware-cache`
 - `ormClientGetUsersCached(limit, runtime, options?)` — opt-in cached `User.all()` listing, with optional explicit cache-key override
+- `ormClientGetRecentPosts(since, orderBy, direction, limit, runtime)` — **query fragments as scopes**: `createdSince` (`db.orm.scope`, a scope for any model with a `createdAt` field), `orderByField` (a field to order by, named in the request and checked at run time) and `postSummary` (`db.orm.public.Post.scope`, the shared `select` and `include` of a post), from `src/orm-client/scopes.ts`
+- `ormClientGetRecentUsers(since, limit, runtime)` — the same `createdSince` on users and on their included posts, which `postSummary` shapes inside the include refinement
 - `ormClientSearchPostsByTitle(query, limit, runtime)` — **full-text search**: `p.title.fullTextMatches(websearchToTsquery(query))` filtered and `p.title.fullTextRank(websearchToTsquery(query)).desc()` ordered, over the GIN index `@@fullTextIndex([title])` declares
 
 Run from the CLI:
@@ -136,6 +138,7 @@ pnpm start -- repo-user admin@example.com
 pnpm start -- repo-posts user_001 10
 pnpm start -- repo-dashboard example.com post 10 2
 pnpm start -- repo-post-feed post 10
+pnpm start -- repo-recent-posts 2024-01-01T00:00:00Z title asc 10
 pnpm start -- repo-task-board 10
 pnpm start -- repo-bug-triage critical 10
 pnpm start -- repo-feature-roadmap v2.0 10

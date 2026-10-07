@@ -1,8 +1,12 @@
 import type {
   AggregateResult,
   AggregateSelector,
+  CodecField,
+  CodecListField,
   Collection,
   CollectionRowOf,
+  DeclaredField,
+  FieldScope,
   Filtered,
   Ordered,
 } from '@prisma/orm-postgres/orm-client';
@@ -11,12 +15,19 @@ import type { Contract } from '../../src/prisma/contract.d';
 import {
   filteredChain,
   filterPosts,
+  firstPage,
   type GenericLibrary,
+  labelled,
+  labelledAs,
+  notExpired,
   type PostLibrary,
   type PrivateLibrary,
   plainChain,
   type SubLibrary,
   type TaskLibrary,
+  titleSummary,
+  unexpired,
+  unexpiredPosts,
 } from './declaration-library';
 
 type PostKey =
@@ -34,6 +45,7 @@ type PostKey =
 type UserKey = 'address' | 'createdAt' | 'displayName' | 'email' | 'id' | 'kind';
 
 type PostRow = CollectionRowOf<Collection<Contract, 'Post'>>;
+type UserRow = CollectionRowOf<Collection<Contract, 'User'>>;
 
 declare const posts: PostLibrary;
 declare const tasks: TaskLibrary;
@@ -123,4 +135,56 @@ export function exportedValues() {
   expectTypeOf(plainChain).not.toBeAny();
   expectTypeOf<keyof CollectionRowOf<typeof plainChain>>().toEqualTypeOf<PostKey>();
   expectTypeOf(filterPosts).returns.toEqualTypeOf<Filtered<Collection<Contract, 'Post'>>>();
+}
+
+export function queryFragments(now: Temporal.Instant) {
+  expectTypeOf(posts.live(now)).toEqualTypeOf<Filtered<PostLibrary>>();
+  expectTypeOf(posts.orderedBy('title')).toEqualTypeOf<Ordered<PostLibrary>>();
+  expectTypeOf(notExpired(now)).toEqualTypeOf<
+    (row: {
+      expiresAt: CodecField<Contract, 'pg/timestamptz-temporal@1'>;
+    }) => ReturnType<ReturnType<typeof notExpired>>
+  >();
+  type Summary = ReturnType<typeof titleSummary>;
+  expectTypeOf(posts.summaries()).toEqualTypeOf<Summary>();
+  expectTypeOf(posts.with(titleSummary)).toEqualTypeOf<Summary>();
+  // @ts-expect-error the rows no longer have every Post field
+  posts.select('id').with(titleSummary);
+  expectTypeOf(posts.unexpired(now)).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  expectTypeOf(posts.with(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  // @ts-expect-error User has no expiresAt field
+  users.with(unexpired(now));
+  expectTypeOf(posts.with(firstPage)).toEqualTypeOf<PostLibrary>();
+  // @ts-expect-error firstPage applied no filter, so delete is refused
+  posts.with(firstPage).deleteAll();
+  expectTypeOf(unexpiredPosts(now)).not.toBeAny();
+  unexpiredPosts(now).cursor({ id: 'x' });
+  unexpiredPosts(now).deleteAll();
+  expectTypeOf<keyof CollectionRowOf<ReturnType<typeof unexpiredPosts>>>().toEqualTypeOf<PostKey>();
+  expectTypeOf<CollectionRowOf<Summary>>().toEqualTypeOf<{
+    id: string;
+    title: string;
+    user: UserRow;
+  }>();
+}
+
+export function listFragments() {
+  expectTypeOf(labelledAs(['a'])).toEqualTypeOf<
+    (row: {
+      labels: CodecListField<Contract, 'pg/text@1'>;
+    }) => ReturnType<ReturnType<typeof labelledAs>>
+  >();
+  // @ts-expect-error Post has no labels field
+  posts.where(labelledAs(['a']));
+  expectTypeOf(labelled(['a'])).toEqualTypeOf<
+    FieldScope<
+      Contract,
+      {
+        readonly labels: DeclaredField<'pg/text@1', false, { readonly elementNullable: false }>;
+      },
+      { readonly hasWhere: true; readonly hasOrderBy: boolean }
+    >
+  >();
+  // @ts-expect-error Post has no list field labels
+  posts.with(labelled(['a']));
 }

@@ -119,7 +119,7 @@ function parseAndEmit(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },

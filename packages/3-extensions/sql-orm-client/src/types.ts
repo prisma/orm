@@ -15,6 +15,7 @@ import {
   type CodecTrait,
   type LimitOffsetValue,
   ListExpression,
+  type LockingClause,
   NullCheckExpr,
   type OrderByItem,
   type OrderByNulls,
@@ -97,6 +98,7 @@ export interface CollectionState {
   readonly limit: LimitOffsetValue | undefined;
   readonly offset: LimitOffsetValue | undefined;
   readonly variantName: string | undefined;
+  readonly locking: ReadonlyArray<LockingClause> | undefined;
   /**
    * Annotations attached to this query at terminal-call time.
    * Populated transiently by the read terminals `all` and `first` just before dispatch. Terminals
@@ -121,6 +123,7 @@ export function emptyState(): CollectionState {
     limit: undefined,
     offset: undefined,
     variantName: undefined,
+    locking: undefined,
     annotations: new Map(),
   };
 }
@@ -319,6 +322,19 @@ type OpMatchesField<Op, CodecId extends string, CT extends Record<string, unknow
       : false
   : false;
 
+type CodecOperations<TContract extends Contract<SqlStorage>, CodecId extends string> =
+  ExtractQueryOperationTypes<TContract> extends infer AllOps
+    ? {
+        [OpName in keyof AllOps & string as OpMatchesField<
+          AllOps[OpName],
+          CodecId,
+          ExtractCodecTypes<TContract>
+        > extends true
+          ? OpName
+          : never]: QueryOperationMethod<AllOps[OpName], ExtractCodecTypes<TContract>>;
+      }
+    : unknown;
+
 type FieldOperations<
   TContract extends Contract<SqlStorage>,
   NsId extends string,
@@ -338,6 +354,54 @@ type FieldOperations<
         }
       : unknown
     : unknown;
+
+type CodecTraits<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends string,
+> = CodecId extends keyof ExtractCodecTypes<TContract>
+  ? ExtractCodecTypes<TContract>[CodecId] extends { readonly traits: infer T }
+    ? T
+    : never
+  : never;
+
+type CodecOutput<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends string,
+> = CodecId extends keyof ExtractCodecTypes<TContract>
+  ? ExtractCodecTypes<TContract>[CodecId] extends { readonly output: infer O }
+    ? O
+    : unknown
+  : unknown;
+
+/**
+ * The model accessor's type for any field with the codec `CodecId` and the given nullability. A function of `{ deletedAt: CodecField<Contract, 'pg/timestamptz-temporal@1', true> }` is a `where` callback for every model with such a field. Values are checked against the codec's output type, which is wider than a field that refines it, such as an enum or `Char<36>`.
+ */
+export type CodecField<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends keyof ExtractCodecTypes<TContract> & string,
+  Nullable extends boolean = false,
+> = Expression<{ codecId: CodecId; nullable: Nullable }> &
+  ComparisonMethods<
+    CodecOutput<TContract, CodecId> | (Nullable extends true ? null : never),
+    CodecTraits<TContract, CodecId>,
+    CodecId
+  > &
+  CodecOperations<TContract, CodecId>;
+
+/** The model accessor's type for a list field whose elements have the codec `CodecId`, as a scope for any model declares it with `.many()`, or with `.many({ elementsNullable: true })` when `ElementNullable` is `true`. */
+export type CodecListField<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends keyof ExtractCodecTypes<TContract> & string,
+  Nullable extends boolean = false,
+  ElementNullable extends boolean = false,
+> = Expression<{ codecId: CodecId; nullable: Nullable }> &
+  ComparisonMethods<
+    | ReadonlyArray<CodecOutput<TContract, CodecId> | (ElementNullable extends true ? null : never)>
+    | (Nullable extends true ? null : never),
+    CodecTraits<TContract, CodecId>,
+    CodecId
+  > &
+  CodecOperations<TContract, CodecId>;
 
 function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
   const expression = predicateExpression(value);
@@ -480,6 +544,13 @@ type OrderableFields<
     ? K
     : never]: Orderable;
 };
+
+/** The fields of a model whose codec has the `order` trait. */
+export type OrderableFieldNames<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = keyof OrderableFields<TContract, ModelName, NsId> & string;
 
 /**
  * A to-one relation inside `where`/`orderBy`: the relation filters plus each orderable scalar field of the related model. A related field named like a relation method is not exposed.
@@ -1108,7 +1179,7 @@ type ResolvedNsId<
       : never
   : NsId;
 
-type FieldsOf<
+export type FieldsOf<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
@@ -1287,7 +1358,7 @@ type FieldStorageColumn<
   NsId extends string = never,
 > = ResolvedStorageColumn<TContract, ModelName, FieldName, NsId>;
 
-type FieldCodecId<
+export type FieldCodecId<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
@@ -1299,7 +1370,7 @@ type FieldCodecId<
     ? Id
     : never;
 
-type FieldNullable<
+export type FieldNullable<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,

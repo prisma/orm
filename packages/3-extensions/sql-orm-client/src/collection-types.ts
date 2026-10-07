@@ -1,4 +1,6 @@
-import type { CollectionTypeState } from './types';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import type { CollectionTypeState, DefaultModelRow } from './types';
 
 export declare const RowType: unique symbol;
 
@@ -32,8 +34,20 @@ export type Ordered<C> = C & HasOrderBy;
 /** A collection whose rows also have the fields of `Added`, such as an included relation. */
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
 
-/** A scope: a function from one collection to another. `collection.apply(scope)` runs it. */
+/** A scope: a function from one collection to another. `collection.with(scope)` runs it. */
 export type Scope<In, Out> = (collection: In) => Out;
+
+/** What a scope made by `collection.scope` accepts: a collection of the model, in the same namespace when the scope's collection names one, whose rows have every field of the model and that is not narrowed to a variant. */
+export type ModelScopeReceiver<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = HasRow<DefaultModelRow<TContract, ModelName, NsId>> &
+  HasTypeState<
+    [NsId] extends [never]
+      ? { readonly variantName: undefined }
+      : { readonly variantName: undefined; readonly nsId: NsId }
+  > & { readonly modelName: ModelName };
 
 /** The type state of a collection. */
 export type CollectionTypeStateOf<C extends HasTypeState> = C[typeof TypeState];

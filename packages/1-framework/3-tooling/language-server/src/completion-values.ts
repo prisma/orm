@@ -178,6 +178,7 @@ function valueItems(
         selector: type.expected,
         namespaces: true,
       });
+    case 'dataTypeValue':
     case 'list':
     case 'record':
     case 'int':

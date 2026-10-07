@@ -1570,7 +1570,10 @@ export class ProjectionItem extends AstNode {
 
 export type LimitOffsetValue = number | AnyExpression;
 
-function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void {
+export function checkLimitOffset(
+  argument: 'limit' | 'offset',
+  value: LimitOffsetValue | undefined,
+): void {
   if (typeof value === 'number' && !(Number.isSafeInteger(value) && value >= 0)) {
     throw structuredError(
       'ORM.ARGUMENT_INVALID',

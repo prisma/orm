@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { createChainingOrm, PostCollection } from './collection-chaining-fixture';
 
-describe('apply', () => {
+describe('with', () => {
   it('returns what the function returns', () => {
     const { db } = createChainingOrm();
     const result = { applied: true };
-    expect(db.Post.apply(() => result)).toBe(result);
+    expect(db.Post.with(() => result)).toBe(result);
   });
 
   it('passes the receiver to the function', () => {
     const { db } = createChainingOrm();
     const posts = db.Post.recent();
-    expect(posts.apply((received) => received)).toBe(posts);
+    expect(posts.with((received) => received)).toBe(posts);
   });
 
   it('an applied where reaches the query plan', async () => {
     const { db, runtime } = createChainingOrm();
     await db.Post.all();
     await db.Post.where((p) => p.views.gte(100)).all();
-    await db.Post.apply((posts) => posts.where((p) => p.views.gte(100))).all();
+    await db.Post.with((posts) => posts.where((p) => p.views.gte(100))).all();
     expect(runtime.executions).toHaveLength(3);
     const [unfiltered, direct, applied] = runtime.executions;
     expect(applied?.plan.ast).toBeDefined();

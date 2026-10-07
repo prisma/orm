@@ -1,6 +1,6 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
-import { checkSqlDefaultBody } from '@internal/family-sql/control';
+import { checkSqlDefaultText } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
@@ -786,7 +786,7 @@ async function sqliteRenderDdlColumnDefault(
   if (def.kind === 'function') {
     if (def.expression.text === 'autoincrement()') return '';
     if (def.expression.text === 'now()') return `DEFAULT (${SQLITE_NOW_EXPRESSION})`;
-    if (checkSqlDefaultBody(def.expression.text) !== undefined) {
+    if (checkSqlDefaultText(def.expression.text) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
         `Unsafe default expression in contract: "${def.expression.text}". ` +

@@ -2,7 +2,7 @@ import { structBlock } from '@internal/psl-parser';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   documentScopedTypes,
   interpretSqlContract,
@@ -13,7 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  ...fixtureTypeLookups,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -548,7 +548,7 @@ namespace public {
 }
 `,
       {
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
@@ -613,7 +613,7 @@ model Foo {
 }
 `,
         {
-          ...fixtureTypeLookups,
+          ...fixtureInterpreterTypes,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -657,7 +657,7 @@ namespace auth {
 }
 `,
         {
-          ...fixtureTypeLookups,
+          ...fixtureInterpreterTypes,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -702,7 +702,7 @@ namespace auth {
 }
 `,
         {
-          ...fixtureTypeLookups,
+          ...fixtureInterpreterTypes,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),

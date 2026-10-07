@@ -16,6 +16,7 @@ export function funcCall<const Name extends string, const Signature extends Func
     label: `${name}()`,
     name,
     signature: sig,
+    claims: (arg) => plainCallee(arg)?.name === name,
     parse: (arg, ctx): Result<TypedFuncCall, readonly PslDiagnostic[]> => {
       const guard = matchCallee(arg, name, ctx);
       if (!guard.ok) return guard;
@@ -33,25 +34,28 @@ export function funcCall<const Name extends string, const Signature extends Func
   };
 }
 
+export function plainCallee(
+  arg: ExpressionAst,
+): { readonly call: FunctionCallAst; readonly name: string } | undefined {
+  const call = FunctionCallAst.cast(arg.syntax);
+  const qname = call?.name();
+  if (call === undefined || qname === undefined) return undefined;
+  if (qname.dot() !== undefined || qname.colon() !== undefined) return undefined;
+  const name = qname.identifier()?.token()?.text;
+  return name === undefined ? undefined : { call, name };
+}
+
 function matchCallee(
   arg: ExpressionAst,
   name: string,
   ctx: AttributeCtx,
 ): Result<FunctionCallAst, readonly PslDiagnostic[]> {
-  const call = FunctionCallAst.cast(arg.syntax);
-  if (call === undefined) {
+  const callee = plainCallee(arg);
+  if (callee === undefined) {
     return notOk([leafDiagnostic(ctx, arg, 'Expected a function call')]);
   }
-  const qname = call.name();
-  if (qname === undefined || qname.dot() !== undefined || qname.colon() !== undefined) {
-    return notOk([leafDiagnostic(ctx, arg, 'Expected a function call')]);
-  }
-  const calleeName = qname.identifier()?.token()?.text;
-  if (calleeName === undefined) {
-    return notOk([leafDiagnostic(ctx, arg, 'Expected a function call')]);
-  }
-  if (calleeName !== name) {
+  if (callee.name !== name) {
     return notOk([leafDiagnostic(ctx, arg, `Expected ${name}()`)]);
   }
-  return ok(call);
+  return ok(callee.call);
 }

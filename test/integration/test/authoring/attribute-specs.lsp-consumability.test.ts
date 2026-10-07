@@ -48,8 +48,8 @@ describe('postgres attribute specs are consumable from a resolved language-serve
       model,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
       },
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[
@@ -100,8 +100,8 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       model,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
       },
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[
@@ -171,8 +171,8 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       typeResolution: undefined,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
       },
+      dataTypes: interpretation.context.dataTypes,
     });
 
     expect(spec).toMatchObject({

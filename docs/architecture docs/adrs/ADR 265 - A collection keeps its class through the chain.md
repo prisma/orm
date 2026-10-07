@@ -62,11 +62,11 @@ Each fact has three names. The flag `hasWhere` in the type state is set to `true
 | `orderBy` | `Ordered<Self>` | yes | an order has been applied |
 | `limit`, `offset`, `distinct`, `distinctOn`, `cursor` | `Self` | yes | nothing |
 | `include` | `Including<Self, { [K in Rel]: ... }>` | yes | each row has the included relation |
-| `apply(fn)` | whatever `fn(this)` returns | as the function | as the function |
+| `with(fn)` | whatever `fn(this)` returns | as the function | as the function |
 | `select` | `Collection<Contract, Model, NarrowedRow, State>` | no | a different row |
 | `variant` | `Collection<Contract, Model, VariantRow, VariantState>` | no | a different row and a different type argument |
 
-`apply` is the principle made explicit: it calls a function with the receiver and returns the result. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a scope is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.apply((posts) => posts.where(...))` has the same type as `db.Post.withTitle(term)`. A class method is a named scope. `apply` accepts any function, including one that ends in a terminal such as `first()`; when the function returns a collection, it is a scope.
+`with` is the principle made explicit: it calls a function with the receiver and returns the result. A pure filter is `where(rowFragment)`; `with` is for what `where` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a scope is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.with((posts) => posts.where(...))` has the same type as `db.Post.withTitle(term)`. A class method is a named scope. `with` accepts any function, including one that ends in a terminal such as `first()`; when the function returns a collection, it is a scope.
 
 The facts live in two declared properties on the class, the **type state** and the **row**:
 
@@ -143,7 +143,7 @@ class CollectionBase<TContract, ModelName, Row, State> {
     this: Self,
     relationName: RelName,
   ): Including<Self, { [K in RelName]: IncludeRelationValue<...> }>;
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  with<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
 
   select<Fields extends ..., S extends CollectionTypeState = State, R = Row>(
     this: HasTypeState<S> & HasRow<R>,
@@ -189,7 +189,7 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 
 - **Class methods chain**, before and after the built-in methods, and after `include`.
 - **Inside a class body, a class method called on the result of another call loses that call's facts.** In `latest() { return this.withTitle('orm').newestFirst(); }`, `newestFirst()` returns `Ordered<this>`, and `Filtered` is lost; `this.include('user').withTitle('orm')` loses `user`. TypeScript resolves a method's polymorphic `this` on an intersection that contains the class's own `this` as the class's `this` alone. The `prepared` getter has the same limit: inside a class body, `this.include('user').prepared` describes the class's row without `user`. Built-in methods are not affected, because they infer their receiver. A chain of class methods written outside the class keeps every fact. But a class method whose body chains two class methods loses the first call's facts for every caller: with `latest()` above, `db.Post.latest()` is `Ordered<PostCollection>`, not `Filtered<Ordered<PostCollection>>`. Losing a fact refuses more calls, never fewer. Inside a class body, chain the built-in methods after a class method, or call one class method per expression.
-- **A built-in method, a class method and a scope are one typed thing.** A query shared between places is written once as a scope and run with `apply`, or wrapped in a class method; both give the same type. A package can supply scopes without any knowledge of the application's classes.
+- **A built-in method, a class method and a scope are one typed thing.** A query shared between places is written once as a scope and run with `with`, or wrapped in a class method; both give the same type. A package can supply scopes without any knowledge of the application's classes.
 - **Conditional queries are sound.** A ternary, an `if`, a loop or a reassigned `let` never unlocks a write or `cursor` on a collection that may lack the filter or order.
 - **After `select` or `variant`, class methods are gone.** After `select` the rows are no longer the model's; after `variant` the type argument is a different one.
 - **A conditional between two differently flagged collections keeps a union.** `flag ? db.Post.withTitle('orm') : db.Post.newestFirst()` is `Filtered<PostCollection> | Ordered<PostCollection>`. Reads, `select`, `include` and class methods work on it; writes and `cursor` are refused, and `select` on it drops included relations from the type. A write on it fails with "The 'this' context of type 'Ordered<PostCollection> | Filtered<PostCollection>' is not assignable to method's 'this' of type 'HasWhere'", because one branch has no filter; filter both branches, or annotate the result as `PostCollection`, which reduces the union and states that the filter is not known.
@@ -199,7 +199,7 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 - **The state and the row are read with `CollectionTypeStateOf<C>` and `CollectionRowOf<C>`**, not by extracting a type argument of `Collection`. The type arguments hold what the collection started with, and the filter fact that `variant` writes into its new type argument; every other fact is in the intersection.
 - **`ReturnType` of a chaining method does not give a collection**, because `ReturnType` of a generic method uses the type parameter's constraint: `ReturnType<C['where']>` is `HasWhere`, and `ReturnType<C['limit']>` is `unknown`. Write `Filtered<C>` or `Ordered<C>`, or `C` for the methods that add nothing.
 - **`include`, `distinct` and `distinctOn` take no explicit type arguments.** Each gained the type parameter `Self`, and TypeScript infers no type parameter once any is given explicitly. `posts.include<'user'>('user')` does not compile, and `ReturnType<typeof posts.include<'user'>>` is `never`. `posts.distinct<['title']>('title')` fails with TS2558 ("Expected 2 type arguments, but got 1"). The arguments give every type parameter, so `posts.distinct('title')` needs none.
-- **`apply` is a member of every collection.** A custom class cannot declare its own `apply` with another signature, and an aggregate operation cannot be named `apply`.
+- **`with` is a member of every collection.** A custom class cannot declare its own `with` with another signature, and an aggregate operation cannot be named `with`.
 
 ## Later decisions
 

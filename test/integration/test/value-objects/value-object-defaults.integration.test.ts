@@ -24,7 +24,7 @@ async function loadSqlite(pslSchema: string, schemaPath = newSchemaPath()) {
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,

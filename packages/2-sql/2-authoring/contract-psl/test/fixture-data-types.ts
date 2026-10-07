@@ -7,7 +7,10 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import type {
+  DataTypeAuthoringEntry,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import {
   type Cast,
   createDataTypeLookup,
@@ -22,7 +25,6 @@ import {
 } from '@internal/sql-contract/sql-expression';
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
-import type { DataTypeSupport } from '../src/data-type-default';
 
 const unchanged: Cast = (value) => value;
 const asText: Cast = (value) => String(value);
@@ -214,7 +216,7 @@ function parseJson(text: string): JsonValue {
     throw structuredError(
       'CONTRACT.INVALID_JSON_LITERAL',
       error instanceof Error ? error.message : String(error),
-      { why: 'The body is not a JSON document.', fix: 'Write a JSON document.' },
+      { why: 'The text is not a JSON document.', fix: 'Write a JSON document.' },
     );
   }
 }

@@ -34,7 +34,10 @@ import {
   errorDestructiveChanges,
   errorFileNotFound,
   errorMigrationPlanningFailed,
+  errorPlanProducedNoOperations,
   errorTargetMigrationNotSupported,
+  type PlanDestination,
+  type PlanOrigin,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -108,17 +111,24 @@ type PlannerSuccess = {
 
 type TargetMigrationsApi = NonNullable<ReturnType<typeof getTargetMigrations>>;
 
+/** A plan origin whose earlier contract the planner diffs against. */
+type PlannerLegOrigin =
+  | Exclude<PlanOrigin, { readonly kind: 'contract' }>
+  | (Extract<PlanOrigin, { readonly kind: 'contract' }> & { readonly contract: Contract });
+
 async function runPlannerLeg(
   planner: ReturnType<TargetMigrationsApi['createPlanner']>,
   migrations: TargetMigrationsApi,
   frameworkComponents: ReturnType<typeof assertFrameworkComponentsCompatible>,
   contract: Contract,
-  fromContract: Contract | null,
+  origin: PlannerLegOrigin,
+  destination: PlanDestination,
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
   resolveImportSpecifier: ImportSpecifierResolver,
 ): Promise<Result<PlannerSuccess, CliStructuredError>> {
+  const fromContract = origin.kind === 'contract' ? origin.contract : null;
   const fromSchema = migrations.contractToSchema(fromContract, frameworkComponents);
   const plannerResult = planner.plan({
     contract,
@@ -148,18 +158,7 @@ async function runPlannerLeg(
   try {
     plannedOps = await Promise.all(plannerResult.plan.operations);
     if (plannedOps.length === 0) {
-      return notOk(
-        errorMigrationPlanningFailed({
-          conflicts: [
-            {
-              kind: 'unsupportedChange',
-              summary:
-                'Contract changed but planner produced no operations. ' +
-                'This indicates unsupported or ignored changes.',
-            },
-          ],
-        }),
-      );
+      return notOk(errorPlanProducedNoOperations(origin, destination));
     }
   } catch (e) {
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
@@ -490,6 +489,15 @@ async function executeMigrationPlanCommandInner(
       isAutoBaseline = true;
       break;
   }
+  const resolvedFrom = resolutionResult.value;
+  const fromOrigin: PlannerLegOrigin =
+    resolvedFrom.kind === 'greenfield'
+      ? { kind: 'empty' }
+      : {
+          kind: 'contract',
+          hash: resolvedFrom.fromHash,
+          contract: resolvedFrom.fromContract,
+        };
 
   // `--to <ref>` swaps the planner destination to an arbitrary resolved
   // contract (e.g. an ancestor / rollback target). The from-side resolution
@@ -622,6 +630,10 @@ async function executeMigrationPlanCommandInner(
 
   try {
     const planner = migrations.createPlanner(controlAdapter);
+    const planDestination: PlanDestination = {
+      hash: toStorageHash,
+      isEmitted: options.to === undefined,
+    };
 
     if (isAutoBaseline && fromHash !== null && fromContract !== null && fromContractInStore) {
       const deltaTimestamp = new Date();
@@ -636,7 +648,8 @@ async function executeMigrationPlanCommandInner(
         migrations,
         frameworkComponents,
         fromContract,
-        null,
+        { kind: 'baseline', hash: fromHash },
+        { hash: fromHash, isEmitted: false },
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
@@ -713,7 +726,8 @@ async function executeMigrationPlanCommandInner(
         migrations,
         frameworkComponents,
         aggregate.app.contract(),
-        fromContract,
+        fromOrigin,
+        planDestination,
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
@@ -798,7 +812,8 @@ async function executeMigrationPlanCommandInner(
       migrations,
       frameworkComponents,
       aggregate.app.contract(),
-      fromContract,
+      fromOrigin,
+      planDestination,
       aggregate.app.spaceId,
       aggregate,
       snapshotsImportPathFrom(packageDir, migrationsDir),

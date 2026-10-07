@@ -29,7 +29,7 @@ flowchart LR
   G -->|cast declared by pg/float8| H["pg/float8: JSON number 1.5"]
 ```
 
-`pg/int4` declares no cast from `pg/int8`, so `100000000000000099` on an `Int` column is refused before anything is decoded, with a message that says which types `pg/int4` casts from.
+`pg/int4` declares no cast from `pg/int8`, so `100000000000000099` on an `Int` column is refused before anything is decoded, with a message that says what to write instead.
 
 ## Why
 
@@ -37,7 +37,7 @@ Three problems share one cause: a written value had no type of its own, and the 
 
 - A written number was read through a JavaScript number, so `100000000000000099` on a `BigInt` column silently became `100000000000000100`, and `1.50` on a `Decimal` column lost its trailing zero.
 - A JSON default could only be written as a quoted string, `Jsonb @default("{}")`, which is a string and not a document, and `contract infer` could not print one back.
-- The `8` in `nanoid(8)` and the `8` in `@default(8)` were checked by unrelated code, though they are the same thing: a written value handed to something that expects a particular type.
+- The `8` in `@default(8)` and the `8` in a database function's argument, such as a `sql` default calling `gen_random_bytes(8)`, were checked by unrelated code, though they are the same thing: a written value handed to something that expects a particular type. (The `8` in `nanoid(8)` is not: it sizes a generator that runs in the client, so it is grammar, typed by shape; [ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md) draws the line.)
 - The facts about a database type, its DDL name, its parameters, how `numeric(10,2)` is rendered, were spread across codec descriptors and rendering hooks, because a codec stood in for the type it represents. Two codecs of the same database type, `pg/int8@1` and `pg/int8number@1`, could not say so, and stored the same value in two different contract forms.
 
 Giving written values and columns data types, and letting each type declare what it casts from, answers all of these with one entity.
@@ -175,8 +175,8 @@ authoring: {
   dataTypes: {
     [pgJson.id]: {
       // `parse` turns the literal's text into the canonical form and refuses what it cannot read.
-      written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-      print: printJsonBody,
+      written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+      print: printJsonText,
       documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
     [pgText.id]: {
@@ -217,10 +217,10 @@ SQLite stores a JSON document as text, so its `json` tag yields a value of `sqli
     kind: 'tag',
     tag: 'json',
     type: sqliteText.id,
-    parse: (text) => canonicalizeJson(parseJsonBody(text)),
+    parse: (text) => canonicalizeJson(parseJsonText(text)),
   },
   print: (value) => String(value),
-  documentation: 'Reads the body as a JSON document and stores its JSON text as the default value.',
+  documentation: 'Reads the text as a JSON document and stores its JSON text as the default value.',
 },
 ```
 
@@ -234,11 +234,11 @@ The language server takes tag completion and documentation from the same entries
 
 PSL has three kinds of expression, and each has one rule.
 
-- **A literal** is written plainly or with a tag. The interpreter finds the entry, calls `parse`, and has a value of a known type. The receiving type must be that type or cast from it: for a column, the column's type; for a function argument, the parameter's declared type; inside a list, per element. No cast is `PSL_VALUE_TYPE_INCOMPATIBLE`: `Field "Account.count": pg/int4 has no cast from pg/int8; it casts from pg/int2`. Text the entry cannot parse, the text of a `json` literal included, is `PSL_INVALID_LITERAL`; a tag nobody registered is `PSL_UNKNOWN_LITERAL_TAG`. Two codes are about defaults only: a single value on a list column is `PSL_DEFAULT_LIST_EXPECTED`, and a value the column's codec refuses is `PSL_INVALID_DEFAULT_LITERAL`. `@default` reports `PSL_UNKNOWN_LITERAL_TAG` at the literal and the other codes at the `@default` attribute.
+- **A literal** is written plainly or with a tag. The interpreter finds the entry, calls `parse`, and has a value of a known type. The receiving type must be that type or cast from it: for a column, the column's type; for a function argument, the parameter's declared type; inside a list, per element. No cast is `PSL_VALUE_TYPE_INCOMPATIBLE`: `Field "Account.count": Expected a number that pg/int4 can hold; got pg/int8`. Text the entry cannot parse, the text of a `json` literal included, is `PSL_INVALID_LITERAL`; a tag nobody registered is `PSL_UNKNOWN_LITERAL_TAG`. Two codes are about defaults only: a single value on a list column is `PSL_DEFAULT_LIST_EXPECTED`, and a value the column's codec refuses is `PSL_INVALID_DEFAULT_LITERAL`. `@default` reports `PSL_UNKNOWN_LITERAL_TAG`, `PSL_VALUE_TYPE_INCOMPATIBLE` and `PSL_INVALID_LITERAL` at the written value, or at the element of a written list they are about, as every other value position does; it reports its two default-only codes at the `@default` attribute.
 - **A reference** is an identifier. It resolves through the symbol table to a declaration, and its value is that declaration's, of the declaration's type. An enum member resolves to the member declared in its `enum` block, and the only check is scope: the member must belong to this column's enum. No parsing and no cast.
-- **A call** names a registered function. Each argument is an expression delivered to a parameter, and a parameter names a data type, so an argument is admitted by the same rule as a default. Function registries are per target, so `nanoid`'s size parameter is `pg/int4` on Postgres and `sqlite/integer` on SQLite, with one shared implementation. The call produces what the function registry defines, a storage default or a client-side generator.
+- **A call** names a registered function. Each argument is an expression delivered to a parameter. A parameter whose value the database receives names a data type, so its argument is admitted by the same rule as a default; a parameter of a client-side generator, such as `nanoid`'s size, is grammar and keeps its shape check ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). The call produces what the function registry defines, a storage default or a client-side generator.
 
-Value positions, in attributes and in function signatures, are typed through the attribute specification with one combinator that names a data type; the syntax that is not a value (field references, entity references, identifiers, lists, records, calls) keeps its own combinators. One binder parses, validates and drives the editor for both attributes and calls.
+A value position with a fixed receiving type is typed through the attribute specification with one combinator that names that data type, `dataTypeValue` ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)); the syntax that is not a value (field references, entity references, identifiers, lists, records, calls) keeps its own combinators. The combinator runs the cast rule for one written value, which the framework holds as `readWrittenValue` and `castTypedValue`, and words a refusal with the framework's `describeRefusal`. `@default` casts in lowering instead, because its receiving type comes from the column, and words its refusals with the same function, adding only the field it is about. The framework holds the scalar cast rule. A data type declares its list cast on the framework's `DataType`; reading a written list through it is the job of the family's default reader. Typed function arguments and editor completion for these positions arrive with the projects that first use them.
 
 Reading a default is then:
 

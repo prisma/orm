@@ -6,8 +6,8 @@ export type MongoContextInput = Pick<
   InterpretPslDocumentToMongoContractInput,
   | 'scalarTypeCodecIds'
   | 'controlMutationDefaults'
+  | 'dataTypes'
   | 'codecLookup'
-  | 'dataTypeLookup'
   | 'authoringContributions'
   | 'reportWarning'
 >;
@@ -19,12 +19,9 @@ export function mongoContextInput(context: ContractSourceContext): MongoContextI
         ([name, output]) => [name, output.codecId],
       ),
     ),
-    controlMutationDefaults: {
-      ...context.controlMutationDefaults,
-      dataTypeEntries: context.authoringContributions.dataTypes,
-    },
+    controlMutationDefaults: context.controlMutationDefaults,
+    dataTypes: context.dataTypes,
     codecLookup: context.codecLookup,
-    dataTypeLookup: context.dataTypeLookup,
     authoringContributions: context.authoringContributions,
     ...(context.reportWarning ? { reportWarning: context.reportWarning } : {}),
   };

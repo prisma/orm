@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
+  printedTaggedLiteralReadsBack,
   printTaggedLiteral,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
@@ -34,7 +35,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     ['empty body stays empty', '', ''],
     ['whitespace-only body becomes empty', '  \n  ', ''],
   ])('%s', (_name, input, expected) => {
-    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, body: expected });
+    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, text: expected });
   });
 
   it('fails on a NUL character with its offset', () => {
@@ -44,7 +45,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
   it('accepts a body of exactly 65536 bytes', () => {
     expect(canonicalizeTaggedLiteralBody('a'.repeat(MAX_BYTES))).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 
@@ -78,7 +79,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     const indented = `  ${'a'.repeat(MAX_BYTES)}`;
     expect(canonicalizeTaggedLiteralBody(indented)).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 });
@@ -155,7 +156,7 @@ describe('printTaggedLiteral', () => {
     const raw = printed.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
   });
 
@@ -165,7 +166,30 @@ describe('printTaggedLiteral', () => {
     const raw = indented.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
+  });
+});
+
+describe('printedTaggedLiteralReadsBack', () => {
+  it.each([
+    ['single-line', 'md5(random()::text)'],
+    ['multi-line', "(now()\n  + '1 day'::interval)"],
+    ['a backtick', 'a `b`'],
+    ['an empty line first', '\nselect 1'],
+    ['a backslash', 'a\\b'],
+    ['a dollar-brace sequence', 'a $' + '{x} b'],
+  ])('holds for %s text', (_name, text) => {
+    expect(printedTaggedLiteralReadsBack(text)).toBe(true);
+  });
+
+  it.each([
+    ['leading indentation', '  select 1'],
+    ['a blank first line of spaces', '  \nselect 1'],
+    ['a carriage return', 'a\rb'],
+    ['a NUL character', 'a\0b'],
+    ['leading indentation in the double-quote form', '  a `b`'],
+  ])('fails for text with %s, which the literal canonicalizes away', (_name, text) => {
+    expect(printedTaggedLiteralReadsBack(text)).toBe(false);
   });
 });

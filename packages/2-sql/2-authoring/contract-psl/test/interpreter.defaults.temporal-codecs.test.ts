@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   interpretSqlContract,
   postgresScalarTypeDescriptors,
@@ -145,7 +145,7 @@ stamped ${field}
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: sqliteTemporalContributions,
       createNamespace: createTestSqlNamespace,
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
     });
 

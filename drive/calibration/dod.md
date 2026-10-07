@@ -69,6 +69,7 @@ In addition to the canonical slice DoD:
 - If the slice touches `packages/3-*-extensions/**`, the slice plan must include a `pnpm fixtures:check` dispatch step.
 - If the slice touches package boundaries / imports, the slice plan must include `pnpm lint:deps`.
 - If the slice changes typed surfaces consumed elsewhere, the slice plan must include a downstream `pnpm typecheck` after the producing package's `pnpm build`.
+- If a dispatch adds a JavaScript or TypeScript file outside a package, `projects/` included, the gate includes `pnpm lint:throws` and `pnpm lint:casts`: CI's Lint job runs them over those files too. (Added 2026-10-07, lsp-find-references: a QA driver under `projects/` failed CI's Lint job on a bare `throw new Error`.)
 
 ### PR-side items
 
