@@ -83,7 +83,7 @@ The server computes the edit; the client applies it. The server writes no file.
 - **Symbols with no declaration in the schema sources**: attributes, parameters, functions, constants, contributed types and namespaces, cross-space references. `prepareRename` returns `null` on them.
 - **Anything outside the project's schema files**: application code that names a model or field, the emitted contract, migrations.
 - **File renames** (`workspace/willRenameFiles`) and **linked editing**.
-- **Changes to the binder or to what find references returns.**
+- **Changes to the binder or to what find references returns**, in slice 1. Slice 2 is a binder change.
 
 ## Place in the larger world
 
@@ -139,10 +139,16 @@ The server edits nothing itself, so a failed request leaves every file as it was
 
 ## Transitional-shape constraints
 
-N/A — single-slice project.
+Two slices (see `plan.md`). Between them, one gap is known and accepted (found by the QA run of 2026-10-07, decided by the operator the same day):
+
+- An entity name inside a type-constructor argument, such as `OrderStatus` in `status pg.enum(OrderStatus)`, has no binder resolution: the SQL interpreter looks the name up itself. Go-to-definition, find references and rename do not see it. After slice 1, renaming a `native_enum` block edits the block name and adds `@@map`, and leaves `pg.enum(...)` usages unchanged; the schema then reports `PSL_UNKNOWN_ENTITY_REF` until the usages are edited by hand.
+- Slice 2 makes the binder record that resolution. Rename needs no change for it: its name edits are the find-references result.
+
+Also observed, not addressed by either slice: with the usage corrected, a renamed `native_enum` with `@@map` keeps its database type name, but the contract's value-set entry is keyed by the block name, so the storage hash changes.
 
 ## Project Definition of Done
 
+- [ ] Slice 2: go-to-definition, find references and rename work from and to an entity name inside a type-constructor argument; renaming a `native_enum` block used in `pg.enum(...)` leaves a schema with no diagnostics.
 - [ ] Team-DoD floor items (inherited; see [`drive/calibration/dod.md`](../../drive/calibration/dod.md)).
 - [ ] The language server declares `renameProvider`, with `prepareProvider` when the client declares `prepareSupport`.
 - [ ] Tests cover every row of the table in [At a glance](#at-a-glance), with the files split as shown, once from the declaration name and once from a reference.
