@@ -239,7 +239,7 @@ model Other {
       valueObjectDefault: undefined,
       generatorDescriptorById: new Map(),
       defaultFunctionRegistry: new Map(),
-      dataTypeSupport: fixtureDataTypeSupport,
+      dataTypes: fixtureDataTypeSupport,
       codecLookup: context.codecLookup,
       diagnostics,
     });

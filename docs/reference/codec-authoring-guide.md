@@ -615,8 +615,8 @@ A value is written either with a tag — a qualified name followed by a string i
   documentation: 'Text.',
 },
 [pgJson.id]: {
-  written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-  print: printJsonBody,
+  written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+  print: printJsonText,
   documentation: 'Reads the text as a JSON document and stores it as the default value.',
 },
 ```
@@ -625,9 +625,9 @@ A tag whose value is a type that another syntax already reads sits under `tagEnt
 
 ```ts
 [tagEntryKey('json')]: {
-  written: { kind: 'tag', tag: 'json', type: sqliteText.id, parse: (text) => canonicalizeJson(parseJsonBody(text)) },
+  written: { kind: 'tag', tag: 'json', type: sqliteText.id, parse: (text) => canonicalizeJson(parseJsonText(text)) },
   print: (value) => String(value),
-  documentation: 'Reads the body as a JSON document and stores its JSON text as the default value.',
+  documentation: 'Reads the text as a JSON document and stores its JSON text as the default value.',
 },
 ```
 

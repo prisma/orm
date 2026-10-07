@@ -33,7 +33,7 @@ async function author(fields: string, blocks = '') {
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,
@@ -131,7 +131,7 @@ describe('written values on SQLite', () => {
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
         message:
-          'Field "Row.value": sqlite/integer has no cast from sqlite/real; it casts from nothing',
+          'Field "Row.value": Expected a number that sqlite/integer can hold; got sqlite/real',
       }),
     ]);
   });
@@ -233,8 +233,7 @@ describe('enum members on SQLite', () => {
   it('refuses a sqlite/json@1 member written as a number, which no cast takes to text', async () => {
     expect((await storedEnumValues('sqlite/json@1', 'Low = 1')).diagnostics).toContainEqual({
       code: 'PSL_EXTENSION_INVALID_VALUE',
-      message:
-        'enum "Priority" member "Low": sqlite/text has no cast from sqlite/integer; it casts from nothing',
+      message: 'enum "Priority" member "Low": Expected a quoted string',
     });
   });
 });

@@ -8,6 +8,7 @@ import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl
 import {
   assembleAttributeSpecs,
   buildSymbolTable,
+  EMPTY_DATA_TYPES,
   fieldAttribute,
   modelAttribute,
 } from '@internal/psl-parser';
@@ -113,8 +114,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       controlMutationDefaults: {
         defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-        dataTypeEntries: {},
       },
+      dataTypes: EMPTY_DATA_TYPES,
     });
     expect(spec).toMatchObject({
       name: 'base',
@@ -207,8 +208,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       typeResolution: undefined,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
       },
+      dataTypes: interpretation.context.dataTypes,
     });
     expect(spec).toMatchObject({
       name: 'marker',
@@ -240,8 +241,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
       },
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[

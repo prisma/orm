@@ -197,7 +197,7 @@ model Task {
       {
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message:
-          'enum "Priority" member "Low": pg/int4 has no cast from pg/int8; it casts from pg/int2',
+          'enum "Priority" member "Low": Expected a number that pg/int4 can hold; got pg/int8',
       },
     ]);
   });
@@ -230,7 +230,7 @@ model Task {
         'a number member under a text codec',
         '  @@type("pg/text@1")\n  Low = 1',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low": pg/text has no cast from pg/int2; it casts from nothing',
+        'enum "Priority" member "Low": Expected a quoted string',
       ],
       [
         'a numeric member with a leading zero',
@@ -278,7 +278,7 @@ model Task {
         'a fraction under an integer codec',
         '  @@type("pg/int4@1")\n  Low = 1.5',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+        'enum "Priority" member "Low": Expected a number that pg/int4 can hold; got pg/numeric',
       ],
     ])('refuses %s', async (_name, members, code, message) => {
       expect(await diagnosticsOf(enumOf(members))).toEqual([{ code, message }]);
@@ -328,7 +328,7 @@ model Task {
         {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message:
-            'enum "Priority" member "Low": pg/int4 has no cast from pg/int8; it casts from pg/int2',
+            'enum "Priority" member "Low": Expected a number that pg/int4 can hold; got pg/int8',
         },
       ]);
     });

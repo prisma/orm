@@ -3,8 +3,8 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable, createBinder } from '@internal/psl-parser';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { buildSymbolTable, createBinder, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
@@ -123,7 +123,7 @@ describe('createBinder', () => {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
-      dataTypeLookup: createDataTypeLookup([]),
+      dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},
     };

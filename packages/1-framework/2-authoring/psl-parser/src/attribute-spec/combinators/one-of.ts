@@ -12,6 +12,9 @@ import type {
 } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
+/**
+ * The first alternative that accepts the argument. When exactly one alternative claims the argument's shape, its result, success or failure, so its diagnostics about the argument are kept.
+ */
 export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
   ...alts: Alts
 ): OneOfArgType<Alts, ContextForRequirement<RequiredContextFor<CtxOf<Alts[number]>>>> {
@@ -28,6 +31,9 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
         readonly [Alternative, ...Alternative[]],
         'ParseContext is the strongest context every alternative requires and each alternative output is a member of the union, but iterating a heterogeneous tuple erases both relationships.'
       >(alts);
+      const claiming = [head, ...tail].filter((alt) => alt.claims?.(arg) === true);
+      const [only] = claiming;
+      if (only !== undefined && claiming.length === 1) return only.parse(arg, ctx);
       let rejection = head.parse(arg, ctx);
       if (rejection.ok) return rejection;
       for (const alt of tail) {

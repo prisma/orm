@@ -4,9 +4,11 @@ Read this first when you resume the project. It records where the work stands an
 
 ## State on 2026-09-30
 
-- Planning is finished. No slice has merged.
+- Slice 2t (TML-3367) is on branch `tml-3367-data-type-value`, stacked on the 2a branch. Pull request: https://github.com/prisma/orm/pull/30539 (opened 2026-09-30, base `main` since #30534 merged; approved for merge by Will, auto-merge on). Two review rounds done, every finding fixed. Next: slice 2b (TML-3288) once 2a merges; its "Carried over" list in plan.md holds the deferred items from both 2t reviews.
+
+- Planning is finished. Slice 2a merged on 2026-09-30.
 - PR #30349 (the binder) merged on 2026-09-25 and PR #30381 (block specs) on 2026-09-28. Nothing outside the project blocks it.
-- Slice 2a (TML-3296) is implemented on branch `tml-3296-sql-expression-data-type`, which also carries these project files. Two review rounds are done and every finding is fixed. Pull request: https://github.com/prisma/orm/pull/30534 (opened 2026-09-30, CI monitor on). Next: slice 2t (TML-3367) once it merges. [handover.md](handover.md) is the earlier handover and is superseded by this file.
+- Slice 2a (TML-3296) is implemented on branch `tml-3296-sql-expression-data-type`, which also carries these project files. Two review rounds are done and every finding is fixed. Pull request https://github.com/prisma/orm/pull/30534 merged to `main` on 2026-09-30 as `d0ec42633f`. [handover.md](handover.md) is the earlier handover and is superseded by this file.
 - Slice 2a changed nothing in `examples/` or `packages/3-extensions/`, so `check:upgrade-coverage` required no declaration; the two fragments under `upgrade-instructions/pending/sql-is-a-data-type/` are the ones design section 20 names.
 - The three publish-shell tarball tests (`all-shells-tarball`, `module-identity`, `cross-shell-tarball`) fail on this machine because `pnpm install` in the scratch project refuses `@vercel/detect-agent@1.2.5` as a "high-risk trust downgrade". That is the registry, not this branch. Check them in CI.
 
@@ -42,12 +44,114 @@ The second review is in `slice-reviews/2a-round-2/` (findings B01 to B05 and G01
 
 Verification (logs in the gitignored `wip/v4/`): `build`, `typecheck`, `lint`, `lint:deps`, `lint:casts` (delta 0), `lint:throws` (delta 0), `check:error-reference` (361 codes), `lint:framework-vocabulary` (272 of 272), `fixtures:check` (tree clean) and `check:upgrade-coverage` pass. Tests: framework-components 794 pass, family-sql 372 pass (after the operation preview fix; the first run failed on that stub), the integration registration test 16 pass, language server 734 pass, `sql-expression.test.ts` and `sql-attribute-specs.test.ts` pass. Manual QA: `wip/v4/manual-qa.log`. The orchestrator still has to run `test:packages` and `test:integration`.
 
+## Slice 2t, 2026-09-30
+
+Implemented on branch `tml-3367-data-type-value`, on top of slice 2a. Not pushed; no pull request. Brief: `dispatches/2t-implementer-brief.md`. Two findings (`dispatches/2t-findings.md`) are decided and fixed; see "Findings fixes" below.
+
+### What was built
+
+- **Section 4** (`6ce7f897a9`): `framework-components/src/shared/written-value.ts`, exported from `/authoring`, holds the cast rule for one written value. `contract-psl/src/data-type-default.ts` keeps the list handling, `DefaultRefusal`, `readDataTypeDefault` and `lowerDataTypeDefault`, and imports the rest. `contract-prisma7` imports `entryForTag`, `WrittenValue` and `DataTypeSupport` from the framework.
+- **Section 5** (`1e47750cf6`): `readWrittenLiteral` in `psl-parser/src/written-literal.ts`.
+- **Section 6** (`0f3d47efb9`): `dataTypeValue`, `ParsedTypedValue`, `DataTypeValueArgType`. The language server's `completion-values.ts` returns no items for it; completion is section 12, slice 2b.
+- **Section 7** (`42b9fc44b5`): `AttributeSpecContext.dataTypes`, `EMPTY_DATA_TYPES`, `ControlDefaultRegistries` with only the function registry. Every construction site passes the stack's data types, including the binder.
+- **Carried over from the 2a review:** ADR 254 has the scalar cast rule sentence (`32837b1c52`). `TaggedLiteralCanonicalization.text`, `TaggedLiteralExprAst.text()`, `parseJsonText` and `printJsonText` (`24c934710f`). `@default` reports `PSL_VALUE_TYPE_INCOMPATIBLE` and `PSL_INVALID_LITERAL` at the written value or the list element; the two default-only codes stay at the attribute (`32837b1c52`). The `@default` list arm no longer offers `sql` (`32837b1c52`). No name about lowering a tag is left. The `unknown-tag` arm of `lowerDataTypeDefault` stays and is now the one place that reports an unknown tag: see finding 1 and "Findings fixes".
+- **Docs** (`bcae07f564`, `32837b1c52`): ADR 231 (`dataTypeValue`, the `oneOf` rule), ADR 249 (the context carries `dataTypes`), ADR 254, the error reference and the editor tooling brief.
+- **Upgrade instructions** (`55f5c11982`): `upgrade-instructions/pending/arguments-typed-by-data-type/{app,extension}`. The detection patterns are tested against a true positive and the nearest false positive (`wip/2t/detection.log`). The extension entry was validated by execution: with `packages/3-extensions/` restored to the merge base, no non-test path differs and the Mongo extension tests pass (`wip/2t/fragment-validation*.log`).
+- **Manual QA** (`907248634f`): the slice 2t script and run in `manual-qa.md`. Every case gives the expected code, message and start.
+
+### Design corrections
+
+- The language server has no `pipeline.ts`, `PipelineInputs` or `server.ts` edit. `LspControlStack.dataTypes` is set in `lspControlStackFromStack`, and `project.ts` spreads it into both `candidates` objects. Design section 7 is corrected.
+- The binder is a construction site that research Part B missed. `CreateBinderOptions` gains a required `dataTypes`; `createSqlBinder` takes an optional one and `createMongoBinder` a required one. Design section 7 is corrected.
+- Mongo tests pass `EMPTY_DATA_TYPES`, which is the value the design wrote out.
+- `TaggedLiteralExprAst.body()` returned the canonical text, so it is renamed `text()` with the field.
+
+### Verification
+
+Logs are in the gitignored `wip/2t/`.
+
+- `build` (`build.log`), `typecheck` (`typecheck.log`), `lint` (`lint.log`), `lint:deps` (`lint-deps.log`), `check:error-reference` (`check-error-reference.log`, 361 codes), `fixtures:check` (`fixtures-check.log`, tree clean) and `check:upgrade-coverage` (`check-upgrade-coverage.log`) pass.
+- `lint:casts`: delta 0. `lint:throws`: delta 0. `lint:framework-vocabulary`: 272 of 272.
+- `test:packages` (`test-packages.log`): 1422 files pass. Seven failed. The three tarball tests fail on the registry refusal. `render-typescript.roundtrip.test.ts`, the two `cli-telemetry` files and `cli` `migration-plan.test.ts` pass when rerun alone (`rerun-*.log`).
+- Integration, run alone: `test/authoring`, `test/number-defaults` and the four Mongo and value-object files whose imports changed, 36 files, 244 tests, pass (`integration.log`).
+
+### Findings fixes, 2026-09-30
+
+Brief: `dispatches/2t-findings-fixes-brief.md`.
+
+- **Finding 1, option A** (`3facad43e0`): `@default` no longer checks a tag before it reads the value. `readTaggedLiteral` is gone; an unknown tag is reported by the `unknown-tag` arm of `lowerDataTypeDefault` at the written value or the list element. Messages and spans are unchanged; a new test covers a list element.
+- **Finding 2** (`c294bfd4f1`, `3ac77e2800`): `oneOf` returns the result of the one `funcCall` alternative that names the called function. `@default(uuid(5))` now reports `Expected one of: 4 | 7` at `5`, and `@default(nanoid("8"))` with a `dataTypeValue` parameter would report the cast refusal at `"8"`. ADR 231, design section 6, the app upgrade fragment and the manual QA script are updated; the run is recorded.
+- Verification, logs in `wip/2t-fixes/`: `build`, `typecheck`, `lint`, `lint:deps`, `check:error-reference` (361 codes), `fixtures:check` (tree clean), `check:upgrade-coverage` pass. `lint:casts` delta 0, `lint:throws` delta 0, `lint:framework-vocabulary` 272 of 272. `test:packages` (`test-packages.log`): 1423 files pass, 6 fail; the three tarball tests fail on the registry refusal, and `completion-provider.test.ts`, `cli-telemetry` `cli-e2e.test.ts` and `render-typescript.roundtrip.test.ts` timed out and pass alone (`rerun-*.log`). Integration `test/authoring test/number-defaults`: 28 files, 174 tests pass (`integration-authoring-number-defaults.log`). Manual QA: `manual-qa.log`.
+
+### Slice 2t review fixes, 2026-09-30
+
+Brief: `dispatches/2t-review-fixes-brief.md`. Reviews: `slice-reviews/2t/`. Commits `e4ca38ef56` to `b90636f40e`.
+
+- **A01** (`d60177aeed`): no code change. Design-notes decision 14 and the note to "Data types own column types" above record the mechanism: a default-function signature becomes `(dataTypes: DataTypeSupport) => FuncCallSig`, resolved in `scalarDefaultArms`.
+- **A02** (`e6c2815e36`): the pair is the field `dataTypes` everywhere. `DataTypeSupport` keeps its name; its doc comment says what it holds.
+- **A03** (`93d49f733e`): `ControlStack.dataTypes` is built once. `ContractSourceContext` had two production construction sites, so it replaces `dataTypeLookup` with `dataTypes`, and the SQL and Prisma 7 interpreter inputs do the same. Every test that built a context or an interpreter input was updated; a test that passed a lookup without entries passes `{ entries: {}, lookup }`, and contract-psl tests now pass the fixture's entries. ADR 249 and the extension fragment are updated.
+- **A04, A07**: carried over to slice 2b in `plan.md`.
+- **A05, A13** (`4d7d7a6fa7`): ADR 254 states the end state; ADR 231 lists all six codes and the label rule.
+- **A06, A12** (`f70a219d11`): the doc comment cites ADR 231 and ADR 254. A tagless label is `describeAdmittedForms` (`a number`, `true or false`), tested.
+- **A08** (`87581a7e0a`): `DefaultRefusal` is `ReadRefusal | CastRefusal` plus `not-a-list`, `no-list-cast` and `undecodable`. The brief said two default-only arms; a third, `no-list-cast`, was needed because a list written on a scalar column whose type has no list cast has no `DataTypeId` for `valueType`. Prisma 7 reads `receivingType`.
+- **A09** (`249c4d760d`): the sentence is on `WrittenValue`.
+- **A10** (`d5117ef66b`): `readWrittenScalar`, `WrittenScalarResult`, files `written-scalar.ts` and its test; design section 5 updated.
+- **A11** (`a2c75c6ba7`): `checkSqlDefaultText`, `reservedSqlDefaultText`, `UNSAFE_DEFAULT_TEXT`, file `default-sql-text.ts`; `default-mapping.ts` and `sql-default-literal.ts` say text. Extension fragment updated.
+- **A14** (`1360f60594`): `test/integration/test/authoring/data-type-value.test.ts` parses `8`, `"8"` and `` sql`x` `` on the assembled Postgres and SQLite stacks.
+- **A15** (`cbd529fb90`, `f70a219d11`, `87581a7e0a`, `47db2ee790`): `describeRefusal` in `written-value.ts` is the one wording. `@default` passes the forms of the receiving types and adds only `Field "X.y": `; for an element read through a list cast, the forms are those of the list cast's element types. `@default` words `no-list-cast` itself in the same pattern. Tests, `error-reference.md`, design sections 4, 6, 10.1 and 13, and the app fragment (detection `; it casts from `, before and after table) are updated. Manual QA cases 13 and 14 added and the script rerun.
+- **F01, F02, F07** (`cbd529fb90`, `f70a219d11`): casts with a visible effect, the admitted-tag order, and the `an expression` refusal are tested. Planted defects (returning the value before the cast) fail the new tests.
+- **F03** (`47db2ee790`): the extension fragment describes the `oneOf` rule and the binders that require `dataTypes`.
+- **F04** (`5929d57073`): the dead named-argument fallback is gone.
+- **F05** (`87581a7e0a`): the codec-refusal test asserts the whole diagnostic with the `@default` span.
+- **F06** (`f70a219d11`, `980f83e74b`): dotted and colon-qualified callees list the arms; a colon-qualified callee cannot be written in argument position (`a:` opens a named argument), so its test builds the tree of the dotted form with a colon. The Mongo `@@index([email(sort: Up)])` case reports `Expected one of: Asc | Desc` at `Up`.
+- **F08** (`93d49f733e`): the config-resolution test asserts the stack's pair is passed by identity.
+- **F09** (`30a4523acf`): `createSqlBinder` requires `dataTypes`; design section 7 corrected.
+- **F10** (`47db2ee790`, `d60177aeed`): the order is kept; the app fragment and finding 1's outcome say so.
+- The code review's first four deferred items and one new observation are in `plan.md` slice 2b: a type with no written form gives the message ending `write no written form`.
+
+Verification, logs in `wip/2t-review-fixes/`: `build`, `typecheck`, `lint`, `lint:deps`, `check:error-reference` (361 codes), `fixtures:check` (tree clean) and `check:upgrade-coverage` pass. `lint:casts` delta 0, `lint:throws` delta 0, `lint:framework-vocabulary` 272 of 272. `test:packages` (`test-packages.log`): 1425 files pass, 4 fail; the three tarball tests fail on the registry refusal, and `cli-telemetry` `cli-e2e.test.ts` passes alone (`cli-telemetry-rerun.log`). Integration `test/authoring test/number-defaults`: 30 files, 198 tests pass (`integration-authoring-number-defaults.log`). Manual QA: `manual-qa.log`, recorded in `manual-qa.md`.
+
+### Slice 2t review fixes, round 2, 2026-09-30
+
+Brief: `dispatches/2t-round-2-fixes-brief.md`. Reviews: `slice-reviews/2t-round-2/`. Commits `9f8bd38248` to `9b21e77bf2`.
+
+- **Merge** (`9f8bd38248`): the slice 2a branch merged cleanly. It brings `656249c3d9`, which is G01.
+- **B01 and G06** (`5adf991e77`): `SqlPslBuildContext` and `DefaultMappingOptions` take `dataTypes: DataTypeSupport`. `SqlPslBuildContext.authoringContributions` no longer includes `dataTypes`. `ControlStack.dataTypeLookup` is gone; readers use `stack.dataTypes.lookup`. Inside `default-mapping.ts` the private helpers call the lookup `lookup`. Tests, the extension fragment (new change `print-path-carries-data-types`) and design section 7 are updated.
+- **B02** (`39bb27db90`): new family arm `no-element-cast` (`receivingType`, `valueType`, `elementTypes`). `contract-psl` words it `<type> has no cast from a list holding <value type>; write <forms of the element types>`. Prisma 7 words it `holds a <value type> value at element n, which the list cast of <type> does not take; it takes <element types>.` `ReadDefaultResult.receivingTypes` is now `suggestedTypes`. The Prisma 7 test gives `pg/float8` a list cast in the lookup, because no Prisma 7 column type has one. Before the fix it printed `which pg/float8 has no cast from; it casts from pg/int2`, which is false: `pg/float8` has no such cast. Design section 4, `error-reference.md` and both fragments are updated.
+- **B03** (`f1ab5abb9d`): the parameter is `guidance`, and the doc comment says it follows `write `. Design section 4 is updated.
+- **B04** (`6d361db9ef`): the slice 2b carry-over names `@default` and manual QA case 4.
+- **B05** (`6d361db9ef`): the ADR 254 call bullet is in the future tense, and line 181 says a data type declares its list cast and the family's default reader reads a written list through it.
+- **G01**: fixed by the merge.
+- **G02** (`39bb27db90`): two tests on a `pgvector.Vector(3)` column assert the whole diagnostic at element 2: text (`write a number`, which also covers de-duplication of the forms) and an unknown tag.
+- **G03** (`3494a37620`): the extension fragment has `default-refusals-say-what-to-write` with the app fragment's detection patterns and table, and no longer says the messages are unchanged. Both tables have a row for the vector element.
+- **G04** (`39bb27db90`): Prisma 7 tests for `count Int @default([1, 2])` and for the new arm.
+- **G05** (`6d361db9ef`): the contract-psl README says the message ends with what to write.
+- **G07** (`2d788c2342`): `dispatches/2t-findings.md` has an A08 entry with the decision and its reason.
+- Manual QA (`9b21e77bf2`): four cases with the pgvector extension, recorded in `manual-qa.md`.
+
+Verification, logs in `wip/2t-round-2-fixes/`: `build`, `typecheck`, `lint`, `lint:deps`, `check:error-reference` (361 codes), `fixtures:check` (tree clean) and `check:upgrade-coverage` pass. `lint:casts` delta 0, `lint:throws` delta 0, `lint:framework-vocabulary` 272 of 272. `test:packages` (`test-packages.log`): 1438 files pass, 6 fail. The three tarball tests fail on the registry refusal. `cli-telemetry` `cli-e2e.test.ts` and `integration.test.ts` timed out and pass alone (`rerun-cli-telemetry.log`); `cli` `migration-cli.exit-scheme.test.ts` failed once and passes alone (`rerun-cli-exit-scheme.log`). Integration `test/authoring test/number-defaults test/date-time-defaults`: 34 files, 230 tests pass (`integration.log`). Manual QA: `manual-qa.log`.
+
+### Slice 2t wording: refusals lead with what to write, 2026-10-06
+
+Brief: `dispatches/2t-wording-brief.md`. Serhii's review of #30539 found `pg/int4 has no cast from pg/text; write a number` worse than `Expected a number`; Will agreed. Design notes item 15 records it.
+
+- `describeRefusal(refusal, support, guidance)` takes `RefusalGuidance`, `{ forms, rewrite }`. `forms` are the phrases of the new `admittedFormPhrases`; `describeAdmittedForms` joins them.
+- Messages: `Expected <forms>`; `Expected <forms>; write <literal>` for a quoted string on a type with a tag; `Expected <forms> that <type> can hold; got <value type>` when the value's written form is one of the forms; `Expected <forms>; this target has no data type for a <syntax> value`.
+- `lowerDataTypeDefault`: `no-list-cast` is `Expected <forms>; got a list`; `no-element-cast` goes through the `no-cast` rule of `describeRefusal`.
+- The brief named `taggedLiteralTextReadsBack`, which did not exist. It is new in `tagged-literal.ts`, beside `printTaggedLiteral`: it holds when the printed literal's canonical text equals the text. A string with leading indentation, for example, now gets no rewrite. The `it as a sql literal` fallback the brief mentions did not exist in the code either, so nothing was removed for it.
+- `NO_WRITTEN_FORM` is no longer exported.
+- Docs: ADR 231, ADR 254, `error-reference.md`, the contract-psl README, the pending `arguments-typed-by-data-type` and `sql-is-a-data-type` fragments, and design sections 4, 6 and 7. The `default-refusals-say-what-to-write` detection pattern for `this target has no data type` now requires `: ` or a quote before it, so it no longer matches the new messages.
+
+Review fixes (brief `dispatches/2t-wording-fixes-brief.md`, reviews in `slice-reviews/2t-wording/`): the framework's `exactRewrite` decides the exact rewrite for `dataTypeValue` and `@default` alike, so `meta Jsonb @default("{}")` says ``Expected json`...`; write json`{}` ``; it is offered only when the receiving type takes the rewritten literal. `RefusalGuidance.forms` holds `WrittenForm` values (kind, tag, phrase), and the range rule compares kinds, not phrases. `describeExpected` builds every `Expected <forms>` sentence, and `describeRefusedValueType` words the `no-cast` rule for both callers and the list-element arm, which no longer invents a refusal. The not-a-literal refusal reads ``Expected sql`...`; got an identifier``. `dataTypeValue` throws an `InternalError` for a registered type nothing writes. `taggedLiteralTextReadsBack` is now `printedTaggedLiteralReadsBack`. New tests: the round trip of the offered rewrite through the PSL parser, a narrow list cast that reaches the range rule, the value type on each assembled stack, and one message for the same refusal as `@default` and as an argument. B07 accepted as is. Logs in `wip/2t-wording-fixes/`.
+
+Round two (`slice-reviews/2t-wording-round-2/code-review.md`) confirmed every finding fixed and raised four small ones (H01 to H04), fixed the same day: ADR 231 names the "receiving type takes it" condition and the no-written-form internal error; the `dataTypeValue` label uses `tagForm`; `printedTaggedLiteralReadsBack` is no longer exported; the extension fragment lists `WrittenForm`, `RefusalGuidance` and `tagForm`. The deferred items in that review (codec check of a rewrite, newlines in a multi-line rewrite, one tag per type) are accepted costs. `main` (`45c3b5b076`) was merged in the same day.
+
 ## Slice order and tickets
 
 | Order | Plan slice | Ticket | State |
 | --- | --- | --- | --- |
-| 1 | 2a: `sql` is the data type `sql/expression` | TML-3296 | PR #30534 open; two review rounds done, all findings fixed |
-| 2 | 2t: an argument declares the data type it receives | TML-3367 | Waiting for 2a |
+| 1 | 2a: `sql` is the data type `sql/expression` | TML-3296 | Merged 2026-09-30 (#30534) |
+| 2 | 2t: an argument declares the data type it receives | TML-3367 | PR #30539 open against the 2a branch; two review rounds done, all findings fixed |
 | 3 | 2b: the six places take `sql` literals | TML-3288 | Waiting for 2t |
 | 4 | 3: the TypeScript builder takes `sql` values | TML-3289 | Waiting for 2b |
 | On the side | 1: line comments in raw SQL | TML-3287 | Not started; depends on nothing |
@@ -62,8 +166,10 @@ The Linear project "Data types own column types" finishes ADR 254. Its last slic
 
 Two notes were sent to that project's agent:
 
-- `dataTypeValue` must not be a direct arm of `oneOf`. Inside a function call signature it works, and slice 2t tests a function call that is an arm of `oneOf`.
+- `dataTypeValue` is used as a parameter of a `funcCall`, not as a bare arm of `oneOf`. A `funcCall` claims a call to its name (`ArgType.claims`), and when exactly one arm claims the argument `oneOf` keeps that arm's diagnostics, so `@default(nanoid("8"))` can report the cast refusal at `"8"` (updated 2026-09-30).
 - `dataTypeValue` throws an internal error when the stack does not register the named data type. A family spec must choose the type id from the stack, not hard-code one target's id.
+- A default-function signature is built from the stack's data types: `ControlMutationDefaultEntry.signature` becomes `(dataTypes: DataTypeSupport) => FuncCallSig` (or the entry offers that form beside the static one), resolved in `scalarDefaultArms` with `ctx.dataTypes`. That project makes the change when it types `nanoid(8)`; see design-notes decision 14 (added 2026-09-30).
+- The label of a `dataTypeValue` without a tag is the forms it admits, such as `a number`. A refusal is worded by the framework's `describeRefusal`; a caller adds only its location prefix and chooses the forms to suggest (added 2026-09-30).
 
 ## The design is older than `main`
 

@@ -50,7 +50,7 @@ function interpret(schema: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: createPostgresBuiltinCodecLookup(),
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

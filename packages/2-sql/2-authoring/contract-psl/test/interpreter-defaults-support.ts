@@ -25,13 +25,13 @@ export const interpretPostgresSchema = (
     | 'composedExtensionContracts'
     | 'createNamespace'
     | 'capabilities'
-    | 'dataTypeLookup'
+    | 'dataTypes'
     | 'codecLookup'
   > &
     Partial<
       Pick<
         InterpretPslDocumentToSqlContractInput,
-        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypeLookup' | 'codecLookup'
+        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypes' | 'codecLookup'
       >
     >,
 ) => {
@@ -46,13 +46,12 @@ export const interpretPostgresSchema = (
     ...interpreterInput,
     // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
     codecLookup: interpreterInput.codecLookup ?? fixtureTypeLookups.codecLookup,
-    dataTypeLookup: interpreterInput.dataTypeLookup ?? fixtureTypeLookups.dataTypeLookup,
-    authoringContributions: {
-      ...interpreterInput.authoringContributions,
-      dataTypes: {
+    dataTypes: interpreterInput.dataTypes ?? {
+      entries: {
         ...fixtureDataTypeSupport.entries,
         ...interpreterInput.authoringContributions?.dataTypes,
       },
+      lookup: fixtureTypeLookups.dataTypeLookup,
     },
   });
 };

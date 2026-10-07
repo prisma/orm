@@ -1,7 +1,7 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -13,7 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  ...fixtureTypeLookups,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {

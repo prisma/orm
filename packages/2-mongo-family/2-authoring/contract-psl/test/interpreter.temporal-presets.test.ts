@@ -36,9 +36,9 @@ function interpret(
 ) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
     codecLookup: mongoCodecLookup,
-    dataTypeLookup: mongoDataTypeLookup,
+    dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),
   });

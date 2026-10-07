@@ -11,7 +11,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -57,7 +57,7 @@ namespace public {
         composedExtensionContracts: new Map(),
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -184,7 +184,7 @@ namespace public {
         composedExtensions: ['supabase'],
         composedExtensionContracts: new Map([['supabase', syntheticExtensionContract]]),
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -255,7 +255,7 @@ namespace public {
         composedExtensions: ['supabase'],
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );

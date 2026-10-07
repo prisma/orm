@@ -1,0 +1,28 @@
+# Brief: fix the review findings on the 2t wording change (TML-3367)
+
+You fix the findings of the review of the refusal wording change, on branch `m29-2t` in the git worktree at the current directory. Read `dispatches/2t-wording-brief.md` first (its rules stand), then the two reviews in `projects/sql-expression-literals/slice-reviews/2t-wording/`: `system-design-review.md` (B01 to B10) and `code-review.md` (G01 to G06). Do not read, write or run anything outside this worktree; no `/tmp`; scratch under `wip/2t-wording-fixes/`. Run node, pnpm and git through `mise exec --`. The machine is heavily loaded: long commands in the background with a log, then read the log.
+
+**Never run `pnpm test:integration`, `pnpm test:e2e` or `pnpm test:all`.** `pnpm test:packages` is allowed. In `test/integration`, run only `pnpm test test/authoring/data-type-value.test.ts test/number-defaults/psl-number-defaults.integration.test.ts`.
+
+## Already done
+
+B01, B02, B03, B09 and B10 (the ADR text, design-notes item 14 and the `design.md` example) are fixed in commit `96cdb4ac1c`. Do not touch those passages except where a decision below says so.
+
+## Decisions
+
+Fix every finding as its suggestion says, except where this list says otherwise. Decided; do not reopen.
+
+- **B04: the exact rewrite is a framework decision, offered to `@default` too.** Move the "offer the exact literal" rule out of `data-type-value.ts` into `framework-components/src/shared/written-value.ts` (or beside `describeRefusal`): given the support, the receiving type and the written scalar, it returns the rewrite when the value is a quoted string, the receiving type has a tag (`admittedTags(support, type)[0]`) and the printed literal reads back. Both `dataTypeValue` and `lowerDataTypeDefault` call it, so `meta Jsonb @default("{}")` now says ``Field "N.meta": Expected json`...`; write json`{}` ``. Test it in both callers. Update `error-reference.md`, the pending upgrade fragments and `design.md` where they say `@default` offers no rewrite or describe the rule as `dataTypeValue`'s alone.
+- **B05 and G06 together: the same-form check compares written-form kinds, not English phrases.** A form is the kind of syntax an entry reads (`tag`, `string`, `boolean`, `number`, and for a tag, which tag). Carry that identity in `RefusalGuidance.forms` beside the phrase (for example `{ kind, phrase }`), and let the `no-cast` rule compare the value type's form identity against the admitted ones. Then `no-element-cast` in `data-type-default.ts` no longer builds a fake `no-cast` refusal with the wrong `casts`: give the framework one exported function that words "a value of type V refused by receiving type R, given the admitted forms" and call it from both arms.
+- **B06: one builder for the `Expected …` sentence.** The framework exports the function that joins forms and builds `Expected <forms>`; `contract-psl` and `data-type-value.ts` call it (this also fixes G05). The not-a-literal message in `data-type-value.ts` becomes ``Expected sql`...`; got an identifier`` (semicolon, like the others); update its tests and the docs that quote it (`design.md` section 6, `error-reference.md` if it quotes it).
+- **B07: accepted as is.** `Expected a number that pgvector/vector can hold; got pg/int8` for a list element is fine. No change.
+- **B08:** rename `taggedLiteralTextReadsBack` to `printedTaggedLiteralReadsBack` and make `printTaggedLiteral`'s doc comment true: it prints a literal; the predicate says whether that literal reads back as the same text. Do not change `contract infer`.
+- **G01:** `parseDataTypeValue` throws an `InternalError` when the receiving type admits no written form, worded like the existing check for an unregistered type ("…which nothing in this stack writes"). Test it beside that check. `plan.md` already calls this a pack bug; no doc change needed.
+- **G02, G03, G04:** add the tests as suggested. For G03 use a fixture list cast that takes fewer number types than pgvector's; for G04 add the backslash and `${` cases and the psl-parser round-trip test (parse the offered rewrite, compare its text with the original).
+- **Architect's missing tests:** add one test that the same refusal, written as `@default(...)` and as a `dataTypeValue` argument, produces the same message after the `Field "X.y": ` prefix. Put it where both are reachable (the contract-psl interpreter tests or `test/integration/test/authoring/data-type-value.test.ts`).
+
+If a decision above turns out wrong against the code, stop and write why to `wip/2t-wording-fixes/findings.md`.
+
+## Order, verify, commits
+
+Tests first for every behaviour change. Commit this brief first. Small commits with explicit `git add`, `mise exec -- git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`, no AI attribution, never amend, rebase, squash or force-push, do not push, no pull request. Logs under `wip/2t-wording-fixes/`: `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm lint:deps`, `pnpm lint:casts`, `pnpm lint:throws`, `pnpm check:error-reference`, `pnpm lint:framework-vocabulary`, `pnpm fixtures:check`, `pnpm test:packages`; the two integration files named above; after committing, `pnpm check:upgrade-coverage --mode pr --prev "$(git merge-base origin/main HEAD)" --head HEAD`. A test that times out under load usually passes alone: rerun that file once and say so. The three tarball tests fail on a known registry refusal; report, do not fix. Markdown: never hard-wrap prose. Add a short "Review fixes" paragraph to the 2026-10-06 subsection of `status.md`. Report in plain English, short sentences: each finding and what you did, each verification result with its log path, anything you could not do.

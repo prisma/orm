@@ -6,15 +6,13 @@ import type { Contract } from '@internal/contract/types';
 import type {
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import {
   getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -86,7 +84,7 @@ export interface InterpretPrisma7DocumentsInput {
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly dataTypes: DataTypeSupport;
   readonly composedExtensions: readonly string[];
 }
 
@@ -496,7 +494,7 @@ export function interpretPrisma7Documents(
         models: modelNodes,
       },
       input.codecLookup,
-      input.dataTypeLookup,
+      input.dataTypes.lookup,
     ),
   );
 }
@@ -775,7 +773,7 @@ function lowerNativeEnums(
       family: input.binding.target.familyId,
       target: input.binding.target.targetId,
       codecLookup: input.codecLookup,
-      dataTypeLookup: input.dataTypeLookup,
+      dataTypeLookup: input.dataTypes.lookup,
       sourceId: declaration.sourceId,
       diagnostics: {
         push: (diagnostic) => {
@@ -1103,10 +1101,11 @@ function readField(args: ReadFieldArgs): void {
   if (!resolved.ok) {
     return;
   }
+  const typeLookups = { codecLookup: input.codecLookup, dataTypeLookup: input.dataTypes.lookup };
   const columnTypeName = unquotedSqlBaseNameOfCodec(
     resolved.descriptor.codecId,
     resolved.descriptor.typeParams,
-    input,
+    typeLookups,
   );
   const updatedAtGeneratorId =
     updatedAt === undefined ? undefined : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
@@ -1149,13 +1148,10 @@ function readField(args: ReadFieldArgs): void {
           codecId: resolved.descriptor.codecId,
           typeParams: resolved.descriptor.typeParams,
           codecLookup: input.codecLookup,
-          dataTypeSupport: {
-            entries: input.authoringContributions?.dataTypes ?? {},
-            lookup: input.dataTypeLookup,
-          },
+          dataTypes: input.dataTypes,
           literalForm: binding.literalDefaultForm({
             codecId: resolved.descriptor.codecId,
-            dataType: sqlDataTypeOfCodec(resolved.descriptor.codecId, input).id,
+            dataType: sqlDataTypeOfCodec(resolved.descriptor.codecId, typeLookups).id,
             typeParams: resolved.descriptor.typeParams,
           }),
           enumMembers:
