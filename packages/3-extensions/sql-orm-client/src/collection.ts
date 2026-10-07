@@ -10,6 +10,7 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
   type OrderByItem,
@@ -80,9 +81,11 @@ import type {
   HasTypeState,
   HasWhere,
   Including,
+  ModelScopeReceiver,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
+  Scope,
   TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
@@ -121,6 +124,13 @@ import {
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import {
+  assertModelScopeReceiver,
+  assertScopeBody,
+  type ScopeFacts,
+  type ScopeFactsType,
+  type WithFacts,
+} from './scopes';
+import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
   type AggregateResult,
@@ -154,8 +164,10 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNameForValue,
+  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
+import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
@@ -262,6 +274,30 @@ interface MtiCreateContext {
   variantFieldToColumn: Record<string, string>;
   pkColumns: readonly string[];
 }
+
+/** What `scope` reads from the collection it is called on: its contract and its model. */
+interface ScopeSource {
+  readonly modelName: string;
+  readonly namespaceId: string;
+  readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
+}
+
+type ContractOf<C extends ScopeSource> = C['ctx']['context']['contract'];
+
+type ModelNameOf<C extends ScopeSource> = C['modelName'];
+
+type ModelScopeBody<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = [NsId] extends [never]
+  ? Collection<TContract, ModelName>
+  : Collection<
+      TContract,
+      ModelName,
+      InferRootRow<TContract, ModelName, NsId>,
+      WithNsId<DefaultCollectionTypeState, NsId>
+    >;
 
 export class CollectionBase<
   TContract extends Contract<SqlStorage>,
@@ -384,12 +420,6 @@ export class CollectionBase<
   where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
   where<Self>(
     this: Self,
-    fn: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
-  ): Filtered<Self>;
-  where<Self>(
-    this: Self,
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<Self>;
   where(
@@ -403,14 +433,6 @@ export class CollectionBase<
             State['nsId']
           >,
         ) => WhereDirectInput)
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
     const whereArg =
@@ -444,10 +466,40 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result.
+   * Call `fn` with this collection and return its result. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
    */
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+  apply<Self, Facts extends ScopeFacts>(
+    this: Self,
+    scope: ((collection: NoInfer<Self>) => unknown) & { readonly [ScopeFactsType]: Facts },
+  ): WithFacts<Self, Facts>;
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  apply(fn: (collection: unknown) => unknown): unknown {
     return fn(this);
+  }
+
+  /**
+   * Define a scope for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The scope accepts any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * ```ts
+   * const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
+   * db.User.include('posts', (posts) => posts.apply(summary));
+   * ```
+   */
+  scope<Self extends ScopeSource, NsId extends string, Result>(
+    this: Self & HasTypeState<{ readonly nsId: NsId }>,
+    body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
+  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+    assertScopeBody(body);
+    const source = { modelName: this.modelName, namespaceId: this.namespaceId };
+    return (collection) => {
+      assertModelScopeReceiver(source, collection);
+      return body(
+        blindCast<
+          ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
+          'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
+        >(collection),
+      );
+    };
   }
 
   /**
@@ -2300,6 +2352,8 @@ export class CollectionBase<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
+   * The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row changes and the result is `null`. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit, an offset, a cursor, `distinct` or `distinctOn`.
+   *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
    * The callback receives a mutator exposing `create(...)`, `connect(...)`, and `disconnect(...)`.
@@ -2355,6 +2409,7 @@ export class CollectionBase<
         >(data),
       )
     ) {
+      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
         runtime: this.ctx.runtime,
@@ -2399,7 +2454,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: update every matching row and stream the updated
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams updated
@@ -2431,6 +2486,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     return this.#updateAllWithAnnotations(
       data,
       this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
@@ -2487,7 +2543,7 @@ export class CollectionBase<
   /**
    * Write terminal: update every matching row without returning them,
    * resolving to the count of rows that were updated. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `updateAll(...)` when you need the updated rows; prefer
    * this when you only need the affected-row count.
@@ -2507,6 +2563,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2541,7 +2598,7 @@ export class CollectionBase<
    * Write terminal: delete a single matching row — the first one the
    * filter matches — and return it (or `null` when no row matched).
    * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error.
+   * unfiltered collection is a type error. The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row is deleted and the result is `null`.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2564,7 +2621,11 @@ export class CollectionBase<
       if (!identityWhere) {
         return null;
       }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
+      const narrowed = scoped.#clone({
+        filters: [identityWhere],
+        limit: undefined,
+        offset: undefined,
+      });
       const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
       return rows[0] ?? null;
     });
@@ -2572,7 +2633,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: delete every matching row and stream the deleted
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams deleted
@@ -2598,6 +2659,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
     );
@@ -2695,7 +2757,7 @@ export class CollectionBase<
   /**
    * Write terminal: delete every matching row without returning them,
    * resolving to the count of rows that were deleted. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `deleteAll(...)` when you need the deleted rows; prefer
    * this when you only need the affected-row count.
@@ -2709,6 +2771,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number>;
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
     const compiled = mergeAnnotations(
@@ -2793,6 +2856,10 @@ export class CollectionBase<
         `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
         { meta: { model: this.modelName, table: this.tableName } },
       );
+    }
+    checkLimitOffset('limit', this.state.limit);
+    if (this.state.limit === 0) {
+      return null;
     }
     const firstRow = await this.#clone({
       selectedFields: [...identityColumns],

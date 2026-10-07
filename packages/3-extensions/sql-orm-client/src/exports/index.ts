@@ -26,12 +26,20 @@ export {
   type PreparedRowQuery,
   prepareQuery,
 } from '../prepared-row-query';
+export {
+  type DeclaredField,
+  type FieldScope,
+  orderByField,
+  type ScopeFacts,
+} from '../scopes';
 export type {
   AggregateBuilder,
   AggregateIncludeReducers,
   AggregateResult,
   AggregateSelector,
   AggregateSpec,
+  CodecField,
+  CodecListField,
   CollectionContext,
   CollectionModelName,
   CollectionState,
@@ -45,6 +53,7 @@ export type {
   ModelAccessor,
   NumericFieldNames,
   Orderable,
+  OrderableFieldNames,
   OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,

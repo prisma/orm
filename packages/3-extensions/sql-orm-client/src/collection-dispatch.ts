@@ -50,6 +50,7 @@ import {
   mapStorageRowToModelFields,
   type RowEnvelope,
 } from './collection-runtime';
+import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
@@ -695,7 +696,7 @@ function resolveIncludedColumnRef(
   include: IncludeExpr,
   key: string,
 ): IncludedColumnRef | undefined {
-  const baseColumn = resolveStorageColumn(
+  const baseColumn = resolveColumn(
     contract,
     include.relatedNamespaceId,
     include.relatedTableName,
@@ -721,7 +722,7 @@ function resolveIncludedColumnRef(
     }
 
     const column = key.slice(prefix.length);
-    const variantColumn = resolveStorageColumn(
+    const variantColumn = resolveColumn(
       contract,
       include.relatedNamespaceId,
       variant.table,
@@ -733,15 +734,6 @@ function resolveIncludedColumnRef(
   }
 
   return undefined;
-}
-
-function resolveStorageColumn(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-  columnName: string,
-): StorageColumn | undefined {
-  return contract.storage.namespaces[namespaceId]?.entries.table?.[tableName]?.columns[columnName];
 }
 
 function decodeIncludedColumnValue(

@@ -147,10 +147,16 @@ The TypeScript detection matches a file that calls `enumType(` and names the jso
 
 ## `enum-list-check-compares-in-column-type`
 
-A list column typed by an enum, such as `hosts Host[]` in PSL or `field.namedType(Host).many()` in TypeScript, has a CHECK constraint that every element is a member. Earlier versions cast the column to `text[]` before comparing:
+A list column typed by an enum, such as `hosts Host[]` in PSL or `field.namedType(Host).many()` in TypeScript, has a CHECK constraint that every element is a member. Earlier versions cast the column to `text[]` before comparing. 8.0.0-rc.14 wrote:
 
 ```sql
 "hosts"::text[] <@ ARRAY['127.0.0.1', '10.0.0.0/8']::text[]
+```
+
+and 8.0.0-rc.15 wrote:
+
+```sql
+array_remove("hosts"::text[], NULL) <@ ARRAY['127.0.0.1', '10.0.0.0/8']::text[]
 ```
 
 Postgres writes an `inet` value as text with its prefix length, `127.0.0.1/32`, so that constraint refused every host address. The constraint now compares in the column's type:

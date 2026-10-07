@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/data-type-in-contract/app/scripts/data-type-in-contract.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.14-to-8.0.0-rc.15/scripts/data-type-in-contract/data-type-in-contract.ts',
   extension:
-    'upgrade-instructions/pending/data-type-in-contract/extension/scripts/data-type-in-contract.ts',
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.14-to-8.0.0-rc.15/scripts/data-type-in-contract/data-type-in-contract.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));

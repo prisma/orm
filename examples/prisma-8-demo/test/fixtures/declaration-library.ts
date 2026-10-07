@@ -1,9 +1,66 @@
+import { field } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { Collection, type Filtered, orm } from '@prisma/orm-postgres/orm-client';
+import {
+  type CodecField,
+  type CodecListField,
+  Collection,
+  type Filtered,
+  orderByField,
+  orm,
+} from '@prisma/orm-postgres/orm-client';
 import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
 import type { Contract } from '../../src/prisma/contract.d';
 
+type ExpiresAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
+
+export const notExpired = (now: Temporal.Instant) => (row: { expiresAt: ExpiresAt }) =>
+  row.expiresAt.gt(now);
+
+type Labels = CodecListField<Contract, 'pg/text@1'>;
+
+export const labelledAs = (labels: readonly string[]) => (row: { labels: Labels }) =>
+  row.labels.eq(labels);
+
+declare const runtime: Runtime;
+declare const context: ExecutionContext<Contract>;
+
+const client = orm({ runtime, context });
+
+export const titleSummary = client.public.Post.scope((posts) =>
+  posts.select('id', 'title').include('user'),
+);
+
+export const firstPage = client.scope({ title: field.text() }, (rows) => rows.limit(10).offset(0));
+
+export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.apply(unexpired(now));
+
+export const labelled = (labels: readonly string[]) =>
+  client.scope({ labels: field.text().many() }, (rows) =>
+    rows.where((row) => row.labels.eq(labels)),
+  );
+
+export const unexpired = (now: Temporal.Instant) =>
+  client.scope({ expiresAt: field.temporal.timestamptz() }, (rows) =>
+    rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
+  );
+
 export class PostLibrary extends Collection<Contract, 'Post'> {
+  live(now: Temporal.Instant) {
+    return this.where(notExpired(now));
+  }
+
+  summaries() {
+    return this.apply(titleSummary);
+  }
+
+  unexpired(now: Temporal.Instant) {
+    return this.apply(unexpired(now));
+  }
+
+  orderedBy(name: string) {
+    return this.orderBy(orderByField(this, name, 'desc', ['title', 'createdAt']));
+  }
+
   filtered() {
     return this.where({ title: 'x' });
   }
@@ -180,9 +237,6 @@ export class SubLibrary extends PostLibrary {
     return this.ordered().first();
   }
 }
-
-declare const runtime: Runtime;
-declare const context: ExecutionContext<Contract>;
 
 export const posts = orm({ runtime, context, collections: { Post: PostLibrary } }).public.Post;
 export const filteredChain = posts.filtered().ordered().withUser();

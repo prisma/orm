@@ -76,7 +76,7 @@ describe('orm()', () => {
   it('returns undefined for symbol-based property lookups on the proxy', () => {
     const runtime = createMockRuntime();
     const db = orm({ runtime, context });
-    expect((db as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
+    expect((db as unknown as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
   });
 
   it('caches lazily created collections', () => {

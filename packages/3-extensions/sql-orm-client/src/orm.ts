@@ -1,5 +1,5 @@
 import { type Contract, domainModelsAtDefaultNamespace } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
   SqlAggregateDescriptorRegistry,
@@ -8,6 +8,15 @@ import { blindCast } from '@internal/utils/casts';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import { ormError } from './orm-errors';
+import {
+  type DeclaredFields,
+  defineFieldScope,
+  type FieldScope,
+  type ScopeCollection,
+  type ScopeFacts,
+  type ScopeFieldDeclarations,
+  type ScopeModelAccessor,
+} from './scopes';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
   CollectionContext,
@@ -88,10 +97,38 @@ type NamespacedClientMap<
   [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, Collections, Ns>;
 };
 
+/** The members of the client beside its namespaces. */
+export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
+  /**
+   * Define a scope for any model that has the declared fields. Declare each field with a field builder from the contract DSL or with `{ codecId, nullable }`, and a list field with `.many()` or `many: { elementNullable: false }`, or `.many({ elementsNullable: true })` or `many: { elementNullable: true }` when its elements may be null. The body sees only the declared fields and may call `where`, `orderBy`, `limit` and `offset`; `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` throw `ORM.ARGUMENT_INVALID` after a scope that set a limit or an offset, as they do for any limit, offset, cursor, `distinct` or `distinctOn` they would ignore. The scope accepts a collection of any model whose fields include the declared ones with the same codec and nullability, a list with the same element nullability exactly where the declaration declares one, and returns that collection with the filter and order the body applied.
+   *
+   * ```ts
+   * const notDeleted = db.orm.scope(
+   *   { deletedAt: field.temporal.timestamptz().optional() },
+   *   (rows) => rows.where((r) => r.deletedAt.isNull()),
+   * );
+   * db.orm.public.Post.apply(notDeleted).deleteAll();
+   * ```
+   */
+  scope<
+    const Declarations extends ScopeFieldDeclarations<keyof ExtractCodecTypes<TContract> & string>,
+    Facts extends ScopeFacts,
+  >(
+    fields: Declarations,
+    body: (
+      rows: ScopeCollection<
+        ScopeModelAccessor<TContract, DeclaredFields<Declarations>>,
+        ScopeFacts
+      >,
+    ) => ScopeCollection<ScopeModelAccessor<TContract, DeclaredFields<Declarations>>, Facts>,
+  ): FieldScope<TContract, DeclaredFields<Declarations>, Facts>;
+}
+
 type OrmClient<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
-> = NamespacedClientMap<TContract, Collections>;
+> = NamespacedClientMap<TContract, Collections> &
+  ('scope' extends keyof TContract['domain']['namespaces'] ? unknown : OrmClientMembers<TContract>);
 
 /**
  * Reject a contributed aggregate operation whose name a collection member
@@ -194,11 +231,11 @@ export function orm<
         return undefined;
       }
 
-      if (!Object.hasOwn(contract.domain.namespaces, prop)) {
-        return undefined;
+      if (Object.hasOwn(contract.domain.namespaces, prop)) {
+        return namespaceFacet(prop);
       }
 
-      return namespaceFacet(prop);
+      return prop === 'scope' ? defineFieldScope : undefined;
     },
   });
 }
