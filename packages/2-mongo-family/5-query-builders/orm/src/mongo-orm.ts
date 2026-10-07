@@ -29,6 +29,20 @@ export type MongoOrmClient<
   >;
 };
 
+function assertEnumsComplete(contract: MongoContract, enums: MongoOrmEnums): void {
+  for (const [namespaceId, namespace] of Object.entries(contract.domain.namespaces)) {
+    const accessors = enums[namespaceId] ?? {};
+    for (const enumName of Object.keys(namespace.enum ?? {})) {
+      if (enumName in accessors) continue;
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `mongoOrm() has no accessor for enum ${enumName} in namespace ${namespaceId}, so it cannot check a value written to a field of that enum. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).`,
+        { meta: { argument: 'enums', namespace: namespaceId, enum: enumName } },
+      );
+    }
+  }
+}
+
 export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
@@ -41,6 +55,7 @@ export function mongoOrm<
       { meta: { fields: executionDefaults.map((d) => `${d.ref.entry}.${d.ref.field}`) } },
     );
   }
+  assertEnumsComplete(contract, enums);
   const client: Record<string, unknown> = {};
 
   for (const [rootName, rootRef] of Object.entries(contract.roots)) {

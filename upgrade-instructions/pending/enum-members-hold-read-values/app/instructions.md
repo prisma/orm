@@ -81,19 +81,33 @@ For each enum reported, do one of these:
 
 Code that builds the Mongo ORM itself, rather than through `mongo()`, passes the contract's enum accessors, the same ones `db.enums` holds. Built without them, the ORM compared a written enum value with the enum's stored forms and refused every value of an enum whose stored form is not the value, such as a bigint or a date member; it is now a type error.
 
+Before:
+
+```ts
+import { createMongoExecutionContext, createMongoRuntime } from '@prisma/orm-mongo/family-runtime';
+import { mongoOrm } from '@prisma/orm-mongo/orm';
+
+const context = createMongoExecutionContext({ contract, stack });
+const runtime = createMongoRuntime({ context, driver });
+const orm = mongoOrm({ contract, executor: runtime });
+```
+
+After:
+
 ```ts
 import {
   buildMongoEnums,
   createMongoExecutionContext,
   createMongoRuntime,
 } from '@prisma/orm-mongo/family-runtime';
+import { mongoOrm } from '@prisma/orm-mongo/orm';
 
 const context = createMongoExecutionContext({ contract, stack });
 const runtime = createMongoRuntime({ context, driver });
 const orm = mongoOrm({ contract, executor: runtime, enums: buildMongoEnums(contract, context.codecs) });
 ```
 
-`buildMongoEnums` refuses a contract whose enum codec the context lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`. `createMongoCollection()` takes the accessors as its fourth argument, before the optional `mutationDefaults`: change `createMongoCollection(contract, 'User', executor, mutationDefaults)` to `createMongoCollection(contract, 'User', executor, enums, mutationDefaults)`. A write of an enum field whose accessor is missing from `enums` is refused with `ORM.ARGUMENT_INVALID`.
+`buildMongoEnums` refuses a contract whose enum codec the context lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`. `createMongoCollection()` takes the accessors as its fourth argument, before the optional `mutationDefaults`: change `createMongoCollection(contract, 'User', executor, mutationDefaults)` to `createMongoCollection(contract, 'User', executor, enums, mutationDefaults)`. `mongoOrm()` refuses `enums` that lack an accessor for an enum the contract declares with `ORM.ARGUMENT_INVALID` when it is called; `createMongoCollection()` refuses a write of an enum field whose accessor is missing from `enums` with the same error.
 
 ## `contract-dts-enum-member-types`
 
