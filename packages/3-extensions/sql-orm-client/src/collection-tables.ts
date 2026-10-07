@@ -5,6 +5,7 @@ import {
   type AstRewriter,
   type ColumnRef,
   EqColJoinOn,
+  type SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { resolveModelTableName, resolvePolymorphismInfo } from './collection-contract';
@@ -101,18 +102,43 @@ export function bindingForTable(tables: CollectionTables, tableName: string): Ta
   return binding;
 }
 
+function declaresTable(ast: SelectAst, tableName: string): boolean {
+  const sources = [
+    ...(ast.from === undefined ? [] : [ast.from]),
+    ...(ast.joins ?? []).map((join) => join.source),
+  ];
+  return sources.some(
+    (source) =>
+      (source.kind === 'table-source' && (source.alias ?? source.name) === tableName) ||
+      (source.kind === 'derived-table-source' && source.alias === tableName),
+  );
+}
+
 export function rebaseOntoRoot(expr: AnyExpression, root: TableBinding): AnyExpression {
   const { tableName } = root.storage;
   if (root.reference === tableName) {
     return expr;
   }
-  const rebase = (column: ColumnRef) =>
-    column.table === tableName ? root.column(column.column) : column;
-  const rewriter: AstRewriter = {
+  const originals = new Map<ColumnRef, ColumnRef>();
+  const rebase = (column: ColumnRef): ColumnRef => {
+    if (column.table !== tableName) {
+      return column;
+    }
+    const rebased = root.column(column.column);
+    originals.set(rebased, column);
+    return rebased;
+  };
+  const restore = (column: ColumnRef): ColumnRef => originals.get(column) ?? column;
+  const restorer: AstRewriter = {
+    columnRef: restore,
+    eqColJoinOn: (on) => EqColJoinOn.of(restore(on.left), restore(on.right)),
+  };
+  const rebaser: AstRewriter = {
     columnRef: rebase,
     eqColJoinOn: (on) => EqColJoinOn.of(rebase(on.left), rebase(on.right)),
+    select: (ast) => (declaresTable(ast, tableName) ? ast.rewrite(restorer) : ast),
   };
-  return expr.rewrite(rewriter);
+  return expr.rewrite(rebaser);
 }
 
 export function bindStatementTable(storage: TableStorageCoordinate): CollectionTables {

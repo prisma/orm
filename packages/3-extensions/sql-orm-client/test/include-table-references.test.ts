@@ -3,6 +3,7 @@ import { BinaryExpr, ColumnRef, LiteralExpr } from '@internal/sql-relational-cor
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import { Collection } from '../src/collection';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
@@ -146,12 +147,22 @@ describe('table references in includes', () => {
   it('rejects a refinement result that was not derived from the collection it was handed', () => {
     const { collection } = createCollectionFor('User');
     const { collection: unrelated } = createCollectionFor('Post');
+    const unrelatedScalar = new Collection(unrelated.ctx, 'Post', {
+      namespaceId: 'public',
+      includeRefinementMode: true,
+    });
 
+    expect(() => collection.include('posts', () => unrelatedScalar.count())).toThrow(
+      /include\('posts'\) refinement must return a collection derived from the one it was handed/,
+    );
     expect(() => collection.include('posts', () => unrelated.select('id'))).toThrow(
       /include\('posts'\) refinement must return a collection derived from the one it was handed/,
     );
     expect(() =>
       collection.include('posts', (posts) => posts.combine({ rows: unrelated.select('id') })),
+    ).toThrow(/derived from the one it was handed/);
+    expect(() =>
+      collection.include('posts', (posts) => posts.combine({ total: unrelatedScalar.count() })),
     ).toThrow(/derived from the one it was handed/);
     expect(
       collection.include('posts', (posts) => posts.select('id').where({ views: 1 })).state.includes,

@@ -941,8 +941,6 @@ function buildIncludeChildScalarSelect(
     whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
   }
 
-  const remappedOrderBy = state.orderBy;
-
   const hasPagination = state.limit !== undefined || state.offset !== undefined;
   const hasDistinct =
     (state.distinct !== undefined && state.distinct.length > 0) ||
@@ -986,10 +984,10 @@ function buildIncludeChildScalarSelect(
   const needsHiddenOrderProjection =
     state.distinct !== undefined &&
     state.distinct.length > 0 &&
-    remappedOrderBy !== undefined &&
-    remappedOrderBy.length > 0;
+    state.orderBy !== undefined &&
+    state.orderBy.length > 0;
   const hiddenOrderProjection: ReadonlyArray<ProjectionItem> = needsHiddenOrderProjection
-    ? remappedOrderBy.map((item, index) =>
+    ? state.orderBy.map((item, index) =>
         ProjectionItem.of(`${include.relationName}__order_${index}`, item.expr),
       )
     : [];
@@ -1009,8 +1007,8 @@ function buildIncludeChildScalarSelect(
 
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     inner = inner.withDistinctOn(state.distinctOn.map((column) => child.column(column)));
-    if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
-      inner = inner.withOrderBy(remappedOrderBy);
+    if (state.orderBy !== undefined && state.orderBy.length > 0) {
+      inner = inner.withOrderBy(state.orderBy);
     }
   } else if (state.distinct !== undefined && state.distinct.length > 0) {
     // Prisma-style `.distinct(cols)`: ROW_NUMBER dedup, mirroring
@@ -1022,18 +1020,18 @@ function buildIncludeChildScalarSelect(
     inner = wrapWithRowNumberDedup({
       base: inner,
       distinctColumnRefs: state.distinct.map((column) => child.column(column)),
-      rankingOrderBy: remappedOrderBy ?? [],
+      rankingOrderBy: state.orderBy ?? [],
       rankedAlias,
     });
-    if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
+    if (state.orderBy !== undefined && state.orderBy.length > 0) {
       inner = inner.withOrderBy(
-        remappedOrderBy.map((item, index) =>
+        state.orderBy.map((item, index) =>
           item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
         ),
       );
     }
-  } else if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
-    inner = inner.withOrderBy(remappedOrderBy);
+  } else if (state.orderBy !== undefined && state.orderBy.length > 0) {
+    inner = inner.withOrderBy(state.orderBy);
   }
 
   if (state.limit !== undefined) {
