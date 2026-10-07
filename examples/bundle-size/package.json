@@ -28,7 +28,7 @@
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.2",
+    "@prisma/cli-engine": "0.6.3",
     "@prisma/dev": "catalog:",
     "@repo/test-utils": "workspace:8.0.0-rc.15",
     "@repo/tsconfig": "workspace:8.0.0-rc.15",

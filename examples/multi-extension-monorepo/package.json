@@ -18,7 +18,7 @@
     "@prisma/orm-postgres": "workspace:8.0.0-rc.15"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.2",
+    "@prisma/cli-engine": "0.6.3",
     "@repo/test-utils": "workspace:8.0.0-rc.15",
     "@repo/tsconfig": "workspace:8.0.0-rc.15",
     "@types/node": "catalog:",

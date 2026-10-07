@@ -20,7 +20,7 @@ catalogs:
       version: 8.20.0
     arktype:
       specifier: ^2.2.2
-      version: 2.2.3
+      version: 2.2.7
     bson:
       specifier: ^7.2.0
       version: 7.3.1
@@ -102,7 +102,7 @@ importers:
         version: 5.0.0-rc.2(vitest@5.0.0-rc.2)
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       dependency-cruiser:
         specifier: ^18.1.1
         version: 18.2.0
@@ -201,8 +201,8 @@ importers:
         version: 8.21.3
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
         version: link:../../packages/0-config/tsconfig
@@ -232,14 +232,14 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       evlog:
         specifier: ^2.24.0
         version: 2.24.0(express@5.2.1)(hono@4.11.4)(next@16.3.0(@types/node@26.1.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/compute-sdk':
         specifier: ^0.43.0
         version: 0.43.0(@prisma/management-api-sdk@1.76.0)(encoding@0.1.13)(rollup@4.59.0)
@@ -293,8 +293,8 @@ importers:
         version: 8.22.0
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/dev':
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -345,8 +345,8 @@ importers:
         version: 7.5.0(socks@2.8.9)
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
         version: link:../../packages/0-config/tsconfig
@@ -388,8 +388,8 @@ importers:
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -434,8 +434,8 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -462,7 +462,7 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -471,8 +471,8 @@ importers:
         version: 8.22.0
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -502,7 +502,7 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pg:
         specifier: 'catalog:'
         version: 8.22.0
@@ -517,8 +517,8 @@ importers:
         specifier: 5.20260804.1
         version: 5.20260804.1
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
         version: link:../../packages/0-config/tsconfig
@@ -554,7 +554,7 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -569,8 +569,8 @@ importers:
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/dev':
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -627,14 +627,14 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-sqlite
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
         version: link:../../packages/0-config/tsconfig
@@ -658,7 +658,7 @@ importers:
         version: link:../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -682,8 +682,8 @@ importers:
         version: 5.0.0(leaflet@1.9.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -734,8 +734,8 @@ importers:
         version: 8.22.0
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/dev':
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -798,8 +798,8 @@ importers:
         version: 8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/dev':
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -904,8 +904,8 @@ importers:
         version: 4.3.3
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -953,8 +953,8 @@ importers:
         version: 8.22.0
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../test/utils
@@ -1028,7 +1028,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
@@ -1077,7 +1077,7 @@ importers:
         version: link:../../0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1145,7 +1145,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
@@ -1377,7 +1377,7 @@ importers:
         version: link:../../0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       ci-info:
         specifier: ^4.3.1
         version: 4.4.0
@@ -1428,8 +1428,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../../2-sql/5-runtime
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../test/utils
@@ -1468,7 +1468,7 @@ importers:
         version: 1.2.4
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       c12:
         specifier: ^3.3.4
         version: 3.3.4(magicast@0.5.4)
@@ -1535,7 +1535,7 @@ importers:
         version: link:../../0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       c12:
         specifier: ^3.3.4
         version: 3.3.4(magicast@0.5.4)
@@ -1547,8 +1547,8 @@ importers:
         version: 0.2.17
     devDependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../test/utils
@@ -1590,7 +1590,7 @@ importers:
         version: link:../../0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -1688,7 +1688,7 @@ importers:
         version: link:../../0-foundation/utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1805,7 +1805,7 @@ importers:
         version: link:../../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -2388,7 +2388,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -2434,7 +2434,7 @@ importers:
         version: link:../../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
@@ -2486,7 +2486,7 @@ importers:
         version: link:../contract
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.15
@@ -2652,7 +2652,7 @@ importers:
         version: link:../../../0-config/tsdown
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -2688,7 +2688,7 @@ importers:
         version: link:../../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -2792,7 +2792,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       ts-toolbelt:
         specifier: ^9.6.0
         version: 9.6.0
@@ -2899,7 +2899,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
@@ -2975,7 +2975,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pluralize:
         specifier: ^8.0.0
         version: 8.0.0
@@ -3036,7 +3036,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ~2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.15
@@ -3228,7 +3228,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.15
@@ -3246,8 +3246,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../3-targets/3-targets/postgres
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../test/utils
@@ -3310,7 +3310,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.15
@@ -3334,8 +3334,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../2-sql/2-authoring/contract-ts
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../test/utils
@@ -3398,7 +3398,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.15
@@ -3416,8 +3416,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../2-sql/2-authoring/contract-ts
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../test/utils
@@ -3498,7 +3498,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -3771,7 +3771,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       jose:
         specifier: ^6
         version: 6.2.8
@@ -3792,8 +3792,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../2-sql/2-authoring/contract-psl
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../test/utils
@@ -3868,7 +3868,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       bson:
         specifier: 'catalog:'
         version: 7.3.1
@@ -3965,7 +3965,7 @@ importers:
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/driver-mongo':
         specifier: workspace:8.0.0-rc.15
@@ -4096,7 +4096,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -4181,7 +4181,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/driver-sqlite':
         specifier: workspace:8.0.0-rc.15
@@ -4263,7 +4263,7 @@ importers:
         version: link:../../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/cli':
         specifier: workspace:8.0.0-rc.15
@@ -4412,7 +4412,7 @@ importers:
         version: link:../../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/driver-sqlite':
         specifier: workspace:8.0.0-rc.15
@@ -4516,7 +4516,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pg:
         specifier: 'catalog:'
         version: 8.22.0
@@ -4620,7 +4620,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ~2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/extension-arktype-json':
         specifier: workspace:8.0.0-rc.15
@@ -4679,7 +4679,7 @@ importers:
         version: link:../orm-toolchain
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/extension-paradedb':
         specifier: workspace:8.0.0-rc.15
@@ -4713,7 +4713,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.15
@@ -4750,7 +4750,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/extension-postgis':
         specifier: workspace:8.0.0-rc.15
@@ -4796,7 +4796,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       jose:
         specifier: ^6
         version: 6.2.8
@@ -4833,7 +4833,7 @@ importers:
         version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -4912,7 +4912,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -4985,7 +4985,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5113,7 +5113,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5193,7 +5193,7 @@ importers:
         version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       bson:
         specifier: 'catalog:'
         version: 7.3.1
@@ -5245,7 +5245,7 @@ importers:
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5303,7 +5303,7 @@ importers:
         version: 1.1.0
       arktype:
         specifier: ^2.2.2
-        version: 2.2.3
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5333,8 +5333,8 @@ importers:
   packages/9-public/@prisma/orm-toolchain:
     dependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/orm-framework':
         specifier: workspace:8.0.0-rc.15
         version: link:../orm-framework
@@ -5343,7 +5343,7 @@ importers:
         version: 1.2.4
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
       c12:
         specifier: ^3.3.4
         version: 3.3.4(magicast@0.5.4)
@@ -5385,7 +5385,7 @@ importers:
         version: 0.2.17
       vite:
         specifier: ^7.0.0 || ^8.0.0
-        version: 8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
+        version: 8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
       vscode-languageserver:
         specifier: 'catalog:'
         version: 10.1.0
@@ -5452,7 +5452,7 @@ importers:
         version: link:../../utils
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.15
@@ -5479,8 +5479,8 @@ importers:
   test/e2e/framework/test/fixtures:
     dependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/orm-extension-arktype-json':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../packages/9-public/@prisma/orm-extension-arktype-json
@@ -5492,13 +5492,13 @@ importers:
         version: link:../../../../../packages/9-public/@prisma/orm-postgres
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
 
   test/e2e/framework/test/sqlite/fixtures:
     dependencies:
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/orm-sqlite':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../../packages/9-public/@prisma/orm-sqlite
@@ -5663,7 +5663,7 @@ importers:
         version: link:../../packages/1-framework/3-tooling/vite-plugin-contract-emit
       arktype:
         specifier: 'catalog:'
-        version: 2.2.3
+        version: 2.2.7
     devDependencies:
       '@internal/config':
         specifier: workspace:8.0.0-rc.15
@@ -5684,8 +5684,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../packages/0-shared/publish-surface
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.15
         version: link:../utils
@@ -5804,8 +5804,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../../packages/1-framework/0-foundation/utils
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../../packages/9-public/@prisma/orm-extension-pgvector
@@ -5879,8 +5879,8 @@ importers:
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../../packages/1-framework/0-foundation/utils
       '@prisma/cli-engine':
-        specifier: 0.6.2
-        version: 0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+        specifier: 0.6.3
+        version: 0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.15
         version: link:../../../../../../packages/9-public/@prisma/orm-extension-pgvector
@@ -5979,11 +5979,11 @@ packages:
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
 
-  '@ark/schema@0.56.2':
-    resolution: {integrity: sha512-Qx4D2JFbBWpntiHZaTv7bGG4H/M2rigiknezKg/WVyDSaLdE4YCcWAOoFB7pjjDqHbbV2OqRfntm1nnXvwMexg==}
+  '@ark/schema@0.56.6':
+    resolution: {integrity: sha512-OmLv80BCF2ib+zjecrXDosip/CSnZSYBGjblhqWYZWFOzdLQka6QymHToE9u7Z/HZW2KA8Hwc8MCNXoI3uGSIA==}
 
-  '@ark/util@0.56.2':
-    resolution: {integrity: sha512-9kU2sUE38FZEGG7l3hamYMBieLYEJh2L1mrYD2eXpT+78EnQSV1bhjxJhnxGBMSTbtwpBSDNSK+K60WvaI/DTQ==}
+  '@ark/util@0.56.6':
+    resolution: {integrity: sha512-mHqq0f0HyDd9YadpFl25w0QECAP7d8HGIUpEC85duD+L+xr4i/CwfOid/Z7zJFFF/47oLt6+pZB9RbqWpBYTYg==}
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -7661,8 +7661,8 @@ packages:
   '@prisma/adapter-pg@7.10.0':
     resolution: {integrity: sha512-N7nwSor0HO1Kz6xBv0TPAjAPysKK0fac6p4fVN3ensLOuzc/83Fgmln5k92eK/cvzqdkSR/2kkAqlbcdwVrwpw==}
 
-  '@prisma/cli-engine@0.6.2':
-    resolution: {integrity: sha512-ZdZKMfDYitEgifpS0W60Q09Iu23S+OXQ+ErMI/6a1M6BvCsqpu0SCH4ox9gyGnxzUB1T1qq+k2CyCsbexhlwPw==}
+  '@prisma/cli-engine@0.6.3':
+    resolution: {integrity: sha512-rNPu6ulo72abHznDZ76sEa+mcPZ8k9tm5cQTwflb5EzEWq3f0T6/3NQ9GIJsNAX/oJK9H1pKl08tLgTjK8Vc7A==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@prisma/management-api-sdk': ^1.55.0
@@ -9371,11 +9371,11 @@ packages:
     resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
     engines: {node: '>= 0.4'}
 
-  arkregex@0.0.8:
-    resolution: {integrity: sha512-PJcx6G1kQTgLKPUbeYlYecDRaKq15AMSGVajlKFYWlPeJRQL+j3dKE6tyMs40HZ99djS1l9Vhl3ezAHy9JBIqQ==}
+  arkregex@0.0.12:
+    resolution: {integrity: sha512-sOxL0eX50pnRYO4OyajKZChGuuj/iHwC5tysiAaGOPBu+zJwJQckWn7/DRH2++ol5uaKpyRn7N0hKT7nDqGmgg==}
 
-  arktype@2.2.3:
-    resolution: {integrity: sha512-7W+0RLTUNJiBFIIZXwOQxSR8Z273IAd6IvqBeG9+gHnQKFsIx2C0iOtGTmMrPnlX4qLXyc5+ll7A0BIj9WrbTg==}
+  arktype@2.2.7:
+    resolution: {integrity: sha512-AbgM5SQvwCTURSR+ENfPtOG7cL5VZ0hqOVtoWyXKw2SviFddZhCBEUAjjVJYKCNFlPPR1VX5LGUKxsSqqc4Kdw==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -9854,10 +9854,6 @@ packages:
   encoding@0.1.13:
     resolution: {integrity: sha512-ETBauow1T35Y/WZMkio9jiM0Z5xjHHmJ4XmjZOq1l/dXz3lr2sRn87nJy20RupqSh1F2m3HHPSp8ShIPQJrJ3A==}
 
-  enhanced-resolve@5.24.3:
-    resolution: {integrity: sha512-PwKooW9JUzh5chmYfHM3IQl5OkK2u2Nm011MgeZrss3JmFraUx/fqrf78kk8GUMYoibx/14MdwTl/1WKkG7TpQ==}
-    engines: {node: '>=10.13.0'}
-
   enhanced-resolve@5.24.5:
     resolution: {integrity: sha512-L1l8TNvomm6UVW5B253AGxQagSQr+vGwhMlrrfRS2qmhx46AMpMVJKQYLvWYbysTMY8VoicOvzHzoHMbyzB+4A==}
     engines: {node: '>=10.13.0'}
@@ -10175,10 +10171,6 @@ packages:
 
   has-symbols@1.1.0:
     resolution: {integrity: sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ==}
-    engines: {node: '>= 0.4'}
-
-  hasown@2.0.3:
-    resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
   hasown@2.0.4:
@@ -10646,11 +10638,6 @@ packages:
     resolution: {integrity: sha512-Tz09sEL2EEuv5fFowm419c1+a/jSMiBjI9gHxVLrVdbUkkNUUfjsVYs9pVZu5oCon/kmRh9TfLEObFtkVxmY0w==}
     engines: {node: '>=8.0.0'}
 
-  nanoid@3.3.15:
-    resolution: {integrity: sha512-y7Wygv/7mEOvxTuEQDB8StXdMRBWf1kR/tlhAzBRUFkB2jfcLOAxO/SHmOO2zgz1pVgK29/kyupn059/bCHdjA==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
   nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -10907,10 +10894,6 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
-
-  postcss@8.5.17:
-    resolution: {integrity: sha512-J7EF+8X+CzRPaJPOv9Ck2wNWJvGnnl3PcNPAdGg6GTLjyVpyQ0yATMSXRFRV01BviT/9Gwuc3rjEyJbDJG9a4w==}
-    engines: {node: ^10 || ^12 || >=14}
 
   postcss@8.5.23:
     resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
@@ -11435,10 +11418,6 @@ packages:
     resolution: {integrity: sha512-8k25iNSZHnzkjp3nrpEmx6YkrTNs41PzOHYc28DR5Z2l/CId/Nzw+Ume/41jCeDDmCUMPuK5GkQ/VxJaJ2P6Qg==}
     engines: {node: '>=20.0.0'}
 
-  tinyexec@1.2.4:
-    resolution: {integrity: sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==}
-    engines: {node: '>=18'}
-
   tinyexec@1.3.0:
     resolution: {integrity: sha512-QKAl9m8gWWGHV8jZcPeym6j+XULi6tOf1mT83WYJ4Lk2ytW/uwAWkrP0uFsdoYMdueVJ0qs26wZ+23xeB4ibNQ==}
     engines: {node: '>=18'}
@@ -11446,10 +11425,6 @@ packages:
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
-
-  tinyrainbow@3.1.0:
-    resolution: {integrity: sha512-Bf+ILmBgretUrdJxzXM0SgXLZ3XfiaUuOj/IKQHuTXip+05Xn+uyEYdVg0kYDipTBcLrCVyUzAPz7QmArb0mmw==}
-    engines: {node: '>=14.0.0'}
 
   tinyrainbow@3.1.1:
     resolution: {integrity: sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw==}
@@ -11731,49 +11706,6 @@ packages:
     peerDependencies:
       '@types/node': ^20.19.0 || >=22.12.0
       '@vitejs/devtools': ^0.1.0
-      esbuild: ^0.27.0 || ^0.28.0
-      jiti: '>=1.21.0'
-      less: ^4.0.0
-      sass: ^1.70.0
-      sass-embedded: ^1.70.0
-      stylus: '>=0.54.8'
-      sugarss: ^5.0.0
-      terser: ^5.16.0
-      tsx: ^4.8.1
-      yaml: ^2.4.2
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-      '@vitejs/devtools':
-        optional: true
-      esbuild:
-        optional: true
-      jiti:
-        optional: true
-      less:
-        optional: true
-      sass:
-        optional: true
-      sass-embedded:
-        optional: true
-      stylus:
-        optional: true
-      sugarss:
-        optional: true
-      terser:
-        optional: true
-      tsx:
-        optional: true
-      yaml:
-        optional: true
-
-  vite@8.1.0:
-    resolution: {integrity: sha512-BuJcQK/56NQTWDGn4ABea3q4SSBdNPWwNZKTkkUpcMPnLoquSYH8llRtSUIgoL1KSCpHt5eghLShn50mH36y7Q==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
-    peerDependencies:
-      '@types/node': ^20.19.0 || >=22.12.0
-      '@vitejs/devtools': ^0.3.0
       esbuild: ^0.27.0 || ^0.28.0
       jiti: '>=1.21.0'
       less: ^4.0.0
@@ -12154,11 +12086,11 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@ark/schema@0.56.2':
+  '@ark/schema@0.56.6':
     dependencies:
-      '@ark/util': 0.56.2
+      '@ark/util': 0.56.6
 
-  '@ark/util@0.56.2': {}
+  '@ark/util@0.56.6': {}
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
@@ -13498,12 +13430,12 @@ snapshots:
     transitivePeerDependencies:
       - pg-native
 
-  '@prisma/cli-engine@0.6.2(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)':
+  '@prisma/cli-engine@0.6.3(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)':
     dependencies:
       '@clack/prompts': 1.5.0
       '@prisma/management-api-sdk': 1.76.0
       '@stricli/core': 1.3.0
-      arktype: 2.2.3
+      arktype: 2.2.7
       c12: 3.3.4(magicast@0.5.4)
       colorette: 2.0.20
       package-manager-detector: 1.8.0
@@ -14450,7 +14382,7 @@ snapshots:
   '@tailwindcss/node@4.3.3':
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      enhanced-resolve: 5.24.3
+      enhanced-resolve: 5.24.5
       jiti: 2.7.0
       lightningcss: 1.32.0
       magic-string: 0.30.21
@@ -14803,7 +14735,7 @@ snapshots:
       '@vitest/spy': 4.1.10
       '@vitest/utils': 4.1.10
       chai: 6.2.2
-      tinyrainbow: 3.1.0
+      tinyrainbow: 3.1.1
 
   '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))':
     dependencies:
@@ -14824,7 +14756,7 @@ snapshots:
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
-      tinyrainbow: 3.1.0
+      tinyrainbow: 3.1.1
 
   '@vitest/runner@4.1.10':
     dependencies:
@@ -14846,7 +14778,7 @@ snapshots:
     dependencies:
       '@vitest/pretty-format': 4.1.10
       convert-source-map: 2.0.0
-      tinyrainbow: 3.1.0
+      tinyrainbow: 3.1.1
 
   '@vscode/iconv-lite-umd@0.7.1': {}
 
@@ -14988,15 +14920,15 @@ snapshots:
 
   aria-query@5.3.2: {}
 
-  arkregex@0.0.8:
+  arkregex@0.0.12:
     dependencies:
-      '@ark/util': 0.56.2
+      '@ark/util': 0.56.6
 
-  arktype@2.2.3:
+  arktype@2.2.7:
     dependencies:
-      '@ark/schema': 0.56.2
-      '@ark/util': 0.56.2
-      arkregex: 0.0.8
+      '@ark/schema': 0.56.6
+      '@ark/util': 0.56.6
+      arkregex: 0.0.12
 
   assertion-error@2.0.1: {}
 
@@ -15430,11 +15362,6 @@ snapshots:
       iconv-lite: 0.6.3
     optional: true
 
-  enhanced-resolve@5.24.3:
-    dependencies:
-      graceful-fs: 4.2.11
-      tapable: 2.3.3
-
   enhanced-resolve@5.24.5:
     dependencies:
       graceful-fs: 4.2.11
@@ -15744,7 +15671,7 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       has-symbols: 1.1.0
-      hasown: 2.0.3
+      hasown: 2.0.4
       math-intrinsics: 1.1.0
 
   get-nonce@1.0.1: {}
@@ -15796,10 +15723,6 @@ snapshots:
       es-define-property: 1.0.1
 
   has-symbols@1.1.0: {}
-
-  hasown@2.0.3:
-    dependencies:
-      function-bind: 1.1.2
 
   hasown@2.0.4:
     dependencies:
@@ -15935,7 +15858,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.1
-      undici: 7.28.0
+      undici: 7.29.0
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -16025,7 +15948,7 @@ snapshots:
     dependencies:
       picomatch: 4.0.5
       string-argv: 0.3.2
-      tinyexec: 1.2.4
+      tinyexec: 1.3.0
     optionalDependencies:
       yaml: 2.9.0
 
@@ -16274,8 +16197,6 @@ snapshots:
     dependencies:
       lru.min: 1.1.5
 
-  nanoid@3.3.15: {}
-
   nanoid@3.3.18: {}
 
   nanospinner@1.2.2:
@@ -16478,12 +16399,6 @@ snapshots:
       pathe: 2.0.3
 
   pluralize@8.0.0: {}
-
-  postcss@8.5.17:
-    dependencies:
-      nanoid: 3.3.15
-      picocolors: 1.1.1
-      source-map-js: 1.2.1
 
   postcss@8.5.23:
     dependencies:
@@ -17132,16 +17047,12 @@ snapshots:
 
   tinybench@6.1.3: {}
 
-  tinyexec@1.2.4: {}
-
   tinyexec@1.3.0: {}
 
   tinyglobby@0.2.17:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-
-  tinyrainbow@3.1.0: {}
 
   tinyrainbow@3.1.1: {}
 
@@ -17218,7 +17129,7 @@ snapshots:
 
   tsx@4.23.12:
     dependencies:
-      esbuild: 0.28.1
+      esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
 
@@ -17312,7 +17223,7 @@ snapshots:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-      postcss: 8.5.17
+      postcss: 8.5.26
       rollup: 4.59.0
       tinyglobby: 0.2.17
     optionalDependencies:
@@ -17354,21 +17265,6 @@ snapshots:
       tsx: 4.23.12
       yaml: 2.9.0
 
-  vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0):
-    dependencies:
-      lightningcss: 1.32.0
-      picomatch: 4.0.5
-      postcss: 8.5.23
-      rolldown: 1.1.5
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 26.1.2
-      esbuild: 0.28.2
-      fsevents: 2.3.3
-      jiti: 2.7.0
-      tsx: 4.23.12
-      yaml: 2.9.0
-
   vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
@@ -17401,9 +17297,9 @@ snapshots:
       picomatch: 4.0.5
       std-env: 4.2.0
       tinybench: 2.9.0
-      tinyexec: 1.2.4
+      tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      tinyrainbow: 3.1.0
+      tinyrainbow: 3.1.1
       vite: 8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
