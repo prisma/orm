@@ -13,7 +13,7 @@ import { all, and, not, or } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
 import { normalizeWhereArg } from '../src/where-interop';
 import { combineWhereExprs } from '../src/where-utils';
-import { getTestContext, getTestContract } from './helpers';
+import { getTestContext, getTestContract, publicTables } from './helpers';
 
 function collectParamValues(expr: AnyExpression): unknown[] {
   return expr.fold<unknown[]>({
@@ -63,7 +63,7 @@ describe('SQL ORM rich AST filters', () => {
             ParamRef.of(1, { name: 'id', codec: { codecId: 'pg/int4@1' } }),
           ),
       },
-      { contract },
+      { contract, tables: publicTables('users') },
     );
 
     expect(normalized.kind).toBe('binary');

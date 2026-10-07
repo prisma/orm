@@ -3,11 +3,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { AnyExpression, ToWhereExpr, WhereArg } from '@internal/sql-relational-core/ast';
 import { isWhereExpr } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
-import { bindWhereExpr } from './where-binding';
+import { bindWhereExpr, type TableReferences } from './where-binding';
 
 interface NormalizeWhereArgOptions {
-  readonly contract?: Contract<SqlStorage>;
-  readonly namespaceId?: string | undefined;
+  readonly contract: Contract<SqlStorage>;
+  readonly tables: TableReferences;
 }
 
 export function normalizeWhereArg(arg: undefined): undefined;
@@ -36,8 +36,8 @@ export function normalizeWhereArg(
     return arg.toWhereExpr();
   }
 
-  if (options?.contract) {
-    return bindWhereExpr(options.contract, arg, options.namespaceId);
+  if (options) {
+    return bindWhereExpr(options.contract, arg, options.tables);
   }
   return arg;
 }

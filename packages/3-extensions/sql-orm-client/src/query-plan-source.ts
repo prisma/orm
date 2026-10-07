@@ -32,7 +32,11 @@ import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
 import type { CollectionState } from './types';
-import { bindWhereExpr } from './where-binding';
+import {
+  bindWhereExpr,
+  paramRefForStorageColumn,
+  type TableStorageCoordinate,
+} from './where-binding';
 import { combineWhereExprs } from './where-utils';
 
 type CursorOrderEntry = {
@@ -41,17 +45,22 @@ type CursorOrderEntry = {
   readonly value: unknown;
 };
 
-function createBoundaryExpr(tableName: string, entry: CursorOrderEntry): AnyExpression {
+function createBoundaryExpr(
+  contract: Contract<SqlStorage>,
+  storage: TableStorageCoordinate,
+  entry: CursorOrderEntry,
+): AnyExpression {
   const comparator: BinaryOp = entry.direction === 'asc' ? 'gt' : 'lt';
   return new BinaryExpr(
     comparator,
-    ColumnRef.of(tableName, entry.column),
-    LiteralExpr.of(entry.value),
+    ColumnRef.of(storage.tableName, entry.column),
+    paramRefForStorageColumn(contract, storage, entry.column, entry.value),
   );
 }
 
 function buildLexicographicCursorWhere(
-  tableName: string,
+  contract: Contract<SqlStorage>,
+  storage: TableStorageCoordinate,
   entries: readonly CursorOrderEntry[],
 ): AnyExpression {
   const branches = entries.map((entry, index): AnyExpression => {
@@ -60,13 +69,13 @@ function buildLexicographicCursorWhere(
     for (const prefixEntry of entries.slice(0, index)) {
       branchExprs.push(
         BinaryExpr.eq(
-          ColumnRef.of(tableName, prefixEntry.column),
-          LiteralExpr.of(prefixEntry.value),
+          ColumnRef.of(storage.tableName, prefixEntry.column),
+          paramRefForStorageColumn(contract, storage, prefixEntry.column, prefixEntry.value),
         ),
       );
     }
 
-    branchExprs.push(createBoundaryExpr(tableName, entry));
+    branchExprs.push(createBoundaryExpr(contract, storage, entry));
     if (branchExprs.length === 1) {
       const branch = branchExprs[0];
       assertDefined(branch, 'cursor branch contains its boundary expression');
@@ -86,7 +95,8 @@ function buildLexicographicCursorWhere(
 }
 
 function buildCursorWhere(
-  tableName: string,
+  contract: Contract<SqlStorage>,
+  storage: TableStorageCoordinate,
   orderBy: readonly OrderByItem[] | undefined,
   cursor: Readonly<Record<string, unknown>> | undefined,
 ): AnyExpression | undefined {
@@ -120,10 +130,10 @@ function buildCursorWhere(
 
   const firstEntry = entries[0];
   if (entries.length === 1 && firstEntry !== undefined) {
-    return createBoundaryExpr(tableName, firstEntry);
+    return createBoundaryExpr(contract, storage, firstEntry);
   }
 
-  return buildLexicographicCursorWhere(tableName, entries);
+  return buildLexicographicCursorWhere(contract, storage, entries);
 }
 
 function createTableRefRemapper(fromTable: string, toTable: string): AstRewriter {
@@ -150,32 +160,25 @@ function buildStateWhere(
   contract: Contract<SqlStorage>,
   tableName: string,
   state: CollectionState,
-  options?: {
+  options: {
     readonly filterTableName?: string;
-    readonly namespaceId?: string | undefined;
+    readonly namespaceId: string;
   },
 ): AnyExpression | undefined {
-  const filterTableName = options?.filterTableName;
-  const cursorTableName = filterTableName ?? tableName;
-  const cursorWhere = buildCursorWhere(cursorTableName, state.orderBy, state.cursor);
-  const boundFilters = state.filters.map((filter) =>
-    bindWhereExpr(contract, filter, options?.namespaceId),
-  );
+  const filterTableName = options.filterTableName;
+  const storage: TableStorageCoordinate = {
+    namespaceId: options.namespaceId,
+    tableName: filterTableName ?? tableName,
+  };
+  const references = new Map([[storage.tableName, storage]]);
+  const cursorWhere = buildCursorWhere(contract, storage, state.orderBy, state.cursor);
+  const boundFilters = state.filters.map((filter) => bindWhereExpr(contract, filter, references));
+  const filters = cursorWhere ? [...boundFilters, cursorWhere] : boundFilters;
   const remappedFilters =
     filterTableName && filterTableName !== tableName
-      ? boundFilters.map((filter) =>
-          filter.rewrite(createTableRefRemapper(filterTableName, tableName)),
-        )
-      : boundFilters;
-  const boundCursorWhere = cursorWhere
-    ? bindWhereExpr(contract, cursorWhere, options?.namespaceId)
-    : undefined;
-  const remappedCursorWhere =
-    boundCursorWhere && filterTableName && filterTableName !== tableName
-      ? boundCursorWhere.rewrite(createTableRefRemapper(filterTableName, tableName))
-      : boundCursorWhere;
-  const filters = remappedCursorWhere ? [...remappedFilters, remappedCursorWhere] : remappedFilters;
-  return combineWhereExprs(filters);
+      ? filters.map((filter) => filter.rewrite(createTableRefRemapper(filterTableName, tableName)))
+      : filters;
+  return combineWhereExprs(remappedFilters);
 }
 
 /**

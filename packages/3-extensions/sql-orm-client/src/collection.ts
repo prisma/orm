@@ -178,6 +178,7 @@ import {
   type VariantNameForValue,
   type WithNsId,
 } from './types';
+import type { TableReferences } from './where-binding';
 import { normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
@@ -469,7 +470,7 @@ export class CollectionBase<
           : shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, input);
     const filter = normalizeWhereArg(whereArg, {
       contract: this.contract,
-      namespaceId: this.namespaceId,
+      tables: this.#tableReferences(),
     });
 
     if (!filter) {
@@ -3026,6 +3027,14 @@ export class CollectionBase<
       'ORM.INCLUDE_INVALID',
       `${action} is only available inside include() refinement callbacks`,
       { meta: { action } },
+    );
+  }
+
+  #tableReferences(): TableReferences {
+    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
+    const tableNames = [this.tableName, ...(polyInfo?.mtiVariants ?? []).map(({ table }) => table)];
+    return new Map(
+      tableNames.map((tableName) => [tableName, { namespaceId: this.namespaceId, tableName }]),
     );
   }
 

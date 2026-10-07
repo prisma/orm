@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan';
 import { emptyState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
-import { buildMixedPolyContract, getTestAggregates, isSelectAst } from './helpers';
+import { buildMixedPolyContract, getTestAggregates, isSelectAst, publicTables } from './helpers';
 import { featureJoin } from './variant-include.query-plan-fixtures';
 
 function expectSelectAst(ast: unknown): asserts ast is SelectAst {
@@ -34,6 +34,7 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileAggregate(
@@ -55,6 +56,7 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileAggregate(
@@ -142,6 +144,7 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('tasks', 'severity'), LiteralExpr.of('major')),
+      publicTables('tasks'),
     );
 
     const plan = compileAggregate(
@@ -170,6 +173,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileGroupedAggregate(
@@ -195,6 +199,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileGroupedAggregate(
@@ -218,6 +223,7 @@ describe('MTI variant join in compileGroupedAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('tasks', 'severity'), LiteralExpr.of('major')),
+      publicTables('tasks'),
     );
 
     const plan = compileGroupedAggregate(

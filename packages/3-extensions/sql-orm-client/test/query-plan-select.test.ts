@@ -40,6 +40,7 @@ import {
   buildStiPolyContract,
   getTestAggregates,
   isSelectAst,
+  publicTables,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
 
@@ -123,6 +124,7 @@ describe('compileSelectWithIncludes', () => {
       bindWhereExpr(
         baseContract,
         BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+        publicTables('users'),
       ),
     );
 
@@ -139,6 +141,7 @@ describe('compileSelectWithIncludes', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]),
     );
@@ -167,14 +170,17 @@ describe('compileSelectWithIncludes', () => {
     const gtName = bindWhereExpr(
       baseContract,
       BinaryExpr.gt(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+      publicTables('users'),
     );
     const eqName = bindWhereExpr(
       baseContract,
       BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+      publicTables('users'),
     );
     const ltId = bindWhereExpr(
       baseContract,
       BinaryExpr.lt(ColumnRef.of('users', 'id'), LiteralExpr.of(7)),
+      publicTables('users'),
     );
 
     expect(plan.ast.where).toEqual(OrExpr.of([gtName, AndExpr.of([eqName, ltId])]));
@@ -192,7 +198,11 @@ describe('compileSelectWithIncludes', () => {
     expect(plan.params).toEqual([9]);
     expect(paramCodecs(plan)).toEqual([codecForColumn('users', 'id')]);
     expect(plan.ast.where).toEqual(
-      bindWhereExpr(baseContract, BinaryExpr.gt(ColumnRef.of('users', 'id'), LiteralExpr.of(9))),
+      bindWhereExpr(
+        baseContract,
+        BinaryExpr.gt(ColumnRef.of('users', 'id'), LiteralExpr.of(9)),
+        publicTables('users'),
+      ),
     );
 
     const invalidState = {
@@ -470,6 +480,7 @@ describe('compileSelectWithIncludes', () => {
           bindWhereExpr(
             baseContract,
             BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+            publicTables('posts'),
           ),
         ]),
       );
@@ -532,6 +543,7 @@ describe('compileSelectWithIncludes', () => {
           bindWhereExpr(
             baseContract,
             BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+            publicTables('posts'),
           ),
         ]),
       );
@@ -793,10 +805,12 @@ describe('compileSelectWithIncludes', () => {
       const popularWhere = bindWhereExpr(
         baseContract,
         BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(200)),
+        publicTables('posts'),
       );
       const mediocreWhere = bindWhereExpr(
         baseContract,
         BinaryExpr.lt(ColumnRef.of('posts', 'views'), LiteralExpr.of(200)),
+        publicTables('posts'),
       );
 
       expectDerivedTableSource(subquery.from);

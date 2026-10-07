@@ -5,6 +5,7 @@ import {
   ExistsExpr,
   type InsertAst,
   LiteralExpr,
+  ParamRef,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
@@ -320,6 +321,21 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({ id: 2, title: 'Dark mode', type: 'feature', priority: 1 });
+  });
+
+  it('where() binds a ready-made expression on an MTI variant table with the variant column codec', () => {
+    const { collection } = createMixedPolyCollection();
+
+    const filtered = collection.where(
+      BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+    );
+
+    expect(filtered.state.filters).toEqual([
+      BinaryExpr.gte(
+        ColumnRef.of('features', 'priority'),
+        ParamRef.of(3, { codec: { codecId: 'pg/int4@1' } }),
+      ),
+    ]);
   });
 
   it('first() after variant("feature") resolves the MTI variant field against the variant table', async () => {

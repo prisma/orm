@@ -20,7 +20,7 @@ import {
   createReturningCollectionWithoutCapabilities,
   createReturningCollectionWithoutDefaultInInsert,
 } from './collection-fixtures';
-import type { MockExecution, MockRuntime } from './helpers';
+import { type MockExecution, type MockRuntime, publicTables } from './helpers';
 
 function insertAstOf(execution: MockExecution): InsertAst {
   const ast = (execution.plan as { ast: unknown }).ast;
@@ -44,6 +44,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
       ]);
       expect(collection.state.filters).toEqual([]);
@@ -53,10 +54,12 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
         bindWhereExpr(
           baseContract,
           BinaryExpr.neq(ColumnRef.of('users', 'email'), LiteralExpr.of('old@example.com')),
+          publicTables('users'),
         ),
       ]);
     });
@@ -112,6 +115,7 @@ describe('Collection', () => {
             BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
             NullCheckExpr.isNull(ColumnRef.of('users', 'email')),
           ]),
+          publicTables('users'),
         ),
       ]);
 
@@ -210,6 +214,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
       expect(withPosts.state.includes[0]?.nested.limit).toBe(5);
@@ -226,6 +231,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
 

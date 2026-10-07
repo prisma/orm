@@ -29,7 +29,7 @@ import { compileAggregate, compileGroupedAggregate } from '../src/query-plan';
 import { emptyState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract } from './collection-fixtures';
-import { getTestAggregates } from './helpers';
+import { getTestAggregates, publicTables } from './helpers';
 
 const defaultAggSpec = {
   totalViews: { kind: 'aggregate' as const, fn: 'sum' as const, column: 'views' },
@@ -52,6 +52,7 @@ describe('query plan aggregate', () => {
   const filteredViews = bindWhereExpr(
     baseContract,
     BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+    publicTables('posts'),
   );
 
   it('rejects empty aggregate specs and selectors without required fields', () => {

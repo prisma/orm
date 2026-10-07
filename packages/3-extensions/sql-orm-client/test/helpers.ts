@@ -25,10 +25,15 @@ import {
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import type { RuntimeQueryable } from '../src/types';
+import type { TableReferences } from '../src/where-binding';
 import { defineContract, field, model, rel, type ScalarFieldBuilder } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
 import { defineTestCodec } from './test-codec';
+
+export function publicTables(...tableNames: string[]): TableReferences {
+  return new Map(tableNames.map((tableName) => [tableName, { namespaceId: 'public', tableName }]));
+}
 
 export function isSelectAst(ast: unknown): ast is SelectAst {
   return typeof ast === 'object' && ast !== null && 'kind' in ast && ast.kind === 'select';

@@ -27,7 +27,6 @@ import {
   type Codec,
   ColumnRef,
   ListExpression,
-  LiteralExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { Preparable } from '@internal/sql-relational-core/plan';
@@ -62,7 +61,7 @@ import {
   type IncludeExpr,
   type IncludeScalar,
 } from './types';
-import { bindWhereExpr } from './where-binding';
+import { paramRefForStorageColumn, type TableStorageCoordinate } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 
@@ -503,6 +502,7 @@ function buildIdentityInFilter(
   identityColumns: readonly string[],
   identityRows: readonly Record<string, unknown>[],
 ): AnyExpression | undefined {
+  const storage: TableStorageCoordinate = { namespaceId, tableName };
   const [singleColumn, ...rest] = identityColumns;
   if (singleColumn !== undefined && rest.length === 0) {
     const values = identityRows
@@ -511,10 +511,11 @@ function buildIdentityInFilter(
     if (values.length === 0) {
       return undefined;
     }
-    return bindWhereExpr(
-      contract,
-      BinaryExpr.in(ColumnRef.of(tableName, singleColumn), ListExpression.fromValues(values)),
-      namespaceId,
+    return BinaryExpr.in(
+      ColumnRef.of(tableName, singleColumn),
+      ListExpression.of(
+        values.map((value) => paramRefForStorageColumn(contract, storage, singleColumn, value)),
+      ),
     );
   }
 
@@ -524,11 +525,14 @@ function buildIdentityInFilter(
   const tuples = identityRows.map((row) =>
     AndExpr.of(
       identityColumns.map((column) =>
-        BinaryExpr.eq(ColumnRef.of(tableName, column), LiteralExpr.of(row[column])),
+        BinaryExpr.eq(
+          ColumnRef.of(tableName, column),
+          paramRefForStorageColumn(contract, storage, column, row[column]),
+        ),
       ),
     ),
   );
-  return bindWhereExpr(contract, OrExpr.of(tuples), namespaceId);
+  return OrExpr.of(tuples);
 }
 
 /**
