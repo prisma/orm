@@ -61,8 +61,6 @@ export interface CodecLookup {
     value: JsonValue,
     side: 'output' | 'input',
   ): string | undefined;
-  /** Codec-id-keyed `enumRefusal`: why an enum cannot use the codec. Optional so existing lookups need not provide it; returns `undefined` when an enum can use the codec or the id is unknown. */
-  enumRefusalFor?(id: string): string | undefined;
 }
 
 /** A {@link CodecLookup} that resolves codec descriptors, which building a column's codec with its type parameters needs. */

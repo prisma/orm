@@ -376,10 +376,14 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
       codecLookup: {
         ...testCodecLookup,
         get: (id) => (id === PRINTED_CODEC_ID ? textCodec : testCodecLookup.get(id)),
-        enumRefusalFor: (id) =>
+        descriptorFor: (id) =>
           id === PRINTED_CODEC_ID
-            ? 'A query reads its values as text the contract does not store.'
-            : undefined,
+            ? ({
+                codecId: id,
+                dataType: textType.id,
+                enumRefusal: 'A query reads its values as text the contract does not store.',
+              } as AnyCodecDescriptor)
+            : testCodecLookup.descriptorFor(id),
       },
     };
     const handle = factory(

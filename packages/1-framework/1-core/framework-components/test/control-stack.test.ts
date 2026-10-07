@@ -1249,28 +1249,6 @@ describe('extractCodecLookup', () => {
     expect(lookup.renderValueLiteralFor?.('text@1', 42, 'output')).toBeUndefined();
   });
 
-  it("enumRefusalFor answers the descriptor's reason an enum cannot use the codec", () => {
-    const refusing: AnyCodecDescriptor = {
-      ...stubDescriptor('printed@1'),
-      enumRefusal: 'Values read back differ from the stored form.',
-    };
-    const lookup = extractCodecLookup([
-      {
-        id: 'desc',
-        types: { codecTypes: { codecDescriptors: [refusing, stubDescriptor('a@1')] } },
-      },
-    ]);
-    expect({
-      refusing: lookup.enumRefusalFor?.('printed@1'),
-      usable: lookup.enumRefusalFor?.('a@1'),
-      unknown: lookup.enumRefusalFor?.('nope@1'),
-    }).toEqual({
-      refusing: 'Values read back differ from the stored form.',
-      usable: undefined,
-      unknown: undefined,
-    });
-  });
-
   it('renderValueLiteralFor returns undefined for unknown codec ids', () => {
     const lookup = extractCodecLookup([
       { id: 'desc', types: { codecTypes: { codecDescriptors: [stubDescriptor('a@1')] } } },
