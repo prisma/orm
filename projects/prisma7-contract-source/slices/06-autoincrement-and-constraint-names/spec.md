@@ -17,6 +17,7 @@ model Post {
 `migration plan` today writes nothing for `serial`. After this slice it writes one operation:
 
 ```sql
+ALTER SEQUENCE IF EXISTS "public"."Post_serial_seq" AS integer;
 CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS integer;
 ALTER TABLE "public"."Post" ALTER COLUMN "serial" SET DEFAULT nextval('"public"."Post_serial_seq"'::regclass);
 ALTER SEQUENCE "public"."Post_serial_seq" OWNED BY "public"."Post"."serial";
@@ -38,10 +39,11 @@ And a fresh database replayed from `migrations/` has `_PostToTag_AB_pkey`, as Pr
 ### Chosen design
 
 - **One operation**, the existing `setDefault.{table}.{column}` id, additive when the column had no default and widening when it replaces a default. Its steps, in order:
-  1. `CREATE SEQUENCE IF NOT EXISTS <seq> AS smallint|integer|bigint`, matching the column's `int2|int4|int8` (as SERIAL does). `IF NOT EXISTS` because removing autoincrement leaves the owned sequence in place (removal is `DROP DEFAULT` only, unchanged), so adding it back must reuse it.
-  2. `ALTER TABLE <table> ALTER COLUMN <col> SET DEFAULT nextval('<seq>'::regclass)`.
-  3. `ALTER SEQUENCE <seq> OWNED BY <table>.<col>`.
-  4. `SELECT setval('<seq>'::regclass, COALESCE(MAX(<col>), 0) + 1, false) FROM <table>`, so existing rows never collide. Prisma 7 omits this; it is a Prisma 7 bug, not parity to keep.
+  1. `ALTER SEQUENCE IF EXISTS <seq> AS smallint|integer|bigint`. A sequence left behind by an earlier removal keeps the width the column had then; if the column was widened since, this retypes the sequence (and its default maximum) to the column's current width, so the `setval` in step 5 and later inserts can go past the old maximum.
+  2. `CREATE SEQUENCE IF NOT EXISTS <seq> AS smallint|integer|bigint`, matching the column's `int2|int4|int8` (as SERIAL does). `IF NOT EXISTS` because removing autoincrement leaves the owned sequence in place (removal is `DROP DEFAULT` only, unchanged), so adding it back must reuse it.
+  3. `ALTER TABLE <table> ALTER COLUMN <col> SET DEFAULT nextval('<seq>'::regclass)`.
+  4. `ALTER SEQUENCE <seq> OWNED BY <table>.<col>`.
+  5. `SELECT setval('<seq>'::regclass, COALESCE(MAX(<col>), 0) + 1, false) FROM <table>`, so existing rows never collide. Prisma 7 omits this; it is a Prisma 7 bug, not parity to keep.
 - **Checks.** Precheck: the column exists. Postcheck: `pg_get_serial_sequence('<table>', '<col>') IS NOT NULL` and the column default starts with `nextval(`. A plain "column has a default" postcheck already holds in the literal-to-autoincrement case and the runner would skip the operation.
 - **Sequence name.** What Postgres names a SERIAL column's sequence: `{table}_{column}_seq`, quoted, case-preserving, in the table's schema, truncated the way Postgres `makeObjectName` truncates (trim the longer of table and column, by bytes, on character boundaries, until `table + "_" + column + "_seq"` fits 63 bytes). Add the helper beside `default-constraint-names.ts`; reuse the byte-aware truncation pattern in `packages/2-sql/1-core/schema-ir/src/naming.ts` if it fits. Test it against names Postgres itself produces for SERIAL columns on PGlite (ASCII over 63 bytes, multibyte, mixed case, non-public schema).
 - **Surface.** Extend the existing `setDefault` path so the planned call and the authored `setDefault(..., fn('autoincrement()'))` in `migration.ts` produce the same steps. Remove the `set-default-autoincrement` refusal for integer columns; keep a refusal for non-integer columns, with an updated error-reference entry.
@@ -49,8 +51,8 @@ And a fresh database replayed from `migrations/` has `_PostToTag_AB_pkey`, as Pr
 
 ### Tests (write them first; each must fail before the fix)
 
-- Unit: `buildSetDefaultColumn` returns a column for int2/int4/int8 autoincrement and refuses other types; the lowering of `setDefault` with `autoincrement()` renders the four steps (snapshot); the sequence-name helper cases; the issue mapper produces `setDefault` for `not-found` (additive) and literal-to-autoincrement (widening).
-- Integration on PGlite (model on `planner.authored-function-defaults.integration.test.ts`): for int2, int4 and int8, seed rows, plan and apply; `column_default` is `nextval(...)`; `pg_get_serial_sequence` resolves; an insert without a value gets max + 1; re-planning gives no operations; removing autoincrement plans `dropDefault`; adding it back reuses the sequence and succeeds.
+- Unit: `buildSetDefaultColumn` returns a column for int2/int4/int8 autoincrement and refuses other types; the lowering of `setDefault` with `autoincrement()` renders the five steps (snapshot); the sequence-name helper cases; the issue mapper produces `setDefault` for `not-found` (additive) and literal-to-autoincrement (widening).
+- Integration on PGlite (model on `planner.authored-function-defaults.integration.test.ts`): for int2, int4 and int8, seed rows, plan and apply; `column_default` is `nextval(...)`; `pg_get_serial_sequence` resolves; an insert without a value gets max + 1; re-planning gives no operations; removing autoincrement plans `dropDefault`; adding it back reuses the sequence and succeeds, including after the column was widened from int4 to int8 and holds a value past the integer maximum.
 - End to end: see Part C.
 
 ## Part B: Prisma 7 constraint names (TML-3452)

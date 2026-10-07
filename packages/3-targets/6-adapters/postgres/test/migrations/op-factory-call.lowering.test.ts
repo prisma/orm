@@ -359,6 +359,10 @@ describe('SetDefaultCall', () => {
       operationClass: 'additive',
       execute: [
         {
+          description: 'widen any existing sequence "Post_serial_seq" to integer',
+          sql: 'ALTER SEQUENCE IF EXISTS "public"."Post_serial_seq" AS integer',
+        },
+        {
           description: 'create sequence "Post_serial_seq"',
           sql: 'CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS integer',
         },
@@ -396,9 +400,10 @@ describe('SetDefaultCall', () => {
       col('serial', type, { default: fn('autoincrement()') }),
     ).toOp(testAdapter);
 
-    expect(op.execute[0]?.sql).toBe(
+    expect(op.execute.slice(0, 2).map((step) => step.sql)).toEqual([
+      `ALTER SEQUENCE IF EXISTS "public"."Post_serial_seq" AS ${sequenceType}`,
       `CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS ${sequenceType}`,
-    );
+    ]);
   });
 
   it('checks for the attached sequence when an autoincrement default replaces another default', async () => {

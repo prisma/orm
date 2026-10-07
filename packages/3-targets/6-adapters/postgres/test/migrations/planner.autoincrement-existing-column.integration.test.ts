@@ -248,6 +248,28 @@ describe('autoincrement() on an existing integer column', { concurrent: false },
     },
   );
 
+  it('widens a sequence left behind by a removed default to the widened column', {
+    timeout: testTimeout,
+  }, async () => {
+    await planAndApply(buildContract('int4', undefined), emptySchema, INIT_ADDITIVE_POLICY);
+    await migrateTo(buildContract('int4', AUTOINCREMENT));
+    await migrateTo(buildContract('int4', undefined));
+    await migrateTo(buildContract('int8', undefined));
+    await driver!.query('INSERT INTO public.orders (id, number) VALUES (1, 2147483647)');
+
+    await migrateTo(buildContract('int8', AUTOINCREMENT));
+
+    const inserted = await driver!.query<{ number: string }>(
+      'INSERT INTO public.orders (id) VALUES (2) RETURNING number::text AS number',
+    );
+    expect(inserted.rows[0]!.number).toBe('2147483648');
+    const sequence = await driver!.query<{ data_type: string; max_value: string }>(
+      `SELECT data_type::text AS data_type, max_value::text AS max_value FROM pg_sequences
+       WHERE schemaname = 'public' AND sequencename = 'orders_number_seq'`,
+    );
+    expect(sequence.rows).toEqual([{ data_type: 'bigint', max_value: '9223372036854775807' }]);
+  });
+
   it('starts the sequence at 1 when every existing value is negative', {
     timeout: testTimeout,
   }, async () => {

@@ -272,7 +272,7 @@ export async function setDefault(
 /**
  * Gives an existing smallint, integer or bigint column an `autoincrement()` default: creates the
  * sequence a SERIAL column of that width would get (or reuses it, since dropping the default leaves
- * it in place), sets the column's default to it, makes the column own it, and starts it past the
+ * it in place, retyped to the column's current width), sets the column's default to it, makes the column own it, and starts it past the
  * column's largest value so existing rows never collide. The precheck refuses a name another
  * relation holds, which `IF NOT EXISTS` would otherwise skip over and then attach. The postcheck asks
  * for both the attached sequence and the `nextval(` default, which no earlier default satisfies.
@@ -328,6 +328,10 @@ async function setAutoincrementDefault(
       ),
     ],
     execute: [
+      step(
+        `widen any existing sequence "${sequenceName}" to ${sequenceType}`,
+        `ALTER SEQUENCE IF EXISTS ${qualifiedSequence} AS ${sequenceType}`,
+      ),
       step(
         `create sequence "${sequenceName}"`,
         `CREATE SEQUENCE IF NOT EXISTS ${qualifiedSequence} AS ${sequenceType}`,
