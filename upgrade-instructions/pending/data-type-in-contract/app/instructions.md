@@ -45,7 +45,7 @@ changes:
 
 Upgrade every extension that ships migrations (for example `@prisma/orm-extension-pgvector` and `@prisma/orm-extension-postgis`) in the same step as the framework, to the release its authors published for this change. An extension whose contract space is still in the old format makes the project refuse to load.
 
-Commit your work first, so the script's changes can be reviewed and undone with git. The script follows links to files and directories, also outside the root, and rewrites the files there; commit or back up those too. Then run the script from the project root:
+Do this before any other step of this release that re-emits a contract: the script changes only files in the old format, and `prisma db sign` (`sign-databases-after-upgrade`) must see the contract the database was created from before a re-emit changes it again. Commit your work first, so the script's changes can be reviewed and undone with git. The script follows links to files and directories, also outside the root, and rewrites the files there; commit or back up those too. Then run the script from the project root:
 
 ```sh
 node <path-to-this-guide>/scripts/data-type-in-contract.ts
