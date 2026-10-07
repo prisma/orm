@@ -31,7 +31,7 @@ Review: one reviewer round after Dispatch 2, covering both code dispatches. Disp
 
 ### Dispatch 4: map attribute on rename (added 2026-10-07)
 
-- **Outcome:** a rename of a model, a scalar field or a `mappable` block adds `@map` / `@@map` with the old name to the declaration unless it has one, as the amended slice spec describes; the Postgres `native_enum` descriptor is `mappable`. Tests cover the amended Definition of Done.
+- **Outcome:** a rename of a model, a scalar field or a block that sets `nameIsStorageName` adds `@map` / `@@map` with the old name to the declaration unless it has one, as the amended slice spec describes; the Postgres `native_enum` descriptor sets `nameIsStorageName`. Tests cover the amended Definition of Done.
 - **Builds on:** Dispatches 1–3.
 - **Hands to:** review, then the QA rerun.
 - **Focus:** `language-server/src/rename.ts`, `project.ts`, `test/rename.test.ts`, `test/server.test.ts`; `framework-components` `framework-authoring.ts`; the Postgres target's `native_enum` descriptor and its test; one test each in SQL and Mongo `contract-psl`.

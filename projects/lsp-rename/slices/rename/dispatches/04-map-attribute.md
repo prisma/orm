@@ -2,15 +2,15 @@
 
 ## Task
 
-Make rename add `@map("<old>")` / `@@map("<old>")` to the renamed declaration when the rename would change a database name and the declaration has no map attribute. The design is the slice spec's sections "Map attribute" and "Block descriptor flag"; the rules and the test list are in the project spec's "Cross-cutting requirements" and "Project Definition of Done". The operator decided the shape: the rule for models and fields is written in the language server, blocks opt in with a boolean `mappable` flag on their descriptor, and the attribute is always `map`.
+Make rename add `@map("<old>")` / `@@map("<old>")` to the renamed declaration when the rename would change a database name and the declaration has no map attribute. The design is the slice spec's sections "Map attribute" and "Block descriptor flag"; the rules and the test list are in the project spec's "Cross-cutting requirements" and "Project Definition of Done". The operator decided the shape: the rule for models and fields is written in the language server, blocks opt in with a boolean `nameIsStorageName` flag on their descriptor, and the attribute is always `map`.
 
 ## Scope
 
 **In:**
 
 - `packages/1-framework/3-tooling/language-server`: `src/rename.ts`, `src/project.ts` (passing what the function needs), `test/rename.test.ts`, `test/server.test.ts`, `test/helpers/reference-fixtures.ts` if a fixture is needed by both test files.
-- `packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts`: the `mappable` flag on `AuthoringPslBlockDescriptor`, with a doc comment in the style of `requiresModelAttribute` next to it (this one comment is required by the spec).
-- The Postgres target's `native_enum` block descriptor (`packages/3-targets/3-targets/postgres/src/core/authoring.ts`) and a test that it is `mappable`.
+- `packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts`: the `nameIsStorageName` flag on `AuthoringPslBlockDescriptor`, with a doc comment in the style of `requiresModelAttribute` next to it (this one comment is required by the spec).
+- The Postgres target's `native_enum` block descriptor (`packages/3-targets/3-targets/postgres/src/core/authoring.ts`) and a test that it sets `nameIsStorageName`.
 - One test in SQL `contract-psl` and one in Mongo `contract-psl`: a schema and the same schema with a model and a field renamed and the map attributes rename would add produce the same storage names.
 
 **Out:**
@@ -25,7 +25,7 @@ Make rename add `@map("<old>")` / `@@map("<old>")` to the renamed declaration wh
 - [ ] Every item of the project spec's Definition of Done that mentions the map attribute has tests, and every row added to the slice spec's edge-case table on 2026-10-07 has a test. Tests were written before the implementation they cover. Plain `it` per case; no `it.each` over booleans; no "should".
 - [ ] For the two model position tests, the test formats the edited text with the package's formatter and asserts the `@@map` line and the lines around it are unchanged. Field insertions are one space and the attribute, with no alignment.
 - [ ] The existing rename tests still pass; expectations change only where a map attribute is now part of the edit, and you list each changed expectation in your report.
-- [ ] No comment added except the doc comment on `mappable`. No bare `as` in `src/`. No word flagged by the framework vocabulary lint in `packages/1-framework/**` (`table`, `column`, `sql`, `mongo`, `postgres`, …): check with the lint.
+- [ ] No comment added except the doc comment on `nameIsStorageName`. No bare `as` in `src/`. No word flagged by the framework vocabulary lint in `packages/1-framework/**` (`table`, `column`, `sql`, `mongo`, `postgres`, …): check with the lint.
 - [ ] `typecheck`, `lint` and the changed tests pass for every changed package; then, once: full language-server tests, `pnpm lint:deps`, `pnpm test:packages` (three tarball tests fail with `ERR_PNPM_TRUST_DOWNGRADE` for reasons outside this branch; confirm the error text if you see them).
 - [ ] Work is committed on `psl-rename` (new commits, `-s`, no amend, no rebase, no push).
 

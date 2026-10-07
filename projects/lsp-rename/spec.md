@@ -75,7 +75,7 @@ The server computes the edit; the client applies it. The server writes no file.
 
 ## Non-goals
 
-- **Database names that no map attribute can keep.** A namespace (the schema name on Postgres), a member of a composite type (the stored key) and a block not marked `mappable` (Postgres `role` and `policy_*`) are renamed without a map attribute. The database name changes with the rename and the next migration plan reflects that.
+- **Database names that no map attribute can keep.** A namespace (the schema name on Postgres), a member of a composite type (the stored key) and a block that does not set `nameIsStorageName` (Postgres `role` and `policy_*`) are renamed without a map attribute. The database name changes with the rename and the next migration plan reflects that.
 - **A map attribute other than `@map` / `@@map`.** The attribute name is fixed. A block cannot name a different attribute for this purpose.
 - **A family-contributed rule for models and fields.** The rule for when a model or field gets a map attribute is written in the language server. Decided by the operator on 2026-10-07, over a function contributed by each family.
 - **Collision checks.** Renaming to a name that is already declared, or to one that changes how another reference resolves, is not rejected. The result is reported by the existing diagnostics (`Duplicate declaration of "…"`), and the user undoes the edit. Decided by the operator on 2026-10-07; TypeScript and Prisma 7 do the same (see References).
@@ -94,7 +94,7 @@ The server computes the edit; the client applies it. The server writes no file.
   - a model with `@@base` and no `@@map` is stored with its base, and adding `@@map` would give it its own table in SQL and is an error in Mongo;
   - a relation field has no database name;
   - a composite type member does not take `@map`.
-- **Block descriptors** (`AuthoringPslBlockDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts`). The descriptor gains an optional `mappable` flag, set by whoever contributes the block: a target or an extension pack. Postgres sets it on `native_enum`, whose block name is the database type name unless `@@map` replaces it.
+- **Block descriptors** (`AuthoringPslBlockDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts`). The descriptor gains an optional `nameIsStorageName` flag, set by whoever contributes the block: a target or an extension pack. Postgres sets it on `native_enum`, whose block name is the database type name unless `@@map` replaces it.
 - **Tokenizer** (`psl-parser/src/tokenizer.ts`). `isPslIdentifier`, exported from `@internal/psl-parser`, decides whether a new name is accepted.
 - **Symbol table** (`psl-parser/src/symbol-table.ts`). It already reports duplicate declarations; rename relies on that instead of its own check.
 - **Playground** (`apps/lsp-playground`). Its editor sends rename to the language server and applies the returned edit. Scratch files are opened in the editor lazily, on first selection, so an edit can target a file the editor has not opened yet. Rename has to work there too; the playground client is changed if it does not.
@@ -102,11 +102,11 @@ The server computes the edit; the client applies it. The server writes no file.
 
 ### Contract impact
 
-No contract entity, kind, or emitted artifact changes. `AuthoringPslBlockDescriptor` gains the optional `mappable` flag; existing descriptors are valid without it. A rename the user applies changes their contract the same way a manual edit of the same text would.
+No contract entity, kind, or emitted artifact changes. `AuthoringPslBlockDescriptor` gains the optional `nameIsStorageName` flag; existing descriptors are valid without it. A rename the user applies changes their contract the same way a manual edit of the same text would.
 
 ### Adapter impact
 
-The Postgres target sets `mappable` on its `native_enum` block descriptor. No other target or adapter changes.
+The Postgres target sets `nameIsStorageName` on its `native_enum` block descriptor. No other target or adapter changes.
 
 ### Failure states
 
@@ -126,8 +126,8 @@ The server edits nothing itself, so a failed request leaves every file as it was
 - **When a map attribute is added.** The attribute is `@map("<old name>")` on a field and `@@map("<old name>")` on a model or block. It is added when the declaration has no `map` attribute and is one of:
   - a model without `@@base`, when the attribute specs define `map` for models;
   - a field of a model whose type does not resolve to a model, when the attribute specs define `map` for fields;
-  - a block whose descriptor is `mappable`.
-- **Nothing else gets one.** A composite type, a composite type member, a named type, an enum block, a namespace, a model with `@@base`, a relation field and a block that is not `mappable` are renamed by name only.
+  - a block whose descriptor sets `nameIsStorageName`.
+- **Nothing else gets one.** A composite type, a composite type member, a named type, an enum block, a namespace, a model with `@@base`, a relation field and a block that does not set `nameIsStorageName` are renamed by name only.
 - **Where the attribute goes.** On a field it follows the field's last attribute, or its type when it has none, after one space, before any trailing comment. In a model or block it is on its own line before the closing brace, at the indent of the block's members, after the existing `@@` attributes, and separated from the last field by a blank line. Column alignment of field attributes is left to the formatter: a rename changes name widths, so the formatter may realign the block's rows anyway.
 - **Whole project.** The edit covers every schema input of the project, including files not open in the editor, each under its own URI.
 - **Cursor position does not change the answer.** A cursor on the declaration name and a cursor on any reference to the same symbol produce the same edit.
@@ -146,11 +146,11 @@ N/A — single-slice project.
 - [ ] Tests cover every row of the table in [At a glance](#at-a-glance), with the files split as shown, once from the declaration name and once from a reference.
 - [ ] Tests cover the remaining symbol kinds: a composite type, a named type, a generic block and an enum block.
 - [ ] Tests cover the map attribute, each from the declaration name and from a reference in another file:
-  - added for a model, a scalar field, a list of scalars, a field typed by an enum, a field typed by a composite type, and a `mappable` block;
-  - not added for a model, field or block that already has one, a model with `@@base`, a relation field in both directions, a composite type member, a composite type, an enum block, a named type, a namespace, a block that is not `mappable`, and a model or field when the attribute specs define no `map`.
+  - added for a model, a scalar field, a list of scalars, a field typed by an enum, a field typed by a composite type, and a block that sets `nameIsStorageName`;
+  - not added for a model, field or block that already has one, a model with `@@base`, a relation field in both directions, a composite type member, a composite type, an enum block, a named type, a namespace, a block that does not set `nameIsStorageName`, and a model or field when the attribute specs define no `map`.
 - [ ] Tests cover the position of the inserted text: a field with no attribute, with attributes, and with a trailing comment; a model whose last member is a field, and one that already has `@@` attributes. For the two model cases, formatting the edited file leaves the `@@map` line and the lines around it unchanged.
 - [ ] After a rename with a map attribute is applied, the contract the SQL interpreter emits has the same storage names as before the rename, covered by a test for a model and a field. The same for the Mongo interpreter.
-- [ ] The Postgres `native_enum` descriptor is `mappable`, and renaming a `native_enum` block adds `@@map`.
+- [ ] The Postgres `native_enum` descriptor sets `nameIsStorageName`, and renaming a `native_enum` block adds `@@map`.
 - [ ] Tests cover `prepareRename`: a range on each renameable kind, `null` on an attribute name, a contributed type, a cross-space reference, an unresolved name and a position with no identifier.
 - [ ] Tests cover a rejected new name (not an identifier).
 - [ ] Manual check in VS Code: F2 on a model, a field, a namespace and a block, from a declaration and from a reference, with edits in more than one file including one that is not open; F2 on an attribute name is refused.

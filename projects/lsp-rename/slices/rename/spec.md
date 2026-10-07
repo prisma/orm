@@ -31,7 +31,7 @@ function mapAttributeEdit(symbol, ...): { uri: string; edit: TextEdit } | undefi
 
 - **Model** (`symbol.kind === 'model'`): insert when the resolver has a model-level `map`, and the model has neither a `map` nor a `base` attribute.
 - **Field** (`symbol.kind === 'field'`): insert when the owner is a model, the resolver has a field-level `map`, the field has no `map` attribute, and the binder's resolution of the field's type is not a model.
-- **Block** (`symbol.kind === 'block'`): insert when the block's descriptor in `pslBlockDescriptors` has `mappable: true` and the block has no `map` attribute.
+- **Block** (`symbol.kind === 'block'`): insert when the block's descriptor in `pslBlockDescriptors` has `nameIsStorageName: true` and the block has no `map` attribute.
 - **Anything else**: no insertion.
 
 The attribute names `map` and `base` are written in this function. No keyword of a target block is.
@@ -47,7 +47,7 @@ The insertion is added to `changes` under the URI of the declaration's file, nex
 
 ### Block descriptor flag
 
-`AuthoringPslBlockDescriptor` gains `readonly mappable?: boolean`, documented as: the block's name is the name of the storage object it declares, and the block attribute `map` replaces that name. The Postgres target sets it on `native_enum`. `policy_*` and `role` do not set it.
+`AuthoringPslBlockDescriptor` gains `readonly nameIsStorageName?: boolean`, documented as: the block's name is the name of the storage object it declares, and the block attribute `map` replaces that name. The Postgres target sets it on `native_enum`. `policy_*` and `role` do not set it.
 
 `WorkspaceEdit.changes` is used, not `documentChanges`: the edit has no file operations and the server does not track versions for files that are not open.
 
@@ -74,7 +74,7 @@ The provider is a mapping from the find-references result to edits, and it has n
 
 ## Scope
 
-**In (amendment 2026-10-07):** the map-attribute function in `src/rename.ts` and its inputs through `Project.rename`; the `mappable` flag in `framework-components` and on the Postgres `native_enum` descriptor; tests in the language server, one interpreter test each in SQL and Mongo `contract-psl` for unchanged storage names, one in the Postgres target for the flag.
+**In (amendment 2026-10-07):** the map-attribute function in `src/rename.ts` and its inputs through `Project.rename`; the `nameIsStorageName` flag in `framework-components` and on the Postgres `native_enum` descriptor; tests in the language server, one interpreter test each in SQL and Mongo `contract-psl` for unchanged storage names, one in the Postgres target for the flag.
 
 **In:** `src/rename.ts`, `Project.prepareRename` / `Project.rename`, the two handlers and the capability in `server.ts`, `test/rename.test.ts`, the capability and handler tests in `test/server.test.ts`, the two READMEs, `apps/lsp-playground/src/client/main.ts` if the playground does not apply the edit to every file, the manual-QA script and run.
 
