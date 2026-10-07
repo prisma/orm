@@ -76,7 +76,7 @@ for await (const user of db.orm.public.User.select('id', 'email').all()) {
 }
 ```
 
-Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` (which issues `LIMIT 1` on Postgres):
+Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` and `.firstOrThrow()` (which issue `LIMIT 1` on Postgres):
 
 ```typescript
 const user = await db.orm.public.User.where({ id }).all().first();
@@ -85,7 +85,7 @@ const required = await db.orm.public.User.where({ id }).all().firstOrThrow();
 //    ^? Row          ← buffers; throws `RUNTIME.NO_ROWS` if empty.
 ```
 
-For genuine single-row reads, prefer the *collection*-level `.first()` (which adds `LIMIT 1` to the SQL on Postgres) over `.all().first()` (which fetches all rows and discards the rest). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
+For genuine single-row reads, prefer the *collection*-level `.first()` or `.firstOrThrow()` (which add `LIMIT 1` to the SQL on Postgres) over `.all().first()` / `.all().firstOrThrow()` (which fetch all rows and discard the rest). Collection-level `.firstOrThrow()` runs the same query as `.first()`, returns the row without `null`, and rejects with `RUNTIME.NO_ROWS` when nothing matches: `await db.orm.public.User.firstOrThrow({ id })` on Postgres, `await db.orm.users.where({ email }).firstOrThrow()` on Mongo (no arguments there). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
 
 **The result is single-consumption.** Each `AsyncIterableResult` instance can be consumed once — by `await`, by `.toArray()`, or by `for await`. Trying to consume it a second time throws **`RUNTIME.ITERATOR_CONSUMED`**. The fix is almost always to store the array in a variable on first consumption and reuse the variable:
 
