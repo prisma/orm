@@ -22,11 +22,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { ormError } from './orm-errors';
-
-export interface TableStorageCoordinate {
-  readonly namespaceId: string;
-  readonly tableName: string;
-}
+import type { TableStorageCoordinate } from './table-scope';
 
 export type TableReferences = ReadonlyMap<string, TableStorageCoordinate>;
 

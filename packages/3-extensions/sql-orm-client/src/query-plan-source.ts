@@ -31,12 +31,9 @@ import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
+import type { TableStorageCoordinate } from './table-scope';
 import type { CollectionState } from './types';
-import {
-  bindWhereExpr,
-  paramRefForStorageColumn,
-  type TableStorageCoordinate,
-} from './where-binding';
+import { bindWhereExpr, paramRefForStorageColumn } from './where-binding';
 import { combineWhereExprs } from './where-utils';
 
 type CursorOrderEntry = {

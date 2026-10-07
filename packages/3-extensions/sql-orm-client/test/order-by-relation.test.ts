@@ -87,15 +87,15 @@ describe('orderBy through a to-one relation', () => {
     expect(orderByOf(plan)).toEqual([
       OrderByItem.desc(
         correlated(
-          table('users', '__orm_rel_1'),
-          ProjectionItem.of('name', ColumnRef.of('__orm_rel_1', 'name')),
-          BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'id'), ColumnRef.of('users', 'invited_by_id')),
+          table('users', 'users_2'),
+          ProjectionItem.of('name', ColumnRef.of('users_2', 'name')),
+          BinaryExpr.eq(ColumnRef.of('users_2', 'id'), ColumnRef.of('users', 'invited_by_id')),
         ),
         { nulls: 'last' },
       ),
     ]);
     expect(sqlOf(plan)).toMatchInlineSnapshot(
-      `"SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "users"."invited_by_id") DESC NULLS LAST"`,
+      `"SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "users"."invited_by_id") DESC NULLS LAST"`,
     );
   });
 });
@@ -312,7 +312,7 @@ describe('orderBy a relation inside an include', () => {
     );
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
-      `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id") ORDER BY "invitedUsers__rows"."invitedUsers__order_0" ASC), json_build_array()) AS "invitedUsers" FROM (SELECT "invitedUsers__child"."id" AS "id", (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "invitedUsers__child"."invited_by_id") AS "invitedUsers__order_0" FROM "public"."users" AS "invitedUsers__child" WHERE "invitedUsers__child"."invited_by_id" = "users"."id" ORDER BY (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "invitedUsers__child"."invited_by_id") ASC) AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users""`,
+      `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id") ORDER BY "invitedUsers__rows"."invitedUsers__order_0" ASC), json_build_array()) AS "invitedUsers" FROM (SELECT "invitedUsers__child"."id" AS "id", (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "invitedUsers__child"."invited_by_id") AS "invitedUsers__order_0" FROM "public"."users" AS "invitedUsers__child" WHERE "invitedUsers__child"."invited_by_id" = "users"."id" ORDER BY (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "invitedUsers__child"."invited_by_id") ASC) AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users""`,
     );
   });
 });

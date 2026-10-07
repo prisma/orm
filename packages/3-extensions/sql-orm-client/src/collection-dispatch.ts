@@ -53,6 +53,7 @@ import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import type { TableStorageCoordinate } from './table-scope';
 import {
   type CollectionContext,
   type CollectionState,
@@ -61,7 +62,7 @@ import {
   type IncludeExpr,
   type IncludeScalar,
 } from './types';
-import { paramRefForStorageColumn, type TableStorageCoordinate } from './where-binding';
+import { paramRefForStorageColumn } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 

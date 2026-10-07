@@ -174,7 +174,9 @@ describe('createModelAccessor', () => {
       ]),
     );
 
-    const everyExpr = accessor['posts']!.every((post) => post['views']!.gt(10)) as ExistsExpr;
+    const everyExpr = createModelAccessor(context, 'public', 'User')['posts']!.every((post) =>
+      post['views']!.gt(10),
+    ) as ExistsExpr;
     expect(everyExpr.notExists).toBe(true);
     expect(everyExpr.subquery.where).toEqual(
       AndExpr.of([
@@ -189,7 +191,7 @@ describe('createModelAccessor', () => {
 
     expect(accessor['posts']!.every({})).toEqual(AndExpr.true());
 
-    const expr = accessor['posts']!.none() as ExistsExpr;
+    const expr = createModelAccessor(context, 'public', 'User')['posts']!.none() as ExistsExpr;
     expect(expr.notExists).toBe(true);
     expect(expr.subquery.where).toEqual(
       BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
@@ -207,6 +209,61 @@ describe('createModelAccessor', () => {
     expect(where.exprs[1]!.kind).toBe('exists');
   });
 
+  it('gives sibling relation filters over one table distinct references', () => {
+    const accessor = createModelAccessor(context, 'public', 'User');
+    const first = accessor['posts']!.some((post) => post['views']!.gt(10)) as ExistsExpr;
+    const second = accessor['posts']!.none((post) => post['views']!.gt(20)) as ExistsExpr;
+
+    expect(first.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+    expect(first.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.gt(ColumnRef.of('posts', 'views'), paramRef('posts', 'views', 10)),
+      ]),
+    );
+    expect(second.subquery.from).toEqual(TableSource.named('posts', 'posts_2', 'public'));
+    expect(second.subquery.projection).toEqual([
+      ProjectionItem.of('_exists', ColumnRef.of('posts_2', 'user_id')),
+    ]);
+    expect(second.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('posts_2', 'user_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.gt(ColumnRef.of('posts_2', 'views'), paramRef('posts', 'views', 20)),
+      ]),
+    );
+  });
+
+  it('aliases a nested relation that returns to the root table', () => {
+    const expr = createModelAccessor(context, 'public', 'User')['posts']!.some((post) =>
+      post['author']!.some((author) => author['name']!.eq('Alice')),
+    ) as ExistsExpr;
+    const nested = (expr.subquery.where as AndExpr).exprs[1] as ExistsExpr;
+
+    expect(expr.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+    expect(nested.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
+    expect(nested.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('users_2', 'id'), ColumnRef.of('posts', 'user_id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Alice')),
+      ]),
+    );
+  });
+
+  it('keeps a name taken inside one relation filter taken for a later sibling', () => {
+    const accessor = createModelAccessor(context, 'public', 'User');
+    accessor['posts']!.some((post) => post['author']!.some());
+    const sibling = accessor['invitedUsers']!.some() as ExistsExpr;
+
+    expect(sibling.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
+  });
+
+  it('gives each accessor its own references', () => {
+    createModelAccessor(context, 'public', 'User')['posts']!.some();
+    const expr = createModelAccessor(context, 'public', 'User')['posts']!.some() as ExistsExpr;
+
+    expect(expr.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+  });
+
   it('aliases both directions of ordinary self-relation predicates', () => {
     const children = createModelAccessor(context, 'public', 'User')['invitedUsers']!.some(
       (invitee) => invitee['name']!.eq('Bob'),
@@ -215,18 +272,18 @@ describe('createModelAccessor', () => {
       invitedBy['name']!.eq('Alice'),
     ) as ExistsExpr;
 
-    expect(children.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
+    expect(children.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
     expect(children.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'invited_by_id'), ColumnRef.of('users', 'id')),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'name'), paramRef('users', 'name', 'Bob')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'invited_by_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Bob')),
       ]),
     );
-    expect(inviter.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
+    expect(inviter.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
     expect(inviter.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'id'), ColumnRef.of('users', 'invited_by_id')),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'name'), paramRef('users', 'name', 'Alice')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'id'), ColumnRef.of('users', 'invited_by_id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Alice')),
       ]),
     );
   });
@@ -240,8 +297,8 @@ describe('createModelAccessor', () => {
       invitedBy['name']!.eq('Alice'),
     ) as ExistsExpr;
 
-    expect(children.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
-    expect(inviter.subquery.from).toEqual(TableSource.named('users', '__orm_rel_2', 'public'));
+    expect(children.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
+    expect(inviter.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
   });
 
   it('correlates repeated self-relation predicates to the immediate parent alias', () => {
@@ -251,18 +308,15 @@ describe('createModelAccessor', () => {
     const outerWhere = expr.subquery.where as AndExpr;
     const nested = outerWhere.exprs[1] as ExistsExpr;
 
-    expect(expr.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
+    expect(expr.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
     expect(outerWhere.exprs[0]).toEqual(
-      BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'invited_by_id'), ColumnRef.of('users', 'id')),
+      BinaryExpr.eq(ColumnRef.of('users_2', 'invited_by_id'), ColumnRef.of('users', 'id')),
     );
-    expect(nested.subquery.from).toEqual(TableSource.named('users', '__orm_rel_2', 'public'));
+    expect(nested.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
     expect(nested.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(
-          ColumnRef.of('__orm_rel_2', 'invited_by_id'),
-          ColumnRef.of('__orm_rel_1', 'id'),
-        ),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_2', 'name'), paramRef('users', 'name', 'Dan')),
+        BinaryExpr.eq(ColumnRef.of('users_3', 'invited_by_id'), ColumnRef.of('users_2', 'id')),
+        BinaryExpr.eq(ColumnRef.of('users_3', 'name'), paramRef('users', 'name', 'Dan')),
       ]),
     );
   });
@@ -277,7 +331,9 @@ describe('createModelAccessor', () => {
     );
 
     // Undefined values are skipped before the field lookup, so a shorthand with an unknown field and undefined value is a no-op.
-    const someUndefined = user['posts']!.some({ unknown: undefined }) as ExistsExpr;
+    const someUndefined = createModelAccessor(context, 'public', 'User')['posts']!.some({
+      unknown: undefined,
+    }) as ExistsExpr;
     expect(someUndefined.subquery.where).toEqual(
       BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
     );
@@ -700,9 +756,9 @@ describe('createModelAccessor', () => {
 
       const expr = feature['subtasks']!.some() as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('tasks', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('tasks', 'tasks_2', 'public'));
       expect(expr.subquery.where).toEqual(
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'parent_id'), ColumnRef.of('tasks', 'id')),
+        BinaryExpr.eq(ColumnRef.of('tasks_2', 'parent_id'), ColumnRef.of('tasks', 'id')),
       );
     });
 
@@ -717,7 +773,7 @@ describe('createModelAccessor', () => {
       feature['assignee']!.some();
       const expr = feature['subtasks']!.some() as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('tasks', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('tasks', 'tasks_2', 'public'));
     });
   });
 
@@ -805,6 +861,26 @@ describe('createModelAccessor', () => {
       expect(accessor['tags']!.every({})).toEqual(AndExpr.true());
     });
 
+    it('gives sibling M:N filters distinct related and junction references', () => {
+      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
+        string,
+        { some: () => unknown }
+      >;
+      accessor['tags']!.some();
+      const expr = accessor['tags']!.some() as ExistsExpr;
+
+      expect(expr.subquery.from).toEqual(TableSource.named('tags', 'tags_2', 'public'));
+      expect(expr.subquery.joins).toEqual([
+        JoinAst.inner(
+          TableSource.named('user_tags', 'user_tags_2', 'public'),
+          BinaryExpr.eq(ColumnRef.of('user_tags_2', 'tag_id'), ColumnRef.of('tags_2', 'id')),
+        ),
+      ]);
+      expect(expr.subquery.where).toEqual(
+        BinaryExpr.eq(ColumnRef.of('user_tags_2', 'user_id'), ColumnRef.of('users', 'id')),
+      );
+    });
+
     it('some() emits EXISTS with composite-key AND-ed junction join', () => {
       const accessor = createModelAccessor(context, 'public', 'Project') as unknown as Record<
         string,
@@ -819,11 +895,11 @@ describe('createModelAccessor', () => {
           AndExpr.of([
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
         ),
@@ -849,9 +925,9 @@ describe('createModelAccessor', () => {
         (c as Record<string, { eq: (v: unknown) => unknown }>)['name']!.eq('Apollo'),
       ) as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('projects', 'projects_2', 'public'));
       expect(expr.subquery.projection).toEqual([
-        ProjectionItem.of('_exists', ColumnRef.of('__orm_rel_1', 'tenant_id')),
+        ProjectionItem.of('_exists', ColumnRef.of('projects_2', 'tenant_id')),
       ]);
       expect(expr.subquery.where).toEqual(
         AndExpr.of([
@@ -862,10 +938,7 @@ describe('createModelAccessor', () => {
             ),
             BinaryExpr.eq(ColumnRef.of('project_links', 'src_id'), ColumnRef.of('projects', 'id')),
           ]),
-          BinaryExpr.eq(
-            ColumnRef.of('__orm_rel_1', 'name'),
-            paramRef('projects', 'name', 'Apollo'),
-          ),
+          BinaryExpr.eq(ColumnRef.of('projects_2', 'name'), paramRef('projects', 'name', 'Apollo')),
         ]),
       );
     });
@@ -886,34 +959,34 @@ describe('createModelAccessor', () => {
       const outerWhere = expr.subquery.where as AndExpr;
       const nested = outerWhere.exprs[1] as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('projects', 'projects_2', 'public'));
       expect(expr.subquery.joins).toEqual([
         JoinAst.inner(
           TableSource.named('project_links', undefined, 'public'),
           AndExpr.of([
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
         ),
       ]);
-      expect(nested.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_2', 'public'));
+      expect(nested.subquery.from).toEqual(TableSource.named('projects', 'projects_3', 'public'));
       expect(nested.subquery.joins).toEqual([
         JoinAst.inner(
-          TableSource.named('project_links', '__orm_junction_3', 'public'),
+          TableSource.named('project_links', 'project_links_2', 'public'),
           AndExpr.of([
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_2', 'tenant_id'),
+              ColumnRef.of('project_links_2', 'dst_tenant_id'),
+              ColumnRef.of('projects_3', 'tenant_id'),
             ),
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'dst_id'),
-              ColumnRef.of('__orm_rel_2', 'id'),
+              ColumnRef.of('project_links_2', 'dst_id'),
+              ColumnRef.of('projects_3', 'id'),
             ),
           ]),
         ),
@@ -922,15 +995,15 @@ describe('createModelAccessor', () => {
         AndExpr.of([
           AndExpr.of([
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'src_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('project_links_2', 'src_tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'src_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('project_links_2', 'src_id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
-          BinaryExpr.eq(ColumnRef.of('__orm_rel_2', 'name'), paramRef('projects', 'name', 'Gamma')),
+          BinaryExpr.eq(ColumnRef.of('projects_3', 'name'), paramRef('projects', 'name', 'Gamma')),
         ]),
       );
     });
