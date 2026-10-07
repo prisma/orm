@@ -27,13 +27,14 @@ changes:
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)[\s\S]*?(?:[''"]pg/inet@1[''"]|\bpgInetColumn\b)'
   - id: enum-codecs-refused
     summary: |
-      An enum typed by `pg/timestamp-string@1`, `pg/timestamptz-string@1`, `pg/bytea@1` or `pg/tsquery@1` is now refused: `defineContract` from the Postgres package refuses its `enumType` with `CONTRACT.ENUM_INVALID`, and PSL refuses its `@@type` with `PSL_EXTENSION_INVALID_VALUE`. No value a query reads back can equal a member of such an enum, and a bytea enum column's CHECK constraint refused every member. Type a string timestamp enum with `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1` and write its members as Temporal values; replace a bytea or tsquery enum with a text enum.
+      An enum typed by `pg/timestamp-string@1`, `pg/timestamptz-string@1`, `pg/bytea@1` or `pg/tsquery@1` is now refused: `defineContract` from the Postgres package refuses its `enumType` with `CONTRACT.ENUM_INVALID`, and PSL refuses its `@@type` with `PSL_EXTENSION_INVALID_VALUE`. No value a query reads back can equal a member of such an enum, and a bytea enum column's CHECK constraint refused every member. Type a string timestamp enum with `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1` and write its members as Temporal values; replace a bytea or tsquery enum with a text enum. On MongoDB, `defineContract` now refuses an `enumType` typed by `mongo/json@1` or `mongo/bson@1` with `CONTRACT.ENUM_INVALID`; type it with `mongo/string@1`.
     detection:
       glob: "**/*.{prisma,ts,tsx,mts,cts}"
       matches:
         - '@@type\(\s*"pg/(?:timestamp(?:tz)?-string|bytea|tsquery)@1"\s*\)'
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)[\s\S]*?(?:[''"]pg/timestamp(?:tz)?-string@1[''"]|\b(?:PG_TIMESTAMP(?:TZ)?_STRING_CODEC_ID|pgTimestamp(?:tz)?StringColumn)\b)'
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)(?=[\s\S]*\benumType\()[\s\S]*?(?:[''"]pg/(?:bytea|tsquery)@1[''"]|\b(?:PG_BYTEA_CODEC_ID|PG_TSQUERY_CODEC_ID|pgByteaColumn)\b)'
+        - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)(?=[\s\S]*\benumType\()[\s\S]*?(?:[''"]mongo/(?:json|bson)@1[''"]|\bMONGO_(?:JSON|BSON)_CODEC_ID\b)'
   - id: enum-json-codec-refused
     summary: |
       An enum typed by `pg/json@1` is now refused: `defineContract` refuses its `enumType` with `CONTRACT.ENUM_INVALID`, and PSL refuses its `@@type("pg/json@1")` with `PSL_EXTENSION_INVALID_VALUE`. The `json` type has no equality operator, so a scalar column never applied and a list column's new CHECK constraint refuses every insert. Type the enum with `pg/jsonb@1` and re-emit.
@@ -124,7 +125,7 @@ One case did apply: a numeric default with a leading zero or a minus sign on zer
 
 ## `enum-codecs-refused`
 
-An enum compares a value with its members, so a codec whose values read back can never equal a member is now refused when the contract is authored. Four Postgres codecs are refused this way.
+An enum compares a value with its members, so a codec whose values read back can never equal a member is now refused when the contract is authored. Four Postgres codecs and two MongoDB codecs are refused this way.
 
 `pg/timestamp-string@1` and `pg/timestamptz-string@1` read a value as the text Postgres prints, such as `2024-01-02 03:04:05` or `2024-01-02 03:04:05+00`, while the contract stores ISO 8601, such as `2024-01-02T03:04:05` or `2024-01-02T03:04:05Z`. The `timestamptz` text also depends on the session's time zone. `defineContract` refuses an `enumType` typed by either codec:
 
@@ -138,7 +139,15 @@ Type the enum with the Temporal codec of the same column type, `pg/timestamp-tem
 
 PSL refuses an enum block typed by any of these codecs with the same reason, as `PSL_EXTENSION_INVALID_VALUE` at its `@@type`; for the string timestamp codecs it used to report the codec as unknown.
 
-The TypeScript detection for the bytea and tsquery codecs matches a file that calls `enumType(` and names the codec anywhere, even on a column that is not an enum. Check only the enums.
+On MongoDB, `mongo/json@1` and `mongo/bson@1` declare no equality, so a value read back cannot be compared with a member. Earlier versions accepted an `enumType` typed by either codec with string members; `defineContract` from the MongoDB package now refuses it:
+
+```text
+CONTRACT.ENUM_INVALID: enumType("Shape"): an enum cannot use the codec mongo/json@1. The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.
+```
+
+Type the enum with `mongo/string@1` and re-emit the contract. The enum's codec changes, and with it the storage hash, so plan and apply a migration. MongoDB PSL already refused an enum block typed by either codec, because an enum's codec must declare exactly one BSON type, so a PSL contract needs no change.
+
+The TypeScript detection for the bytea, tsquery, `mongo/json@1` and `mongo/bson@1` codecs matches a file that calls `enumType(` and names the codec anywhere, even on a column that is not an enum. Check only the enums.
 
 ## `enum-json-codec-refused`
 
