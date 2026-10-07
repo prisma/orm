@@ -937,4 +937,125 @@ describe('integration/nested mutations on SQLite', () => {
     },
     timeouts.databaseOperation,
   );
+
+  const invalidNestedUpdates: ReadonlyArray<
+    readonly [
+      name: string,
+      update: (harness: Harness, id: number) => Promise<unknown>,
+      expected: { code: string; meta?: Record<string, unknown> },
+      existingId: number,
+    ]
+  > = [
+    [
+      'a relation field that is not a callback',
+      ({ users }, id) =>
+        users.where({ id }).update({ posts: 'not a callback', tags: () => [] } as never),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'missing-callback' } },
+      1,
+    ],
+    [
+      'a callback returning something that is not an operation',
+      ({ users }, id) => users.where({ id }).update({ posts: () => ({ id: 10 }) } as never),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor' } },
+      1,
+    ],
+    [
+      'a nested array of operations',
+      ({ users }, id) =>
+        users.where({ id }).update({
+          // @ts-expect-error
+          posts: (posts) => [[posts.disconnect()]],
+        }),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'nested-array' } },
+      1,
+    ],
+    [
+      'an array element that is not an operation',
+      ({ users }, id) =>
+        users.where({ id }).update({
+          // @ts-expect-error
+          posts: (posts) => [posts.disconnect(), { id: 10 }],
+        }),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor', index: 1 } },
+      1,
+    ],
+    [
+      'updateAll() on a to-one relation',
+      ({ posts }, id) =>
+        posts.where({ id }).update({ author: (author) => author.updateAll({ name: 'Renamed' }) }),
+      {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
+      },
+      10,
+    ],
+    [
+      'updateAll() data that sets the foreign key to the parent',
+      ({ users }, id) =>
+        users.where({ id }).update({ posts: (posts) => posts.updateAll({ userId: 2 }) }),
+      {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { problem: 'parent-link-column', fields: ['userId'] },
+      },
+      1,
+    ],
+    [
+      'disconnect() without criteria on a many-to-many relation',
+      ({ users }, id) =>
+        users.where({ id }).update({
+          tags: (tags) => tags.disconnect(),
+        }),
+      {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'disconnect', relation: 'tags', problem: 'missing-criterion' },
+      },
+      1,
+    ],
+  ];
+
+  for (const [name, update, expected, existingId] of invalidNestedUpdates) {
+    it(
+      `update() rejects ${name} whether or not a row matches`,
+      async () => {
+        await withSqlite(seedSql, async (harness) => {
+          await expect(update(harness, 999)).rejects.toMatchObject(expected);
+          await expect(update(harness, existingId)).rejects.toMatchObject(expected);
+
+          expect(harness.rows('select id, title, user_id from posts order by id')).toEqual([
+            { id: 10, title: 'Old first', user_id: 1 },
+            { id: 11, title: 'Old second', user_id: 1 },
+            { id: 12, title: 'Unowned', user_id: null },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+  }
+
+  it(
+    'update() with valid nested input and no matching row returns null and writes nothing',
+    async () => {
+      await withSqlite(seedSql, async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 999 })
+          .select('id', 'name')
+          .update({
+            name: 'Renamed',
+            posts: (posts) => [
+              posts.create({ id: 30, title: 'Created' }),
+              posts.where({ title: 'Old first' }).updateAll({ title: 'Changed' }),
+              posts.deleteAll(),
+            ],
+          });
+
+        expect(updated).toBeNull();
+        expect(rows('select id, title, user_id from posts order by id')).toEqual([
+          { id: 10, title: 'Old first', user_id: 1 },
+          { id: 11, title: 'Old second', user_id: 1 },
+          { id: 12, title: 'Unowned', user_id: null },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
 });

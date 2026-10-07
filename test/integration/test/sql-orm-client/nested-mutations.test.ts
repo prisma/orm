@@ -908,4 +908,185 @@ describe('integration/nested-mutations', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  type Runtime = Parameters<typeof seedUsers>[0];
+
+  const invalidNestedUpdates: ReadonlyArray<
+    readonly [
+      name: string,
+      update: (runtime: Runtime, id: number) => Promise<unknown>,
+      expected: { code: string; meta?: Record<string, unknown> },
+      existingId: number,
+    ]
+  > = [
+    [
+      'a relation field that is not a callback',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({ posts: 'not a callback', tags: () => [] } as never),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'missing-callback' } },
+      1,
+    ],
+    [
+      'a callback returning something that is not an operation',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({ posts: () => ({ id: 10 }) } as never),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor' } },
+      1,
+    ],
+    [
+      'a nested array of operations',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            posts: (posts) => [[posts.disconnect()]],
+          }),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'nested-array' } },
+      1,
+    ],
+    [
+      'an array element that is not an operation',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            posts: (posts) => [posts.disconnect(), { id: 10 }],
+          }),
+      { code: 'ORM.RELATION_MUTATION_INVALID', meta: { problem: 'invalid-descriptor', index: 1 } },
+      1,
+    ],
+    [
+      'updateAll() on a to-one relation the parent owns',
+      (runtime, id) =>
+        createReturningPostsCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            author: (author) => author.updateAll({ name: 'Renamed' }),
+          }),
+      {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'updateAll', relation: 'author', reason: 'to-one-relation' },
+      },
+      10,
+    ],
+    [
+      'deleteAll() on a to-one relation the child owns',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            profile: (profile) => profile.deleteAll(),
+          }),
+      {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'deleteAll', relation: 'profile', reason: 'to-one-relation' },
+      },
+      1,
+    ],
+    [
+      'updateAll() data that sets the foreign key to the parent',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            posts: (posts) => posts.updateAll({ userId: 2 }),
+          }),
+      {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { problem: 'parent-link-column', fields: ['userId'] },
+      },
+      1,
+    ],
+    [
+      'disconnect() without criteria on a many-to-many relation',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            // @ts-expect-error
+            tags: (tags) => tags.disconnect(),
+          }),
+      {
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'disconnect', relation: 'tags', problem: 'missing-criterion' },
+      },
+      1,
+    ],
+    [
+      'connect() through a junction with required payload columns',
+      (runtime, id) =>
+        createReturningUsersCollection(runtime)
+          .where({ id })
+          .update({
+            roles: (roles: { connect(criterion: unknown): unknown }) =>
+              roles.connect({ id: 'role-admin' }),
+          } as never),
+      {
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        meta: { kind: 'connect', relation: 'roles', reason: 'junction-required-columns' },
+      },
+      1,
+    ],
+  ];
+
+  for (const [name, update, expected, existingId] of invalidNestedUpdates) {
+    it(
+      `update() rejects ${name} whether or not a row matches`,
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seedTwoUsersWithPosts(runtime);
+          await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Profile' }]);
+
+          await expect(update(runtime, 999)).rejects.toMatchObject(expected);
+          await expect(update(runtime, existingId)).rejects.toMatchObject(expected);
+
+          expect(await postRows(runtime)).toEqual([
+            { id: 10, title: 'Draft', user_id: 1, views: 1 },
+            { id: 11, title: 'Kept', user_id: 1, views: 20 },
+            { id: 20, title: 'Draft', user_id: 2, views: 3 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  }
+
+  it(
+    'update() with valid nested input and no matching row returns null and writes nothing',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithPosts(runtime);
+
+        const updated = await users
+          .where({ id: 999 })
+          .select('id', 'name')
+          .update({
+            name: 'Renamed',
+            posts: (posts) => [
+              posts.create({ id: 30, title: 'Created', views: 0 }),
+              posts.where({ title: 'Draft' }).updateAll({ views: 100 }),
+              posts.deleteAll(),
+            ],
+          });
+
+        expect(updated).toBeNull();
+        expect(await postRows(runtime)).toEqual([
+          { id: 10, title: 'Draft', user_id: 1, views: 1 },
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });
