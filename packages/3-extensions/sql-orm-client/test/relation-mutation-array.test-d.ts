@@ -79,3 +79,17 @@ test('an array element that is not an operation is a type error', () => {
   expectTypeOf(update).toExtend<UserUpdate>();
   expectTypeOf(create).toExtend<UserCreate>();
 });
+
+test('disconnect inside an array is a type error in create input on a one-to-many relation', () => {
+  const input: UserCreate = {
+    name: 'Alice',
+    email: 'alice@test.com',
+    posts: (posts) => [
+      posts.connect({ id: 2 }),
+      // @ts-expect-error
+      posts.disconnect([{ id: 3 }]),
+    ],
+  };
+
+  expectTypeOf(input).toExtend<UserCreate>();
+});
