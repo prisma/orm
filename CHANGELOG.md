@@ -6,6 +6,20 @@ Changelog tracking starts at **v0.12.0**, the first release cut after this conve
 
 <!-- New release entries go here, newest first, each mirroring docs/releases/v<version>.md under a `## v<version>` header. -->
 
+## v8.0.0-rc.16
+
+This release moves the toolchain to `@prisma/cli-engine` 0.6.3, which shares one ArkType copy with the Prisma ORM packages. With engine 0.6.2, a fresh Bun install could resolve two ArkType copies, and `prisma orm init` and `prisma contract emit` then failed on a valid contract.
+
+The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.16/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.15-to-8.0.0-rc.16/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.16/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.15-to-8.0.0-rc.16/). The breaking change below names the change id to look for in them.
+
+## Breaking changes
+
+- **The toolchain requires `@prisma/cli-engine` 0.6.3.** A project or extension that pins `@prisma/cli-engine` itself must move the pin from `0.6.2` to `0.6.3`. The engine's commands and output do not change: its only change is that it accepts ArkType `^2.2.7` instead of exactly `2.2.3`. See `engine-pin-moves-to-0-6-3` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.16/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.15-to-8.0.0-rc.16/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.16/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.15-to-8.0.0-rc.16/). ([#30632](https://github.com/prisma/orm/pull/30632))
+
+## Fixes
+
+- With Bun, `prisma orm init` and `prisma contract emit` no longer fail with `CONTRACT.VALIDATION_FAILED` on a valid contract. Engine 0.6.3 and the Prisma ORM packages now resolve one ArkType copy. ([#30632](https://github.com/prisma/orm/pull/30632))
+
 ## v8.0.0-rc.15
 
 In this release, each column in a SQL contract names its data type, such as `pg/text`, in place of the type name the database prints. One script and `prisma db sign` upgrade a project. Codecs now check every value a contract stores, and a field's type in the contract matches its column. Custom collection classes keep their methods through the chain, and scopes let you share a piece of a query across models. The typed SQL builder can lock the rows a select reads. Middleware gains an `afterTransaction` stage, and the cache middleware gains invalidation. A hand-written migration can rename a table with `this.renameTable`. Lists can hold `null` elements. The PSL language server adds hover, go to definition and find references.
