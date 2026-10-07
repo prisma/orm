@@ -1,0 +1,39 @@
+# lsp-rename — Plan
+
+**Spec:** `projects/lsp-rename/spec.md`
+**Linear Project:** none (as for lsp-find-references)
+
+## At a glance
+
+The project is one slice, delivered as one PR. It adds `textDocument/prepareRename` and `textDocument/rename` to the language server, built on the find-references provider, and makes rename work in `apps/lsp-playground`.
+
+## Composition
+
+### Stack (deliver in order)
+
+1. **Slice `rename`**. Linear: none. Folder: `projects/lsp-rename/slices/rename/`
+   - **Outcome:**
+     - The language server declares `renameProvider` and answers `textDocument/rename` with one `WorkspaceEdit` for models, composite types, named types, blocks (including enum blocks), fields and namespaces, from a declaration name or from a reference, across every schema file of the project.
+     - `textDocument/prepareRename` returns the identifier's range on those symbols and `null` everywhere else.
+     - A new name that is not a PSL identifier is refused with an error response.
+     - Rename in `apps/lsp-playground` changes every scratch file that uses the symbol, including files never selected in the sidebar.
+   - **Builds on:** PR #30621 (branch `find-usage`): `provideReferences`, `ProjectArtifacts.documents()` and the `namespace` resolution on namespace block names.
+   - **Hands to:** Project close-out.
+   - **Focus:**
+     - a new `rename.ts` provider that maps the find-references result to text edits, with the new-name check;
+     - `Project.prepareRename` and `Project.rename`, with the membership checks `Project.references` has;
+     - the `renameProvider` capability, `prepareSupport` detection and the two handlers in `server.ts`, including how the refused-name error reaches the client;
+     - tests for every item in the spec's Definition of Done;
+     - the playground: a hand check of a multi-file rename, and a client change if the editor does not apply the edit to every scratch file;
+     - one statement in the language-server README and one in the playground README that rename is supported;
+     - the manual QA script and run, with the VS Code and playground checks as operator steps.
+
+## Dependencies (external)
+
+- **PR #30621 (find references)** is open. The slice branch is based on `find-usage` and its PR targets that branch. After #30621 squash-merges, the slice branch is rebased onto `origin/main` and the PR is retargeted to `main`.
+- No package release is named: the language server reaches users with the next regular release of the CLI package, as find references does.
+
+## Sequencing rationale
+
+- **Why one slice.** The provider is a mapping from the find-references result to edits and has no use without the handlers and the capability. The playground change, if one is needed, is small and is what lets the feature be tried by hand; a separate PR for it would leave the first PR merged with rename not working in the playground.
+- **Why stacked on #30621 instead of waiting.** Find references is complete and under review; rename does not change any file that PR touches except `project.ts` and `server.ts`, where it adds next to the references code.
