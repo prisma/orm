@@ -34,6 +34,7 @@ import {
   errorDestructiveChanges,
   errorFileNotFound,
   errorMigrationPlanningFailed,
+  errorPlanProducedNoOperations,
   errorTargetMigrationNotSupported,
 } from '../../utils/cli-errors';
 import {
@@ -108,35 +109,29 @@ type PlannerSuccess = {
 
 type TargetMigrationsApi = NonNullable<ReturnType<typeof getTargetMigrations>>;
 
-function noOperationsConflict(fromHash: string | null): CliErrorConflict {
-  if (fromHash === null) {
-    return {
-      kind: 'unsupportedChange',
-      summary:
-        'This contract describes nothing migration plan can create, so there is no first migration to plan.',
-      why: 'If the database needs something the contract does not describe, such as a database extension, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.',
+/** Where a planner leg plans from: an empty database, an empty database toward the `db` ref's contract (the automatic baseline), or an earlier contract. */
+type PlanOrigin =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'baseline'; readonly hash: string }
+  | {
+      readonly kind: 'contract';
+      readonly hash: string;
+      readonly contract: Contract;
+      readonly destinationIsEmitted: boolean;
     };
-  }
-  return {
-    kind: 'unsupportedChange',
-    summary:
-      'The contract changed, but migration plan found nothing to change in the database. That is expected after a Prisma upgrade that changes how contract.json records values, after you switch a field to another codec of the same type, or after you change a control policy.',
-    why: `If you deploy with migrations, run \`prisma migration new --from ${fromHash}\` to write a migration with no operations, then \`prisma db migrate\`. If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign\` on each database instead. If you expected the database to change, migration plan missed it: report it with the output of \`prisma migration plan --json\`.`,
-  };
-}
 
 async function runPlannerLeg(
   planner: ReturnType<TargetMigrationsApi['createPlanner']>,
   migrations: TargetMigrationsApi,
   frameworkComponents: ReturnType<typeof assertFrameworkComponentsCompatible>,
   contract: Contract,
-  fromContract: Contract | null,
-  fromHash: string | null,
+  origin: PlanOrigin,
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
   resolveImportSpecifier: ImportSpecifierResolver,
 ): Promise<Result<PlannerSuccess, CliStructuredError>> {
+  const fromContract = origin.kind === 'contract' ? origin.contract : null;
   const fromSchema = migrations.contractToSchema(fromContract, frameworkComponents);
   const plannerResult = planner.plan({
     contract,
@@ -166,7 +161,7 @@ async function runPlannerLeg(
   try {
     plannedOps = await Promise.all(plannerResult.plan.operations);
     if (plannedOps.length === 0) {
-      return notOk(errorMigrationPlanningFailed({ conflicts: [noOperationsConflict(fromHash)] }));
+      return notOk(errorPlanProducedNoOperations(origin));
     }
   } catch (e) {
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
@@ -497,6 +492,16 @@ async function executeMigrationPlanCommandInner(
       isAutoBaseline = true;
       break;
   }
+  const resolvedFrom = resolutionResult.value;
+  const fromOrigin: PlanOrigin =
+    resolvedFrom.kind === 'greenfield'
+      ? { kind: 'empty' }
+      : {
+          kind: 'contract',
+          hash: resolvedFrom.fromHash,
+          contract: resolvedFrom.fromContract,
+          destinationIsEmitted: options.to === undefined,
+        };
 
   // `--to <ref>` swaps the planner destination to an arbitrary resolved
   // contract (e.g. an ancestor / rollback target). The from-side resolution
@@ -643,8 +648,7 @@ async function executeMigrationPlanCommandInner(
         migrations,
         frameworkComponents,
         fromContract,
-        null,
-        null,
+        { kind: 'baseline', hash: fromHash },
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
@@ -721,8 +725,7 @@ async function executeMigrationPlanCommandInner(
         migrations,
         frameworkComponents,
         aggregate.app.contract(),
-        fromContract,
-        fromHash,
+        fromOrigin,
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
@@ -807,8 +810,7 @@ async function executeMigrationPlanCommandInner(
       migrations,
       frameworkComponents,
       aggregate.app.contract(),
-      fromContract,
-      fromHash,
+      fromOrigin,
       aggregate.app.spaceId,
       aggregate,
       snapshotsImportPathFrom(packageDir, migrationsDir),

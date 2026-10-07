@@ -122,6 +122,7 @@ withTempDir(({ createTempDir }) => {
           meta: {
             conflicts: [
               expect.objectContaining({
+                kind: 'noDatabaseChange',
                 summary: expect.stringContaining(
                   'The contract changed, but migration plan found nothing to change in the database.',
                 ),

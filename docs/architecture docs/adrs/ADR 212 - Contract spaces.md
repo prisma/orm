@@ -148,16 +148,15 @@ const baseline: MigrationPackage = {
 
 The build pipeline emits the contract artefacts under `src/contract.{json,d.ts}` and `tsdown` bundles them into `dist/`. `prisma-next migration plan` is **not** part of the build script — it is non-idempotent (each invocation generates a new timestamped directory) and is run manually when the contract source changes, exactly the way application authors run it.
 
-#### Two authoring paths: planner-emitted (A) vs hand-scaffolded (B)
+#### Two authoring paths: planner-emitted (A) vs hand-written (B)
 
 Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migration directory from the contract diff (cipherstash + the audit / feature-flags monorepo packages all follow this), and the resulting `migration.ts` is hand-edited to carry the extension's stable invariantIds and any non-derivable ops (e.g. cipherstash's `installEqlBundle` op + structural `cipherstash:create-*-v1` no-ops). `pnpm tsx migrations/<dirName>/migration.ts` then re-emits `ops.json` + `migration.json` deterministically.
 
-A handful of extensions need **Path B** — hand-scaffolding the migration directory — when the contract declares only `storage.types` (no tables / models). For such contracts the planner returns no operations and `migration plan` refuses with `PN-CLI-4020`: "This contract describes nothing migration plan can create, so there is no first migration to plan." So `migration plan` cannot scaffold the baseline. The author instead:
+A handful of extensions need **Path B** — scaffolding an empty migration and writing its operations by hand — when the contract declares only `storage.types` (no tables / models). For such contracts the planner returns no operations and `migration plan` refuses with `MIGRATION.PLANNING_FAILED`: "This contract describes nothing migration plan can create, so there is no first migration to plan." The author instead:
 
-1. Creates `migrations/<timestamp>_<name>/` by hand.
-2. Seeds `migration.json` with `from: null`, `to: <storageHash from contract.json>`, and `toContract` set to the emitted `<package>/src/contract.json` byte-for-byte.
-3. Hand-authors `migration.ts` as a `Migration` subclass returning the production op list (typically a single `rawSql` op installing the underlying database extension) via the `operations` getter.
-4. Runs `pnpm tsx migrations/<dirName>/migration.ts` to canonicalize `ops.json` + `migration.json` from the subclass output.
+1. Runs `prisma-next migration new`, which writes `migrations/<timestamp>_<name>/` with `migration.json` (`from: null`, `to: <storageHash from contract.json>`), an empty `ops.json`, a `migration.ts` stub, and the contract snapshot.
+2. Hand-authors `migration.ts` as a `Migration` subclass returning the production op list (typically a single `rawSql` op installing the underlying database extension) via the `operations` getter.
+3. Runs `pnpm tsx migrations/<dirName>/migration.ts` to canonicalize `ops.json` + `migration.json` from the subclass output.
 
 pgvector (whose contract declares only `vector(N)` under `storage.types`) is the exemplar. Future migrations on a Path-B-bootstrapped extension that *do* add tables / models can use `migration plan` (Path A) directly — the path choice is per-migration, not per-extension.
 
