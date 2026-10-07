@@ -433,6 +433,11 @@ export interface AuthoringPslBlockDescriptor {
     readonly parameter: string;
     readonly attribute: string;
   };
+  /**
+   * Declares that the block's name is the name of the storage object the
+   * block declares, and that the block attribute `map` replaces that name.
+   */
+  readonly nameIsStorageName?: boolean;
   readonly attributes?: Readonly<Record<string, unknown>>;
 }
 

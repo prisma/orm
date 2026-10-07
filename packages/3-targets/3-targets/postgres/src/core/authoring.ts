@@ -576,6 +576,7 @@ export const postgresAuthoringPslBlockDescriptors = {
     discriminator: 'native_enum',
     name: { required: true },
     spec: nativeEnumSpec,
+    nameIsStorageName: true,
     attributes: { map: () => nativeEnumMapAttribute },
   } satisfies PslBlockSpecDescriptor,
   /**
