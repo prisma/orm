@@ -145,7 +145,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -162,31 +162,31 @@
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "external_id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "order_id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 }
               },
@@ -231,7 +231,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1d10040f515e1e8d9d9b3ea907152be6c7a6b9f3796b52a1c919554ef9c179f7"
+    "storageHash": "30ff5a9e093446ad197ef6e6fda5589d26809a866e197f316c98be9b803fb5cb"
   },
   "execution": {
     "executionHash": "22025a4d4d9e3b06377509dcc92ca21ef7f1f8ca5d497e13ba08d58eab55f9df",
@@ -258,6 +258,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -268,9 +270,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

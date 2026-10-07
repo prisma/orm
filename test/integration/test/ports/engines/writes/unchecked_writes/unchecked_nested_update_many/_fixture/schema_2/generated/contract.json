@@ -115,12 +115,12 @@
               "columns": {
                 "b_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -163,7 +163,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -182,11 +182,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1d0b78f31ef4e09668d84eb80343bbeb82223c9d64781a9ef1e921d99fb87327"
+    "storageHash": "a3b99a02827fcfd9c792fd5e620179b58764cd621792ef4263b2eebc3889c1c3"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -197,9 +199,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
