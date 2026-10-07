@@ -41,3 +41,76 @@ describe('numeric membership checks in Postgres', () => {
     timeouts.spinUpPpgDev,
   );
 });
+
+describe('list membership checks in Postgres', () => {
+  it(
+    'compares members in the element type and reads quoted members back exactly',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await withClient(connectionString, async (client) => {
+          const columns = {
+            hosts: { type: 'inet', members: ['127.0.0.1', '10.0.0.0/8', '::1'] },
+            ratios: { type: 'numeric', members: ['0.5', '1.50'] },
+            labels: { type: 'varchar(20)', members: ['say "hi"', 'back\\slash', "o'brien"] },
+          };
+          const checks = Object.entries(columns).flatMap(([columnName, { members }]) =>
+            postgresRenderCheckExpressions({
+              tableName: 'lists',
+              columnName,
+              many: { elementNullable: false },
+              memberValues: members,
+            }),
+          );
+          await client.query(
+            `CREATE TABLE lists (id int, ${Object.entries(columns)
+              .map(([name, { type }]) => `${name} ${type}[]`)
+              .join(', ')}, ${checks.map(({ expression }) => `CHECK (${expression})`).join(', ')})`,
+          );
+          await client.query('INSERT INTO lists VALUES ($1, $2, $3, $4)', [
+            1,
+            ['127.0.0.1', '10.0.0.0/8', '::1'],
+            ['0.5', '1.50'],
+            ['say "hi"', 'back\\slash', "o'brien"],
+          ]);
+          await client.query('INSERT INTO lists VALUES ($1, $2, $3, $4)', [
+            2,
+            ['127.0.0.1/32'],
+            ['0.50'],
+            [],
+          ]);
+          const refused = await Promise.all(
+            [
+              [['10.0.0.1'], [], []],
+              [['10.0.0.0/16'], [], []],
+              [[], ['0.7'], []],
+              [[], [], ['say hi']],
+            ].map((values, index) =>
+              client
+                .query('INSERT INTO lists VALUES ($1, $2, $3, $4)', [10 + index, ...values])
+                .then(
+                  () => 'accepted',
+                  (error: { code?: string }) => error.code,
+                ),
+            ),
+          );
+          const { rows } = await client.query(
+            'SELECT id, hosts::text, ratios::text, labels FROM lists ORDER BY id',
+          );
+          expect({ rows, refused }).toEqual({
+            rows: [
+              {
+                id: 1,
+                hosts: '{127.0.0.1,10.0.0.0/8,::1}',
+                ratios: '{0.5,1.50}',
+                labels: ['say "hi"', 'back\\slash', "o'brien"],
+              },
+              { id: 2, hosts: '{127.0.0.1}', ratios: '{0.50}', labels: [] },
+            ],
+            refused: ['23514', '23514', '23514', '23514'],
+          });
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});

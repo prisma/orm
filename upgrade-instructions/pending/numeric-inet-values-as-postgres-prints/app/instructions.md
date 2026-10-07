@@ -31,6 +31,13 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)[\s\S]*?(?:[''"]pg/timestamp(?:tz)?-string@1[''"]|\b(?:PG_TIMESTAMP(?:TZ)?_STRING_CODEC_ID|pgTimestamp(?:tz)?StringColumn)\b)'
+  - id: enum-list-check-compares-in-column-type
+    summary: |
+      The CHECK constraint on a Postgres list column typed by an enum now compares each element with the members in the column's own type, not as text, so an inet enum list takes a host address such as "127.0.0.1". The constraint's expression and name change, so re-emit the contract and apply a migration that replaces the constraint.
+    detection:
+      glob: "**/contract.json"
+      matches:
+        - '::(?:text|numeric)\[\], NULL\) <@ ARRAY\['
 ---
 
 ## `ts-numeric-inet-enum-members-written-as-postgres-prints`
@@ -100,3 +107,22 @@ CONTRACT.ENUM_INVALID: enumType("Stamp"): an enum cannot use the codec pg/timest
 PSL refuses an enum block typed by either codec with the same reason, as `PSL_EXTENSION_INVALID_VALUE` at its `@@type`; it used to report the codec as unknown.
 
 Type the enum with the Temporal codec of the same column type, `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1`, and write each member as a `Temporal.PlainDateTime` or a `Temporal.Instant`. `db.enums` then holds Temporal values and finds a value read back. Re-emit the contract; the enum's codec changes, and with it the storage hash. Plan and apply a migration, or run `prisma db sign` for a project kept with `db init` or `db update`.
+
+## `enum-list-check-compares-in-column-type`
+
+A list column typed by an enum, such as `hosts Host[]` in PSL or `field.namedType(Host).many()` in TypeScript, has a CHECK constraint that every element is a member. Earlier versions cast the column to `text[]` before comparing:
+
+```sql
+array_remove("hosts"::text[], NULL) <@ ARRAY['127.0.0.1', '10.0.0.0/8']::text[]
+```
+
+Postgres writes an `inet` value as text with its prefix length, `127.0.0.1/32`, so that constraint refused every host address. The constraint now compares in the column's type:
+
+```sql
+array_remove("hosts", NULL) <@ '{"127.0.0.1","10.0.0.0/8"}'
+```
+
+1. Re-emit the contract. Every list column typed by an enum gets the new expression, and the constraint's name is derived from its expression, so the name and the storage hash change.
+2. Plan and apply a migration: it drops the old CHECK constraint and adds the new one. Dropping a constraint is a destructive operation, so the plan needs the destructive operation class allowed.
+
+The detection for this change looks in `contract.json` for the old expression. If you do not keep `contract.json` in the project, look for list fields typed by an enum.

@@ -75,12 +75,14 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
     const members = input.memberValues
       .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
       .join(', ');
-    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
+    const elements = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `"${v}"`))
+      .join(',');
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}, NULL) <@ '{${elements}}'`
         : `${column} IN (${members})`,
     });
   }
@@ -213,10 +215,7 @@ describe('check emission — array domain enum', () => {
     ) as Contract<SqlStorage>;
 
     expect(flatten(checksOf(contract))).toEqual([
-      wire(
-        'User_roles_check',
-        `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
-      ),
+      wire('User_roles_check', `array_remove("roles", NULL) <@ '{"user","admin"}'`),
       wire('User_roles_elem_not_null', `array_position("roles", NULL) IS NULL`),
     ]);
   });
@@ -630,10 +629,7 @@ describe('check emission — guards', () => {
         valueSet: { kind: 'valueSet', values: ['1', '10'] },
         checks: many
           ? [
-              wire(
-                'User_level_check',
-                `array_remove("level"::text[], NULL) <@ ARRAY['1', '10']::text[]`,
-              ),
+              wire('User_level_check', `array_remove("level", NULL) <@ '{"1","10"}'`),
               wire('User_level_elem_not_null', `array_position("level", NULL) IS NULL`),
             ]
           : [wire('User_level_check', `"level" IN ('1', '10')`)],

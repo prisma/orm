@@ -109,6 +109,68 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
     timeouts.spinUpPpgDev,
   );
 
+  it(
+    'enforces inet and numeric list members in the element type',
+    () =>
+      withEnumMembers(async ({ client, db }) => {
+        const { Host, Ratio } = client.enums.public;
+        await db.public.Network.createAndCount([
+          {
+            id: 1,
+            hosts: [Host.members.Loopback, Host.members.Private, Host.members.Local6],
+            ratios: [Ratio.members.Half, Ratio.members.Whole],
+            ratio: Ratio.members.Half,
+          },
+          { id: 2, hosts: [], ratios: ['0.50'], ratio: '0.50' },
+        ]);
+        const refused = await Promise.all(
+          [
+            { id: 3, hosts: ['10.0.0.1'], ratios: [], ratio: Ratio.members.Half },
+            { id: 4, hosts: ['10.0.0.0/16'], ratios: [], ratio: Ratio.members.Half },
+            { id: 5, hosts: [], ratios: ['0.7'], ratio: Ratio.members.Half },
+            { id: 6, hosts: [], ratios: [], ratio: '0.7' },
+          ].map((row) =>
+            db.public.Network.createAndCount([row]).then(
+              () => 'accepted',
+              (error: Error) =>
+                /violates check constraint "networks_\w+_check_/.test(error.message),
+            ),
+          ),
+        );
+        const rows = await db.public.Network.orderBy((n) => n.id.asc()).all();
+
+        expect({
+          rows: rows.map((row) => ({
+            ...row,
+            hostsFound: row.hosts.map((host) => Host.has(host)),
+            ratiosFound: row.ratios.map((ratio) => Ratio.has(ratio)),
+          })),
+          refused,
+        }).toEqual({
+          rows: [
+            {
+              id: 1,
+              hosts: ['127.0.0.1', '10.0.0.0/8', '::1'],
+              ratios: ['0.5', '1.50'],
+              ratio: '0.5',
+              hostsFound: [true, true, true],
+              ratiosFound: [true, true],
+            },
+            {
+              id: 2,
+              hosts: [],
+              ratios: ['0.50'],
+              ratio: '0.50',
+              hostsFound: [],
+              ratiosFound: [false],
+            },
+          ],
+          refused: [true, true, true, true],
+        });
+      }),
+    timeouts.spinUpPpgDev,
+  );
+
   it('types each member as the value a query returns for it', () => {
     type Levels = PortContext<Contract>['client']['enums']['public'];
     expectTypeOf<Levels['TextLevel']['members']['Low']>().toEqualTypeOf<'low'>();

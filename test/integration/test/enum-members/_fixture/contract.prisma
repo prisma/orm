@@ -49,6 +49,28 @@ enum FloatSpecial {
   Negative = "-Infinity"
 }
 
+enum Host {
+  @@type("pg/inet@1")
+  Loopback = "127.0.0.1"
+  Private  = "10.0.0.0/8"
+  Local6   = "::1"
+}
+
+enum Ratio {
+  @@type("pg/numeric@1")
+  Half  = "0.5"
+  Whole = "1.50"
+}
+
+model Network {
+  id     Int     @id
+  hosts  Host[]
+  ratios Ratio[]
+  ratio  Ratio
+
+  @@map("networks")
+}
+
 model Reading {
   id     Int         @id
   text   TextLevel

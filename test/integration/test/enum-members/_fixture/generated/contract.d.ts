@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'c45dba024cecc6a0f3a12a204207217875ce0fc985e5aada283dea73ef9e672d'>;
+  StorageHashBase<'211447d69f87329212f4dfe9e68eb03c85de33e22da707af2ba1dbd9f26f5df3'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -233,6 +233,12 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 
 export type FieldOutputTypes = {
   readonly public: {
+    readonly Network: {
+      readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly ratio: CodecTypes['pg/numeric@1']['output'];
+      readonly ratios: ReadonlyArray<CodecTypes['pg/numeric@1']['output']>;
+    };
     readonly Reading: {
       readonly day: CodecTypes['pg/date-temporal@1']['output'];
       readonly float8: 1.5 | 2.25;
@@ -248,6 +254,12 @@ export type FieldOutputTypes = {
 };
 export type FieldInputTypes = {
   readonly public: {
+    readonly Network: {
+      readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['input']>;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly ratio: CodecTypes['pg/numeric@1']['input'];
+      readonly ratios: ReadonlyArray<CodecTypes['pg/numeric@1']['input']>;
+    };
     readonly Reading: {
       readonly day: CodecTypes['pg/date-temporal@1']['input'];
       readonly float8: 1.5 | 2.25;
@@ -263,6 +275,12 @@ export type FieldInputTypes = {
 };
 export type StorageColumnTypes = {
   readonly public: {
+    readonly networks: {
+      readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly ratio: CodecTypes['pg/numeric@1']['output'];
+      readonly ratios: ReadonlyArray<CodecTypes['pg/numeric@1']['output']>;
+    };
     readonly readings: {
       readonly day: CodecTypes['pg/date-temporal@1']['output'];
       readonly float8: 1.5 | 2.25;
@@ -278,6 +296,12 @@ export type StorageColumnTypes = {
 };
 export type StorageColumnInputTypes = {
   readonly public: {
+    readonly networks: {
+      readonly hosts: ReadonlyArray<CodecTypes['pg/inet@1']['input']>;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly ratio: CodecTypes['pg/numeric@1']['input'];
+      readonly ratios: ReadonlyArray<CodecTypes['pg/numeric@1']['input']>;
+    };
     readonly readings: {
       readonly day: CodecTypes['pg/date-temporal@1']['input'];
       readonly float8: 1.5 | 2.25;
@@ -293,6 +317,13 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Network = {
+    hosts: ReadonlyArray<CodecTypes['pg/inet@1']['output']>;
+    id: CodecTypes['pg/int4@1']['output'];
+    ratio: CodecTypes['pg/numeric@1']['output'];
+    ratios: ReadonlyArray<CodecTypes['pg/numeric@1']['output']>;
+    readonly [RelationKeys]?: never;
+  };
   export type public_Reading = {
     day: CodecTypes['pg/date-temporal@1']['output'];
     float8: 1.5 | 2.25;
@@ -309,6 +340,7 @@ export namespace Models {
 
 export declare const models: {
   public: {
+    Network: Models.public_Network;
     Reading: Models.public_Reading;
   };
 };
@@ -331,6 +363,38 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly networks: {
+              columns: {
+                readonly hosts: {
+                  readonly dataType: 'pg/inet';
+                  readonly codecId: 'pg/inet@1';
+                  readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
+                };
+                readonly id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly ratio: {
+                  readonly dataType: 'pg/numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly ratios: {
+                  readonly dataType: 'pg/numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                  readonly many: { readonly elementNullable: false };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly readings: {
               columns: {
                 readonly day: {
@@ -407,10 +471,18 @@ type ContractBase = Omit<
               readonly kind: 'valueSet';
               readonly values: readonly ['NaN', 'Infinity', '-Infinity'];
             };
+            readonly Host: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['127.0.0.1', '10.0.0.0/8', '::1'];
+            };
             readonly Int4Level: { readonly kind: 'valueSet'; readonly values: readonly [1, 10] };
             readonly Int8Level: {
               readonly kind: 'valueSet';
               readonly values: readonly ['1', '10'];
+            };
+            readonly Ratio: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['0.5', '1.50'];
             };
             readonly StampLevel: {
               readonly kind: 'valueSet';
@@ -438,12 +510,46 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly networks: { readonly namespace: 'public' & NamespaceId; readonly model: 'Network' };
     readonly readings: { readonly namespace: 'public' & NamespaceId; readonly model: 'Reading' };
   };
   readonly domain: {
     readonly namespaces: {
       readonly public: {
         readonly models: {
+          readonly Network: {
+            readonly fields: {
+              readonly hosts: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/inet@1' };
+                readonly many: { readonly elementNullable: false };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly ratio: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+              };
+              readonly ratios: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+                readonly many: { readonly elementNullable: false };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'networks';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly hosts: { readonly column: 'hosts' };
+                readonly id: { readonly column: 'id' };
+                readonly ratio: { readonly column: 'ratio' };
+                readonly ratios: { readonly column: 'ratios' };
+              };
+            };
+          };
           readonly Reading: {
             readonly fields: {
               readonly day: {
@@ -527,6 +633,14 @@ type ContractBase = Omit<
               { readonly name: 'Negative'; readonly value: '-Infinity' },
             ];
           };
+          readonly Host: {
+            readonly codecId: 'pg/inet@1';
+            readonly members: readonly [
+              { readonly name: 'Loopback'; readonly value: '127.0.0.1' },
+              { readonly name: 'Private'; readonly value: '10.0.0.0/8' },
+              { readonly name: 'Local6'; readonly value: '::1' },
+            ];
+          };
           readonly Int4Level: {
             readonly codecId: 'pg/int4@1';
             readonly members: readonly [
@@ -539,6 +653,13 @@ type ContractBase = Omit<
             readonly members: readonly [
               { readonly name: 'Low'; readonly value: '1' },
               { readonly name: 'High'; readonly value: '10' },
+            ];
+          };
+          readonly Ratio: {
+            readonly codecId: 'pg/numeric@1';
+            readonly members: readonly [
+              { readonly name: 'Half'; readonly value: '0.5' },
+              { readonly name: 'Whole'; readonly value: '1.50' },
             ];
           };
           readonly StampLevel: {
@@ -577,6 +698,11 @@ type ContractBase = Omit<
             { readonly name: 'Infinite'; readonly value: CodecTypes['pg/float8@1']['output'] },
             { readonly name: 'Negative'; readonly value: CodecTypes['pg/float8@1']['output'] },
           ];
+          readonly Host: readonly [
+            { readonly name: 'Loopback'; readonly value: '127.0.0.1' },
+            { readonly name: 'Private'; readonly value: '10.0.0.0/8' },
+            { readonly name: 'Local6'; readonly value: '::1' },
+          ];
           readonly Int4Level: readonly [
             { readonly name: 'Low'; readonly value: 1 },
             { readonly name: 'High'; readonly value: 10 },
@@ -584,6 +710,10 @@ type ContractBase = Omit<
           readonly Int8Level: readonly [
             { readonly name: 'Low'; readonly value: 1n },
             { readonly name: 'High'; readonly value: 10n },
+          ];
+          readonly Ratio: readonly [
+            { readonly name: 'Half'; readonly value: '0.5' },
+            { readonly name: 'Whole'; readonly value: '1.50' },
           ];
           readonly StampLevel: readonly [
             {
