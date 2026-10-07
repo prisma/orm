@@ -1,5 +1,6 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
 import {
   applyNaming,
@@ -30,6 +31,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 };
 
 const { model } = createComposedAuthoringHelpers({
+  ...testTypeLookups,
   family: bareFamilyPack,
   target: postgresTargetPack,
   extensions: { testIndexes: testIndexPack },
@@ -37,7 +39,7 @@ const { model } = createComposedAuthoringHelpers({
 
 const int4Column = columnDescriptor('pg/int4@1');
 const textColumn = columnDescriptor('pg/text@1');
-const charColumn = columnDescriptor('sql/char@1', 'character');
+const charColumn = columnDescriptor('sql/char@1');
 
 describe('contract DSL runtime helpers', () => {
   it('normalizes defaults, generated descriptors, relation helpers, and input detection', () => {
@@ -70,7 +72,6 @@ describe('contract DSL runtime helpers', () => {
     expect(functionDefault.default).toEqual({ kind: 'function', expression: 'now()' });
     expect(generated.descriptor).toEqual({
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: 12 },
     });
     expect(normalizeRelationFieldNames('id')).toEqual(['id']);

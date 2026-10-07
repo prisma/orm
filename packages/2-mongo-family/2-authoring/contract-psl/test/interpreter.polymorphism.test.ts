@@ -1,6 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
-import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoIndex } from '@internal/mongo-contract';
 
@@ -9,6 +8,7 @@ function modelsOf(ir: Contract): Record<string, unknown> {
 }
 
 import { describe, expect, it } from 'vitest';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
@@ -23,32 +23,6 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
 ]);
-
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
-
-const mongoCodecLookup: CodecLookupWithDescriptors = {
-  get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
 
 function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, unknown> {
   const storage = ir.storage as {
@@ -67,6 +41,7 @@ function interpret(schema: string) {
         defaultFunctionRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,
+      dataTypeLookup: mongoDataTypeLookup,
     },
     'test.prisma',
   );
@@ -326,6 +301,44 @@ namespace scoped {
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {
+    it('diagnoses duplicate discriminator values', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  String
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+
+        model OtherBug {
+          id          ObjectId @id @map("_id")
+          description String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
+            message:
+              'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task"',
+          }),
+        ]),
+      );
+    });
+
     it('diagnoses orphaned @@discriminator (no @@base declarations)', () => {
       const result = interpret(`
         model Task {

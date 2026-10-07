@@ -21,7 +21,7 @@ function expectDerivedTableSource(source: unknown): asserts source is DerivedTab
   expect(source).toBeInstanceOf(DerivedTableSource);
 }
 
-// A `.variant('Feature')`-narrowed Task resolves `priority` (variant-owned,
+// A `.variant('feature')`-narrowed Task resolves `priority` (variant-owned,
 // MTI) to a ColumnRef qualified against `features`, mirroring what the
 // model accessor produces (`model-accessor.ts:222-229`). Root
 // `compileAggregate` must join `features` into its FROM the same way

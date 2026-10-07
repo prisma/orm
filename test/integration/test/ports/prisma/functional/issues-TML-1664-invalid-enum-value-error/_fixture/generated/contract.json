@@ -71,12 +71,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "status": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "Status",
+                  "dataType": "pg/enum",
                   "nullable": false,
                   "typeParams": {
                     "typeName": "Status"
@@ -114,11 +114,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d9d1732db60a57acdbdf8c782987802f55b577dab5180837be0e5a773a018b18"
+    "storageHash": "25446826fe1e727075de946425ed688c8ba3d7519a770c3920786bcf48638158"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -129,9 +131,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

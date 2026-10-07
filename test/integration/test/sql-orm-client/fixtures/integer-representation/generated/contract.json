@@ -145,17 +145,17 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "lifetime": {
                   "codecId": "pg/unboundedint@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": false
                 },
                 "peak": {
                   "codecId": "pg/int8number@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 }
               },
@@ -172,17 +172,17 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "meter_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "reading": {
                   "codecId": "pg/int8number@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 }
               },
@@ -227,11 +227,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4fd3adfc6d6b3912e188d78624c3b652a5315a4c5763284696a16a62ed187bd0"
+    "storageHash": "850c17d1c7717e962170fd5b71a67a2810709bfe81984612db7d44ea015764a9"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -242,9 +244,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

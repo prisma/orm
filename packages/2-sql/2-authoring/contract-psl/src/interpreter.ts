@@ -81,11 +81,11 @@ import {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import {
+  type AuthoredStorageTypeInstance,
   resolvedTypeParams,
   type SqlModelStorage,
   type SqlNamespaceBase,
   type SqlNamespaceInput,
-  type StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
@@ -110,7 +110,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-import type { DataTypeSupport } from './data-type-default';
+import { type DataTypeSupport, readWrittenNumberForCodec } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import {
   getAttribute,
@@ -175,7 +175,7 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   /** Target-supplied factory that materialises a `SqlNamespaceBase` concretion for each namespace coordinate. */
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
-  readonly codecLookup?: CodecLookupWithDescriptors;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
@@ -563,10 +563,7 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
     if (handle === undefined || handle === null) continue;
 
     enumHandles.set(symbol, handle);
-    enumTypeDescriptors.set(symbol, {
-      codecId: handle.codecId,
-      nativeType: handle.nativeType,
-    });
+    enumTypeDescriptors.set(symbol, { codecId: handle.codecId });
   }
 
   return { enumHandles, enumTypeDescriptors };
@@ -607,7 +604,7 @@ interface BuildModelNodeInput {
     Readonly<Record<string, Readonly<Record<string, unknown>>>>
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
-  readonly codecLookup?: CodecLookupWithDescriptors;
+  readonly codecLookup: CodecLookupWithDescriptors;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -707,7 +704,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     capabilities: input.capabilities,
     ...ifDefined('namespaceId', modelNamespaceId),
     ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntitiesForModel),
-    ...ifDefined('codecLookup', input.codecLookup),
+    codecLookup: input.codecLookup,
   });
 
   const inlineIdFields = resolvedFields.filter((field) => field.isId);
@@ -1106,6 +1103,8 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       const lowered = lower(parsed, {
         family: input.familyId,
         target: input.targetId,
+        codecLookup: input.codecLookup,
+        dataTypeLookup: input.dataTypeSupport.lookup,
         modelName: model.name,
         storageName: tableName,
         fieldStorageName: (fieldName) => {
@@ -1502,7 +1501,7 @@ interface BuildValueObjectNodesInput {
   readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** The named types; a member typed by one takes its parameters inline. */
-  readonly namedTypes: Record<string, StorageTypeInstance>;
+  readonly namedTypes: Record<string, AuthoredStorageTypeInstance>;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
   /** Composite types are placed in the default namespace, so their members resolve against it. */
@@ -1510,7 +1509,7 @@ interface BuildValueObjectNodesInput {
   readonly defaultNamespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly binder: Binder;
 }
 
@@ -1557,7 +1556,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
         namespaceId: input.defaultNamespaceId,
         ...ifDefined('namespaceExtensionEntities', input.defaultNamespaceExtensionEntities),
-        ...ifDefined('codecLookup', input.codecLookup),
+        codecLookup: input.codecLookup,
       });
       if (!resolved.ok) {
         continue;
@@ -2210,7 +2209,8 @@ export function interpretPslDocumentToSqlContract(
     entityContext: {
       family: input.target.familyId,
       target: input.target.targetId,
-      ...ifDefined('codecLookup', input.codecLookup),
+      codecLookup: input.codecLookup,
+      dataTypeLookup: input.dataTypeLookup,
       sourceId: source.sources.sourceFileFor(source.node).filename,
       diagnostics: {
         push: (d) => {
@@ -2218,6 +2218,17 @@ export function interpretPslDocumentToSqlContract(
             blindCast<ContractSourceDiagnostic, 'sink diagnostics are span-compatible'>(d),
           );
         },
+      },
+      readWrittenNumber: ({ text, codecId, subject }) => {
+        if (input.codecLookup.descriptorFor(codecId) === undefined) return undefined;
+        const reading = readWrittenNumberForCodec({
+          text,
+          codecId,
+          codecLookup: input.codecLookup,
+          support: dataTypeSupport,
+          subject,
+        });
+        return reading.ok ? reading : { ok: false, message: reading.message };
       },
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
     },
@@ -2253,7 +2264,8 @@ export function interpretPslDocumentToSqlContract(
     family: input.target.familyId,
     target: input.target.targetId,
     ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
-    ...ifDefined('codecLookup', input.codecLookup),
+    codecLookup: input.codecLookup,
+    dataTypeLookup: input.dataTypeLookup,
     sourceId: source.sources.sourceFileFor(source.node).filename,
     diagnostics: {
       push: (d) => {
@@ -2391,6 +2403,7 @@ export function interpretPslDocumentToSqlContract(
     source,
     binder,
     enumTypeDescriptors: allEnumTypeDescriptors,
+    codecLookup: input.codecLookup,
     diagnostics,
   });
 
@@ -2455,7 +2468,7 @@ export function interpretPslDocumentToSqlContract(
       enumHandles,
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
-      ...ifDefined('codecLookup', input.codecLookup),
+      codecLookup: input.codecLookup,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       defaultNamespaceId,
@@ -2689,6 +2702,7 @@ export function interpretPslDocumentToSqlContract(
       models: stiColumnModelNodes,
     },
     input.codecLookup,
+    input.dataTypeLookup,
   );
 
   // Key by namespace so same bare model names across namespaces stay distinct;

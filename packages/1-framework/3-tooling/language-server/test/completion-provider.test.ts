@@ -459,7 +459,7 @@ namespace other { model Hidden { id Int } }`,
                 Value: {
                   kind: 'typeConstructor',
                   documentation: 'Custom value',
-                  output: { codecId: 'value', nativeType: 'value' },
+                  output: { codecId: 'value' },
                 },
               },
             },
@@ -512,17 +512,17 @@ namespace other { model Hidden { id Int } }`,
       const types: AuthoringTypeNamespace = {
         Scalar: {
           kind: 'typeConstructor',
-          output: { codecId: 'fixture/value', nativeType: 'value' },
+          output: { codecId: 'fixture/value' },
         },
         Deprecated: {
           kind: 'typeConstructor',
           deprecated: { replacement: 'Scalar' },
-          output: { codecId: 'fixture/value', nativeType: 'value' },
+          output: { codecId: 'fixture/value' },
         },
         Empty: {
           kind: 'typeConstructor',
           args: [],
-          output: { codecId: 'fixture/value', nativeType: 'value' },
+          output: { codecId: 'fixture/value' },
         },
         Required: {
           kind: 'typeConstructor',
@@ -531,12 +531,12 @@ namespace other { model Hidden { id Int } }`,
             { name: 'label', kind: 'string' },
             { name: 'scale', kind: 'number', optional: true },
           ],
-          output: { codecId: 'fixture/value', nativeType: 'value' },
+          output: { codecId: 'fixture/value' },
         },
         Optional: {
           kind: 'typeConstructor',
           args: [{ name: 'size', kind: 'number', optional: true }],
-          output: { codecId: 'fixture/value', nativeType: 'value' },
+          output: { codecId: 'fixture/value' },
         },
         Entity: {
           kind: 'typeConstructor',
@@ -1423,7 +1423,7 @@ namespace app {
               String: {
                 kind: 'typeConstructor',
                 documentation: 'Variable-length Unicode text.',
-                output: { codecId: 'fixture/text@1', nativeType: 'text' },
+                output: { codecId: 'fixture/text@1' },
               },
             },
           },
@@ -1447,7 +1447,7 @@ namespace app {
             field: {
               stamp: {
                 kind: 'fieldPreset',
-                output: { codecId: 'fixture/timestamp@1', nativeType: 'timestamp' },
+                output: { codecId: 'fixture/timestamp@1' },
               },
             },
           },

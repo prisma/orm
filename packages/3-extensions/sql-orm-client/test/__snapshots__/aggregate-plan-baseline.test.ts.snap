@@ -22,6 +22,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > groupBy(
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -83,6 +84,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > groupBy(
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -174,6 +176,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > groupBy(
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -229,6 +232,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > root agg
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -304,6 +308,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > root agg
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -347,6 +352,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > root agg
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [
@@ -390,6 +396,7 @@ exports[`aggregate plan baseline for chains naming no aggregate input > root agg
     "joins": undefined,
     "kind": "select",
     "limit": undefined,
+    "locking": undefined,
     "offset": undefined,
     "orderBy": undefined,
     "projection": [

@@ -40,9 +40,9 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT '2024-01-01T00:00:00Z'",
     ],
     [
-      "now(), as datetime('now')",
+      'now(), as the text the datetime codec writes',
       col('c', 'TEXT', { default: fn('now()') }),
-      "DEFAULT (datetime('now'))",
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     ],
     [
       'autoincrement(), which the type writes',

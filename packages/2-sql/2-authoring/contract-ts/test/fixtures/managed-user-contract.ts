@@ -1,5 +1,6 @@
 import type { FamilyPackRef } from '@internal/framework-components/components';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../../src/contract-builder';
 import { enumType, member } from '../../src/enum-type';
 
@@ -12,7 +13,7 @@ const sqlFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
     },
   },
@@ -65,11 +66,12 @@ const postgresTargetPack = {
   authoring: { field: {}, renderCheckExpressions },
 } as const;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
 const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 
 export default defineContract(
   {
+    ...testTypeLookups,
     family: sqlFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,

@@ -9,7 +9,7 @@ import {
   member,
 } from '../src/enum-type';
 
-const textCodec = { codecId: 'pg/text@1', nativeType: 'text' };
+const textCodec = { codecId: 'pg/text@1' };
 
 describe('member', () => {
   it('defaults the value to the name', () => {
@@ -30,7 +30,6 @@ describe('a declared enum type', () => {
       [ENUM_TYPE_HANDLE_BRAND]: true,
       enumName: 'Role',
       codecId: 'pg/text@1',
-      nativeType: 'text',
       enumMembers: [
         { name: 'User', value: 'user' },
         { name: 'Admin', value: 'admin' },
@@ -90,7 +89,7 @@ describe('bindEnumType', () => {
 
     const Level = boundEnumType(
       'Level',
-      { codecId: 'pg/int4@1', nativeType: 'int4' },
+      { codecId: 'pg/int4@1' },
       member('Low', 1),
       member('High', 2),
     );
@@ -98,13 +97,11 @@ describe('bindEnumType', () => {
     expect({
       enumName: Level.enumName,
       codecId: Level.codecId,
-      nativeType: Level.nativeType,
       values: Level.values,
       members: Level.members,
     }).toEqual({
       enumName: 'Level',
       codecId: 'pg/int4@1',
-      nativeType: 'int4',
       values: [1, 2],
       members: { Low: 1, High: 2 },
     });

@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest';
+import { prisma7PostgresTypeMap } from '../src/core/prisma7-type-map';
+import { INFERRED_PSL_TYPE_NAMES } from '../src/core/psl-build/postgres-type-map';
+import { postgresPslTypeConstructors } from '../src/core/type-constructors';
+
+const TEMPORAL_CODEC_IDS = [
+  'pg/date-temporal@1',
+  'pg/timestamp-temporal@1',
+  'pg/timestamptz-temporal@1',
+  'pg/time-temporal@1',
+];
+
+const constructorNames = [
+  ...[...INFERRED_PSL_TYPE_NAMES].map((name) => ({ source: 'contract infer', name })),
+  ...[
+    ...Object.values(prisma7PostgresTypeMap.scalars),
+    ...Object.values(prisma7PostgresTypeMap.nativeTypes),
+  ].map(({ constructorName }) => ({ source: 'prisma7Schema', name: constructorName })),
+];
+
+function codecIdOf(name: string): string | undefined {
+  return Object.hasOwn(postgresPslTypeConstructors, name)
+    ? postgresPslTypeConstructors[name as keyof typeof postgresPslTypeConstructors].output.codecId
+    : undefined;
+}
+
+describe('the types contract infer and prisma7Schema write', () => {
+  it('names a type constructor the adapter contributes for every entry', () => {
+    expect(constructorNames.length).toBeGreaterThan(30);
+    expect(constructorNames.filter(({ name }) => codecIdOf(name) === undefined)).toEqual([]);
+  });
+
+  it('binds no column to a codec that needs Temporal', () => {
+    expect(
+      constructorNames
+        .map(({ source, name }) => ({ source, name, codecId: codecIdOf(name) }))
+        .filter(({ codecId }) => codecId !== undefined && TEMPORAL_CODEC_IDS.includes(codecId)),
+    ).toEqual([]);
+  });
+});
+
+describe('the constructors marked inferred', () => {
+  it('name no codec that needs Temporal', () => {
+    expect(
+      Object.entries(postgresPslTypeConstructors)
+        .filter(([, descriptor]) => 'inferred' in descriptor)
+        .map(([name, descriptor]) => ({ name, codecId: descriptor.output.codecId }))
+        .filter(({ codecId }) => TEMPORAL_CODEC_IDS.includes(codecId)),
+    ).toEqual([]);
+  });
+});

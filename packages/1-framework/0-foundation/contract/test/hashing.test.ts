@@ -56,7 +56,7 @@ describe('computeStorageHash', () => {
             entries: {
               table: {
                 user: {
-                  columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+                  columns: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } },
                 },
               },
             },
@@ -95,8 +95,8 @@ describe('computeStorageHash', () => {
             id: '__unbound__',
             entries: {
               table: {
-                a: { columns: { x: { codecId: 'pg/text@1', nativeType: 'text' } } },
-                b: { columns: { y: { codecId: 'pg/text@1', nativeType: 'text' } } },
+                a: { columns: { x: { codecId: 'pg/text@1', dataType: 'pg/text' } } },
+                b: { columns: { y: { codecId: 'pg/text@1', dataType: 'pg/text' } } },
               },
             },
           },
@@ -112,8 +112,8 @@ describe('computeStorageHash', () => {
             id: '__unbound__',
             entries: {
               table: {
-                b: { columns: { y: { codecId: 'pg/text@1', nativeType: 'text' } } },
-                a: { columns: { x: { codecId: 'pg/text@1', nativeType: 'text' } } },
+                b: { columns: { y: { codecId: 'pg/text@1', dataType: 'pg/text' } } },
+                a: { columns: { x: { codecId: 'pg/text@1', dataType: 'pg/text' } } },
               },
             },
           },
@@ -128,7 +128,7 @@ describe('computeStorageHash', () => {
     const tables = {
       test_box: {
         columns: {
-          x: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+          x: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
         },
         uniques: [],
         indexes: [],

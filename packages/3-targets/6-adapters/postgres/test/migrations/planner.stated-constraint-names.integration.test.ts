@@ -46,7 +46,7 @@ function buildContract(names: Names): Contract<SqlStorage> {
           entries: {
             table: {
               author: {
-                columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+                columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
                 indexes: [],
@@ -54,8 +54,8 @@ function buildContract(names: Names): Contract<SqlStorage> {
               },
               post: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: {
                   columns: ['id'],

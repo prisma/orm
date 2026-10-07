@@ -1,0 +1,38 @@
+name: Integration
+
+# The integration suite runs in the merge queue (ci.yml), where it blocks the
+# merge. Pull requests do not run it. To run it on a branch before queueing:
+#
+#   gh workflow run integration.yml --ref <branch>
+#
+# The results appear as checks on the branch's head commit. GitHub runs the
+# workflow as it is on that branch, so a branch older than this file must
+# merge main first. It cannot run on a fork's branch.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-integration:
+    name: Integration Tests (on demand, ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    env:
+      TEST_TIMEOUT_MULTIPLIER: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/integration-tests
+        with:
+          shard: ${{ matrix.shard }}

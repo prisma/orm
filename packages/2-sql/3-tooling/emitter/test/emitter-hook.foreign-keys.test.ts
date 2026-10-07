@@ -18,7 +18,7 @@ describe('generateContractDts — FK literal (FK1)', () => {
       storage: {
         tables: {
           user: {
-            columns: { id: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false } },
+            columns: { id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -26,8 +26,8 @@ describe('generateContractDts — FK literal (FK1)', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false },
+              userId: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -65,7 +65,7 @@ describe('generateContractDts — FK literal (FK1)', () => {
       storage: {
         tables: {
           user: {
-            columns: { id: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false } },
+            columns: { id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -73,8 +73,8 @@ describe('generateContractDts — FK literal (FK1)', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false },
+              userId: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],

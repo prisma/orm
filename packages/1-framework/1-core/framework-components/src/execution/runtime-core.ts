@@ -1,10 +1,19 @@
+import { blindCast } from '@internal/utils/casts';
 import type { CodecCallContext } from '../shared/codec-types';
 import { AsyncIterableResult } from './async-iterable-result';
 import { runBeforeExecuteChain, runBeforeQueryChain } from './before-execute-chain';
 import type { ExecutionPlan, QueryPlan } from './query-plan';
 import { checkAborted } from './race-against-abort';
-import { runExecuteWithMiddleware, runQueryWithMiddleware } from './run-with-middleware';
+import {
+  onQueryEndOutsideTransaction,
+  reportExecuteEnding,
+  reportQueryEnding,
+  runAfterTransaction,
+  runExecuteWithMiddleware,
+  runQueryWithMiddleware,
+} from './run-with-middleware';
 import type {
+  AfterTransactionResult,
   RuntimeExecuteOptions,
   RuntimeExecutor,
   RuntimeMiddleware,
@@ -40,6 +49,13 @@ export interface RuntimeCoreOptions<TMiddleware extends RuntimeMiddleware<Execut
  * 4. The matching runner processes `interceptQuery` or `interceptExecute`
  *    before invoking the driver. Queries then fire `onRow` and `afterQuery`;
  *    statements fire `afterExecute`.
+ * 5. Every operation whose lowering (which encodes parameters) and before-hooks
+ *    succeeded fires `afterTransaction` once, as its last hook: `committed`
+ *    when it completed, `unknown` when it threw or the caller stopped reading
+ *    its rows. `reportQueryEnding` and `reportExecuteEnding` report how the
+ *    operation ended, and `onQueryEndOutsideTransaction` turns that into the
+ *    outcome; family runtimes that override `query` or `execute` call them
+ *    too, with {@link afterTransactionStageFor}.
  *
  * Concrete subclasses must implement `lower`, `runDriver`, `runExecute`, and
  * `close`.
@@ -60,10 +76,25 @@ export abstract class RuntimeCore<
 {
   protected readonly middleware: ReadonlyArray<TMiddleware>;
   protected readonly ctx: RuntimeMiddlewareContext;
+  protected readonly anyMiddlewareDeclaresAfterTransaction: boolean;
 
   constructor(options: RuntimeCoreOptions<TMiddleware>) {
-    this.middleware = options.middleware;
+    this.middleware = [...options.middleware];
     this.ctx = options.ctx;
+    this.anyMiddlewareDeclaresAfterTransaction = this.middleware.some(
+      (mw) => mw.afterTransaction !== undefined,
+    );
+  }
+
+  /**
+   * Returns the function that runs every middleware's `afterTransaction` hook for one operation with a given result, or `undefined` when no middleware declared the hook when the runtime was created.
+   */
+  protected afterTransactionStageFor(
+    exec: TExec,
+    ctx: RuntimeMiddlewareContext,
+  ): ((result: AfterTransactionResult) => Promise<void>) | undefined {
+    if (!this.anyMiddlewareDeclaresAfterTransaction) return undefined;
+    return (result) => runAfterTransaction(exec, this.middleware, result, ctx);
   }
 
   /**
@@ -124,11 +155,14 @@ export abstract class RuntimeCore<
       const compiled = await self.runBeforeCompile(plan);
       const exec = await self.lower(compiled, codecCtx);
       await runBeforeQueryChain<TExec>(exec, self.middleware, execCtx);
-      yield* runQueryWithMiddleware<TExec, Row>(
-        exec,
-        self.middleware,
-        execCtx,
-        () => self.runDriver(exec) as AsyncIterable<Row>,
+      const onQueryEnd = onQueryEndOutsideTransaction(self.afterTransactionStageFor(exec, execCtx));
+      yield* reportQueryEnding(onQueryEnd, () =>
+        runQueryWithMiddleware<TExec, Row>(exec, self.middleware, execCtx, () =>
+          blindCast<
+            AsyncIterable<Row>,
+            'the caller types rows through the plan; the runtime treats them as opaque records'
+          >(self.runDriver(exec)),
+        ),
       );
     }
 
@@ -149,6 +183,9 @@ export abstract class RuntimeCore<
     const compiled = await this.runBeforeCompile(plan);
     const exec = await this.lower(compiled, codecCtx);
     await runBeforeExecuteChain<TExec>(exec, this.middleware, execCtx);
-    return runExecuteWithMiddleware(exec, this.middleware, execCtx, () => this.runExecute(exec));
+    const onQueryEnd = onQueryEndOutsideTransaction(this.afterTransactionStageFor(exec, execCtx));
+    return reportExecuteEnding(onQueryEnd, () =>
+      runExecuteWithMiddleware(exec, this.middleware, execCtx, () => this.runExecute(exec)),
+    );
   }
 }

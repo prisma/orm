@@ -14,7 +14,7 @@ function withEnum(fn: Parameters<typeof withPostgresPort<PostgresContract>>[1]) 
 
 const MyEnum = enumType(
   'MyEnum',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('A'),
   member('B'),
   member('C'),

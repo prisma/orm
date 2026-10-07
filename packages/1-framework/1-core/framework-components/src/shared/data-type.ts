@@ -13,6 +13,8 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
+import type { Type } from 'arktype';
 import { runtimeError } from './runtime-error';
 
 /**
@@ -46,17 +48,20 @@ export type ToCanonicalForm = (value: JsonValue) => JsonValue;
 
 export interface DataType {
   readonly id: DataTypeId;
+  /** An arktype object schema of the type's parameters. A type without one has no parameters. */
+  readonly params?: Type<unknown>;
   /** Keyed by the id of the type each cast takes values of. */
   readonly casts: Readonly<Record<DataTypeId, Cast>>;
   readonly listCast?: ListCast;
   /**
-   * Gives a value of this type its canonical form. Everything that reads, compares or writes a
-   * stored value of the type goes through it, so two forms of one value are one value.
+   * Gives a value of this type its canonical form, so two forms of one value are one value. Read it
+   * through `canonicalFormOf`, which takes a codec's own form in its place.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
 }
 
 export interface DataTypeSpec {
+  readonly params?: Type<unknown>;
   readonly casts?: Readonly<Record<string, Cast>>;
   readonly listCast?: { readonly of: readonly string[]; readonly cast: ListCast['cast'] };
   readonly toCanonicalForm?: ToCanonicalForm;
@@ -68,11 +73,12 @@ export interface DataTypeLookup {
   has(id: string): boolean;
 }
 
-const DATA_TYPE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** The whole of what a data type id is: `owner/name` in lower case, with no version. */
+export const DATA_TYPE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Read `id` as a data type id, refusing anything that is not `owner/name` in lower case. */
 export function dataTypeId(id: string): DataTypeId {
-  if (!DATA_TYPE_ID.test(id)) {
+  if (!DATA_TYPE_ID_PATTERN.test(id)) {
     throw runtimeError(
       'CONTRACT.DATA_TYPE_ID_INVALID',
       `"${id}" is not a data type id. A data type id is "owner/name" in lower case and carries no version, as in "owner/name"; a versioned id names a codec.`,
@@ -91,6 +97,7 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
   const listCast = spec.listCast;
   return {
     id: dataTypeId(id),
+    ...ifDefined('params', spec.params),
     casts,
     ...(listCast === undefined
       ? {}
@@ -99,10 +106,97 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
   };
 }
 
+type SchemaProp = { readonly key: PropertyKey; readonly kind?: unknown };
+
+function isSchemaPropList(value: unknown): value is readonly SchemaProp[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (prop) =>
+        prop !== null && (typeof prop === 'object' || typeof prop === 'function') && 'key' in prop,
+    )
+  );
+}
+
+function describesObjects(schema: object): boolean {
+  const extendsType: unknown = Reflect.get(schema, 'extends');
+  return typeof extendsType === 'function' && extendsType.call(schema, 'object') === true;
+}
+
+function objectSchemaProps(schema: unknown): readonly SchemaProp[] | undefined {
+  if (schema === null || (typeof schema !== 'object' && typeof schema !== 'function')) {
+    return undefined;
+  }
+  if (!describesObjects(schema)) return undefined;
+  const props = readProps(schema);
+  return isSchemaPropList(props) ? props : undefined;
+}
+
+/** Arktype throws from `props` for a union or a morph, whose keys it cannot list. */
+function readProps(schema: object): unknown {
+  try {
+    return Reflect.get(schema, 'props');
+  } catch {
+    return undefined;
+  }
+}
+
+/** The keys an arktype object schema declares, or undefined when `schema` is not one. */
+export function objectSchemaKeys(schema: unknown): readonly string[] | undefined {
+  return objectSchemaProps(schema)?.flatMap((prop) =>
+    typeof prop.key === 'string' ? [prop.key] : [],
+  );
+}
+
+/** The required keys an arktype object schema declares, or undefined when `schema` is not one. */
+export function requiredSchemaKeys(schema: unknown): readonly string[] | undefined {
+  return objectSchemaProps(schema)?.flatMap((prop) =>
+    prop.kind === 'required' && typeof prop.key === 'string' ? [prop.key] : [],
+  );
+}
+
+/** The parameters a data type requires. */
+export function requiredParamKeys(type: DataType): readonly string[] {
+  return requiredSchemaKeys(type.params) ?? [];
+}
+
 export function createDataTypeLookup(types: readonly DataType[]): DataTypeLookup {
   const byId = new Map<string, DataType>(types.map((type) => [type.id, type]));
   return {
     get: (id) => byId.get(id),
     has: (id) => byId.has(id),
   };
+}
+
+/** Collect every data type the composed components register, refusing two declarations of one id. */
+export function assembleDataTypes(
+  descriptors: ReadonlyArray<{
+    readonly id?: string;
+    readonly dataTypes?: ReadonlyArray<DataType>;
+  }>,
+): {
+  readonly lookup: DataTypeLookup;
+  readonly declared: ReadonlyArray<{ readonly type: DataType; readonly contributedBy: string }>;
+} {
+  const declared: { type: DataType; contributedBy: string }[] = [];
+  const owners = new Map<string, string>();
+
+  for (const descriptor of descriptors) {
+    const contributedBy = descriptor.id ?? '<unknown>';
+    for (const type of descriptor.dataTypes ?? []) {
+      const existingOwner = owners.get(type.id);
+      if (existingOwner !== undefined) {
+        throw runtimeError(
+          'CONTRACT.DATA_TYPE_DUPLICATE',
+          `Duplicate data type "${type.id}". Component "${contributedBy}" conflicts with "${existingOwner}". ` +
+            'Each data type has exactly one owner across the composed stack.',
+          { dataType: type.id, contributedBy, owner: existingOwner },
+        );
+      }
+      owners.set(type.id, contributedBy);
+      declared.push({ type, contributedBy });
+    }
+  }
+
+  return { lookup: createDataTypeLookup(declared.map((entry) => entry.type)), declared };
 }

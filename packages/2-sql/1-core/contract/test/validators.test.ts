@@ -10,6 +10,7 @@ import { composeSqlEntityKinds } from '../src/entity-kinds';
 import { col, fk, index, model, pk, table, unique } from '../src/factories';
 import { CheckConstraint } from '../src/ir/check-constraint';
 import { Index } from '../src/ir/sql-index';
+import { StorageColumn } from '../src/ir/storage-column';
 import { StorageTable } from '../src/ir/storage-table';
 import { indexInputFromSerialized, type SerializedIndex } from '../src/serialized-index';
 import type { ReferentialAction, SqlModelFieldStorage, SqlStorage } from '../src/types';
@@ -150,7 +151,7 @@ describe('SQL contract validators', () => {
               ...unboundTables({
                 Item: {
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many },
+                    tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many },
                   },
                   uniques: [],
                   indexes: [],
@@ -169,8 +170,8 @@ describe('SQL contract validators', () => {
   describe('validateStorage', () => {
     it('validates valid storage', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
-        email: col('text', 'pg/text@1'),
+        id: col('pg/int4', 'pg/int4@1'),
+        email: col('pg/text', 'pg/text@1'),
       });
       const s = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -225,7 +226,7 @@ describe('SQL contract validators', () => {
       expect(() => validateStorage(invalid)).toThrow();
     });
 
-    it('throws on invalid nativeType', () => {
+    it('throws on a data type that is not a string', () => {
       const invalid = {
         storageHash: 'test',
         namespaces: {
@@ -235,7 +236,7 @@ describe('SQL contract validators', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 123, codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 123, codecId: 'pg/int4@1', nullable: false },
                   },
                 },
               },
@@ -256,7 +257,7 @@ describe('SQL contract validators', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: 'yes' },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: 'yes' },
                   },
                 },
               },
@@ -278,7 +279,7 @@ describe('SQL contract validators', () => {
                 user: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeParams: { dimensions: 1536 },
@@ -295,6 +296,156 @@ describe('SQL contract validators', () => {
         },
       } as unknown;
       expect(() => validateStorage(invalid)).toThrow(/either typeParams or typeRef, not both/);
+    });
+  });
+
+  describe('the stored data type', () => {
+    const columnsPath = `storage.namespaces.${UNBOUND_NAMESPACE_ID}.entries.table.user.columns`;
+    const refusal = (path: string) =>
+      `${path}.nativeType: contracts no longer store a column's database type name; the column names its data type in "dataType"`;
+    const storageWithColumns = (columns: Record<string, Record<string, unknown>>) => ({
+      storageHash: 'test',
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: {
+          id: UNBOUND_NAMESPACE_ID,
+          entries: {
+            table: {
+              user: { columns, uniques: [], indexes: [], foreignKeys: [] },
+            },
+          },
+        },
+      },
+    });
+    const storageWithColumn = (column: Record<string, unknown>) =>
+      storageWithColumns({ id: column });
+    const oldColumns = (count: number) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `c${index}`,
+          { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+        ]),
+      );
+    const jsonDefaultWithNativeTypeKey = {
+      dataType: 'pg/jsonb',
+      codecId: 'pg/jsonb@1',
+      nullable: false,
+      default: { kind: 'literal', value: { nativeType: 'default', nested: [{ nativeType: 1 }] } },
+    };
+
+    it('refuses a column that stores its database type name', () => {
+      const storage = storageWithColumn({
+        nativeType: 'int4',
+        codecId: 'pg/int4@1',
+        nullable: false,
+      });
+      expect(() => validateStorage(storage)).toThrowError(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          meta: { errors: [refusal(`${columnsPath}.id`)] },
+        }) as unknown as Error,
+      );
+    });
+
+    it('refuses a storage type that stores its database type name, naming every such key', () => {
+      const storage = {
+        ...storageWithColumn({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: false }),
+        types: {
+          Embedding: {
+            kind: 'codec-instance',
+            codecId: 'pg/vector@1',
+            nativeType: 'vector',
+            typeParams: { length: 3 },
+          },
+        },
+      };
+      expect(() => validateStorage(storage)).toThrowError(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          meta: {
+            errors: [refusal(`${columnsPath}.id`), refusal('storage.types.Embedding')],
+          },
+        }) as unknown as Error,
+      );
+    });
+
+    it('refuses an old contract through the full validator with the standard code', () => {
+      const contract = {
+        ...createContract<SqlStorage>({ storage: unboundTables({}) }),
+        storage: storageWithColumn({ nativeType: 'int4', codecId: 'pg/int4@1', nullable: false }),
+      };
+      expect(() => validateSqlContractFully(contract)).toThrowError(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          phase: 'structural',
+          message: `Contract structural validation failed: ${refusal(`${columnsPath}.id`)}`,
+        }) as unknown as Error,
+      );
+    });
+
+    it('names the first five paths and the total count when more keys store a database type name', () => {
+      const listed = [0, 1, 2, 3, 4].map((index) => refusal(`${columnsPath}.c${index}`));
+      expect(() => validateStorage(storageWithColumns(oldColumns(7)))).toThrowError(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          message: `Storage validation failed: ${[...listed, 'and 2 more paths (7 in all)'].join('; ')}`,
+        }) as unknown as Error,
+      );
+    });
+
+    it('names the first five paths and the total count through the full validator', () => {
+      const listed = [0, 1, 2, 3, 4].map((index) => refusal(`${columnsPath}.c${index}`));
+      const contract = {
+        ...createContract<SqlStorage>({ storage: unboundTables({}) }),
+        storage: storageWithColumns(oldColumns(6)),
+      };
+      expect(() => validateSqlContractFully(contract)).toThrowError(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          message: `Contract structural validation failed: ${[...listed, 'and 1 more path (6 in all)'].join('; ')}`,
+        }) as unknown as Error,
+      );
+    });
+
+    it('accepts a JSON default whose document has a nativeType key', () => {
+      expect(() => validateStorage(storageWithColumn(jsonDefaultWithNativeTypeKey))).not.toThrow();
+    });
+
+    it('accepts a JSON default whose document has a nativeType key through the full validator', () => {
+      const contract = {
+        ...createContract<SqlStorage>({ storage: unboundTables({}) }),
+        storage: storageWithColumn(jsonDefaultWithNativeTypeKey),
+      };
+      expect(() => validateSqlContractFully(contract)).not.toThrow();
+    });
+
+    it('refuses a column without a data type', () => {
+      expect(() =>
+        validateStorage(storageWithColumn({ codecId: 'pg/int4@1', nullable: false })),
+      ).toThrow(/dataType must be/);
+    });
+
+    it('refuses a data type that is not a data type id', () => {
+      expect(() =>
+        validateStorage(
+          storageWithColumn({ dataType: 'int4', codecId: 'pg/int4@1', nullable: false }),
+        ),
+      ).toThrow(/dataType must be/);
+    });
+
+    it('accepts a column that names its data type', () => {
+      expect(() =>
+        validateStorage(
+          storageWithColumn({ dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('refuses a storage type without a data type', () => {
+      const storage = {
+        ...storageWithColumn({ dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false }),
+        types: { Embedding: { kind: 'codec-instance', codecId: 'pg/vector@1', typeParams: {} } },
+      };
+      expect(() => validateStorage(storage)).toThrow(/dataType must be/);
     });
   });
 
@@ -446,8 +597,8 @@ describe('SQL contract validators', () => {
 
     it('validates valid contract', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
-        email: col('text', 'pg/text@1'),
+        id: col('pg/int4', 'pg/int4@1'),
+        email: col('pg/text', 'pg/text@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -468,10 +619,10 @@ describe('SQL contract validators', () => {
       createContract<SqlStorage>({
         storage: unboundTables({
           post: table({
-            id: col('int4', 'pg/int4@1'),
-            author_id: col('int4', 'pg/int4@1', input.authorIdNullable),
+            id: col('pg/int4', 'pg/int4@1'),
+            author_id: col('pg/int4', 'pg/int4@1', input.authorIdNullable),
           }),
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
         }),
         models: {
           Post: contractModel(
@@ -532,11 +683,11 @@ describe('SQL contract validators', () => {
         createContract<SqlStorage>({
           storage: unboundTables({
             user: table(
-              { id: col('int4', 'pg/int4@1') },
+              { id: col('pg/int4', 'pg/int4@1') },
               layout === 'with-primary-keys' ? { pk: pk('id') } : undefined,
             ),
             profile: table(
-              { id: col('int4', 'pg/int4@1'), user_id: col('int4', 'pg/int4@1') },
+              { id: col('pg/int4', 'pg/int4@1'), user_id: col('pg/int4', 'pg/int4@1') },
               layout === 'with-primary-keys' ? { pk: pk('id') } : undefined,
             ),
           }),
@@ -595,11 +746,11 @@ describe('SQL contract validators', () => {
       const owningOneToOneContract = (input: { nullable: boolean; userIdNullable: boolean }) =>
         createContract<SqlStorage>({
           storage: unboundTables({
-            user: table({ id: col('int4', 'pg/int4@1') }),
+            user: table({ id: col('pg/int4', 'pg/int4@1') }),
             profile: table(
               {
-                id: col('int4', 'pg/int4@1'),
-                user_id: col('int4', 'pg/int4@1', input.userIdNullable),
+                id: col('pg/int4', 'pg/int4@1'),
+                user_id: col('pg/int4', 'pg/int4@1', input.userIdNullable),
               },
               { fks: [fk('profile', ['user_id'], 'user', ['id'])] },
             ),
@@ -660,11 +811,11 @@ describe('SQL contract validators', () => {
     }) =>
       createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
-          tag: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
+          tag: table({ id: col('pg/int4', 'pg/int4@1') }),
           user_tags: table({
-            user_id: col('int4', 'pg/int4@1'),
-            tag_id: col('int4', 'pg/int4@1'),
+            user_id: col('pg/int4', 'pg/int4@1'),
+            tag_id: col('pg/int4', 'pg/int4@1'),
           }),
         }),
         models: {
@@ -732,11 +883,11 @@ describe('SQL contract validators', () => {
     it('rejects an N:M relation whose through joins columns of differing storage type', () => {
       const c = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
-          tag: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
+          tag: table({ id: col('pg/int4', 'pg/int4@1') }),
           user_tags: table({
-            user_id: col('text', 'pg/text@1'),
-            tag_id: col('int4', 'pg/int4@1'),
+            user_id: col('pg/text', 'pg/text@1'),
+            tag_id: col('pg/int4', 'pg/int4@1'),
           }),
         }),
         models: {
@@ -764,16 +915,99 @@ describe('SQL contract validators', () => {
       expect(() => validateSqlContractFully(c)).toThrow(/differing storage type/);
     });
 
+    const junctionContract = (userId: ReturnType<typeof col>, id: ReturnType<typeof col>) =>
+      createContract<SqlStorage>({
+        storage: unboundTables({
+          user: table({ id }),
+          tag: table({ id: col('pg/int4', 'pg/int4@1') }),
+          user_tags: table({ user_id: userId, tag_id: col('pg/int4', 'pg/int4@1') }),
+        }),
+        models: {
+          User: contractModel(
+            'user',
+            { id: { column: 'id' } },
+            {
+              tags: {
+                to: crossRef('Tag', UNBOUND_NAMESPACE_ID),
+                cardinality: 'N:M',
+                on: { localFields: ['id'], targetFields: ['user_id'] },
+                through: {
+                  table: 'user_tags',
+                  namespaceId: UNBOUND_NAMESPACE_ID,
+                  parentColumns: ['user_id'],
+                  childColumns: ['tag_id'],
+                  targetColumns: ['id'],
+                },
+              },
+            },
+          ),
+          Tag: contractModel('tag', { id: { column: 'id' } }),
+        },
+      });
+
+    it('joins junction columns of one data type whatever their codecs', () => {
+      const c = junctionContract(col('pg/int8', 'pg/int8number@1'), col('pg/int8', 'pg/int8@1'));
+      expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
+    it('compares junction column parameters without regard to key order', () => {
+      const c = junctionContract(
+        new StorageColumn({
+          dataType: 'pg/numeric',
+          codecId: 'pg/numeric@1',
+          nullable: false,
+          typeParams: { precision: 10, scale: 2 },
+        }),
+        new StorageColumn({
+          dataType: 'pg/numeric',
+          codecId: 'pg/numeric@1',
+          nullable: false,
+          typeParams: { scale: 2, precision: 10 },
+        }),
+      );
+      expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
+    it('names both data types when junction columns differ', () => {
+      const c = junctionContract(col('pg/text', 'pg/text@1'), col('pg/int4', 'pg/int4@1'));
+      expect(() => validateSqlContractFully(c)).toThrow(
+        /joins "user_tags.user_id" \(pg\/text\) with "user.id" \(pg\/int4\) of differing storage type/,
+      );
+    });
+
+    it('leaves the storage type of a value-object column to the stack', () => {
+      const c = createContract<SqlStorage>({
+        storage: unboundTables({
+          user: table({ id: col('pg/int4', 'pg/int4@1'), address: col('pg/text', 'pg/text@1') }),
+        }),
+        models: {
+          User: blindCast<ContractModel, 'test model literal with a value-object field'>({
+            ...contractModel('user', { id: { column: 'id' }, address: { column: 'address' } }),
+            fields: {
+              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+              address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+            },
+          }),
+        },
+        valueObjects: {
+          Address: {
+            fields: { street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+          },
+        },
+      });
+      expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
     it('validates child-side through length even for a cross-space target', () => {
       // The target Tag lives in another contract space, so its storage is not
       // resolvable here — but the childColumns ↔ targetColumns length is still
       // checkable, and here it is wrong.
       const c = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           user_tags: table({
-            user_id: col('int4', 'pg/int4@1'),
-            tag_id: col('int4', 'pg/int4@1'),
+            user_id: col('pg/int4', 'pg/int4@1'),
+            tag_id: col('pg/int4', 'pg/int4@1'),
           }),
         }),
         models: {
@@ -805,11 +1039,11 @@ describe('SQL contract validators', () => {
     it('resolves on.localFields field names to storage columns when they differ', () => {
       const c = createContract<SqlStorage>({
         storage: unboundTables({
-          account: table({ tenant_id: col('int4', 'pg/int4@1') }),
-          tag: table({ id: col('int4', 'pg/int4@1') }),
+          account: table({ tenant_id: col('pg/int4', 'pg/int4@1') }),
+          tag: table({ id: col('pg/int4', 'pg/int4@1') }),
           account_tags: table({
-            acct_tenant: col('int4', 'pg/int4@1'),
-            tag_id: col('int4', 'pg/int4@1'),
+            acct_tenant: col('pg/int4', 'pg/int4@1'),
+            tag_id: col('pg/int4', 'pg/int4@1'),
           }),
         }),
         models: {
@@ -839,7 +1073,7 @@ describe('SQL contract validators', () => {
 
     it('throws on missing targetFamily', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -850,7 +1084,7 @@ describe('SQL contract validators', () => {
 
     it('throws ContractValidationError on wrong targetFamily', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -868,7 +1102,7 @@ describe('SQL contract validators', () => {
 
     it('throws ContractValidationError on missing target', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -886,7 +1120,7 @@ describe('SQL contract validators', () => {
 
     it('throws on missing storage.storageHash', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -897,7 +1131,7 @@ describe('SQL contract validators', () => {
 
     it('throws on missing storage', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -908,7 +1142,7 @@ describe('SQL contract validators', () => {
 
     it('throws on missing models', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -919,7 +1153,7 @@ describe('SQL contract validators', () => {
 
     it('accepts contract with profileHash', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -929,7 +1163,7 @@ describe('SQL contract validators', () => {
 
     it('rejects contract without profileHash', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -940,7 +1174,7 @@ describe('SQL contract validators', () => {
 
     it('accepts optional capabilities', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -955,7 +1189,7 @@ describe('SQL contract validators', () => {
 
     it('accepts optional extension packs', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -971,7 +1205,7 @@ describe('SQL contract validators', () => {
 
     it('accepts optional meta', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
+        id: col('pg/int4', 'pg/int4@1'),
       });
       const c = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
@@ -983,7 +1217,7 @@ describe('SQL contract validators', () => {
     });
 
     it('rejects unknown top-level keys', () => {
-      const userTable = table({ id: col('int4', 'pg/int4@1') });
+      const userTable = table({ id: col('pg/int4', 'pg/int4@1') });
       const base = createContract<SqlStorage>({
         storage: unboundTables({ user: userTable }),
       });
@@ -995,9 +1229,9 @@ describe('SQL contract validators', () => {
     });
 
     it('validates FK with source and target coordinates only', () => {
-      const userTable = table({ id: col('int4', 'pg/int4@1') }, { pk: pk('id') });
+      const userTable = table({ id: col('pg/int4', 'pg/int4@1') }, { pk: pk('id') });
       const postTable = table(
-        { id: col('int4', 'pg/int4@1'), userId: col('int4', 'pg/int4@1') },
+        { id: col('pg/int4', 'pg/int4@1'), userId: col('pg/int4', 'pg/int4@1') },
         {
           pk: pk('id'),
           fks: [fk('post', ['userId'], 'user', ['id'])],
@@ -1020,8 +1254,8 @@ describe('SQL contract validators', () => {
       for (const action of actions) {
         const postTable = table(
           {
-            id: col('int4', 'pg/int4@1'),
-            userId: col('int4', 'pg/int4@1'),
+            id: col('pg/int4', 'pg/int4@1'),
+            userId: col('pg/int4', 'pg/int4@1'),
           },
           { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: action })] },
         );
@@ -1035,8 +1269,8 @@ describe('SQL contract validators', () => {
     it('validates storage with FK onDelete and onUpdate', () => {
       const postTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          userId: col('int4', 'pg/int4@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          userId: col('pg/int4', 'pg/int4@1'),
         },
         {
           fks: [
@@ -1060,8 +1294,8 @@ describe('SQL contract validators', () => {
               table: {
                 post: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    userId: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -1093,7 +1327,7 @@ describe('SQL contract validators', () => {
       const rawContract = createContract({
         storage: unboundTables({
           user: {
-            columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+            columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
             primaryKey: { columns: ['id'] },
             uniques: [],
             indexes: [],
@@ -1101,8 +1335,8 @@ describe('SQL contract validators', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+              userId: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -1133,7 +1367,7 @@ describe('SQL contract validators', () => {
                 table: {
                   users: {
                     columns: {
-                      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -1149,7 +1383,7 @@ describe('SQL contract validators', () => {
                 table: {
                   users: {
                     columns: {
-                      user_uuid: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                      user_uuid: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     },
                     primaryKey: { columns: ['user_uuid'] },
                     uniques: [],
@@ -1158,8 +1392,8 @@ describe('SQL contract validators', () => {
                   },
                   events: {
                     columns: {
-                      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                      user_uuid: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                      user_uuid: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -1203,7 +1437,7 @@ describe('SQL contract validators', () => {
                 table: {
                   users: {
                     columns: {
-                      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -1219,7 +1453,7 @@ describe('SQL contract validators', () => {
                 table: {
                   users: {
                     columns: {
-                      user_uuid: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                      user_uuid: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     },
                     primaryKey: { columns: ['user_uuid'] },
                     uniques: [],
@@ -1228,8 +1462,8 @@ describe('SQL contract validators', () => {
                   },
                   events: {
                     columns: {
-                      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                      user_uuid: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                      user_uuid: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -1265,11 +1499,11 @@ describe('SQL contract validators', () => {
     it('rejects setNull on non-nullable FK column', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', false),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', false),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: 'setNull' })] },
           ),
@@ -1284,11 +1518,11 @@ describe('SQL contract validators', () => {
     it('allows setNull on nullable FK column', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', true),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', true),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: 'setNull' })] },
           ),
@@ -1301,11 +1535,11 @@ describe('SQL contract validators', () => {
     it('allows cascade on non-nullable FK column', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', false),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', false),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: 'cascade' })] },
           ),
@@ -1318,11 +1552,11 @@ describe('SQL contract validators', () => {
     it('rejects setNull on onUpdate for non-nullable FK column', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', false),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', false),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onUpdate: 'setNull' })] },
           ),
@@ -1336,11 +1570,11 @@ describe('SQL contract validators', () => {
     it('rejects setDefault on non-nullable FK column without DEFAULT', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', false),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', false),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: 'setDefault' })] },
           ),
@@ -1357,12 +1591,12 @@ describe('SQL contract validators', () => {
     it('allows setDefault on non-nullable FK column with DEFAULT', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
+              id: col('pg/int4', 'pg/int4@1'),
               userId: {
-                nativeType: 'int4',
+                dataType: 'pg/int4',
                 codecId: 'pg/int4@1',
                 nullable: false,
                 default: { kind: 'literal', value: 0 },
@@ -1379,11 +1613,11 @@ describe('SQL contract validators', () => {
     it('allows setDefault on nullable FK column without DEFAULT', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', true),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', true),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onDelete: 'setDefault' })] },
           ),
@@ -1396,11 +1630,11 @@ describe('SQL contract validators', () => {
     it('rejects setDefault on onUpdate for non-nullable FK column without DEFAULT', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
           post: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              userId: col('int4', 'pg/int4@1', false),
+              id: col('pg/int4', 'pg/int4@1'),
+              userId: col('pg/int4', 'pg/int4@1', false),
             },
             { fks: [fk('post', ['userId'], 'user', ['id'], { onUpdate: 'setDefault' })] },
           ),
@@ -1416,8 +1650,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               pk: { columns: ['id'], name: 'user_pkey' },
@@ -1439,8 +1673,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               uniques: [unique('email'), unique('email')],
@@ -1461,8 +1695,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [index('user_email_idx1', ['email']), index('user_email_idx2', ['email'])],
@@ -1479,8 +1713,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1502,8 +1736,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               pk: pk('id', 'id'),
@@ -1529,7 +1763,7 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1', true),
+              id: col('pg/int4', 'pg/int4@1', true),
             },
             {
               pk: pk('id'),
@@ -1549,8 +1783,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1586,8 +1820,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1615,8 +1849,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1644,8 +1878,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1670,8 +1904,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1703,8 +1937,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              email: col('text', 'pg/text@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              email: col('pg/text', 'pg/text@1'),
             },
             {
               indexes: [
@@ -1732,8 +1966,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: table(
             {
-              id: col('int4', 'pg/int4@1'),
-              orgId: col('int4', 'pg/int4@1'),
+              id: col('pg/int4', 'pg/int4@1'),
+              orgId: col('pg/int4', 'pg/int4@1'),
             },
             {
               fks: [
@@ -1743,7 +1977,7 @@ describe('SQL contract validators', () => {
             },
           ),
           org: table({
-            id: col('int4', 'pg/int4@1'),
+            id: col('pg/int4', 'pg/int4@1'),
           }),
         }),
       }).storage;
@@ -1756,7 +1990,7 @@ describe('SQL contract validators', () => {
     it('returns no errors for storage without FKs', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
-          user: table({ id: col('int4', 'pg/int4@1') }),
+          user: table({ id: col('pg/int4', 'pg/int4@1') }),
         }),
       }).storage;
       const errors = validateStorageSemantics(s);
@@ -1767,7 +2001,7 @@ describe('SQL contract validators', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
           user: new StorageTable({
-            columns: { role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+            columns: { role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
             uniques: [],
             indexes: [],
             foreignKeys: [],
@@ -1784,8 +2018,8 @@ describe('SQL contract validators', () => {
         storage: unboundTables({
           user: new StorageTable({
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+              role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
             },
             uniques: [],
             indexes: [serializedIndex({ columns: ['id'], name: 'shared_name', unique: false })],
@@ -1805,7 +2039,7 @@ describe('SQL contract validators', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
           user: new StorageTable({
-            columns: { role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+            columns: { role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
             uniques: [],
             indexes: [],
             foreignKeys: [],
@@ -1824,7 +2058,7 @@ describe('SQL contract validators', () => {
       const s = createContract<SqlStorage>({
         storage: unboundTables({
           user: new StorageTable({
-            columns: { role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+            columns: { role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
             uniques: [],
             indexes: [],
             foreignKeys: [],
@@ -1846,7 +2080,7 @@ describe('SQL contract validators', () => {
       const rawContract = createContract({
         storage: unboundTables({
           user: new StorageTable({
-            columns: { role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+            columns: { role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
             uniques: [],
             indexes: [
               serializedIndex({ columns: ['status'], name: 'user_status_idx', unique: false }),
@@ -1864,7 +2098,7 @@ describe('SQL contract validators', () => {
       const rawContract = createContract({
         storage: unboundTables({
           user: new StorageTable({
-            columns: { role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+            columns: { role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
             uniques: [],
             indexes: [serializedIndex({ columns: ['role'], name: 'user_role_idx', unique: false })],
             foreignKeys: [],
@@ -1878,7 +2112,7 @@ describe('SQL contract validators', () => {
   describe('validateSqlContractFully strict mode', () => {
     it('rejects unknown top-level properties', () => {
       const c = createContract<SqlStorage>({
-        storage: unboundTables({ users: table({ id: col('int4', 'pg/int4@1') }) }),
+        storage: unboundTables({ users: table({ id: col('pg/int4', 'pg/int4@1') }) }),
         models: { User: contractModel('users', { id: { column: 'id' } }) },
       });
       const withUnknown = { ...c, bogusField: 'unexpected' };
@@ -1887,7 +2121,7 @@ describe('SQL contract validators', () => {
 
     it('accepts valid contracts without unknown properties', () => {
       const c = createContract<SqlStorage>({
-        storage: unboundTables({ users: table({ id: col('int4', 'pg/int4@1') }) }),
+        storage: unboundTables({ users: table({ id: col('pg/int4', 'pg/int4@1') }) }),
         models: { User: contractModel('users', { id: { column: 'id' } }) },
       });
       expect(() => validateSqlContractFully(c)).not.toThrow();
@@ -1908,7 +2142,7 @@ describe('SQL contract validators', () => {
                 users: {
                   columns: {
                     role: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: ref,
@@ -2075,8 +2309,8 @@ describe('validateSqlContractFully — pre-name-identity index shape', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],

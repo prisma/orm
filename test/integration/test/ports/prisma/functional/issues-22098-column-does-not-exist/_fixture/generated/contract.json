@@ -57,12 +57,12 @@
               "columns": {
                 "TESTE_NÚMERICO": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -87,7 +87,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "555e73e9a36eb0260ec25c85aac3e1d40694d694d17949ab6dc68b260358eec6"
+    "storageHash": "cab7d6556cad5e71bf14a8dadd2b9cc3522cb0fa78dd3a4f7e9ededefcb073b1"
   },
   "execution": {
     "executionHash": "1f7886616c73d2fd35992d6b9727bd8478632c592681200c916c78377344059c",
@@ -110,6 +110,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -120,9 +122,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

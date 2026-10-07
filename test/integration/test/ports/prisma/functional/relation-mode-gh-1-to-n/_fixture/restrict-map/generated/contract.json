@@ -192,12 +192,12 @@
               "columns": {
                 "authorId_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -242,12 +242,12 @@
               "columns": {
                 "authorId_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -292,12 +292,12 @@
               "columns": {
                 "enabledAtMap": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "id_AtMap": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -316,11 +316,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "efea9e51411c2e214e7e7e5f319b3759421a1a013cbe392f5924dcc9743493d8"
+    "storageHash": "b94758c8992b6fac3ddf33adf0cf0979857caacd6194d6e8f1d51d660a4677f1"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -331,9 +333,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

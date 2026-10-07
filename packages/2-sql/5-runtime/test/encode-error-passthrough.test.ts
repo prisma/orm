@@ -13,7 +13,6 @@ function throwingRegistry(original: unknown) {
   return buildTestContractCodecs([
     defineTestCodec({
       typeId: 'test/passthrough@1',
-      targetTypes: ['text'],
       encode: () => {
         throw original;
       },

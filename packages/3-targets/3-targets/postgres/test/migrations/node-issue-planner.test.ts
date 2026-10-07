@@ -1,7 +1,10 @@
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { index } from '@internal/sql-contract/factories';
+import { toStorageTypeInstance } from '@internal/sql-contract/types';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPlanDiff } from '../../src/core/migrations/diff-database-schema';
 import {
@@ -9,9 +12,10 @@ import {
   mapNodeIssueToCall,
   planIssues as planNodeIssues,
 } from '../../src/core/migrations/issue-planner';
-import { RenameIndexCall } from '../../src/core/migrations/op-factory-call';
+import { AlterColumnTypeCall, RenameIndexCall } from '../../src/core/migrations/op-factory-call';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 import {
   emptyRoot,
   makeContract,
@@ -29,12 +33,15 @@ import {
  * type-change, nullable-tightening, check constraints, codec storage types,
  * shared-temp-default add-column) is covered by the cross-package planner /
  * control-policy suites and `rls-planner.test.ts`.
+ *
+ * The `ALTER COLUMN TYPE` postcheck compares `format_type` text; TML-3387
+ * replaces it with a type identity comparison.
  */
 
 const userTable: TableSpec = {
   columns: {
-    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
   },
   primaryKey: { columns: ['id'] },
   foreignKeys: [],
@@ -59,9 +66,9 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
       user: userTable,
       post: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [
@@ -141,8 +148,8 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     const contract = makeContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -167,6 +174,151 @@ describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
     });
     const calls = planFor(contract, actual);
     expect(calls.map((c) => c.factoryName)).toEqual(['alterColumnType', 'setNotNull']);
+  });
+
+  it('checks a type change of a column that references a storage type against the catalog text of the referenced type', () => {
+    const contract = makeContract(
+      {
+        user: {
+          columns: {
+            id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+            visits: {
+              dataType: 'pg/int8',
+              codecId: 'pg/int8@1',
+              nullable: false,
+              typeRef: 'Count',
+            },
+          },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        },
+      },
+      { Count: toStorageTypeInstance({ codecId: 'pg/int8@1', dataType: 'pg/int8' }) },
+    );
+    const actual = rootOf({
+      user: new PostgresTableSchemaNode({
+        name: 'user',
+        columns: {
+          id: { name: 'id', nativeType: 'uuid', nullable: false, resolvedNativeType: 'uuid' },
+          visits: {
+            name: 'visits',
+            nativeType: 'int4',
+            nullable: false,
+            resolvedNativeType: 'int4',
+          },
+        },
+        primaryKey: { columns: ['id'] },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+        policies: [],
+        rlsEnabled: false,
+      }),
+    });
+    const [call] = planFor(contract, actual);
+    expect(call).toBeInstanceOf(AlterColumnTypeCall);
+    expect(call instanceof AlterColumnTypeCall && call.options).toEqual({
+      qualifiedTargetType: 'int8',
+      formatTypeExpected: 'bigint',
+      rawTargetTypeForLabel: 'int8',
+    });
+  });
+
+  it.each([
+    { typeName: 'UserRole', typeRef: 'UserRole', formatTypeExpected: '"UserRole"' },
+    { typeName: 'UserRole', typeRef: undefined, formatTypeExpected: '"UserRole"' },
+    { typeName: 'user_role', typeRef: 'user_role', formatTypeExpected: 'user_role' },
+    { typeName: 'user_role', typeRef: undefined, formatTypeExpected: 'user_role' },
+    { typeName: 'select', typeRef: undefined, formatTypeExpected: '"select"' },
+    { typeName: 'position', typeRef: undefined, formatTypeExpected: '"position"' },
+  ])(
+    'checks a type change to enum $typeName (typeRef $typeRef) against $formatTypeExpected',
+    ({ typeName, typeRef, formatTypeExpected }) => {
+      const enumType = { dataType: 'pg/enum', codecId: 'pg/enum@1', typeParams: { typeName } };
+      const contract = makeContract(
+        {
+          user: {
+            columns: {
+              id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+              role: { ...enumType, nullable: false, ...ifDefined('typeRef', typeRef) },
+            },
+            primaryKey: { columns: ['id'] },
+            foreignKeys: [],
+            uniques: [],
+            indexes: [],
+          },
+        },
+        typeRef === undefined ? undefined : { [typeRef]: toStorageTypeInstance(enumType) },
+      );
+      const actual = rootOf({
+        user: new PostgresTableSchemaNode({
+          name: 'user',
+          columns: {
+            id: { name: 'id', nativeType: 'uuid', nullable: false, resolvedNativeType: 'uuid' },
+            role: { name: 'role', nativeType: 'text', nullable: false, resolvedNativeType: 'text' },
+          },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+          policies: [],
+          rlsEnabled: false,
+        }),
+      });
+      const call = planFor(contract, actual).find((c) => c instanceof AlterColumnTypeCall);
+      expect(call instanceof AlterColumnTypeCall && call.options.formatTypeExpected).toBe(
+        formatTypeExpected,
+      );
+    },
+  );
+
+  it('refuses to plan a type change for a live column that carries no codec', () => {
+    const contract = makeContract({
+      user: {
+        columns: {
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
+        },
+        primaryKey: { columns: ['id'] },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+      },
+    });
+    const actual = rootOf({
+      user: new PostgresTableSchemaNode({
+        name: 'user',
+        columns: {
+          id: { name: 'id', nativeType: 'uuid', nullable: false, resolvedNativeType: 'uuid' },
+          age: { name: 'age', nativeType: 'int4', nullable: false, resolvedNativeType: 'int4' },
+        },
+        primaryKey: { columns: ['id'] },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+        policies: [],
+        rlsEnabled: false,
+      }),
+    });
+    const { issues } = buildPostgresPlanDiff({
+      contract,
+      actualSchema: actual,
+      frameworkComponents: postgresTypeComponents,
+    });
+
+    expect(() =>
+      planNodeIssues({
+        issues: coalesceSubtreeIssues(issues),
+        toContract: contract,
+        fromContract: contract,
+        schemaName: 'public',
+        codecHooks: new Map(),
+        types: postgresTypeLookups,
+        storageTypes: {},
+      }),
+    ).toThrow(InternalError);
   });
 
   it('an extra live table becomes DropTable (strict)', () => {
@@ -219,10 +371,11 @@ describe('mapNodeIssueToCall — synthesized namespace issue', () => {
       fromContract: null,
       schemaName: 'public',
       codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       schema: undefined as never,
       policy: { allowedOperationClasses: ['additive'] as const },
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
     };
     const result = mapNodeIssueToCall(issue, ctx);
     expect(result.ok).toBe(true);
@@ -288,8 +441,8 @@ describe('planNodeIssues — dependency-graph ordering', () => {
     const contract = makeContract({
       post: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -321,8 +474,8 @@ describe('planNodeIssues — dependency-graph ordering', () => {
     const contract = makeContract({
       account: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         foreignKeys: [],
@@ -391,10 +544,11 @@ describe('mapNodeIssueToCall — table rlsEnabled drift', () => {
     fromContract: null,
     schemaName: 'public',
     codecHooks: new Map(),
+    types: postgresTypeLookups,
     storageTypes: {},
     schema: undefined as never,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] as const },
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
   };
 
   function tableNode(rlsEnabled: boolean): PostgresTableSchemaNode {
@@ -454,7 +608,7 @@ describe('coalesceSubtreeIssues', () => {
     const { issues } = buildPostgresPlanDiff({
       contract,
       actualSchema: emptyRoot(),
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
     });
     // The total differ emits the table not-found plus every column/PK under it.
     expect(issues.length).toBeGreaterThan(1);
@@ -471,7 +625,7 @@ describe('operation-class gating of a RenameIndexCall', () => {
     const { issues } = buildPostgresPlanDiff({
       contract,
       actualSchema: emptyRoot(),
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
     });
     const coalesced = coalesceSubtreeIssues(issues);
     const renameCall = new RenameIndexCall(
@@ -489,6 +643,7 @@ describe('operation-class gating of a RenameIndexCall', () => {
       fromContract: null,
       schemaName: 'public',
       codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: contract.storage.types ?? {},
       policy: { allowedOperationClasses: ['additive'] },
       strategies: [renameEmittingStrategy],

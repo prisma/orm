@@ -6,7 +6,7 @@ import { StorageTable } from '../src/ir/storage-table';
 import { StorageValueSet } from '../src/ir/storage-value-set';
 import { createTestSqlNamespace } from './test-support';
 
-const baseColumn = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
+const baseColumn = { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false };
 
 const baseTable = new StorageTable({
   columns: { role: baseColumn },

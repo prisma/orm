@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
 import { columnDescriptor } from './helpers/column-descriptor';
@@ -29,6 +30,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 describe('contract builder normalization', () => {
   it('normalizes nullable to false when not provided', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -46,6 +48,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes nullable to provided value', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -65,6 +68,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes uniques to empty array when not provided', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -83,6 +87,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes indexes to empty array when not provided', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -101,6 +106,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes foreignKeys to empty array when not provided', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -119,6 +125,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes relations to empty object when not provided', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -142,6 +149,7 @@ describe('contract builder normalization', () => {
 
   it('normalizes all required fields in a complete contract', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -187,6 +195,7 @@ describe('contract builder normalization', () => {
   it('passes type and options on indexes through to storage IR', () => {
     const contract = defineContract(
       {
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -227,6 +236,7 @@ describe('contract builder normalization', () => {
 
   it('preserves plain indexes without extension config', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

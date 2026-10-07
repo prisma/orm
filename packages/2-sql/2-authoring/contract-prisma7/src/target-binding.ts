@@ -4,7 +4,8 @@ import type { Prisma7TypeMap } from './native-types';
 
 export interface Prisma7ColumnType {
   readonly codecId: string;
-  readonly nativeType: string;
+  /** The id of the data type the column's codec represents. */
+  readonly dataType: string;
   readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
 }
 

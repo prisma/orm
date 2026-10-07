@@ -20,6 +20,7 @@ import type {
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import {
   RelationalSchemaNodeKind,
   type SqlColumnIR,
@@ -38,6 +39,8 @@ export interface StrategyContext {
   readonly actual: SqlSchemaIR;
   readonly policy: MigrationOperationPolicy;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
+  /** The composed stack's codecs and data types, which write each column's type. */
+  readonly types: SqlTypeLookups;
 }
 
 export type CallMigrationStrategy = (
@@ -144,7 +147,7 @@ export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
 
     // Flatten the expected table node to a self-contained spec — the Call
     // holds pre-rendered SQL fragments only, no schema-IR node.
-    const tableSpec = tableSpecFromNode(expectedTable);
+    const tableSpec = tableSpecFromNode(expectedTable, ctx.types);
 
     // Indexes (declared + FK-backing) are already merged and deduped by
     // column-set at derivation (`contractToSchemaIR`'s `convertTable`).

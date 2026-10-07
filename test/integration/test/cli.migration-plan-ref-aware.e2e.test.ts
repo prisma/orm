@@ -29,10 +29,7 @@ function writeCompositePkContract(ctx: JourneyContext): void {
   writeFileSync(
     join(ctx.testDir, 'contract.ts'),
     `import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import sqlFamily from '@internal/family-sql/pack';
-import { defineContract, field, model } from '@internal/sql-contract-ts/contract-builder';
-import postgresPack from '@internal/target-postgres/pack';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 const User = model('User', {
   fields: {
@@ -45,12 +42,7 @@ const User = model('User', {
   }))
   .sql({ table: 'user' });
 
-export const contract = defineContract({
-  family: sqlFamily,
-  target: postgresPack,
-  createNamespace: postgresCreateNamespace,
-  models: { User },
-});
+export const contract = defineContract({ models: { User } });
 `,
     'utf-8',
   );

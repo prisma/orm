@@ -39,7 +39,7 @@ model T {
 }
 `;
 
-const uuidColumn = { codecId: 'pg/uuid@1', nativeType: 'uuid' } as const;
+const uuidColumn = { codecId: 'pg/uuid@1' } as const;
 
 interface EmittedEnum {
   readonly domain: {

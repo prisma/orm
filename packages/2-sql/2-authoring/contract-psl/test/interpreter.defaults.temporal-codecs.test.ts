@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   interpretSqlContract,
   postgresScalarTypeDescriptors,
@@ -48,7 +48,7 @@ stamped ${field}
 
   const pgTimestampPrecision3 = {
     many: false,
-    nativeType: 'timestamp',
+    dataType: 'pg/timestamp',
     codecId: 'pg/timestamp-temporal@1',
     nullable: false,
     typeParams: { precision: 3 },
@@ -74,7 +74,7 @@ stamped ${field}
     const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
     expect(column).toEqual({
       many: false,
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
     });
@@ -87,7 +87,7 @@ stamped ${field}
       model('temporal.timestamptz(onCreate: now, onUpdate: now)'),
     );
     expect(column).toEqual({
-      nativeType: 'timestamptz',
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
       many: false,
@@ -98,7 +98,7 @@ stamped ${field}
   it('timestamptz(onUpdate: now) yields the onUpdate phase only', () => {
     const { column, defaults } = columnAndDefaults(model('temporal.timestamptz(onUpdate: now)'));
     expect(column).toEqual({
-      nativeType: 'timestamptz',
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
       many: false,
@@ -110,6 +110,22 @@ stamped ${field}
     const convenience = columnAndDefaults(model('temporal.updatedAt()'));
     const full = columnAndDefaults(model('temporal.timestamptz(onCreate: now, onUpdate: now)'));
     expect(convenience).toEqual(full);
+  });
+
+  it('accepts a precision at each edge of the data type’s bounds', () => {
+    expect(interpretTemporal(model('temporal.timestamp(0)')).ok).toBe(true);
+    expect(interpretTemporal(model('temporal.timestamp(6)')).ok).toBe(true);
+  });
+
+  it('reports a precision outside the bounds at the argument, not the call', () => {
+    const schema = model('temporal.timestamp(7)');
+    const result = interpretTemporal(schema);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find((entry) =>
+      entry.message.includes('precision must be at most 6'),
+    );
+    expect(diagnostic?.span?.start.offset).toBe(schema.indexOf('7)'));
   });
 
   it('accepts precision named as well as positional, lowering identically', () => {
@@ -129,7 +145,7 @@ stamped ${field}
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: sqliteTemporalContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureTypeLookups,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -137,7 +153,7 @@ stamped ${field}
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(unboundTables(storage)['T']?.columns['stamped']).toEqual({
-      nativeType: 'text',
+      dataType: 'sqlite/text',
       codecId: 'sqlite/datetime@1',
       nullable: false,
       many: false,
@@ -179,6 +195,17 @@ stamped ${field}
       name: 'an unknown named argument',
       field: 'temporal.timestamp(frequency: now)',
       message: /received unknown named argument "frequency"/,
+    },
+    {
+      name: 'a precision below the data type’s bounds, reported at the argument',
+      field: 'temporal.timestamp(-1)',
+      message:
+        /preset "temporal\.timestamp" Authoring helper argument at temporal\.timestamp\[0\] is invalid: precision must be non-negative \(was -1\)/,
+    },
+    {
+      name: 'a precision above the data type’s bounds',
+      field: 'temporal.timestamp(precision: 7)',
+      message: /precision must be at most 6 \(was 7\)/,
     },
   ])('rejects $name', ({ field, message }) => {
     const result = interpretTemporal(model(field));

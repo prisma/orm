@@ -20,7 +20,7 @@ type ColumnMultiplicityOptions =
   | { readonly many?: false; readonly elementNullable?: never };
 
 export function col(
-  nativeType: string,
+  dataType: string,
   codecId: string,
   nullable = false,
   opts?: ColumnMultiplicityOptions,
@@ -34,7 +34,7 @@ export function col(
   }
 
   return new StorageColumn({
-    nativeType,
+    dataType,
     codecId,
     nullable,
     many: opts?.many === true ? { elementNullable: opts.elementNullable ?? false } : false,

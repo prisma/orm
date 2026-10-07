@@ -1,5 +1,6 @@
 import type { GeneratedValueSpec } from '@internal/contract/types';
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
+import { assembleDataTypes } from '@internal/framework-components/codec';
 import type { RuntimeAdapterInstance } from '@internal/framework-components/execution';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { builtinGeneratorIds } from '@internal/ids';
@@ -58,8 +59,9 @@ const postgresRuntimeAdapterDescriptor: SqlRuntimeAdapterDescriptor<'postgres', 
     rawCodecInferer: postgresRawCodecInferer,
     create(stack): SqlRuntimeAdapter {
       const components = [stack.target, stack.adapter, ...stack.extensions];
-      const codecRegistry = assemblePostgresCodecRegistry(components);
-      return createPostgresAdapterWithCodecRegistry(codecRegistry);
+      const dataTypeLookup = assembleDataTypes(components).lookup;
+      const codecRegistry = assemblePostgresCodecRegistry(components, dataTypeLookup);
+      return createPostgresAdapterWithCodecRegistry(codecRegistry, dataTypeLookup);
     },
   };
 

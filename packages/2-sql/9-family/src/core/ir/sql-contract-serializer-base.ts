@@ -229,7 +229,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     if (typeof entry !== 'object' || entry === null) {
       return entry;
     }
-    const kind = isPlainRecord(entry) ? entry['kind'] : undefined;
+    const kind = isPlainRecord(entry) && 'kind' in entry ? entry.kind : undefined;
     if (typeof kind !== 'string') {
       return entry;
     }

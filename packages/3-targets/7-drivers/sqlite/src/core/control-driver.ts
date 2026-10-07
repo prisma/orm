@@ -48,6 +48,7 @@ const sqliteDriverDescriptor: ControlDriverDescriptor<'sql', 'sqlite', SqliteCon
     try {
       const db = new DatabaseSync(pathOrMemory);
       db.exec('PRAGMA foreign_keys = ON');
+      db.exec('PRAGMA busy_timeout = 5000');
       return new SqliteControlDriver(db, pathOrMemory);
     } catch (error) {
       throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {

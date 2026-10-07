@@ -49,7 +49,7 @@ function buildContract(keep: Keep): Contract<SqlStorage> {
           entries: {
             table: {
               owner: {
-                columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+                columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
                 indexes: [],
@@ -57,9 +57,9 @@ function buildContract(keep: Keep): Contract<SqlStorage> {
               },
               [LONG_TABLE]: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  code: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                  owner_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  code: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+                  owner_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 ...(keep.primaryKey ? { primaryKey: { columns: ['id'] } } : {}),
                 uniques: keep.unique ? [{ columns: ['code'] }] : [],

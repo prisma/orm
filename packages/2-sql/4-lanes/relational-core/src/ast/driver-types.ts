@@ -42,6 +42,9 @@ export interface SqlDriver<TBinding = void> extends SqlQueryable {
 }
 
 export interface SqlConnection extends SqlQueryable {
+  /**
+   * Begins a transaction on this connection's session. Until it commits or rolls back, a statement sent on this connection runs inside it.
+   */
   beginTransaction(): Promise<SqlTransaction>;
   /**
    * Returns the connection to the pool for reuse. Must only be called when the
@@ -76,6 +79,9 @@ export interface SqlConnection extends SqlQueryable {
   destroy(reason?: unknown): Promise<void>;
 }
 
+/**
+ * A transaction begun on a connection. A statement sent on the transaction or on its connection after `commit()` or `rollback()` is called reaches the database after the `COMMIT` or `ROLLBACK`.
+ */
 export interface SqlTransaction extends SqlQueryable {
   commit(): Promise<void>;
   rollback(): Promise<void>;

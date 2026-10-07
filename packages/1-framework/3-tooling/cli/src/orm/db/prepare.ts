@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
@@ -73,6 +74,8 @@ export async function prepareMigrationRun(inputs: {
   readonly db: string | undefined;
   readonly commandName: string;
   readonly createClient: CreateControlClient;
+  /** The command the missing-connection error suggests; defaults to `{bin} <commandName> --db <url>`. */
+  readonly retryCommand?: string;
 }): Promise<Result<PreparedMigrationRun, CliStructuredError>> {
   const { config, cwd, commandName } = inputs;
   const contractPath = contractPathFor(config);
@@ -100,6 +103,7 @@ export async function prepareMigrationRun(inputs: {
           why: `Database connection is required for ${commandName} (set db.connection in prisma.config.ts, or pass --db <url>)`,
           commandName,
           missingFlags: ['--db'],
+          ...ifDefined('retryCommand', inputs.retryCommand),
         }),
       ),
     );

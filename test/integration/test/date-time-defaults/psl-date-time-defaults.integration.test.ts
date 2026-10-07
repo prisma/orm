@@ -125,7 +125,7 @@ describe('a PSL date or time default is stored in its data type canonical form',
       expect.objectContaining({
         code: 'PSL_INVALID_LITERAL',
         message:
-          'Field "Event.at": sqlite/datetime needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z".',
+          'Field "Event.at": sqlite/datetime@1 needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z".',
       }),
     ]);
   });
@@ -138,7 +138,7 @@ describe('a PSL date or time default is stored in its data type canonical form',
       expect.objectContaining({
         code: 'PSL_INVALID_LITERAL',
         message:
-          'Field "Event.at": "2024-01-01T00:00:00.1234Z" has 4 digits after the decimal point, but sqlite/datetime holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
+          'Field "Event.at": "2024-01-01T00:00:00.1234Z" has 4 digits after the decimal point, but sqlite/datetime@1 holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
       }),
     ]);
   });

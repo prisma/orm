@@ -491,6 +491,42 @@ describe('validateContractDomain()', () => {
         /model.*Child.*base.*must not.*variants/i,
       );
     });
+
+    it('accepts variants with distinct discriminator values', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+          Feature: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects variants that share a discriminator value', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { Bug: { value: 'bug' }, OtherBug: { value: 'bug' } },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+          OtherBug: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        'Discriminator value "bug" is used by both "__unbound__:Bug" and "__unbound__:OtherBug" on base model "__unbound__:Item"',
+      );
+    });
   });
 
   it('does not reject orphaned models (advisory, removed from runtime validation)', () => {

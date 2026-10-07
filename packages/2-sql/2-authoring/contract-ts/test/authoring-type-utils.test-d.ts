@@ -17,7 +17,6 @@ const nanoidDescriptor = {
   args: [nanoidOptionsArgumentMirror],
   output: {
     codecId: 'sql/char@1',
-    nativeType: 'character',
     typeParams: { length: { kind: 'arg', index: 0, path: ['size'], default: 21 } },
     id: true,
   },
@@ -28,7 +27,6 @@ const plainNanoidDescriptor = {
   args: [nanoidOptionsArgumentMirror],
   output: {
     codecId: 'sql/char@1',
-    nativeType: 'character',
     typeParams: { length: { kind: 'arg', index: 0, path: ['size'], default: 21 } },
   },
 } as const;
@@ -37,7 +35,6 @@ const uuidv4Descriptor = {
   kind: 'fieldPreset',
   output: {
     codecId: 'sql/char@1',
-    nativeType: 'character',
     typeParams: { length: 36 },
     id: true,
   },

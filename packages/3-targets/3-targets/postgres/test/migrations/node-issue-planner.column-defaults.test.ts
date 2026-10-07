@@ -11,9 +11,9 @@ describe('node issue planner: column defaults', () => {
     const contract = makeContract({
       post: {
         columns: {
-          id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           serial: {
-            nativeType: 'int4',
+            dataType: 'pg/int4',
             codecId: 'pg/int4@1',
             nullable: false,
             default: { kind: 'function', expression: 'autoincrement()' },

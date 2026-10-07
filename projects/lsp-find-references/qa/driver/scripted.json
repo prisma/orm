@@ -1,0 +1,270 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "steps": [
+    {
+      "id": "1.1",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "includeDeclaration": false
+    },
+    {
+      "id": "1.2",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "includeDeclaration": true
+    },
+    {
+      "id": "1.3",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "includeDeclaration": false
+    },
+    {
+      "id": "1.4",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "includeDeclaration": true
+    },
+    {
+      "id": "1.5",
+      "kind": "references",
+      "file": "session.prisma",
+      "at": "user   Us|er",
+      "includeDeclaration": false
+    },
+    {
+      "id": "1.6",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "model Po|st",
+      "includeDeclaration": false
+    },
+    {
+      "id": "1.7",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "model Po|st",
+      "includeDeclaration": true
+    },
+    {
+      "id": "1.8",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "posts Po|st[]",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.1",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "i|d    Int    @id",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.2",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "i|d    Int    @id",
+      "includeDeclaration": true
+    },
+    {
+      "id": "2.3",
+      "kind": "references",
+      "file": "session.prisma",
+      "at": "references: [i|d]",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.4",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "references: [i|d]",
+      "includeDeclaration": true
+    },
+    {
+      "id": "2.5",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "author|Id Int",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.6",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "author|Id Int",
+      "includeDeclaration": true
+    },
+    {
+      "id": "2.7",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "fields: [author|Id]",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.8",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "@@index([author|Id])",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.9",
+      "kind": "references",
+      "file": "session.prisma",
+      "at": "i|d     Int  @id",
+      "includeDeclaration": false
+    },
+    {
+      "id": "2.10",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "i|d       Int       @id",
+      "includeDeclaration": true
+    },
+    {
+      "id": "3.1",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "au|th.User",
+      "includeDeclaration": false
+    },
+    {
+      "id": "3.2",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "au|th.User",
+      "includeDeclaration": true
+    },
+    {
+      "id": "3.3",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "namespace au|th",
+      "includeDeclaration": false
+    },
+    {
+      "id": "3.4",
+      "kind": "references",
+      "file": "session.prisma",
+      "at": "namespace au|th",
+      "includeDeclaration": true
+    },
+    {
+      "id": "4.1",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "model Orph|an {",
+      "includeDeclaration": false
+    },
+    {
+      "id": "4.2",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "model Orph|an {",
+      "includeDeclaration": true
+    },
+    {
+      "id": "4.3",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "enum Ro|le",
+      "includeDeclaration": false
+    },
+    {
+      "id": "4.4",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "role Ro|le",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.1",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "@rel|ation",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.2",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "authorId In|t",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.3",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "missing No|pe",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.4",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "mo|del Orphan {",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.5",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "// Orp|han and Role",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.6",
+      "kind": "references",
+      "file": "extra.prisma",
+      "at": "@map(\"Orp|han\")",
+      "includeDeclaration": true
+    },
+    {
+      "id": "5.7",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "author  | auth.User",
+      "includeDeclaration": true
+    },
+    {
+      "id": "6.1",
+      "kind": "definition",
+      "file": "auth.prisma",
+      "at": "model Us|er"
+    },
+    {
+      "id": "6.2",
+      "kind": "definition",
+      "file": "auth.prisma",
+      "at": "i|d    Int    @id"
+    },
+    {
+      "id": "6.3",
+      "kind": "definition",
+      "file": "session.prisma",
+      "at": "namespace au|th"
+    },
+    {
+      "id": "6.4",
+      "kind": "definition",
+      "file": "post.prisma",
+      "at": "auth.Us|er"
+    },
+    {
+      "id": "6.5",
+      "kind": "definition",
+      "file": "post.prisma",
+      "at": "au|th.User"
+    },
+    {
+      "id": "diag",
+      "kind": "diagnostics"
+    }
+  ]
+}

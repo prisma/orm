@@ -20,7 +20,7 @@
  *      storage.
  *   3. A query that binds `aal` as a parameter forces the renderer to emit a
  *      `$N::auth.aal_level` cast (the column's own schema-qualified
- *      `nativeType`, since `auth` is not the default `public` schema). The
+ *      `typeParams.typeName`, since `auth` is not the default `public` schema). The
  *      query executes against real Postgres and returns the expected row.
  */
 
@@ -163,7 +163,7 @@ describe('native Postgres enum (auth.aal_level) on auth.sessions', () => {
           //   (Postgres code 42704, routine typenameType)
           // because the unqualified cast resolved under the default
           // search_path (`public`), and `aal_level` lives in `auth`. The
-          // column's `nativeType` is now schema-qualified (`auth.aal_level`),
+          // column's `typeParams.typeName` is now schema-qualified (`auth.aal_level`),
           // so the cast resolves and the query executes.
           const rows = await findSessionsByAal(internal, 'aal2');
           expect(rows).toEqual([{ id: sessionId, aal: 'aal2' }]);

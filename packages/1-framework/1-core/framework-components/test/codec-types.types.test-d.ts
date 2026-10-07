@@ -33,7 +33,7 @@ test('decodeJson is required and synchronous', () => {
 });
 
 test('Codec instance carries only id + the four conversion methods (plus phantom)', () => {
-  // The runtime instance is narrowed to id + behavior (TML-2357); codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on `CodecDescriptor` keyed by codecId. The `__codecTraits` slot is a type-only phantom carrier (always `undefined` at runtime) and double-underscored to signal that it is not part of the consumer-facing API surface.
+  // The runtime instance is narrowed to id + behavior (TML-2357); codec-id-keyed static metadata (`traits`, `renderOutputType`) lives on `CodecDescriptor` keyed by codecId. The `__codecTraits` slot is a type-only phantom carrier (always `undefined` at runtime) and double-underscored to signal that it is not part of the consumer-facing API surface.
   type CodecStringKeys = Extract<keyof Codec, string>;
   const expectedKeys = [
     'id',
@@ -47,10 +47,9 @@ test('Codec instance carries only id + the four conversion methods (plus phantom
   expectTypeOf<CodecStringKeys>().toEqualTypeOf<ExpectedKeys>();
 });
 
-test('Codec instance does not carry traits / targetTypes / meta / renderOutputType', () => {
+test('Codec instance does not carry traits / meta / renderOutputType', () => {
   type C = Codec;
   expectTypeOf<C>().not.toHaveProperty('traits');
-  expectTypeOf<C>().not.toHaveProperty('targetTypes');
   expectTypeOf<C>().not.toHaveProperty('meta');
   expectTypeOf<C>().not.toHaveProperty('renderOutputType');
 });

@@ -185,47 +185,47 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "childId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "parentId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -268,7 +268,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -287,11 +287,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5894a3403a39a4c389c8758397b0794ae4ee2b0066519747c4195a1433ad7719"
+    "storageHash": "9afce1bb9401f9b83742acdc4eae717d8781cc5c071d930b2433cbacf306509d"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -302,9 +304,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

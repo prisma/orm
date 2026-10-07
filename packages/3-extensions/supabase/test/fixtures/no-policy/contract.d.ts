@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'001f3fafe61a0014ad43b145830bb08d77853a35d6b3003f045d4931c74e7ee8'>;
+  StorageHashBase<'6c177b00f7e42bf40f9639a1d9d875e9c93cee515ed29edc8f16e2ac4dc54bcf'>;
 export type ExecutionHash =
   ExecutionHashBase<'d1b9b4a64beb4dad525e44f724c5103b32a6ab5ee1b0eae24917a72c54557beb'>;
 export type ProfileHash =
@@ -305,19 +305,19 @@ type ContractBase = Omit<
             readonly profile: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly userId: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly username: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -391,6 +391,8 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly postgres: {
       readonly distinctOn: true;
+      readonly forKeyShare: true;
+      readonly forNoKeyUpdate: true;
       readonly jsonAgg: true;
       readonly lateral: true;
       readonly limit: true;
@@ -401,9 +403,14 @@ type ContractBase = Omit<
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
       readonly enums: true;
+      readonly forShare: true;
+      readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
+      readonly lockNowait: true;
+      readonly lockOf: true;
+      readonly lockSkipLocked: true;
       readonly returning: true;
       readonly scalarList: true;
     };

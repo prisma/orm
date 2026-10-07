@@ -2,7 +2,11 @@ import { introspectSchema, MongoControlAdapterImpl } from '@internal/adapter-mon
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type CodecLookup,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { MigrationPlan } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { MongoContract } from '@internal/mongo-contract';
@@ -16,15 +20,19 @@ import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/contr
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient, MongoServerError } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
@@ -61,14 +69,7 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['Double', 'mongo/double@1'],
 ]);
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
+const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.values());
 
 // Without a codec lookup the emitter cannot resolve field BSON types, so the
 // derived validator carries empty `properties`. Closed-by-default schemas then
@@ -76,8 +77,7 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
 // the production emission path also supplies.
 const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
+    if (!mongoCodecIds.has(id)) return undefined;
     return {
       id,
       encode: async (v: unknown) => v,
@@ -86,9 +86,8 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
       decodeJson: (j: unknown) => j,
     } as ReturnType<CodecLookup['get']>;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
 };
 
 const polymorphicSchema = `
@@ -124,7 +123,7 @@ function makeContractFromPsl(): MongoContract {
     Object.fromEntries(
       [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
         name,
-        { kind: 'typeConstructor' as const, output: { codecId, nativeType: codecId } },
+        { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
     );
   const bound = bindPslSchema(polymorphicSchema, {
@@ -144,7 +143,7 @@ function makeContractFromPsl(): MongoContract {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypeLookup: mongoDataTypeLookup,
       resolvedInputs: [],
       capabilities: {},
     },

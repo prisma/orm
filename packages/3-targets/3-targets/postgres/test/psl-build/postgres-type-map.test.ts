@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createPostgresTypeMap } from '../../src/core/psl-build/postgres-type-map';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
-import {
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
-} from '../../src/core/type-constructors';
+import { postgresPslTypeConstructors } from '../../src/core/type-constructors';
 
 const typeConstructors: Readonly<
   Record<string, { readonly output: { readonly codecId: string } }>
-> = { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes };
+> = postgresPslTypeConstructors;
 
 describe('createPostgresTypeMap', () => {
   const typeMap = createPostgresTypeMap();

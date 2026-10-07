@@ -10,32 +10,26 @@ import type { StorageType } from '@internal/framework-components/ir';
 export const CODEC_INSTANCE_KIND = 'codec-instance' as const;
 
 /**
- * Structural sub-interface of {@link StorageType} for codec-typed entries
- * in `SqlStorage.types`. These are plain object literals — there is no
- * runtime IR class, the JSON envelope round-trips through the slot
- * unchanged. The `kind: 'codec-instance'` discriminator is the dispatch
- * key that distinguishes codec-typed entries from any class-instance
- * kinds a target pack contributes to the polymorphic slot.
+ * A codec-typed entry in `SqlStorage.types`, as `contract.json` stores it and the contract IR holds it. These are plain object literals with no runtime IR class; the JSON envelope round-trips through the slot unchanged. The `kind: 'codec-instance'` discriminator distinguishes them from any class-instance kinds a target pack contributes to the slot.
  */
 export interface StorageTypeInstance extends StorageType {
   readonly kind: typeof CODEC_INSTANCE_KIND;
   readonly codecId: string;
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly typeParams: Record<string, unknown>;
 }
 
 /**
- * Construction-time input for a codec-triple entry. Symmetric with the
- * structural runtime shape minus the `kind` discriminator — callers may
- * omit `kind`; the helper {@link toStorageTypeInstance} stamps it on.
- * `typeParams` may be omitted on input; the constructor normalises a
- * missing value to `{}` so the in-memory shape is always present.
+ * A `storage.types` entry as authored, by a `type.*` helper or a PSL `types {}` alias: a {@link StorageTypeInstance} before the contract build adds the id of the data type its codec represents.
  */
-export interface StorageTypeInstanceInput {
-  readonly codecId: string;
-  readonly nativeType: string;
+export type AuthoredStorageTypeInstance = Omit<StorageTypeInstance, 'dataType'>;
+
+/**
+ * A `storage.types` entry as `SqlStorage` and {@link toStorageTypeInstance} take it: a {@link StorageTypeInstance} whose `kind` and `typeParams` may be left out. {@link toStorageTypeInstance} stamps the `kind` and normalises a missing `typeParams` to `{}`.
+ */
+export type StorageTypeInstanceInput = Omit<StorageTypeInstance, 'kind' | 'typeParams'> & {
   readonly typeParams?: Record<string, unknown>;
-}
+};
 
 /**
  * Stamp the codec-instance `kind` discriminator on a caller-supplied
@@ -46,7 +40,7 @@ export function toStorageTypeInstance(input: StorageTypeInstanceInput): StorageT
   return {
     kind: CODEC_INSTANCE_KIND,
     codecId: input.codecId,
-    nativeType: input.nativeType,
+    dataType: input.dataType,
     typeParams: input.typeParams ?? {},
   };
 }

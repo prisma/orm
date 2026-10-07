@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, type field, type model, type rel } from '../src/contract-builder';
 
 const sqlFamilyPack = {
@@ -10,7 +11,7 @@ const sqlFamilyPack = {
   version: '0.0.1',
   authoring: {
     field: {
-      text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1', nativeType: 'text' } },
+      text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1' } },
     },
   },
 } as const satisfies FamilyPackRef<'sql'>;
@@ -35,6 +36,7 @@ function build(
 ) {
   return defineContract(
     {
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

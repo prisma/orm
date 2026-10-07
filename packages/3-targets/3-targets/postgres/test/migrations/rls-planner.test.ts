@@ -32,6 +32,7 @@ import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-poli
 import { PostgresRoleSchemaNode } from '../../src/core/schema-ir/postgres-role-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { PostgresCreatePolicy } from '../../src/exports/ddl';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower(_ast, _ctx) {
@@ -105,8 +106,8 @@ function buildContractWith(
       table: {
         [TABLE_NAME]: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            user_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            user_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
@@ -205,7 +206,7 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -237,7 +238,7 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -269,7 +270,7 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -298,7 +299,7 @@ describe('RLS planner diff-wiring', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -323,7 +324,7 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -351,7 +352,7 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
       schema,
       policy: DB_UPDATE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -378,7 +379,7 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -407,7 +408,7 @@ describe('RLS planner roles produce zero ops (AC-6)', () => {
       schema,
       policy: DB_UPDATE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

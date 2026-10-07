@@ -24,6 +24,7 @@ import {
 } from '@internal/target-postgres/codecs';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { nativeTypeOf } from './aggregate-matrix';
 import { aggregateSql } from './aggregate-sql';
 
 const registry = buildSqlAggregateDescriptorRegistry(
@@ -42,10 +43,6 @@ function codecFor(codecId: string): Codec {
   return postgresCodecDescriptorRegistry.descriptorFor(codecId)!.factory(undefined)({
     name: 'aggregate-defaults',
   });
-}
-
-function nativeTypeOf(codecId: string): string {
-  return postgresCodecDescriptorRegistry.descriptorFor(codecId)!.nativeTypeFor({ codecId });
 }
 
 describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
@@ -72,7 +69,7 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
     samples: readonly string[],
     body: () => Promise<void>,
   ): Promise<void> {
-    const nativeType = nativeTypeOf(codecId);
+    const nativeType = nativeTypeOf({ codecId });
     await query(`DROP TABLE IF EXISTS "${TABLE}"`);
     await query(`CREATE TABLE "${TABLE}" ("${COLUMN}" ${nativeType})`);
     for (const sample of samples) {

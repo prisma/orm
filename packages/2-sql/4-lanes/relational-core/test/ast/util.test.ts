@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { NativeJsonValueProjection } from '../../src/ast/json-value-projection';
 import {
+  AggregateExpr,
   AndExpr,
   BinaryExpr,
   ColumnRef,
+  JsonArrayAggExpr,
+  OrderByItem,
   ParamRef,
   ProjectionItem,
   SelectAst,
   TableSource,
+  WindowFuncExpr,
 } from '../../src/ast/types';
-import { collectOrderedParamRefs, compact } from '../../src/ast/util';
+import { collectOrderedParamRefs, compact, isAggregateProjection } from '../../src/ast/util';
 
 describe('ast/util', () => {
   describe('compact', () => {
@@ -189,6 +194,28 @@ describe('ast/util', () => {
       const refs = collectOrderedParamRefs(ast);
       expect(refs).toEqual([]);
       expect(Object.isFrozen(refs)).toBe(true);
+    });
+  });
+
+  describe('isAggregateProjection', () => {
+    const id = ColumnRef.of('users', 'id');
+
+    it.each([
+      { kind: 'aggregate', expr: AggregateExpr.count(id) },
+      { kind: 'json-array-agg', expr: JsonArrayAggExpr.of(new NativeJsonValueProjection(id)) },
+      { kind: 'window-func', expr: WindowFuncExpr.rowNumber({ orderBy: [OrderByItem.asc(id)] }) },
+    ])('is true for a top-level $kind', ({ expr }) => {
+      expect(isAggregateProjection(ProjectionItem.of('n', expr))).toBe(true);
+    });
+
+    it('is false for a column', () => {
+      expect(isAggregateProjection(ProjectionItem.of('id', id))).toBe(false);
+    });
+
+    it('is false for an aggregate nested inside another expression', () => {
+      const nested = BinaryExpr.gt(AggregateExpr.count(id), ParamRef.of(1));
+
+      expect(isAggregateProjection(ProjectionItem.of('n', nested))).toBe(false);
     });
   });
 });

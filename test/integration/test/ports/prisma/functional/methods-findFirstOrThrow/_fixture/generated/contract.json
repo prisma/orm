@@ -135,17 +135,17 @@
               "columns": {
                 "authorId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -188,12 +188,12 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -212,7 +212,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ff385b9bdb067b9f91be5a0ceaa51992b998d4797d371a4271305a5a66d6426d"
+    "storageHash": "745a6625a93f758a60a251722d91125038c3cf4562cf842f7191f9cb2752f154"
   },
   "execution": {
     "executionHash": "d8f8d2a4e40d2ef6e2756511552840af3ca0deb53997b4b22b615cab9bc18877",
@@ -246,6 +246,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -256,9 +258,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

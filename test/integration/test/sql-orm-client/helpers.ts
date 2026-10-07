@@ -217,10 +217,10 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.tasks = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      type: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      severity: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      type: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      severity: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -230,8 +230,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.features = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      priority: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      priority: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -295,17 +295,17 @@ export function buildStiPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.kind = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: false,
   };
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.role = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.plan = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
 

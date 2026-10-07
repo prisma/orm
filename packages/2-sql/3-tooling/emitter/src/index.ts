@@ -622,23 +622,23 @@ function generateDocumentScopedStorageTypesType(types: SqlStorage['types']): str
     const codecInstanceShape = typeInstance as Partial<StorageTypeInstance>;
     if (
       typeof codecInstanceShape.codecId !== 'string' ||
-      typeof codecInstanceShape.nativeType !== 'string'
+      typeof codecInstanceShape.dataType !== 'string'
     ) {
       throw sqlEmitterError(
         'CONTRACT.TYPE_UNKNOWN',
         `Unknown storage type kind for "${typeName}" in document-scoped storage.types; expected a codec-instance triple.`,
         {
           why: 'A storage.types entry is not a codec-instance triple, so its column type cannot be emitted.',
-          fix: 'Regenerate the contract from its authoring source; storage.types entries must carry codecId and nativeType.',
+          fix: 'Regenerate the contract from its authoring source; storage.types entries must carry codecId and dataType.',
           meta: { type: typeName },
         },
       );
     }
     const codecId = serializeValue(codecInstanceShape.codecId);
-    const nativeType = serializeValue(codecInstanceShape.nativeType);
+    const dataType = serializeValue(codecInstanceShape.dataType);
     const typeParamsStr = serializeTypeParamsLiteral(codecInstanceShape.typeParams);
     typeEntries.push(
-      `readonly ${serializeObjectKey(typeName)}: { readonly kind: "codec-instance"; readonly codecId: ${codecId}; readonly nativeType: ${nativeType}; readonly typeParams: ${typeParamsStr} }`,
+      `readonly ${serializeObjectKey(typeName)}: { readonly kind: "codec-instance"; readonly codecId: ${codecId}; readonly dataType: ${dataType}; readonly typeParams: ${typeParamsStr} }`,
     );
   }
 
@@ -685,7 +685,7 @@ function generateTableLiteralType(table: StorageTable): string {
   const columns: string[] = [];
   for (const [colName, col] of Object.entries(table.columns)) {
     const nullable = col.nullable ? 'true' : 'false';
-    const nativeType = serializeValue(col.nativeType);
+    const dataType = serializeValue(col.dataType);
     const codecId = serializeValue(col.codecId);
     const defaultSpec = col.default
       ? col.default.kind === 'literal'
@@ -706,7 +706,7 @@ function generateTableLiteralType(table: StorageTable): string {
         ? '; readonly many: false'
         : `; readonly many: { readonly elementNullable: ${col.many.elementNullable} }`;
     columns.push(
-      `readonly ${serializeObjectKey(colName)}: { readonly nativeType: ${nativeType}; readonly codecId: ${codecId}; readonly nullable: ${nullable}${defaultSpec}${typeParamsSpec}${typeRefSpec}${manySpec} }`,
+      `readonly ${serializeObjectKey(colName)}: { readonly dataType: ${dataType}; readonly codecId: ${codecId}; readonly nullable: ${nullable}${defaultSpec}${typeParamsSpec}${typeRefSpec}${manySpec} }`,
     );
   }
 

@@ -24,8 +24,8 @@ const familyInstance = sql.create(controlStack);
 const planner = sqliteTarget.createPlanner(sqliteAdapter.create(controlStack));
 const frameworkComponents = [sqliteTarget, sqliteAdapter] as const;
 
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'real' } as const;
-const sqliteReal = { codecId: 'sqlite/real@1', nativeType: 'real' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
+const sqliteReal = { codecId: 'sqlite/real@1' } as const;
 
 const contract = defineContract({
   models: {

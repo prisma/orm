@@ -1,15 +1,5 @@
 import { sqliteAggregateDescriptors } from '@internal/target-sqlite/aggregates';
 import { sqliteCodecRegistry } from '@internal/target-sqlite/codecs';
-import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
-
-// Exclude codecs that carry a renderOutputType: those emit named TypeScript types (e.g.
-// Char<N>, Varchar<N>) that are not listed in this adapter's typeImports and would
-// produce unresolvable references in contract.d.ts.  All other codecs — including the
-// sql/ identity encoders (sql/int@1, sql/float@1) — are kept so execution codec
-// lookup works and DDL lowering has access to the full codec set.
-const executionCodecDescriptors = Array.from(sqliteCodecRegistry.values()).filter(
-  (d) => d.renderOutputType === undefined,
-);
 
 export const sqliteAdapterDescriptorMeta = {
   kind: 'adapter',
@@ -30,11 +20,10 @@ export const sqliteAdapterDescriptorMeta = {
       insertOnConflictWithoutTarget: true,
     },
   },
-  dataTypes: sqliteDataTypes,
   types: {
     aggregateDescriptors: sqliteAggregateDescriptors,
     codecTypes: {
-      codecDescriptors: executionCodecDescriptors,
+      codecDescriptors: Array.from(sqliteCodecRegistry.values()),
       import: {
         package: '@internal/adapter-sqlite/codec-types',
         named: 'CodecTypes',

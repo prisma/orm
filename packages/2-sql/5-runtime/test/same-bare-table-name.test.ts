@@ -6,12 +6,24 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import { createStubAdapter, createTestContext } from './utils';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+  'sql/varchar@1': 'pg/varchar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 function table(columns: Record<string, string>): StorageTableInput {
   return {
     columns: Object.fromEntries(
       Object.entries(columns).map(([name, codecId]) => [
         name,
-        { nativeType: codecId, codecId, nullable: false },
+        { dataType: dataTypeOf(codecId), codecId, nullable: false },
       ]),
     ),
     primaryKey: { columns: ['id'] },

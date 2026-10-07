@@ -81,15 +81,12 @@ export async function decryptSecret(wire: string, seed: string): Promise<string>
 export function createAsyncSecretCodec({
   seed,
   typeId = 'pg/secret@1',
-  targetTypes = ['text'],
 }: {
   seed: string;
   typeId?: string;
-  targetTypes?: readonly string[];
 }) {
   return defineTestCodec({
     typeId,
-    targetTypes,
     encode: (value: string) => encryptSecret(value, seed),
     decode: (wire: string) => decryptSecret(wire, seed),
   });

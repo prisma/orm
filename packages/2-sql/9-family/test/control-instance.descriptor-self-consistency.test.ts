@@ -23,8 +23,8 @@ const TARGET_FAMILY = 'sql' as const;
 const fixtureTables = {
   fixture_box: {
     columns: {
-      x: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
-      y: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+      x: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+      y: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
     },
     uniques: [],
     indexes: [],

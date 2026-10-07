@@ -1,119 +1,34 @@
 import { rm } from 'node:fs/promises';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { writeRef } from '@internal/migration-tools/refs';
-import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
-import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   createOfflineProject,
   invariantOp,
-  type OfflineProject,
-  offlineConfig,
   removeOfflineProjects,
   seedMigrationPackage,
 } from './fixtures/offline-project';
+import {
+  addAllExternalSpace,
+  codesAndSeverities,
+  DIR_BASE,
+  driverConfig,
+  EXTERNAL_SPACE,
+  fakeDatabase,
+  HASH_BASE,
+  HASH_EXTERNAL_HEAD,
+  HASH_HEAD,
+  HASH_UNKNOWN,
+  harness,
+  markersAt,
+  markersWithExternalAtHead,
+  projectWithOneMigration,
+  withAllExternalExtension,
+} from './fixtures/status-database';
 
 afterEach(removeOfflineProjects);
-
-const HASH_HEAD = `c0ffee${'0'.repeat(58)}`;
-const HASH_BASE = `beef${'1'.repeat(60)}`;
-const HASH_UNKNOWN = `dead${'2'.repeat(60)}`;
-const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-
-interface FakeDatabaseScript {
-  readonly markers?: ReadonlyMap<
-    string,
-    { readonly storageHash: string; readonly invariants: readonly string[] }
-  >;
-  readonly ledger?: ReadonlyArray<{ readonly migrationHash: string }>;
-  readonly readMarkersError?: Error;
-  readonly closeError?: Error;
-}
-
-/**
- * The database the real control client talks to: the family instance answers
- * marker and ledger reads from the script, and the driver descriptor counts
- * connections so tests can assert none was opened. No module mocks — the
- * command builds the real client over these descriptors.
- */
-function fakeDatabase(script: FakeDatabaseScript = {}) {
-  const counters = { connections: 0, closes: 0 };
-  const familyInstance = {
-    deserializeContract: (json: unknown) => json,
-    readAllMarkers: async () => {
-      if (script.readMarkersError !== undefined) {
-        throw script.readMarkersError;
-      }
-      return script.markers ?? new Map();
-    },
-    readLedger: async () => script.ledger ?? [],
-  };
-  const driver = {
-    close: async () => {
-      counters.closes += 1;
-      if (script.closeError !== undefined) {
-        throw script.closeError;
-      }
-    },
-  };
-  return { counters, familyInstance, driver };
-}
-
-type FakeDatabase = ReturnType<typeof fakeDatabase>;
-
-function driverConfig(
-  project: OfflineProject,
-  db: FakeDatabase = fakeDatabase(),
-): Record<string, unknown> {
-  const base = offlineConfig({ project });
-  return {
-    ...base,
-    family: { ...(base['family'] as Record<string, unknown>), create: () => db.familyInstance },
-    driver: {
-      kind: 'driver',
-      id: 'pg',
-      familyId: 'sql',
-      targetId: 'postgres',
-      version: '1.0.0',
-      create: async () => {
-        db.counters.connections += 1;
-        return db.driver;
-      },
-    },
-    db: { connection: CONNECTION },
-  };
-}
-
-function harness(config: Record<string, unknown>) {
-  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
-}
-
-/** A project whose app space carries one migration ∅ → HASH_HEAD. */
-async function projectWithOneMigration(): Promise<
-  OfflineProject & { readonly migrationHash: string }
-> {
-  const project = await createOfflineProject({ storageHash: HASH_HEAD });
-  const seeded = await seedMigrationPackage({
-    appMigrationsDir: project.appMigrationsDir,
-    dirName: '20260101T0000_initial',
-    from: null,
-    to: HASH_HEAD,
-  });
-  return { ...project, migrationHash: seeded.migrationHash };
-}
-
-function markersAt(storageHash: string) {
-  return new Map([['app', { storageHash, invariants: [] as readonly string[] }]]);
-}
-
-function codesAndSeverities(
-  diagnostics: readonly Diagnostic[],
-): ReadonlyArray<{ code: string; severity: string }> {
-  return diagnostics.map(({ code, severity }) => ({ code, severity }));
-}
 
 describe('migration status', () => {
   it('settles as a completed envelope carrying the status document', async () => {
@@ -178,6 +93,109 @@ describe('migration status', () => {
     expect(run.presented?.diagnostics.at(0)).toMatchObject({ meta: { space: 'app' } });
     expect(run.presented?.data).toMatchObject({
       summary: `Database marker ${HASH_UNKNOWN.slice(0, 12)} is not in the on-disk migration graph`,
+    });
+  });
+
+  it('warns when the marker equals the emitted contract but no migration ends there', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    await seedMigrationPackage({
+      appMigrationsDir: project.appMigrationsDir,
+      dirName: DIR_BASE,
+      from: null,
+      to: HASH_BASE,
+    });
+    const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(codesAndSeverities(run.presented?.diagnostics ?? [])).toEqual([
+      { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn' },
+    ]);
+    expect(run.presented?.data).toMatchObject({
+      summary: `Database marker ${HASH_HEAD.slice(0, 12)} is not in the on-disk migration graph`,
+      spaces: [{ currentContract: HASH_HEAD, targetContract: HASH_HEAD }],
+    });
+  });
+
+  it('stays quiet when the app space has no migrations and the marker is the emitted contract', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status'], {
+      cwd: project.dir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.diagnostics ?? []).toEqual([]);
+    expect(run.presented?.data).toMatchObject({ summary: 'No migrations found' });
+    expect(run.presented?.presentation.human.at(-1)).toEqual({
+      kind: 'summary',
+      status: 'ok',
+      text: 'No migrations found',
+    });
+  });
+
+  it('warns when the app space has no migrations and the marker is another contract', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    const db = fakeDatabase({ markers: markersAt(HASH_UNKNOWN) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(codesAndSeverities(run.presented?.diagnostics ?? [])).toEqual([
+      { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn' },
+    ]);
+  });
+
+  it('stays quiet about an all-external extension space whose marker is at its head', async () => {
+    const project = await projectWithOneMigration();
+    await addAllExternalSpace(project);
+    const db = fakeDatabase({
+      markers: markersWithExternalAtHead(HASH_HEAD),
+      ledger: [{ migrationHash: project.migrationHash }],
+    });
+
+    const run = await harness(withAllExternalExtension(driverConfig(project, db))).run(
+      ['migration', 'status', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.diagnostics).toEqual([]);
+    expect(run.presented?.data).toMatchObject({
+      summary: 'Up to date',
+      spaces: expect.arrayContaining([
+        expect.objectContaining({
+          space: EXTERNAL_SPACE,
+          currentContract: HASH_EXTERNAL_HEAD,
+          targetContract: HASH_EXTERNAL_HEAD,
+        }),
+      ]),
+    });
+  });
+
+  it('names the extension head, not the app --to, when an extension space has no path', async () => {
+    const project = await projectWithOneMigration();
+    await addAllExternalSpace(project);
+    const db = fakeDatabase({
+      markers: markersAt(HASH_HEAD),
+      ledger: [{ migrationHash: project.migrationHash }],
+    });
+
+    const run = await harness(withAllExternalExtension(driverConfig(project, db))).run(
+      ['migration', 'status', '--to', HASH_HEAD, '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({
+      summary: `No migration path from the database state to the head of extension space \`${EXTERNAL_SPACE}\` (${HASH_EXTERNAL_HEAD.slice(0, 12)}).`,
     });
   });
 
@@ -331,6 +349,35 @@ describe('migration status', () => {
       envelope: {
         ok: false,
         error: { code: 'CONFIG.DB_CONNECTION_REQUIRED', meta: { missingFlags: ['--db'] } },
+      },
+    });
+  });
+
+  it('keeps --to in the retry command it suggests when no connection is configured', async () => {
+    const project = await projectWithOneMigration();
+    const config = driverConfig(project);
+
+    const run = await harness({ ...config, db: undefined }).run(
+      ['migration', 'status', '--to', HASH_HEAD, '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.DB_CONNECTION_REQUIRED',
+          meta: { missingFlags: ['--db'] },
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining(
+                `migration status --from <contract> --to ${HASH_HEAD}`,
+              ),
+            }),
+          ],
+        },
       },
     });
   });

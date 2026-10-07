@@ -8,7 +8,7 @@ import type { SqlAggregateDescriptor, SqlAggregateLowering } from './aggregate-d
 import type { ContractCodecRegistry } from './ast/codec-types';
 
 /**
- * Codec-id-keyed accessor for descriptor metadata. The unified read API for codec-id-keyed metadata (`traits`, `targetTypes`) — non-branching for parameterized vs. non-parameterized codecs. Every codec ships natively as a `CodecDescriptor` through the unified `codecs:` contributor slot (see ADR 208).
+ * Codec-id-keyed accessor for descriptor metadata. The unified read API for codec-id-keyed metadata (`traits`) — non-branching for parameterized vs. non-parameterized codecs. Every codec ships natively as a `CodecDescriptor` through the unified `codecs:` contributor slot (see ADR 208).
  */
 export interface CodecDescriptorRegistry {
   /**
@@ -33,10 +33,6 @@ export interface CodecDescriptorRegistry {
    * All registered descriptors. Used by `validateCodecRegistryCompleteness` and other startup-time consumers that enumerate descriptors.
    */
   values(): IterableIterator<CodecDescriptor<unknown>>;
-  /**
-   * Descriptors indexed by `targetTypes[i]` (each scalar type the codec advertises). Multiple descriptors may map to the same scalar type; ordering reflects registration order.
-   */
-  byTargetType(targetType: string): readonly CodecDescriptor<unknown>[];
 }
 
 /**
@@ -84,7 +80,7 @@ export interface ExecutionContext<TContract extends Contract<SqlStorage> = Contr
    */
   readonly contractCodecs: ContractCodecRegistry;
   /**
-   * Codec-id-keyed descriptor map. Single source of truth for codec-id-keyed metadata (`traits`, `targetTypes`) — every codec, parameterized or not, resolves through this map without branching.
+   * Codec-id-keyed descriptor map. Single source of truth for codec-id-keyed metadata (`traits`) — every codec, parameterized or not, resolves through this map without branching.
    */
   readonly codecDescriptors: CodecDescriptorRegistry;
   /**

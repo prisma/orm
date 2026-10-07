@@ -20,11 +20,6 @@
  *
  *   - `contractSpace.{contractJson,migrations,headRef}` — sourced from
  *     the on-disk artefacts emitted by `build:contract-space`.
- *   - `types.codecTypes.controlPlaneHooks[PGVECTOR_CODEC_ID]` — codec
- *     control hooks (`expandNativeType`, `resolveIdentityValue`) the
- *     SQL planner extracts via `extractCodecControlHooks` and uses to
- *     render `vector(N)` column types and the canonical zero-vector
- *     identity literal.
  *
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  *   (contract-space package layout convention).
@@ -62,13 +57,6 @@ function buildVectorIdentityValue(typeParams: Record<string, unknown> | undefine
 }
 
 const vectorControlPlaneHooks: CodecControlHooks = {
-  expandNativeType: ({ nativeType, typeParams }) => {
-    const length = typeParams?.['length'];
-    if (typeof length === 'number' && Number.isInteger(length) && length > 0) {
-      return `${nativeType}(${length})`;
-    }
-    return nativeType;
-  },
   resolveIdentityValue: ({ typeParams }) => buildVectorIdentityValue(typeParams),
 };
 

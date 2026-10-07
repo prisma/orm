@@ -17,6 +17,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MongoContract } from '@internal/mongo-contract';
 import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/control';
 import { createCollection, createIndex } from '@internal/target-mongo/migration';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
@@ -231,6 +232,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
     if (!pgResult.ok) throw new Error(formatRunnerFailure(pgResult.failure));
     const pgLedger = await new PostgresControlAdapter(
       createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
     ).readLedger(pgDriver!, LEDGER_TEST_SPACE_ID);
 
     const sqlite = multiEdgePlanSqlite();
@@ -358,6 +360,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
     if (!pgResult.ok) throw new Error(formatRunnerFailure(pgResult.failure));
     const pgLedger = await new PostgresControlAdapter(
       createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
     ).readLedger(pgDriver!, LEDGER_TEST_SPACE_ID);
 
     const sqliteDriver = sqliteTestDb!.driver;
@@ -512,6 +515,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
     if (!pgResult.ok) throw new Error(formatRunnerFailure(pgResult.failure));
     const pgLedger = await new PostgresControlAdapter(
       createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
     ).readLedger(pgDriver!, LEDGER_TEST_SPACE_ID);
 
     const sqliteDest = sqliteContract.storage.storageHash;

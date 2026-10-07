@@ -57,12 +57,12 @@
               "columns": {
                 "data": {
                   "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "dataType": "pg/json",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d720224fc1abc99e4ab4f9af30620b120a294a83d535e951c49d58ba71654576"
+    "storageHash": "2ffd674a0bf9d6f344ffaba5f405517ea704927d9d89e8180d21d6e3def44466"
   },
   "execution": {
     "executionHash": "42f83384ad4ada71e03078c06806ba44e63ca46399abe0028d7d56dae18a6363",
@@ -104,6 +104,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -114,9 +116,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

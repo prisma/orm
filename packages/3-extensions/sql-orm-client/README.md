@@ -60,6 +60,32 @@ const posts = await db.Post
   .all();
 ```
 
+## Custom collections
+
+An application extends `Collection` with its own query methods and registers the class with `orm({ collections })`:
+
+```ts
+class PostCollection extends Collection<Contract, 'Post'> {
+  withTitle(term: string) { return this.where((p) => p.title.ilike(`%${term}%`)); }
+  newestFirst()           { return this.orderBy((p) => p.createdAt.desc()); }
+}
+
+const db = orm({ runtime, context, collections: { Post: PostCollection } }).public;
+
+db.Post.where({ userId }).withTitle('orm').newestFirst().limit(10).all();
+db.Post.include('user').withTitle('orm');
+```
+
+`where`, `orderBy`, `limit`, `offset`, `distinct`, `distinctOn`, `cursor` and `include` return the collection they were called on, so the class's methods stay available. What a chain has established is added to the type as a fact: `where` gives `Filtered<Self>`, `orderBy` gives `Ordered<Self>`, and `include` gives `Including<Self, ...>`, whose rows also have the included relation. Write a filtered collection's type as `Filtered<C>`; it is `C & HasWhere`, and `HasWhere` is the name error messages print. `select` changes the row and `variant` changes the collection's type argument, so both return the base `Collection` type and the class's methods are gone after them.
+
+Inside a class body, a class method called on the result of another call loses what that call established, and so does `.prepared` after `.include(...)`: in `latest() { return this.withTitle('orm').newestFirst(); }` the result is known to be ordered but not filtered, for every caller of `latest()` (TML-3434). Inside the class, follow a class method with built-in methods (`this.withTitle('orm').orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
+
+`apply(fn)` calls `fn` with the collection and returns its result. A function from a collection to a collection is a scope, of type `Scope<In, Out>`: `db.Post.apply((posts) => posts.withTitle('orm'))` has the same type as `db.Post.withTitle('orm')`.
+
+The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not been established is `boolean`; a method that establishes it sets it to `true`. `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` need `hasWhere: true`; `cursor` and `distinctOn` need `hasOrderBy: true`. Because `true` is a subtype of `boolean`, a filtered collection is a subtype of an unfiltered one: `search ? db.Post.withTitle(search) : db.Post` is a `PostCollection` that may have no filter, and `deleteAll()` on it does not compile. Each fact has three names: the flag `hasWhere` is set to `true` by the interface `HasWhere`, which is what `Filtered<C>` adds and what error messages print; `hasOrderBy`, `HasOrderBy` and `Ordered<C>` are the same for an order. `variant` needs a collection with no variant selected: the type-state field `variantName` must be `undefined`, which error messages print as `HasNoVariant`. Read a collection's type state and row with `CollectionTypeStateOf<C>` and `CollectionRowOf<C>`. The row includes the relations and values `include` adds. See [ADR 265](../../../docs/architecture%20docs/adrs/ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md).
+
+`examples/prisma-8-demo/test/declaration-emit.test.ts` checks that a library exporting collection classes emits declarations with these names and that a consumer can use them. It runs in the demo's `pnpm test`, not in `pnpm test:packages`.
+
 ## Skipping rows that collide with a unique constraint
 
 `createAll` and `createAndCount` take an options object in second position that asks the database to skip rows colliding with a unique constraint instead of failing the whole statement.

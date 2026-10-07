@@ -127,7 +127,7 @@ describe('parameters the Mongo ORM builds', () => {
   it('name the base fields and the discriminator of a variant create', async () => {
     const { executor, plans } = recordingExecutor();
     await createMongoCollection(contract, 'Task', executor)
-      .variant('Bug')
+      .variant('bug')
       .create({ title: 'Crash', assigneeId: 'a1', severity: 'high', comments: [] });
 
     expect(labels(plans)).toEqual([

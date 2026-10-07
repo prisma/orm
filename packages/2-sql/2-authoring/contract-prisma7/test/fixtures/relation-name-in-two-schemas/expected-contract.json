@@ -324,7 +324,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "9055824653f5816174257e0f87f2d1460fa1eceab4270ec9832c7f2ff4c05440",
+    "storageHash": "9738464cd9e5d135bc92081134a90fd3d7f64d6555d3410418d08fea877eae3b",
     "namespaces": {
       "one": {
         "id": "one",
@@ -334,7 +334,7 @@
             "A": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -350,7 +350,7 @@
             "B": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -366,13 +366,13 @@
             "_X": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -439,7 +439,7 @@
             "C": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -455,7 +455,7 @@
             "D": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -471,13 +471,13 @@
             "_X": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false

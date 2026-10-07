@@ -5,11 +5,12 @@ import {
   DeleteAst,
   InsertAst,
   InsertOnConflict,
+  LockingClause,
   OrderByItem,
   SelectAst,
   UpdateAst,
 } from '../../src/exports/ast';
-import { col, param, returning, table } from './test-helpers';
+import { col, param, returning, shiftParamRef, table } from './test-helpers';
 
 describe('ast/builders', () => {
   it('builds select ASTs through fluent rich-node methods', () => {
@@ -95,5 +96,77 @@ describe('ast/builders', () => {
 
     expect(updateAst).toMatchObject({ where, returning: returning('user', ['id']) });
     expect(deleteAst).toMatchObject({ where, returning: returning('user', ['id']) });
+  });
+
+  describe('select locking', () => {
+    const base = SelectAst.from(table('job', 'j')).addProjection('id', col('j', 'id'));
+    const skipLocked = LockingClause.of('forUpdate', { of: ['j'], waitPolicy: 'skipLocked' });
+    const share = LockingClause.of('forShare');
+
+    it('keeps locking clauses through the other with... calls', () => {
+      const where = BinaryExpr.eq(col('j', 'state'), param(1, 'state'));
+      const ast = base
+        .withLocking([skipLocked, share])
+        .withFrom(table('job', 'j'))
+        .withJoins([])
+        .withProjection([...base.projection])
+        .addProjection('state', col('j', 'state'))
+        .withWhere(where)
+        .withOrderBy([OrderByItem.asc(col('j', 'id'))])
+        .withLimit(1)
+        .withOffset(2)
+        .withSelectAllIntent(undefined);
+
+      expect(ast).toMatchObject({
+        where,
+        limit: 1,
+        offset: 2,
+        locking: [
+          { strength: 'forUpdate', of: ['j'], waitPolicy: 'skipLocked' },
+          { strength: 'forShare', of: undefined, waitPolicy: undefined },
+        ],
+      });
+      expect(Object.isFrozen(ast.locking)).toBe(true);
+    });
+
+    it('keeps locking clauses through rewrite', () => {
+      const ast = base
+        .withWhere(BinaryExpr.eq(col('j', 'id'), param(0, 'id')))
+        .withLocking([skipLocked]);
+
+      const rewritten = ast.rewrite({ paramRef: shiftParamRef(1) });
+
+      expect(rewritten.where).toEqual(BinaryExpr.eq(col('j', 'id'), param(1, 'id')));
+      expect(rewritten.locking).toEqual([skipLocked]);
+    });
+
+    it('normalises an empty locking list to undefined', () => {
+      expect(base.withLocking([skipLocked]).withLocking([]).locking).toBeUndefined();
+      expect(base.locking).toBeUndefined();
+      expect(SelectAst.noFrom().locking).toBeUndefined();
+    });
+
+    it('LockingClause.of normalises an empty of to undefined and freezes the instance', () => {
+      const clause = LockingClause.of('forNoKeyUpdate', { of: [], waitPolicy: 'nowait' });
+
+      expect(clause).toEqual(
+        new LockingClause({ strength: 'forNoKeyUpdate', of: undefined, waitPolicy: 'nowait' }),
+      );
+      expect(clause).toMatchObject({
+        strength: 'forNoKeyUpdate',
+        of: undefined,
+        waitPolicy: 'nowait',
+      });
+      expect(Object.isFrozen(clause)).toBe(true);
+    });
+
+    it('LockingClause freezes a copy of of', () => {
+      const tables = ['a', 'b'];
+      const clause = LockingClause.of('forKeyShare', { of: tables });
+      tables.push('c');
+
+      expect(clause.of).toEqual(['a', 'b']);
+      expect(Object.isFrozen(clause.of)).toBe(true);
+    });
   });
 });

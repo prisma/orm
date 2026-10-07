@@ -1,4 +1,4 @@
-import { type Binder, isNamespaceLike, type Resolution } from '@internal/psl-parser';
+import type { Binder, Resolution } from '@internal/psl-parser';
 import {
   ArrayLiteralAst,
   type AttributeArgAst,
@@ -416,7 +416,7 @@ function collectExpression(
     if (memberPath === undefined) {
       collectTypeReference(expression.name(), source, tokens);
     } else {
-      collectMemberPath(memberPath, tokens);
+      collectMemberPath(memberPath, source, tokens);
     }
     for (const arg of expression.args()) {
       collectAttributeArg(arg, source, tokens);
@@ -444,7 +444,7 @@ function collectExpression(
   }
 
   if (expression instanceof PathExprAst) {
-    collectMemberPath(expression, tokens);
+    collectMemberPath(expression, source, tokens);
     return;
   }
 
@@ -452,9 +452,16 @@ function collectExpression(
 }
 
 /** A member path such as `address.city` names fields, one per segment. */
-function collectMemberPath(path: PathExprAst, tokens: PendingSemanticToken[]): void {
+function collectMemberPath(
+  path: PathExprAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
   for (const segment of path.segments()) {
-    addIdentifier(segment, 'property', tokens);
+    const resolution = source.binder.symbolForNode(segment.syntax);
+    const namespace =
+      resolution?.kind === 'namespace' || resolution?.kind === 'contributedNamespace';
+    addIdentifier(segment, namespace ? 'namespace' : 'property', tokens);
   }
 }
 
@@ -507,8 +514,8 @@ function collectTypeReference(
   }
 
   for (const segment of segments.slice(0, -1)) {
-    const qualifier = source.binder.scopeAt(name.syntax).lookup(segment.text);
-    if (qualifier !== undefined && isNamespaceLike(qualifier)) {
+    const qualifier = source.binder.symbolForNode(segment.identifier.syntax);
+    if (qualifier?.kind === 'namespace' || qualifier?.kind === 'contributedNamespace') {
       tokens.push(rangeForIdentifier(segment.identifier, 'namespace'));
     }
   }

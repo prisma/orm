@@ -12,7 +12,7 @@ Type-safe builder interfaces validated via `expectTypeOf` tests in `test/playgro
 
 - **`sql({ context, runtime })`** — factory returning `Db<Contract>` with table proxies
 - **`TableProxy`** — `.select()`, `.as()`, all join methods, lateral joins
-- **`SelectQuery`** — `.select()`, `.where()`, `.orderBy()`, `.groupBy()`, `.limit()`, `.offset()`, `.distinct()`, `.distinctOn()`, `.as()`, `.first()`, `.firstOrThrow()`, `.all()`
+- **`SelectQuery`** — `.select()`, `.where()`, `.orderBy()`, `.groupBy()`, `.limit()`, `.offset()`, `.distinct()`, `.distinctOn()`, `.forUpdate()`, `.forNoKeyUpdate()`, `.forShare()`, `.forKeyShare()`, `.as()`, `.first()`, `.firstOrThrow()`, `.all()`
 - **`GroupedQuery`** — `.groupBy()`, `.having()`, `.orderBy()`, `.limit()`, `.offset()`, `.distinct()`, `.distinctOn()`, `.as()`, `.first()`, `.firstOrThrow()`, `.all()`
 - **Execution** — `.first()`, `.firstOrThrow()`, `.all()` build `SqlQueryPlan` and delegate to `Runtime`
 - **Extension functions** — derived from `QueryOperationRegistry` (e.g., pgvector `cosineDistance`)
@@ -35,12 +35,14 @@ Type-safe builder interfaces validated via `expectTypeOf` tests in `test/playgro
 - **Logical operators**: `and`, `or`
 - **Subquery predicates**: `exists`, `notExists`, `in` (subquery or array), `notIn` (subquery or array)
 - **DISTINCT** / **DISTINCT ON (expr, ...)** (DISTINCT ON is capability-gated)
+- **Row locking**: `.forUpdate()`, `.forNoKeyUpdate()`, `.forShare()`, `.forKeyShare()` with the options `of` (tables or aliases in scope), `nowait` and `skipLocked` (each method and option is capability-gated)
 - **Extension functions** (e.g., pgvector `cosineDistance`)
 
 ### Tests
 
 - 72 unit tests (expressions, field proxy, functions, builders)
 - 33 integration tests against PGlite (SELECT, WHERE, JOIN, ORDER BY, GROUP BY, HAVING, LIMIT/OFFSET, DISTINCT, subqueries, execution methods, extension functions)
+- Row-locking integration tests prove that Postgres accepts each rendered locking clause and that the transaction holds the lock, on a single PGlite connection. They do not prove that another transaction waits, fails under `nowait` or skips under `skipLocked`, because PGlite has one connection.
 
 ## What's missing
 
@@ -48,7 +50,6 @@ Type-safe builder interfaces validated via `expectTypeOf` tests in `test/playgro
 
 - **WITH** (common table expressions) / **WITH RECURSIVE**
 - **UNION** / **INTERSECT** / **EXCEPT** (and their `ALL` variants)
-- **FOR UPDATE / FOR SHARE / FOR NO KEY UPDATE / FOR KEY SHARE** (row locking)
 - **FETCH FIRST n ROWS ONLY** (SQL-standard syntax — functionally LIMIT but with `WITH TIES`)
 - **TABLESAMPLE**
 

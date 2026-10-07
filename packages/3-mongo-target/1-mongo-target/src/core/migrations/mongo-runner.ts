@@ -250,6 +250,7 @@ export class MongoMigrationRunner {
           invariants: incomingInvariants,
         });
         if (!updated) {
+          const found = await markerOps.readMarker(space);
           return runnerFailure(
             'MIGRATION.MARKER_CAS_FAILURE',
             'Marker was modified by another process during migration execution.',
@@ -257,6 +258,7 @@ export class MongoMigrationRunner {
               meta: {
                 space,
                 expectedStorageHash: existingMarker.storageHash,
+                foundStorageHash: found?.storageHash ?? null,
                 destinationStorageHash: destination.storageHash,
               },
             },

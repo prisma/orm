@@ -1,7 +1,7 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -13,7 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureTypeLookups,
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
@@ -61,23 +61,20 @@ model Event {
     if (!result.ok) return;
 
     expect(documentScopedTypes(result.value)).toMatchObject({
-      Id: { codecId: 'pg/uuid@1', nativeType: 'uuid' },
+      Id: { codecId: 'pg/uuid@1' },
       Slug: {
         codecId: 'sql/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: 191 },
       },
-      Rating: { codecId: 'pg/int2@1', nativeType: 'int2' },
+      Rating: { codecId: 'pg/int2@1' },
       HappenedAt: {
         codecId: 'pg/time-temporal@1',
-        nativeType: 'time',
         typeParams: { precision: 3 },
       },
-      PublishDay: { codecId: 'pg/date-temporal@1', nativeType: 'date' },
-      Payload: { codecId: 'pg/json@1', nativeType: 'json' },
+      PublishDay: { codecId: 'pg/date-temporal@1' },
+      Payload: { codecId: 'pg/json@1' },
       Amount: {
         codecId: 'pg/numeric@1',
-        nativeType: 'numeric',
         typeParams: { precision: 10, scale: 2 },
       },
     });
@@ -88,40 +85,40 @@ model Event {
             table: {
               Event: {
                 columns: {
-                  id: { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false, typeRef: 'Id' },
+                  id: { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false, typeRef: 'Id' },
                   slug: {
                     codecId: 'sql/varchar@1',
-                    nativeType: 'character varying',
+                    dataType: 'pg/varchar',
                     nullable: false,
                     typeRef: 'Slug',
                   },
                   rating: {
                     codecId: 'pg/int2@1',
-                    nativeType: 'int2',
+                    dataType: 'pg/int2',
                     nullable: false,
                     typeRef: 'Rating',
                   },
                   happenedAt: {
                     codecId: 'pg/time-temporal@1',
-                    nativeType: 'time',
+                    dataType: 'pg/time',
                     nullable: false,
                     typeRef: 'HappenedAt',
                   },
                   publishDay: {
                     codecId: 'pg/date-temporal@1',
-                    nativeType: 'date',
+                    dataType: 'pg/date',
                     nullable: false,
                     typeRef: 'PublishDay',
                   },
                   payload: {
                     codecId: 'pg/json@1',
-                    nativeType: 'json',
+                    dataType: 'pg/json',
                     nullable: false,
                     typeRef: 'Payload',
                   },
                   amount: {
                     codecId: 'pg/numeric@1',
-                    nativeType: 'numeric',
+                    dataType: 'pg/numeric',
                     nullable: false,
                     typeRef: 'Amount',
                   },
@@ -168,31 +165,25 @@ model Event {
     expect(documentScopedTypes(result.value)).toMatchObject({
       Code: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: 12 },
       },
       Score: {
         codecId: 'pg/float4@1',
-        nativeType: 'float4',
       },
       CreatedAt: {
         codecId: 'pg/timestamp-temporal@1',
-        nativeType: 'timestamp',
         typeParams: { precision: 3 },
       },
       PublishedAt: {
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
         typeParams: { precision: 6 },
       },
       ReminderAt: {
         codecId: 'pg/timetz@1',
-        nativeType: 'timetz',
         typeParams: { precision: 2 },
       },
       Ip: {
         codecId: 'pg/inet@1',
-        nativeType: 'inet',
       },
     });
     expect(result.value.storage).toMatchObject({
@@ -202,40 +193,40 @@ model Event {
             table: {
               Event: {
                 columns: {
-                  id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                  id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
                   code: {
                     codecId: 'sql/char@1',
-                    nativeType: 'character',
+                    dataType: 'pg/char',
                     nullable: false,
                     typeRef: 'Code',
                   },
                   score: {
                     codecId: 'pg/float4@1',
-                    nativeType: 'float4',
+                    dataType: 'pg/float4',
                     nullable: false,
                     typeRef: 'Score',
                   },
                   createdAt: {
                     codecId: 'pg/timestamp-temporal@1',
-                    nativeType: 'timestamp',
+                    dataType: 'pg/timestamp',
                     nullable: false,
                     typeRef: 'CreatedAt',
                   },
                   publishedAt: {
                     codecId: 'pg/timestamptz-temporal@1',
-                    nativeType: 'timestamptz',
+                    dataType: 'pg/timestamptz',
                     nullable: false,
                     typeRef: 'PublishedAt',
                   },
                   reminderAt: {
                     codecId: 'pg/timetz@1',
-                    nativeType: 'timetz',
+                    dataType: 'pg/timetz',
                     nullable: false,
                     typeRef: 'ReminderAt',
                   },
                   ip: {
                     codecId: 'pg/inet@1',
-                    nativeType: 'inet',
+                    dataType: 'pg/inet',
                     nullable: false,
                     typeRef: 'Ip',
                   },

@@ -19,7 +19,6 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   codecId: id,
   dataType: dataTypeId('demo/fixture'),
   traits: ['equality'],
-  targetTypes: ['string'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () =>
@@ -42,7 +41,7 @@ const mongoTargetPack = {
   types: { codecTypes: { codecDescriptors: [identityDescriptor('mongo/string@1')] } },
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
-const mongoString = { codecId: 'mongo/string@1' as const, nativeType: 'string' } as const;
+const mongoString = { codecId: 'mongo/string@1' as const } as const;
 
 describe('member()', () => {
   it('preserves name and value as literal types', () => {
@@ -85,9 +84,8 @@ describe('enumType() — Mongo binding', () => {
     expect(Role.ordinalOf(notAMember)).toBe(-1);
   });
 
-  it('stores codecId and nativeType', () => {
+  it('stores codecId', () => {
     expect(Role.codecId).toBe('mongo/string@1');
-    expect(Role.nativeType).toBe('string');
   });
 });
 
@@ -263,12 +261,11 @@ describe('defineContract() — enum declaration key mismatch', () => {
 });
 
 describe('defineContract() — codec-encoded value set', () => {
-  const upperCodec = { codecId: 'test/upper@1' as const, nativeType: 'string' } as const;
+  const upperCodec = { codecId: 'test/upper@1' as const } as const;
   const upperDescriptor: AnyCodecDescriptor = {
     codecId: 'test/upper@1',
     dataType: dataTypeId('test/upper'),
     traits: ['equality'],
-    targetTypes: ['string'],
     paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>

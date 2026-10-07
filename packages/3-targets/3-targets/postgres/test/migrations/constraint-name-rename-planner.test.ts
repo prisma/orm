@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
 import { PostgresSchema } from '../../src/core/postgres-schema';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: 'stub', params: [] }),
@@ -36,7 +37,7 @@ function buildContract(names: Names): Contract<SqlStorage> {
     entries: {
       table: {
         author: new StorageTable({
-          columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
           uniques: [],
@@ -44,9 +45,9 @@ function buildContract(names: Names): Contract<SqlStorage> {
         }),
         post: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+            author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: {
             columns: names.primaryKeyColumns ?? ['id'],
@@ -87,10 +88,10 @@ async function plannedOperations(
 ) {
   const result = createPostgresMigrationPlanner(stubLowerer).plan({
     contract: to,
-    schema: postgresContractToSchema(from, []),
+    schema: postgresContractToSchema(from, postgresTypeComponents),
     policy: { allowedOperationClasses: [...allowed] },
     fromContract: from,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -188,10 +189,13 @@ describe('a stated constraint name that changes', () => {
   it('leaves a primary key whose columns change to the conflict it reports today', () => {
     const result = createPostgresMigrationPlanner(stubLowerer).plan({
       contract: buildContract({ primaryKey: 'post_key', primaryKeyColumns: ['id', 'slug'] }),
-      schema: postgresContractToSchema(buildContract({ primaryKey: 'post_primary' }), []),
+      schema: postgresContractToSchema(
+        buildContract({ primaryKey: 'post_primary' }),
+        postgresTypeComponents,
+      ),
       policy: { allowedOperationClasses: [...ALL_CLASSES] },
       fromContract: buildContract({ primaryKey: 'post_primary' }),
-      frameworkComponents: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

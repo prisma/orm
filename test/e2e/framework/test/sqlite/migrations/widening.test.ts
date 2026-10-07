@@ -85,7 +85,7 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
       },
       async ({ schema, driver }) => {
         const stored = schema.tables['User']!.columns['createdAt']!.default;
-        expect(stored).toBe("datetime('now')");
+        expect(stored).toBe("strftime('%Y-%m-%dT%H:%M:%fZ','now')");
         await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
         const row = (
           await driver.query<{ createdAt: string }>(

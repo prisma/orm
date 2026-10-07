@@ -1,5 +1,6 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
-import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { SqlStorage, StorageTable, type StorageTypeInstance } from '@internal/sql-contract/types';
+import { ifDefined } from '@internal/utils/defined';
 import { applicationDomainOf } from '@repo/test-utils';
 import { buildPostgresPlanDiff } from '../../src/core/migrations/diff-database-schema';
 import {
@@ -10,10 +11,14 @@ import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import type { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 export type TableSpec = ConstructorParameters<typeof StorageTable>[0];
 
-export function makeContract(tables: Record<string, TableSpec>): Contract<SqlStorage> {
+export function makeContract(
+  tables: Record<string, TableSpec>,
+  types?: Record<string, StorageTypeInstance>,
+): Contract<SqlStorage> {
   const publicSchema = new PostgresSchema({
     id: 'public',
     entries: {
@@ -28,6 +33,7 @@ export function makeContract(tables: Record<string, TableSpec>): Contract<SqlSto
     profileHash: profileHash('node-planner'),
     storage: new SqlStorage({
       storageHash: coreHash('node-planner'),
+      ...ifDefined('types', types),
       namespaces: { public: publicSchema },
     }),
     roots: {},
@@ -67,7 +73,7 @@ export function planFor(contract: Contract<SqlStorage>, actual: PostgresDatabase
   const { issues } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
-    frameworkComponents: [],
+    frameworkComponents: postgresTypeComponents,
   });
   // Subtree coalescing is the planner's responsibility (per the differ's
   // contract) — the total differ emits an issue for every node in a
@@ -79,6 +85,7 @@ export function planFor(contract: Contract<SqlStorage>, actual: PostgresDatabase
     fromContract: null,
     schemaName: 'public',
     codecHooks: new Map(),
+    types: postgresTypeLookups,
     storageTypes: contract.storage.types ?? {},
     // The default per-issue mapper is what this suite pins — the real
     // strategy list is covered elsewhere (see module docstring).

@@ -1,9 +1,14 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
+import {
+  assembleDataTypes,
+  type CodecLookupWithDescriptors,
+  type DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import type {
+  AuthoredStorageTypeInstance,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type {
   ComposedAuthoringHelpers,
@@ -21,7 +26,7 @@ import type { RlsEntityHandle } from './rls';
 type SqlFamily = typeof sqlFamilyPack;
 type PostgresPack = typeof postgresPack;
 
-type TypesConstraint = Record<string, StorageTypeInstance>;
+type TypesConstraint = Record<string, AuthoredStorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
 type EnumsConstraint = Record<string, EnumTypeHandle>;
 
@@ -40,6 +45,8 @@ type PostgresResult<
       readonly extensions?: Extensions;
       readonly enums?: Enums;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
+      readonly codecLookup: CodecLookupWithDescriptors;
+      readonly dataTypeLookup: DataTypeLookup;
     }
   >
 >;
@@ -48,8 +55,20 @@ type PostgresBaseScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = Omit<
   ContractInput<SqlFamily, PostgresPack, Record<never, never>, Record<never, never>, Extensions>,
-  'family' | 'target' | 'types' | 'models' | 'enums' | 'createNamespace' | 'entities'
+  | 'family'
+  | 'target'
+  | 'types'
+  | 'models'
+  | 'enums'
+  | 'createNamespace'
+  | 'entities'
+  | 'codecLookup'
+  | 'dataTypeLookup'
 > & {
+  /** Overrides the codecs of the target and the extensions. */
+  readonly codecLookup?: CodecLookupWithDescriptors;
+  /** Overrides the data types of the target and the extensions. */
+  readonly dataTypeLookup?: DataTypeLookup;
   /**
    * RLS handles (`policy*`, `rlsEnabled`, `role`), lowered by the generic
    * contract build through the postgres pack's entity-handle hook —
@@ -115,12 +134,18 @@ export function defineContract(
     readonly enums?: EnumsConstraint;
   },
 ): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
+  const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
+    definition.extensions ?? {},
+  );
+  const dataTypeLookup =
+    definition.dataTypeLookup ?? assembleDataTypes([postgresPack, ...extensions]).lookup;
   const bound = {
     ...definition,
     createNamespace: postgresCreateNamespace,
     codecLookup:
       definition.codecLookup ??
-      assemblePostgresCodecRegistryWithBuiltins(Object.values(definition.extensions ?? {})),
+      assemblePostgresCodecRegistryWithBuiltins(extensions, dataTypeLookup),
+    dataTypeLookup,
   };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);

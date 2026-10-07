@@ -17,7 +17,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4a6ab3206062fc2061c13fc5362978dd0d0245fd37c26df94a294ec78692b5c6'>;
+  StorageHashBase<'510b859cf27e09d6b3daa5284cd5356d78b5c4d2e355a3241ea25395c8ba6b6d'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -356,19 +356,19 @@ type ContractBase = Omit<
             readonly comments: {
               columns: {
                 readonly body: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly post_id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -382,13 +382,13 @@ type ContractBase = Omit<
             readonly items: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly default: {
@@ -398,7 +398,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -412,25 +412,25 @@ type ContractBase = Omit<
             readonly posts: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly user_id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly views: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -444,19 +444,19 @@ type ContractBase = Omit<
             readonly profiles: {
               columns: {
                 readonly bio: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly user_id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -470,31 +470,31 @@ type ContractBase = Omit<
             readonly typed_rows: {
               columns: {
                 readonly active: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly created_at: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly metadata: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/json@1';
                   readonly nullable: true;
                   readonly many: false;
@@ -508,25 +508,25 @@ type ContractBase = Omit<
             readonly users: {
               columns: {
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly invited_by_id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly name: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;

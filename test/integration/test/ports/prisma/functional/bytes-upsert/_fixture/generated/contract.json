@@ -57,12 +57,12 @@
               "columns": {
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -87,7 +87,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cdaf3dc2b0878f5162c0e73200191c9e0af03fb534ae64a67becee0c0b00f916"
+    "storageHash": "3688ad17a138df896ce0419f6beb2bd3e4fab8b12c4162c04ad51ec4a497397b"
   },
   "execution": {
     "executionHash": "27c5ba4e2c8d914a952a649111a63cd6b9e2c2e16c9d9e069a1993b6c276e561",
@@ -110,6 +110,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -120,9 +122,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

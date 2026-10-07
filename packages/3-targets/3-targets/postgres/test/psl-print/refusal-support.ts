@@ -14,13 +14,13 @@ export type Overrides = NonNullable<Parameters<typeof createSqlContract>[0]>;
 export const PUBLIC = asNamespaceId('public');
 export const INT_COLUMN = {
   many: false,
-  nativeType: 'int4',
+  dataType: 'pg/int4',
   codecId: 'pg/int4@1',
   nullable: false,
 } as const;
 export const TEXT_COLUMN = {
   many: false,
-  nativeType: 'text',
+  dataType: 'pg/text',
   codecId: 'pg/text@1',
   nullable: false,
 } as const;

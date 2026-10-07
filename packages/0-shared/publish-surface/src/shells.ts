@@ -645,6 +645,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'errors',
           'full-text',
           'issue-planner',
+          'marker-lock',
           'migration',
           'native-type-normalizer',
           'op-factory-call',

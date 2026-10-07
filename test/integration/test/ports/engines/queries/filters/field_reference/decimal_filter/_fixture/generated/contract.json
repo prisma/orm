@@ -67,17 +67,17 @@
               "columns": {
                 "dec": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true
                 },
                 "dec2": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -96,11 +96,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "14571cbc9ae00d0d392177b24a422b763c9d0feaa35b94e3441024b28001ceaa"
+    "storageHash": "17a68ba4b125b6a172639b163957d160248f354de20ab895e9e098c0cb4e9260"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -111,9 +113,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

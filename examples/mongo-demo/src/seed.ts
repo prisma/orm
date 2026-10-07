@@ -23,8 +23,8 @@ export async function seed(orm: Db['orm']) {
   const carol = createdUsers[2];
   if (!alice || !bob || !carol) throw new Error('Failed to seed users');
 
-  const articles = orm.posts.variant('Article');
-  const tutorials = orm.posts.variant('Tutorial');
+  const articles = orm.posts.variant('article');
+  const tutorials = orm.posts.variant('tutorial');
 
   await articles.createAll([
     {

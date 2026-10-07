@@ -1,6 +1,7 @@
 import type { ColumnDefaultLiteralValue } from '@internal/contract/types';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
@@ -11,16 +12,19 @@ import type { PostgresContract } from '../src/core/types';
  * planner's SET DEFAULT writes for the same defaults.
  */
 async function createTableDefault(
-  nativeType: string,
+  typeText: string,
   codecId: string,
   value: ColumnDefaultLiteralValue,
   many = false,
 ): Promise<string> {
   const ast = new PostgresCreateTable({
     table: 't',
-    columns: [col('v', nativeType, { default: lit(value), codecRef: { codecId, many } })],
+    columns: [col('v', typeText, { default: lit(value), codecRef: { codecId, many } })],
   });
-  const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+  const adapter = new PostgresControlAdapter(
+    createPostgresBuiltinCodecLookup(),
+    createPostgresBuiltinDataTypeLookup(),
+  );
   const lowered = await adapter.lowerToExecuteRequest(ast, { contract: {} as PostgresContract });
   return lowered.sql.slice(lowered.sql.indexOf('DEFAULT'), lowered.sql.lastIndexOf('\n'));
 }
@@ -54,25 +58,25 @@ describe('a date or time default in CREATE TABLE', () => {
     ['time', 'pg/time-temporal@1', '12:34:56.5', "'12:34:56.5'"],
     ['timetz', 'pg/timetz@1', '12:34:56+02:00', "'12:34:56+02:00'"],
     ['interval', 'pg/interval@1', 'P1Y1M', "'P1Y1M'"],
-  ])(
-    'writes a %s default through %s, %s, as %s',
-    async (nativeType, codecId, canonical, literal) => {
-      expect(await createTableDefault(nativeType, codecId, canonical)).toBe(
-        `DEFAULT ${literal}::${nativeType}`,
-      );
-    },
-  );
+  ])('writes a %s default through %s, %s, as %s', async (typeText, codecId, canonical, literal) => {
+    expect(await createTableDefault(typeText, codecId, canonical)).toBe(
+      `DEFAULT ${literal}::${typeText}`,
+    );
+  });
 
   it.each([
     ['jsonb[]', 'pg/jsonb@1'],
     ['timestamptz[]', 'pg/timestamptz-temporal@1'],
-  ])('writes a null %s container as SQL NULL with %s', async (nativeType, codecId) => {
-    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
-    const column = col('v', nativeType, {
+  ])('writes a null %s container as SQL NULL with %s', async (typeText, codecId) => {
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
+    const column = col('v', typeText, {
       default: lit(null),
       codecRef: { codecId, many: true },
     });
-    expect(await createTableDefault(nativeType, codecId, null, true)).toBe('DEFAULT NULL');
+    expect(await createTableDefault(typeText, codecId, null, true)).toBe('DEFAULT NULL');
     expect(await adapter.renderColumnDefault(column, 't')).toBe('DEFAULT NULL');
   });
 
@@ -94,8 +98,8 @@ describe('a date or time default in CREATE TABLE', () => {
     ['interval', 'pg/interval@1', '1 day'],
   ])(
     'refuses a %s default its codec %s does not read, %s, naming the column',
-    async (nativeType, codecId, value) => {
-      await expect(createTableDefault(nativeType, codecId, value)).rejects.toMatchObject({
+    async (typeText, codecId, value) => {
+      await expect(createTableDefault(typeText, codecId, value)).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: { table: 't', column: 'v', codecId, value, reason: 'codec-refused-default' },
       });

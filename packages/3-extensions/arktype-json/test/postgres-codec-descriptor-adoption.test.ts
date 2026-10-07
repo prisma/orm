@@ -28,7 +28,7 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves jsonb native type, identity projection, and structured JSON behavior', () => {
+  it('preserves the jsonb data type, identity projection, and structured JSON behavior', () => {
     const schema = type({ name: 'string', price: 'number' });
     const column = arktypeJsonColumn(schema);
     const ref: CodecRef = {
@@ -40,7 +40,7 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     };
     const expression = ColumnRef.of('products', 'details');
 
-    expect(arktypeJsonDescriptor.nativeTypeFor(ref)).toBe('jsonb');
+    expect(arktypeJsonDescriptor.dataType).toBe('pg/jsonb');
     expect(arktypeJsonDescriptor.projectJson(expression, ref)).toBe(expression);
 
     const codec = column.codecFactory({ name: 'details' });
