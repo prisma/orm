@@ -64,14 +64,17 @@ import {
   type InitializeResult,
   InsertTextFormat,
   LogMessageNotification,
+  LSPErrorCodes,
   MarkupKind,
   MessageType,
   type Position,
+  PrepareRenameRequest,
   PublishDiagnosticsNotification,
   type Range,
   ReferencesRequest,
   type RegistrationParams,
   RegistrationRequest,
+  RenameRequest,
   type SemanticTokens,
   ShutdownRequest,
   type SignatureHelpContext,
@@ -423,6 +426,10 @@ const snippetCompletionCapabilities: ClientCapabilities = {
   textDocument: { completion: { completionItem: { snippetSupport: true } } },
 };
 
+const prepareRenameCapabilities: ClientCapabilities = {
+  textDocument: { rename: { prepareSupport: true } },
+};
+
 const pullDiagnosticsCapabilities: ClientCapabilities = {
   textDocument: { diagnostic: { relatedDocumentSupport: true } },
 };
@@ -434,6 +441,7 @@ const pullDiagnosticsWithRefreshCapabilities: ClientCapabilities = {
 
 interface Harness {
   readonly client: ReturnType<typeof createConnection>;
+  readonly unguardedClient: ReturnType<typeof createConnection>;
   readonly initialize: (initializationOptions?: unknown) => Promise<InitializeResult>;
   readonly waitForDiagnostics: (uri: string) => Promise<readonly Diagnostic[]>;
   readonly waitForDiagnosticsMatching: (
@@ -497,15 +505,14 @@ function startHarness(
   );
   const server = createServer(serverConnection);
 
+  const unguardedClient = createConnection(
+    new StreamMessageReader(serverToClient),
+    new StreamMessageWriter(clientToServer),
+    connectionOptions,
+  );
   // Guarded like the server: a client send whose write fails after dispose
   // must not become an unhandled rejection in the test process.
-  const client = guardedConnection(
-    createConnection(
-      new StreamMessageReader(serverToClient),
-      new StreamMessageWriter(clientToServer),
-      connectionOptions,
-    ),
-  );
+  const client = guardedConnection(unguardedClient);
 
   const pending = new Map<string, (diagnostics: readonly Diagnostic[]) => void>();
   const latest = new Map<string, readonly Diagnostic[]>();
@@ -631,6 +638,7 @@ function startHarness(
 
   return {
     client,
+    unguardedClient,
     registrations,
     waitForWatchedFilesRegistration: (timeoutMs) =>
       new Promise((resolve, reject) => {
@@ -784,6 +792,21 @@ function requestReferences(
     textDocument: { uri },
     position,
     context: { includeDeclaration },
+  });
+}
+
+function requestPrepareRename(harness: Harness, uri: string, position: Position) {
+  return harness.client.sendRequest(PrepareRenameRequest.type, {
+    textDocument: { uri },
+    position,
+  });
+}
+
+function requestRename(harness: Harness, uri: string, position: Position, newName: string) {
+  return harness.client.sendRequest(RenameRequest.type, {
+    textDocument: { uri },
+    position,
+    newName,
   });
 }
 
@@ -1085,6 +1108,20 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(result.capabilities.hoverProvider).toBe(true);
     expect(result.capabilities.definitionProvider).toBe(true);
     expect(result.capabilities.referencesProvider).toBe(true);
+  });
+
+  it('declares rename without the prepare provider for a client without prepare support', async () => {
+    harness = startHarness(resolveToSchema);
+    const result = await harness.initialize();
+
+    expect(result.capabilities.renameProvider).toBe(true);
+  });
+
+  it('declares rename with the prepare provider for a client with prepare support', async () => {
+    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
+    const result = await harness.initialize();
+
+    expect(result.capabilities.renameProvider).toEqual({ prepareProvider: true });
   });
 
   it('serves hover content through the server for an opened document', async () => {
@@ -2333,6 +2370,195 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         range: { start: { line: 6, character: 12 }, end: { line: 6, character: 16 } },
       },
     ]);
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers prepare rename with the range and text of the name at the cursor', async () => {
+    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestPrepareRename(harness, schemaUri, position)).resolves.toEqual({
+      range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+      placeholder: 'User',
+    });
+  });
+
+  it('answers prepare rename with null on a name that cannot be renamed', async () => {
+    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor('// use prisma-8\nmodel User {\n  id In|t\n}\n');
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestPrepareRename(harness, schemaUri, position)).resolves.toBeNull();
+  });
+
+  it('answers prepare rename with null for a document outside the project', async () => {
+    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
+    await harness.initialize();
+    const outsideUri = pathToFileURL(join(root, 'outside.prisma')).href;
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, outsideUri, source);
+
+    await expect(requestPrepareRename(harness, outsideUri, position)).resolves.toBeNull();
+  });
+
+  it('answers prepare rename with null for a document that is not open', async () => {
+    harness = startHarness(resolveToSchema, prepareRenameCapabilities);
+    await harness.initialize();
+
+    await expect(
+      requestPrepareRename(harness, schemaUri, { line: 1, character: 7 }),
+    ).resolves.toBeNull();
+  });
+
+  it('answers rename with an edit of the declaration and every reference', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestRename(harness, schemaUri, position, 'Account')).resolves.toEqual({
+      changes: {
+        [schemaUri]: [
+          {
+            range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+            newText: 'Account',
+          },
+          {
+            range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+            newText: 'Account',
+          },
+        ],
+      },
+    });
+  });
+
+  it('answers rename with an error response that quotes a new name that is not an identifier', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(
+      harness.unguardedClient.sendRequest(RenameRequest.type, {
+        textDocument: { uri: schemaUri },
+        position,
+        newName: '1st',
+      }),
+    ).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: '"1st" is not a valid PSL identifier',
+    });
+    await expect(requestRename(harness, schemaUri, position, 'First')).resolves.toMatchObject({
+      changes: { [schemaUri]: [{ newText: 'First' }, { newText: 'First' }] },
+    });
+  });
+
+  it('answers rename with null on a name that cannot be renamed', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor('// use prisma-8\nmodel User {\n  id In|t\n}\n');
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestRename(harness, schemaUri, position, 'Number')).resolves.toBeNull();
+  });
+
+  it('answers rename with null for a document outside the project', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const outsideUri = pathToFileURL(join(root, 'outside.prisma')).href;
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}\n',
+    );
+    openDocument(harness, outsideUri, source);
+
+    await expect(requestRename(harness, outsideUri, position, 'Account')).resolves.toBeNull();
+  });
+
+  it('answers rename with null for a document that is not open', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+
+    await expect(
+      requestRename(harness, schemaUri, { line: 1, character: 7 }, 'Account'),
+    ).resolves.toBeNull();
+  });
+
+  it('answers rename with null when resolving an attribute argument throws and serves the next rename request', async () => {
+    const extendsAttribute = modelAttribute('extends', {
+      documentation: 'Extends another model.',
+      positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
+    });
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken rename factory');
+      })
+      .mockReturnValue(extendsAttribute);
+    const resolution = await resolveToSchemaWithAttributeContributions(configPath);
+    const brokenAuthoringContributions = assembleAuthoringContributions([
+      {
+        id: 'broken-rename',
+        authoring: {
+          type: testTypeConstructors(scalarTypes),
+          attributeSpecs: { field: {}, model: { extends: factory } },
+        },
+      },
+    ]);
+    if (resolution.interpretation === undefined) throw new Error('expected interpretation');
+    const interpretation = resolution.interpretation;
+    harness = startHarness(
+      async () => ({
+        ...resolution,
+        controlStack: {
+          ...resolution.controlStack,
+          authoringContributions: brokenAuthoringContributions,
+        },
+        interpretation: {
+          ...interpretation,
+          context: {
+            ...interpretation.context,
+            authoringContributions: brokenAuthoringContributions,
+          },
+        },
+      }),
+      pullDiagnosticsCapabilities,
+    );
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User {\n  id Int\n}\nmodel Post {\n  id Int\n  @@extends(Us|er)\n}\n',
+    );
+    openDocument(harness, schemaUri, source);
+    expect(await requestRename(harness, schemaUri, position, 'Account')).toBeNull();
+    await expect(requestRename(harness, schemaUri, position, 'Account')).resolves.toEqual({
+      changes: {
+        [schemaUri]: [
+          {
+            range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+            newText: 'Account',
+          },
+          {
+            range: { start: { line: 6, character: 12 }, end: { line: 6, character: 16 } },
+            newText: 'Account',
+          },
+        ],
+      },
+    });
     expect(factory).toHaveBeenCalledTimes(2);
   });
 
@@ -4503,6 +4729,47 @@ describe('language server whole-project push and freshness', {
         range: { start: { line: 3, character: 7 }, end: { line: 3, character: 11 } },
       },
     ]);
+  });
+
+  it('renames a usage in a project file that is not open, under the URI of that file', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel Post {\n  id Int @id\n  author Us|er\n}\n',
+    );
+    await writeFile(memberAPath, '// use prisma-8\nmodel User {\n  id Int @id\n  best Post\n}\n');
+    await writeFile(memberBPath, source);
+    harness = startHarness(
+      async () => resolutionForInputs([memberAPath, memberBPath]),
+      prepareRenameCapabilities,
+    );
+    await harness.initialize();
+    openDocument(harness, memberBUri, source);
+    await harness.waitForDiagnostics(memberBUri);
+
+    await expect(requestPrepareRename(harness, memberBUri, position)).resolves.toEqual({
+      range: { start: { line: 3, character: 9 }, end: { line: 3, character: 13 } },
+      placeholder: 'User',
+    });
+    await expect(requestRename(harness, memberBUri, position, 'Account')).resolves.toEqual({
+      changes: {
+        [memberAUri]: [
+          {
+            range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+            newText: 'Account',
+          },
+        ],
+        [memberBUri]: [
+          {
+            range: { start: { line: 3, character: 9 }, end: { line: 3, character: 13 } },
+            newText: 'Account',
+          },
+        ],
+      },
+    });
   });
 
   it('follows unsaved edits in another open project file', async () => {

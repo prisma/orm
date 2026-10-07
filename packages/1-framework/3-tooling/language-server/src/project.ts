@@ -15,12 +15,15 @@ import {
   type Hover,
   type Location,
   type LocationLink,
+  LSPErrorCodes,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
   type RelatedFullDocumentDiagnosticReport,
+  ResponseError,
   type SemanticTokens,
   type SignatureHelp,
+  type WorkspaceEdit,
 } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from './completion-context';
 import { providePslCompletionItems } from './completion-provider';
@@ -32,6 +35,7 @@ import { computeFoldingRanges } from './folding-ranges';
 import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
 import { provideReferences } from './references';
+import { type PrepareRenameResult, providePrepareRename, provideRename } from './rename';
 import {
   isWatcherCacheEligible,
   normalizeFileUri,
@@ -245,6 +249,50 @@ export class Project {
       });
     } catch {
       return [];
+    }
+  }
+
+  async prepareRename(uri: string, position: Position): Promise<PrepareRenameResult | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return providePrepareRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async rename(uri: string, position: Position, newName: string): Promise<WorkspaceEdit | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        newName,
+      });
+    } catch (error) {
+      if (error instanceof ResponseError && error.code === LSPErrorCodes.RequestFailed) throw error;
+      return null;
     }
   }
 
