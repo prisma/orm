@@ -1,6 +1,6 @@
 # lsp-playground (private)
 
-A throwaway dev playground that opens a multi-file PSL scratch project in a browser Monaco editor wired to the Prisma 8 language server (`prisma lsp --stdio`) for live diagnostics, folding ranges, whole-document formatting, server-driven semantic tokens, and go-to-definition.
+A throwaway dev playground that opens a multi-file PSL scratch project in a browser Monaco editor wired to the Prisma 8 language server (`prisma lsp --stdio`) for live diagnostics, folding ranges, whole-document formatting, server-driven semantic tokens, go-to-definition, and find references.
 
 It is a private, unpublished `apps/` package — not part of the framework build graph and exempt from `lint:deps` layering.
 
@@ -19,7 +19,7 @@ pnpm --filter lsp-playground start
 
 `psl-playground` takes **no arguments**. It always opens the gitignored scratch project under `.playground/scratch/`, seeding it on first creation with three `.prisma` files — two directive-carrying files (`customer.prisma`, `order.prisma`) forming a cross-file relation, a namespace (`catalog`) reopened across both, and a qualified cross-file reference (`Order.product` of type `catalog.Product`), plus one directive-less file (`draft.prisma`) that demonstrates membership exclusion. An **existing** scratch directory is never re-seeded or overwritten; edit the files under `.playground/scratch/` directly and your changes persist across restarts. A scratch directory created before the seed gained the `catalog.Product` reference does not have it; delete `.playground/scratch/` (or run `pnpm --filter lsp-playground clean`) to re-seed. Passing a schema path as a positional argument exits non-zero with a message pointing at this workflow instead.
 
-Then open the printed `http://localhost:5295/` URL. A file-picker sidebar beside the editor lists one entry per scratch-project file, labeled by filename. The editor is wired to request live diagnostics, folding ranges, semantic tokens, go-to-definition, and whole-document formatting (via the header's **Format** button) from the language server — see "File picker and lazy opening" below for what to expect from each, including files you never click.
+Then open the printed `http://localhost:5295/` URL. A file-picker sidebar beside the editor lists one entry per scratch-project file, labeled by filename. The editor is wired to request live diagnostics, folding ranges, semantic tokens, go-to-definition, find references, and whole-document formatting (via the header's **Format** button) from the language server — see "File picker and lazy opening" below for what to expect from each, including files you never click.
 
 Everything (editor + LSP) is served on the single port `5295`.
 
@@ -34,6 +34,10 @@ Browser edits stay in the in-memory overlay; nothing writes them back to the scr
 ### Go to definition
 
 Go to Definition (F12 or Ctrl/Cmd-click) and Peek Definition (Alt+F12) send `textDocument/definition` to the language server; the playground does not resolve PSL names itself. A target in the file already shown is revealed in place. A target in another scratch file goes through the editor service's open-editor hook (`viewsConfig.openEditorFunc` in `src/client/main.ts`): the playground selects that file the same way a sidebar click does, including the first-selection `didOpen`, and the editor then reveals and selects the target range. Peek shows targets in an embedded editor and does not switch files. A namespace qualifier such as `catalog` in `catalog.Product` resolves to every `namespace catalog` block, so the editor lists them instead of jumping.
+
+### Find references
+
+The editor's reference requests go to the language server as `textDocument/references`; the playground does not search for usages itself. The server answers from every scratch-project member, including files that were never selected in the sidebar.
 
 ## How it works
 

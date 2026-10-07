@@ -455,10 +455,26 @@ describe('createBinder — declaration-name resolutions', () => {
     });
   });
 
-  it('does not resolve a namespace declaration name', () => {
-    const { symbolTable, binder } = bind('namespace app {\n  model Item {\n    id Int\n  }\n}');
+  it('resolves the name of every block of a namespace to the namespace', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'namespace app {\n  model Item {\n    id Int\n  }\n}\nnamespace other {\n  model Hidden {\n    id Int\n  }\n}',
+      'namespace app {\n  model Cart {\n    id Int\n  }\n}',
+    );
     const app = symbolTable.topLevel.namespaces['app']!;
-    expect(binder.symbolForNode(app.declarations[0].node.name()!.syntax)).toBeUndefined();
+    const other = symbolTable.topLevel.namespaces['other']!;
+
+    expect(diagnostics).toEqual([]);
+    expect(app.declarations).toHaveLength(2);
+    expect(
+      app.declarations.map((declaration) => binder.symbolForNode(declaration.node.name()!.syntax)),
+    ).toEqual([
+      { kind: 'namespace', symbol: app },
+      { kind: 'namespace', symbol: app },
+    ]);
+    expect(binder.symbolForNode(other.declarations[0].node.name()!.syntax)).toEqual({
+      kind: 'namespace',
+      symbol: other,
+    });
   });
 });
 

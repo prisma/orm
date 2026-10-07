@@ -24,7 +24,7 @@ import {
 } from '@internal/psl-parser/syntax';
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
-import { resolvedNodeAt } from './cursor-resolution';
+import { identTokenAt, resolvedNodeAt } from './cursor-resolution';
 import {
   namedParameterText,
   renderSignatureLabel,
@@ -75,14 +75,6 @@ function hoverValueAt(
   const result = resolveHoverResult(binder, token);
   if (result !== undefined) return renderHoverResult(result);
   return blockKeywordDocumentationAt(token, pslBlockDescriptors);
-}
-
-function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined {
-  const at = root.tokenAtOffset(offset);
-  const left = at.leftBiased();
-  if (left?.kind === 'Ident') return left;
-  const right = at.rightBiased();
-  return right?.kind === 'Ident' ? right : undefined;
 }
 
 function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | undefined {

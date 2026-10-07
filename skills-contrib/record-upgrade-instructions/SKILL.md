@@ -52,7 +52,7 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 
    The inner lookbehind restricts the exclusion to the exact `fns` token.
 
-   **Only describe consumer action.** Omit narrative about internal renames, dev-only dependency bumps, and incidental generated churn. If this PR's audience needs no action, use only:
+   **Only describe consumer action.** Omit narrative about internal renames, dev-only dependency bumps, and incidental generated churn. Changes to `@internal/*` APIs that no published `@prisma/*` package re-exports are not consumer action either: a PR that only changes those declares `changes: []`, even when extension tests had to be updated. If this PR's audience needs no action, use only:
 
    ```md
    ---

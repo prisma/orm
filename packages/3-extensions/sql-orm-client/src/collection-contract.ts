@@ -1,5 +1,6 @@
 import type {
   Contract,
+  ContractField,
   ContractFieldType,
   ContractRelationThrough,
   CrossReference,
@@ -21,7 +22,7 @@ type ModelStorageFields = Record<string, { column?: string }>;
 type ModelEntry = {
   storage?: { table?: string; fields?: ModelStorageFields };
   relations?: Record<string, unknown>;
-  fields?: Record<string, { type?: ContractFieldType }>;
+  fields?: Record<string, { type?: ContractFieldType; many?: ContractField['many'] }>;
   discriminator?: { field: string };
   variants?: Record<string, { value: string }>;
   base?: CrossReference;

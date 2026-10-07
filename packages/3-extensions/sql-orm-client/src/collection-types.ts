@@ -1,4 +1,6 @@
-import type { CollectionTypeState } from './types';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import type { CollectionTypeState, DefaultModelRow } from './types';
 
 export declare const RowType: unique symbol;
 
@@ -20,6 +22,9 @@ export interface HasWhere extends HasTypeState<{ readonly hasWhere: true }> {}
 /** The fact that an order has been applied: the type-state flag `hasOrderBy` is `true`. Write `Ordered<C>` for an ordered collection; error messages print `HasOrderBy`. */
 export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> {}
 
+/** The fact that no variant has been selected: the type-state field `variantName` is `undefined`. `variant()` needs it; error messages print `HasNoVariant`. */
+export interface HasNoVariant extends HasTypeState<{ readonly variantName: undefined }> {}
+
 /** A collection with a filter applied: `C & HasWhere`. */
 export type Filtered<C> = C & HasWhere;
 
@@ -31,6 +36,18 @@ export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> &
 
 /** A scope: a function from one collection to another. `collection.apply(scope)` runs it. */
 export type Scope<In, Out> = (collection: In) => Out;
+
+/** What a scope made by `collection.scope` accepts: a collection of the model, in the same namespace when the scope's collection names one, whose rows have every field of the model and that is not narrowed to a variant. */
+export type ModelScopeReceiver<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = HasRow<DefaultModelRow<TContract, ModelName, NsId>> &
+  HasTypeState<
+    [NsId] extends [never]
+      ? { readonly variantName: undefined }
+      : { readonly variantName: undefined; readonly nsId: NsId }
+  > & { readonly modelName: ModelName };
 
 /** The type state of a collection. */
 export type CollectionTypeStateOf<C extends HasTypeState> = C[typeof TypeState];

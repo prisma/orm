@@ -10,6 +10,7 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
   LockingClause,
@@ -46,7 +47,6 @@ import {
   getColumnToFieldMap,
   getFieldToColumnMap,
   isToOneCardinality,
-  modelOf,
   type PolymorphismInfo,
   type PolymorphismVariantInfo,
   resolveFieldToColumn,
@@ -86,14 +86,17 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  HasNoVariant,
   HasOrderBy,
   HasRow,
   HasTypeState,
   HasWhere,
   Including,
+  ModelScopeReceiver,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
+  Scope,
   TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
@@ -133,6 +136,13 @@ import {
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import {
+  assertModelScopeReceiver,
+  assertScopeBody,
+  type ScopeFacts,
+  type ScopeFactsType,
+  type WithFacts,
+} from './scopes';
+import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
   type AggregateResult,
@@ -142,6 +152,7 @@ import {
   type CollectionTypeState,
   type DefaultCollectionTypeState,
   type DefaultModelRow,
+  type DiscriminatorValues,
   emptyGroupPagingState,
   emptyState,
   type IncludeCombine,
@@ -164,9 +175,11 @@ import {
   type VariantAwareIncludeRelationNames,
   type VariantAwareModelAccessor,
   type VariantModelRow,
-  type VariantNames,
+  type VariantNameForValue,
+  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
+import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
@@ -280,6 +293,30 @@ interface MtiCreateContext {
   variantFieldToColumn: Record<string, string>;
   pkColumns: readonly string[];
 }
+
+/** What `scope` reads from the collection it is called on: its contract and its model. */
+interface ScopeSource {
+  readonly modelName: string;
+  readonly namespaceId: string;
+  readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
+}
+
+type ContractOf<C extends ScopeSource> = C['ctx']['context']['contract'];
+
+type ModelNameOf<C extends ScopeSource> = C['modelName'];
+
+type ModelScopeBody<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = [NsId] extends [never]
+  ? Collection<TContract, ModelName>
+  : Collection<
+      TContract,
+      ModelName,
+      InferRootRow<TContract, ModelName, NsId>,
+      WithNsId<DefaultCollectionTypeState, NsId>
+    >;
 
 export class CollectionBase<
   TContract extends Contract<SqlStorage>,
@@ -402,12 +439,6 @@ export class CollectionBase<
   where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
   where<Self>(
     this: Self,
-    fn: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
-  ): Filtered<Self>;
-  where<Self>(
-    this: Self,
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<Self>;
   where(
@@ -421,14 +452,6 @@ export class CollectionBase<
             State['nsId']
           >,
         ) => WhereDirectInput)
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
     const whereArg =
@@ -462,102 +485,146 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result.
+   * Call `fn` with this collection and return its result. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
    */
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+  apply<Self, Facts extends ScopeFacts>(
+    this: Self,
+    scope: ((collection: NoInfer<Self>) => unknown) & { readonly [ScopeFactsType]: Facts },
+  ): WithFacts<Self, Facts>;
+  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  apply(fn: (collection: unknown) => unknown): unknown {
     return fn(this);
   }
 
   /**
-   * Narrow a polymorphic model to a specific variant. The returned
-   * collection has the variant's row shape and a discriminator filter
-   * is automatically applied. Chaining `.variant(...)` again replaces
-   * the previous variant filter.
+   * Define a scope for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The scope accepts any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * ```ts
+   * const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
+   * db.User.include('posts', (posts) => posts.apply(summary));
+   * ```
+   */
+  scope<Self extends ScopeSource, NsId extends string, Result>(
+    this: Self & HasTypeState<{ readonly nsId: NsId }>,
+    body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
+  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+    assertScopeBody(body);
+    const source = { modelName: this.modelName, namespaceId: this.namespaceId };
+    return (collection) => {
+      assertModelScopeReceiver(source, collection);
+      return body(
+        blindCast<
+          ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
+          'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
+        >(collection),
+      );
+    };
+  }
+
+  /**
+   * Narrow a polymorphic model to the variant declared with the given
+   * discriminator value. The returned collection has the variant's row
+   * shape and a discriminator filter is automatically applied. Call
+   * `.variant(...)` once, on the base collection: a collection that
+   * already has a variant selected refuses it. To select a different
+   * variant, start again from the base collection.
    *
    * ```typescript
    * // Read only admin users (STI):
-   * const admins = await db.orm.User.variant('Admin').all();
+   * const admins = await db.orm.User.variant('admin').all();
    *
    * // Iterate the rows:
-   * for await (const admin of db.orm.User.variant('Admin').all()) {
+   * for await (const admin of db.orm.User.variant('admin').all()) {
    *   console.log(admin.role);
    * }
    *
    * // Insert under a variant — discriminator is injected automatically:
-   * await db.orm.User.variant('Admin').create({ name: 'Ada', role: 'super' });
+   * await db.orm.User.variant('admin').create({ name: 'Ada', role: 'super' });
    * ```
    */
-  variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
-    this: HasTypeState<S>,
-    variantName: V,
+  variant<
+    V extends DiscriminatorValues<TContract, ModelName>,
+    S extends CollectionTypeState = State,
+  >(
+    this: HasTypeState<S> & HasNoVariant,
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<S>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<S>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    this: HasNoVariant,
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<State>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<State>, VariantNameForValue<TContract, ModelName, V>>
   >;
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<State>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<State>, VariantNameForValue<TContract, ModelName, V>>
   > {
-    type ReturnState = WithVariantState<WithWhereState<State>, V>;
-    const model = modelOf(this.contract, this.namespaceId, this.modelName);
-    const discriminator = model?.discriminator;
-    const variants = model?.variants;
+    type VariantName = VariantNameForValue<TContract, ModelName, V>;
+    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
+    const selectedVariantName = this.state.variantName;
 
-    if (!discriminator || !variants) {
-      return blindCast<
-        Collection<TContract, ModelName, VariantModelRow<TContract, ModelName, V>, ReturnState>,
-        'variant() preserves its declared static narrowing when runtime polymorphism metadata is absent'
-      >(this);
+    if (selectedVariantName !== undefined) {
+      const selectedValue = polyInfo?.variants.get(selectedVariantName)?.value;
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `variant("${value}") cannot be called on model "${this.modelName}" because variant("${selectedValue}") is already selected; call variant() on the base collection instead`,
+        {
+          meta: {
+            method: 'variant',
+            model: this.modelName,
+            variant: selectedVariantName,
+            selectedValue,
+            reason: 'variant-already-selected',
+          },
+        },
+      );
     }
 
-    const variantEntry = variants[variantName];
-    if (!variantEntry) {
-      return blindCast<
-        Collection<TContract, ModelName, VariantModelRow<TContract, ModelName, V>, ReturnState>,
-        'variant() preserves its declared static narrowing when runtime metadata lacks the selected variant'
-      >(this);
+    const variantInfo = polyInfo?.variantsByValue.get(value);
+
+    if (!polyInfo || !variantInfo) {
+      const declaredValues = [...(polyInfo?.variantsByValue.keys() ?? [])];
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        declaredValues.length === 0
+          ? `variant("${value}") cannot narrow model "${this.modelName}": it declares no discriminator values`
+          : `variant("${value}") cannot narrow model "${this.modelName}": the declared discriminator values are ${declaredValues.map((declared) => `"${declared}"`).join(', ')}`,
+        {
+          meta: {
+            method: 'variant',
+            argument: 'value',
+            model: this.modelName,
+            value,
+            declaredValues,
+          },
+        },
+      );
     }
 
-    const columnName = resolveFieldToColumn(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      discriminator.field,
-    );
+    const columnName = polyInfo.discriminatorColumn;
     const filter = BinaryExpr.eq(
       ColumnRef.of(this.tableName, columnName),
-      LiteralExpr.of(variantEntry.value),
+      LiteralExpr.of(variantInfo.value),
     );
 
-    const filtersWithoutPreviousVariant = this.state.variantName
-      ? this.state.filters.filter(
-          (f) =>
-            !(
-              f instanceof BinaryExpr &&
-              f.left instanceof ColumnRef &&
-              f.left.column === columnName &&
-              f.left.table === this.tableName
-            ),
-        )
-      : this.state.filters;
-
-    return this.#cloneWithRow<VariantModelRow<TContract, ModelName, V>, ReturnState>({
-      filters: [...filtersWithoutPreviousVariant, filter],
-      variantName,
+    return this.#cloneWithRow<
+      VariantModelRow<TContract, ModelName, VariantName>,
+      WithVariantState<WithWhereState<State>, VariantName>
+    >({
+      filters: [...this.state.filters, filter],
+      variantName: variantInfo.modelName,
     });
   }
 
@@ -2358,6 +2425,8 @@ export class CollectionBase<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
+   * The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row changes and the result is `null`. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit, an offset, a cursor, `distinct` or `distinctOn`.
+   *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
    * The callback receives a mutator exposing `create(...)`, `connect(...)`, and `disconnect(...)`.
@@ -2414,6 +2483,7 @@ export class CollectionBase<
         >(data),
       )
     ) {
+      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
         runtime: this.ctx.runtime,
@@ -2458,7 +2528,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: update every matching row and stream the updated
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams updated
@@ -2490,6 +2560,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
     return this.#updateAllWithAnnotations(
       data,
@@ -2547,7 +2618,7 @@ export class CollectionBase<
   /**
    * Write terminal: update every matching row without returning them,
    * resolving to the count of rows that were updated. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `updateAll(...)` when you need the updated rows; prefer
    * this when you only need the affected-row count.
@@ -2567,6 +2638,7 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
@@ -2602,7 +2674,7 @@ export class CollectionBase<
    * Write terminal: delete a single matching row — the first one the
    * filter matches — and return it (or `null` when no row matched).
    * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error.
+   * unfiltered collection is a type error. The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row is deleted and the result is `null`.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2626,7 +2698,11 @@ export class CollectionBase<
       if (!identityWhere) {
         return null;
       }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
+      const narrowed = scoped.#clone({
+        filters: [identityWhere],
+        limit: undefined,
+        offset: undefined,
+      });
       const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
       return rows[0] ?? null;
     });
@@ -2634,7 +2710,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: delete every matching row and stream the deleted
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams deleted
@@ -2660,6 +2736,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     assertLockCompatible(this.state, 'mutation');
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
@@ -2758,7 +2835,7 @@ export class CollectionBase<
   /**
    * Write terminal: delete every matching row without returning them,
    * resolving to the count of rows that were deleted. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `deleteAll(...)` when you need the deleted rows; prefer
    * this when you only need the affected-row count.
@@ -2772,6 +2849,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number>;
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
@@ -2857,6 +2935,10 @@ export class CollectionBase<
         `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
         { meta: { model: this.modelName, table: this.tableName } },
       );
+    }
+    checkLimitOffset('limit', this.state.limit);
+    if (this.state.limit === 0) {
+      return null;
     }
     const firstRow = await this.#clone({
       selectedFields: [...identityColumns],

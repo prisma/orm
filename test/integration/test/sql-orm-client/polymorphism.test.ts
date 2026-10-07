@@ -145,7 +145,7 @@ describe('integration/polymorphism', () => {
         // pins the default projection of an STI-variant-narrowed query — base
         // fields plus the Bug variant's `severity`, and only the Bug rows.
         const bugs = await tasks
-          .variant('Bug')
+          .variant('bug')
           .orderBy((task) => task.id.asc())
           .all()
           .toArray();
@@ -188,7 +188,7 @@ describe('integration/polymorphism', () => {
         // query — base fields plus the joined `priority`, and only the Feature
         // rows (the INNER JOIN drops non-Feature rows).
         const features = await tasks
-          .variant('Feature')
+          .variant('feature')
           .orderBy((task) => task.id.asc())
           .all()
           .toArray();
@@ -225,7 +225,7 @@ describe('integration/polymorphism', () => {
         await setupPolySchema(runtime);
 
         const tasks = createTaskCollection(runtime);
-        const bugs = tasks.variant('Bug');
+        const bugs = tasks.variant('bug');
         const created = await bugs.create({ title: 'New bug', severity: 'high', assigneeId: 17 });
 
         const id = created.id;
@@ -243,7 +243,7 @@ describe('integration/polymorphism', () => {
         // rather than re-reading the discriminator column raw: the discriminator
         // round-trips through the mapped variant shape, which is what callers see.
         const readBack = await tasks
-          .variant('Bug')
+          .variant('bug')
           .orderBy((task) => task.id.asc())
           .all()
           .toArray();
@@ -270,7 +270,7 @@ describe('integration/polymorphism', () => {
         await setupPolySchema(runtime);
 
         const tasks = createTaskCollection(runtime);
-        const features = tasks.variant('Feature');
+        const features = tasks.variant('feature');
         const created = await features.create({
           title: 'New feature',
           priority: 5,

@@ -31,6 +31,7 @@ import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
+import { provideReferences } from './references';
 import {
   isWatcherCacheEligible,
   normalizeFileUri,
@@ -208,18 +209,42 @@ export class Project {
     const document = data?.artifacts.document(uri);
     if (data === undefined || document === undefined) return null;
     try {
-      return provideDefinition(
-        {
-          document: document.parse().document,
-          sourceFile: document.sourceFile,
-          sources: data.artifacts.sources,
-          binder: data.artifacts.binder(),
-        },
+      return provideDefinition({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
         position,
+        sources: data.artifacts.sources,
+        binder: data.artifacts.binder(),
         linkSupport,
-      );
+      });
     } catch {
       return null;
+    }
+  }
+
+  async references(
+    uri: string,
+    position: Position,
+    includeDeclaration: boolean,
+  ): Promise<Location[]> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return [];
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideReferences({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        includeDeclaration,
+      });
+    } catch {
+      return [];
     }
   }
 

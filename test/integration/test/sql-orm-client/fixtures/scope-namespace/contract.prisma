@@ -1,0 +1,22 @@
+// use prisma-8
+
+// Emitted fixture for the sql-orm-client scope tests: a contract with a
+// namespace named `scope`, which takes the name of the client's `scope` method.
+
+namespace public {
+  model Post {
+    id    Int    @id @default(autoincrement())
+    title String
+
+    @@map("posts")
+  }
+}
+
+namespace scope {
+  model Audit {
+    id      Int    @id @default(autoincrement())
+    message String
+
+    @@map("audits")
+  }
+}
