@@ -12,22 +12,26 @@
 
 | # | Scenario | What it proves | Isolation | Covers |
 |---|---|---|---|---|
-| 1 | Rename a model | `User` → `Account` returns the table's edit from the declaration and from each reference | tmpdir | DoD-2 |
-| 2 | Rename a field | `User.id` → `uid` and `authorId` → `writerId` return the table's edits; `Session.id` and `Post.id` are untouched | tmpdir | DoD-2 |
+| 1 | Rename a model | `User` → `Account` returns the table's edit, with `@@map("User")` in the declaration's file, from the declaration and from each reference | tmpdir | DoD-2, DoD-12 |
+| 2 | Rename a field | `User.id` → `uid` and `authorId` → `writerId` return the table's edits with `@map` carrying the old name; `Session.id` and `Post.id` are untouched | tmpdir | DoD-2, DoD-12 |
 | 3 | Rename a namespace | `auth` → `identity` edits both block names and the qualifier, from either block and from the qualifier | tmpdir | DoD-2, DoD-6 (namespace in two files) |
 | 4 | Rename an enum block; a lookalike enum member stays | An enum of the real target is renamed from its declaration and its use; a model named like an enum member does not drag the member along | tmpdir | DoD-3 (enum block only) |
 | 5 | `prepareRename` | A renameable name answers with its own range and text; an attribute name and other non-renameable positions answer `null` | tmpdir | DoD-4 |
 | 6 | Refused new name | A name that is not a PSL identifier is an error response that quotes it; a hyphenated name is accepted | tmpdir | DoD-5, DoD-6 (hyphen, rejected names) |
 | 7 | Files the client never opened; client without `prepareSupport` | With one file open, the edit still covers the other files under their URIs; the server declares `renameProvider: true` | tmpdir | DoD-1, DoD-6 (file not open, client without `prepareSupport`) |
-| 8 | Apply the edit and keep working | After applying each of the four table renames in turn, diagnostics stay empty and find references on the new name returns the edited positions | tmpdir | (journey; no AC) |
+| 8 | Apply the edit and keep working | After applying each of the four table renames in turn, map attributes included, diagnostics stay empty and find references on the new name returns the renamed positions | tmpdir | (journey; no AC) |
 | 9 | Rename to a name already declared | The edit is returned; the duplicate-declaration diagnostic appears afterwards | tmpdir | DoD-6 (name already declared) |
 | 10 | Exploratory: identifier sweep | Every identifier position in the scratch project and in the shipped demo schema obeys the cross-cutting requirements | read-only | (no AC; charter) |
+| 11 | Applied renames keep the storage names | A model, a scalar field and a `native_enum` block are renamed and applied; each edit carries the map attribute, diagnostics stay empty, the formatter leaves the attribute in place, and the emitted contract has the same storage as before | tmpdir | DoD-12, DoD-13, DoD-14, DoD-15 |
+| 12 | Renames that get no map attribute | A relation field in both directions, a model with `@@base`, a namespace, a `role` block, a model and a field that already have one, and a rename to the current name return name edits only | tmpdir | DoD-12 |
 | V | Operator steps: VS Code | F2 in the editor applies the edit across files; not run by the agent runner | external | DoD-10 |
 | P | Operator steps: playground | Rename across scratch files with one never selected; not run by the agent runner | external | DoD-8 |
 
 > Scenarios 1 to 7 and 9 are **judgement** scenarios with an explicit oracle: the project spec's "At a glance" table, its cross-cutting requirements and the slice spec's edge-case table. Scenario 8 is a **journey** scenario. Scenario 10 is **exploratory**. The refused-name check of scenario 6 is the one guard this change adds; its coverage boundary is stated there.
 >
-> AC IDs are the ones used in `projects/lsp-rename/reviews/code-review.md`: DoD-1 to DoD-11.
+> AC IDs are the ones used in `projects/lsp-rename/reviews/code-review.md`: DoD-1 to DoD-15.
+>
+> Scenarios 1 to 10 run against scratch project A (the "At a glance" project). Scenarios 11 and 12 run against scratch project B, which adds Postgres-specific declarations.
 
 ## Scenarios deliberately not in this script
 
@@ -37,6 +41,9 @@
 | DoD-4 — `prepareRename` on a cross-space reference | The scratch project has one contract space. Covered by `rename.test.ts`. |
 | DoD-6 — model and namespace with the same name (`auth.auth`) | Covered by `rename.test.ts`; not added to the scratch project to keep the table rows readable. |
 | DoD-7 — `references.ts`, `cursor-resolution.ts`, psl-parser unchanged | A `git diff`; the reviewer checked it. |
+| DoD-12 — a field typed by a model of another contract space; a control stack that defines no `map` | The scratch projects have one contract space and the real Postgres stack defines `map`. Covered by `rename.test.ts`. |
+| DoD-13 — CRLF files, a one-line model, an unterminated model, a comment before the closing brace | Covered by `rename.test.ts`; not repeated against the real target. |
+| DoD-14 — Mongo | The scratch projects use the Postgres target. Covered by the Mongo interpreter test. |
 | DoD-9 — READMEs | A file read; the reviewer checked it. |
 | DoD-11 — team gates | CI gates. |
 
@@ -53,7 +60,7 @@ mkdir -p $S/project $S/out
 ln -sfn "$(pwd)/examples/prisma-8-demo/node_modules" $S/project/node_modules
 ```
 
-5. Write the five files below into `$S/project/`. The three schema files are the project spec's "At a glance" project with the `// use prisma-8` directive added as line 1; `extra.prisma` adds an enum, and a model whose name is also an enum member, a word in a comment and a string.
+5. Write the five files below into `$S/project/` (scratch project A). The three schema files are the project spec's "At a glance" project with the `// use prisma-8` directive added as line 1; `extra.prisma` adds an enum, and a model whose name is also an enum member, a word in a comment and a string.
 
 ### `prisma.config.ts`
 
@@ -133,6 +140,64 @@ model Member {
 }
 ```
 
+### Scratch project B (scenarios 11 and 12)
+
+```bash
+M=wip/qa-scratch/lsp-rename-qa-map
+mkdir -p $M/project $M/out
+ln -sfn "$(pwd)/examples/prisma-8-demo/node_modules" $M/project/node_modules
+cp $S/project/auth.prisma $S/project/session.prisma $S/project/post.prisma $M/project/
+```
+
+Its `prisma.config.ts` is the one above with `inputs: ['./auth.prisma', './session.prisma', './post.prisma', './shop.prisma', './roles.prisma']`. Two more files:
+
+#### `shop.prisma`
+
+```prisma
+// use prisma-8
+native_enum OrderStatus {
+  pending = "pending"
+  shipped = "shipped"
+}
+
+model Order {
+  id     Int                  @id
+  status pg.enum(OrderStatus)
+  note   String               @map("order_note")
+
+  @@map("orders")
+}
+
+model Task {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Bug {
+  severity Int
+
+  @@base(Task, "bug")
+}
+```
+
+#### `roles.prisma`
+
+```prisma
+// use prisma-8
+namespace unbound {
+  role app_user {
+  }
+}
+```
+
+After writing the files, make three copies for the "after" states of scenario 11:
+
+```bash
+for d in after-model after-field after-enum; do cp -a $M/project $M/$d; done
+```
+
 ### The driver
 
 `projects/lsp-rename/qa/driver/qa-driver.mjs` is the find-references QA driver (`projects/lsp-find-references/qa/driver/qa-driver.mjs`) extended for rename. It is a dependency-free Node script. It:
@@ -143,7 +208,12 @@ model Member {
 4. prints each response as raw JSON, then rendered. A `WorkspaceEdit` is rendered per file, with whether the driver has that file open, and one line per edit as `file:line:column  <source line with <<old -> new>> marked>` (1-based). An error response is printed as `error response: {code, message}`;
 5. for a `rename` step with `"apply": true`, applies the returned edits to its own copy of each file and tells the server: `didChange` with the full new text for a file that is open, `didOpen` with the text on disk followed by `didChange` for a file that is not. Nothing is written to disk;
 6. for a `references` step with `"compareWithApplied": true`, prints whether the returned locations are exactly the ranges the last applied edit produced (start of each edit, length of the new name);
-7. a `diagnostics` step waits 1.5 s and prints the latest `publishDiagnostics` per file. A `sweep` step is described in scenario 10.
+7. a `diagnostics` step waits 1.5 s and prints the latest `publishDiagnostics` per file. A `sweep` step is described in scenario 10;
+8. an edit whose new text spans lines (the `@@map` line) is rendered as `file:line:column  insert "<text>" before "<rest of the line>"`. A `references` step with `"compareWithApplied": true` compares against the name edits of the last applied edit, not the insertion;
+9. a `format` step sends `textDocument/formatting` for a file, applies the returned edits to its copy, tells the server, and prints the resulting text;
+10. a `save` step writes the driver's current text of every project file into another directory (a copy of the project), so that the CLI can emit a contract from the renamed text.
+
+`projects/lsp-rename/qa/driver/compare-storage.mjs <before dir> <after dir>…` reads `contract.json` from each directory and prints the storage hash, the storage names (namespace, entry kind, entry, columns, type name) and whether the `storage` section is equal to the first one.
 
 Usage:
 
@@ -182,13 +252,14 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 
 | Step | File, cursor | New name | Expected edits |
 |---|---|---|---|
-| 1.1 | `auth.prisma`, `model Us\|er` | `Account` | `model <<User -> Account>> {` in auth.prisma; `user   <<User -> Account>> @relation(…)` in session.prisma; `author   auth.<<User -> Account>> @relation(…)` in post.prisma |
+| 1.1 | `auth.prisma`, `model Us\|er` | `Account` | `model <<User -> Account>> {` and `insert "\n    @@map(\"User\")\n" before "}"` in auth.prisma; `user   <<User -> Account>> @relation(…)` in session.prisma; `author   auth.<<User -> Account>> @relation(…)` in post.prisma |
 | 1.2 | `session.prisma`, `user   Us\|er` | `Account` | same as 1.1 |
 | 1.3 | `post.prisma`, `auth.Us\|er` | `Account` | same as 1.1 |
 
 ### What you should see
 
-- Three edits, one per file, each replacing `User` alone: in `auth.User` the qualifier and the dot are outside the range.
+- Three name edits, one per file, each replacing `User` alone: in `auth.User` the qualifier and the dot are outside the range.
+- One insertion, in auth.prisma whatever file the cursor was in: a blank line and `@@map("User")` at the four-space indent of the model's fields, before the line of the model's closing brace.
 - The response uses `changes` keyed by file URI, not `documentChanges`.
 - The raw JSON of 1.1, 1.2 and 1.3 is identical.
 
@@ -197,6 +268,7 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 - An edit list that differs between cursor positions.
 - A range wider or narrower than the identifier.
 - A file missing from the edit.
+- No `@@map("User")`, more than one, or one in a file other than auth.prisma.
 
 ## Scenario 2 — Rename a field
 
@@ -208,17 +280,17 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 
 | Step | File, cursor | New name | Expected edits |
 |---|---|---|---|
-| 2.1 | `auth.prisma`, `i\|d    Int    @id` | `uid` | `<<id -> uid>>    Int    @id` in auth.prisma; `references: [<<id -> uid>>]` in session.prisma and in post.prisma |
+| 2.1 | `auth.prisma`, `i\|d    Int    @id` | `uid` | `<<id -> uid>>    Int    @id` and the insertion ` @map("id")` after `@id` in auth.prisma; `references: [<<id -> uid>>]` in session.prisma and in post.prisma |
 | 2.2 | `session.prisma`, `references: [i\|d]` | `uid` | same as 2.1 |
 | 2.3 | `post.prisma`, `references: [i\|d]` | `uid` | same as 2.1 |
-| 2.4 | `post.prisma`, `author\|Id Int` | `writerId` | `<<authorId -> writerId>> Int`, `fields: [<<authorId -> writerId>>]`, `@@index([<<authorId -> writerId>>])`, all in post.prisma |
+| 2.4 | `post.prisma`, `author\|Id Int` | `writerId` | `<<authorId -> writerId>> Int`, `fields: [<<authorId -> writerId>>]`, `@@index([<<authorId -> writerId>>])` and the insertion ` @map("authorId")` after `Int`, all in post.prisma |
 | 2.5 | `post.prisma`, `fields: [author\|Id]` | `writerId` | same as 2.4 |
 | 2.6 | `post.prisma`, `@@index([author\|Id])` | `writerId` | same as 2.4 |
 
 ### What you should see
 
-- 2.1 to 2.3: exactly three edits. No edit on `id     Int  @id` in session.prisma or `id       Int       @id` in post.prisma, and none inside `userId` or `authorId`.
-- 2.4 to 2.6: three edits under the one URI of post.prisma.
+- 2.1 to 2.3: exactly three name edits and one insertion. No edit on `id     Int  @id` in session.prisma or `id       Int       @id` in post.prisma, and none inside `userId` or `authorId`.
+- 2.4 to 2.6: three name edits and one insertion under the one URI of post.prisma. The insertion is one space and the attribute, with no column alignment.
 
 ### Failure modes
 
@@ -252,13 +324,13 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 
 **Covers:** DoD-3 (enum block only)
 
-**Oracle:** project spec non-goal "Enum members"; cross-cutting requirement "Edits equal references".
+**Oracle:** project spec non-goal "Enum members"; cross-cutting requirements "Name edits equal references" and "Nothing else gets one" (an enum block gets no map attribute).
 
 | Step | File, cursor | New name | Expected edits |
 |---|---|---|---|
 | 4.1 | `extra.prisma`, `enum Ro\|le` | `Rank` | `enum <<Role -> Rank>> {` and `role <<Role -> Rank>>` |
 | 4.2 | `extra.prisma`, `role Ro\|le` | `Rank` | same as 4.1 |
-| 4.3 | `extra.prisma`, `model Memb\|er` | `Person` | `model <<Member -> Person>> {` only |
+| 4.3 | `extra.prisma`, `model Memb\|er` | `Person` | `model <<Member -> Person>> {` and `insert "\n  @@map(\"Member\")\n" before "}"`; nothing else |
 
 ### Failure modes
 
@@ -308,7 +380,7 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 | 6.4 | same | empty string | error response quoting the empty string |
 | 6.5 | same | `auth.Account` | error response quoting `auth.Account` |
 | 6.6 | same | `My Model` | error response quoting `My Model` |
-| 6.7 | same | `user-profile` | accepted: the three edits of scenario 1 with `user-profile` |
+| 6.7 | same | `user-profile` | accepted: the edits of scenario 1 with `user-profile`, `@@map("User")` included |
 | 6.8 | `post.prisma`, `@rel\|ation` | `1st` | error response quoting `1st` (the name is checked before the position) |
 | 6.9 | `post.prisma`, `@rel\|ation` | `link` | `null` |
 
@@ -348,9 +420,9 @@ node projects/lsp-rename/qa/driver/qa-driver.mjs \
 | Step | File, cursor | New name | Expected |
 |---|---|---|---|
 | — | capabilities line | — | `renameProvider=true` |
-| 7.1 | `post.prisma`, `auth.Us\|er` | `Account` | the three edits of scenario 1; auth.prisma and session.prisma marked "not open in the client" |
+| 7.1 | `post.prisma`, `auth.Us\|er` | `Account` | the edits of scenario 1, the `@@map("User")` insertion in auth.prisma included; auth.prisma and session.prisma marked "not open in the client" |
 | 7.2 | `post.prisma`, `au\|th.User` | `identity` | the three edits of scenario 3; same two files not open |
-| 7.3 | `post.prisma`, `references: [i\|d]` | `uid` | the three edits of scenario 2.1; same two files not open |
+| 7.3 | `post.prisma`, `references: [i\|d]` | `uid` | the edits of scenario 2.1, the ` @map("id")` insertion in auth.prisma included; same two files not open |
 
 ### Failure modes
 
@@ -379,16 +451,16 @@ node projects/lsp-rename/qa/driver/qa-driver.mjs \
 
 | Step | Action | Expected |
 |---|---|---|
-| 8.1 | rename `post.prisma`, `auth.Us\|er` → `Account`, apply | three edits; auth.prisma and session.prisma are opened by the apply |
+| 8.1 | rename `post.prisma`, `auth.Us\|er` → `Account`, apply | three name edits and `@@map("User")`; auth.prisma and session.prisma are opened by the apply |
 | 8.2 | diagnostics | none in any file |
 | 8.3 | references, `auth.prisma`, `model Acc\|ount`, declaration included | three locations, each covering `Account`; "same positions as the applied edit: yes" |
-| 8.4 | rename `auth.prisma`, `namespace au\|th` → `identity`, apply | three edits; the post.prisma line already reads `auth.Account` |
+| 8.4 | rename `auth.prisma`, `namespace au\|th` → `identity`, apply | three name edits and no map attribute; the post.prisma line already reads `auth.Account` |
 | 8.5 | diagnostics | none |
 | 8.6 | references, `post.prisma`, `ident\|ity.Account` | both block names and the qualifier; same positions: yes |
-| 8.7 | rename `session.prisma`, `references: [i\|d]` → `uid`, apply | three edits |
+| 8.7 | rename `session.prisma`, `references: [i\|d]` → `uid`, apply | three name edits and ` @map("id")` in auth.prisma |
 | 8.8 | diagnostics | none |
 | 8.9 | references, `auth.prisma`, `ui\|d    Int    @id` | three locations; same positions: yes |
-| 8.10 | rename `post.prisma`, `@@index([author\|Id])` → `writerId`, apply | three edits in post.prisma |
+| 8.10 | rename `post.prisma`, `@@index([author\|Id])` → `writerId`, apply | three name edits and ` @map("authorId")` in post.prisma |
 | 8.11 | diagnostics | none |
 | 8.12 | references, `post.prisma`, `writer\|Id Int` | three locations; same positions: yes |
 
@@ -425,7 +497,7 @@ node projects/lsp-rename/qa/driver/qa-driver.mjs \
 | Step | Action | Expected |
 |---|---|---|
 | 9.1 | diagnostics before | none |
-| 9.2 | rename `extra.prisma`, `model Memb\|er` → `Post`, apply | one edit, `model <<Member -> Post>> {`; no error response |
+| 9.2 | rename `extra.prisma`, `model Memb\|er` → `Post`, apply | `model <<Member -> Post>> {` and the `@@map("Member")` insertion; no error response |
 | 9.3 | diagnostics | a `PSL_DUPLICATE_DECLARATION` diagnostic, `Duplicate declaration of "Post"` |
 | 9.4 | prepareRename `extra.prisma`, `model Po\|st` | record what is returned |
 | 9.5 | rename `extra.prisma`, `model Po\|st` → `Member`, not applied | record the edit: this is what a user gets who renames back instead of undoing |
@@ -456,8 +528,8 @@ The driver's `sweep` step opens every listed file, then for each match of `[A-Za
 
 1. `prepareRename` returns a range and `rename` returns `null`, or the reverse ("`prepareRename` and `rename` agree");
 2. `rename` returns an edit and references is empty, or the reverse;
-3. the edit's ranges, in order, are not the references locations ("Edits equal references");
-4. an edit's text is not the new name;
+3. the ranges of the edits whose text is the new name, in order, are not the references locations ("Name edits equal references");
+4. the edit holds more than one edit whose text is not the new name, or that edit does not contain `map("<the identifier>")`, or it is in a file with no name edit ("At most one insertion");
 5. the `prepareRename` range is not the token under the cursor, or the placeholder is not its text;
 6. the edit does not contain the token under the cursor, or one of its ranges does not cover that identifier's text ("One token per edit").
 
@@ -468,9 +540,114 @@ node projects/lsp-rename/qa/driver/qa-driver.mjs \
 node projects/lsp-rename/qa/driver/qa-driver.mjs \
   packages/1-framework/3-tooling/cli/dist/bin.mjs examples/prisma-8-demo \
   projects/lsp-rename/qa/driver/sweep-demo.json | tee $S/out/sweep-demo.txt
+node projects/lsp-rename/qa/driver/qa-driver.mjs \
+  packages/1-framework/3-tooling/cli/dist/bin.mjs $M/project \
+  projects/lsp-rename/qa/driver/sweep-map.json | tee $M/out/sweep-map.txt
 ```
 
+The sweep also prints how many distinct symbols carry a map attribute in their edit.
+
 **Notes capture:** record the counts the sweep prints, every violation verbatim, and anything in the scripted outputs that surprised you even though it matched.
+
+## Scenario 11 — Applied renames keep the storage names
+
+**What you're proving from the user's seat:** you rename a model, a field and a Postgres enum type in a project that already has a database, and nothing in the database has to change: the next `contract emit` describes the same storage. The rename is started from a reference in another file, so the attribute has to land in the declaration's file.
+
+**Covers:** DoD-12, DoD-13, DoD-14, DoD-15
+
+**Isolation:** `tmpdir` (the driver writes only into the three copies under `$M/`).
+
+**Oracle:** project spec, Purpose ("A rename that would change a database name also adds `@map` / `@@map` with the old name to the declaration, so the database keeps its names") and the cross-cutting requirements "When a map attribute is added", "Where the attribute goes" and "At most one insertion". The contract comparison uses the real path: `prisma contract emit` of the built CLI in a copy of the project that holds the renamed text.
+
+**Preconditions:** pre-flight done, scratch project B and its three copies in place. Own server session.
+
+### Steps
+
+```bash
+C=$(pwd)/packages/1-framework/3-tooling/cli/dist/bin.mjs
+node projects/lsp-rename/qa/driver/qa-driver.mjs $C $M/project \
+  projects/lsp-rename/qa/driver/map-apply.json | tee $M/out/map-apply.txt
+for d in project after-model after-field after-enum; do
+  (cd $M/$d && node $C contract emit --output-path ../out/contract-$d > ../out/emit-$d.txt 2>&1; echo "emit $d exit $?")
+done
+node projects/lsp-rename/qa/driver/compare-storage.mjs \
+  $M/out/contract-project $M/out/contract-after-model $M/out/contract-after-field $M/out/contract-after-enum \
+  | tee $M/out/compare.txt
+```
+
+| Step | Action | Expected |
+|---|---|---|
+| 11.1 | diagnostics, `post.prisma` open | none in any file |
+| 11.2 | rename `post.prisma`, `auth.Us\|er` → `Account`, apply | three name edits; `@@map("User")` inserted in auth.prisma, which is not open |
+| 11.3 | diagnostics | none |
+| 11.4 | references, `auth.prisma`, `model Acc\|ount` | the three renamed positions; same positions: yes |
+| 11.5 | format `auth.prisma` | no edit; the text shows a blank line and `@@map("User")` after `posts Post[]` |
+| 11.6 | save to `after-model` | — |
+| 11.7 | rename `post.prisma`, `author\|Id Int` → `writerId`, apply | three name edits and ` @map("authorId")` after `Int` |
+| 11.8 | diagnostics | none |
+| 11.9 | format `post.prisma` | the formatter may realign the rows; `@map("authorId")` stays on the `writerId` line |
+| 11.10 | save to `after-field` | — |
+| 11.11 | rename `shop.prisma`, `pg.enum(Order\|Status)` → `Stage`, not applied | the edit of 11.12: the answer does not depend on the cursor position |
+| 11.12 | rename `shop.prisma`, `native_enum Order\|Status` → `Stage`, apply | the block name, the `pg.enum(OrderStatus)` argument, and `@@map("OrderStatus")` inserted after a blank line before the block's closing brace |
+| 11.13 | diagnostics | none |
+| 11.14 | format `shop.prisma` | no edit to the `@@map("OrderStatus")` line |
+| 11.15 | save to `after-enum` | — |
+| 11.16 | rename `auth.prisma`, `model Acc\|ount` → `Member`, not applied | three name edits and no second `@@map` |
+| emit | `contract emit` in the four directories | exit 0 four times |
+| compare | `compare-storage.mjs` | for each of the three "after" contracts: storage names equal: yes; storage section equal: yes; the same storage hash |
+
+### What you should see
+
+- Each of 11.2, 11.7 and 11.12 holds exactly one edit that is not a name edit, and it is in the file of the declaration.
+- The domain side changes (the model is `Account`, the field is `writerId`) while the tables, columns and the enum type keep their names.
+
+### Failure modes
+
+- A diagnostic after an applied rename.
+- A contract that fails to emit, or whose storage differs from the one emitted before the rename.
+- A map attribute missing, duplicated, or moved or removed by the formatter.
+- A usage of the renamed symbol left with the old name.
+
+### Restore
+
+`git status --porcelain` shows no change from this scenario; `$M/project` still holds the pre-flight text (the driver writes only into the copies).
+
+## Scenario 12 — Renames that get no map attribute
+
+**What you're proving from the user's seat:** the attribute appears only where it keeps a database name. Where it would be wrong or pointless, the rename changes names and nothing else.
+
+**Covers:** DoD-12
+
+**Isolation:** `tmpdir` (nothing is applied or written).
+
+**Oracle:** project spec, cross-cutting requirements "Nothing else gets one" and "A rename to the current name adds nothing", and "When a map attribute is added" ("when the declaration has no `map` attribute").
+
+**Preconditions:** pre-flight done, scratch project B in place. Own server session.
+
+### Steps
+
+```bash
+node projects/lsp-rename/qa/driver/qa-driver.mjs $C $M/project \
+  projects/lsp-rename/qa/driver/map-none.json | tee $M/out/map-none.txt
+```
+
+Every step expects name edits only: no line starting with `insert`, no `@map` in a new text.
+
+| Step | File, cursor | New name | Declaration kind |
+|---|---|---|---|
+| 12.1 | `post.prisma`, `aut\|hor   auth.User` | `writer` | relation field holding the foreign key |
+| 12.2 | `auth.prisma`, `pos\|ts Post[]` | `articles` | back-relation field |
+| 12.3 | `shop.prisma`, `model Bu\|g` | `Defect` | model with `@@base` |
+| 12.4 | `auth.prisma`, `namespace au\|th` | `identity` | namespace |
+| 12.5 | `roles.prisma`, `role app_us\|er` | `member` | `role` block (its descriptor does not set `nameIsStorageName`) |
+| 12.6 | `shop.prisma`, `model Ord\|er {` | `Purchase` | model that has `@@map("orders")` |
+| 12.7 | `shop.prisma`, `no\|te   String` | `remark` | field that has `@map("order_note")` |
+| 12.8 | `auth.prisma`, `model Us\|er` | `User` | rename to the current name |
+
+### Failure modes
+
+- A map attribute in any of these edits.
+- A second map attribute on 12.6 or 12.7.
 
 ## Operator steps: VS Code — not run by the agent runner
 
@@ -485,14 +662,17 @@ These need an editor UI. The runner marks them "not run" in the report; the oper
 | Step | Action | Expected |
 |---|---|---|
 | V1 | In `post.prisma`, cursor on `User` in `auth.User`; press **F2** | The rename box opens pre-filled with `User`, not `auth.User`. |
-| V2 | Type `Account`, press Enter | `post.prisma` reads `auth.Account`. `auth.prisma` (`model Account`) and `session.prisma` (`user   Account`) are changed too although they were not open: VS Code opens them as modified tabs or shows them changed. No error appears in the Problems view. |
+| V2 | Type `Account`, press Enter | `post.prisma` reads `auth.Account`. `auth.prisma` (`model Account`) and `session.prisma` (`user   Account`) are changed too although they were not open: VS Code opens them as modified tabs or shows them changed. `model Account` in `auth.prisma` now ends with a blank line and `@@map("User")` before its closing brace. No error appears in the Problems view. Run **Format Document** on `auth.prisma`: the `@@map("User")` line does not move. |
 | V3 | Undo; open `auth.prisma`; repeat from the declaration, `User` in `model User` | The same three places change. |
-| V4 | F2 on `id` in `auth.prisma` (`id    Int    @id`), new name `uid`; undo; F2 on `id` in `references: [id]` in `post.prisma` | Both change `User.id` and the two `references: [id]` entries. `Session.id` and `Post.id` stay. |
-| V5 | F2 on `auth` in `namespace auth` (`auth.prisma`), new name `identity`; undo; F2 on `auth` in `auth.User` (`post.prisma`) | Both change the two `namespace` block names and the qualifier. |
-| V6 | In `extra.prisma`, F2 on `Role` in `enum Role`, new name `Rank`; undo; F2 on `Role` in `role Role` | Both change the enum name and the field type. |
+| V4 | F2 on `id` in `auth.prisma` (`id    Int    @id`), new name `uid`; undo; F2 on `id` in `references: [id]` in `post.prisma` | Both change `User.id` and the two `references: [id]` entries, and the field in `auth.prisma` reads `uid    Int    @id @map("id")`. `Session.id` and `Post.id` stay. |
+| V5 | F2 on `auth` in `namespace auth` (`auth.prisma`), new name `identity`; undo; F2 on `auth` in `auth.User` (`post.prisma`) | Both change the two `namespace` block names and the qualifier. No map attribute is added. |
+| V6 | In `extra.prisma`, F2 on `Role` in `enum Role`, new name `Rank`; undo; F2 on `Role` in `role Role` | Both change the enum name and the field type. No map attribute is added to the enum. |
 | V7 | F2 on `relation` in `@relation` | VS Code refuses: no rename box, and its message that the element cannot be renamed. |
 | V8 | F2 on `User`, type `1st`, press Enter | VS Code shows the server's message, `"1st" is not a valid PSL identifier`. No file changes. |
-| V9 | F2 on `Member` in `model Member` (`extra.prisma`), type `Post`, press Enter | The rename is applied. The Problems view shows `Duplicate declaration of "Post"`. Undo restores the project. |
+| V9 | F2 on `Member` in `model Member` (`extra.prisma`), type `Post`, press Enter | The rename is applied, with `@@map("Member")` added to the renamed model. The Problems view shows `Duplicate declaration of "Post"`. Undo restores the project. |
+| V10 | F2 on `User` in `model User`, type `User` again, press Enter | Nothing changes: no `@@map` is added. |
+| V11 | In `post.prisma`, F2 on `author` (the relation field), new name `writer` | The field is renamed; no `@map` is added. |
+| V12 | Open scratch project B of the pre-flight. In `shop.prisma`, F2 on `OrderStatus` in `native_enum OrderStatus`, new name `Stage` | The block is renamed and gets `@@map("OrderStatus")`. Check that `status pg.enum(OrderStatus)` in `model Order` is renamed too and that the Problems view stays empty. |
 
 ## Operator steps: playground — not run by the agent runner
 
@@ -504,10 +684,11 @@ These need an editor UI. The runner marks them "not run" in the report; the oper
 
 | Step | Action | Expected |
 |---|---|---|
-| P1 | Cursor on `Customer` in `model Customer`; press **F2**, type `Client`, press Enter | The editor shows `model Client {`. No "Rename failed to apply edits" message. In the WebSocket frames: `textDocument/rename`, a `textDocument/didOpen` for `order.prisma`, then `textDocument/didChange` for both files. |
+| P1 | Cursor on `Customer` in `model Customer`; press **F2**, type `Client`, press Enter | The editor shows `model Client {`, and the model now ends with a blank line and `@@map("Customer")`. No "Rename failed to apply edits" message. In the WebSocket frames: `textDocument/rename`, a `textDocument/didOpen` for `order.prisma`, then `textDocument/didChange` for both files. |
 | P2 | Select `order.prisma` in the sidebar | The `customer` field reads `customer   Client        @relation(…)`. No second `didOpen` for `order.prisma`. No error marker in the file. |
 | P3 | Select `customer.prisma` again | Still `model Client {`. |
-| P4 | In `order.prisma`, F2 on `catalog` in `catalog.Product`, new name `shop` | Both `namespace` block names (one per file) and the qualifier change; switching files shows `namespace shop` in each. |
+| P4 | In `order.prisma`, F2 on `catalog` in `catalog.Product`, new name `shop` | Both `namespace` block names (one per file) and the qualifier change; switching files shows `namespace shop` in each. No map attribute is added. |
+| P4a | In `customer.prisma`, F2 on `name` in `model Client`, new name `fullName` | The field reads `fullName String @map("name")`. Click **Format**: the attribute stays on the field. |
 | P5 | F2 on `relation` in `@relation` | The editor refuses the rename. |
 
 ## Sign-off coverage map
@@ -521,7 +702,11 @@ These need an editor UI. The runner marks them "not run" in the report; the oper
 | DoD-5 | 6 |
 | DoD-6 | 3, 6, 7, 9; row "new name equals the current name" and row `auth.auth` CI only |
 | DoD-7 | (not manual-QA scope) — see "Scenarios deliberately not in this script" |
-| DoD-8 | P1 to P5 (operator) |
+| DoD-8 | P1 to P5, P4a (operator) |
 | DoD-9 | (not manual-QA scope) |
-| DoD-10 | V1 to V9 (operator) |
+| DoD-10 | V1 to V12 (operator) |
 | DoD-11 | (CI) |
+| DoD-12 | 1, 2, 4, 11, 12; cases that need fixtures the real target does not offer (a field typed by a cross-space model, a control stack without `map`) CI only |
+| DoD-13 | 11 (formatting through the server); the remaining positions CI only |
+| DoD-14 | 11 (SQL, through `contract emit`); Mongo CI only |
+| DoD-15 | 11 |

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -132,6 +132,9 @@ function render(uri, range, replacement) {
     return `${where} (to line ${range.end.line + 1}) ${lines[range.start.line].trim()} ...`;
   }
   const line = lines[range.start.line];
+  if (replacement?.includes('\n')) {
+    return `${where}  insert ${JSON.stringify(replacement)} before ${JSON.stringify(line.slice(range.end.character).trim())}`;
+  }
   const inside = line.slice(range.start.character, range.end.character);
   const arrow = replacement === undefined ? '' : ` -> ${replacement}`;
   const marked = `${line.slice(0, range.start.character)}<<${inside}${arrow}>>${line.slice(range.end.character)}`;
@@ -163,7 +166,7 @@ function printEdit(edit) {
 
 let applied = [];
 
-function applyEdit(edit) {
+function applyEdit(edit, newName) {
   applied = [];
   for (const [uri, edits] of Object.entries(edit.changes ?? {})) {
     const file = fileOf(uri);
@@ -179,7 +182,7 @@ function applyEdit(edit) {
       const end = offsetAt(text, range.end);
       text = `${text.slice(0, start)}${newText}${text.slice(end)}`;
       for (const earlier of starts) earlier.offset += newText.length - (end - start);
-      starts.push({ offset: start, length: newText.length });
+      if (newText === newName) starts.push({ offset: start, length: newText.length });
     }
     for (const { offset, length } of starts) {
       applied.push(
@@ -198,6 +201,7 @@ async function sweep(step) {
   let cursors = 0;
   let renameable = 0;
   const lists = new Set();
+  const withInsertion = new Set();
   for (const file of step.files) textOf(file);
   for (const file of step.files) {
     open(file);
@@ -216,7 +220,9 @@ async function sweep(step) {
       const prepared = await result('textDocument/prepareRename', params);
       const edit = await result('textDocument/rename', { ...params, newName: step.newName });
       const referenceKeys = references.map((location) => key(location.uri, location.range));
-      const editKeys = editEntries(edit).map((entry) => key(entry.uri, entry.range));
+      const nameEdits = editEntries(edit).filter((entry) => entry.newText === step.newName);
+      const insertions = editEntries(edit).filter((entry) => entry.newText !== step.newName);
+      const editKeys = nameEdits.map((entry) => key(entry.uri, entry.range));
       if ((prepared !== null) !== (edit !== null)) {
         violations.push(
           `${here}: prepareRename=${JSON.stringify(prepared)} but rename=${JSON.stringify(edit)}`,
@@ -233,8 +239,16 @@ async function sweep(step) {
       if (editKeys.join('|') !== referenceKeys.join('|')) {
         violations.push(`${here}: edit ranges differ from the references locations`);
       }
-      if (editEntries(edit).some((entry) => entry.newText !== step.newName)) {
-        violations.push(`${here}: an edit carries a text other than the new name`);
+      if (insertions.length > 1) {
+        violations.push(`${here}: more than one edit that is not a name edit`);
+      }
+      for (const insertion of insertions) {
+        withInsertion.add(editKeys.join('|'));
+        if (!insertion.newText.includes(`map("${match[0]}")`)) {
+          violations.push(`${here}: insertion ${JSON.stringify(insertion.newText)}`);
+        }
+        const declared = references.some((location) => location.uri === insertion.uri);
+        if (!declared) violations.push(`${here}: insertion in a file with no name edit`);
       }
       const own = key(uriOf(file), { start, end });
       if (prepared !== null && key(uriOf(file), prepared.range) !== own) {
@@ -246,7 +260,7 @@ async function sweep(step) {
       if (!editKeys.includes(own)) {
         violations.push(`${here}: the edit does not contain the cursor's own token`);
       }
-      for (const entry of editEntries(edit)) {
+      for (const entry of nameEdits) {
         const target = fileOf(entry.uri);
         const line =
           target === undefined ? undefined : textOf(target).split('\n')[entry.range.start.line];
@@ -263,6 +277,7 @@ async function sweep(step) {
   console.log(`  identifier positions requested: ${cursors}`);
   console.log(`  positions with a non-null rename result: ${renameable}`);
   console.log(`  distinct symbols (distinct edit lists): ${lists.size}`);
+  console.log(`  symbols whose edit carries a map attribute: ${withInsertion.size}`);
   console.log(`  violations: ${violations.length}`);
   for (const violation of violations) console.log(`    ${violation}`);
 }
@@ -310,6 +325,26 @@ async function run() {
       await sweep(step);
       continue;
     }
+    if (step.kind === 'save') {
+      const target = resolve(step.to);
+      mkdirSync(target, { recursive: true });
+      for (const file of steps.files) writeFileSync(resolve(target, file), textOf(file));
+      console.log(
+        `\n[${step.id}] wrote the client's text of ${steps.files.join(', ')} to ${step.to}`,
+      );
+      continue;
+    }
+    if (step.kind === 'format') {
+      open(step.file);
+      const edits = await result('textDocument/formatting', {
+        textDocument: { uri: uriOf(step.file) },
+        options: { tabSize: 2, insertSpaces: true },
+      });
+      console.log(`\n[${step.id}] formatting ${step.file}: ${(edits ?? []).length} edit(s)`);
+      for (const { newText } of edits ?? []) change(step.file, newText);
+      console.log(textOf(step.file).trimEnd().replaceAll(/^/gm, '  | '));
+      continue;
+    }
     open(step.file);
     const position = cursor(step.file, step.at);
     const params = { textDocument: { uri: uriOf(step.file) }, position };
@@ -345,7 +380,9 @@ async function run() {
       }
       console.log(`  raw: ${shorten(response.result)}`);
       printEdit(response.result);
-      if (step.apply === true && response.result !== null) applyEdit(response.result);
+      if (step.apply === true && response.result !== null) {
+        applyEdit(response.result, step.newName);
+      }
     } else {
       throw new Error(`unknown step kind ${step.kind}`);
     }
