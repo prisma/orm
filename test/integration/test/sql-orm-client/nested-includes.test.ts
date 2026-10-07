@@ -271,10 +271,9 @@ describe('integration/nested-includes', () => {
       'users -> invitedUsers -> invitedUsers (self-relation chained)',
       async () => {
         // Self-relation at depth 2. The existing depth-1 self-relation
-        // tests verify that `buildIncludeChildRowsSelect` aliases the
-        // child table as `<relationName>__child` to avoid colliding with
-        // the parent's table name. At depth 2 the inner aggregate must
-        // alias *again* to avoid colliding with the depth-1 child alias.
+        // tests verify that the child table gets its own reference
+        // (`users_2`) instead of the parent's table name. At depth 2 the
+        // inner child must get another one (`users_3`).
         await withCollectionRuntime(async (runtime) => {
           const users = createUsersCollection(runtime);
           await seedUsers(runtime, [

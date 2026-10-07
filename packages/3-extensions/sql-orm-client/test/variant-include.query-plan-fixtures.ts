@@ -17,14 +17,21 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { expect } from 'vitest';
+import { bindIncludeTables } from '../src/collection-tables';
+import { createIncludeScalar } from '../src/include-descriptors';
 import type {
   CollectionState,
-  IncludeExpr,
-  IncludeScalar,
   IncludeThroughDescriptor,
   RelationCardinalityTag,
 } from '../src/types';
-import { buildMixedPolyContract, isSelectAst, type StateFields, tableState } from './helpers';
+import {
+  buildMixedPolyContract,
+  type IncludeSpec,
+  isSelectAst,
+  type StateSpec,
+  specState,
+  tableSpecState,
+} from './helpers';
 
 const fixtureContract = buildMixedPolyContract();
 
@@ -36,43 +43,54 @@ export function includeExpr(options: {
   targetColumn: string;
   localColumn: string;
   cardinality: RelationCardinalityTag;
-  nested?: StateFields;
-  scalar?: IncludeScalar<unknown>;
+  nested?: StateSpec;
+  scalar?: string;
   through?: IncludeThroughDescriptor;
-}): IncludeExpr {
-  return {
-    relationName: options.relationName,
-    relatedModelName: options.relatedModelName,
-    relatedNamespaceId: 'public',
-    relatedTableName: options.relatedTableName,
-    localTableName: options.localTableName,
-    targetColumns: [options.targetColumn],
-    localColumns: [options.localColumn],
-    cardinality: options.cardinality,
-    ...ifDefined('through', options.through),
-    nested: tableState(fixtureContract, options.relatedTableName, options.nested),
-    scalar: options.scalar,
-    combine: undefined,
+}): IncludeSpec {
+  return (parent) => {
+    const child = bindIncludeTables(fixtureContract, parent, {
+      relatedNamespaceId: 'public',
+      relatedModelName: options.relatedModelName,
+      relatedTableName: options.relatedTableName,
+      through: options.through,
+    });
+    const nested = specState(child.tables, options.nested);
+    return {
+      relationName: options.relationName,
+      relatedModelName: options.relatedModelName,
+      relatedNamespaceId: 'public',
+      relatedTableName: options.relatedTableName,
+      localTableName: options.localTableName,
+      targetColumns: [options.targetColumn],
+      localColumns: [options.localColumn],
+      cardinality: options.cardinality,
+      ...ifDefined('through', options.through),
+      ...ifDefined('junction', child.junction),
+      nested,
+      scalar:
+        options.scalar === undefined ? undefined : createIncludeScalar(options.scalar, nested),
+      combine: undefined,
+    };
   };
 }
 
-export function selectedState(...fields: string[]): StateFields {
+export function selectedState(...fields: string[]): StateSpec {
   return { selectedFields: fields };
 }
 
 export function rootState(
-  include: IncludeExpr,
+  include: IncludeSpec,
   variantName: string,
   ...fields: string[]
 ): CollectionState {
-  return tableState(fixtureContract, 'tasks', {
+  return tableSpecState(fixtureContract, 'tasks', {
     includes: [include],
     selectedFields: fields,
     variantName,
   });
 }
 
-export function assigneeInclude(localTableName: string): IncludeExpr {
+export function assigneeInclude(localTableName: string): IncludeSpec {
   return includeExpr({
     relationName: 'assignee',
     relatedModelName: 'Assignee',
@@ -85,7 +103,7 @@ export function assigneeInclude(localTableName: string): IncludeExpr {
   });
 }
 
-export function tasksInclude(nested: StateFields): IncludeExpr {
+export function tasksInclude(nested: StateSpec): IncludeSpec {
   return includeExpr({
     relationName: 'tasks',
     relatedModelName: 'Task',

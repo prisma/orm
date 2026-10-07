@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createUsersCollection, timeouts, withCollectionRuntime } from './integration-helpers';
-import { seedUsers } from './runtime-helpers';
+import { seedPosts, seedUsers } from './runtime-helpers';
 
 function findEmittedSql(executions: readonly { sql: string }[]): string {
   const exec = executions[0];
@@ -118,7 +118,7 @@ describe('integration/self-relations', () => {
         // `users` outer source, or Postgres correlates the ORDER BY
         // against the outer row and indeterminacy follows.
         const sql = findEmittedSql(runtime.executions);
-        expect(sql).toContain('"invitedUsers__child"."id" AS "invitedUsers__order_0"');
+        expect(sql).toContain('"users_2"."id" AS "invitedUsers__order_0"');
       });
     },
     timeouts.spinUpPpgDev,
@@ -178,6 +178,131 @@ describe('integration/self-relations', () => {
               address: null,
             },
           },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+  it(
+    'include() on a self-relation applies the refinement filter to the included rows only',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+          { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 1 },
+        ]);
+
+        const rows = await users
+          .select('id', 'name')
+          .where((user) => user.name.eq('Alice'))
+          .include('invitedUsers', (invitedUsers) =>
+            invitedUsers.select('id', 'name').where((invitedUser) => invitedUser.name.eq('Bob')),
+          )
+          .all();
+
+        expect(rows).toEqual([{ id: 1, name: 'Alice', invitedUsers: [{ id: 2, name: 'Bob' }] }]);
+        const sql = findEmittedSql(runtime.executions);
+        expect(sql).toContain('FROM "public"."users" AS "users_2"');
+        expect(sql).toContain('"users_2"."name" = $');
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'include() that returns to an ancestor table reads the ancestor row through its own reference',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'First', userId: 1, views: 5 },
+          { id: 11, title: 'Second', userId: 2, views: 50 },
+        ]);
+
+        const rows = await users
+          .select('id')
+          .orderBy((user) => user.id.asc())
+          .include('posts', (posts) =>
+            posts.select('id').include('author', (author) => author.select('name')),
+          )
+          .all();
+
+        expect(rows).toEqual([
+          { id: 1, posts: [{ id: 10, author: { name: 'Alice' } }] },
+          { id: 2, posts: [{ id: 11, author: { name: 'Bob' } }] },
+        ]);
+        expect(findEmittedSql(runtime.executions)).toContain('FROM "public"."users" AS "users_2"');
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a relation filter and an include of the same table return the same rows in either order',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'Quiet', userId: 1, views: 5 },
+          { id: 11, title: 'Loud', userId: 1, views: 50 },
+          { id: 12, title: 'Silent', userId: 2, views: 1 },
+        ]);
+
+        const filterThenInclude = await users
+          .select('id')
+          .where((user) => user.posts.some((post) => post.views.gt(10)))
+          .include('posts', (posts) => posts.select('id').orderBy((post) => post.id.asc()))
+          .all();
+        const includeThenFilter = await users
+          .select('id')
+          .include('posts', (posts) => posts.select('id').orderBy((post) => post.id.asc()))
+          .where((user) => user.posts.some((post) => post.views.gt(10)))
+          .all();
+
+        const expected = [{ id: 1, posts: [{ id: 10 }, { id: 11 }] }];
+        expect(filterThenInclude).toEqual(expected);
+        expect(includeThenFilter).toEqual(expected);
+        expect(runtime.executions[0]?.sql).toContain('"posts_2"."user_id" = "users"."id"');
+        expect(runtime.executions[1]?.sql).toContain('"posts_2"."views" > $');
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'two sibling includes of the same table each return their own rows',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        ]);
+
+        const rows = await users
+          .select('id')
+          .orderBy((user) => user.id.asc())
+          .include('invitedUsers', (invitedUsers) => invitedUsers.select('id'))
+          .include('invitedBy', (invitedBy) => invitedBy.select('id'))
+          .all();
+
+        expect(rows).toEqual([
+          { id: 1, invitedUsers: [{ id: 2 }], invitedBy: null },
+          { id: 2, invitedUsers: [], invitedBy: { id: 1 } },
         ]);
       });
     },

@@ -15,7 +15,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { POLYMORPHIC_DISCRIMINATOR_ALIAS } from '../src/collection-contract';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import { buildMixedPolyContract, getTestAggregates, tableState } from './helpers';
+import { buildMixedPolyContract, getTestAggregates, tableSpecState } from './helpers';
 import {
   assigneeInclude,
   assigneeRows,
@@ -39,7 +39,7 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      tableState(contract, 'projects_tbl', {
+      tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
@@ -77,7 +77,7 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      tableState(contract, 'projects_tbl', {
+      tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
@@ -146,7 +146,7 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      tableState(contract, 'projects_tbl', {
+      tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
@@ -200,7 +200,7 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      tableState(contract, 'projects_tbl', {
+      tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),

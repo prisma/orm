@@ -30,9 +30,9 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
-import { resolveIncludeRelation } from '../src/collection-contract';
+import { bindCollectionTables } from '../src/collection-tables';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
-import type { CollectionState, IncludeExpr } from '../src/types';
+import type { CollectionState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollection, createCollectionFor } from './collection-fixtures';
 import {
@@ -40,9 +40,11 @@ import {
   buildStiPolyContract,
   emptyTableState,
   getTestAggregates,
+  type IncludeSpec,
   isSelectAst,
   publicTables,
-  type StateFields,
+  relationInclude,
+  specState,
   tableState,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
@@ -836,33 +838,33 @@ describe('M:N include correlated subquery', () => {
 
   it('AND-s across all column pairs for a composite-key M:N junction', () => {
     // Project.related -[M:N via project_links]-> Project (composite key on
-    // (tenant_id, id)). The child table is aliased `related__child` because the
+    // (tenant_id, id)). The child table is aliased `projects_2` because the
     // relation is self-referential. Correlation: project_links.src_* -> projects.*;
-    // join: project_links.dst_* -> related__child.*.
+    // join: project_links.dst_* -> projects_2.*.
     const { collection } = createCollectionFor('Project');
     const state = collection.include('related').state;
     const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
-    const relatedRows = SelectAst.from(TableSource.named('projects', 'related__child', 'public'))
+    const relatedRows = SelectAst.from(TableSource.named('projects', 'projects_2', 'public'))
       .withJoins([
         JoinAst.inner(
           TableSource.named('project_links', undefined, 'public'),
           AndExpr.of([
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_tenant_id'),
-              ColumnRef.of('related__child', 'tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_id'),
-              ColumnRef.of('related__child', 'id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
         ),
       ])
       .withProjection([
-        proj('id', 'related__child', 'id', 'projects'),
-        proj('name', 'related__child', 'name', 'projects'),
-        proj('tenant_id', 'related__child', 'tenant_id', 'projects'),
+        proj('id', 'projects_2', 'id', 'projects'),
+        proj('name', 'projects_2', 'name', 'projects'),
+        proj('tenant_id', 'projects_2', 'tenant_id', 'projects'),
       ])
       .withWhere(
         AndExpr.of([
@@ -956,7 +958,7 @@ describe('M:N include correlated subquery', () => {
   // outer include distinct('name') with a nested .include('related') reaches
   // the distinct-non-leaf lowering. The whole-AST `toEqual` pins the layering:
   // `related__rows` (json_agg) → `related__distinct` (rn = 1 filter) →
-  // `related__ranked` (junction join + ROW_NUMBER) → `projects AS related__child`.
+  // `related__ranked` (junction join + ROW_NUMBER) → `projects AS projects_2`.
   it('lowers M:N + distinct + nested non-leaf to a ranked dedup with the junction join on the ranked layer', () => {
     const { collection } = createCollectionFor('Project');
     const state = collection.include('related', (related) =>
@@ -964,57 +966,61 @@ describe('M:N include correlated subquery', () => {
     ).state;
     const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
 
-    const junctionJoinOnto = (childRef: string): JoinAst =>
+    const junctionJoinOnto = (childRef: string, junctionRef = 'project_links'): JoinAst =>
       JoinAst.inner(
-        TableSource.named('project_links', undefined, 'public'),
+        TableSource.named(
+          'project_links',
+          junctionRef === 'project_links' ? undefined : junctionRef,
+          'public',
+        ),
         AndExpr.of([
           BinaryExpr.eq(
-            ColumnRef.of('project_links', 'dst_tenant_id'),
+            ColumnRef.of(junctionRef, 'dst_tenant_id'),
             ColumnRef.of(childRef, 'tenant_id'),
           ),
-          BinaryExpr.eq(ColumnRef.of('project_links', 'dst_id'), ColumnRef.of(childRef, 'id')),
+          BinaryExpr.eq(ColumnRef.of(junctionRef, 'dst_id'), ColumnRef.of(childRef, 'id')),
         ]),
       );
 
-    const correlateOnto = (parentRef: string): AndExpr =>
+    const correlateOnto = (parentRef: string, junctionRef = 'project_links'): AndExpr =>
       AndExpr.of([
         BinaryExpr.eq(
-          ColumnRef.of('project_links', 'src_tenant_id'),
+          ColumnRef.of(junctionRef, 'src_tenant_id'),
           ColumnRef.of(parentRef, 'tenant_id'),
         ),
-        BinaryExpr.eq(ColumnRef.of('project_links', 'src_id'), ColumnRef.of(parentRef, 'id')),
+        BinaryExpr.eq(ColumnRef.of(junctionRef, 'src_id'), ColumnRef.of(parentRef, 'id')),
       ]);
 
-    // Innermost scalar SELECT (FROM projects AS related__child) carrying the
+    // Innermost scalar SELECT (FROM projects AS projects_2) carrying the
     // junction join, correlated WHERE, and the ROW_NUMBER ranking column.
-    const ranked = SelectAst.from(TableSource.named('projects', 'related__child', 'public'))
-      .withJoins([junctionJoinOnto('related__child')])
+    const ranked = SelectAst.from(TableSource.named('projects', 'projects_2', 'public'))
+      .withJoins([junctionJoinOnto('projects_2')])
       .withProjection([
-        proj('id', 'related__child', 'id', 'projects'),
-        proj('name', 'related__child', 'name', 'projects'),
-        proj('tenant_id', 'related__child', 'tenant_id', 'projects'),
+        proj('id', 'projects_2', 'id', 'projects'),
+        proj('name', 'projects_2', 'name', 'projects'),
+        proj('tenant_id', 'projects_2', 'tenant_id', 'projects'),
         ProjectionItem.of(
           '__prisma_distinct_rn',
           WindowFuncExpr.rowNumber({
-            partitionBy: [ColumnRef.of('related__child', 'name')],
-            orderBy: [OrderByItem.asc(ColumnRef.of('related__child', 'name'))],
+            partitionBy: [ColumnRef.of('projects_2', 'name')],
+            orderBy: [OrderByItem.asc(ColumnRef.of('projects_2', 'name'))],
           }),
         ),
       ])
       .withWhere(correlateOnto('projects'));
 
     // Nested related aggregate, correlated to the deduped distinct row.
-    const nestedRelatedRows = SelectAst.from(TableSource.named('projects', undefined, 'public'))
-      .withJoins([junctionJoinOnto('projects')])
+    const nestedRelatedRows = SelectAst.from(TableSource.named('projects', 'projects_3', 'public'))
+      .withJoins([junctionJoinOnto('projects_3', 'project_links_2')])
       .withProjection([
-        proj('id', 'projects', 'id'),
-        proj('name', 'projects', 'name'),
-        proj('tenant_id', 'projects', 'tenant_id'),
+        proj('id', 'projects_3', 'id', 'projects'),
+        proj('name', 'projects_3', 'name', 'projects'),
+        proj('tenant_id', 'projects_3', 'tenant_id', 'projects'),
       ])
-      .withWhere(correlateOnto('related__distinct'));
+      .withWhere(correlateOnto('related__distinct', 'project_links_2'));
 
     const nestedRelatedAggregate = SelectAst.from(
-      DerivedTableSource.as('related__rows', nestedRelatedRows),
+      DerivedTableSource.as('related__rows_2', nestedRelatedRows),
     ).withProjection([
       ProjectionItem.of(
         'related',
@@ -1024,21 +1030,21 @@ describe('M:N include correlated subquery', () => {
               JsonObjectExpr.entry(
                 'id',
                 new CodecJsonValueProjection(
-                  ColumnRef.of('related__rows', 'id'),
+                  ColumnRef.of('related__rows_2', 'id'),
                   codecRefFor('projects', 'id'),
                 ),
               ),
               JsonObjectExpr.entry(
                 'name',
                 new CodecJsonValueProjection(
-                  ColumnRef.of('related__rows', 'name'),
+                  ColumnRef.of('related__rows_2', 'name'),
                   codecRefFor('projects', 'name'),
                 ),
               ),
               JsonObjectExpr.entry(
                 'tenant_id',
                 new CodecJsonValueProjection(
-                  ColumnRef.of('related__rows', 'tenant_id'),
+                  ColumnRef.of('related__rows_2', 'tenant_id'),
                   codecRefFor('projects', 'tenant_id'),
                 ),
               ),
@@ -1302,31 +1308,16 @@ describe('compileSelect MTI JOINs', () => {
 });
 
 describe('compileSelectWithIncludes polymorphic targets', () => {
-  function includeFor(
+  const includeFor = relationInclude;
+
+  function stateWithInclude(
     contract: Contract<SqlStorage>,
     parentModel: string,
-    relationName: string,
-    nested: StateFields = {},
-    namespaceId = 'public',
-  ): IncludeExpr {
-    const relation = resolveIncludeRelation(contract, namespaceId, parentModel, relationName);
-    return {
-      relationName,
-      relatedModelName: relation.relatedModelName,
-      relatedTableName: relation.relatedTableName,
-      relatedNamespaceId: relation.relatedNamespaceId,
-      localTableName: relation.localTableName,
-      targetColumns: relation.targetColumns,
-      localColumns: relation.localColumns,
-      cardinality: relation.cardinality,
-      nested: tableState(contract, relation.relatedTableName, nested, relation.relatedNamespaceId),
-      scalar: undefined,
-      combine: undefined,
-    };
-  }
-
-  function stateWithInclude(contract: Contract<SqlStorage>, include: IncludeExpr): CollectionState {
-    return tableState(contract, include.localTableName, { includes: [include] });
+    include: IncludeSpec,
+  ): CollectionState {
+    return specState(bindCollectionTables(contract, 'public', parentModel), {
+      includes: [include],
+    });
   }
 
   function childRowsSelectFor(plan: { ast: unknown }, relationName: string): SelectAst {
@@ -1344,7 +1335,7 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
 
   it('STI-target include projects discriminator and variant base-table columns, no joins', () => {
     const contract = buildStiPolyContract();
-    const state = stateWithInclude(contract, includeFor(contract, 'Account', 'members'));
+    const state = stateWithInclude(contract, 'Account', includeFor(contract, 'Account', 'members'));
 
     const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Account');
     const childRows = childRowsSelectFor(plan, 'members');
@@ -1358,13 +1349,19 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
 
   it('MTI-target include selection controls variant projections while implicit selection retains them', () => {
     const contract = buildMixedPolyContract();
-    const implicitState = stateWithInclude(contract, includeFor(contract, 'Project', 'tasks'));
+    const implicitState = stateWithInclude(
+      contract,
+      'Project',
+      includeFor(contract, 'Project', 'tasks'),
+    );
     const omittedMtiState = stateWithInclude(
       contract,
+      'Project',
       includeFor(contract, 'Project', 'tasks', { selectedFields: ['id', 'title'] }),
     );
     const selectedMtiState = stateWithInclude(
       contract,
+      'Project',
       includeFor(contract, 'Project', 'tasks', { selectedFields: ['id', 'priority'] }),
     );
 
@@ -1421,7 +1418,7 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
   it('variant-narrowed MTI-target include inner-joins only the named variant', () => {
     const contract = buildMixedPolyContract();
     const include = includeFor(contract, 'Project', 'tasks', { variantName: 'Feature' });
-    const state = stateWithInclude(contract, include);
+    const state = stateWithInclude(contract, 'Project', include);
 
     const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Project');
     const childRows = childRowsSelectFor(plan, 'tasks');
@@ -1435,20 +1432,19 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     expect(projectionAliases(childRows)).toContain('features__priority');
   });
 
-  it('self-relation poly include remaps the variant join ON to the child alias', () => {
+  it('self-relation poly include joins the child variant table on the child references', () => {
     const contract = buildMixedPolyContract();
-    // `subtasks` is a Task→Task self relation; the child base table is
-    // aliased, so the variant join ON must reference the alias rather
-    // than the unaliased base table name.
-    const state = stateWithInclude(contract, includeFor(contract, 'Task', 'subtasks'));
+    // `subtasks` is a Task→Task self relation; the child base table and its
+    // variant table get their own references, and the variant join ON uses both.
+    const state = stateWithInclude(contract, 'Task', includeFor(contract, 'Task', 'subtasks'));
 
     const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Task');
     const childRows = childRowsSelectFor(plan, 'subtasks');
 
     expect(childRows.joins).toEqual([
       JoinAst.left(
-        TableSource.named('features', undefined, 'public'),
-        EqColJoinOn.of(ColumnRef.of('subtasks__child', 'id'), ColumnRef.of('features', 'id')),
+        TableSource.named('features', 'features_2', 'public'),
+        EqColJoinOn.of(ColumnRef.of('tasks_2', 'id'), ColumnRef.of('features_2', 'id')),
       ),
     ]);
   });

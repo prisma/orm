@@ -30,6 +30,7 @@ import type { HasRow } from './collection-types';
 import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
+import type { TableBinding } from './table-scope';
 
 export interface IncludeScalar<Result> extends HasRow<Result> {
   readonly kind: 'includeScalar';
@@ -83,6 +84,7 @@ export interface IncludeExpr {
   readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
+  readonly junction?: TableBinding;
   readonly nested: CollectionState;
   readonly scalar: IncludeScalar<unknown> | undefined;
   readonly combine: Readonly<Record<string, IncludeCombineBranch>> | undefined;

@@ -3,7 +3,6 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   AndExpr,
   type AnyExpression,
-  type AstRewriter,
   BinaryExpr,
   type BinaryOp,
   ColumnRef,
@@ -16,7 +15,7 @@ import {
   OrExpr,
   ProjectionItem,
   SelectAst,
-  TableSource,
+  type TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
@@ -138,42 +137,14 @@ function buildCursorWhere(
   return buildLexicographicCursorWhere(contract, table, entries);
 }
 
-function createTableRefRemapper(fromTable: string, toTable: string): AstRewriter {
-  return {
-    columnRef: (col) => (col.table === fromTable ? ColumnRef.of(toTable, col.column) : col),
-    tableSource: (source) => {
-      if (source.alias === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      if (!source.alias && source.name === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      return source;
-    },
-    eqColJoinOn: (on) =>
-      EqColJoinOn.of(
-        on.left.table === fromTable ? ColumnRef.of(toTable, on.left.column) : on.left,
-        on.right.table === fromTable ? ColumnRef.of(toTable, on.right.column) : on.right,
-      ),
-  };
-}
-
 function buildStateWhere(
   contract: Contract<SqlStorage>,
   state: CollectionState,
-  options?: { readonly remapRootTo?: string },
 ): AnyExpression | undefined {
-  const { root } = state.tables;
   const references = tableReferences(state.tables);
-  const cursorWhere = buildCursorWhere(contract, root, state.orderBy, state.cursor);
+  const cursorWhere = buildCursorWhere(contract, state.tables.root, state.orderBy, state.cursor);
   const boundFilters = state.filters.map((filter) => bindWhereExpr(contract, filter, references));
-  const filters = cursorWhere ? [...boundFilters, cursorWhere] : boundFilters;
-  const remapRootTo = options?.remapRootTo;
-  const remappedFilters =
-    remapRootTo !== undefined && remapRootTo !== root.reference
-      ? filters.map((filter) => filter.rewrite(createTableRefRemapper(root.reference, remapRootTo)))
-      : filters;
-  return combineWhereExprs(remappedFilters);
+  return combineWhereExprs(cursorWhere ? [...boundFilters, cursorWhere] : boundFilters);
 }
 
 /**
@@ -431,6 +402,5 @@ export {
   buildMtiJoins,
   buildPrimaryKeyJoinOn,
   buildStateWhere,
-  createTableRefRemapper,
   wrapWithRowNumberDedup,
 };

@@ -1,6 +1,6 @@
 import { ColumnRef, TableSource } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindTable, createTableScope } from '../src/table-scope';
+import { bindTable, copyTableScope, createTableScope, mergeTableScopes } from '../src/table-scope';
 import { getTestContract } from './helpers';
 
 const byteLength = (value: string) => new TextEncoder().encode(value).length;
@@ -97,6 +97,37 @@ describe('TableScope', () => {
     createTableScope().name('posts');
 
     expect(createTableScope().name('posts')).toBe('posts');
+  });
+});
+
+describe('copyTableScope', () => {
+  it('carries the taken names and leaves the original untouched', () => {
+    const scope = createTableScope();
+    scope.name('posts');
+    const copy = copyTableScope(scope);
+
+    expect(copy.name('posts')).toBe('posts_2');
+    expect(scope.name('posts')).toBe('posts_2');
+  });
+});
+
+describe('mergeTableScopes', () => {
+  it('holds every name taken in any of the scopes', () => {
+    const first = createTableScope();
+    first.name('posts');
+    const second = createTableScope();
+    second.name('posts');
+    second.name('posts');
+    second.name('users');
+
+    const merged = mergeTableScopes([first, second]);
+
+    expect([merged.name('posts'), merged.name('users'), merged.name('tags')]).toEqual([
+      'posts_3',
+      'users_2',
+      'tags',
+    ]);
+    expect(first.name('users')).toBe('users');
   });
 });
 

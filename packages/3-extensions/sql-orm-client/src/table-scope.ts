@@ -44,11 +44,17 @@ class TableScopeImpl implements TableScope {
     this.#names = new Set(names);
   }
 
-  static copyOf(scope: TableScope): TableScope {
-    if (!(scope instanceof TableScopeImpl)) {
-      throw new InternalError('copyTableScope() requires a scope made by createTableScope()');
+  static unionOf(scopes: readonly TableScope[]): TableScope {
+    const names = new Set<string>();
+    for (const scope of scopes) {
+      if (!(scope instanceof TableScopeImpl)) {
+        throw new InternalError('a table scope must be made by createTableScope()');
+      }
+      for (const name of scope.#names) {
+        names.add(name);
+      }
     }
-    return new TableScopeImpl(scope.#names);
+    return new TableScopeImpl(names);
   }
 
   name(preferred: string): string {
@@ -68,7 +74,11 @@ export function createTableScope(): TableScope {
 }
 
 export function copyTableScope(scope: TableScope): TableScope {
-  return TableScopeImpl.copyOf(scope);
+  return TableScopeImpl.unionOf([scope]);
+}
+
+export function mergeTableScopes(scopes: readonly TableScope[]): TableScope {
+  return TableScopeImpl.unionOf(scopes);
 }
 
 export function bindTable(scope: TableScope, storage: TableStorageCoordinate): TableBinding {

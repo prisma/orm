@@ -83,6 +83,7 @@ import {
 import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
 import {
   bindCollectionTables,
+  bindIncludeTables,
   requireVariantBinding,
   tableReferences,
   variantColumnLabel,
@@ -148,6 +149,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { mergeTableScopes, type TableScope } from './table-scope';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -488,6 +490,7 @@ export class CollectionBase<
     const filter = normalizeWhereArg(whereArg, {
       contract: this.contract,
       tables: tableReferences(tables),
+      rebaseOnto: isWhereDirectInput(input) ? tables.root : undefined,
     });
 
     if (!filter) {
@@ -846,14 +849,9 @@ export class CollectionBase<
       this.state.variantName,
     );
 
-    const childTables = () =>
-      bindCollectionTables(
-        this.contract,
-        relation.relatedNamespaceId,
-        relation.relatedModelName,
-        relation.relatedTableName,
-      );
-    let nestedState = emptyState(childTables());
+    const child = bindIncludeTables(this.contract, this.state.tables, relation);
+    let nestedState = emptyState(child.tables);
+    let adoptedScope = child.tables.scope;
     let scalarSelector: IncludeScalar<unknown> | undefined;
     let combineBranches: Readonly<Record<string, IncludeCombineBranch>> | undefined;
 
@@ -874,6 +872,16 @@ export class CollectionBase<
         },
       );
       const refined = refineFn(nestedCollection);
+      const derivedScope = (state: CollectionState): TableScope => {
+        if (state.tables.root !== child.tables.root) {
+          throw ormError(
+            'ORM.INCLUDE_INVALID',
+            `include('${relationName}') refinement must return a collection derived from the one it was handed`,
+            { meta: { relation: relationName, reason: 'foreign-collection' } },
+          );
+        }
+        return state.tables.scope;
+      };
 
       if (isIncludeScalar(refined)) {
         if (isToOneCardinality(relation.cardinality)) {
@@ -883,6 +891,7 @@ export class CollectionBase<
             { meta: { relation: relationName, kind: 'scalar' } },
           );
         }
+        adoptedScope = derivedScope(refined.state);
         scalarSelector = refined;
         nestedState = refined.state;
       } else if (isIncludeCombine(refined)) {
@@ -893,8 +902,15 @@ export class CollectionBase<
             { meta: { relation: relationName, kind: 'combine' } },
           );
         }
+        adoptedScope = mergeTableScopes([
+          child.tables.scope,
+          ...Object.values(refined.branches).map((branch) =>
+            derivedScope(branch.kind === 'rows' ? branch.state : branch.selector.state),
+          ),
+        ]);
         combineBranches = refined.branches;
       } else if (isCollectionStateCarrier(refined)) {
+        adoptedScope = derivedScope(refined.state);
         nestedState = refined.state;
       } else {
         throw ormError(
@@ -915,6 +931,7 @@ export class CollectionBase<
       localColumns: relation.localColumns,
       cardinality: relation.cardinality,
       ...ifDefined('through', relation.through),
+      ...ifDefined('junction', child.junction),
       nested: nestedState,
       scalar: scalarSelector,
       combine: combineBranches,
@@ -935,6 +952,7 @@ export class CollectionBase<
       >,
       CollectionTypeStateOf<this>
     >({
+      tables: { ...this.state.tables, scope: adoptedScope },
       includes: [...this.state.includes, includeExpr],
     });
   }

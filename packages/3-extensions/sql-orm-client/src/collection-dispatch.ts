@@ -52,6 +52,7 @@ import {
   type CollectionTables,
   requireVariantBinding,
   variantColumnLabel,
+  variantColumnLabelPrefix,
 } from './collection-tables';
 import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
@@ -733,9 +734,8 @@ function resolveIncludedColumnRef(
   }
 
   for (const variant of polyInfo.mtiVariants) {
-    const prefix = variantColumnLabel(
+    const prefix = variantColumnLabelPrefix(
       requireVariantBinding(include.nested.tables, variant.modelName),
-      '',
     );
     if (!key.startsWith(prefix)) {
       continue;
