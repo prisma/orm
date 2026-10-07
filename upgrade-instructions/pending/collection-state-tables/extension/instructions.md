@@ -124,7 +124,7 @@ users.include('posts', (posts) => posts.where({ published: true }));
 users.include('posts', (posts) => posts.combine({ recent: posts.limit(3) }));
 ```
 
-A refinement that returned an unrelated collection used to be accepted and its state was used as the include's. To reuse a refinement across includes, share a function that takes the refinement's parameter, or a scope made with `db.orm.scope(...)` / `Model.scope(...)` and applied with `.apply(...)`.
+A refinement that returned an unrelated collection used to be accepted and its state was used as the include's. To reuse a refinement across includes, share a function that takes the refinement's parameter, or a scope made with `db.orm.scope(...)` / `Model.scope(...)` and passed to `.with(...)`.
 
 ## `sql-orm-table-references-renamed`
 

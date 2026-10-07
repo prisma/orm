@@ -682,6 +682,7 @@ describe('bindWhereExpr', () => {
       const bound = bindWhereExpr(
         contract,
         ExistsExpr.exists(subqueryWithLiteral().withLocking(locking)),
+        references,
       );
 
       expect(((bound as ExistsExpr).subquery as SelectAst).locking).toEqual(locking);

@@ -3086,7 +3086,7 @@ export class CollectionBase<
       assertLockCapability(this.contract, lockOptionCapabilities[waitPolicy], strength);
     }
     const clause = LockingClause.of(strength, {
-      of: [this.tableName],
+      of: [this.state.tables.root.reference],
       ...ifDefined('waitPolicy', waitPolicy),
     });
     return this.#clone({ locking: [...(this.state.locking ?? []), clause] });

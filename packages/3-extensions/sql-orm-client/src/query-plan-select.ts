@@ -37,13 +37,13 @@ import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
 } from './collection-contract';
-import { assertLockCompatible } from './lock-guards';
 import {
   bindingForTable,
   type CollectionTables,
   variantBindingForTable,
   variantColumnLabel,
 } from './collection-tables';
+import { assertLockCompatible } from './lock-guards';
 import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
