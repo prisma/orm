@@ -122,7 +122,10 @@ withTempDir(({ createTempDir }) => {
           meta: {
             conflicts: [
               expect.objectContaining({
-                summary: expect.stringContaining('planner produced no operations'),
+                summary: expect.stringContaining(
+                  'The contract changed, but migration plan found nothing to change in the database.',
+                ),
+                why: expect.stringContaining(`prisma migration new --from ${beforeStorageHash()}`),
               }),
             ],
           },
