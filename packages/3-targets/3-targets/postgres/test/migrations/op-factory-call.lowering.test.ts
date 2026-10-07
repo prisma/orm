@@ -408,7 +408,7 @@ describe('SetDefaultCall', () => {
     await expect(async () => call.toOp()).rejects.toThrow('createPostgresMigrationPlanner');
   });
 
-  it('renders this.setDefault with the column, including operationClass only when non-additive', () => {
+  it('renders this.setDefault with the column and never the operation class, which the migration derives from its start contract', () => {
     const additive = new SetDefaultCall('public', 'user', status);
     const widening = new SetDefaultCall('public', 'user', status, 'widening');
     const column =
@@ -419,7 +419,7 @@ describe('SetDefaultCall', () => {
       imports: additive.importRequirements().map((requirement) => requirement.symbol),
     }).toEqual({
       additive: `this.setDefault({ schema: "public", table: "user", column: ${column} })`,
-      widening: `this.setDefault({ schema: "public", table: "user", column: ${column}, operationClass: "widening" })`,
+      widening: `this.setDefault({ schema: "public", table: "user", column: ${column} })`,
       imports: ['col', 'lit'],
     });
   });

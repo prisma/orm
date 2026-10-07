@@ -16,9 +16,17 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { coreHash, profileHash } from '@internal/contract/types';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
-import { checkExpression, col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { type SqlNamespaceBase, SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import {
+  checkExpression,
+  col,
+  fn,
+  lit,
+  primaryKey,
+} from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import {
@@ -39,8 +47,9 @@ import {
 } from '@internal/target-postgres/op-factory-call';
 import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
 import { renderOps } from '@internal/target-postgres/render-ops';
-import { PostgresRlsPolicy } from '@internal/target-postgres/types';
-import { timeouts } from '@repo/test-utils';
+import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { PostgresRlsPolicy, postgresCreateNamespace } from '@internal/target-postgres/types';
+import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
@@ -113,10 +122,29 @@ function rewriteImports(tsSource: string): string {
     );
 }
 
+function snapshotContractJson(
+  storageHash: string,
+  namespaces: Readonly<Record<string, SqlNamespaceBase>>,
+): string {
+  const contract = new PostgresContractSerializer().serializeContract({
+    target: 'postgres',
+    targetFamily: 'sql',
+    profileHash: profileHash('roundtrip'),
+    storage: new SqlStorage({ storageHash: coreHash(storageHash), namespaces }),
+    roots: {},
+    domain: applicationDomainOf({ models: {} }),
+    capabilities: {},
+    extensions: {},
+    meta: {},
+  });
+  return JSON.stringify(contract, null, 2);
+}
+
 /**
  * Write the deduplicated snapshot-store fixtures the rendered scaffold
- * imports — `snapshots/<hex>/contract.json` (carrying `storage.storageHash`,
- * which the base's derived `describe()` reads) and the matching
+ * imports — `snapshots/<hex>/contract.json` (a serialized contract whose
+ * `storage.storageHash` the base's derived `describe()` reads, and whose
+ * start-contract tables `this.setDefault` reads) and the matching
  * `snapshots/<hex>/contract.ts` type module (`export type Contract`) for
  * each of `meta.to` and (when non-null) `meta.from`. The JSON hashes match
  * `meta` so the derived describe() is consistent with the migration's
@@ -127,21 +155,25 @@ function rewriteImports(tsSource: string): string {
 async function writeContractFixtures(
   dir: string,
   meta: { readonly from: string | null; readonly to: string },
+  startNamespaces: Readonly<Record<string, SqlNamespaceBase>> = {},
 ): Promise<void> {
   const contractType =
     'export type Contract = { readonly storage: { readonly storageHash: string } };\n';
-  const writeSnapshot = async (storageHash: string) => {
+  const writeSnapshot = async (
+    storageHash: string,
+    namespaces: Readonly<Record<string, SqlNamespaceBase>>,
+  ) => {
     const snapshotDir = join(dir, SNAPSHOTS_IMPORT_PATH, storageHashHex(storageHash));
     await mkdir(snapshotDir, { recursive: true });
     await writeFile(
       join(snapshotDir, 'contract.json'),
-      JSON.stringify({ storage: { storageHash } }, null, 2),
+      snapshotContractJson(storageHash, namespaces),
     );
     await writeFile(join(snapshotDir, 'contract.ts'), contractType);
   };
-  await writeSnapshot(meta.to);
+  await writeSnapshot(meta.to, {});
   if (meta.from !== null) {
-    await writeSnapshot(meta.from);
+    await writeSnapshot(meta.from, startNamespaces);
   }
 }
 
@@ -303,6 +335,67 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
 
     const expected = await Promise.all(renderOps(calls, testAdapter));
     expect(ops).toEqual(expected);
+  });
+
+  it('renders a changed default without its operation class, which the executed migration derives from the start contract', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    await writeContractFixtures(tmpDir, META, {
+      public: postgresCreateNamespace({
+        id: 'public',
+        entries: {
+          table: {
+            ticket: new StorageTable({
+              columns: {
+                status: {
+                  dataType: 'pg/text',
+                  codecId: 'pg/text@1',
+                  nullable: false,
+                  default: { kind: 'literal', value: 'open' },
+                },
+              },
+              uniques: [],
+              indexes: [],
+              foreignKeys: [],
+            }),
+          },
+        },
+      }),
+    });
+    const calls = [
+      new SetDefaultCall(
+        'public',
+        'ticket',
+        col('status', 'text', { default: lit('closed'), codecRef: { codecId: 'pg/text@1' } }),
+        'widening',
+      ),
+    ];
+    const migration = new TypeScriptRenderablePostgresMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+      testAdapter,
+    );
+
+    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    await writeFile(join(tmpDir, 'migration.ts'), tsSource);
+    const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+      cwd: tmpDir,
+    });
+    const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+
+    expect({
+      stderr,
+      rendersOperationClass: tsSource.includes('operationClass'),
+      operationClasses: ops.map((op: { operationClass: string }) => op.operationClass),
+      ops,
+    }).toEqual({
+      stderr: '',
+      rendersOperationClass: false,
+      operationClasses: ['widening'],
+      ops: await Promise.all(renderOps(calls, testAdapter)),
+    });
   });
 
   it('renders an empty calls list whose executed scaffold emits []', {

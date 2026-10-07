@@ -1,14 +1,20 @@
-import type { Contract as FrameworkContract } from '@internal/contract/types';
+import {
+  type ColumnDefault,
+  coreHash,
+  type Contract as FrameworkContract,
+  profileHash,
+} from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type {
   ExecuteRequestLowerer,
   SqlControlAdapter,
 } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { blindCast } from '@internal/utils/casts';
+import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { AlterColumnTypeOptions } from '../src/core/migrations/op-factory-call';
 import type { DataTransformOptions } from '../src/core/migrations/operations/data-transform';
@@ -16,6 +22,8 @@ import type { CreateIndexExtras } from '../src/core/migrations/operations/indexe
 import type { ForeignKeySpec } from '../src/core/migrations/operations/shared';
 import type { PostgresPlanTargetDetails } from '../src/core/migrations/planner-target-details';
 import { PostgresMigration } from '../src/core/migrations/postgres-migration';
+import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
+import { postgresCreateNamespace } from '../src/core/postgres-schema';
 import type { Contract } from './fixtures/namespaced-contract.d';
 import contractJson from './fixtures/namespaced-contract.json' with { type: 'json' };
 
@@ -182,7 +190,6 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly column: DdlColumn;
-    readonly operationClass?: 'additive' | 'widening';
   }): Promise<Op> {
     return this.setDefault(options);
   }
@@ -463,6 +470,60 @@ function fakeControlStack(): ControlStack<'sql', 'postgres'> {
   } as unknown as ControlStack<'sql', 'postgres'>;
 }
 
+const CHANGED_TO_TWO = {
+  schema: 'public',
+  table: 'Box',
+  column: col('changed', 'int4', { default: lit(2) }),
+} as const;
+
+function boxContract(changedDefault: ColumnDefault | undefined): FrameworkContract<SqlStorage> {
+  const changed = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
+  return {
+    target: 'postgres',
+    targetFamily: 'sql',
+    profileHash: profileHash('box'),
+    storage: new SqlStorage({
+      storageHash: coreHash('box'),
+      namespaces: {
+        public: postgresCreateNamespace({
+          id: 'public',
+          entries: {
+            table: {
+              Box: new StorageTable({
+                columns: {
+                  changed:
+                    changedDefault === undefined
+                      ? changed
+                      : { ...changed, default: changedDefault },
+                },
+                uniques: [],
+                indexes: [],
+                foreignKeys: [],
+              }),
+            },
+          },
+        }),
+      },
+    }),
+    roots: {},
+    domain: applicationDomainOf({ models: {} }),
+    capabilities: {},
+    extensions: {},
+    meta: {},
+  };
+}
+
+function migrationStartingFrom(start: FrameworkContract<SqlStorage>): ExposedMigration {
+  const startJson = blindCast<
+    { readonly storage: { readonly storageHash: string } },
+    'a serialized contract carries its storage hash'
+  >(new PostgresContractSerializer().serializeContract(start));
+  class StartingFrom extends ExposedMigration {
+    override readonly startContractJson = startJson;
+  }
+  return new StartingFrom(fakeControlStack());
+}
+
 describe('PostgresMigration op-builder methods with a ControlStack', () => {
   it('createTable lowers to an additive create-table operation', async () => {
     const m = new ExposedMigration(fakeControlStack());
@@ -525,6 +586,35 @@ describe('PostgresMigration op-builder methods with a ControlStack', () => {
     ).rejects.toMatchObject({
       code: 'CONTRACT.DEFAULT_INVALID',
       meta: { table: 'Box', column: 'changed', reason: 'set-default-without-default' },
+    });
+  });
+
+  it('setDefault without a start contract is additive and carries no postcheck', async () => {
+    const op = await new ExposedMigration(fakeControlStack()).callSetDefault(CHANGED_TO_TWO);
+
+    expect({ operationClass: op.operationClass, postcheck: op.postcheck }).toEqual({
+      operationClass: 'additive',
+      postcheck: [],
+    });
+  });
+
+  it('setDefault is additive and carries no postcheck when the start column has no default', async () => {
+    const op = await migrationStartingFrom(boxContract(undefined)).callSetDefault(CHANGED_TO_TWO);
+
+    expect({ operationClass: op.operationClass, postcheck: op.postcheck }).toEqual({
+      operationClass: 'additive',
+      postcheck: [],
+    });
+  });
+
+  it('setDefault is widening and carries no postcheck when the start column has a different default', async () => {
+    const op = await migrationStartingFrom(
+      boxContract({ kind: 'literal', value: 1 }),
+    ).callSetDefault(CHANGED_TO_TWO);
+
+    expect({ operationClass: op.operationClass, postcheck: op.postcheck }).toEqual({
+      operationClass: 'widening',
+      postcheck: [],
     });
   });
 

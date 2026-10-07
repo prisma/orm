@@ -55,7 +55,7 @@ describe('Postgres call classes - renderTypeScript + importRequirements', () => 
     expect(call.importRequirements()).toEqual([]);
   });
 
-  it('SetDefaultCall emits this.setDefault({...}) with the column, omits operationClass when additive', () => {
+  it('SetDefaultCall emits this.setDefault({...}) with the column and never the operation class', () => {
     const column = col('created_at', 'timestamptz', { default: fn('now()') });
     const additive = new SetDefaultCall('public', 'user', column);
     const widening = new SetDefaultCall('public', 'user', column, 'widening');
@@ -65,7 +65,7 @@ describe('Postgres call classes - renderTypeScript + importRequirements', () => 
       imports: additive.importRequirements().map((requirement) => requirement.symbol),
     }).toEqual({
       additive: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }) })`,
-      widening: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }), operationClass: "widening" })`,
+      widening: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }) })`,
       imports: ['col', 'fn'],
     });
   });

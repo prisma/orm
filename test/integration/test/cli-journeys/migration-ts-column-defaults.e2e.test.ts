@@ -152,8 +152,8 @@ withTempDir(({ createTempDir }) => {
         const packageDir = await emitAndPlan(ctx, 'change');
         editMigrationTs(
           packageDir,
-          /this\.setDefault\(\{[\s\S]*?operationClass: 'widening',?\s*\}\)/,
-          "this.setDefault({ schema: 'public', table: 'Box', column: 'changed', defaultSql: 'DEFAULT 2', operationClass: 'widening' })",
+          /this\.setDefault\(\{[\s\S]*?column: col\([^\n]*\),?\s*\}\)/,
+          "this.setDefault({ schema: 'public', table: 'Box', column: 'changed', defaultSql: 'DEFAULT 2' })",
         );
 
         expect(await runMigrationTs(ctx, packageDir)).toEqual({

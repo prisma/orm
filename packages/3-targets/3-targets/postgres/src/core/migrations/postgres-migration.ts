@@ -50,7 +50,7 @@ import { installExtension } from './operations/dependencies';
 import type { CreateIndexExtras } from './operations/indexes';
 import type { ForeignKeySpec } from './operations/shared';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
-import { postgresTableRenameCalls } from './table-rename-calls';
+import { emissionSchemaForNamespace, postgresTableRenameCalls } from './table-rename-calls';
 
 /**
  * Target-owned base class for Postgres migrations.
@@ -427,19 +427,33 @@ export abstract class PostgresMigration<
     );
   }
 
+  /**
+   * Emit an `ALTER COLUMN … SET DEFAULT` operation. It is widening when this migration's start contract gives the column a default, and additive otherwise.
+   */
   protected setDefault(options: {
     readonly schema: string;
     readonly table: string;
     readonly column: DdlColumn;
-    readonly operationClass?: 'additive' | 'widening';
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     refuseEarlierSetDefaultOptions(options);
     return new SetDefaultCall(
       options.schema,
       options.table,
       options.column,
-      options.operationClass,
+      this.startColumnHasDefault(options.schema, options.table, options.column.name)
+        ? 'widening'
+        : 'additive',
     ).toOp(this.controlAdapterFor('setDefault'));
+  }
+
+  private startColumnHasDefault(schema: string, table: string, column: string): boolean {
+    const start = this.startContract;
+    if (start === null) return false;
+    return Object.entries(start.storage.namespaces).some(
+      ([namespaceId, namespace]) =>
+        emissionSchemaForNamespace(start, namespaceId) === schema &&
+        namespace.entries.table?.[table]?.columns[column]?.default !== undefined,
+    );
   }
 
   protected dropDefault(options: {

@@ -718,9 +718,6 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
     }
     opts.push(`table: ${jsonToTsSource(this.tableName)}`);
     opts.push(`column: ${renderDdlColumnAsTsCall(this.column)}`);
-    if (this.operationClass !== 'additive') {
-      opts.push(`operationClass: ${jsonToTsSource(this.operationClass)}`);
-    }
     return `this.setDefault({ ${opts.join(', ')} })`;
   }
 
