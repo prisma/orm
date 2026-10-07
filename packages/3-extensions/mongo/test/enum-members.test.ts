@@ -1,6 +1,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { type MongoQueryExecutor, mongoOrm } from '@internal/mongo-orm';
+import { buildMongoEnums } from '@internal/mongo-runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
@@ -131,39 +132,37 @@ describe('db.enums member types', () => {
   });
 });
 
-describe('the Mongo ORM checks a written enum value through the runtime codecs', () => {
-  it('looks up each enum codec once, however many writes check it', async () => {
-    const lookups: string[] = [];
+describe('the Mongo ORM checks a written enum value against the accessors db.enums holds', () => {
+  it('passes a member to the database and refuses a value outside the enum', async () => {
     const orm = mongoOrm({
       contract,
       executor: unreachableDatabase,
-      codecs: {
-        get: (codecId) => {
-          lookups.push(codecId);
-          return context.codecs.get(codecId);
-        },
-      },
+      enums: buildMongoEnums(contract, context.codecs),
     });
     await expect(orm.readings.create(reading)).rejects.toThrow('no database');
-    await expect(orm.readings.create(reading)).rejects.toThrow('no database');
-    expect(lookups.sort()).toEqual([
-      'mongo/date@1',
-      'mongo/double@1',
-      'mongo/int32@1',
-      'mongo/int64@1',
-      'mongo/string@1',
-    ]);
+    await expect(orm.readings.create({ ...reading, int64: 7n as never })).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message:
+        "Failed to encode field int64 in collection 'readings': 7n is not a value of enum Int64Level; the values are 1n and 10n",
+    });
   });
 
-  it('refuses a write when the runtime has no codec for the enum', async () => {
-    const orm = mongoOrm({
-      contract,
-      executor: unreachableDatabase,
-      codecs: { get: () => undefined },
-    });
+  it('refuses a write when it was built without the accessor of the enum', async () => {
+    const orm = mongoOrm({ contract, executor: unreachableDatabase, enums: {} });
     await expect(orm.readings.create(reading)).rejects.toMatchObject({
-      code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
-      message: "No codec is registered for codecId 'mongo/string@1', which enum TextLevel uses.",
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        "The ORM has no accessor for enum TextLevel, so it cannot check the value written to text in collection 'readings'. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).",
     });
+  });
+
+  it('refuses a contract whose enum codec the runtime lacks when the accessors are built', () => {
+    expect(() => buildMongoEnums(contract, { get: () => undefined, has: () => false })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        message:
+          "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
+      }),
+    );
   });
 });

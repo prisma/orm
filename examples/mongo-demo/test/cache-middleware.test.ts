@@ -4,6 +4,7 @@ import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
 import { createMongoDriver } from '@prisma/orm-mongo/driver';
 import { MongoContractSerializer } from '@prisma/orm-mongo/family/ir';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -79,7 +80,11 @@ describe('mongo-demo cache middleware integration', {
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
     const cache = createCacheMiddleware();
     const runtime = createMongoRuntime({ context, driver, middleware: [cache] });
-    const orm = mongoOrm({ contract, executor: runtime, codecs: context.codecs });
+    const orm = mongoOrm({
+      contract,
+      executor: runtime,
+      enums: buildMongoEnums(contract, context.codecs),
+    });
     const query = mongoQuery<Contract>({ contractJson });
     return { runtime, orm, query, driver, driverExecuteSpy };
   }

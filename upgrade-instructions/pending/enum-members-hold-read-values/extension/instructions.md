@@ -7,9 +7,9 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\b(?:buildNamespacedEnums|buildEnumsMapForNamespace|createEnumAccessor)\b'
-  - id: mongo-orm-takes-codecs
+  - id: mongo-orm-takes-enum-accessors
     summary: |
-      `mongoOrm()` and `createMongoCollection()` from `@internal/mongo-orm` now require the runtime's codecs, which they check a written enum value through. Code that builds them itself passes the execution context's `codecs`; `createMongoCollection()` takes them before the optional `mutationDefaults`.
+      `mongoOrm()` and `createMongoCollection()` from `@internal/mongo-orm` now require the contract's enum accessors, which they check a written enum value against. Code that builds them itself passes `buildMongoEnums(contract, context.codecs)` from `@internal/mongo-runtime` as `enums`; `createMongoCollection()` takes them before the optional `mutationDefaults`.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -42,46 +42,33 @@ const enums = Object.freeze(
 );
 ```
 
-On Mongo, resolve through the execution context's codec lookup and throw when it has none:
+On Mongo, build them with `buildMongoEnums` from `@internal/mongo-runtime`, which resolves each codec through the execution context's codec lookup and throws `RUNTIME.CODEC_DESCRIPTOR_MISSING` when it has none:
 
 ```ts
-function enumCodec(codecs: MongoCodecLookup, codecId: string): EnumMemberCodec {
-  const codec = codecs.get(codecId);
-  if (codec === undefined) {
-    throw runtimeError(
-      'RUNTIME.CODEC_DESCRIPTOR_MISSING',
-      `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
-      { codecId },
-    );
-  }
-  return codec;
-}
-
-const enums = buildNamespacedEnums<TContract>(contract.domain, (codecId) =>
-  enumCodec(context.codecs, codecId),
-)[UNBOUND_NAMESPACE_ID];
+const enumsByNamespace = buildMongoEnums(contract, context.codecs);
+const enums = enumsByNamespace[UNBOUND_NAMESPACE_ID];
 ```
 
-`runtimeError` comes from `@internal/framework-components/runtime`, and `EnumMemberCodec` from `@internal/contract/enum-accessor`. A static context that builds enums before it has an execution context must build the context first so it can pass the codecs.
+A static context that builds enums before it has an execution context must build the context first so it can pass the codecs. Each enum's codec is resolved when the accessors are built; its members are decoded when the enum is first read.
 
 `createEnumAccessor(contractEnum)` without a codec keeps the members in their stored forms, as the native-enum accessor of `@internal/postgres` does.
 
 The accessor's members are the values the codec reads, so code that read `EnumAccessor.values` or `members` as `JsonValue` must accept `unknown`. Members are decoded once, when the enum is first read; a mutable member, such as a `Date` or a `Uint8Array`, is a fresh copy on every read, and an immutable one, such as a Temporal value, is the same value on every read. `has()`, `nameOf()` and `ordinalOf()` find a value equal to a member: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form the codec stores it in. Code that passed a stored form to them must pass the value a query returns.
 
-## `mongo-orm-takes-codecs`
+## `mongo-orm-takes-enum-accessors`
 
-Pass the execution context's codecs when building the Mongo ORM:
+Pass the contract's enum accessors when building the Mongo ORM, the same ones the static context builds for `db.enums`:
 
 ```ts
 const orm = mongoOrm<TContract>({
   contract,
   executor,
   mutationDefaults: context,
-  codecs: context.codecs,
+  enums: buildMongoEnums(contract, context.codecs),
 });
 ```
 
-`createMongoCollection()` takes the codecs as its fourth argument, before the optional `mutationDefaults`: `createMongoCollection(contract, 'User', executor, context.codecs, mutationDefaults)`. The ORM reads each enum through its codec once and refuses a write of an enum field whose codec the lookup lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`.
+`createMongoCollection()` takes the accessors as its fourth argument, before the optional `mutationDefaults`: `createMongoCollection(contract, 'User', executor, enums, mutationDefaults)`. A write of an enum field whose accessor `enums` lacks is refused with `ORM.ARGUMENT_INVALID`.
 
 ## `define-contract-carries-enums`
 

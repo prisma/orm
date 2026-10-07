@@ -16,6 +16,7 @@ import {
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
+import { buildMongoEnums } from '@internal/mongo-runtime';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -207,7 +208,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const orm = mongoOrm({
       contract: validated.contract,
       executor: ctx.runtime,
-      codecs: ctx.codecs,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
     });
     const userCollection = orm['User']!;
 
@@ -242,7 +243,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const orm = mongoOrm({
       contract: validated.contract,
       executor: ctx.runtime,
-      codecs: ctx.codecs,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
     });
     const userCollection = orm['User']!;
 
@@ -285,7 +286,7 @@ type Address {
     const orm = mongoOrm({
       contract: validated.contract,
       executor: ctx.runtime,
-      codecs: ctx.codecs,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
     });
     const userCollection = orm['User']!;
 

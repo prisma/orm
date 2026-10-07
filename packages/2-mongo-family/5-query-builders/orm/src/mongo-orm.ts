@@ -6,8 +6,8 @@ import type {
   RootModelName,
 } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
-import type { MongoCollection, MongoOrmCodecs } from './collection';
-import { createRootCollection, enumAccessorsFor } from './collection';
+import type { MongoCollection, MongoOrmEnums } from './collection';
+import { createMongoCollection } from './collection';
 import type { MongoQueryExecutor } from './executor';
 import { ormError } from './orm-errors';
 
@@ -16,8 +16,8 @@ export interface MongoOrmOptions<TContract extends MongoContract> {
   readonly executor: MongoQueryExecutor;
   /** Fills the contract's execution defaults on writes. Without it, no generated values are applied. */
   readonly mutationDefaults?: MutationDefaults;
-  /** The runtime's codecs, which a written enum value is checked through. Pass the execution context's `codecs`. */
-  readonly codecs: MongoOrmCodecs;
+  /** The contract's enum accessors, which a written enum value is checked against: `buildMongoEnums(contract, context.codecs)`, the accessors `db.enums` holds. */
+  readonly enums: MongoOrmEnums;
 }
 
 export type MongoOrmClient<
@@ -32,7 +32,7 @@ export type MongoOrmClient<
 export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
-  const { contract, executor, mutationDefaults, codecs } = options;
+  const { contract, executor, mutationDefaults, enums } = options;
   const executionDefaults = contract.execution?.mutations.defaults ?? [];
   if (executionDefaults.length > 0 && mutationDefaults === undefined) {
     throw ormError(
@@ -42,18 +42,17 @@ export function mongoOrm<
     );
   }
   const client: Record<string, unknown> = {};
-  const enumAccessorFor = enumAccessorsFor(contract, codecs);
 
   for (const [rootName, rootRef] of Object.entries(contract.roots)) {
-    client[rootName] = createRootCollection(
+    client[rootName] = createMongoCollection(
       contract,
       blindCast<
         RootModelName<TContract, typeof rootName & keyof TContract['roots'] & string>,
         'roots entries are CrossReferences; rootRef.model is a valid RootModelName for this contract'
       >(rootRef.model),
       executor,
+      enums,
       mutationDefaults,
-      enumAccessorFor,
     );
   }
 

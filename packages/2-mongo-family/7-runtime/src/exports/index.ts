@@ -1,4 +1,6 @@
 export type { RuntimeTargetInstance } from '@internal/framework-components/execution';
+export type { MongoEnumAccessors } from '../mongo-enums';
+export { buildMongoEnums } from '../mongo-enums';
 export type { MongoExecutionPlan } from '../mongo-execution-plan';
 export type {
   MongoCodecLookup,

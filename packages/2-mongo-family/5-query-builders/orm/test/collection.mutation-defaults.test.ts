@@ -16,7 +16,7 @@ import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
-import { noEnumCodecs } from './no-enum-codecs';
+import { noEnums } from './no-enums';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -105,7 +105,7 @@ function commandOf(plans: readonly MongoQueryPlan[], kind: string) {
 }
 
 function users(executor: MongoQueryExecutor, defaults: MutationDefaults) {
-  return createMongoCollection(contract, 'User', executor, noEnumCodecs, defaults);
+  return createMongoCollection(contract, 'User', executor, noEnums, defaults);
 }
 
 const byEmail = MongoFieldFilter.eq('email', 'a@b.c');
@@ -316,7 +316,7 @@ describe('mongoOrm', () => {
         },
       },
     } as unknown as Contract;
-    expect(() => mongoOrm({ contract: withDefaults, executor, codecs: noEnumCodecs })).toThrow(
+    expect(() => mongoOrm({ contract: withDefaults, executor, enums: noEnums })).toThrow(
       expect.objectContaining({
         code: 'ORM.MUTATION_DEFAULTS_MISSING',
         message: expect.stringContaining('mutationDefaults: context'),
@@ -326,7 +326,7 @@ describe('mongoOrm', () => {
 
   it('builds a contract without execution defaults without mutationDefaults', () => {
     const { executor } = recordingExecutor();
-    expect(() => mongoOrm({ contract, executor, codecs: noEnumCodecs })).not.toThrow();
+    expect(() => mongoOrm({ contract, executor, enums: noEnums })).not.toThrow();
   });
 
   it('passes mutationDefaults to every root collection', async () => {
@@ -336,7 +336,7 @@ describe('mongoOrm', () => {
     const orm = mongoOrm({
       contract,
       executor,
-      codecs: noEnumCodecs,
+      enums: noEnums,
       mutationDefaults: fakeMutationDefaults(),
     });
     await orm.users.create(input(userData));

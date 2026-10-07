@@ -18,6 +18,7 @@ import type {
 import type { MongoOrmClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -163,7 +164,7 @@ export async function withMongoPort<
         contract,
         executor: runtime,
         mutationDefaults: context,
-        codecs: context.codecs,
+        enums: buildMongoEnums(contract, context.codecs),
       });
       const mongoDb = client.db(dbName);
       await fn({ db, client, mongoDb, contract });

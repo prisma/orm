@@ -52,7 +52,7 @@ export interface MongodContext {
   readonly dbName: string;
   readonly client: MongoClient;
   readonly runtime: MongoRuntime;
-  /** The execution context's codecs, which `mongoOrm()` checks enum values through. */
+  /** The execution context's codecs, which `buildMongoEnums()` reads enum members through. */
   readonly codecs: MongoCodecLookup;
 }
 

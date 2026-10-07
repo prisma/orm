@@ -4,6 +4,7 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
+import type * as MongoRuntime from '@internal/mongo-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>;
@@ -31,7 +32,8 @@ vi.mock('@internal/target-mongo/runtime', () => ({
   default: mocks.mongoRuntimeTarget,
 }));
 
-vi.mock('@internal/mongo-runtime', () => ({
+vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
+  buildMongoEnums: (await importOriginal<typeof MongoRuntime>()).buildMongoEnums,
   createMongoExecutionStack: mocks.createMongoExecutionStack,
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,

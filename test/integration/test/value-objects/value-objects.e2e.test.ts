@@ -3,6 +3,7 @@ import postgresDriver from '@internal/driver-postgres/runtime';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { mongoOrm } from '@internal/mongo-orm';
+import { buildMongoEnums } from '@internal/mongo-runtime';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { orm as sqlOrm } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -26,7 +27,7 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
     const ormClient = mongoOrm<MongoVOContract>({
       contract,
       executor: ctx.runtime,
-      codecs: ctx.codecs,
+      enums: buildMongoEnums(contract, ctx.codecs),
     });
 
     const shopCollection = ormClient['shop']!;
@@ -81,7 +82,7 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
     const ormClient = mongoOrm<MongoVOContract>({
       contract,
       executor: ctx.runtime,
-      codecs: ctx.codecs,
+      enums: buildMongoEnums(contract, ctx.codecs),
     });
     const shopCollection = ormClient['shop']!;
 

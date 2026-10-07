@@ -22,9 +22,9 @@ changes:
       matches:
         - '@@type\(\s*"mongo/(?:int64|int64Number|date|objectId|decimal128|binary|vector)@1"'
         - '@@type\(\s*"mongo/double@1"\s*\)[^}]*"(?:NaN|-?Infinity)"'
-  - id: mongo-orm-requires-codecs
+  - id: mongo-orm-takes-enum-accessors
     summary: |
-      `mongoOrm()` and `createMongoCollection()` from `@prisma/orm-mongo/orm` now require the runtime's codecs, which they check a written enum value through. Pass the execution context's `codecs`: `mongoOrm({ contract, executor, codecs: context.codecs })`, and `createMongoCollection(contract, model, executor, context.codecs, mutationDefaults)`, whose codecs now come before the optional `mutationDefaults`. Clients built with `mongo()` need no change.
+      `mongoOrm()` and `createMongoCollection()` from `@prisma/orm-mongo/orm` now require the contract's enum accessors, which they check a written enum value against. Build them with `buildMongoEnums(contract, context.codecs)` from `@prisma/orm-mongo/family-runtime` and pass them as `enums`: `mongoOrm({ contract, executor, enums })`, and `createMongoCollection(contract, model, executor, enums, mutationDefaults)`, whose accessors come before the optional `mutationDefaults`. Clients built with `mongo()` need no change.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -77,17 +77,23 @@ For each enum reported, do one of these:
 - Store the enum through a codec the validator can list, for example a `mongo/string@1` enum whose members are the values' text, and convert at the application boundary.
 - Author the enum and the models that use it in a TypeScript contract (`@internal/mongo/contract-builder`), which carries no collection validator; the ORM checks enum membership on write there.
 
-## `mongo-orm-requires-codecs`
+## `mongo-orm-takes-enum-accessors`
 
-Code that builds the Mongo ORM itself, rather than through `mongo()`, passes the codecs of the execution context its runtime uses. Built without them, the ORM compared a written enum value with the enum's stored forms and refused every value of an enum whose stored form is not the value, such as a bigint or a date member; it is now a type error.
+Code that builds the Mongo ORM itself, rather than through `mongo()`, passes the contract's enum accessors, the same ones `db.enums` holds. Built without them, the ORM compared a written enum value with the enum's stored forms and refused every value of an enum whose stored form is not the value, such as a bigint or a date member; it is now a type error.
 
 ```ts
+import {
+  buildMongoEnums,
+  createMongoExecutionContext,
+  createMongoRuntime,
+} from '@prisma/orm-mongo/family-runtime';
+
 const context = createMongoExecutionContext({ contract, stack });
 const runtime = createMongoRuntime({ context, driver });
-const orm = mongoOrm({ contract, executor: runtime, codecs: context.codecs });
+const orm = mongoOrm({ contract, executor: runtime, enums: buildMongoEnums(contract, context.codecs) });
 ```
 
-`createMongoCollection()` takes the codecs as its fourth argument, before the optional `mutationDefaults`: change `createMongoCollection(contract, 'User', executor, mutationDefaults)` to `createMongoCollection(contract, 'User', executor, context.codecs, mutationDefaults)`. A write of an enum field whose codec the lookup lacks is refused with `RUNTIME.CODEC_DESCRIPTOR_MISSING`.
+`buildMongoEnums` refuses a contract whose enum codec the context lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`. `createMongoCollection()` takes the accessors as its fourth argument, before the optional `mutationDefaults`: change `createMongoCollection(contract, 'User', executor, mutationDefaults)` to `createMongoCollection(contract, 'User', executor, enums, mutationDefaults)`. A write of an enum field whose accessor is missing from `enums` is refused with `ORM.ARGUMENT_INVALID`.
 
 ## `contract-dts-enum-member-types`
 

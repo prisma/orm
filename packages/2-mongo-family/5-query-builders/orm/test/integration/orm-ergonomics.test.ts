@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { createMongoDriver } from '@internal/driver-mongo';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -13,7 +14,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
-import type { MongoOrmCodecs } from '../../src/collection';
+import type { MongoOrmEnums } from '../../src/collection';
 import type { FieldAccessor } from '../../src/field-accessor';
 import { mongoOrm } from '../../src/mongo-orm';
 
@@ -37,7 +38,7 @@ describe('ORM ergonomics integration', {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   let runtime: MongoRuntime;
-  let codecs: MongoOrmCodecs;
+  let enums: MongoOrmEnums;
   const dbName = 'orm_ergonomics_test';
 
   beforeAll(async () => {
@@ -54,7 +55,7 @@ describe('ORM ergonomics integration', {
     const context = createMongoExecutionContext({ contract: {}, stack });
     const driver = await createMongoDriver(replSet.getUri(), dbName);
     runtime = createMongoRuntime({ context, driver });
-    codecs = context.codecs;
+    enums = buildMongoEnums(contract, context.codecs);
   }, timeouts.spinUpMongoMemoryServer);
 
   beforeEach(async () => {
@@ -67,7 +68,7 @@ describe('ORM ergonomics integration', {
 
   describe('write results decode through codecs (issue #577)', () => {
     it('create() returns _id as the decoded hex string a read returns', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const created = await orm.users.create(defaultUserData);
       expect(typeof created._id).toBe('string');
       const fetched = await orm.users.where({ _id: created._id as string }).first();
@@ -75,7 +76,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('createAll() returns decoded _ids', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const rows: Record<string, unknown>[] = [];
       for await (const row of orm.users.createAll([
         defaultUserData,
@@ -90,7 +91,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('update() returns the document decoded like a read', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const created = await orm.users.create(defaultUserData);
       const updated = await orm.users
         .where({ _id: created._id as string })
@@ -100,7 +101,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('delete() returns the document decoded like a read', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const created = await orm.users.create(defaultUserData);
       const deleted = await orm.users.where({ _id: created._id as string }).delete();
       expect(deleted).not.toBeNull();
@@ -110,7 +111,7 @@ describe('ORM ergonomics integration', {
 
   describe('codec-aware where()', () => {
     it('retrieves document by ObjectId field using object where', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       const found = await orm.users.where({ _id: user._id as string }).first();
       expect(found).not.toBeNull();
@@ -118,7 +119,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('retrieves document by string field using object where', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);
       const found = await orm.users.where({ name: 'Alice' }).first();
       expect(found).not.toBeNull();
@@ -126,7 +127,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('filters by multiple fields using object where', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);
       await orm.users.create({ ...defaultUserData, name: 'Bob', email: 'bob@test.com' });
       const found = await orm.users.where({ name: 'Alice', email: 'alice@test.com' }).first();
@@ -137,7 +138,7 @@ describe('ORM ergonomics integration', {
 
   describe('field accessor mutations', () => {
     it('$push adds element to array field', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       const updated = await orm.users
         .where({ _id: user._id as string })
@@ -150,7 +151,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('$pull removes element from array field', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create({ ...defaultUserData, tags: ['admin', 'editor'] });
       await orm.users.where({ _id: user._id as string }).update((u) => [u.tags.pull('admin')]);
 
@@ -160,7 +161,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('$inc increments numeric field', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       await orm.users.where({ _id: user._id as string }).update((u) => [u.loginCount.inc(1)]);
 
@@ -170,7 +171,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('dot-path $set updates nested value object field', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create({
         ...defaultUserData,
         homeAddress: { city: 'SF', country: 'US' },
@@ -185,7 +186,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('multiple operations in one callback are applied together', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       await orm.users
         .where({ _id: user._id as string })
@@ -198,7 +199,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('updateAll with callback updates multiple documents', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);
       await orm.users.create({ ...defaultUserData, name: 'Bob', email: 'bob@test.com' });
 
@@ -219,7 +220,7 @@ describe('ORM ergonomics integration', {
 
   describe('upsert() dot-path guard', () => {
     it('throws when callback uses a dot-path operation', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);
       await expect(
         orm.users.where({ name: 'Alice' }).upsert({
@@ -232,7 +233,7 @@ describe('ORM ergonomics integration', {
 
   describe('reference relation include', () => {
     it('include() on 1:N relation returns array of related documents', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
 
       await orm.tasks.create({
@@ -258,7 +259,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('include() on 1:N returns empty array when no related documents', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
 
       const result = await orm.users
@@ -271,7 +272,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('select() keeps a 1:N include whose join key is not selected', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       await orm.tasks.create({
         title: 'Task 1',
@@ -294,7 +295,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('select() keeps an N:1 include whose join key is not selected', async () => {
-      const orm = mongoOrm({ contract, executor: runtime, codecs });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       const user = await orm.users.create(defaultUserData);
       await orm.tasks.create({
         title: 'Task 1',

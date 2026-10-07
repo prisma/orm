@@ -10,7 +10,7 @@ import type { Contract } from '../../../1-foundation/mongo-contract/test/fixture
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
-import { noEnumCodecs } from './no-enum-codecs';
+import { noEnums } from './no-enums';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -58,7 +58,7 @@ const withoutCodec = { name: undefined, collection: undefined, codecId: undefine
 describe('parameters the Mongo ORM builds', () => {
   it('name each field of a create by its path, nested value-object fields included', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'User', executor, noEnumCodecs).create(user);
+    await createMongoCollection(contract, 'User', executor, noEnums).create(user);
 
     expect(labels(plans)).toEqual([
       { name: 'name', collection: 'users', codecId: string },
@@ -72,7 +72,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('name the fields of a where filter and a delete filter', async () => {
     const { executor, plans } = recordingExecutor();
-    const users = createMongoCollection(contract, 'User', executor, noEnumCodecs);
+    const users = createMongoCollection(contract, 'User', executor, noEnums);
     await users.where({ email: 'a@b.c' }).all().toArray();
     await users.where({ name: 'Alice' }).delete();
 
@@ -84,7 +84,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('name the fields of $set, $inc, $push and a dot-path $set', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'User', executor, noEnumCodecs)
+    await createMongoCollection(contract, 'User', executor, noEnums)
       .where({ email: 'a@b.c' })
       .update((u) => [
         u.name.set('Bob'),
@@ -104,7 +104,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('name the fields of an upsert, in both $set and $setOnInsert', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'User', executor, noEnumCodecs)
+    await createMongoCollection(contract, 'User', executor, noEnums)
       .where({ email: 'a@b.c' })
       .upsert({ create: user, update: { name: 'Bob' } });
 
@@ -127,7 +127,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('name the base fields and the discriminator of a variant create', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'Task', executor, noEnumCodecs)
+    await createMongoCollection(contract, 'Task', executor, noEnums)
       .variant('bug')
       .create({ title: 'Crash', assigneeId: 'a1', severity: 'high', comments: [] });
 
@@ -142,7 +142,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('encode the values of a filter expression through the codec of the field it names', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'User', executor, noEnumCodecs)
+    await createMongoCollection(contract, 'User', executor, noEnums)
       .where(
         MongoAndExpr.of([
           MongoFieldFilter.eq('_id', '65f0000000000000000000ab'),
@@ -163,7 +163,7 @@ describe('parameters the Mongo ORM builds', () => {
 
   it('encode each element of a whole-list comparison once, wrapped or not', async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'User', executor, noEnumCodecs)
+    await createMongoCollection(contract, 'User', executor, noEnums)
       .where(MongoFieldFilter.eq('tags', [new MongoParamRef('x'), 'y']))
       .all()
       .toArray();
@@ -179,7 +179,7 @@ describe('parameters the Mongo ORM builds', () => {
 describe('null in the Mongo ORM', () => {
   it('is refused for a required field on create and update, naming the field', async () => {
     const { executor, plans } = recordingExecutor();
-    const users = createMongoCollection(contract, 'User', executor, noEnumCodecs);
+    const users = createMongoCollection(contract, 'User', executor, noEnums);
     const refused = {
       code: 'RUNTIME.ENCODE_FAILED',
       message:
@@ -201,7 +201,7 @@ describe('null in the Mongo ORM', () => {
 
   it('is written without a codec to a nullable field and compared without one in a filter', async () => {
     const { executor, plans } = recordingExecutor();
-    const users = createMongoCollection(contract, 'User', executor, noEnumCodecs);
+    const users = createMongoCollection(contract, 'User', executor, noEnums);
     await users.create({ ...user, homeAddress: null });
     await users
       .where({ loginCount: null as never })

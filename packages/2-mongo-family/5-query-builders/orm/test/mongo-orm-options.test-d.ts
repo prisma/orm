@@ -7,9 +7,9 @@ import { mongoOrm } from '../src/mongo-orm';
 declare const contract: Contract;
 declare const executor: MongoQueryExecutor;
 
-test('mongoOrm() and createMongoCollection() require the runtime codecs', () => {
-  // @ts-expect-error a written enum value is checked through the runtime's codecs
+test("mongoOrm() and createMongoCollection() require the contract's enum accessors", () => {
+  // @ts-expect-error a written enum value is checked against the contract's enum accessors
   mongoOrm({ contract, executor });
-  // @ts-expect-error a written enum value is checked through the runtime's codecs
+  // @ts-expect-error a written enum value is checked against the contract's enum accessors
   createMongoCollection(contract, 'User', executor);
 });
