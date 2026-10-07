@@ -343,6 +343,7 @@
   "test/integration/test/sql-orm-client/fixtures/junction-namespaces/generated/contract.json": "6cf52dd448084eedfe1550226a994a820097aac6fa0fb7a377870fa64f74513d",
   "test/integration/test/sql-orm-client/fixtures/mn-psl/generated/contract.json": "37205b83f64d12bc359f76b37e260c5cde866d03178cd45e133a30973d0540e9",
   "test/integration/test/sql-orm-client/fixtures/non-identifier-names/generated/contract.json": "9d6f0e504bcb1cddfc81726514d6b38fdd669dfd18731a8c60d6900f146e482c",
+  "test/integration/test/sql-orm-client/fixtures/polymorphism-self-relation/generated/contract.json": "8d6db6c70ff3edb06861ab1d30c15b2027ea1589646d36bbb6651f7b4d9a8659",
   "test/integration/test/sql-orm-client/fixtures/polymorphism/generated/contract.json": "2c3c7739e7fb50a9d13ab8d20cf5021e71a4a88760e679680226ca39b441afc1",
   "test/integration/test/sql-orm-client/fixtures/scalar-lists/generated/contract.json": "fb1c7d505604ebb1216e58504edcce277f7617b8e2e42943adba885ee38678df",
   "test/integration/test/sql-orm-client/fixtures/scope-namespace/generated/contract.json": "628bf17bdba20dc459a8bd5b9b20a5153278e23b9d08f2509411ad9203f83634",
