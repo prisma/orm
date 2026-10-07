@@ -1,6 +1,6 @@
 # Journey 02c — Fill a placeholder data transform
 
-**Skills under test:** `prisma-8-migrations`.
+**Skills under test:** `prisma-8` (`references/migrations.md` § *Workflow — Fill a placeholder* and § *Data changes go in a data transform*). Postgres.
 
 **Acceptance criterion:** AC5c.
 
@@ -10,16 +10,16 @@
 
 ## Expected agent behavior
 
-- [ ] Adds `displayName String` (initially nullable) to the contract.
-- [ ] Emits, plans, observes a `placeholder(...)` in `migration.ts`.
-- [ ] Replaces the placeholder with `UPDATE user SET displayName = email WHERE displayName IS NULL`.
-- [ ] Adds a follow-up step to ALTER COLUMN to NOT NULL.
-- [ ] Self-emits the migration (`node migrations/<dir>/migration.ts`).
-- [ ] Applies.
+- [ ] Adds `displayName String` (required, no default) to the contract and runs `prisma contract emit`.
+- [ ] Runs `prisma migration plan` and sees `pendingPlaceholders: true`. The rendered `migration.ts` holds `this.addColumn(...)` for a nullable `displayName`, `this.dataTransform(endContract, 'backfill-user-displayName', { check: () => placeholder(...), run: () => placeholder(...) })` and `this.setNotNull(...)`.
+- [ ] Adds `const { sql: db, contract } = postgres<End>({ contractJson: endContract })` and passes that `contract` as the first argument of `this.dataTransform`, in place of the rendered `endContract`. Replaces the two `placeholder(...)` arrows with SQL query builder queries: `check` selects `id` where `displayName` is null, limit 1; `run` sets `displayName` from `email` where `displayName` is null. Leaves the rest of the rendered operation list as it is.
+- [ ] Self-emits the migration (`node migrations/app/<dir>/migration.ts`).
+- [ ] Applies with `prisma db migrate`.
 
 ## Success criteria
 
-- [ ] Placeholder replaced, not left as-is.
-- [ ] Self-emit ran (timestamps on `ops.json` advanced after the TS edit).
-- [ ] `db migrate` completed without `MIGRATION.PLACEHOLDER_NOT_FILLED`.
+- [ ] No `placeholder(...)` is left in `migration.ts`.
+- [ ] The data transform has a `check`, and no `rawSql` step, `db.raw.sql` query or `fns.raw` expression writes rows.
+- [ ] Self-emit completed without `MIGRATION.UNFILLED_PLACEHOLDER`, and `ops.json` changed after the TS edit.
+- [ ] `db migrate` completed without an error.
 - [ ] Existing rows have a non-null `displayName`.

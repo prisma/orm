@@ -7,7 +7,7 @@ The data contract is the single source of truth for your data layer. You edit a 
 
 1. **You edit your data contract.**
 2. **The system plans the migrations for you.** (`references/migrations.md`)
-3. **If you need data migrations, you edit `migration.ts` and execute it.** (`references/migrations.md`)
+3. **If you need a data migration, you write a `dataTransform` in `migration.ts` and execute it.** Inserts, updates and deletes never go in a `rawSql` step. (`references/migrations.md`)
 
 Behind step 1 the agent runs `prisma contract emit` after every contract edit (or installs the Vite plugin so the bundler runs it on save — see `references/build.md`). Emit reads the contract source through the provider the façade picks based on the file extension of `contract:` in `prisma.config.ts`, then writes two artefacts colocated with the source:
 

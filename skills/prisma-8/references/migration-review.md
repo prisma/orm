@@ -105,7 +105,7 @@ If you omit `--db`, the command runs offline: it lists the migrations on disk bu
 
 If you omit `--to`, the destination defaults to the contract head — which answers *"is this branch's contract reachable from the database, and how?"*, not *"what runs on deploy"*. Pass the ref explicitly when the question is about a specific environment.
 
-`migration status` summarises each pending migration's operations by class (`additive`, `widening`, `data`, `destructive`) and reports a destructive-op count when destructive operations are present. Surface that count to the user before they merge or deploy — destructive operations are the class that warrants manual review.
+`migration status` summarises each pending migration's operations by class (`additive`, `widening`, `data`, `destructive`) and reports a destructive-op count when destructive operations are present. Surface that count to the user before they merge or deploy. Review `destructive` and `data` operations before deploy: both can change stored data. Then read each pending `migration.ts` against `references/migrations.md` § *Data changes go in a data transform*. These are findings: DML (inserts, updates, deletes) outside a data transform; a Postgres data transform whose query comes from `db.raw.sql` or contains `fns.raw`; a Postgres or Mongo data transform without `check`; and a hand-written `rawSql` step, unless it is DDL that no operation factory expresses (or whose factory cannot carry the class the migration needs, such as the 0.14 upgrade guide's `data`-class type conversion in a migration from a hash to itself) and has both a precheck and a postcheck that test the live schema. `rawSql` steps the planner rendered itself, such as the `CREATE EXTENSION` step in an initial migration, are not findings; if you cannot tell who wrote a step, ask the author.
 
 ## Workflow — *"What state is each environment at?"*
 
@@ -204,7 +204,8 @@ This skill is intentionally body-only; the underlying CLI reference (`prisma mig
 - [ ] Read the `migration status` header (it names config, ref, database) and the summary line (it names the origin/destination distance) before reading the per-edge list.
 - [ ] For concurrent-migration conflicts: re-applied the *core* workflow (edit → plan → apply) rather than following a memorised "diamond convergence" procedure. Ported any data-transform logic from the abandoned `migration.ts` over.
 - [ ] For a ref-mismatch: investigated *which* piece of state is wrong (DB ahead, DB behind, DB on a divergent branch). Did NOT `migration ref set` to silence the mismatch.
-- [ ] Surfaced the destructive-op count from `migration status` (the only operation class that warrants manual review pre-deploy) before the user merges or deploys.
+- [ ] Surfaced the destructive-op count from `migration status` before the user merges or deploys, and reviewed every `destructive` and `data` operation.
+- [ ] Flagged DML outside a data transform, Postgres transforms that use `db.raw.sql` or `fns.raw`, Postgres and Mongo transforms without `check`, and hand-written `rawSql` steps, unless they are DDL that no operation factory expresses (or whose factory cannot carry the class the migration needs) and have both a precheck and a postcheck that test the live schema. Did NOT flag `rawSql` steps the planner rendered.
 - [ ] In CI: the deploy job is `prisma db migrate --to <ref> --db $URL` and nothing else. Did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
 - [ ] Did NOT confuse `--to` with database selection (`--to` picks the destination hash; `--db` picks the database).
 - [ ] Did NOT use `--ref` (removed; use `--to`).
