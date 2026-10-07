@@ -2898,4 +2898,149 @@ describe('mutation-executor', () => {
     expect(postsCallback).toHaveBeenCalledTimes(1);
     expect(commentsCallback).toHaveBeenCalledTimes(1);
   });
+
+  const createDataLayouts = [
+    {
+      layout: 'a one-to-many relation',
+      modelName: 'User',
+      relationName: 'posts',
+      filter: userIdFilter,
+      parentData: aliceRow,
+      validRow: { id: 20, title: 'New', views: 0 },
+      contract: undefined,
+    },
+    {
+      layout: 'a many-to-many relation',
+      modelName: 'Parent',
+      relationName: 'children',
+      filter: parentIdFilter,
+      parentData: { id: 1 },
+      validRow: { id: 20 },
+      contract: manyToManyContract(),
+    },
+    {
+      layout: 'a to-one relation the parent owns',
+      modelName: 'Post',
+      relationName: 'author',
+      filter: postIdFilter,
+      parentData: { id: 1, title: 'Post', views: 1 },
+      validRow: { id: 7, name: 'Bob', email: 'bob@example.com' },
+      contract: undefined,
+    },
+  ] as const;
+
+  const invalidCreateRows = [
+    { value: 'null', rows: () => [null], expected: { problem: 'missing-data' } },
+    { value: 'undefined', rows: () => [undefined], expected: { problem: 'missing-data' } },
+    { value: 'a string', rows: () => ['row'], expected: { problem: 'invalid-data', index: 0 } },
+    {
+      value: 'an array',
+      rows: () => [[{ id: 20 }]],
+      expected: { problem: 'invalid-data', index: 0 },
+    },
+    {
+      value: 'a number after a valid row',
+      rows: (validRow: unknown) => [validRow, 7],
+      expected: { problem: 'invalid-data', index: 1 },
+    },
+    {
+      value: 'null after a valid row',
+      rows: (validRow: unknown) => [validRow, null],
+      expected: { problem: 'missing-data' },
+    },
+  ] as const;
+
+  const invalidCreateDataCases = createDataLayouts.flatMap((layout) =>
+    invalidCreateRows.map((row) => ({
+      name: `${row.value} on ${layout.layout}`,
+      layout,
+      row,
+    })),
+  );
+
+  it.each(invalidCreateDataCases)(
+    'executeNestedUpdateMutation() rejects nested create() data that is $name before it looks up the row',
+    async ({ layout, row }) => {
+      const context = layout.contract
+        ? { ...getTestContext(), contract: layout.contract }
+        : getTestContext();
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[]]);
+
+      await expect(
+        executeNestedUpdateMutation({
+          context,
+          runtime,
+          namespaceId: 'public',
+          modelName: layout.modelName,
+          filters: [layout.filter],
+          data: {
+            [layout.relationName]: (mutator: LooseMutator) =>
+              mutator.create(row.rows(layout.validRow)),
+          } as never,
+        }),
+      ).rejects.toMatchObject({
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'create', relation: layout.relationName, ...row.expected },
+      });
+      expect(runtime.executions).toEqual([]);
+    },
+  );
+
+  it.each(invalidCreateDataCases)(
+    'executeNestedCreateMutation() rejects nested create() data that is $name before any write',
+    async ({ layout, row }) => {
+      const context = layout.contract
+        ? { ...getTestContext(), contract: layout.contract }
+        : getTestContext();
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[layout.parentData], [layout.validRow]]);
+
+      await expect(
+        executeNestedCreateMutation({
+          context,
+          runtime,
+          namespaceId: 'public',
+          modelName: layout.modelName,
+          data: {
+            ...layout.parentData,
+            [layout.relationName]: (mutator: LooseMutator) =>
+              mutator.create(row.rows(layout.validRow)),
+          } as never,
+        }),
+      ).rejects.toMatchObject({
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: { kind: 'create', relation: layout.relationName, ...row.expected },
+      });
+      expect(runtime.executions).toEqual([]);
+    },
+  );
+
+  it('executeNestedCreateMutation() rejects nested create() data that is not an object two levels down before any write', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[aliceRow], [{ id: 20, title: 'New', user_id: 1, views: 0 }]]);
+
+    await expect(
+      executeNestedCreateMutation({
+        context: getTestContext(),
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        data: {
+          ...aliceRow,
+          posts: (posts: LooseMutator) =>
+            posts.create({
+              id: 20,
+              title: 'New',
+              views: 0,
+              comments: (comments: LooseMutator) => comments.create(['body']),
+            }),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_INVALID',
+      meta: { kind: 'create', relation: 'comments', problem: 'invalid-data', index: 0 },
+    });
+    expect(runtime.executions).toEqual([]);
+  });
 });

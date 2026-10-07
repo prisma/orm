@@ -1020,7 +1020,7 @@ A `connect()` nested mutation violated a unique constraint on the junction table
 
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, duplicate connect criteria resolving to the same junction link, conflicting values for a junction column, an array of operations that contains a nested array or a value that is not an operation, or `updateAll` data that sets the field linking the related row to its parent. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data or with a row that is not an object, `connect`/`disconnect` with a missing or empty criterion, duplicate connect criteria resolving to the same junction link, conflicting values for a junction column, an array of operations that contains a nested array or a value that is not an operation, or `updateAll` data that sets the field linking the related row to its parent. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 

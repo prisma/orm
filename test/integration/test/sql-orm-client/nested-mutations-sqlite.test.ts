@@ -1058,4 +1058,79 @@ describe('integration/nested mutations on SQLite', () => {
     },
     timeouts.databaseOperation,
   );
+
+  it(
+    'update() rejects nested create() data that is not an object, whether or not a row matches',
+    async () => {
+      await withSqlite(seedSql, async ({ users, rows }) => {
+        for (const id of [999, 1]) {
+          await expect(
+            users.where({ id }).update({
+              name: 'Renamed',
+              posts: (posts) => posts.create([{ id: 30, title: 'Created' }, null] as never),
+            }),
+          ).rejects.toMatchObject({
+            code: 'ORM.RELATION_MUTATION_INVALID',
+            meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
+          });
+          await expect(
+            users.where({ id }).update({
+              name: 'Renamed',
+              tags: (tags) => tags.create(['Go'] as never),
+            }),
+          ).rejects.toMatchObject({
+            code: 'ORM.RELATION_MUTATION_INVALID',
+            meta: { kind: 'create', relation: 'tags', problem: 'invalid-data', index: 0 },
+          });
+        }
+
+        expect(rows('select id, name from users order by id')).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(rows('select id, title, user_id from posts order by id')).toEqual([
+          { id: 10, title: 'Old first', user_id: 1 },
+          { id: 11, title: 'Old second', user_id: 1 },
+          { id: 12, title: 'Unowned', user_id: null },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'create() rejects nested create() data that is not an object and writes nothing',
+    async () => {
+      await withSqlite(seedSql, async ({ users, rows }) => {
+        await expect(
+          users.create({
+            id: 3,
+            name: 'Carol',
+            posts: (posts) => posts.create([{ id: 30, title: 'Created' }, 7] as never),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: { kind: 'create', relation: 'posts', problem: 'invalid-data', index: 1 },
+        });
+        await expect(
+          users.create({
+            id: 3,
+            name: 'Carol',
+            posts: (posts) => posts.create([null] as never),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
+        });
+
+        expect(rows('select id from users order by id')).toEqual([{ id: 1 }, { id: 2 }]);
+        expect(rows('select id from posts order by id')).toEqual([
+          { id: 10 },
+          { id: 11 },
+          { id: 12 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
 });

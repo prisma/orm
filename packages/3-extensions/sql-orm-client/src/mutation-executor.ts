@@ -248,14 +248,9 @@ async function createGraph(
   modelName: string,
   input: MutationCreateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown>> {
-  return createParsedGraph(
-    scope,
-    context,
-    resolved,
-    namespaceId,
-    modelName,
-    parseMutationInput(context.contract, namespaceId, modelName, input),
-  );
+  const parsed = parseMutationInput(context.contract, namespaceId, modelName, input);
+  validateRelationMutations(context, resolved, parsed.relationMutations, 'create');
+  return createParsedGraph(scope, context, resolved, namespaceId, modelName, parsed);
 }
 
 async function createParsedGraph(
@@ -719,6 +714,32 @@ function newResolvedNestedInput(): ResolvedNestedInput {
   return { createRows: new Map(), filters: new Map() };
 }
 
+function assertCreateRowsAreObjects(
+  relation: RelationDefinition,
+  mutation: RelationMutationCreate<Contract<SqlStorage>, string>,
+): void {
+  const rows: readonly unknown[] = mutation.data;
+  rows.forEach((row, index) => {
+    if (row === null || row === undefined) {
+      throw createMissingDataError(relation);
+    }
+    if (typeof row !== 'object' || Array.isArray(row)) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_INVALID',
+        `create() nested mutation for relation "${relation.relationName}" requires an object for each row; the value at index ${index} is not an object`,
+        {
+          meta: {
+            kind: 'create',
+            relation: relation.relationName,
+            problem: 'invalid-data',
+            index,
+          },
+        },
+      );
+    }
+  });
+}
+
 function parsedCreateRow(
   context: ExecutionContext,
   resolved: ResolvedNestedInput,
@@ -735,6 +756,7 @@ function parsedCreateRow(
   if (cached) {
     return cached;
   }
+  assertCreateRowsAreObjects(relation, mutation);
   const input = mutation.data[index];
   if (!input) {
     return undefined;

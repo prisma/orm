@@ -1089,4 +1089,86 @@ describe('integration/nested-mutations', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'update() rejects nested create() data that is not an object, whether or not a row matches',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithPosts(runtime);
+
+        for (const id of [999, 1]) {
+          await expect(
+            users.where({ id }).update({
+              name: 'Renamed',
+              posts: (posts) =>
+                posts.create([{ id: 30, title: 'Created', views: 0 }, null] as never),
+            }),
+          ).rejects.toMatchObject({
+            code: 'ORM.RELATION_MUTATION_INVALID',
+            meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
+          });
+          await expect(
+            users.where({ id }).update({
+              name: 'Renamed',
+              tags: (tags) => tags.create(['Go'] as never),
+            }),
+          ).rejects.toMatchObject({
+            code: 'ORM.RELATION_MUTATION_INVALID',
+            meta: { kind: 'create', relation: 'tags', problem: 'invalid-data', index: 0 },
+          });
+        }
+
+        const userRows = await runtime.query<{ id: number; name: string }>(
+          'select id, name from users order by id',
+        );
+        expect(userRows).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(await postRows(runtime)).toEqual([
+          { id: 10, title: 'Draft', user_id: 1, views: 1 },
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'create() rejects nested create() data that is not an object and writes nothing',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await expect(
+          users.create({
+            id: 1,
+            name: 'Alice',
+            email: 'alice@example.com',
+            posts: (posts) => posts.create([{ id: 30, title: 'Created', views: 0 }, 7] as never),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: { kind: 'create', relation: 'posts', problem: 'invalid-data', index: 1 },
+        });
+        await expect(
+          users.create({
+            id: 1,
+            name: 'Alice',
+            email: 'alice@example.com',
+            posts: (posts) => posts.create([null] as never),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: { kind: 'create', relation: 'posts', problem: 'missing-data' },
+        });
+
+        expect(await runtime.query<{ id: number }>('select id from users')).toEqual([]);
+        expect(await postRows(runtime)).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });
