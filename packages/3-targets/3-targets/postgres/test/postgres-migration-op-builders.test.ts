@@ -10,6 +10,7 @@ import type {
   SqlControlAdapter,
 } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
@@ -187,7 +188,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
   }
 
   callSetDefault(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly table: string;
     readonly column: DdlColumn;
   }): Promise<Op> {
@@ -476,7 +477,10 @@ const CHANGED_TO_TWO = {
   column: col('changed', 'int4', { default: lit(2) }),
 } as const;
 
-function boxContract(changedDefault: ColumnDefault | undefined): FrameworkContract<SqlStorage> {
+function boxContract(
+  changedDefault: ColumnDefault | undefined,
+  namespaceId = 'public',
+): FrameworkContract<SqlStorage> {
   const changed = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
   return {
     target: 'postgres',
@@ -485,8 +489,8 @@ function boxContract(changedDefault: ColumnDefault | undefined): FrameworkContra
     storage: new SqlStorage({
       storageHash: coreHash('box'),
       namespaces: {
-        public: postgresCreateNamespace({
-          id: 'public',
+        [namespaceId]: postgresCreateNamespace({
+          id: namespaceId,
           entries: {
             table: {
               Box: new StorageTable({
@@ -616,6 +620,31 @@ describe('PostgresMigration op-builder methods with a ControlStack', () => {
       operationClass: 'widening',
       postcheck: [],
     });
+  });
+
+  it('setDefault is widening when the start column already has the same default', async () => {
+    const op = await migrationStartingFrom(
+      boxContract({ kind: 'literal', value: 2 }),
+    ).callSetDefault(CHANGED_TO_TWO);
+
+    expect(op.operationClass).toBe('widening');
+  });
+
+  it('setDefault without a schema is widening when the default namespace start column has a default', async () => {
+    const { schema: _schema, ...unqualified } = CHANGED_TO_TWO;
+    const op = await migrationStartingFrom(
+      boxContract({ kind: 'literal', value: 1 }, UNBOUND_NAMESPACE_ID),
+    ).callSetDefault(unqualified);
+
+    expect(op.operationClass).toBe('widening');
+  });
+
+  it('setDefault is additive when only a same-named table in another schema has a default', async () => {
+    const op = await migrationStartingFrom(
+      boxContract({ kind: 'literal', value: 1 }),
+    ).callSetDefault({ ...CHANGED_TO_TWO, schema: 'auth' });
+
+    expect(op.operationClass).toBe('additive');
   });
 
   it('createSchema lowers to an additive create-schema operation', async () => {

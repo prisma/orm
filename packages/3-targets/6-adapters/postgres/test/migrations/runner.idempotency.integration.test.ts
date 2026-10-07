@@ -291,53 +291,55 @@ describe('PostgresMigrationRunner - Idempotency', { concurrent: false }, () => {
         },
       });
     });
-    it('runs a setDefault that changes an existing default, whatever its operation class', {
-      timeout: testTimeout,
-    }, async () => {
-      await driver!.query(
-        `create table "ticket" (id int4 primary key, status text not null default 'open')`,
-      );
-      const changeToClosed = await new SetDefaultCall(
-        UNBOUND_NAMESPACE_ID,
-        'ticket',
-        col('status', 'text', { default: lit('closed'), codecRef: { codecId: 'pg/text@1' } }),
-        'additive',
-      ).toOp(controlAdapter);
-      const plan = createMigrationPlan<PostgresPlanTargetDetails>({
-        targetId: 'postgres',
-        spaceId: APP_SPACE_ID,
-        origin: null,
-        destination: toPlanContractInfo(ticketClosedByDefault),
-        operations: [changeToClosed],
-        providedInvariants: [],
-      });
+    it.each(['additive', 'widening'] as const)(
+      'runs a %s setDefault that changes an existing default',
+      async (operationClass) => {
+        await driver!.query(
+          `create table "ticket" (id int4 primary key, status text not null default 'open')`,
+        );
+        const changeToClosed = await new SetDefaultCall(
+          UNBOUND_NAMESPACE_ID,
+          'ticket',
+          col('status', 'text', { default: lit('closed'), codecRef: { codecId: 'pg/text@1' } }),
+          operationClass,
+        ).toOp(controlAdapter);
+        const plan = createMigrationPlan<PostgresPlanTargetDetails>({
+          targetId: 'postgres',
+          spaceId: APP_SPACE_ID,
+          origin: null,
+          destination: toPlanContractInfo(ticketClosedByDefault),
+          operations: [changeToClosed],
+          providedInvariants: [],
+        });
 
-      const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
-        driver: driver!,
-        perSpaceOptions: [
-          {
-            space: APP_SPACE_ID,
-            plan,
-            migrationEdges: synthEdges(plan),
-            driver: driver!,
-            destinationContract: ticketClosedByDefault,
-            policy: INIT_ADDITIVE_POLICY,
-            frameworkComponents,
-          },
-        ],
-      });
-      const columnDefault = await driver!.query<{ column_default: string | null }>(
-        `select column_default from information_schema.columns where table_name = 'ticket' and column_name = 'status'`,
-      );
+        const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
+          driver: driver!,
+          perSpaceOptions: [
+            {
+              space: APP_SPACE_ID,
+              plan,
+              migrationEdges: synthEdges(plan),
+              driver: driver!,
+              destinationContract: ticketClosedByDefault,
+              policy: { allowedOperationClasses: ['additive', 'widening'] },
+              frameworkComponents,
+            },
+          ],
+        });
+        const columnDefault = await driver!.query<{ column_default: string | null }>(
+          `select column_default from information_schema.columns where table_name = 'ticket' and column_name = 'status'`,
+        );
 
-      expect({
-        executed: result.ok ? result.value.perSpaceResults[0]?.value : result.failure,
-        columnDefault: columnDefault.rows[0]?.column_default,
-      }).toMatchObject({
-        executed: { operationsPlanned: 1, operationsExecuted: 1 },
-        columnDefault: expect.stringContaining('closed'),
-      });
-    });
+        expect({
+          executed: result.ok ? result.value.perSpaceResults[0]?.value : result.failure,
+          columnDefault: columnDefault.rows[0]?.column_default,
+        }).toMatchObject({
+          executed: { operationsPlanned: 1, operationsExecuted: 1 },
+          columnDefault: expect.stringContaining('closed'),
+        });
+      },
+      testTimeout,
+    );
   });
 
   describe('when origin === destination (self-edge plan)', () => {

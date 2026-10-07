@@ -19,6 +19,7 @@ import { promisify } from 'node:util';
 import { coreHash, profileHash } from '@internal/contract/types';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { type SqlNamespaceBase, SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import {
   checkExpression,
@@ -338,66 +339,68 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     expect(ops).toEqual(expected);
   });
 
-  it('renders a changed default without its operation class, which the executed migration derives from the start contract', {
-    timeout: timeouts.typeScriptCompilation,
-  }, async () => {
-    await writeContractFixtures(tmpDir, META, {
-      public: postgresCreateNamespace({
-        id: 'public',
-        entries: {
-          table: {
-            ticket: new StorageTable({
-              columns: {
-                status: {
-                  dataType: 'pg/text',
-                  codecId: 'pg/text@1',
-                  nullable: false,
-                  default: { kind: 'literal', value: 'open' },
+  it.each(['public', UNBOUND_NAMESPACE_ID])(
+    'renders a changed default in namespace %s without its operation class, which the executed migration derives from the start contract',
+    async (namespaceId) => {
+      await writeContractFixtures(tmpDir, META, {
+        [namespaceId]: postgresCreateNamespace({
+          id: namespaceId,
+          entries: {
+            table: {
+              ticket: new StorageTable({
+                columns: {
+                  status: {
+                    dataType: 'pg/text',
+                    codecId: 'pg/text@1',
+                    nullable: false,
+                    default: { kind: 'literal', value: 'open' },
+                  },
                 },
-              },
-              uniques: [],
-              indexes: [],
-              foreignKeys: [],
-            }),
+                uniques: [],
+                indexes: [],
+                foreignKeys: [],
+              }),
+            },
           },
-        },
-      }),
-    });
-    const calls = [
-      new SetDefaultCall(
-        'public',
-        'ticket',
-        col('status', 'text', { default: lit('closed'), codecRef: { codecId: 'pg/text@1' } }),
-        'widening',
-      ),
-    ];
-    const migration = new TypeScriptRenderablePostgresMigration(
-      calls,
-      META,
-      APP_SPACE_ID,
-      SNAPSHOTS_IMPORT_PATH,
-      testAdapter,
-    );
+        }),
+      });
+      const calls = [
+        new SetDefaultCall(
+          namespaceId,
+          'ticket',
+          col('status', 'text', { default: lit('closed'), codecRef: { codecId: 'pg/text@1' } }),
+          'widening',
+        ),
+      ];
+      const migration = new TypeScriptRenderablePostgresMigration(
+        calls,
+        META,
+        APP_SPACE_ID,
+        SNAPSHOTS_IMPORT_PATH,
+        testAdapter,
+      );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
-    await writeFile(join(tmpDir, 'migration.ts'), tsSource);
-    const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
-      cwd: tmpDir,
-    });
-    const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+      const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+      await writeFile(join(tmpDir, 'migration.ts'), tsSource);
+      const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+        cwd: tmpDir,
+      });
+      const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
 
-    expect({
-      stderr,
-      rendersOperationClass: tsSource.includes('operationClass'),
-      operationClasses: ops.map((op: { operationClass: string }) => op.operationClass),
-      ops,
-    }).toEqual({
-      stderr: '',
-      rendersOperationClass: false,
-      operationClasses: ['widening'],
-      ops: await Promise.all(renderOps(calls, testAdapter)),
-    });
-  });
+      expect({
+        stderr,
+        rendersOperationClass: tsSource.includes('operationClass'),
+        operationClasses: ops.map((op: { operationClass: string }) => op.operationClass),
+        ops,
+      }).toEqual({
+        stderr: '',
+        rendersOperationClass: false,
+        operationClasses: ['widening'],
+        ops: await Promise.all(renderOps(calls, testAdapter)),
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
 
   it('renders an empty calls list whose executed scaffold emits []', {
     timeout: timeouts.typeScriptCompilation,

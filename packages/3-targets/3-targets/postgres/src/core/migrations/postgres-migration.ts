@@ -429,19 +429,20 @@ export abstract class PostgresMigration<
   }
 
   /**
-   * Emit an `ALTER COLUMN … SET DEFAULT` operation. It is widening when this migration's start contract gives the column a default, and additive otherwise.
+   * Emit an `ALTER COLUMN … SET DEFAULT` operation. `schema` defaults to the default namespace. It is widening when this migration's start contract gives the column a default, and additive otherwise.
    */
   protected setDefault(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly table: string;
     readonly column: DdlColumn;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     refuseEarlierSetDefaultOptions(options);
+    const schema = options.schema ?? UNBOUND_NAMESPACE_ID;
     return new SetDefaultCall(
-      options.schema,
+      schema,
       options.table,
       options.column,
-      this.columnHasDefaultInStartContract(options.schema, options.table, options.column.name)
+      this.columnHasDefaultInStartContract(schema, options.table, options.column.name)
         ? 'widening'
         : 'additive',
     ).toOp(this.controlAdapterFor('setDefault'));
