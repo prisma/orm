@@ -43,3 +43,10 @@ Slice spec: `projects/nested-mutations/slices/filtered-many-writes/spec.md`. Six
 - **Builds on:** Dispatch 3's finished surface.
 - **Hands to:** The slice ready for its full gate run and PR.
 - **Focus:** Docs describe behaviour, not implementation. No mention of `projects/` paths in long-lived files.
+
+### Dispatch 7: nested input is validated before the parent row is looked up
+
+- **Outcome:** In `update()`, nested relation input is parsed and every rejection that does not depend on the parent row's values is raised before the parent row is looked up. An `update()` whose filter matches no row therefore rejects malformed or unsupported nested input instead of resolving `null`. The port of `disallow_write_parent_inline_rel_sclrs` passes as a plain test; its `it.fails` marker and its `engines/failing.md` entry are removed.
+- **Builds on:** Dispatch 5's port, which showed the gap: upstream runs that test on an empty database and expects the rejection.
+- **Hands to:** The slice's rejections hold at runtime whether or not the filter matches a row, as the slice spec states.
+- **Focus:** The order of parsing and lookup in the update path of `mutation-executor.ts`, for every nested operation kind, including the pre-existing ones. An `update()` with valid nested input and no matching row still resolves `null` and writes nothing. Added after dispatch 5 reported; not in the original plan.
