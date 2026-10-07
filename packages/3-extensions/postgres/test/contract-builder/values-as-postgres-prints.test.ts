@@ -47,7 +47,7 @@ function storedDefaults(): Record<string, unknown> {
   };
 }
 
-describe('values in a Postgres contract are the text Postgres returns', () => {
+describe('values in a Postgres contract decode to the value a query returns', () => {
   it('stores numeric and inet defaults as Postgres prints them', () => {
     expect(storedDefaults()).toEqual({
       ratio: { kind: 'literal', value: '1.5' },

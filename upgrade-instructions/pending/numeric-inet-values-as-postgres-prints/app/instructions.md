@@ -66,7 +66,7 @@ changes:
 
 ## `ts-numeric-inet-enum-members-written-as-postgres-prints`
 
-A value in a contract is now the text Postgres returns for it. Postgres reads `01.5` as a `numeric` and prints `1.5`, and reads `10.0.0.1/32` as an `inet` and prints `10.0.0.1`. An enum member written the first way was stored that way in `contract.json` and in the enum's CHECK constraint, so `db.enums.<namespace>.<Enum>.has(row.value)` was false for every value read back. `defineContract` now refuses such a member and says what to write:
+A value in a contract now decodes to the value a query returns for it, so where Postgres normalises a value's text, the contract stores the normalised text. Postgres reads `01.5` as a `numeric` and prints `1.5`, and reads `10.0.0.1/32` as an `inet` and prints `10.0.0.1`. An enum member written the first way was stored that way in `contract.json` and in the enum's CHECK constraint, so `db.enums.<namespace>.<Enum>.has(row.value)` was false for every value read back. `defineContract` now refuses such a member and says what to write:
 
 ```text
 CONTRACT.ENUM_INVALID: enumType("Ratio"): member "Half" is written "01.5", but the column stores "1.5". Write the member as "1.5".
