@@ -57,6 +57,8 @@ A state where neither pre nor post holds or holds only partially, indicating div
 - **Already applied:** current metadata equals desired spec
 - **Runner action on replay:** verify equivalence, skip if equal, else conflict
 
+The Postgres setDefault op does not follow this pattern: it carries no postcheck and is run again on replay. See ADR 044, "setDefault carries no postcheck".
+
 ### 3. Replay-sensitive but bounded by unique identity
 
 **Examples:** insert into ledger tables, enqueue background task with unique opId, create index concurrently without IF NOT EXISTS but with unique name policy
@@ -158,6 +160,8 @@ This enables audit, replay decisions, and safe resumption.
 - **Pre:** table/column exist and type compatible
 - **Post:** default equals 'active'
 - **Replay:** if default already 'active', skip
+
+This example is illustrative. The setDefault op carries no postcheck; see ADR 044, "setDefault carries no postcheck".
 
 ### Unique
 
