@@ -19,6 +19,17 @@ export const SPAN = {
   end: { offset: 0, line: 1, column: 1 },
 };
 
+/** Where an enum block's `@@type` argument is written, distinct from the block and the attribute. */
+export const CODEC_ARG_SPAN = {
+  start: { offset: 30, line: 2, column: 10 },
+  end: { offset: 41, line: 2, column: 21 },
+};
+
+export const TYPE_ATTRIBUTE_SPAN = {
+  start: { offset: 22, line: 2, column: 3 },
+  end: { offset: 42, line: 2, column: 22 },
+};
+
 export function enumBlock(input: {
   readonly name: string;
   readonly values: Record<string, JsonValue | undefined>;
@@ -32,7 +43,13 @@ export function enumBlock(input: {
     parameterSpans: Object.fromEntries(Object.keys(input.values).map((key) => [key, SPAN])),
     attributes:
       input.typeCodecId !== undefined
-        ? { type: { args: { codecId: input.typeCodecId }, span: SPAN } }
+        ? {
+            type: {
+              args: { codecId: input.typeCodecId },
+              argSpans: { codecId: CODEC_ARG_SPAN },
+              span: TYPE_ATTRIBUTE_SPAN,
+            },
+          }
         : {},
     span: SPAN,
   };
@@ -44,6 +61,8 @@ export const JSON_CODEC_ID = 'test/json@1';
 export const FOLDING_CODEC_ID = 'test/folding-text@1';
 export const ENCODE_FOLDING_CODEC_ID = 'test/encode-folding-text@1';
 export const BROKEN_CODEC_ID = 'test/broken@1';
+export const LENIENT_OBJECT_CODEC_ID = 'test/lenient-object@1';
+export const ARRAY_CODEC_ID = 'test/array@1';
 
 export const textCodec: Codec = {
   id: TEXT_CODEC_ID,
@@ -76,6 +95,14 @@ export const jsonCodec: Codec = {
     if (json === null) throw new Error('expected a non-null JSON value');
     return json;
   },
+};
+
+export const lenientJsonCodec: Codec = {
+  id: LENIENT_OBJECT_CODEC_ID,
+  encode: async (v: unknown) => v,
+  decode: async (w: unknown) => w,
+  encodeJson: (value) => value as never,
+  decodeJson: (json) => json,
 };
 
 export const foldingCodec: Codec = {
@@ -121,6 +148,8 @@ export const dataTypeIdByCodecId: Record<string, string> = {
   [BROKEN_CODEC_ID]: 'test/folding-text',
   'test/orphan@1': 'test/unregistered',
   [UNEQUAL_CODEC_ID]: 'test/json',
+  [LENIENT_OBJECT_CODEC_ID]: 'test/json',
+  [ARRAY_CODEC_ID]: 'test/array',
 };
 
 export const testDataTypes = createDataTypeLookup([
@@ -131,6 +160,7 @@ export const testDataTypes = createDataTypeLookup([
   }),
   mongoDataType('test/mongo-bson', { bsonTypes: [] }),
   mongoDataType('test/json', { bsonTypes: ['object'] }),
+  mongoDataType('test/array', { bsonTypes: ['array'] }),
   mongoDataType('test/folding-text', { bsonTypes: ['string'] }),
 ]);
 
@@ -143,6 +173,7 @@ export const testCodecLookup: CodecLookupWithDescriptors = {
     if (id === ENCODE_FOLDING_CODEC_ID) return encodeFoldingCodec;
     if (id === BROKEN_CODEC_ID) return brokenCodec;
     if (id === UNEQUAL_CODEC_ID) return jsonCodec;
+    if (id === LENIENT_OBJECT_CODEC_ID || id === ARRAY_CODEC_ID) return lenientJsonCodec;
     return undefined;
   },
   descriptorFor(id: string) {

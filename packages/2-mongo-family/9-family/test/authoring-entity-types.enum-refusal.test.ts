@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { enumBlock, factory, makeContext, SPAN, UNEQUAL_CODEC_ID } from './enum-entity-fixtures';
+import {
+  CODEC_ARG_SPAN,
+  enumBlock,
+  factory,
+  makeContext,
+  UNEQUAL_CODEC_ID,
+} from './enum-entity-fixtures';
 
 describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage type', () => {
   it.each([
@@ -16,7 +22,7 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
     expect(diagnostics).toEqual([
       expect.objectContaining({
         message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one. Use a codec with one BSON type, such as mongo/string@1.`,
-        span: SPAN,
+        span: CODEC_ARG_SPAN,
       }),
     ]);
   });
@@ -38,7 +44,7 @@ describe('mongoFamilyEnumEntityDescriptor: a codec an enum cannot use', () => {
           message:
             'enum "Shape" cannot use the codec "test/unequal@1". The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
           sourceId: 'schema.prisma',
-          span: SPAN,
+          span: CODEC_ARG_SPAN,
         },
       ],
     });

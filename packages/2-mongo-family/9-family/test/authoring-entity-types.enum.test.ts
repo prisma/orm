@@ -2,6 +2,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import {
   BROKEN_CODEC_ID,
+  CODEC_ARG_SPAN,
   ENCODE_FOLDING_CODEC_ID,
   enumBlock,
   FOLDING_CODEC_ID,
@@ -9,7 +10,6 @@ import {
   INT_CODEC_ID,
   JSON_CODEC_ID,
   makeContext,
-  SPAN,
   TEXT_CODEC_ID,
 } from './enum-entity-fixtures';
 
@@ -161,7 +161,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     const handle = factory(
       enumBlock({
         name: 'Config',
-        values: { region: { zone: 'a', replicas: [1, 2] }, tags: ['x', 'y'] },
+        values: { region: { zone: 'a', replicas: [1, 2] } },
         typeCodecId: JSON_CODEC_ID,
       }),
       makeContext(diagnostics),
@@ -170,7 +170,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: JSON_CODEC_ID,
-      members: { region: { zone: 'a', replicas: [1, 2] }, tags: ['x', 'y'] },
+      members: { region: { zone: 'a', replicas: [1, 2] } },
     });
   });
 
@@ -217,7 +217,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
         message:
           'enum "Role" @@type codec "test/orphan@1" represents data type "test/unregistered", which no component registers',
         sourceId: 'schema.prisma',
-        span: SPAN,
+        span: CODEC_ARG_SPAN,
       },
     ]);
   });

@@ -26,26 +26,33 @@ export function mongoFamilyEnumSpec() {
 
 type EnumBlockValues = InferBlock<ReturnType<typeof mongoFamilyEnumSpec>>;
 
+const STORED_JSON_TYPE_NAMES = {
+  string: 'a string',
+  number: 'a finite number',
+  boolean: 'a boolean',
+  object: 'a JSON object',
+  array: 'a JSON array',
+} as const;
+
+type StoredJsonType = keyof typeof STORED_JSON_TYPE_NAMES;
+
+function storedJsonTypeOf(stored: unknown): string {
+  if (stored === null) return 'null';
+  if (Array.isArray(stored)) return 'array';
+  return typeof stored;
+}
+
 /**
  * A collection validator lists an enum's members in their stored forms, so an enum's BSON type must be one whose values JSON holds. Maps each such type to the JSON type of a member's stored form.
  */
-const VALIDATOR_LISTABLE_BSON_TYPES: Readonly<
-  Record<string, 'string' | 'number' | 'boolean' | 'object'>
-> = {
+const VALIDATOR_LISTABLE_BSON_TYPES: Readonly<Record<string, StoredJsonType>> = {
   string: 'string',
   int: 'number',
   double: 'number',
   bool: 'boolean',
   object: 'object',
-  array: 'object',
+  array: 'array',
 };
-
-const STORED_JSON_TYPE_NAMES = {
-  string: 'a string',
-  number: 'a finite number',
-  boolean: 'a boolean',
-  object: 'a JSON object or array',
-} as const;
 
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
@@ -138,7 +145,7 @@ export const mongoFamilyEnumEntityDescriptor = {
       let unlistedMember = false;
       for (const member of members) {
         const stored = codec.encodeJson(member.value);
-        if (typeof stored === storedJsonType) continue;
+        if (storedJsonTypeOf(stored) === storedJsonType) continue;
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" member "${member.name}" is stored as ${JSON.stringify(stored)}, which a collection validator cannot list as a ${bsonType}. A member of a ${bsonType} enum must be ${STORED_JSON_TYPE_NAMES[storedJsonType]}.`,
