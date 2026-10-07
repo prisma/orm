@@ -66,7 +66,7 @@ const enums = buildNamespacedEnums<TContract>(contract.domain, (codecId) =>
 
 `createEnumAccessor(contractEnum)` without a codec keeps the members in their stored forms, as the native-enum accessor of `@internal/postgres` does.
 
-The accessor's members are the values the codec reads, so code that read `EnumAccessor.values` or `members` as `JsonValue` must accept `unknown`. A member that is an object is a fresh copy on every read. `has()`, `nameOf()` and `ordinalOf()` find a value equal to a member: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form the codec stores it in. Code that passed a stored form to them must pass the value a query returns.
+The accessor's members are the values the codec reads, so code that read `EnumAccessor.values` or `members` as `JsonValue` must accept `unknown`. Members are decoded once, when the enum is first read; a mutable member, such as a `Date` or a `Uint8Array`, is a fresh copy on every read, and an immutable one, such as a Temporal value, is the same value on every read. `has()`, `nameOf()` and `ordinalOf()` find a value equal to a member: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form the codec stores it in. Code that passed a stored form to them must pass the value a query returns.
 
 ## `mongo-orm-takes-codecs`
 

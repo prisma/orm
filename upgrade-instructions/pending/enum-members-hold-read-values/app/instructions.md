@@ -56,7 +56,7 @@ The rule: a member changes when its codec's stored JSON form is not the applicat
 - byte codecs, `sqlite/blob@1` and `mongo/binary@1` (a `Uint8Array`, where it was JSON). An enum can no longer use `pg/bytea@1`; see `ts-enum-string-timestamp-codecs-refused`;
 - float members written "NaN", "Infinity" or "-Infinity" on `pg/float4@1`, `pg/float8@1`, `pg/float@1` or `mongo/double@1`, and members written "Infinity" or "-Infinity" on `sqlite/real@1`, which refuses NaN (a number, where it was text).
 
-Text, integer, uuid, numeric, boolean and JSON members are unchanged. An object member, such as a `Date`, is a fresh copy on every read, so changing one does not change the enum.
+Text, integer, uuid, numeric, boolean and JSON members are unchanged. A mutable member, such as a `Date` or a `Uint8Array`, is a fresh copy on every read, so changing one does not change the enum. An enum's members are decoded when the enum is first read, so a client whose contract has a Temporal enum builds in a runtime without `Temporal` and fails only when that enum is read.
 
 `has()`, `nameOf()` and `ordinalOf()` find a value equal to a member. A string, number or bigint must be the member itself; an object must be of the member's kind and stored as the member is, so a date equal to a member matches although it is a different object. A value of another type, such as `"1"` for an int8 member or an ISO string for a date member, is no member.
 

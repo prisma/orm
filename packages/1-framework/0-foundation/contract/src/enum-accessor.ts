@@ -22,6 +22,7 @@ export type EnumMemberCodecFor = (codecId: string) => EnumMemberCodec;
  * Its shape mirrors the authoring-time `EnumTypeHandle` (in `contract-ts`), which carries the literal value generics and lives in the authoring layer the foundation layer cannot depend on. The two compare values differently: the handle compares by identity, while this accessor finds a value equal to a member, so a date equal to a date member is found here and not on the handle.
  */
 export interface EnumAccessor {
+  /** The members' values in declaration order. The same array on every read when every member is a primitive or an immutable object such as a Temporal value; a fresh array of fresh copies when a member is mutable, such as a `Date` or a `Uint8Array`. */
   readonly values: readonly unknown[];
   readonly names: readonly string[];
   readonly members: Readonly<Record<string, unknown>>;
@@ -39,8 +40,14 @@ function kindOf(value: object): string {
   return Object.prototype.toString.call(value);
 }
 
+function isImmutable(value: unknown): boolean {
+  return (
+    !isObject(value) || Object.isFrozen(value) || kindOf(value).startsWith('[object Temporal.')
+  );
+}
+
 /**
- * Builds the accessor for one enum. Each member holds the value `codec` reads from its stored form, which is the value a query returns; a member that is an object is read again on every access, so changing a value read from the accessor leaves the enum unchanged. A value is a member when it equals one: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form `codec` stores it in, so two equal dates match. Without a codec, members are their stored forms.
+ * Builds the accessor for one enum, decoding each member once. Each member holds the value `codec` reads from its stored form, which is the value a query returns. A primitive or immutable member is handed out as decoded; a mutable member is copied on every read, so changing a value read from the accessor leaves the enum unchanged. A value is a member when it equals one: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form `codec` stores it in, so two equal dates match. Without a codec, members are their stored forms.
  */
 export function createEnumAccessor(
   contractEnum: ContractEnum,
@@ -53,13 +60,16 @@ export function createEnumAccessor(
   const storedFormKey = (value: object): string =>
     canonicalStringify(codec === undefined ? value : codec.encodeJson(value));
 
-  const entries = contractEnum.members.map((member) => ({
-    name: member.name,
-    stored: member.value,
-    value: read(member.value),
-  }));
-  const memberValue = (entry: (typeof entries)[number]): unknown =>
-    isObject(entry.value) ? read(entry.stored) : entry.value;
+  const entries = contractEnum.members.map((member) => {
+    const value = read(member.value);
+    return { name: member.name, stored: member.value, value, immutable: isImmutable(value) };
+  });
+  const copyOf = (entry: (typeof entries)[number]): unknown => {
+    if (entry.immutable) return entry.value;
+    if (entry.value instanceof Date) return new Date(entry.value.getTime());
+    if (entry.value instanceof Uint8Array) return Uint8Array.from(entry.value);
+    return read(entry.stored);
+  };
 
   const names = Object.freeze(entries.map((entry) => entry.name));
   const nameSet = Object.freeze(new Set(names));
@@ -67,12 +77,12 @@ export function createEnumAccessor(
     Object.defineProperties(
       {},
       Object.fromEntries(
-        entries.map((entry) => [entry.name, { enumerable: true, get: () => memberValue(entry) }]),
+        entries.map((entry) => [entry.name, { enumerable: true, get: () => copyOf(entry) }]),
       ),
     ),
   );
-  const holdsObjects = entries.some((entry) => isObject(entry.value));
-  const primitiveValues = Object.freeze(entries.map((entry) => entry.value));
+  const allImmutable = entries.every((entry) => entry.immutable);
+  const immutableValues = Object.freeze(entries.map((entry) => entry.value));
 
   const primitiveOrdinals = new Map<unknown, number>();
   const objectOrdinals = new Map<string, number>();
@@ -97,7 +107,7 @@ export function createEnumAccessor(
 
   return {
     get values() {
-      return holdsObjects ? Object.freeze(entries.map(memberValue)) : primitiveValues;
+      return allImmutable ? immutableValues : Object.freeze(entries.map(copyOf));
     },
     names,
     members,
@@ -111,6 +121,9 @@ export function createEnumAccessor(
   };
 }
 
+/**
+ * The accessors for one namespace's enums. Each enum's codec is resolved here, so a contract whose enum codec `codecFor` lacks fails now; its members are decoded when the enum is first read, so a codec that needs something the runtime lacks, such as `Temporal`, fails only then.
+ */
 export function buildEnumsMapForNamespace(
   domain: {
     readonly namespaces: Readonly<
@@ -124,7 +137,15 @@ export function buildEnumsMapForNamespace(
   const namespace = domain.namespaces[namespaceId];
   if (namespace?.enum) {
     for (const [name, contractEnum] of Object.entries(namespace.enum)) {
-      result[name] = createEnumAccessor(contractEnum, codecFor(contractEnum.codecId));
+      const codec = codecFor(contractEnum.codecId);
+      let accessor: EnumAccessor | undefined;
+      Object.defineProperty(result, name, {
+        enumerable: true,
+        get: () => {
+          accessor ??= createEnumAccessor(contractEnum, codec);
+          return accessor;
+        },
+      });
     }
   }
   return result;

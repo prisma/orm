@@ -1239,7 +1239,7 @@ A value that only a `Temporal` implementation can produce or read was needed in 
 - A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) decoding a value. Payload: `codecId`, `operation` (`'decode'`). Encoding a `Temporal` value needs no implementation and does not raise this error.
 - The `instantNow` or `plainDateTimeNow` mutation-default generator producing a value, for `temporal.createdAt()`, `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`.
 
-The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
+The check is lazy: registering the target, validating a contract, building a runtime or a client, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails, including the first read of a `db.enums` enum whose codec is a Temporal codec.
 
 It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
