@@ -21,7 +21,7 @@
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.6",
     "jose": "^6",
     "pg": "catalog:"
   },

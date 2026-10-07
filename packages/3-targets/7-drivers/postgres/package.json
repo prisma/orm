@@ -25,7 +25,7 @@
     "@internal/utils": "workspace:8.0.0-rc.15",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.6",
     "pg": "catalog:",
     "pg-cursor": "^2.21.0"
   },

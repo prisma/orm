@@ -20,8 +20,8 @@
     "@internal/operations": "workspace:8.0.0-rc.15",
     "@internal/ts-render": "workspace:8.0.0-rc.15",
     "@internal/utils": "workspace:8.0.0-rc.15",
-    "arktype": "^2.2.2",
-    "prettier": "^3.9.6"
+    "arktype": "^2.2.6",
+    "prettier": "^3.9.9"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.15",

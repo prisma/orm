@@ -29,7 +29,7 @@
     "@internal/ts-render": "workspace:8.0.0-rc.15",
     "@internal/utils": "workspace:8.0.0-rc.15",
     "@standard-schema/spec": "1.1.0",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.6"
   },
   "devDependencies": {
     "@internal/driver-sqlite": "workspace:8.0.0-rc.15",
@@ -37,7 +37,7 @@
     "@repo/test-utils": "workspace:8.0.0-rc.15",
     "@repo/tsconfig": "workspace:8.0.0-rc.15",
     "@repo/tsdown": "workspace:8.0.0-rc.15",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

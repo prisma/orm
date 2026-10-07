@@ -23,10 +23,10 @@
   "dependencies": {
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.15",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.15",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.6",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",
-    "next": "^16.3.0",
+    "next": "^16.3.8",
     "pg": "catalog:",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

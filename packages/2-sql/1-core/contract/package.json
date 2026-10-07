@@ -20,7 +20,7 @@
     "@internal/framework-components": "workspace:8.0.0-rc.15",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.15",
     "@internal/utils": "workspace:8.0.0-rc.15",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.6"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.15",

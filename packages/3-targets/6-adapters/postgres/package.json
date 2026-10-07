@@ -31,7 +31,7 @@
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.15",
     "@internal/target-postgres": "workspace:8.0.0-rc.15",
     "@internal/utils": "workspace:8.0.0-rc.15",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.6"
   },
   "devDependencies": {
     "@internal/cli": "workspace:8.0.0-rc.15",
@@ -43,7 +43,7 @@
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
