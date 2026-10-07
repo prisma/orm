@@ -1,20 +1,21 @@
 ---
 changes:
-  - id: ts-numeric-inet-enum-members-written-as-postgres-prints
+  - id: ts-enum-members-written-as-stored
     summary: |
       `defineContract` from the Postgres package now refuses a `pg/numeric@1` enum member written with a leading zero or as negative zero, such as "01.5" or "-0", and a `pg/inet@1` member Postgres prints differently, such as "10.0.0.1/32" or "::FFFF:10.0.0.1", with `CONTRACT.ENUM_INVALID`. The message says the text to write. An inet member that is not an address is refused too. Rewrite each refused member, re-emit, and apply a migration that replaces the enum's CHECK constraint.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\benumType\('
-  - id: psl-numeric-inet-enum-members-refused
+  - id: psl-enum-members-written-as-stored
     summary: |
-      A PSL enum block typed `@@type("pg/numeric@1")`, `@@type("pg/inet@1")`, `@@type("pg/int8@1")`, `@@type("pg/int8number@1")` or `@@type("pg/unboundedint@1")` is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is not written as Postgres prints it, such as "01.5", "-0", "10.0.0.1/32", "::FFFF:10.0.0.1" or, on the integer codecs, "007", or is not an address. The message says the text to write. Rewrite each refused member and re-emit. A numeric or inet enum's CHECK constraint changes, so apply a migration that replaces it; an integer enum's contract is unchanged.
+      A PSL enum block is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is not written as its codec stores it. On Postgres this covers `@@type("pg/numeric@1")`, `@@type("pg/inet@1")`, `@@type("pg/int8@1")`, `@@type("pg/int8number@1")` and `@@type("pg/unboundedint@1")`, with members such as "01.5", "-0", "10.0.0.1/32", "::FFFF:10.0.0.1", "007", or an inet member that is not an address. On SQLite it covers `@@type("sqlite/bigint@1")`, `@@type("sqlite/bigintnumber@1")`, `@@type("sqlite/integer@1")` and `@@type("sql/int@1")`, with members such as "007" or "-0". The message says the text to write. Rewrite each refused member and re-emit. A numeric or inet enum's CHECK constraint changes, so apply a migration that replaces it; an integer enum's contract is unchanged.
     detection:
       glob: "**/*.prisma"
       matches:
         - '@@type\(\s*"pg/(?:numeric|inet|int8|int8number|unboundedint)@1"\s*\)'
-  - id: numeric-inet-defaults-stored-as-postgres-prints
+        - '@@type\(\s*"(?:sqlite/(?:bigint|bigintnumber|integer)|sql/int)@1"\s*\)'
+  - id: numeric-inet-defaults-stored-normalised
     summary: |
       A numeric default written with a leading zero or as negative zero in a TypeScript `.default()`, and an inet default written in a form Postgres prints differently, in PSL or in a TypeScript `.default()`, are now stored as Postgres prints them, so emitting the contract again changes its storage hash. An inet default that is not an address is now refused. Earlier versions could not apply most such contracts: the command that applied them failed and changed nothing. Emit the contract again, then run that command again.
     detection:
@@ -24,7 +25,7 @@ changes:
         - '@db\.Inet\b[^\n]*@default\(|@default\([^\n]*@db\.Inet\b'
         - '\.default\(\s*[''"`]-?0(?:\d|\.0*[''"`]|[''"`])'
         - '(?<![\s\S])(?![\s\S]*GENERATED FILE - DO NOT EDIT)[\s\S]*?(?:[''"]pg/inet@1[''"]|\bpgInetColumn\b)'
-  - id: ts-enum-string-timestamp-codecs-refused
+  - id: enum-codecs-refused
     summary: |
       An enum typed by `pg/timestamp-string@1`, `pg/timestamptz-string@1`, `pg/bytea@1` or `pg/tsquery@1` is now refused: `defineContract` from the Postgres package refuses its `enumType` with `CONTRACT.ENUM_INVALID`, and PSL refuses its `@@type` with `PSL_EXTENSION_INVALID_VALUE`. No value a query reads back can equal a member of such an enum, and a bytea enum column's CHECK constraint refused every member. Type a string timestamp enum with `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1` and write its members as Temporal values; replace a bytea or tsquery enum with a text enum.
     detection:
@@ -48,13 +49,6 @@ changes:
       glob: "**/contract.json"
       matches:
         - '::(?:text|numeric)\[\](?:, NULL\))? <@ ARRAY\['
-  - id: sqlite-integer-text-enum-members-refused
-    summary: |
-      A PSL enum block typed `@@type("sqlite/bigint@1")`, `@@type("sqlite/bigintnumber@1")`, `@@type("sqlite/integer@1")` or `@@type("sql/int@1")` on SQLite is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE` when a member is written as text with a leading zero or as negative zero, such as "007" or "-0". The message says the text to write. Earlier versions stored the member as "7" or "0", so write it that way and re-emit; the contract is unchanged.
-    detection:
-      glob: "**/*.prisma"
-      matches:
-        - '@@type\(\s*"(?:sqlite/(?:bigint|bigintnumber|integer)|sql/int)@1"\s*\)'
   - id: integer-text-in-contract-json-refused
     summary: |
       A `contract.json` value on a SQLite integer codec or on `mongo/int64@1` or `mongo/int64Number@1` that is digit text with a leading zero or a minus sign on zero, such as "007" or "-0", now fails to load with `RUNTIME.DECODE_FAILED`, naming the text to write. `contract emit` never wrote such a value, so only a hand-written or edited `contract.json` is affected. Rewrite the value as the message says, or re-emit the contract.
@@ -64,7 +58,7 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*"(?:sqlite/(?:bigint|bigintnumber|integer)|sql/int|mongo/int64(?:Number)?)@1")[\s\S]*"(?:-0|-?0\d+)"'
 ---
 
-## `ts-numeric-inet-enum-members-written-as-postgres-prints`
+## `ts-enum-members-written-as-stored`
 
 A value in a contract now decodes to the value a query returns for it, so where Postgres normalises a value's text, the contract stores the normalised text. Postgres reads `01.5` as a `numeric` and prints `1.5`, and reads `10.0.0.1/32` as an `inet` and prints `10.0.0.1`. An enum member written the first way was stored that way in `contract.json` and in the enum's CHECK constraint, so `db.enums.<namespace>.<Enum>.has(row.value)` was false for every value read back. `defineContract` now refuses such a member and says what to write:
 
@@ -84,7 +78,7 @@ Refused members:
 
 Creating a client from a `contract.json` emitted by an earlier version that still holds such a member fails with `RUNTIME.DECODE_FAILED`, because `db.enums` reads every member through its codec. Re-emit the contract with this version first.
 
-## `psl-numeric-inet-enum-members-refused`
+## `psl-enum-members-written-as-stored`
 
 The same rule holds in PSL. An enum block typed by `pg/numeric@1`, `pg/inet@1`, `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1` whose member is not written as Postgres prints it is refused at `contract emit`:
 
@@ -94,10 +88,18 @@ PSL_EXTENSION_INVALID_VALUE: enum "Ratio" member "Half" was rejected by codec "p
 
 Rewrite each member as the message says.
 
-- For a numeric or inet enum, the contract held the member as written, so follow steps 2 and 3 of `ts-numeric-inet-enum-members-written-as-postgres-prints`.
+- For a numeric or inet enum, the contract held the member as written, so follow steps 2 and 3 of `ts-enum-members-written-as-stored`.
 - For an enum typed by `pg/int8@1`, `pg/int8number@1` or `pg/unboundedint@1`, such as a member written `"007"` or `"-0"`, earlier versions stored it as Postgres prints it, `"7"` or `"0"`. Write it that way and re-emit; `contract.json`, the CHECK constraint and every hash are unchanged. The message for these codecs ends `the integer's decimal text without leading zeros or a minus sign on zero`.
 
-## `numeric-inet-defaults-stored-as-postgres-prints`
+On SQLite, the integer codecs store an integer as digit text, and now read only the integer's decimal text: no leading zeros and no minus sign on zero. A PSL enum member written another way is refused:
+
+```text
+PSL_EXTENSION_INVALID_VALUE: enum "BigLevel" member "Low" was rejected by codec "sqlite/bigint@1": sqlite/bigint@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero
+```
+
+Earlier versions stored such a member in that form, so rewrite it as the message says, `"7"` for `"007"` and `"0"` for `"-0"`, and re-emit. `contract.json`, the CHECK constraint and every hash are unchanged.
+
+## `numeric-inet-defaults-stored-normalised`
 
 A default is converted rather than refused, as a uuid default already is:
 
@@ -120,7 +122,7 @@ Emit the contract again with this version. The stored default changes, and with 
 
 One case did apply: a numeric default with a leading zero or a minus sign on zero, on a column with a precision such as `numeric(10,2)`, because earlier versions compared such a default by value. After you re-emit, the database needs no change but its marker names the old storage hash. Run `prisma db sign` for a project kept with `db init` or `db update`, or plan and apply a migration for a project with migrations.
 
-## `ts-enum-string-timestamp-codecs-refused`
+## `enum-codecs-refused`
 
 An enum compares a value with its members, so a codec whose values read back can never equal a member is now refused when the contract is authored. Four Postgres codecs are refused this way.
 
@@ -178,17 +180,14 @@ array_remove("hosts", NULL) <@ '{"127.0.0.1","10.0.0.0/8"}'
 
 The detection for this change looks in `contract.json` for the old expression. If you do not keep `contract.json` in the project, look for list fields typed by an enum.
 
+The order of the steps matters when you come from 8.0.0-rc.14, whose upgrade to 8.0.0-rc.15 runs a script and then `prisma db sign`. Run that `db sign` step before you emit the contract with this version. If you already emitted, `db sign` reports the old CHECK constraint as missing:
+
+- In a project with migrations, run `prisma db sign <hash>` with the hash the 8.0.0-rc.15 script printed, then plan and apply a migration as in step 2.
+- In a project without migrations, kept with `db init` or `db update`, run `prisma db update`. It drops the old CHECK constraint and adds the new one; `db sign <hash>` fails there, because no migration holds that hash.
+
+The `contract.json` snapshots under `migrations/snapshots/` keep the old expression, so the detection keeps matching them after the upgrade. They record past contracts and need no change.
+
 A numeric enum's CHECK constraint, on a scalar or a list column, compares values as numbers, so the column also takes a value equal to a member but written with another scale, such as `0.50` for the member `0.5`, which reads back as `0.50` and which `db.enums` does not find (TML-3479).
-
-## `sqlite-integer-text-enum-members-refused`
-
-The SQLite integer codecs store an integer as digit text, and now read only the integer's decimal text: no leading zeros and no minus sign on zero. A PSL enum member written another way is refused:
-
-```text
-PSL_EXTENSION_INVALID_VALUE: enum "BigLevel" member "Low" was rejected by codec "sqlite/bigint@1": sqlite/bigint@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero
-```
-
-Earlier versions stored such a member in that form, so rewrite it as the message says, `"7"` for `"007"` and `"0"` for `"-0"`, and re-emit. `contract.json`, the CHECK constraint and every hash are unchanged.
 
 ## `integer-text-in-contract-json-refused`
 

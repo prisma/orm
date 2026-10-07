@@ -14,7 +14,7 @@ changes:
       glob: "**/contract.json"
       matches:
         - '"codecId"\s*:\s*"pg/float(?:4|8)?@1"[\s\S]*"(?:NaN|-?Infinity)"'
-  - id: mongo-psl-enum-codecs-refused
+  - id: psl-enum-bson-types-refused
     summary: |
       A Mongo PSL enum whose codec stores a BSON type that has no JSON value, such as `mongo/int64@1`, `mongo/int64Number@1`, `mongo/date@1`, `mongo/objectId@1`, `mongo/decimal128@1`, `mongo/binary@1` or `mongo/vector@1`, is now refused at `contract emit` with `PSL_EXTENSION_INVALID_VALUE`, and so is a `mongo/double@1` member written as "NaN", "Infinity" or "-Infinity". The collection validator listed such members in their JSON forms and refused every write of those fields. Change the enum to a codec whose BSON type is string, int, double, bool, object or array, or author the enum in a TypeScript contract, which has no collection validator.
     detection:
@@ -53,7 +53,7 @@ The rule: a member changes when its codec's stored JSON form is not the applicat
 - bigint codecs: `pg/int8@1`, `pg/unboundedint@1`, `sqlite/bigint@1`, `mongo/int64@1` (a bigint, where it was decimal text);
 - codecs that read decimal text as a number: `pg/int8number@1`, `sqlite/bigintnumber@1`, `mongo/int64Number@1` (a number, where it was text);
 - date, time, timestamp and interval codecs: `pg/timestamptz-date@1`, `pg/date-temporal@1`, `pg/time-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/interval@1`, `sqlite/datetime@1`, `mongo/date@1` (a `Date`, a Temporal value or an interval object, where it was text);
-- byte codecs, `sqlite/blob@1` and `mongo/binary@1` (a `Uint8Array`, where it was JSON). An enum can no longer use `pg/bytea@1`; see `ts-enum-string-timestamp-codecs-refused`;
+- byte codecs, `sqlite/blob@1` and `mongo/binary@1` (a `Uint8Array`, where it was JSON). An enum can no longer use `pg/bytea@1`; see `enum-codecs-refused`;
 - float members written "NaN", "Infinity" or "-Infinity" on `pg/float4@1`, `pg/float8@1`, `pg/float@1` or `mongo/double@1`, and members written "Infinity" or "-Infinity" on `sqlite/real@1`, which refuses NaN (a number, where it was text).
 
 Text, integer, uuid, numeric, boolean and JSON members are unchanged. A mutable member, such as a `Date` or a `Uint8Array`, is a fresh copy on every read, so changing one does not change the enum. An enum's members are decoded when the enum is first read, so a client whose contract has a Temporal enum builds in a runtime without `Temporal` and fails only when that enum is read.
@@ -68,7 +68,7 @@ Text, integer, uuid, numeric, boolean and JSON members are unchanged. A mutable 
 
 Re-emit the contract. A float enum column that has a NaN or infinite member is typed `number` in `contract.d.ts`, because those members are numbers. Where code wrote the strings `"NaN"`, `"Infinity"` or `"-Infinity"` to such a column, write `NaN`, `Infinity` or `-Infinity`, or the enum's member, such as `db.enums.public.Special.members.Nan`.
 
-## `mongo-psl-enum-codecs-refused`
+## `psl-enum-bson-types-refused`
 
 A Mongo PSL contract derives a collection validator whose `$jsonSchema` lists each enum's members as JSON. A BSON long, date, ObjectId, decimal, binary or vector value is never equal to its JSON form, so the validator refused every write of a field typed by such an enum. `prisma contract emit` now reports the enum at its `@@type` argument, or a double member written as text at the member, instead of emitting a contract no write can satisfy.
 
