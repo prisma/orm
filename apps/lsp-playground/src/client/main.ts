@@ -147,10 +147,8 @@ function relativeLabel(path: string, scratchRootPath: string): string {
 
 /**
  * One scratch-project member as the client tracks it: its Monaco-facing
- * identity (`uri`/`path`), the text last known for it (the seed text until
- * its file is opened and edited, then whatever the editor model held when
- * the user last switched away), and whether `didOpen` has been sent for it
- * yet.
+ * identity (`uri`/`path`), its seed text (the pinned model holds the text
+ * once its file is opened), and whether `didOpen` has been sent for it yet.
  *
  * A file's document opens — and `didOpen` fires — only the first time it is
  * selected; re-selecting an already-opened file only swaps the visible
@@ -160,7 +158,7 @@ interface FileEntry {
   readonly uri: string;
   readonly path: string;
   readonly button: HTMLButtonElement;
-  text: string;
+  readonly text: string;
   opened: boolean;
   /**
    * A model reference held for the lifetime of the page once opened, never
@@ -289,6 +287,18 @@ async function main(): Promise<void> {
     },
     clientOptions: {
       documentSelector: [LANGUAGE_ID],
+      middleware: {
+        provideRenameEdits: async (document, position, newName, token, next) => {
+          const edit = await next(document, position, newName, token);
+          for (const [uri] of edit?.entries() ?? []) {
+            const entry = entryForUri(uri);
+            if (entry !== undefined) {
+              await enqueueOpenEntry(entry);
+            }
+          }
+          return edit;
+        },
+      },
       initializationOptions: {
         completion: {
           supportsTriggerSuggestCommand: true,
@@ -376,18 +386,8 @@ async function main(): Promise<void> {
     if (!entry.opened) {
       await openEntry(entry);
     }
-    // Capture the outgoing entry's live edits as close to the swap as
-    // possible — right before `updateCodeResources`, not before the
-    // `openEntry` await above, so edits typed while that await was pending
-    // are not lost. `activeEntry` here is still the outgoing entry: this
-    // call is serialized (see `enqueueSelectEntry`), so nothing else can have
-    // reassigned it since this call started.
-    const outgoingEntry = activeEntry;
-    const outgoingModel = editorApp.getEditor()?.getModel();
-    if (outgoingModel !== null && outgoingModel !== undefined) {
-      outgoingEntry.text = outgoingModel.getValue();
-    }
-    await editorApp.updateCodeResources({ modified: { text: entry.text, uri: entry.path } });
+    const text = entry.pin?.object.textEditorModel?.getValue() ?? entry.text;
+    await editorApp.updateCodeResources({ modified: { text, uri: entry.path } });
     activeEntry = entry;
     setActiveStyling();
   }
@@ -411,6 +411,18 @@ async function main(): Promise<void> {
       .catch((error: unknown) => {
         console.error(error);
       });
+    return pendingSelection;
+  }
+
+  function enqueueOpenEntry(entry: FileEntry): Promise<void> {
+    const openUnopened = async (): Promise<void> => {
+      if (!entry.opened) {
+        await openEntry(entry);
+      }
+    };
+    pendingSelection = pendingSelection.then(openUnopened, openUnopened).catch((error: unknown) => {
+      console.error(error);
+    });
     return pendingSelection;
   }
 
