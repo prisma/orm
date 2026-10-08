@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isPgClient,
   isPgPool,
+  resolveOptionalPostgresBinding,
   resolvePostgresBinding,
   validatePostgresUrl,
 } from '../src/runtime/binding';
@@ -118,6 +119,22 @@ describe('validatePostgresUrl', () => {
     expect(() => validatePostgresUrl('mysql://h/db')).toThrow('postgres:// or postgresql://');
   });
 
+  it('preserves a username-only credential on a hostless url', () => {
+    expect(validatePostgresUrl('postgresql://u@/mydb')).toBe('postgresql://u@/mydb');
+  });
+
+  it('preserves a password-only credential on a hostless url', () => {
+    expect(validatePostgresUrl('postgresql://:secret@/mydb')).toBe(
+      'postgresql://:secret@/mydb',
+    );
+  });
+
+  it('rejects a port without a host when no credentials are present', () => {
+    expect(() => validatePostgresUrl('postgresql://:5432/mydb')).toThrow(
+      'cannot specify a port without a host',
+    );
+  });
+
   it('rejects an empty url', () => {
     expect(() => validatePostgresUrl('   ')).toThrow('non-empty string');
   });
@@ -145,9 +162,42 @@ describe('resolvePostgresBinding', () => {
     });
   });
 
+  it('resolves a url input to a url binding with the validated url', () => {
+    expect(resolvePostgresBinding({ url: 'postgresql:///mydb' })).toEqual({
+      kind: 'url',
+      url: 'postgresql:///mydb',
+    });
+  });
+
+  it('throws when no binding input is provided', () => {
+    expect(() => resolvePostgresBinding({})).toThrow('Provide one binding input');
+  });
+
+  it('throws when multiple binding inputs are provided', () => {
+    expect(() =>
+      resolvePostgresBinding({
+        url: 'postgresql:///mydb',
+        pg: duckPool(),
+      } as unknown as Parameters<typeof resolvePostgresBinding>[0]),
+    ).toThrow('Provide one binding input');
+  });
+
   it('throws when pg input is neither Pool nor Client', () => {
     expect(() => resolvePostgresBinding({ pg: { query: () => {} } as unknown as Client })).toThrow(
       'Unable to determine pg binding type from pg input',
     );
+  });
+});
+
+describe('resolveOptionalPostgresBinding', () => {
+  it('returns undefined when no binding input is provided', () => {
+    expect(resolveOptionalPostgresBinding({})).toBeUndefined();
+  });
+
+  it('delegates to resolvePostgresBinding when a url is provided', () => {
+    expect(resolveOptionalPostgresBinding({ url: 'postgresql://u@h/db' })).toEqual({
+      kind: 'url',
+      url: 'postgresql://u@h/db',
+    });
   });
 });
