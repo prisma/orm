@@ -42,6 +42,6 @@ In addition to the project plan's:
 
 ## Open items
 
-- The codec and authoring inventories the dispatches cite were taken at `93b49ceffb`, before #30628 merged; they are under `wip/s3/` (not committed). Each dispatch rechecks its files against the branch.
+- The codec and authoring inventories the dispatches cite were taken at `93b49ceffb`, before #30628 merged; they are in `slices/3/notes/`. Each dispatch rechecks its files against the branch.
 - TML-3406 is In Progress in Linear, assigned to Will; its subject is deleted by dispatch e.
 - The slice changes contracts, so it ships its own upgrade instruction (dispatch g), and the release that ships it needs a `db sign` step for SQLite and Prisma 7 projects.

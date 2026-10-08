@@ -10,7 +10,7 @@ Reviewer-maintained. Contract: [ADR 254](../../../../docs/architecture%20docs/ad
 
 ## Orchestrator rulings
 
-Dispatch a, given during the dispatch and recorded in `wip/s3/report-a.md`. They are part of the brief.
+Dispatch a, given during the dispatch and recorded in `slices/3/notes/dispatch-a-rulings.md`. They are part of the brief.
 
 1. Each Postgres date and time type's reader is its stored-text pattern (`date-time-stored-text.ts`): ISO 8601 and the text PostgreSQL prints, nothing else. Forms only `Temporal.from` accepted (no seconds, `+0530`, nine fraction digits) are refused by `fromContract`. The Date and Temporal codecs refuse only `infinity` and their range. `pg/timestamptz-date@1`'s own pattern goes.
 2. `sqlite/text` reads any string; `sqlite/datetime@1` and `sqlite/json@1` keep their parse in `fromDataTypeValue` until dispatch d.

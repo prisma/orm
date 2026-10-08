@@ -1,6 +1,6 @@
 # Slice 3, dispatch b: database JSON is read with `fromWire`
 
-Dispatch b of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 "Codecs" and the "Rows the database returns as JSON" item of "Reading and writing a stored value", and decision 11 in `design-notes.md`. The map of every JSON projection and what it produces today is `wip/s3/inventory-codec.md` sections 5 and 6. Dispatch a is merged into the branch: values are `DataTypeValue`s and codecs have `fromDataTypeValue`, `toDataTypeValue`, `fromWire` and `toWire`.
+Dispatch b of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 "Codecs" and the "Rows the database returns as JSON" item of "Reading and writing a stored value", and decision 11 in `design-notes.md`. The map of every JSON projection and what it produces today is `projects/data-types-completion/slices/3/notes/inventory-codec.md` sections 5 and 6. Dispatch a is merged into the branch: values are `DataTypeValue`s and codecs have `fromDataTypeValue`, `toDataTypeValue`, `fromWire` and `toWire`.
 
 Today an `include` or an aggregate comes back from the database as JSON, and the ORM reads each column inside it with `fromDataTypeValue`, as if the database had written a stored value. It has not: a Postgres timestamp arrives in the session time zone, SQLite JSON arrives as the text the row holds. So the data types' readers still accept the database's spellings. This dispatch reads database JSON with `fromWire`, the method that reads every ordinary row, and then narrows the readers.
 

@@ -1,6 +1,6 @@
 # Slice 3, dispatch d: SQLite's `sqlite/datetime` and `sqlite/json`
 
-Dispatch d of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 "SQLite's types", "How a data type names its database type", "Date and time types" (the `sqlite/datetime` row and the fraction rule) and "Assembly", and decisions 5, 7, 8, 9 and 16 in `design-notes.md`. The map is `wip/s3/inventory-authoring.md` sections 4 and 8. Prior art: the SQLite declarations before commit b32ec30b6d (`git show b32ec30b6d~1:packages/3-targets/3-targets/sqlite/src/core/data-types.ts`).
+Dispatch d of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 "SQLite's types", "How a data type names its database type", "Date and time types" (the `sqlite/datetime` row and the fraction rule) and "Assembly", and decisions 5, 7, 8, 9 and 16 in `design-notes.md`. The map is `projects/data-types-completion/slices/3/notes/inventory-authoring.md` sections 4 and 8. Prior art: the SQLite declarations before commit b32ec30b6d (`git show b32ec30b6d~1:packages/3-targets/3-targets/sqlite/src/core/data-types.ts`).
 
 Today SQLite's datetime and JSON codecs represent `sqlite/text`, and each carries its own canonical form, so one data type's values have two owners. After this dispatch they represent `sqlite/datetime` and `sqlite/json`, each stored as `sqlite/text`, and the type owns the value.
 

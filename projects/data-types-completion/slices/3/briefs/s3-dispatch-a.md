@@ -1,6 +1,6 @@
 # Slice 3, dispatch a: values and the codec's four methods
 
-Dispatch a of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 sections "At a glance", "Decision", "Values", "Codecs", "Casts" and "Reading a written default", and decisions 1, 2, 15, 21, 22 and 23 in `design-notes.md` under "A data type owns its values". The map of every codec, interface and caller is `wip/s3/inventory-codec.md` sections 1 to 3, 6 and 7.
+Dispatch a of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 sections "At a glance", "Decision", "Values", "Codecs", "Casts" and "Reading a written default", and decisions 1, 2, 15, 21, 22 and 23 in `design-notes.md` under "A data type owns its values". The map of every codec, interface and caller is `projects/data-types-completion/slices/3/notes/inventory-codec.md` sections 1 to 3, 6 and 7.
 
 This dispatch changes how values are represented and what the codec methods are called. It does not change what any contract stores, what any DDL writes, or what any query returns.
 
