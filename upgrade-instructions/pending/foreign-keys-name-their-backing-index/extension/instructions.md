@@ -2,25 +2,18 @@
 changes:
   - id: bundled-contract-foreign-keys-name-their-backing-index
     summary: |
-      Each foreign key in a SQL `contract.json` now names its backing index, unique constraint or primary key in a new `index` field, so a bundled contract space with a foreign key gets a new storage hash. Regenerate the extension's bundled `contract.json` and `contract.d.ts` with its existing emission command.
+      Each foreign key in a SQL `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }`, `{ "primaryKey": true }` or `{ "unique": true }`, absent for `index: false`. A bundled contract space with a foreign key gets a new storage hash. Regenerate the extension's bundled `contract.json` and `contract.d.ts` with its existing emission command.
     detection:
       glob: "**/contract.json"
       matches:
         - '"foreignKeys"\s*:\s*\[\s*\{'
   - id: foreign-key-materialization-takes-one-input
     summary: |
-      `materializeForeignKeysAndIndexes()` from `@internal/sql-contract/foreign-key-materialization` takes one object, `{ tableName, foreignKeys, declaredIndexes, uniques, primaryKey, warnings }`, where each declared index is `{ index, namedByUser }`, and a foreign key's `index` is `true`, `false` or the name of a declared index, unique constraint or primary key. `backingIndexColumnKeys()`, `isBackedByColumnKeys()` and `BackingIndexCandidates` are removed; the function itself removes indexes that duplicate another.
+      `materializeForeignKeysAndIndexes()` from `@internal/sql-contract/foreign-key-materialization` takes one object, `{ tableName, foreignKeys, declaredIndexes, uniques, primaryKey, warnings }`, where each declared index is `{ index, namedByUser }`, and a foreign key's `index` is `true`, `false` or the name of a declared index, unique constraint or primary key. `backingIndexColumnKeys()`, `isBackedByColumnKeys()` and `BackingIndexCandidates` are removed; `derivedBackingIndexIsRedundant()` answers whether a table already serves a foreign key's lookups, by the rule the build uses.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '\b(?:materializeForeignKeysAndIndexes|backingIndexColumnKeys|isBackedByColumnKeys|BackingIndexCandidates)\b'
-  - id: infer-relations-takes-default-index-kind
-    summary: |
-      `inferRelations()` from `@internal/family-sql/psl-infer` takes a third argument, `isDefaultIndexKind`, which says whether a live index is of the target's default kind. `buildChildRelationField()` takes `{ table, isDefaultIndexKind }` as its last argument instead of the table. A relation infers `index: false` unless a live default index, a unique constraint, a unique index without a predicate or the primary key is on exactly its columns.
-    detection:
-      glob: "**/*.{ts,mts,cts}"
-      matches:
-        - '\b(?:inferRelations|buildChildRelationField)\s*\('
 ---
 
 ## `bundled-contract-foreign-keys-name-their-backing-index`
@@ -48,23 +41,17 @@ const warnings: AuthoringWarning[] = [];
 const { foreignKeys, indexes } = materializeForeignKeysAndIndexes({
   tableName,
   foreignKeys: authoredForeignKeys,
-  declaredIndexes: declaredIndexes.map((index) => ({ index, namedByUser: true })),
+  declaredIndexes: authoredIndexes.map((authored) => ({
+    index: lowerAuthoredIndex(tableName, authored, warnings),
+    namedByUser: authored.name !== undefined || authored.map !== undefined,
+  })),
   uniques,
   primaryKey,
   warnings,
 });
+flushAuthoringWarnings(warnings);
 ```
 
-Set `namedByUser` to whether the source gave the index a `name` or `map`. An index that is not named by the user can be left out when it duplicates another, and the foreign keys that pointed at it then name the one that stays. Flush `warnings` the way the extension flushes its other authoring warnings, for example with `flushAuthoringWarnings` from `@internal/framework-components/authoring`. Code that called `backingIndexColumnKeys()` or `isBackedByColumnKeys()` to decide whether a foreign key needs a backing index reads the stored foreign key's `index` field instead.
+`namedByUser` says whether the source gave the index a `name` or `map`. An index not named by the user is left out when it duplicates another, and foreign keys that pointed at it then name the one that stays. `flushAuthoringWarnings` comes from `@internal/framework-components/authoring`.
 
-## `infer-relations-takes-default-index-kind`
-
-Pass a function that says whether a live index is of the target's default kind. On Postgres, that is an index with no access method or `btree`:
-
-```ts
-const { relationsByTable } = inferRelations(tables, modelNameMap, (index) =>
-  (index.type ?? 'btree') === 'btree',
-);
-```
-
-`buildChildRelationField(fieldName, parentModelName, fk, optional, relationName, table)` becomes `buildChildRelationField(fieldName, parentModelName, fk, optional, relationName, { table, isDefaultIndexKind })`.
+Code that called `backingIndexColumnKeys()` or `isBackedByColumnKeys()` to decide whether a foreign key needs a backing index reads the stored foreign key's `index` instead: `{ name }` names an index of the table, `{ primaryKey: true }` and `{ unique: true }` say a primary key or unique constraint whose first columns are the foreign key's columns serves it, and an absent `index` says nothing does. To ask the question of a live table, call `derivedBackingIndexIsRedundant(columns, { indexes, nodeOf, uniques, primaryKey })`, as `contract infer` does.
