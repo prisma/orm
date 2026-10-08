@@ -35,9 +35,14 @@ function request(method, params) {
   });
 }
 
+function fail(message) {
+  console.error(`driver error: ${message}`);
+  process.exit(1);
+}
+
 async function result(method, params) {
   const response = await request(method, params);
-  if (response.error) throw new Error(`${method}: ${JSON.stringify(response.error)}`);
+  if (response.error) fail(`${method}: ${JSON.stringify(response.error)}`);
   return response.result;
 }
 
@@ -170,7 +175,7 @@ function applyEdit(edit, newName) {
   applied = [];
   for (const [uri, edits] of Object.entries(edit.changes ?? {})) {
     const file = fileOf(uri);
-    if (file === undefined) throw new Error(`edit for a file outside the project: ${uri}`);
+    if (file === undefined) fail(`edit for a file outside the project: ${uri}`);
     const wasOpen = versions.has(file);
     let text = textOf(file);
     const ordered = [...edits].sort(
@@ -384,7 +389,7 @@ async function run() {
         applyEdit(response.result, step.newName);
       }
     } else {
-      throw new Error(`unknown step kind ${step.kind}`);
+      fail(`unknown step kind ${step.kind}`);
     }
   }
   await result('shutdown', null);
