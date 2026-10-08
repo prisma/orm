@@ -7,6 +7,7 @@ import type { EnumTypeHandle } from '@internal/contract-authoring';
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
 import type { CheckKind } from '@internal/sql-schema-ir/naming';
+import type { ColumnSite } from './column-site';
 import type {
   AuthoredColumnDefault,
   CheckNode,
@@ -14,12 +15,6 @@ import type {
   PrimaryKeyNode,
   UniqueConstraintNode,
 } from './contract-definition';
-
-/** The field a column was declared through, named in the errors its lowering raises. */
-export interface ColumnSite {
-  readonly modelName: string;
-  readonly fieldName: string;
-}
 
 /** One column of a table, before lowering: its type is still the authored descriptor and its default is still authored. */
 export interface ColumnDescription {
@@ -48,12 +43,13 @@ export interface TableDescription {
 }
 
 /**
- * The storage a model implies. A model with a table of its own describes that table; a single-table variant adds its columns to the table its base model owns.
+ * The storage a model implies. A model with a table of its own describes that table; a single-table variant names the columns it needs on the table its base model owns.
  */
 export type ModelStorage =
   | { readonly kind: 'ownTable'; readonly table: TableDescription }
   | {
       readonly kind: 'baseTable';
+      readonly modelName: string;
       readonly namespaceId: string;
       readonly tableName: string;
       readonly columns: readonly ColumnDescription[];

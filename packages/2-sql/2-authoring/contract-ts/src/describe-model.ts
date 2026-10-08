@@ -1,15 +1,9 @@
-import {
-  asNamespaceId,
-  type ContractField,
-  type ExecutionMutationDefault,
-} from '@internal/contract/types';
-import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
+import type { ContractField, ExecutionMutationDefault } from '@internal/contract/types';
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
-import { type AuthoredStorageTypeInstance, applyFkDefaults } from '@internal/sql-contract/types';
+import type { AuthoredStorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type FieldNode,
-  type ForeignKeyNode,
   isValueObjectMember,
   type ModelNode,
   storedAsListColumn,
@@ -17,18 +11,13 @@ import {
 } from './contract-definition';
 import { contractError } from './contract-errors';
 import { buildDomainField } from './domain-fields';
-import {
-  assertKnownTargetModel,
-  assertTargetTableMatches,
-  type ModelLookups,
-  modelNamespaceId,
-} from './model-references';
+import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
+import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
 import type { ColumnDescription, ModelComponents, ModelStorage } from './storage-description';
 import { type ColumnTypeQualifier, resolveColumnDescriptor } from './target-authoring-hooks';
 
-export interface ModelDescriptionContext extends ModelLookups {
-  readonly foreignKeyDefaults: ForeignKeyDefaultsState | undefined;
+export interface ModelDescriptionContext extends ForeignKeyResolutionContext {
   readonly storageTypes: Record<string, AuthoredStorageTypeInstance>;
   readonly qualifyColumnType: ColumnTypeQualifier | undefined;
 }
@@ -72,7 +61,11 @@ export function describeModel(model: ModelNode, context: ModelDescriptionContext
   }
 
   const foreignKeys = (model.foreignKeys ?? []).map((fk) =>
-    resolveForeignKey(fk, model, namespaceId, context),
+    resolveForeignKey(
+      fk,
+      { namespaceId, tableName: model.tableName, ownerName: model.modelName },
+      context,
+    ),
   );
   const storage = describeModelStorage(model, namespaceId, foreignKeys);
 
@@ -98,7 +91,7 @@ export function describeModel(model: ModelNode, context: ModelDescriptionContext
 }
 
 /**
- * Single-table-inheritance variants share their base model's table: the variant adds its columns to that table and has no table of its own. That leaves an authored check nowhere to attach, so it is refused here as a backstop; the PSL surface refuses it earlier, at interpretation, with a diagnostic that names the base model.
+ * Single-table-inheritance variants share their base model's table: the variant's columns must already be on that table, and it has no table of its own. That leaves an authored check nowhere to attach, so it is refused here as a backstop; the PSL surface refuses it earlier, at interpretation, with a diagnostic that names the base model.
  */
 function describeModelStorage(
   model: ModelNode,
@@ -115,7 +108,7 @@ function describeModelStorage(
         { meta: { tableName, modelName: model.modelName } },
       );
     }
-    return { kind: 'baseTable', namespaceId, tableName, columns };
+    return { kind: 'baseTable', modelName: model.modelName, namespaceId, tableName, columns };
   }
   return {
     kind: 'ownTable',
@@ -145,7 +138,7 @@ function describeColumn(modelName: string, field: ModelField): ColumnDescription
     default: field.default,
     noCheck: typedByValueObject ? undefined : field.noCheck,
     domainEnum: typedByValueObject ? undefined : field.enumTypeHandle,
-    site: { modelName, fieldName: field.fieldName },
+    site: { kind: 'field', modelName, fieldName: field.fieldName },
   };
 }
 
@@ -186,63 +179,4 @@ function executionDefaultOf(
     );
   }
   return phases;
-}
-
-/** Resolves a foreign key's target. A cross-space key keeps its foreign space; a local key must name a model of this definition and that model's table. */
-function resolveForeignKey(
-  fk: ForeignKeyNode,
-  model: ModelNode,
-  namespaceId: string,
-  context: ModelDescriptionContext,
-): ForeignKeyAuthoringInput {
-  const source = {
-    namespaceId: asNamespaceId(namespaceId),
-    tableName: model.tableName,
-    columns: fk.columns,
-  };
-  const options = {
-    ...applyFkDefaults(
-      {
-        ...ifDefined('constraint', fk.constraint),
-        ...ifDefined('index', fk.index),
-      },
-      context.foreignKeyDefaults,
-    ),
-    ...ifDefined('name', fk.name),
-    ...ifDefined('onDelete', fk.onDelete),
-    ...ifDefined('onUpdate', fk.onUpdate),
-  };
-  if (fk.references.spaceId !== undefined) {
-    return {
-      source,
-      target: {
-        namespaceId: asNamespaceId(fk.references.namespaceId ?? context.defaultNamespaceId),
-        tableName: fk.references.table,
-        columns: fk.references.columns,
-        spaceId: fk.references.spaceId,
-      },
-      ...options,
-    };
-  }
-
-  const targetModel = assertKnownTargetModel(
-    context.modelsByName,
-    context.modelsByCoordinate,
-    model.modelName,
-    fk.references.model,
-    fk.references.namespaceId,
-    'Foreign key',
-  );
-  assertTargetTableMatches(model.modelName, targetModel, fk.references.table, 'Foreign key');
-  return {
-    source,
-    target: {
-      namespaceId: asNamespaceId(
-        fk.references.namespaceId ?? modelNamespaceId(targetModel, context.defaultNamespaceId),
-      ),
-      tableName: fk.references.table,
-      columns: fk.references.columns,
-    },
-    ...options,
-  };
 }

@@ -8,6 +8,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
+import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './column-site';
 import type { AuthoredColumnDefault } from './contract-definition';
 import { contractError } from './contract-errors';
 
@@ -46,11 +47,7 @@ export function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonVa
   >(value);
 }
 
-export interface ColumnDefaultSite {
-  readonly modelName: string;
-  readonly fieldName: string;
-  readonly codecId: string;
-}
+export type ColumnDefaultSite = ColumnSite & { readonly codecId: string };
 
 function defaultRefusal(
   site: ColumnDefaultSite,
@@ -62,12 +59,11 @@ function defaultRefusal(
   const reason = cause instanceof Error ? cause.message : String(cause);
   return contractError(
     'CONTRACT.DEFAULT_INVALID',
-    `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec refuses: ${reason}`,
+    `${columnSiteSubject(site)} has a ${subject} that its codec refuses: ${reason}`,
     {
       cause,
       meta: {
-        modelName: site.modelName,
-        fieldName: site.fieldName,
+        ...columnSiteMeta(site),
         codecId: site.codecId,
         reason: 'codec-refused-default',
         ...ifDefined('elementPosition', elementPosition),
@@ -99,11 +95,10 @@ function codecForDefault(
   if (codec === undefined) {
     throw contractError(
       'CONTRACT.DEFAULT_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has a default, but no pack in the contract declares its codec "${site.codecId}", so the default cannot be checked. List the pack that owns the codec in \`extensions\`.`,
+      `${columnSiteSubject(site)} has a default, but no pack in the contract declares its codec "${site.codecId}", so the default cannot be checked. List the pack that owns the codec in \`extensions\`.`,
       {
         meta: {
-          modelName: site.modelName,
-          fieldName: site.fieldName,
+          ...columnSiteMeta(site),
           codecId: site.codecId,
           reason: 'codec-not-found',
         },
@@ -124,12 +119,11 @@ function buildCodecForDefault(
     if (!isStructuredError(cause) || cause.code !== 'RUNTIME.TYPE_PARAMS_INVALID') throw cause;
     throw contractError(
       'CONTRACT.ARGUMENT_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has type parameters that its codec does not accept: ${cause.message}`,
+      `${columnSiteSubject(site)} has type parameters that its codec does not accept: ${cause.message}`,
       {
         cause,
         meta: {
-          modelName: site.modelName,
-          fieldName: site.fieldName,
+          ...columnSiteMeta(site),
           codecId: site.codecId,
           reason: 'type-params-invalid',
         },
@@ -162,11 +156,10 @@ export function encodeColumnDefault(
     if (!Array.isArray(defaultInput.value)) {
       throw contractError(
         'CONTRACT.DEFAULT_INVALID',
-        `Field "${site.modelName}.${site.fieldName}" is a list field, so its default is an array; received ${typeof defaultInput.value}. Call .many() before .default().`,
+        `${columnSiteSubject(site)} is a list field, so its default is an array; received ${typeof defaultInput.value}. Call .many() before .default().`,
         {
           meta: {
-            modelName: site.modelName,
-            fieldName: site.fieldName,
+            ...columnSiteMeta(site),
             codecId: site.codecId,
             reason: 'list-default-not-array',
           },

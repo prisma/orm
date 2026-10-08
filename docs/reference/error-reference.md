@@ -281,6 +281,10 @@ A `@noCheck` / `.noCheck(...)` declaration is invalid. Either it does not apply 
 
 A Mongo model's collection attachment is wrong: the model declares `indexes`, `collectionOptions`, or `controlPolicy` but has no collection, or a single collection has `collectionOptions` / `controlPolicy` declared by more than one model. Raised by the Mongo `defineContract` builder. Payload: `modelName`, `collection`, `reason`.
 
+### CONTRACT.COLUMN_ON_STI_VARIANT
+
+A single-table-inheritance variant has a column that its base model's table does not have. The base model owns the shared table, so every column a variant uses must already be on that table; the PSL interpreter copies each variant column onto the base for this reason. Raised while building a SQL contract. The fix is to declare the column on the base model. Payload: `modelName`, `namespaceId`, `tableName`, `columnName`.
+
 ### CONTRACT.CONSTRAINT_INVALID
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering: the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).

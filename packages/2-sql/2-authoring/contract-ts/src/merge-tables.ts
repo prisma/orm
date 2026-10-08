@@ -1,8 +1,8 @@
 import { contractError } from './contract-errors';
-import type { ColumnDescription, ModelStorage, TableDescription } from './storage-description';
+import type { ModelStorage, TableDescription } from './storage-description';
 
 /**
- * Collects the tables the models describe, one per namespace and table name, in model order. A single-table variant's columns join its base's table, unless the base table already has a column of that name; a variant whose table no model owns adds nothing.
+ * Collects the tables the models describe, one per namespace and table name, in model order. A single-table variant adds nothing: each of its columns must already be on its base's table, which the base owns. A variant whose table no model owns is not checked.
  */
 export function mergeTables(storages: readonly ModelStorage[]): readonly TableDescription[] {
   const tables = new Map<string, TableDescription>();
@@ -22,10 +22,8 @@ export function mergeTables(storages: readonly ModelStorage[]): readonly TableDe
 
   for (const storage of storages) {
     if (storage.kind !== 'baseTable') continue;
-    const key = tableKey(storage.namespaceId, storage.tableName);
-    const table = tables.get(key);
-    if (table === undefined) continue;
-    tables.set(key, { ...table, columns: withAbsentColumns(table.columns, storage.columns) });
+    const table = tables.get(tableKey(storage.namespaceId, storage.tableName));
+    if (table !== undefined) assertVariantColumnsOnBaseTable(storage, table);
   }
 
   return [...tables.values()];
@@ -35,11 +33,23 @@ function tableKey(namespaceId: string, tableName: string): string {
   return JSON.stringify([namespaceId, tableName]);
 }
 
-function withAbsentColumns(
-  columns: readonly ColumnDescription[],
-  added: readonly ColumnDescription[],
-): readonly ColumnDescription[] {
-  const present = new Set(columns.map((column) => column.columnName));
-  const absent = added.filter((column) => !present.has(column.columnName));
-  return absent.length === 0 ? columns : [...columns, ...absent];
+function assertVariantColumnsOnBaseTable(
+  variant: Extract<ModelStorage, { kind: 'baseTable' }>,
+  table: TableDescription,
+): void {
+  const present = new Set(table.columns.map((column) => column.columnName));
+  const missing = variant.columns.find((column) => !present.has(column.columnName));
+  if (missing === undefined) return;
+  throw contractError(
+    'CONTRACT.COLUMN_ON_STI_VARIANT',
+    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), but its column "${missing.columnName}" is not on that table. The base model owns the table; declare the column there.`,
+    {
+      meta: {
+        modelName: variant.modelName,
+        namespaceId: variant.namespaceId,
+        tableName: variant.tableName,
+        columnName: missing.columnName,
+      },
+    },
+  );
 }

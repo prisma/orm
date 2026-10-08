@@ -23,10 +23,11 @@ import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { columnCodec, encodeColumnDefault } from './column-defaults';
+import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './column-site';
 import { contractError } from './contract-errors';
 import { checkMemberValues, enumValueSetRefs } from './enum-members';
 import { type CollectedColumnEntities, collectEntityFromColumn } from './pack-entities';
-import type { ColumnDescription, ColumnSite } from './storage-description';
+import type { ColumnDescription } from './storage-description';
 import {
   type CheckExpressionRenderer,
   type ColumnTypeQualifier,
@@ -41,8 +42,7 @@ import {
  * canonical ascending order — the only form the contract persists.
  */
 function resolveNoCheckKinds(input: {
-  readonly modelName: string;
-  readonly fieldName: string;
+  readonly site: ColumnSite;
   readonly kinds: readonly CheckKind[];
   readonly many: boolean;
   readonly elementNullable: boolean;
@@ -51,8 +51,8 @@ function resolveNoCheckKinds(input: {
   const derivable: CheckKind[] = [];
   if (input.many && !input.elementNullable) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
-  const subject = `Field "${input.modelName}.${input.fieldName}"`;
-  const meta = { modelName: input.modelName, fieldName: input.fieldName };
+  const subject = columnSiteSubject(input.site);
+  const meta = columnSiteMeta(input.site);
 
   if (input.kinds.length === 0) {
     if (derivable.length === 0) {
@@ -133,8 +133,8 @@ function validateColumnTypeParams(
     if (!isStructuredError(cause) || cause.code !== 'CONTRACT.TYPE_PARAMS_INVALID') throw cause;
     throw contractError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has type parameters that its data type does not accept: ${cause.message}`,
-      { cause, meta: { ...cause.meta, modelName: site.modelName, fieldName: site.fieldName } },
+      `${columnSiteSubject(site)} has type parameters that its data type does not accept: ${cause.message}`,
+      { cause, meta: { ...cause.meta, ...columnSiteMeta(site) } },
     );
   }
 }
@@ -193,8 +193,7 @@ export function lowerColumn(
   const noCheck =
     description.noCheck !== undefined && placement.derivesChecks
       ? resolveNoCheckKinds({
-          modelName: site.modelName,
-          fieldName: site.fieldName,
+          site,
           kinds: description.noCheck,
           many: many !== false,
           elementNullable,
@@ -221,7 +220,7 @@ export function lowerColumn(
   const enumRefs = enumValueSetRefs(description.domainEnum, context.defaultNamespaceId);
   invariant(
     enumRefs === undefined || descriptor.valueSet === undefined,
-    `Field "${site.modelName}.${site.fieldName}" is typed by a domain enum and also carries a storage value set from its type constructor.`,
+    `${columnSiteSubject(site)} is typed by a domain enum and also carries a storage value set from its type constructor.`,
   );
   const valueSet = enumRefs?.storage ?? descriptor.valueSet;
 
