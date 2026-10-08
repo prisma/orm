@@ -5,7 +5,7 @@ import { SqlNode } from './sql-node';
 export type ReferentialAction = 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
 
 /**
- * What serves a foreign key's lookups on its own table: an index, by its stored name, or the primary key or a unique constraint on exactly the foreign key's columns, by kind.
+ * What serves a foreign key's lookups on its own table: an index, by its stored name, or, by kind, the primary key or a unique constraint whose first columns are the foreign key's columns.
  */
 export type ForeignKeyIndex =
   | { readonly name: string }
