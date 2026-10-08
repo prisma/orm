@@ -81,7 +81,7 @@ describe('sqlite/datetime@1 declares its canonical form', () => {
 
   it('is the text the codec writes for the value it reads', () => {
     const codec = sqliteDatetimeDescriptor.factory()({ name: '<test>' });
-    expect(toContractJson(codec, fromContractJson(codec, '2024-01-01T00:00:00Z'))).toBe(
+    expect(toContractJson(codec, fromContractJson(codec, '2024-01-01 01:00:00+01:00'))).toBe(
       sqliteDatetimeDescriptor.toCanonicalForm?.('2024-01-01 01:00:00+01:00'),
     );
   });
@@ -98,21 +98,9 @@ describe('sqlite/datetime@1 JSON text', () => {
     ]).toEqual(['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.25Z', '-000043-03-15T00:00:00Z']);
   });
 
-  it.each([
-    ['2024-01-01T00:00:00.000Z', '2024-01-01T00:00:00Z'],
-    ['2024-01-01 01:00:00+01:00', '2024-01-01T00:00:00Z'],
-  ])('refuses %s, the text a row holds, naming the stored form %s', (text, stored) => {
-    expect(() => fromContractJson(codec, text)).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.DECODE_FAILED',
-        message: `sqlite/datetime@1 JSON value must be "${stored}", as sqlite/datetime@1 stores this value`,
-      }),
-    );
-  });
-
-  it('reads the stored form', () => {
-    expect(fromContractJson(codec, '2024-01-01T00:00:00.25Z')).toEqual(
-      new Date('2024-01-01T00:00:00.250Z'),
+  it('still reads the millisecond text it wrote before the canonical form', () => {
+    expect(fromContractJson(codec, '2024-01-01T00:00:00.000Z')).toEqual(
+      new Date('2024-01-01T00:00:00.000Z'),
     );
   });
 });

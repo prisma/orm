@@ -46,7 +46,7 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
-import { isStructuredError, structuredError } from '@internal/utils/structured-error';
+import { structuredError } from '@internal/utils/structured-error';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -584,29 +584,13 @@ export function decodeSqliteDatetime(value: string): Date {
   return date;
 }
 
-/** What `canonical` writes for `text`, or `undefined` for text it cannot read. */
-function storedSpelling(canonical: (text: string) => string, text: string): string | undefined {
-  try {
-    return canonical(text);
-  } catch (error) {
-    if (isStructuredError(error) && error.code === 'CONTRACT.CAST_REFUSED') return undefined;
-    throw error;
+/** The instant text names, refused when it names none. */
+function datetimeOfText(text: string): Date {
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    return refuseJsonValue(SQLITE_DATETIME_CODEC_ID, 'a date and time string', text);
   }
-}
-
-/** The instant a contract stores, refused when the text is not in the stored form, naming that form. */
-function datetimeOfStoredText(text: string): Date {
-  const stored = storedSpelling(sqliteDatetimeCanonical, text);
-  if (stored !== text) {
-    return refuseJsonValue(
-      SQLITE_DATETIME_CODEC_ID,
-      stored === undefined
-        ? 'an instant in UTC, as in "2024-01-01T00:00:00Z"'
-        : `${JSON.stringify(stored)}, as ${SQLITE_DATETIME_CODEC_ID} stores this value`,
-      text,
-    );
-  }
-  return new Date(text);
+  return date;
 }
 
 /** The text SQLite holds for an instant: what the codec writes for every row, and for a default. */
@@ -626,9 +610,9 @@ export class SqliteDatetimeCodec extends CodecImpl<
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Date> {
     return decodeSqliteDatetime(wire);
   }
-  /** `sqlite/text` holds any text; this codec reads only the instant text it stores. */
+  /** `sqlite/text` holds any text, and a `Date` holds only text that names an instant. */
   fromDataTypeValue(value: DataTypeValue<string>): Date {
-    return datetimeOfStoredText(value.value);
+    return datetimeOfText(value.value);
   }
   toDataTypeValue(input: Date): DataTypeValue {
     return this.dataTypeValueOf(sqliteDatetimeCanonical(input.toISOString()));
@@ -683,9 +667,9 @@ export class SqliteJsonCodec extends CodecImpl<
       ? blindCast<JsonValue, 'JSON.parse of stored JSON text yields a JSON value'>(JSON.parse(wire))
       : wire;
   }
-  /** `sqlite/text` holds any text; this codec reads only the canonical JSON text it stores. */
+  /** `sqlite/text` holds any text, and a document is only text that parses as JSON. */
   fromDataTypeValue(value: DataTypeValue<string>): JsonValue {
-    return documentOfStoredText(value.value);
+    return documentOfText(value.value);
   }
   toDataTypeValue(input: JsonValue): DataTypeValue {
     return this.dataTypeValueOf(canonicalizeJson(input));
@@ -700,22 +684,14 @@ function parseJsonText(text: string): { readonly value: JsonValue } | undefined 
   }
 }
 
-/** The document a contract stores, refused when the text is not its canonical JSON text, naming that text. */
-function documentOfStoredText(text: string): JsonValue {
+/** The document JSON text holds, refused when the text is not JSON. */
+function documentOfText(text: string): JsonValue {
   const document = parseJsonText(text);
   if (document === undefined) {
     throw sqliteError(
       'RUNTIME.DECODE_FAILED',
       'sqlite/json@1 contract value must be the JSON text of a document',
       { meta: { codecId: SQLITE_JSON_CODEC_ID, received: 'string' } },
-    );
-  }
-  const stored = canonicalizeJson(document.value);
-  if (stored !== text) {
-    return refuseJsonValue(
-      SQLITE_JSON_CODEC_ID,
-      `${JSON.stringify(stored)}, as ${SQLITE_JSON_CODEC_ID} stores this value`,
-      text,
     );
   }
   return document.value;
