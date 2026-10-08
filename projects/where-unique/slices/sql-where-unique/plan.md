@@ -18,7 +18,7 @@
 
 ### Dispatch 3: evidence and documentation
 
-- **Outcome:** Integration tests run `first`, `update` and `delete` after `whereUnique` against a database, for a single-column key, a compound key, a following `where`, and with an `include`. `examples/prisma-8-demo/test/collection-chaining.types.test-d.ts` exports uniquely filtered chains from a plain collection and from a user class, and the demo's `declaration-emit` test passes. The package README has a `whereUnique` section. An `app` upgrade-instruction declaration with `changes: []` covers the `examples/` test change.
+- **Outcome:** Integration tests run `first`, `update` and `delete` after `whereUnique` against a database, for a single-column key, a compound key, a following `where`, and with an `include`. `examples/prisma-8-demo/test/collection-chaining.types.test-d.ts` exports uniquely filtered chains from a plain collection and from a user class, and the demo's `declaration-emit` test passes. The package README has a `whereUnique` section. The `app` upgrade-instruction declaration is authored in dispatch 2 and carries the same `null`-exclusion entry as the `extension` one, since application developers are the callers of `conflictOn`, `connect` and `disconnect`; it also covers the `examples/` test change.
 - **Builds on:** Dispatches 1 and 2.
 - **Hands to:** The slice's done conditions: the dependents' typecheck, the demo's declaration-emit test and `pnpm check:upgrade-coverage --mode pr` all pass.
 - **Focus:** Tests under `test/integration/test/sql-orm-client/`, the demo's type test, `packages/3-extensions/sql-orm-client/README.md`, the `app` declaration. No source change in the package; a defect found here is reported, not patched in place.

@@ -76,7 +76,7 @@ The snippets above are illustrative. Before a slice treats one as fact, it re-ve
    - `{ _id }` is always admitted on Mongo: `_id` is unique but is not listed among the indexes.
    - On a polymorphic SQL model the shapes come from the collection model's own table. Constraints declared on a variant's table are not offered.
 
-7. **`UniqueConstraintCriterion` itself drops `null`.** It is exported and already used by `upsert`'s `conflictOn` and by relation `connect` criteria. A `null` value cannot identify one record for `connect` any more than for `whereUnique`, so the rule belongs in the one type. Rejected: a second, `whereUnique`-only type that differs in one detail. Cost: a compile error for a caller passing `null` in `conflictOn` or `connect`. What `connect` does at runtime today with a `null` criterion is not investigated, since the type no longer admits it.
+7. **`UniqueConstraintCriterion` itself drops `null`.** It is exported and already used by `upsert`'s `conflictOn` and by relation `connect` and `disconnect` criteria, which share one criterion type; all three reject `null` after this change. A `null` value cannot identify one record for `connect` any more than for `whereUnique`, so the rule belongs in the one type. Rejected: a second, `whereUnique`-only type that differs in one detail. Cost: a compile error for a caller passing `null` in `conflictOn` or `connect`. What `connect` does at runtime today with a `null` criterion is not investigated, since the type no longer admits it.
 
 8. **`where` stays available after `whereUnique`, and `first()` is the read terminal.** `whereUnique({ id }).where({ ownerId })` is still at most one record and is the way to write "this record, if it belongs to this user". No new terminal is added.
 
