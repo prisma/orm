@@ -28,7 +28,7 @@ const outcome = await runSqliteCodecProjection(connection, conformanceCase);
 // outcome.failure is undefined when the projection conforms.
 ```
 
-`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever SQLite client it already owns.
+`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever SQLite client it already owns. Its rows must carry each value as the runtime driver returns it, because the harness reads an ordinary row with the codec's `fromWire` and compares it with the projected value.
 
 ## Scope
 

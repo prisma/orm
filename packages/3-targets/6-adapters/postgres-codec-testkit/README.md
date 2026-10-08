@@ -27,7 +27,7 @@ const outcome = await runPostgresCodecProjection(connection, conformanceCase);
 // outcome.failure is undefined when the projection conforms.
 ```
 
-`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever PostgreSQL client it already owns.
+`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever PostgreSQL client it already owns. Its rows must carry each value as the runtime driver returns it, PostgreSQL's text for every type, because the harness reads an ordinary row with the codec's `fromWire` and compares it with the projected value.
 
 ## Scope
 
