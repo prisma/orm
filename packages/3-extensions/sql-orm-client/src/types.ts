@@ -1637,10 +1637,9 @@ type CriterionFromConstraintColumns<
 > = string extends Columns[number]
   ? Record<string, unknown>
   : {
-      [C in Columns[number] as FieldNameForColumn<TContract, ModelName, C>]: RowValueForField<
-        TContract,
-        ModelName,
-        FieldNameForColumn<TContract, ModelName, C>
+      [C in Columns[number] as FieldNameForColumn<TContract, ModelName, C>]: Exclude<
+        RowValueForField<TContract, ModelName, FieldNameForColumn<TContract, ModelName, C>>,
+        null
       >;
     };
 
