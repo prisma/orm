@@ -1,5 +1,11 @@
-import type { Codec } from '@internal/framework-components/codec';
-import { CodecDescriptorImpl, dataType, dataTypeId } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
+import type { Codec, DataType } from '@internal/framework-components/codec';
+import {
+  CodecDescriptorImpl,
+  dataType,
+  dataTypeId,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry } from '@internal/sql-relational-core/ast';
@@ -29,13 +35,18 @@ const ctx = { contract: {} as SqliteContract };
  * in correct output, so this distinguishes codec routing (walker calls
  * `encode`, inlines the wire result) from the type-branching fallback.
  */
-const transformingCodec = {
-  id: 'test/transform@1',
-  encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value: unknown) => value,
-  decodeJson: (json: unknown) => json,
-} as unknown as Codec;
+const transformCodec = (id: string, type: DataType): Codec => ({
+  id,
+  dataType: type,
+  toWire: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
+  fromWire: async (wire: unknown) => wire,
+  fromDataTypeValue: (value) => value.value,
+  toDataTypeValue: (input) => dataTypeValueFor(type, {}, input as JsonValue),
+});
+
+const transformType = dataType('test/transform', { read: (json) => json });
+
+const transformingCodec = transformCodec('test/transform@1', transformType);
 
 const transformingDescriptor: AnySqliteCodecDescriptor = {
   descriptorKind: 'sqlite-codec',
@@ -218,7 +229,7 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — guards', () => {
 });
 
 describe('SqliteControlAdapter.lowerToExecuteRequest — codec routing + DDL shape', () => {
-  it('routes a codec-bearing literal default through codec.encode (not raw type-branching)', async () => {
+  it('routes a codec-bearing literal default through codec.toWire (not raw type-branching)', async () => {
     const codecAdapter = new SqliteControlAdapter(transformingLookup);
     const ast = new SqliteCreateTable({
       table: 'secrets',
@@ -261,13 +272,7 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — codec routing + DDL sha
 
 const TEST_CODEC_ID = 'test/transform@1';
 
-const transformingQueryCodec: Codec = {
-  id: TEST_CODEC_ID,
-  encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (v) => v as never,
-  decodeJson: (v) => v as never,
-};
+const transformingQueryCodec = transformCodec(TEST_CODEC_ID, transformType);
 
 const testRegistry: ContractCodecRegistry = {
   forColumn: () => undefined,
@@ -329,20 +334,16 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
   override readonly traits = [] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: object) => Codec {
-    return () =>
-      ({
-        id: EXT_CODEC_ID,
-        encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-        decode: async (wire: unknown) => wire,
-        encodeJson: (v: unknown) => v as never,
-        decodeJson: (v: unknown) => v as never,
-      }) as unknown as Codec;
+    return () => transformCodec(EXT_CODEC_ID, fixtureType);
   }
 }
 
+const fixtureType = dataType('demo/fixture', { read: (json) => json });
+
 const extTransformDescriptor = sqliteCodec(new ExtTransformDescriptor(), {
-  dataType: dataType('demo/fixture', {}),
+  dataType: fixtureType,
   jsonProjection: (expression) => expression,
+  factory: (_descriptor, type) => () => transformCodec(EXT_CODEC_ID, type),
 });
 
 function buildExtContractAndTable() {

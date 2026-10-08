@@ -144,9 +144,9 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     const overValues = aggregate('count', 'sqlite/integer@1');
 
     expect({
-      count: await overRows.codec.decode(overRows.wire, {}),
-      countBigInt: await overRowsLossless.codec.decode(overRowsLossless.wire, {}),
-      countOverValues: await overValues.codec.decode(overValues.wire, {}),
+      count: await overRows.codec.fromWire(overRows.wire, {}),
+      countBigInt: await overRowsLossless.codec.fromWire(overRowsLossless.wire, {}),
+      countOverValues: await overValues.codec.fromWire(overValues.wire, {}),
     }).toEqual({ count: 2, countBigInt: 2n, countOverValues: 2 });
   });
 
@@ -155,7 +155,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
 
     const { wire, codec } = aggregate('count', undefined);
 
-    expect(await codec.decode(wire, {})).toBe(0);
+    expect(await codec.fromWire(wire, {})).toBe(0);
   });
 
   it('sums integers up to the safe-integer boundary and refuses the total past it', async () => {
@@ -164,7 +164,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     const withinRange = aggregate('sum', 'sqlite/integer@1');
 
     expect(withinRange.wire).toBe(MAX_SAFE.toString());
-    expect(await withinRange.codec.decode(withinRange.wire, {})).toBe(9007199254740991);
+    expect(await withinRange.codec.fromWire(withinRange.wire, {})).toBe(9007199254740991);
 
     // One row more, and the total is 2^53: representable as a double, outside
     // the range where every integer is.
@@ -172,7 +172,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     const pastRange = aggregate('sum', 'sqlite/integer@1');
 
     expect(pastRange.wire).toBe((MAX_SAFE + 1n).toString());
-    await expect(pastRange.codec.decode(pastRange.wire, {})).rejects.toMatchObject({
+    await expect(pastRange.codec.fromWire(pastRange.wire, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740992',
@@ -188,7 +188,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
 
     expect(codecId).toBe('sqlite/bigint@1');
     expect(wire).toBe(total.toString());
-    expect(await codec.decode(wire, {})).toBe(total);
+    expect(await codec.fromWire(wire, {})).toBe(total);
     // A total a double does not hold, so an exact read and a rounded one differ.
     expect(BigInt(Number(total))).not.toBe(total);
   });
@@ -197,7 +197,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     loadIntegerColumn([MAX_INT64.toString(), '0']);
     const { wire, codec } = aggregate('sumBigInt', 'sqlite/bigint@1');
 
-    expect(await codec.decode(wire, {})).toBe(MAX_INT64);
+    expect(await codec.fromWire(wire, {})).toBe(MAX_INT64);
 
     // One more, and SQLite refuses to compute the total at all rather than
     // promoting it to a float. That raise is the target's declared bound: the
@@ -214,7 +214,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     const { wire, codec, codecId } = aggregate('avg', 'sqlite/integer@1');
 
     expect(codecId).toBe('sqlite/real@1');
-    expect(await codec.decode(wire, {})).toBe(10.333333333333334);
+    expect(await codec.fromWire(wire, {})).toBe(10.333333333333334);
   });
 
   // A wide integer result leaves the database as text, because `node:sqlite`

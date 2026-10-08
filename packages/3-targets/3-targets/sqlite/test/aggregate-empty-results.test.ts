@@ -1,3 +1,4 @@
+import { readContractValue } from '@internal/framework-components/codec';
 import type { AggregateOutputCodec } from '@internal/framework-components/components';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { describe, expect, it } from 'vitest';
@@ -23,7 +24,8 @@ function decodeEmptyResult(row: SqlAggregateDescriptor & { readonly nullable: fa
   if (descriptor === undefined) {
     throw new Error(`no registered codec for '${outputCodecId(row.output)}'`);
   }
-  return descriptor.factory(undefined)({ name: 'empty-result' }).decodeJson(row.emptyResultJson);
+  const codec = descriptor.factory(undefined)({ name: 'empty-result' });
+  return readContractValue(codec, row.emptyResultJson, {});
 }
 
 describe('SQLite empty-result declarations', () => {

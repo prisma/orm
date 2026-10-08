@@ -3,15 +3,15 @@
  * exercised against a real database by the conformance suite.
  *
  * `notYetCanonical` marks a case whose projection disagrees with the codec's
- * **current** `encodeJson` / `decodeJson` — the projection will not execute, or
- * the parsed value differs from what `encodeJson` produces, or the value does
+ * **current** `toDataTypeValue` / `fromDataTypeValue` — the projection will not execute, or
+ * the parsed value differs from what `toDataTypeValue` produces, or the value does
  * not survive the round trip back. The suite asserts a marked case still fails
  * and still fails the recorded way, so a projection cannot be brought into
  * agreement without updating this file.
  *
  * A green run is therefore not a claim that every codec's JSON is canonical.
  * Both conditions are measured against the codec's own two methods, so a codec
- * whose `encodeJson` is itself not canonical conforms here: its projection
+ * whose `toDataTypeValue` is itself not canonical conforms here: its projection
  * faithfully realizes a representation that is simply not the one the codec ends
  * up with. Such a codec conforms, then transits through a failing state when its
  * canonical form lands, then conforms again.
@@ -189,7 +189,7 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     storageType: 'TEXT',
   },
   // SQLite writes an infinity as the JSON number 9.0e+999, which parses back to
-  // Infinity; the float projections write the text encodeJson writes instead.
+  // Infinity; the float projections write the text toDataTypeValue writes instead.
   {
     codecId: 'sqlite/real@1',
     label: 'positive infinity',

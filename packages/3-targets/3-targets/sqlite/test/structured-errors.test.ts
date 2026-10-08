@@ -9,6 +9,7 @@ import { renderOps } from '../src/core/migrations/render-ops';
 import { createSqliteMigrationRunner } from '../src/core/migrations/runner';
 import { escapeLiteral, quoteIdentifier } from '../src/core/sql-utils';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { fromContractJson } from './contract-json';
 import { sqliteTestTypes } from './sqlite-test-types';
 
 function capture(fn: () => unknown): unknown {
@@ -48,20 +49,20 @@ describe('structured error codes', () => {
     });
   });
 
-  it('bigint codec decode of a boolean raises RUNTIME.DECODE_FAILED', () => {
+  it('bigint codec read of a boolean contract value raises RUNTIME.DECODE_FAILED', () => {
     const bigintCodec = sqliteBigintDescriptor.factory()({ name: 'test' });
-    const error = capture(() => bigintCodec.decodeJson(true));
+    const error = capture(() => fromContractJson(bigintCodec, true));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigint@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
+        'sqlite/integer JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
     });
   });
 
-  it('real codec encodeJson of NaN raises RUNTIME.ENCODE_FAILED', () => {
+  it('real codec toDataTypeValue of NaN raises RUNTIME.ENCODE_FAILED', () => {
     const realCodec = sqliteRealDescriptor.factory()({ name: 'test' });
-    const error = capture(() => realCodec.encodeJson(Number.NaN));
+    const error = capture(() => realCodec.toDataTypeValue(Number.NaN));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',

@@ -9,7 +9,8 @@ const lookup = createSqliteBuiltinCodecLookup();
 const adapter = new SqliteControlAdapter(lookup);
 
 async function createTable(codecId: string, value: number): Promise<string> {
-  const stored = lookup.get(codecId)!.encodeJson(value);
+  const codec = lookup.get(codecId)!;
+  const stored = codec.dataType.toContract(codec.toDataTypeValue(value));
   const table = new SqliteCreateTable({
     table: 't',
     columns: [col('c', 'REAL', { default: lit(stored), codecRef: { codecId } })],
@@ -36,7 +37,7 @@ describe('an infinite float default in SQLite DDL', () => {
   it.each([['sqlite/real@1'], ['sql/float@1']])(
     '%s refuses a NaN default when the contract is built',
     (codecId) => {
-      expect(() => lookup.get(codecId)!.encodeJson(Number.NaN)).toThrow(
+      expect(() => lookup.get(codecId)!.toDataTypeValue(Number.NaN)).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.ENCODE_FAILED',
           message: `${codecId} value must be a number other than NaN, which SQLite cannot store`,

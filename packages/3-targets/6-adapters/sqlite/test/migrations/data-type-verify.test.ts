@@ -19,6 +19,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  type DataTypeValue,
   dataTypeId,
 } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -27,6 +28,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn } from '@internal/sql-contract/types';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteText } from '@internal/target-sqlite/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
@@ -170,17 +172,17 @@ const documentContract = documentContractWith({
 });
 
 class LowerCaseCodec extends CodecImpl<'demo/lower-case@1', readonly ['equality'], string, string> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
-  decodeJson(json: JsonValue): string {
-    return String(json);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
 }
 
@@ -192,7 +194,7 @@ class LowerCaseDescriptor extends CodecDescriptorImpl<void> {
   override readonly paramsSchema = undefined;
   override readonly toCanonicalForm = (value: JsonValue): JsonValue => String(value).toLowerCase();
   override factory(): (ctx: CodecInstanceContext) => LowerCaseCodec {
-    return () => new LowerCaseCodec(this);
+    return () => new LowerCaseCodec(this, sqliteText);
   }
 }
 

@@ -9,7 +9,7 @@ const duplicateText: ExtensionPackRef<'sql', 'sqlite'> = {
   familyId: 'sql',
   targetId: 'sqlite',
   version: '0.0.1',
-  dataTypes: [dataType('sqlite/text', {})],
+  dataTypes: [dataType('sqlite/text', { read: (json) => json })],
 };
 
 describe('sqlite defineContract data types', () => {

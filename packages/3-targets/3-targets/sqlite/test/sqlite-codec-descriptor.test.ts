@@ -1,11 +1,13 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
-  type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  type DataType,
+  type DataTypeValue,
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
@@ -47,6 +49,11 @@ const vectorParamsSchema: StandardSchemaV1<VectorParams> = {
   },
 };
 
+const fixtureVectorType = dataType('demo/fixture', {
+  read: (json) => json,
+  params: arktype({ length: 'number.integer >= 1' }),
+});
+
 class VectorCodec<N extends number> extends CodecImpl<
   'demo/vector@1',
   readonly ['equality'],
@@ -54,29 +61,30 @@ class VectorCodec<N extends number> extends CodecImpl<
   ReadonlyArray<number>
 > {
   constructor(
-    descriptor: CodecDescriptor<VectorParams>,
+    descriptor: CodecDescriptorTemplate<VectorParams>,
+    dataType: DataType,
     readonly length: N,
   ) {
-    super(descriptor);
+    super(descriptor, dataType, { length });
   }
 
-  async encode(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
     return wire.slice(1, -1).split(',').map(Number);
   }
 
-  encodeJson(value: ReadonlyArray<number>): JsonValue {
-    return [...value];
+  toDataTypeValue(value: ReadonlyArray<number>): DataTypeValue {
+    return this.dataTypeValueOf([...value]);
   }
 
-  decodeJson(json: JsonValue): ReadonlyArray<number> {
-    if (!Array.isArray(json)) {
+  fromDataTypeValue({ value }: DataTypeValue): ReadonlyArray<number> {
+    if (!Array.isArray(value)) {
       throw new Error('Expected vector JSON array');
     }
-    return json.map(Number);
+    return value.map(Number);
   }
 }
 
@@ -106,7 +114,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureVectorType, params.length);
   }
 }
 
@@ -128,11 +136,15 @@ class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureVectorType, params.length);
   }
 }
 
 const genericVectorDescriptor = new GenericVectorDescriptor();
+
+const buildVectorCodec =
+  (descriptor: CodecDescriptorTemplate<VectorParams>, type: DataType, params: VectorParams) => () =>
+    new VectorCodec(descriptor, type, params.length);
 
 const scalarRef = (codecId: string, length: JsonValue): CodecRef => ({
   codecId,
@@ -180,16 +192,13 @@ describe('SqliteCodecDescriptor', () => {
   });
 });
 
-const fixtureVectorType = dataType('demo/fixture', {
-  params: arktype({ length: 'number.integer >= 1' }),
-});
-
 describe('sqliteCodec', () => {
   it('preserves the wrapped descriptor contract and materialization behavior', () => {
     const descriptor = sqliteCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
       jsonProjection: (expression, params) =>
         FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(params.length)]),
+      factory: buildVectorCodec,
     });
 
     expect(descriptor.descriptorKind).toBe('sqlite-codec');
@@ -208,7 +217,8 @@ describe('sqliteCodec', () => {
     const codec = descriptor.factory({ length: 6 })({} as CodecInstanceContext);
     expect(codec).toBeInstanceOf(VectorCodec);
     expect(codec.length).toBe(6);
-    expect(codec.descriptor).toBe(genericVectorDescriptor);
+    expect(codec.descriptor).toBe(descriptor);
+    expect(codec.dataType).toBe(fixtureVectorType);
 
     const expression = ColumnRef.of('items', 'embedding');
     expect(descriptor.projectJson(expression, scalarRef(descriptor.codecId, 6))).toEqual(
@@ -220,10 +230,12 @@ describe('sqliteCodec', () => {
     const descriptor = sqliteCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
       jsonProjection: (expression) => expression,
+      factory: buildVectorCodec,
     });
     const withoutParams = sqliteCodec(genericVectorDescriptor, {
-      dataType: dataType('demo/plain', {}),
+      dataType: dataType('demo/plain', { read: (json) => json }),
       jsonProjection: (expression) => expression,
+      factory: buildVectorCodec,
     });
 
     expect(descriptor.paramsSchema).toBe(fixtureVectorType.params);
@@ -236,6 +248,7 @@ describe('sqliteCodec', () => {
     const descriptor = sqliteCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
       jsonProjection: (expression) => expression,
+      factory: buildVectorCodec,
       renderTypes: false,
     });
 

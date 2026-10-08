@@ -75,10 +75,10 @@ function datetimeCodec(): Codec {
 async function expectCodecText(text: string, before: number, after: number): Promise<void> {
   expect(text).toMatch(CODEC_TEXT);
   const codec = datetimeCodec();
-  const decoded = (await codec.decode(text, {})) as Date;
+  const decoded = (await codec.fromWire(text, {})) as Date;
   expect(decoded.getTime()).toBeGreaterThanOrEqual(before - 1000);
   expect(decoded.getTime()).toBeLessThanOrEqual(after + 1000);
-  expect(await codec.encode(decoded, {})).toBe(text);
+  expect(await codec.toWire(decoded, {})).toBe(text);
 }
 
 describe('a SQLite now() default', { timeout: timeouts.databaseOperation }, () => {

@@ -1,11 +1,14 @@
-import type { JsonValue } from '@internal/contract/types';
 import sqlFamilyDescriptor from '@internal/family-sql/control';
 import {
   type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
+  type Codec,
   type CodecCallContext,
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  type DataType,
+  type DataTypeValue,
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
@@ -59,35 +62,38 @@ const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? c
 const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
   [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
     .filter((id): id is string => id !== undefined)
-    .map((id) => dataType(id, {}));
+    .map((id) => dataType(id, { read: (json) => json }));
 
 class TestCodec extends CodecImpl<string, readonly ['equality'], string, string> {
   constructor(
-    descriptor: AnyCodecDescriptor,
+    descriptor: AnyCodecDescriptorTemplate,
+    type: DataType,
     private readonly transform: (value: string) => string,
   ) {
-    super(descriptor);
+    super(descriptor, type);
   }
 
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return this.transform(value);
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
 
-  encodeJson(value: string): JsonValue {
-    return value;
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 
-  decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string') {
+  fromDataTypeValue({ value }: DataTypeValue): string {
+    if (typeof value !== 'string') {
       throw new TypeError('Expected string JSON');
     }
-    return json;
+    return value;
   }
 }
+
+const templateType = dataType('demo/fixture', { read: (json) => json });
 
 class TestGenericDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = dataTypeId('demo/fixture');
@@ -103,8 +109,15 @@ class TestGenericDescriptor extends CodecDescriptorImpl<void> {
   }
 
   override factory(): (ctx: CodecInstanceContext) => TestCodec {
+    return this.materialize(this, templateType);
+  }
+
+  materialize(
+    adapted: AnyCodecDescriptorTemplate,
+    type: DataType,
+  ): (ctx: CodecInstanceContext) => TestCodec {
     this.onMaterialize();
-    return () => new TestCodec(this, this.transform);
+    return () => new TestCodec(adapted, type, this.transform);
   }
 }
 
@@ -120,11 +133,12 @@ function sqliteDescriptor(options: {
     options.transform,
   );
   return sqliteCodec(descriptor, {
-    dataType: dataType(fixtureTypeId(options.codecId), {}),
+    dataType: dataType(fixtureTypeId(options.codecId), { read: (json) => json }),
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       options.onProjection?.();
       return expression;
     },
+    factory: (adapted, type) => descriptor.materialize(adapted, type),
   });
 }
 
@@ -439,9 +453,12 @@ describe('SQLite adapter codec registry composition', () => {
     const json = registry.get(SQLITE_JSON_CODEC_ID);
     const document = { nested: ['value', 1, true, null] };
 
-    expect(blob?.encodeJson(new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
-    expect(bigint?.encodeJson(42n)).toBe('42');
-    expect(bigint?.encodeJson(9007199254740993n)).toBe('9007199254740993');
-    expect(json?.encodeJson(document)).toBe('{"nested":["value",1,true,null]}');
+    const stored = (codec: Codec | undefined, value: unknown) =>
+      codec?.dataType.toContract(codec.toDataTypeValue(value));
+
+    expect(stored(blob, new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
+    expect(stored(bigint, 42n)).toBe('42');
+    expect(stored(bigint, 9007199254740993n)).toBe('9007199254740993');
+    expect(stored(json, document)).toBe('{"nested":["value",1,true,null]}');
   });
 });

@@ -2,6 +2,7 @@ import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
 import { sqliteDatetimeCanonical, sqliteDatetimeDescriptor } from '../src/core/codecs';
 import { sqliteText } from '../src/core/data-types';
+import { fromContractJson, toContractJson } from './contract-json';
 
 describe('sqlite/datetime@1 canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
@@ -80,7 +81,7 @@ describe('sqlite/datetime@1 declares its canonical form', () => {
 
   it('is the text the codec writes for the value it reads', () => {
     const codec = sqliteDatetimeDescriptor.factory()({ name: '<test>' });
-    expect(codec.encodeJson(codec.decodeJson('2024-01-01 01:00:00+01:00'))).toBe(
+    expect(toContractJson(codec, fromContractJson(codec, '2024-01-01 01:00:00+01:00'))).toBe(
       sqliteDatetimeDescriptor.toCanonicalForm?.('2024-01-01 01:00:00+01:00'),
     );
   });
@@ -91,14 +92,14 @@ describe('sqlite/datetime@1 JSON text', () => {
 
   it('writes a Date in canonical form', () => {
     expect([
-      codec.encodeJson(new Date('2024-01-01T00:00:00.000Z')),
-      codec.encodeJson(new Date('2024-01-01T00:00:00.250Z')),
-      codec.encodeJson(new Date('-000043-03-15T00:00:00.000Z')),
+      toContractJson(codec, new Date('2024-01-01T00:00:00.000Z')),
+      toContractJson(codec, new Date('2024-01-01T00:00:00.250Z')),
+      toContractJson(codec, new Date('-000043-03-15T00:00:00.000Z')),
     ]).toEqual(['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.25Z', '-000043-03-15T00:00:00Z']);
   });
 
   it('still reads the millisecond text it wrote before the canonical form', () => {
-    expect(codec.decodeJson('2024-01-01T00:00:00.000Z')).toEqual(
+    expect(fromContractJson(codec, '2024-01-01T00:00:00.000Z')).toEqual(
       new Date('2024-01-01T00:00:00.000Z'),
     );
   });
