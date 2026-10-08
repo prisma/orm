@@ -311,7 +311,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "vehicle_id"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -392,7 +394,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "752f43b213af2517eee1193f641e99fa745377f66db80f7cb28e2c4455991e53"
+    "storageHash": "5ceaf3523aff466379ba3754767aaed08690acc1869873bbf3f61763dfa35416"
   },
   "capabilities": {
     "postgres": {

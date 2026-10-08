@@ -212,7 +212,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "mainId"
+                    ]
                   },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
@@ -305,7 +307,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2de50c4a23c0932c776c010a6de927082e992cc489e51a6ca85e1cd40bd65645"
+    "storageHash": "05c2940e64500ed43d44b00e89fd4fe0f35a17097f7d2d5bcb435dd8215a0756"
   },
   "capabilities": {
     "postgres": {

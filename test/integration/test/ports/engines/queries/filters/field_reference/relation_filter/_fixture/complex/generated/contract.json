@@ -239,7 +239,9 @@
                 },
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "toOneId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -330,7 +332,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "89aa03d5406ad85d582c293dedf2c55d20b1988799a002f81e4af55014bf1d48"
+    "storageHash": "60e86314bbf395e84838c7e8c2df858d6385a8101646e7857e7118aad3c74537"
   },
   "capabilities": {
     "postgres": {

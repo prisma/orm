@@ -137,7 +137,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "device_id"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -203,7 +205,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "080b03270a6da9d58e9c9772e203b055bfd2d9e2641275c70a5e4d5809ebc3e2"
+    "storageHash": "4507a4b113f69738396ae0e48581ffaeadca08ef9546a45623dda7facfbe225b"
   },
   "capabilities": {
     "postgres": {

@@ -117,7 +117,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "friendId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -155,7 +157,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "49814182daa031b2555349497bd598255fd1761ac1f3cb8f351de85108f48be3"
+    "storageHash": "fc8341cdb3f37e93db8d71e550a655befb085adc9c0459451e3571dcef5367dc"
   },
   "capabilities": {
     "postgres": {

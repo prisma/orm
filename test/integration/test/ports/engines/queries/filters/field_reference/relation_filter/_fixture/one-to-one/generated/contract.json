@@ -175,7 +175,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "childId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -213,7 +215,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0fb64a8a3c945b0fb811ad810eaab69945c626a34bd79d56cb0befa7df102063"
+    "storageHash": "d60bb980ee12dfe4133e5fb8c057461de2685280d923af6fbaa6ae7f323a550c"
   },
   "capabilities": {
     "postgres": {

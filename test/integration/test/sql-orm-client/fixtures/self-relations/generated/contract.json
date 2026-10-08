@@ -414,7 +414,9 @@
                 },
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "partner_id"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -631,7 +633,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d2d1321f3e26b8f801b1e343007dc4beb43f1a4125f826fc4e3d1b8f6169d3a2"
+    "storageHash": "58b04fcbef7b172c7e23ce7439a27a9f932254a90e8e11403f783753c0a8059f"
   },
   "capabilities": {
     "postgres": {

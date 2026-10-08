@@ -242,7 +242,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "postId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -331,7 +333,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "739b1413fe429eb7631b9cf62a777a681578c0d815154f5d9310a668b6250e80"
+    "storageHash": "ba14e65aaeae8dd62ed49ed902a961e14512b2a538bfcb6f9bdfd269a9fffdb0"
   },
   "capabilities": {
     "postgres": {

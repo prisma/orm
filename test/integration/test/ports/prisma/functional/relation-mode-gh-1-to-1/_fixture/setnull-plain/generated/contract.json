@@ -231,7 +231,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "userId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -284,7 +286,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "unique": true
+                    "unique": [
+                      "userId"
+                    ]
                   },
                   "onDelete": "setNull",
                   "onUpdate": "setNull",
@@ -346,7 +350,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "07a5f7331cb8ce29c33e922977023f58b0194d3309c023dac5bd293db19f5001"
+    "storageHash": "a41b4097bac0ec507d871164ecbccac4b0ef3d8c2489353504035575e8e5208d"
   },
   "capabilities": {
     "postgres": {
