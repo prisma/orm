@@ -9,6 +9,7 @@ import type {
   DeclaredFieldsFragment,
   Filtered,
   Ordered,
+  UniquelyFiltered,
 } from '@prisma/orm-postgres/orm-client';
 import { expectTypeOf } from 'vitest';
 import type { Contract } from '../../src/prisma/contract.d';
@@ -23,11 +24,14 @@ import {
   type PostLibrary,
   type PrivateLibrary,
   plainChain,
+  plainUniqueChain,
+  plainUniqueInclude,
   type SubLibrary,
   type TaskLibrary,
   titleSummary,
   unexpired,
   unexpiredPosts,
+  uniqueChain,
 } from './declaration-library';
 
 type PostKey =
@@ -135,6 +139,34 @@ export function exportedValues() {
   expectTypeOf(plainChain).not.toBeAny();
   expectTypeOf<keyof CollectionRowOf<typeof plainChain>>().toEqualTypeOf<PostKey>();
   expectTypeOf(filterPosts).returns.toEqualTypeOf<Filtered<Collection<Contract, 'Post'>>>();
+}
+
+export async function uniquelyFilteredChains() {
+  expectTypeOf(posts.byId('p1')).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
+  expectTypeOf(posts.byIdForUser('p1', 'u1')).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
+  expectTypeOf(posts.byId('p1').filtered()).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
+  expectTypeOf(uniqueChain).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
+  expectTypeOf(await posts.firstById('p1')).toEqualTypeOf<PostRow | null>();
+  expectTypeOf(await posts.byId('p1').update({ title: 'y' })).toEqualTypeOf<PostRow | null>();
+  expectTypeOf(await posts.byId('p1').delete()).toEqualTypeOf<PostRow | null>();
+  expectTypeOf<keyof CollectionRowOf<ReturnType<PostLibrary['byIdWithUser']>>>().toEqualTypeOf<
+    PostKey | 'user'
+  >();
+  expectTypeOf(
+    await posts.preparedById('p1').first().consume,
+  ).returns.resolves.toEqualTypeOf<PostRow | null>();
+  expectTypeOf(plainUniqueChain).not.toBeAny();
+  expectTypeOf<keyof CollectionRowOf<typeof plainUniqueChain>>().toEqualTypeOf<PostKey>();
+  expectTypeOf(plainUniqueInclude).not.toBeAny();
+  expectTypeOf<keyof CollectionRowOf<typeof plainUniqueInclude>>().toEqualTypeOf<
+    PostKey | 'user'
+  >();
+  // @ts-expect-error a uniquely filtered collection has at most one record
+  posts.byId('p1').all();
+  // @ts-expect-error a uniquely filtered collection has at most one record
+  plainUniqueChain.limit(1);
+  // @ts-expect-error a uniquely filtered collection has at most one record
+  posts.byId('p1').prepared.all();
 }
 
 export function queryFragments(now: Temporal.Instant) {

@@ -115,6 +115,26 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
     return this.filtered().prepared;
   }
 
+  byId(id: string) {
+    return this.whereUnique({ id });
+  }
+
+  byIdForUser(id: string, userId: string) {
+    return this.whereUnique({ id }).where({ userId });
+  }
+
+  byIdWithUser(id: string) {
+    return this.whereUnique({ id }).include('user');
+  }
+
+  firstById(id: string) {
+    return this.whereUnique({ id }).first();
+  }
+
+  preparedById(id: string) {
+    return this.whereUnique({ id }).prepared;
+  }
+
   createRow() {
     return this.create({ title: 'x', userId: 'u' });
   }
@@ -243,6 +263,12 @@ export class SubLibrary extends PostLibrary {
 export const posts = orm({ runtime, context, collections: { Post: PostLibrary } }).public.Post;
 export const filteredChain = posts.filtered().ordered().withUser();
 export const plainChain = orm({ runtime, context }).public.Post.where({ title: 'x' });
+export const uniqueChain = posts.byId('p1').filtered();
+export const plainUniqueChain = orm({ runtime, context }).public.Post.whereUnique({ id: 'p1' });
+export const plainUniqueInclude = orm({ runtime, context })
+  .public.Post.whereUnique({ id: 'p1' })
+  .where({ title: 'x' })
+  .include('user');
 
 export function filterPosts(
   collection: Collection<Contract, 'Post'>,
