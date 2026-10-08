@@ -1,63 +1,68 @@
-# Handover: SQL expression literals (TML-3282), 2026-10-07
+# Handover: SQL expression literals (TML-3282), 2026-10-08
 
-You take over this project from the agent marconi-29. This file supersedes every earlier handover. Read it, then [status.md](status.md), then the parts of [plan.md](plan.md), [design.md](design.md) and [design-notes.md](design-notes.md) your next step needs.
+You take over this project from the agent hammurabi-31. This file supersedes every earlier handover. Read it, then [status.md](status.md) (its "State on 2026-10-07" section and "Slice 2b review, round 3"), then the parts of [plan.md](plan.md), [design.md](design.md) and [design-notes.md](design-notes.md) your next step needs. Before acting on any project or architecture detail, read the architecture docs and the ADRs this project depends on (129, 231, 234, 243, 244, 254, 262, 268); Will insists on it.
 
 ## Where to work
 
-Create a fresh worktree on branch `tml-3288-sql-expression-places` from the `bot` remote (`git@github-wmadden-electric:prisma/prisma.git`), then run `mise exec -- pnpm install` and `mise exec -- pnpm build`. Everything is pushed; nothing is uncommitted anywhere. The previous worktree (`.claude/worktrees/sql-expression-literals-handover-3c78f4`) used local branch names `m29-2t`, `m29-2b`, `m29-3`; ignore them, the remote branches are the truth. If git refuses to check a branch out because another worktree has it, use a different local name and push with `git push bot <local>:<remote-branch>`.
+Create a fresh worktree from the `bot` remote (`git@github-wmadden-electric:prisma/orm.git`), branch `tml-3288-sql-expression-places` while #30550 is open, or `main` once it has merged. Run `mise exec -- pnpm install`, `mise exec -- pnpm build`, then `mise exec -- pnpm install` again (a fresh worktree needs the second install to link the published shells). Everything is pushed; nothing is uncommitted. The previous worktree used the local branch name `h31-2b`; ignore it. If git refuses a branch because another worktree has it, use a different local name and push with `git push bot <local>:<remote-branch>`.
 
 ## State of the pull requests
 
-| Slice | Ticket | Branch | PR | State |
-| --- | --- | --- | --- | --- |
-| 2a, 1, 4 | TML-3296, TML-3287, TML-3290 | | #30534, #30546, #30554 | Merged. |
-| 2t | TML-3367 | `tml-3367-data-type-value` | [#30539](https://github.com/prisma/orm/pull/30539) | **Merged 2026-10-07** as squash `b35bcd7d10`. Shipped in 8.0.0-rc.16. |
-| 2b | TML-3288 | `tml-3288-sql-expression-places` at `7719580e23` | [#30550](https://github.com/prisma/orm/pull/30550) | Base is `main`. Contains `main` at `00bb24ed31` (rc.16). Pushed, checks were running. No approval yet. Review round 3 not done (see below). |
-| 3 | TML-3289 | `tml-3289-sql-expression-ts` at `93b78527df` | [#30558](https://github.com/prisma/orm/pull/30558) | Base `tml-3288-sql-expression-places`; has conflicts with it. Untouched this session. Will paused it; do it after 2b lands. |
-| 5 (stretch) | TML-3297 | | | Not started. Ask Will before starting. |
+| Slice | Ticket | PR | State |
+| --- | --- | --- | --- |
+| 2a, 1, 4, 2t | TML-3296, TML-3287, TML-3290, TML-3367 | #30534, #30546, #30554, #30539 | Merged. 2t shipped in rc.16. |
+| 2b | TML-3288 | [#30550](https://github.com/prisma/orm/pull/30550) | **Approved by Will ("merge at will").** Auto-merge on. Head `e787f95b5d` was pushed on 2026-10-08 after merging `main` at `1923c35787` (rc.17). Waiting for PR CI, then it enters the merge queue by itself. |
+| 3 | TML-3289 | [#30558](https://github.com/prisma/orm/pull/30558) | Based on the 2b branch, in conflict with it. Waits for 2b. |
+| 5 (stretch) | TML-3297 | | Not started. Ask Will first. |
 
-## What happened this session (2026-10-06 and 07)
+## What to do first: land #30550
 
-- **Serhii's design thread on #30539** was settled: Will kept the `dataTypeValue` combinator. ADR 231 now explains why: an attribute argument is either grammar (names, flags, keywords, references, DDL parameters; typed by shape with `str()`, `bool()`, …) or a database value (a value of a data type a column holds or the database evaluates; typed by `dataTypeValue` and the cast rule). The size in `nanoid(8)` is grammar, so the project "Data types own column types" uses `dataTypeValue` only for a function argument the database receives. design-notes.md item 15.
-- **Refusal wording** changed (2t, shipped): messages lead with what to write. `Expected a number`; ``Expected sql`...`; write sql`(x)` `` for a quoted string on a tagged type when the literal reads back; `Expected a number that pg/int4 can hold; got pg/int8` when the value has the right form; `Expected <forms>; got a list`; `Expected <forms>; this target has no data type for a <syntax> value`. `@default` offers the exact rewrite too (`Expected json`...`; write json`{}``). Framework functions: `describeRefusal`, `describeExpected`, `describeRefusedValueType`, `exactRewrite`, `admittedForms`, `tagForm`, `RefusalGuidance`, `WrittenForm`, `printedTaggedLiteralReadsBack` in `packages/1-framework/1-core/framework-components/src/shared/written-value.ts` and `tagged-literal.ts`. Reviews: `slice-reviews/2t-wording/`, `slice-reviews/2t-wording-round-2/`.
-- **Many merges of `main`** into 2t and 2b. `main` moves fast; the "Data types own column types" project (TML-3386 #30547, TML-3388 #30576) conflicts heavily with this work. Merge resolution rule used throughout: `main`'s structure, this project's names and content. Briefs: `dispatches/2t-merge-main-brief.md`, `dispatches/2b-merge-2t-adr-267-brief.md`.
-- **ADR numbers**: #30619 renumbered clashing ADRs. ADR 255 (block specs) is now **ADR 262**. `main` has its own ADR 260 (`afterTransaction`), so 2b took 267; then #30641 also claimed 267, and on 2026-10-07 2b moved to **ADR 268 - Raw SQL is a value of the data type sql-expression**.
-- **Releases**: rc.15 and rc.16 moved pending upgrade fragments into `upgrade-instructions/releases/`. Released fragments must never be edited; a merge can carry edits into them through rename detection, so after every merge of `main` run `git diff --name-only origin/main -- upgrade-instructions/releases skills/prisma-8/upgrading` and restore any hit from `main`. 2t's fragment `arguments-typed-by-data-type` is released in rc.15-to-rc.16; 2b's only pending fragment is `upgrade-instructions/pending/sql-expression-literals-psl/`, and it must describe the change from rc.16.
-- **SQLite `json` hint**: on SQLite `Json`, `String` and `DateTime` columns all have data type `sqlite/text`, and `main` registers the `json` tag under the key `tag:json`. A refused default on a SQLite `Json` column says `Expected a quoted string`. Decided: correct and kept, because a quoted JSON string works there and offering ``json`...`` would also show on `String` and `DateTime` columns. Record this in status.md as a known limit (not yet written there).
+1. Check its state: `gh api graphql -f query='{repository(owner:"prisma",name:"orm"){pullRequest(number:30550){state reviewDecision mergeable autoMergeRequest{enabledAt} mergeQueueEntry{state position}}}}'`.
+2. Bind it to your session's CI monitor (`mcp__ccd_pr__bind_pr`, then `mcp__ccd_pr__set_monitor` with `auto_fix: true`). Binding replays the PR's whole comment history as "new"; every thread is resolved, so check `reviewThreads` with `isResolved == false` before acting on any comment.
+3. **Watch the merge queue yourself.** The app does not report a queue ejection; Will had to tell the last agent, and was angry. Start one background Bash loop that polls the PR every 60 s and exits when `state` is `MERGED`, or when it is `OPEN` with auto-merge off and no queue entry (ejected). On an ejection, find the run with `gh run list --repo prisma/orm --event merge_group --json databaseId,headBranch,conclusion,name` (head branch contains `30550`) and read `gh run view <id> --log-failed` at once.
+4. Why it was ejected twice on 2026-10-08:
+   - First: semantic clashes with newer `main` (planner inputs `origin` and `statements` became required in TML-3476; `main`'s new journey fixtures wrote raw SQL as quoted strings). Fixed.
+   - Second: a known flake, not this branch. The Postgres driver's test worker crashed in V8 (`Worker exited unexpectedly with signal SIGILL` in `packages/3-targets/7-drivers/postgres/test/driver.json-text.integration.test.ts`, after `Check failed: jit_page_->allocations_.erase(addr) == 1`). If that recurs, tell Will and ask before requeueing; never re-run CI jobs without his go-ahead.
+5. When `main` moves and the PR conflicts: `git fetch origin main`, merge it (never rebase or force-push), keep `main`'s structure and this project's syntax (raw SQL places receive `sql/expression` through `dataTypeValue`; fixtures and docs write `sql` literals; printers use `printSqlExpressionLiteral` after the read-back check). After every merge run `git diff --name-only origin/main -- upgrade-instructions/releases skills/prisma-8/upgrading`; it must be empty (released fragments are never edited). Sweep new `.prisma` files with the codemod (`node scripts/codemods/rewrite-sql-strings.mjs <paths>`) and new inline PSL by hand. Run root `pnpm typecheck`, `pnpm fixtures:check`, `pnpm lint:deps`, and the touched test files alone. Push, then re-enable auto-merge (`gh pr merge 30550 --repo prisma/orm --auto`), since an ejection turns it off. Will's approval survives pushes.
+6. After it merges: set TML-3288 to Done in Linear with a closing comment (the integration may leave it In Progress), and tell Will.
 
-## What to do next, in order
+## Then: slice 3 (#30558)
 
-1. **Review round 3 of 2b.** Required by Will's process before 2b goes to him. Brief: `dispatches/2b-round-3-review-brief.md`. Before dispatching, regenerate its two inputs under `wip/2b-round-3/` (gitignored, not in the repo): `git log --first-parent --format="%h %s" ed1df11285..HEAD > wip/2b-round-3/commits.txt`, and for each merge in that range `git diff-tree --cc <merge>` into `wip/2b-round-3/merge-only-hunks.diff` (the commands are in the brief's "Scope"). Note that `7719580e23` (merge of `main`) is now part of the range too. Dispatch two Opus reviewers (architect persona → `slice-reviews/2b-round-3/system-design-review.md`, principal-engineer persona → `slice-reviews/2b-round-3/code-review.md`). Fix the findings with an Opus implementer, review the fixes again, push.
-2. **Update the #30550 description**: base is now `main`, 2t has landed (drop "Builds on #30539"), ADR is 268, the wording examples are the new messages, the upgrade fragment describes the change from rc.16. Description rules below.
-3. **Keep #30550 current with `main`** (CI monitor sends conflict events). Check every merge for released-fragment edits (see above).
-4. Hand #30550 to Will for approval. **A PR is blocked by unresolved review threads** even when checks are green and it is approved: before saying a PR is ready, check `reviewThreads` with `isResolved == false` (GraphQL) and resolve or answer them. Will queues it, or asks you to (`gh pr merge <n> --squash` adds it to the merge queue; integration tests run only in the queue now).
-5. **Slice 3 (#30558)** after #30550 lands: retarget to `main`, merge `main` (where `main`'s file equals the 2b tip, slice 3's side wins), the same released-fragment check, a review round on what changed since its round 2, then Will.
-6. **Close-out** (plan.md "Close-out"): move the decisions into the ADRs, delete `projects/sql-expression-literals/`, tell Will.
+Retarget to `main`, merge `main` (where `main`'s file equals the 2b tip, slice 3's side wins), and run the released-fragment check. Its branch still names the ADR file `ADR 260 - Raw SQL is a value of the data type sql-expression.md`; the decision is **ADR 268** now (ADR 267 belongs to #30641), so rename it and every reference. Then a review round on what changed since its round 2 (two Opus reviewers: architect and principal-engineer personas from `~/.claude/skills/drive-process/references/agent-personas.md`), fixes by an Opus implementer, a fixes check, manual QA, then Will. Its carry-overs are in plan.md, slice 3.
+
+## Close-out (after slice 3)
+
+plan.md "Close-out": map each decision in design-notes.md to ADR 268 or an amended ADR, delete `projects/sql-expression-literals/`, mark the Linear project complete, tell Will.
+
+## What the last session did (2026-10-07 to 08)
+
+- Merged `main` three times; renumbered the ADR from 267 to 268.
+- Review round 3 of 2b (C01 to C08, D01 to D10), all fixed or answered; reports and fixes check in `slice-reviews/2b-round-3/`. Highlights: ADR 268 had said line comments rename objects (slice 1 built that rule; canonicalization renames nothing); the extension fragment described a `BlockSpecContext.block` field that does not exist; block value completion now has tests and offers `sql` at a policy's `using` (integration test `test/integration/test/authoring/lsp-sql-completion-in-blocks.integration.test.ts`).
+- The CLI journey `sql-expression-literals.e2e.test.ts` now has texts ending in `--` comments (slice 1 could not add them, since the file did not exist then).
+- Manual QA of slice 2b rerun on 2026-10-07: all 38 cases match.
+- The PR description was rewritten (base `main`, ADR 268, current messages).
+- Kept on purpose: the Bash hook change in `.claude/scripts/enforce-tools.mjs` (Will asked for it); the PR description names it as unrelated.
 
 ## Rules Will set (also in the global CLAUDE.md and memory)
 
-- Design with Will, then execute without interrupting him. Make engineering decisions yourself.
-- Every slice: implement, `/drive-code-review` (two Opus reviewers), fix, review the fixes, manual QA, then Will. **Every subagent runs on Opus (`model: "opus"`), never Fable, because Fable is expensive.**
-- **Never run `pnpm test:integration`, `pnpm test:e2e` or `pnpm test:all` locally.** Run the files a change touches; CI runs the rest. Put this in every brief.
-- The machine often has a load average over 100. Run long commands in the background with a log under `wip/`. A test that times out under load usually passes alone.
-- Commits: `mise exec -- git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`, no AI attribution lines, never amend, squash, rebase or force-push. Push through the `bot` remote. Run node and pnpm through `mise exec --`.
-- PR titles "TML-NNNN: sentence". Descriptions open with what a user sees, then the decision, then the build-up, alternatives last, `Agent: <your name>` at the end.
-- Bot review comments: fix what is right, reply ending with `_🤖 Addressed by [Claude Code](https://claude.com/claude-code)_`, resolve the thread. Human design comments: answer with facts, don't change the design without Will.
-- Bind the PR to your session's CI monitor (`mcp__ccd_pr__bind_pr`, `set_monitor` with auto-fix). Binding replays the PR's whole comment history as "new"; check thread state before acting.
-- When `pnpm install` changes `pnpm-lock.yaml` only by removing a stray `cli-e2e-test-app/test-…` importer, restore it.
-- `pnpm lint:fix` touches `scripts/validate-package-readmes.test.mjs` and `skills-contrib/review-fetch-phase/scripts/guard-review-artifacts-ignored.test.mjs`; restore both.
-- The three tarball tests fail locally on a registry refusal ("High-risk trust downgrade for @vercel/detect-agent"); ignore them.
-- Write to Will in plain English, short sentences. No question UI, no floating task chips.
+- Design with Will, then execute without interrupting him. Make engineering decisions yourself and state them.
+- Every subagent runs on Opus (`model: "opus"`), never Fable. Docs (ADRs, specs, plans, PR text, status) are written by the orchestrator, not delegated.
+- **Never run `pnpm test:integration`, `pnpm test:e2e` or `pnpm test:all` locally.** Run the files a change touches; integration files with `mise exec -- pnpm --filter integration-tests test <path>` (no `--` before the path). Put this in every brief.
+- Commits: `mise exec -- git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`, no AI attribution lines, never amend, squash, rebase or force-push. Push through the `bot` remote. Run node and pnpm through `mise exec --`. Update PR bodies with `gh api -X PATCH repos/prisma/orm/pulls/<n> -F body=@file` (`gh pr edit` fails under the bot token).
+- PR titles "TML-NNNN: sentence". Descriptions open with what a user sees, then the decision, then the build-up, alternatives last, `Agent: <your name>` before the attribution line.
+- Bot review comments: fix what is right, reply ending with `_🤖 Addressed by [Claude Code](https://claude.com/claude-code)_`, resolve the thread.
+- Write to Will in plain English, short sentences. Explain every mechanism you mention from scratch; he does not read briefs or tickets. No question UI, no task chips.
+- The three tarball tests fail locally on a registry refusal (`@vercel/detect-agent` trust downgrade); CI checks them.
 
 ## Context from earlier sessions
 
-This session's transcript (marconi-29, 2026-10-06 to 07):
+This session's transcript (hammurabi-31, 2026-10-07 to 08):
 
-`/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-3c78f4/ea08b13e-c168-4c0e-a372-06c63f31c561.jsonl`
+`/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-c716de/ede553f9-49a2-4dd1-a029-1816ec60bdc3.jsonl`
 
-Earlier sessions (charon-96):
+Earlier sessions:
 
-- `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-e3d9e9/f34c3092-a059-4002-8e3e-116ce266d1ac.jsonl`
-- `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-index-where-check-rls-5be8b6/3a5b5af0-5cc1-4d56-8be1-c8709196bb41.jsonl`
+- marconi-29: `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-3c78f4/ea08b13e-c168-4c0e-a372-06c63f31c561.jsonl`
+- charon-96: `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-e3d9e9/f34c3092-a059-4002-8e3e-116ce266d1ac.jsonl` and `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-index-where-check-rls-5be8b6/3a5b5af0-5cc1-4d56-8be1-c8709196bb41.jsonl`
 
-They are large JSONL files. Do not read them whole; grep for a topic (for example `grep -n "ADR 268"` or `grep -n "tag:json"`) and read the lines around each match. The decisions they hold are recorded in this file, status.md, design-notes.md and `dispatches/`; read a transcript only when those don't answer a question.
+They are large JSONL files, readable from this account. Do not read them whole; grep for a topic and read the lines around each match. Will's own messages are `type == "user"` entries that are not `isMeta` and do not start with `<task-notification`, `<system-reminder` or `<command-`.
