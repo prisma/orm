@@ -43,6 +43,38 @@ function generateEnumBlockType(enums: Record<string, ContractEnum>): string {
   return `{ ${entries.join('; ')} }`;
 }
 
+/**
+ * Types each enum member as the value a query returns for it: the literal its codec reads from the stored form, or the codec's output type when that value has no literal type or the lookup has no codec.
+ */
+function generateEnumMemberTypesBlock(
+  enums: Record<string, ContractEnum>,
+  codecLookup: CodecLookup | undefined,
+): string {
+  const entries = Object.entries(enums).map(([name, entry]) => {
+    const codec = codecLookup?.get(entry.codecId);
+    const memberTupleItems = entry.members.map((m) => {
+      const literal = codec === undefined ? undefined : literalType(codec.decodeJson(m.value));
+      const valueType = literal ?? `CodecTypes[${serializeValue(entry.codecId)}]["output"]`;
+      return `{ readonly name: ${serializeValue(m.name)}; readonly value: ${valueType} }`;
+    });
+    return `readonly ${serializeObjectKey(name)}: readonly [${memberTupleItems.join(', ')}]`;
+  });
+  return `{ ${entries.join('; ')} }`;
+}
+
+function literalType(value: unknown): string | undefined {
+  switch (typeof value) {
+    case 'string':
+    case 'boolean':
+    case 'bigint':
+      return serializeValue(value);
+    case 'number':
+      return Number.isFinite(value) ? serializeValue(value) : undefined;
+    default:
+      return undefined;
+  }
+}
+
 export function generateContractDts(
   contract: Contract,
   emitter: EmissionSpi,
@@ -110,7 +142,7 @@ export function generateContractDts(
 
   // Per-namespace models, value objects, and enum types for the domain.namespaces section.
   const perNamespaceTypes: Array<
-    readonly [string, string, string | undefined, string | undefined]
+    readonly [string, string, string | undefined, string | undefined, string | undefined]
   > = namespaceEntries.map(([nsId, ns]) => {
     const nsModels = ns.models;
     const nsModelsType = generateModelsType(nsModels, (name, model) =>
@@ -128,21 +160,32 @@ export function generateContractDts(
       Record<string, ContractEnum> | undefined,
       'ns.enum is an optional ContractEnum record in the emitted IR'
     >(ns.enum);
-    const nsEnumBlock =
-      nsEnums !== undefined && Object.keys(nsEnums).length > 0
-        ? generateEnumBlockType(nsEnums)
-        : undefined;
-    return [nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock] as const;
+    const hasEnums = nsEnums !== undefined && Object.keys(nsEnums).length > 0;
+    const nsEnumBlock = hasEnums ? generateEnumBlockType(nsEnums) : undefined;
+    const nsEnumMemberTypesBlock = hasEnums
+      ? generateEnumMemberTypesBlock(nsEnums, codecLookup)
+      : undefined;
+    return [
+      nsId,
+      nsModelsType,
+      nsValueObjectsDescriptor,
+      nsEnumBlock,
+      nsEnumMemberTypesBlock,
+    ] as const;
   });
 
   const domainNamespacesType = perNamespaceTypes
-    .map(([nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock]) => {
+    .map(([nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock, nsEnumMemberTypesBlock]) => {
       const voLine =
         nsValueObjectsDescriptor !== undefined
           ? `\n        readonly valueObjects: ${nsValueObjectsDescriptor};`
           : '';
       const enumLine = nsEnumBlock !== undefined ? `\n        readonly enum: ${nsEnumBlock};` : '';
-      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${voLine}${enumLine}\n      }`;
+      const enumMemberTypesLine =
+        nsEnumMemberTypesBlock !== undefined
+          ? `\n        readonly enumMemberTypes?: ${nsEnumMemberTypesBlock};`
+          : '';
+      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${voLine}${enumLine}${enumMemberTypesLine}\n      }`;
     })
     .join(';\n');
 

@@ -16,6 +16,8 @@ import type {
   MigrationRunnerResult,
   OperationContext,
   OpFactoryCall,
+  PlanOrigin,
+  ResolvedMigrationStatement,
   SchemaDiffIssue,
   SchemaOwnership,
 } from '@internal/framework-components/control';
@@ -262,7 +264,8 @@ export type SqlPlannerConflictKind =
   | 'missingButNonAdditive'
   | 'unsupportedOperation'
   | 'controlPolicySuppressedCall'
-  | 'tableNameCaseChanged';
+  | 'tableNameCaseChanged'
+  | 'statementRefused';
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;
@@ -325,11 +328,15 @@ export interface SqlMigrationPlannerPlanOptions {
    * need from/to column-shape comparisons (unsafe type change, nullability
    * tightening) use this to decide whether to emit `dataTransform`
    * placeholders; they short-circuit when it is `null`.
-   *
-   * Planners also derive the "from" identity they stamp onto the produced
-   * plan's `describe()` as `fromContract?.storage.storageHash ?? null`.
    */
   readonly fromContract: Contract<SqlStorage> | null;
+  /** The origin the produced plan asserts; see the framework planner's `origin` option. */
+  readonly origin: PlanOrigin | null;
+  /**
+   * Statements the user gave, resolved against `fromContract` and `contract`, in the order
+   * given. Empty when the user gave none.
+   */
+  readonly statements: readonly ResolvedMigrationStatement[];
   /**
    * POSIX-relative path from the migration package dir to
    * `migrations/snapshots`, e.g. `'../../snapshots'`. Threaded straight
@@ -348,7 +355,7 @@ export interface SqlMigrationPlannerPlanOptions {
    * Ownership oracle over the whole contract-space composition (the passive
    * aggregate). The planner asks it, per live extra node, whether any space
    * declares that entity: a sibling-owned node is left untouched, an unowned
-   * node is a genuine extra it may drop under a destructive policy. The
+   * node is a genuine extra it may drop under a policy that allows the drop's class. The
    * planner holds no list of other spaces' names — ownership lives in the
    * aggregate; it only asks. Absent for a single-space plan handed no
    * aggregate. See {@link SchemaOwnership}.

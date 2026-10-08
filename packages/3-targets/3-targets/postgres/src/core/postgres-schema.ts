@@ -31,7 +31,7 @@ import { PostgresNativeEnum } from './postgres-native-enum';
 import type { PostgresRlsEnablement } from './postgres-rls-enablement';
 import type { PostgresRlsPolicy } from './postgres-rls-policy';
 import type { PostgresRole } from './postgres-role';
-import { escapeLiteral } from './sql-utils';
+import { escapeLiteral, quoteIdentifier } from './sql-utils';
 
 export type PostgresContract = Contract<SqlStorage> & { readonly target: 'postgres' };
 
@@ -163,7 +163,7 @@ export class PostgresSchema extends SqlNamespaceBase {
    * this to return `''`.
    */
   qualifier(): string {
-    return `"${this.id}"`;
+    return quoteIdentifier(this.id);
   }
 
   /**
@@ -173,7 +173,7 @@ export class PostgresSchema extends SqlNamespaceBase {
    * and `search_path` decides where the object lands at runtime.
    */
   qualifyTable(tableName: string): string {
-    return `"${this.id}"."${tableName}"`;
+    return `${quoteIdentifier(this.id)}.${quoteIdentifier(tableName)}`;
   }
 
   /**
@@ -271,7 +271,7 @@ export class PostgresUnboundSchema extends PostgresSchema {
   }
 
   override qualifyTable(tableName: string): string {
-    return `"${tableName}"`;
+    return quoteIdentifier(tableName);
   }
 
   override schemaSqlExpression(): string {

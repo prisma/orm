@@ -328,7 +328,7 @@ namespace billing {
         composedExtensionContracts: stack.extensionContracts,
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
-        dataTypeLookup: stack.dataTypeLookup,
+        dataTypes: stack.dataTypes,
         controlMutationDefaults: stack.controlMutationDefaults,
         resolvedInputs: await expandContractInputs(contract.source.inputs),
         capabilities: stack.capabilities,

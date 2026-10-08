@@ -103,12 +103,27 @@ const profile: ModelNode = {
   ],
 };
 
+// The same model name `Note`, with the same fields, in BOTH namespaces: a
+// collection's namespace is the only thing that tells the two apart.
+function note(namespaceId: 'public' | 'auth'): ModelNode {
+  return {
+    modelName: 'Note',
+    tableName: 'notes',
+    namespaceId,
+    fields: [
+      { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false },
+      { fieldName: 'body', columnName: 'body', descriptor: textDescriptor, nullable: false },
+    ],
+    id: { columns: ['id'] },
+  };
+}
+
 export const contract = buildSqlContractFromDefinition(
   {
     warnings: undefined,
     target: postgresTargetPack,
     namespaces: ['public', 'auth'],
-    models: [publicUser, profile, authUser],
+    models: [publicUser, profile, authUser, note('public'), note('auth')],
     createNamespace: postgresCreateNamespace,
   },
   postgresTypeLookups.codecLookup,

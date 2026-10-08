@@ -5,7 +5,7 @@ import { SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   buildSymbolTableInput,
@@ -127,7 +127,7 @@ describe('createBinder', () => {
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       controlMutationDefaults: controlMutationDefaultsBase,
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     };

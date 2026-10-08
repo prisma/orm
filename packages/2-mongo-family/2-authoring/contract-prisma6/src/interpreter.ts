@@ -19,14 +19,12 @@ import {
 import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import {
   type AuthoringEntityContext,
+  type DataTypeSupport,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
   type ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -96,7 +94,7 @@ export interface InterpretPrisma6DocumentsInput {
   readonly binding: Prisma6TargetBinding;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly dataTypes: DataTypeSupport;
 }
 
 const SUMMARY = 'Prisma 6 MongoDB schema interpretation failed';
@@ -507,7 +505,7 @@ function buildEnum(
     family: input.binding.target.familyId,
     target: input.binding.target.targetId,
     codecLookup: input.codecLookup,
-    dataTypeLookup: input.dataTypeLookup,
+    dataTypeLookup: input.dataTypes.lookup,
     sourceId,
     enumInferenceCodecs: {
       text: input.binding.scalarCodecIds.String,

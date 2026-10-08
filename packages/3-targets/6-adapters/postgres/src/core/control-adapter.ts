@@ -9,7 +9,7 @@ import {
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
 } from '@internal/errors/execution';
-import { checkSqlDefaultBody } from '@internal/family-sql/control';
+import { checkSqlDefaultText } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type {
@@ -1829,7 +1829,7 @@ async function pgRenderDdlColumnDefault(
       }
       return '';
     }
-    if (checkSqlDefaultBody(def.expression.text) !== undefined) {
+    if (checkSqlDefaultText(def.expression.text) !== undefined) {
       throw postgresError(
         'CONTRACT.DEFAULT_INVALID',
         `Unsafe default expression in contract: "${def.expression.text}". ` +

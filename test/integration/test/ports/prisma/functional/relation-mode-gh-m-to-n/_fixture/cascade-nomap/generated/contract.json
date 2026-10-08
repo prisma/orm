@@ -203,6 +203,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -221,6 +224,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -315,7 +321,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4f13abf936e90ec4660718c4c9c856c795f843d19336b636a7ad712e3b3a667c"
+    "storageHash": "90acfa4f61cc863794d5c78d93907bb29989c84a4dbcb5716aca0c059f2356c2"
   },
   "capabilities": {
     "postgres": {

@@ -158,6 +158,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "accommodationTimeTable_accommodationId_idx_6cccc5ae"
+                  },
                   "source": {
                     "columns": [
                       "accommodationId"
@@ -197,7 +200,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "300758e7d73ad2a00aa308f883b9b77628f0b1ff4c70b6b4afe44cd1f2d2b084"
+    "storageHash": "0573aad644a2a36ee3974d516c180ba29708deae3041d7fc9a642cf671a7ee74"
   },
   "capabilities": {
     "postgres": {

@@ -624,6 +624,11 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
 
       // Plan: exactly one drop per policy — no enablement change anywhere.
       const planResult = await client.dbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         contract: noPolicyContract,
         mode: 'plan',
         migrationsDir,
@@ -638,6 +643,11 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
       );
 
       const applyResult = await client.dbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         contract: noPolicyContract,
         mode: 'apply',
         migrationsDir,
@@ -696,6 +706,11 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
 
       // Plan: exactly one rename — no drop, no create, no enablement change.
       const planResult = await client.dbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         contract: renamedContract,
         mode: 'plan',
         migrationsDir,
@@ -707,6 +722,11 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
       expect(planIds).toEqual([`rlsPolicy.public.profile.${POLICY_WIRE_NAME}.rename`]);
 
       const applyResult = await client.dbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         contract: renamedContract,
         mode: 'apply',
         migrationsDir,

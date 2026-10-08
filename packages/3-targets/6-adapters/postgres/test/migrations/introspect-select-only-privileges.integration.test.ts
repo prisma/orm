@@ -64,8 +64,6 @@ function buildWidgetContract(): Contract<SqlStorage> {
                       tableName: 'widget',
                       columns: ['id'],
                     },
-                    constraint: true,
-                    index: false,
                   },
                 ],
               },

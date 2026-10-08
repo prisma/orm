@@ -365,7 +365,7 @@ describe('op building (typed DDL node)', () => {
     const node = received.find((n): n is PostgresDropType => n instanceof PostgresDropType);
     expect(node?.schema).toBe('sales');
     expect(node?.name).toBe('order_status');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('an unbound-namespace create builds a node with no schema so search_path resolves it', async () => {
@@ -396,6 +396,8 @@ describe('planner ownership + policy for enum extras', () => {
       }),
       policy,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -551,6 +553,8 @@ describe('D2-F1: enum drop-safety resolves ownership by physical type name', () 
       schema: liveInPublic([{ typeName: 'order_status', values: [...MEMBERS] }]),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -574,6 +578,8 @@ describe('D2-F1: enum drop-safety resolves ownership by physical type name', () 
       ]),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

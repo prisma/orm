@@ -128,7 +128,6 @@ export const fullTextIndexOptions = type({
  */
 export const fullTextIndexType = {
   options: fullTextIndexOptions,
-  backsForeignKey: false,
   accessMethod: 'gin',
   columnTraits: FULL_TEXT_COLUMN_TRAITS,
 };

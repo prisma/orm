@@ -10,3 +10,4 @@
 # secrets, and a later commit in the same PR replaced those lines (squash-merge PR).
 f86694b619c360078040116a01fc8826d7e7dfcc:test/integration/test/uuid-defaults/uuid-defaults.integration.test.ts:generic-api-key:348
 f86694b619c360078040116a01fc8826d7e7dfcc:test/integration/test/uuid-defaults/uuid-defaults.integration.test.ts:generic-api-key:349
+873554568f3d4bfd48a8149b158fa8c0a9708ab3:projects/migration-statements/manual-qa-reports/2026-10-07-qa-opus.md:generic-api-key:113

@@ -199,9 +199,7 @@ export function inferPostgresPslContract(
     extraRelationsByTable,
     crossSpaceFieldNamesByTable,
     danglingForeignKeysByTable,
-  } = resolveForeignKeys(tables, owners, (indexType) =>
-    context.indexTypes.backsForeignKey(indexType),
-  );
+  } = resolveForeignKeys(tables, owners);
   const schemaIR = new SqlSchemaIR({ tables: resolvedTables });
 
   // Live introspection reports an enum column's nativeType schema-qualified
@@ -225,7 +223,6 @@ export function inferPostgresPslContract(
     defaultMapping: createPostgresDefaultMapping(),
     parseRawDefault: parsePostgresDefault,
     columnDefaults: inferredColumnDefaults(context),
-    backsForeignKey: (indexType) => context.indexTypes.backsForeignKey(indexType),
     ...(enumDefinitions.size > 0 ? { enumInfo } : {}),
   };
 
@@ -251,8 +248,6 @@ export interface RlsEmissionExtras {
 /** The printer options, and how a column's literal default is checked to read back. */
 export type PostgresPslInferOptions = PslPrinterOptions & {
   readonly columnDefaults: InferredColumnDefaults;
-  /** Whether an index of a type can back a foreign key, from the stack's index type registrations. */
-  readonly backsForeignKey: (indexType: string) => boolean;
 };
 
 /**
@@ -321,11 +316,7 @@ export function buildPslDocumentAst(
     ...crossSpaceFieldNamesByTable,
     ...buildFieldNamesByTable(schemaIR.tables),
   ]);
-  const { relationsByTable } = inferRelations(
-    schemaIR.tables,
-    modelNameMap,
-    options.backsForeignKey,
-  );
+  const { relationsByTable } = inferRelations(schemaIR.tables, modelNameMap);
 
   const policyEmission = buildIntrospectedPolicyBlocks(
     rlsExtras?.policiesByTable ?? new Map(),

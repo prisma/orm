@@ -12,7 +12,7 @@ import { countSemanticLines } from '@repo/test-utils/semantic-lines';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -343,7 +343,7 @@ describe('TS and PSL authoring parity', () => {
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions: target.authoringContributions,
       createNamespace: createTestSqlNamespace,
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -394,7 +394,7 @@ model Post {
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         authoringContributions,
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -470,7 +470,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -516,10 +516,7 @@ model Post {
       familyId: 'sql',
       targetId: 'postgres',
       version: '0.0.1',
-      indexTypes: defineIndexTypes().add('bm25', {
-        options: type('object'),
-        backsForeignKey: false,
-      }),
+      indexTypes: defineIndexTypes().add('bm25', { options: type('object') }),
     } as const;
 
     const pslContract = interpretSqlContract(
@@ -540,7 +537,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -613,7 +610,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -664,7 +661,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -720,7 +717,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
       },
     );
 
@@ -781,7 +778,7 @@ model Post {
           controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
           authoringContributions: postgresTimestampAuthoringContributions,
           createNamespace: createTestSqlNamespace,
-          ...fixtureTypeLookups,
+          ...fixtureInterpreterTypes,
           capabilities: { sql: { scalarList: true } },
         },
       );

@@ -3,7 +3,7 @@ import type { StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -29,7 +29,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
-      | 'dataTypeLookup'
+      | 'dataTypes'
       | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
@@ -43,7 +43,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });

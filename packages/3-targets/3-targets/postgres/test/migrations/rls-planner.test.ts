@@ -206,6 +206,8 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -238,6 +240,8 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -270,6 +274,8 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -299,6 +305,8 @@ describe('RLS planner diff-wiring', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -324,6 +332,8 @@ describe('RLS planner diff-wiring', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -352,6 +362,8 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
       schema,
       policy: DB_UPDATE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -363,6 +375,28 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
     const ops = await Promise.all(result.plan.operations);
     const opIds = ops.map((op) => op.id);
     expect(opIds).toContain(`rlsPolicy.public.${TABLE_NAME}.p_read_11111111`);
+    expect(opIds).toContain(`rlsPolicy.public.${TABLE_NAME}.p_read_00000000.drop`);
+  });
+
+  it('drops the extra policy under a policy that allows widening but not destructive', async () => {
+    const contract = buildContractWith([makePolicy('p_read_11111111')]);
+    const oldPolicy = makeActualPolicy('p_read_00000000', TABLE_NAME, '(auth.uid() = old_user_id)');
+
+    const result = createPostgresMigrationPlanner(stubLowerer).plan({
+      contract,
+      schema: schemaWith([oldPolicy]),
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
+      fromContract: null,
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresTypeComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    const opIds = (await Promise.all(result.plan.operations)).map((op) => op.id);
     expect(opIds).toContain(`rlsPolicy.public.${TABLE_NAME}.p_read_00000000.drop`);
   });
 
@@ -379,6 +413,8 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -408,6 +444,8 @@ describe('RLS planner roles produce zero ops (AC-6)', () => {
       schema,
       policy: DB_UPDATE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -38,6 +38,7 @@ describe('createFixtureControlClient', () => {
       contract: {},
       mode: 'plan',
       migrationsDir: 'migrations',
+      answerQuestions: async () => [],
     });
     expect(dbUpdate.ok).toBe(true);
 
@@ -100,7 +101,11 @@ describe('createFixtureControlClient', () => {
     });
     await client.connect('postgres://fixture');
 
-    const dbInit = await client.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'migrations' });
+    const dbInit = await client.dbInit({
+      contract: {},
+      mode: 'plan',
+      migrationsDir: 'migrations',
+    });
     expect(dbInit.assertNotOk().summary).toBe('planner exploded');
     expect(await client.readMarker()).toBeNull();
 
@@ -154,8 +159,25 @@ describe('createFixtureControlClient', () => {
       ['verify', (c) => c.verify({ contract: {} })],
       ['schemaVerify', (c) => c.schemaVerify({ contract: {} })],
       ['dbSign', (c) => c.dbSign({ contract: {} as never, migrationsDir: 'migrations' })],
-      ['dbInit', (c) => c.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
-      ['dbUpdate', (c) => c.dbUpdate({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
+      [
+        'dbInit',
+        (c) =>
+          c.dbInit({
+            contract: {},
+            mode: 'plan',
+            migrationsDir: 'migrations',
+          }),
+      ],
+      [
+        'dbUpdate',
+        (c) =>
+          c.dbUpdate({
+            contract: {},
+            mode: 'plan',
+            migrationsDir: 'migrations',
+            answerQuestions: async () => [],
+          }),
+      ],
       [
         'dbVerify',
         (c) =>

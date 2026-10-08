@@ -1,4 +1,7 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -9,6 +12,7 @@ import {
   type Binder,
   type BlockAttributeSpecFactory,
   blockSpecFactoryOf,
+  EMPTY_DATA_TYPES,
   findBlockDescriptor,
   type SymbolTable,
   typeReferenceNode,
@@ -27,6 +31,7 @@ export interface AttributeSpecSource {
   readonly symbolTable: SymbolTable;
   readonly authoringContributions?: AssembledAuthoringContributions;
   readonly controlMutationDefaults?: ControlMutationDefaults;
+  readonly dataTypes?: DataTypeSupport;
 }
 
 export interface FieldAttributeOwner {
@@ -114,10 +119,8 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: {
-          ...source.controlMutationDefaults,
-          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
-        },
+        controlMutationDefaults: source.controlMutationDefaults,
+        dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       return (name) => specs.model[name]?.(specContext);
     }
@@ -133,10 +136,8 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: {
-          ...source.controlMutationDefaults,
-          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
-        },
+        controlMutationDefaults: source.controlMutationDefaults,
+        dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       const node = typeReferenceNode(field);
       const typeResolution = node === undefined ? undefined : source.binder.symbolForNode(node);

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { structuredError } from '@internal/utils/structured-error';
+import { clipToUtf8Bytes, utf8ByteLength } from '@internal/utils/text';
 
 export function defaultIndexName(tableName: string, columns: readonly string[]): string {
   return `${tableName}_${columns.join('_')}_idx`;
@@ -283,19 +284,12 @@ export function computeIndexContentHash(parts: IndexContentHashParts): string {
  */
 export const WIRE_NAME_PREFIX_MAX_BYTES = 54;
 
-const utf8 = new TextEncoder();
-
-/** UTF-8 byte length — the unit Postgres measures identifiers in. */
-function byteLength(value: string): number {
-  return utf8.encode(value).length;
-}
-
 /**
  * Rejects a wire-name prefix over {@link WIRE_NAME_PREFIX_MAX_BYTES}.
  * `subject` opens the error message (e.g. `defineContract: policy prefix`).
  */
 export function assertWireNamePrefixLength(prefix: string, subject: string): void {
-  if (byteLength(prefix) > WIRE_NAME_PREFIX_MAX_BYTES) {
+  if (utf8ByteLength(prefix) > WIRE_NAME_PREFIX_MAX_BYTES) {
     throw structuredError(
       'CONTRACT.WIRE_NAME_PREFIX_TOO_LONG',
       `${subject} "${prefix}" exceeds the ${WIRE_NAME_PREFIX_MAX_BYTES}-byte maximum (Postgres identifiers cap at 63 bytes and the wire name appends a 9-byte hash suffix).`,
@@ -311,15 +305,5 @@ export function assertWireNamePrefixLength(prefix: string, subject: string): voi
  * ({@link assertWireNamePrefixLength}), because its author can shorten it.
  */
 export function truncateToWireNamePrefixBytes(prefix: string): string {
-  if (byteLength(prefix) <= WIRE_NAME_PREFIX_MAX_BYTES) return prefix;
-  let out = '';
-  let bytes = 0;
-  // Iterating a string yields code points, so a surrogate pair stays whole.
-  for (const character of prefix) {
-    const size = byteLength(character);
-    if (bytes + size > WIRE_NAME_PREFIX_MAX_BYTES) break;
-    out += character;
-    bytes += size;
-  }
-  return out;
+  return clipToUtf8Bytes(prefix, WIRE_NAME_PREFIX_MAX_BYTES);
 }

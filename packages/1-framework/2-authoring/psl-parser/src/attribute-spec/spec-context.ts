@@ -1,3 +1,5 @@
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { Resolution } from '../binder';
 import type { BlockSpecContext } from '../block-spec/types';
@@ -13,7 +15,11 @@ export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
 }
+
+/** The data types of a stack that registers none. */
+export const EMPTY_DATA_TYPES: DataTypeSupport = { entries: {}, lookup: createDataTypeLookup([]) };
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;

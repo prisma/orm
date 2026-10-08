@@ -14,11 +14,6 @@ export interface IndexTypeEntry<TOptions = unknown> {
    */
   readonly accessMethod?: string;
   /**
-   * Whether an index of this type over a foreign key's columns serves the foreign key's lookups,
-   * so no separate backing index is derived for it.
-   */
-  readonly backsForeignKey: boolean;
-  /**
    * Traits the codec of every column an index of this type covers must carry. The contract build
    * checks them through the contract's codec lookup.
    */
@@ -27,7 +22,6 @@ export interface IndexTypeEntry<TOptions = unknown> {
 
 type IndexTypeDeclaration<TOpts> = {
   readonly options: Type<TOpts>;
-  readonly backsForeignKey: boolean;
   readonly accessMethod?: string;
   readonly columnTraits?: readonly string[];
 };
@@ -72,7 +66,6 @@ class IndexTypeBuilderImpl<TMap extends IndexTypeMap> implements IndexTypeBuilde
       {
         type: typeLiteral,
         options: entry.options as Type<unknown>,
-        backsForeignKey: entry.backsForeignKey,
         ...ifDefined('accessMethod', entry.accessMethod),
         ...ifDefined('columnTraits', entry.columnTraits),
       },
@@ -99,33 +92,15 @@ export function defineIndexTypes(): IndexTypeBuilder<Record<never, never>> {
 }
 
 export interface IndexTypeRegistry {
-  /** `registrant` names the pack the entry comes from, for the refusal of a malformed entry. */
-  register(entry: IndexTypeEntry, registrant?: string): void;
+  register(entry: IndexTypeEntry): void;
   get(typeLiteral: string): IndexTypeEntry | undefined;
   has(typeLiteral: string): boolean;
-  /** Whether an index of this type can back a foreign key; false for a type nobody registered. */
-  backsForeignKey(typeLiteral: string): boolean;
 }
 
 class IndexTypeRegistryImpl implements IndexTypeRegistry {
   private readonly entries = new Map<string, IndexTypeEntry>();
 
-  register(entry: IndexTypeEntry, registrant?: string): void {
-    if (typeof entry.backsForeignKey !== 'boolean') {
-      const source = registrant === undefined ? '' : ` registered by pack "${registrant}"`;
-      throw contractError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Index type "${entry.type}"${source} does not declare backsForeignKey.`,
-        {
-          why: "Each index type says whether an index of that type can serve a foreign key's lookups, so a foreign key gets a backing index only when no declared index can serve it.",
-          fix: `Upgrade ${registrant === undefined ? 'the pack that registers this index type' : `the pack "${registrant}"`}, or add \`backsForeignKey\` to its registration: \`true\` only for an index that answers equality lookups on its leading columns, as btree and hash do; \`false\` for search, spatial and range-summary indexes.`,
-          meta: {
-            indexType: entry.type,
-            ...(registrant === undefined ? {} : { packId: registrant }),
-          },
-        },
-      );
-    }
+  register(entry: IndexTypeEntry): void {
     if (this.entries.has(entry.type)) {
       throw contractError(
         'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -142,10 +117,6 @@ class IndexTypeRegistryImpl implements IndexTypeRegistry {
 
   has(typeLiteral: string): boolean {
     return this.entries.has(typeLiteral);
-  }
-
-  backsForeignKey(typeLiteral: string): boolean {
-    return this.entries.get(typeLiteral)?.backsForeignKey === true;
   }
 }
 
@@ -179,14 +150,14 @@ export function indexTypeRegistryOf(
 ): IndexTypeRegistry {
   const registry = createIndexTypeRegistry();
   for (const entry of registeredEntriesOf(target)) {
-    registry.register(entry, target.id);
+    registry.register(entry);
   }
   for (const extension of extensions) {
     for (const entry of registeredEntriesOf(extension)) {
       if (rendersIndexBody(entry)) {
         throw extensionIndexTypeNotAccessMethod(entry, extension.id);
       }
-      registry.register(entry, extension.id);
+      registry.register(entry);
     }
   }
   return registry;

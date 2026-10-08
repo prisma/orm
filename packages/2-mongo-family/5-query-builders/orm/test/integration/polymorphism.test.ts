@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { createMongoDriver } from '@internal/driver-mongo';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -13,6 +14,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
+import type { MongoOrmEnums } from '../../src/collection';
 import { mongoOrm } from '../../src/mongo-orm';
 
 const contract = ormContractJson as unknown as Contract;
@@ -23,6 +25,7 @@ describe('Mongo ORM polymorphism integration', {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   let runtime: MongoRuntime;
+  let enums: MongoOrmEnums;
   const dbName = 'polymorphism_test';
 
   beforeAll(async () => {
@@ -39,6 +42,7 @@ describe('Mongo ORM polymorphism integration', {
     const context = createMongoExecutionContext({ contract: {}, stack });
     const driver = await createMongoDriver(replSet.getUri(), dbName);
     runtime = createMongoRuntime({ context, driver });
+    enums = buildMongoEnums(contract, context.codecs);
   }, timeouts.spinUpMongoMemoryServer);
 
   beforeEach(async () => {
@@ -50,7 +54,7 @@ describe('Mongo ORM polymorphism integration', {
   }, timeouts.spinUpMongoMemoryServer);
 
   it('base query returns rows with discriminator values', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -77,7 +81,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant("bug") filters to only Bug rows', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -104,7 +108,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant("feature") filters to only Feature rows', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -131,7 +135,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant create injects discriminator and persists it', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -155,7 +159,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('round-trip: create via variant, read back via base', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -186,7 +190,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('non-polymorphic model unaffected by polymorphism changes', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
 
     await orm.users.createAll([
       {
@@ -212,7 +216,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant().first() returns narrowed result', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -234,7 +238,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant createAll injects discriminator into each document', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',

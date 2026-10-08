@@ -18,6 +18,7 @@ import type {
 import type { MongoOrmClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -86,6 +87,8 @@ async function pushContract(connectionUri: string, contractJson: unknown): Promi
       schema,
       policy: initPolicy,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -159,7 +162,12 @@ export async function withMongoPort<
     const runtime = createMongoRuntime({ context, driver });
 
     try {
-      const db = mongoOrm<TContract>({ contract, executor: runtime, mutationDefaults: context });
+      const db = mongoOrm<TContract>({
+        contract,
+        executor: runtime,
+        mutationDefaults: context,
+        enums: buildMongoEnums(contract, context.codecs),
+      });
       const mongoDb = client.db(dbName);
       await fn({ db, client, mongoDb, contract });
     } finally {

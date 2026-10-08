@@ -92,7 +92,7 @@ function interpret(
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: overrides?.codecLookup ?? mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: mongoDataTypeLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },

@@ -94,7 +94,7 @@ Diagnostics are divided between two owners. The binder reports names that do not
 ## Package boundaries
 
 - This package does not perform file I/O.
-- This package does not know any target or family. Targets and families contribute types, attribute specifications and block descriptors through the binder's context.
+- This package does not know any target or family. Targets and families contribute types, data types, attribute specifications and block descriptors through the binder's context.
 - This package does not produce contract IR, `contract.json` or `contract.d.ts`.
 
 ## Related docs

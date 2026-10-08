@@ -224,6 +224,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postOneToMany_userId_idx_a489d58a"
+                  },
                   "onDelete": "setDefault",
                   "onUpdate": "setDefault",
                   "source": {
@@ -278,6 +281,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "setDefault",
                   "onUpdate": "setDefault",
                   "source": {
@@ -350,7 +358,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6a6828ff9870959d3c821e099ec11e6e752fab2253bc77b286cd0bf389fe9337"
+    "storageHash": "e8175007d8b67d8a3aeddb2c71bacf5fe905cbc3ecd15736028b6e85f9e95b0d"
   },
   "capabilities": {
     "postgres": {

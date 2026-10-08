@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, sqliteScalarColumnDescriptors, sqliteTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
@@ -82,7 +82,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
         controlMutationDefaults: builtinControlMutationDefaults,
         authoringContributions: sqliteTemporalContributions,
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );

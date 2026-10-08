@@ -34,6 +34,7 @@ describe('defineConfig', () => {
       create: () => ({
         familyId: 'sql',
         deserializeContract: (contract: unknown) => contract as Contract,
+        storageNameOf: (operation) => operation.id,
         verify: async () => ({
           ok: true,
           summary: 'test',
@@ -176,7 +177,7 @@ describe('defineConfig', () => {
         modelAttributes: {},
         attributeSpecs: { model: {}, field: {} },
       },
-      dataTypeLookup: createDataTypeLookup([]),
+      dataTypes: { entries: {}, lookup: createDataTypeLookup([]) },
       codecLookup: {
         get: () => undefined,
         renderOutputTypeFor: () => undefined,

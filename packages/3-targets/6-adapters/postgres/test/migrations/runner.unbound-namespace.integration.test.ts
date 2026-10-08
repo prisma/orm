@@ -129,6 +129,8 @@ describe('`namespace unbound` multi-tenancy via search_path', { concurrent: fals
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

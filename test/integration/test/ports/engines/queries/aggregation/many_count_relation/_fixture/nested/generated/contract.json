@@ -512,6 +512,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "comment_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -560,6 +563,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "commentTag_commentId_idx_b5a4f615"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -577,6 +583,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "commentTag_tagId_idx_86854244"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -640,6 +649,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -688,6 +700,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postTag_postId_idx_a7a72715"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -705,6 +720,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "postTag_tagId_idx_86854244"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -798,7 +816,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a1e77b05e453cb5b36383ab1f3ba6c73d9a77f311784c5e1ec1a2aa4dd9c8970"
+    "storageHash": "656b1e539f0fb39ef5b04708197cf523c28d7f7981fc6143e2ac08082e470f5d"
   },
   "capabilities": {
     "postgres": {

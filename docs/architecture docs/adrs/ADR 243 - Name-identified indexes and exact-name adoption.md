@@ -2,6 +2,8 @@
 
 Status: **Accepted**
 
+> **Note (2026-10-05).** Dropping an index is now classed `widening`, not `destructive`, because an index holds no stored data. Where this ADR says an index is dropped under a destructive policy, read a policy that allows `widening`.
+
 Related: [ADR 234 — Content-addressed wire names for Postgres-normalized objects](<./ADR 234 - Content-addressed wire names for Postgres-normalized objects.md>) (extended here), [ADR 235 — The schema differ walks two derived schema IRs](<./ADR 235 - The schema differ walks two derived schema IRs.md>), [ADR 009 — Deterministic Naming Scheme](<./ADR 009 - Deterministic Naming Scheme.md>), [ADR 161 — Explicit foreign key constraint and index configuration](<./ADR 161 - Explicit foreign key constraint and index configuration.md>), [ADR 210 — Index-type registry](<./ADR 210 - Index-type registry.md>), [ADR 224 — Control Policy](<./ADR 224 - Control Policy — framework-locked vocabulary and family-owned dispatch.md>).
 
 ## Decision
@@ -94,7 +96,7 @@ The index content tuple is a stability commitment — changing it re-suffixes ev
 
 `sortedOptions` is `[key, String(value)]` pairs sorted by key. Prefix, schema, and table are excluded, for ADR 234's reasons. The RLS tuple is unchanged. A table of literal content-to-hash pairs is pinned in the naming tests, so a change to the tuple encoding fails the suite rather than silently renaming every user's indexes.
 
-Default prefixes for unnamed authoring are ADR 009's existing default names, so an unnamed `@@index([a,b])` becomes `t_a_b_idx_<8hex>`. An expression index has no derivable default and must be named with `name:` or `map:`; an authoring diagnostic enforces it. A synthesized FK-backing index is the exception to authored-prefix rejection: its default prefix is derived during FK materialization and truncated to the 54-byte wire-name budget before the content-hash suffix is appended. The emitted storage contract persists that truncated prefix and full physical name; authored index prefixes remain fail-loud when over budget.
+Default prefixes for unnamed authoring are ADR 009's existing default names, so an unnamed `@@index([a,b])` becomes `t_a_b_idx_<8hex>`. An expression index has no derivable default and must be named with `name:` or `map:`; an authoring diagnostic enforces it. A synthesized FK-backing index is the exception to authored-prefix rejection: its default prefix is derived during FK materialization (which also removes indexes that duplicate another, [ADR 161](<./ADR 161 - Explicit foreign key constraint and index configuration.md#a-foreign-key-names-its-backing-index>)) and truncated to the 54-byte wire-name budget before the content-hash suffix is appended. The emitted storage contract persists that truncated prefix and full physical name; authored index prefixes remain fail-loud when over budget.
 
 ## Equivalence matrix
 

@@ -10,8 +10,19 @@ import {
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
+  LockingClause,
+  type LockOptionCapabilities,
+  type LockStrength,
+  type LockStrengthCapabilities,
+  type LockWaitOptions,
+  type LockWaitRequest,
+  lockIncompatible,
+  lockOptionCapabilities,
+  lockStrengthCapabilities,
+  lockWaitPolicyOf,
   type OrderByItem,
   type ToWhereExpr,
   type WhereArg,
@@ -31,6 +42,7 @@ import { mapCursorValuesToColumns, mapFieldsToColumns } from './collection-colum
 import {
   assertDistinctOnCapability,
   assertInsertConflictSkipCapability,
+  assertLockCapability,
   assertReturningCapability,
   getColumnToFieldMap,
   getFieldToColumnMap,
@@ -74,18 +86,27 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  Fragment,
   HasNoVariant,
   HasOrderBy,
   HasRow,
   HasTypeState,
   HasWhere,
   Including,
+  ModelFragmentReceiver,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
+import {
+  assertFragmentBody,
+  assertModelFragmentReceiver,
+  type FragmentFacts,
+  type FragmentFactsType,
+  type WithFacts,
+} from './fragments';
 import { GroupedCollection } from './grouped-collection';
 import {
   createIncludeCombine,
@@ -94,6 +115,7 @@ import {
   isIncludeCombine,
   isIncludeScalar,
 } from './include-descriptors';
+import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor } from './model-accessor';
 import {
   buildRowIdentityFilterFromRow,
@@ -154,8 +176,10 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNameForValue,
+  type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
+import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
@@ -196,6 +220,13 @@ function applyUpdateDefaults(
 }
 
 type WhereDirectInput = WhereArg;
+
+type LockMethodArgs<
+  Capabilities,
+  Strength extends LockStrength,
+> = Capabilities extends LockStrengthCapabilities[Strength] & LockOptionCapabilities['of']
+  ? [options?: LockWaitOptions<Capabilities>]
+  : never;
 
 function isToWhereExprInput(value: unknown): value is ToWhereExpr {
   return (
@@ -262,6 +293,30 @@ interface MtiCreateContext {
   variantFieldToColumn: Record<string, string>;
   pkColumns: readonly string[];
 }
+
+/** What `fragment` reads from the collection it is called on: its contract and its model. */
+interface FragmentSource {
+  readonly modelName: string;
+  readonly namespaceId: string;
+  readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
+}
+
+type ContractOf<C extends FragmentSource> = C['ctx']['context']['contract'];
+
+type ModelNameOf<C extends FragmentSource> = C['modelName'];
+
+type ModelFragmentBody<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = [NsId] extends [never]
+  ? Collection<TContract, ModelName>
+  : Collection<
+      TContract,
+      ModelName,
+      InferRootRow<TContract, ModelName, NsId>,
+      WithNsId<DefaultCollectionTypeState, NsId>
+    >;
 
 export class CollectionBase<
   TContract extends Contract<SqlStorage>,
@@ -384,12 +439,6 @@ export class CollectionBase<
   where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
   where<Self>(
     this: Self,
-    fn: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
-  ): Filtered<Self>;
-  where<Self>(
-    this: Self,
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<Self>;
   where(
@@ -403,14 +452,6 @@ export class CollectionBase<
             State['nsId']
           >,
         ) => WhereDirectInput)
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
     const whereArg =
@@ -444,10 +485,40 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result.
+   * Call `fn`, a query fragment, with this collection and return its result. `fn` may be a scope, which only imposes conditions and declares the fields it needs, or a fragment for what `where` cannot express, such as a shared `select` and `include`, an order or a limit. A condition on one row that needs no declared fields is `where(rowFragment)`. For a fragment made by the client's `fragment` method, the result is this collection's own type plus the filter and order the fragment's body established.
    */
-  apply<Self, Out>(this: Self, fn: (collection: Self) => Out): Out {
+  with<Self, Facts extends FragmentFacts>(
+    this: Self,
+    fragment: ((collection: NoInfer<Self>) => unknown) & { readonly [FragmentFactsType]: Facts },
+  ): WithFacts<Self, Facts>;
+  with<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
+  with(fn: (collection: unknown) => unknown): unknown {
     return fn(this);
+  }
+
+  /**
+   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * ```ts
+   * const summary = db.Post.fragment((posts) => posts.select('id', 'title').include('user'));
+   * db.User.include('posts', (posts) => posts.with(summary));
+   * ```
+   */
+  fragment<Self extends FragmentSource, NsId extends string, Result>(
+    this: Self & HasTypeState<{ readonly nsId: NsId }>,
+    body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
+  ): Fragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+    assertFragmentBody(body);
+    const source = { modelName: this.modelName, namespaceId: this.namespaceId };
+    return (collection) => {
+      assertModelFragmentReceiver(source, collection);
+      return body(
+        blindCast<
+          ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
+          'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
+        >(collection),
+      );
+    };
   }
 
   /**
@@ -1018,6 +1089,7 @@ export class CollectionBase<
       ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(...fields: Fields): GroupedCollection<TContract, ModelName, Fields, State['nsId']> {
+    assertLockCompatible(this.state, 'groupBy');
     const groupByColumns = mapFieldsToColumns(
       this.contract,
       this.namespaceId,
@@ -1231,6 +1303,54 @@ export class CollectionBase<
       distinct: undefined,
       distinctOn: distinctOnFields,
     });
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR UPDATE` until the transaction ends.
+   *
+   * Requires the `sql.forUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
+   *
+   * ```typescript
+   * const job = await tx.orm.Job.where({ state: 'queued' }).limit(1).forUpdate({ skipLocked: true }).first();
+   * ```
+   */
+  forUpdate(
+    ...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forUpdate', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR NO KEY UPDATE` until the transaction ends. Unlike `forUpdate`, it does not block foreign-key checks from rows that reference them.
+   *
+   * Requires the `postgres.forNoKeyUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
+   */
+  forNoKeyUpdate(
+    ...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forNoKeyUpdate', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR SHARE` until the transaction ends; other transactions may share-lock them but not write them.
+   *
+   * Requires the `sql.forShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
+   */
+  forShare(
+    ...options: LockMethodArgs<TContract['capabilities'], 'forShare'>
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forShare', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR KEY SHARE` until the transaction ends; only deletes and key changes are blocked.
+   *
+   * Requires the `postgres.forKeyShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
+   */
+  forKeyShare(
+    ...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forKeyShare', options[0]);
   }
 
   /**
@@ -1448,6 +1568,7 @@ export class CollectionBase<
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
+    assertLockCompatible(this.state, 'aggregate');
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, State['nsId']>(
         this.contract,
@@ -1592,6 +1713,7 @@ export class CollectionBase<
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'create()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
 
@@ -1721,6 +1843,7 @@ export class CollectionBase<
     optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<unknown> {
+    assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAll()');
     return this.#createAllWithAnnotations(
@@ -2102,6 +2225,7 @@ export class CollectionBase<
     optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
     configure?: WriteConfigure,
   ): Promise<number> {
+    assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAndCount()');
 
@@ -2204,6 +2328,7 @@ export class CollectionBase<
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'upsert()');
     this.#assertNotMtiVariant('upsert()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
@@ -2300,6 +2425,8 @@ export class CollectionBase<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
+   * The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row changes and the result is `null`. An update with a relation callback finds its row by the filter alone, so it throws `ORM.ARGUMENT_INVALID` on a collection with an order, a limit, an offset, a cursor, `distinct` or `distinctOn`.
+   *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
    * The callback receives a mutator exposing `create(...)`, `connect(...)`, and `disconnect(...)`.
@@ -2341,6 +2468,7 @@ export class CollectionBase<
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'update()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
 
@@ -2355,6 +2483,7 @@ export class CollectionBase<
         >(data),
       )
     ) {
+      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
         runtime: this.ctx.runtime,
@@ -2399,7 +2528,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: update every matching row and stream the updated
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams updated
@@ -2431,6 +2560,8 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
+    assertLockCompatible(this.state, 'mutation');
     return this.#updateAllWithAnnotations(
       data,
       this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
@@ -2487,7 +2618,7 @@ export class CollectionBase<
   /**
    * Write terminal: update every matching row without returning them,
    * resolving to the count of rows that were updated. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `updateAll(...)` when you need the updated rows; prefer
    * this when you only need the affected-row count.
@@ -2507,6 +2638,8 @@ export class CollectionBase<
     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
+    assertLockCompatible(this.state, 'mutation');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2541,7 +2674,7 @@ export class CollectionBase<
    * Write terminal: delete a single matching row — the first one the
    * filter matches — and return it (or `null` when no row matched).
    * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error.
+   * unfiltered collection is a type error. The row is the one `first()` returns, so an order, an offset, a cursor, `distinct` and `distinctOn` choose it; after `limit(0)` no row is deleted and the result is `null`.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2556,6 +2689,7 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>> | null>;
   async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
     return withMutationScope(this.ctx.runtime, async (scope) => {
@@ -2564,7 +2698,11 @@ export class CollectionBase<
       if (!identityWhere) {
         return null;
       }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
+      const narrowed = scoped.#clone({
+        filters: [identityWhere],
+        limit: undefined,
+        offset: undefined,
+      });
       const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
       return rows[0] ?? null;
     });
@@ -2572,7 +2710,7 @@ export class CollectionBase<
 
   /**
    * Write terminal: delete every matching row and stream the deleted
-   * rows. Requires a prior `.where(...)` filter.
+   * rows. Requires a prior `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * The returned `AsyncIterableResult<Row>` is BOTH a thenable that
    * resolves to `Row[]` AND an async iterable that streams deleted
@@ -2598,6 +2736,8 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
+    assertLockCompatible(this.state, 'mutation');
     return this.#deleteAllWithAnnotations(
       this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
     );
@@ -2695,7 +2835,7 @@ export class CollectionBase<
   /**
    * Write terminal: delete every matching row without returning them,
    * resolving to the count of rows that were deleted. Requires a prior
-   * `.where(...)` filter.
+   * `.where(...)` filter. Throws `ORM.ARGUMENT_INVALID` on a collection with a limit, an offset, a cursor, `distinct` or `distinctOn`, which the statement cannot apply.
    *
    * Prefer `deleteAll(...)` when you need the deleted rows; prefer
    * this when you only need the affected-row count.
@@ -2709,6 +2849,8 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number>;
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
+    assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
+    assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
     const compiled = mergeAnnotations(
@@ -2793,6 +2935,10 @@ export class CollectionBase<
         `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
         { meta: { model: this.modelName, table: this.tableName } },
       );
+    }
+    checkLimitOffset('limit', this.state.limit);
+    if (this.state.limit === 0) {
+      return null;
     }
     const firstRow = await this.#clone({
       selectedFields: [...identityColumns],
@@ -2881,6 +3027,29 @@ export class CollectionBase<
       `${action} is only available inside include() refinement callbacks`,
       { meta: { action } },
     );
+  }
+
+  #lock(
+    strength: LockStrength,
+    options: LockWaitRequest | undefined,
+  ): Collection<TContract, ModelName, Row, State> {
+    if (this.includeRefinementMode) {
+      throw lockIncompatible(
+        'includeRefinement',
+        `${strength}() cannot be called inside an include() refinement callback`,
+      );
+    }
+    assertLockCapability(this.contract, lockStrengthCapabilities[strength], strength);
+    assertLockCapability(this.contract, lockOptionCapabilities.of, strength);
+    const waitPolicy = lockWaitPolicyOf(strength, options);
+    if (waitPolicy !== undefined) {
+      assertLockCapability(this.contract, lockOptionCapabilities[waitPolicy], strength);
+    }
+    const clause = LockingClause.of(strength, {
+      of: [this.tableName],
+      ...ifDefined('waitPolicy', waitPolicy),
+    });
+    return this.#clone({ locking: [...(this.state.locking ?? []), clause] });
   }
 
   #clone<NextState extends CollectionTypeState = State>(

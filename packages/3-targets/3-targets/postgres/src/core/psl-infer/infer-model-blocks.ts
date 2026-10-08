@@ -404,9 +404,9 @@ function literalOrRawAttribute(
           kind: 'literal',
           value: defaultInCanonicalForm(
             columnDefault.value,
-            defaultMapping.columnCodec === undefined || defaultMapping.dataTypeLookup === undefined
+            defaultMapping.columnCodec === undefined || defaultMapping.dataTypes === undefined
               ? undefined
-              : canonicalFormOf(defaultMapping.columnCodec, defaultMapping.dataTypeLookup),
+              : canonicalFormOf(defaultMapping.columnCodec, defaultMapping.dataTypes.lookup),
             defaultMapping.list === true,
           ).value,
         }
@@ -472,6 +472,8 @@ export function buildRelationField(
     }
     if (rel.index === false) {
       args.push(namedArg('index', 'false'));
+    } else if (rel.index !== undefined) {
+      args.push(namedArg('index', `"${escapePslString(rel.index)}"`));
     }
   } else if (rel.relationName) {
     args.push(namedArg('name', `"${escapePslString(rel.relationName)}"`));

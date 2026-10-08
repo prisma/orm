@@ -217,6 +217,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tagsOnPosts_postId_idx_a7a72715"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -234,6 +237,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "tagsOnPosts_tagId_idx_86854244"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -283,7 +289,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7f0d4e7936e0b384edd5a27bead27e305d01b4290d93ef96212023a51353a418"
+    "storageHash": "aa42b405cb4f441bc7aecb52dbfa3fc2f1f3dc0abb8982477e93a92304139e81"
   },
   "capabilities": {
     "postgres": {

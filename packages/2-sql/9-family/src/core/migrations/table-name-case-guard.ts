@@ -3,6 +3,7 @@ import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import type { TableRename, TableRenameRequest } from './resolve-table-rename';
 import type { SqlPlannerConflict } from './types';
 
 export const TABLE_NAME_CASE_CHANGED_CODE = 'MIGRATION.TABLE_NAME_CASE_CHANGED';
@@ -10,20 +11,6 @@ export const TABLE_NAME_CASE_CHANGED_CODE = 'MIGRATION.TABLE_NAME_CASE_CHANGED';
 /** The one fact the guard needs about a table the plan would drop or create. */
 export interface TableNameCaseGuardTable {
   readonly name: string;
-}
-
-/** A table rename the operator performs by hand, for the target to write the statements of. */
-export interface TableRenameByHand {
-  readonly namespaceId: string;
-  readonly from: string;
-  readonly to: string;
-}
-
-/** A table rename to write as a migration call; `namespaceId` is `undefined` when the call does not need to name the namespace. */
-export interface TableRenameInMigration {
-  readonly namespaceId: string | undefined;
-  readonly from: string;
-  readonly to: string;
 }
 
 interface PlannedTable {
@@ -75,8 +62,8 @@ export function detectTableNameCaseChanges(input: {
   readonly issues: readonly SchemaDiffIssue[];
   readonly tableOf: (issue: SchemaDiffIssue) => TableNameCaseGuardTable | undefined;
   readonly namespaceIdOf: (issue: SchemaDiffIssue) => string;
-  readonly renameByHandStatements: (rename: TableRenameByHand) => readonly string[];
-  readonly renameTableCall: (rename: TableRenameInMigration) => string;
+  readonly renameByHandStatements: (rename: TableRename) => readonly string[];
+  readonly renameTableCall: (rename: TableRenameRequest) => string;
   readonly contract: Contract<SqlStorage>;
   readonly defaultNamespaceId: string;
 }): SqlPlannerConflict[] {

@@ -259,10 +259,10 @@ describe('dropRlsPolicy op', () => {
     );
   });
 
-  it('operationClass is destructive', async () => {
+  it('operationClass is widening, since a policy holds no stored data', async () => {
     const { lowerer } = recordingCheckLowerer();
     const op = await dropRlsPolicy('public', 'profiles', 'read_own_profiles_ab12cd34', lowerer);
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 });
 
@@ -365,8 +365,8 @@ describe('DropPostgresRlsPolicyCall', () => {
     expect(call.factoryName).toBe('dropRlsPolicy');
   });
 
-  it('operationClass is destructive', () => {
+  it('operationClass is widening, since a policy holds no stored data', () => {
     const call = new DropPostgresRlsPolicyCall('public', 'profiles', 'read_own_profiles_ab12cd34');
-    expect(call.operationClass).toBe('destructive');
+    expect(call.operationClass).toBe('widening');
   });
 });

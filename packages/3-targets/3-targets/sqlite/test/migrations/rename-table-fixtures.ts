@@ -1,4 +1,4 @@
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -22,6 +22,7 @@ const integer = { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nulla
 const text = { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false };
 
 export interface ProfileSpec {
+  readonly control?: ControlPolicy;
   readonly uniques?: readonly UniqueConstraintInput[];
   readonly foreignKeys?: (tableName: string) => readonly ForeignKeyInput[];
   readonly indexes?: (tableName: string) => readonly IndexInput[];
@@ -35,6 +36,7 @@ export function contractOf(
   profileTableName: string,
   spec: ProfileSpec,
   hashSeed: string,
+  extraTables: Readonly<Record<string, StorageTable>> = {},
 ): Contract<SqlStorage> {
   return {
     target: 'sqlite',
@@ -53,6 +55,7 @@ export function contractOf(
                 uniques: spec.uniques ?? [],
                 indexes: spec.indexes?.(profileTableName) ?? [],
                 foreignKeys: spec.foreignKeys?.(profileTableName) ?? [],
+                ...(spec.control === undefined ? {} : { control: spec.control }),
               }),
               account: new StorageTable({
                 columns: { id: integer },
@@ -73,6 +76,7 @@ export function contractOf(
                   },
                 ],
               }),
+              ...extraTables,
             },
           },
         }),
@@ -96,5 +100,37 @@ export function handleIndex(tableName: string): IndexInput {
     unique: false,
     type: undefined,
     options: undefined,
+  };
+}
+
+export function plainTable(): StorageTable {
+  return new StorageTable({
+    columns: { id: integer },
+    primaryKey: { columns: ['id'] },
+    uniques: [],
+    indexes: [],
+    foreignKeys: [],
+  });
+}
+
+/** `contract` with one model per entry of `tables`, each stored in the named table. */
+export function withModels(
+  contract: Contract<SqlStorage>,
+  tables: Record<string, string>,
+): Contract<SqlStorage> {
+  return {
+    ...contract,
+    domain: applicationDomainOf({
+      models: Object.fromEntries(
+        Object.entries(tables).map(([model, table]) => [
+          model,
+          {
+            fields: {},
+            relations: {},
+            storage: { table, namespaceId: UNBOUND_NAMESPACE_ID, fields: {} },
+          },
+        ]),
+      ),
+    }),
   };
 }

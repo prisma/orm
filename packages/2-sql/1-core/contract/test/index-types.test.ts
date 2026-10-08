@@ -16,10 +16,7 @@ describe('defineIndexTypes builder', () => {
 
   it('add() yields a new builder with the entry appended', () => {
     const optionsValidator = type({ key_field: 'string' });
-    const builder = defineIndexTypes().add('bm25', {
-      options: optionsValidator,
-      backsForeignKey: false,
-    });
+    const builder = defineIndexTypes().add('bm25', { options: optionsValidator });
     expect(builder.entries).toHaveLength(1);
     expect(builder.entries[0]?.type).toBe('bm25');
     expect(builder.entries[0]?.options).toBe(optionsValidator);
@@ -28,16 +25,14 @@ describe('defineIndexTypes builder', () => {
   it('add() composes multiple distinct entries in order', () => {
     const a = type({ a: 'string' });
     const b = type({ b: 'string' });
-    const builder = defineIndexTypes()
-      .add('alpha', { options: a, backsForeignKey: false })
-      .add('beta', { options: b, backsForeignKey: false });
+    const builder = defineIndexTypes().add('alpha', { options: a }).add('beta', { options: b });
     expect(builder.entries.map((e) => e.type)).toEqual(['alpha', 'beta']);
   });
 
   it("creates an index with its type's access method, the type literal unless declared", () => {
     const { entries } = defineIndexTypes()
-      .add('btree', { options: type('object'), backsForeignKey: true })
-      .add('search', { options: type('object'), backsForeignKey: false, accessMethod: 'gin' });
+      .add('btree', { options: type('object') })
+      .add('search', { options: type('object'), accessMethod: 'gin' });
     expect(entries.map((entry) => [accessMethodOf(entry), rendersIndexBody(entry)])).toEqual([
       ['btree', false],
       ['gin', true],
@@ -47,24 +42,22 @@ describe('defineIndexTypes builder', () => {
   it('add() does not mutate the prior builder', () => {
     const opts = type({ x: 'string' });
     const a = defineIndexTypes();
-    const b = a.add('alpha', { options: opts, backsForeignKey: false });
+    const b = a.add('alpha', { options: opts });
     expect(a.entries).toEqual([]);
     expect(b.entries).toHaveLength(1);
   });
 
   it('add() throws on duplicate type literal in the same builder', () => {
     const opts = type({ x: 'string' });
-    const builder = defineIndexTypes().add('dup', { options: opts, backsForeignKey: false });
-    expect(() => builder.add('dup', { options: opts, backsForeignKey: false })).toThrow(
-      /already declared/,
-    );
+    const builder = defineIndexTypes().add('dup', { options: opts });
+    expect(() => builder.add('dup', { options: opts })).toThrow(/already declared/);
   });
 });
 
 describe('createIndexTypeRegistry', () => {
   it('register stores an entry; get returns it', () => {
     const registry = createIndexTypeRegistry();
-    const entry = { type: 'demo', options: type({ fillfactor: 'number' }), backsForeignKey: true };
+    const entry = { type: 'demo', options: type({ fillfactor: 'number' }) };
     registry.register(entry);
     expect(registry.get('demo')).toBe(entry);
   });
@@ -72,7 +65,7 @@ describe('createIndexTypeRegistry', () => {
   it('has reports presence', () => {
     const registry = createIndexTypeRegistry();
     expect(registry.has('absent')).toBe(false);
-    registry.register({ type: 'present', options: type({ k: 'string' }), backsForeignKey: false });
+    registry.register({ type: 'present', options: type({ k: 'string' }) });
     expect(registry.has('present')).toBe(true);
   });
 
@@ -84,58 +77,24 @@ describe('createIndexTypeRegistry', () => {
   it('register throws on duplicate type', () => {
     const registry = createIndexTypeRegistry();
     const opts = type({ key: 'string' });
-    registry.register({ type: 'gin', options: opts, backsForeignKey: false });
-    expect(() => registry.register({ type: 'gin', options: opts, backsForeignKey: false })).toThrow(
-      /already registered/,
-    );
+    registry.register({ type: 'gin', options: opts });
+    expect(() => registry.register({ type: 'gin', options: opts })).toThrow(/already registered/);
   });
 
   it('error message names the offending type', () => {
     const registry = createIndexTypeRegistry();
-    registry.register({ type: 'gist', options: type({ k: 'string' }), backsForeignKey: false });
-    expect(() =>
-      registry.register({ type: 'gist', options: type({ k: 'string' }), backsForeignKey: false }),
-    ).toThrow(/gist/);
-  });
-
-  it('says whether a registered type can back a foreign key, and no unregistered type can', () => {
-    const registry = createIndexTypeRegistry();
-    registry.register({ type: 'ordered', options: type('object'), backsForeignKey: true });
-    registry.register({ type: 'search', options: type('object'), backsForeignKey: false });
-
-    expect(['ordered', 'search', 'unknown'].map((t) => registry.backsForeignKey(t))).toEqual([
-      true,
-      false,
-      false,
-    ]);
-  });
-
-  it('refuses an entry that does not say whether it can back a foreign key', () => {
-    const registry = createIndexTypeRegistry();
-    const entry = { type: 'legacy', options: type('object') };
-
-    expect(() => registry.register(entry as never)).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        message: expect.stringContaining('"legacy"'),
-        why: expect.stringContaining('foreign key'),
-        fix: expect.stringContaining('backsForeignKey'),
-      }),
+    registry.register({ type: 'gist', options: type({ k: 'string' }) });
+    expect(() => registry.register({ type: 'gist', options: type({ k: 'string' }) })).toThrow(
+      /gist/,
     );
   });
 
-  it('names the pack that registered an entry without backsForeignKey', () => {
-    expect(() =>
-      indexTypeRegistryOf({
-        id: 'legacy-pack',
-        indexTypes: { entries: [{ type: 'legacy', options: type('object') }] },
-      }),
-    ).toThrow(
-      expect.objectContaining({
-        message: expect.stringContaining('"legacy-pack"'),
-        meta: expect.objectContaining({ indexType: 'legacy', packId: 'legacy-pack' }),
-      }),
-    );
+  it('two registries are independent', () => {
+    const a = createIndexTypeRegistry();
+    const b = createIndexTypeRegistry();
+    a.register({ type: 'shared', options: type({ k: 'string' }) });
+    expect(a.has('shared')).toBe(true);
+    expect(b.has('shared')).toBe(false);
   });
 });
 
@@ -144,27 +103,18 @@ describe('indexTypeRegistryOf', () => {
     const registry = indexTypeRegistryOf(
       {
         id: 'target',
-        indexTypes: defineIndexTypes().add('ordered', {
-          options: type('object'),
-          backsForeignKey: true,
-        }),
+        indexTypes: defineIndexTypes().add('ordered', { options: type('object') }),
       },
       [
         { id: 'no-indexes' },
         {
           id: 'search',
-          indexTypes: defineIndexTypes().add('search', {
-            options: type('object'),
-            backsForeignKey: false,
-          }),
+          indexTypes: defineIndexTypes().add('search', { options: type('object') }),
         },
       ],
     );
 
-    expect([registry.backsForeignKey('ordered'), registry.backsForeignKey('search')]).toEqual([
-      true,
-      false,
-    ]);
+    expect([registry.has('ordered'), registry.has('search')]).toEqual([true, true]);
   });
 
   it('refuses a pack whose indexTypes is not a registration', () => {
@@ -176,7 +126,6 @@ describe('indexTypeRegistryOf', () => {
   describe('an index type whose access method is not its own name', () => {
     const convertedSearch = defineIndexTypes().add('search', {
       options: type('object'),
-      backsForeignKey: false,
       accessMethod: 'gin',
     });
 
@@ -206,7 +155,6 @@ describe('indexTypeRegistryOf', () => {
           id: 'bm25-pack',
           indexTypes: defineIndexTypes().add('bm25', {
             options: type('object'),
-            backsForeignKey: false,
             accessMethod: 'bm25',
           }),
         },
@@ -214,13 +162,5 @@ describe('indexTypeRegistryOf', () => {
 
       expect(registry.has('bm25')).toBe(true);
     });
-  });
-
-  it('two registries are independent', () => {
-    const a = createIndexTypeRegistry();
-    const b = createIndexTypeRegistry();
-    a.register({ type: 'shared', options: type({ k: 'string' }), backsForeignKey: false });
-    expect(a.has('shared')).toBe(true);
-    expect(b.has('shared')).toBe(false);
   });
 });

@@ -350,6 +350,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "downVote_commentId_idx_b5a4f615"
+                  },
                   "source": {
                     "columns": [
                       "commentId"
@@ -366,6 +369,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "downVote_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -423,6 +429,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "upVote_commentId_idx_b5a4f615"
+                  },
                   "source": {
                     "columns": [
                       "commentId"
@@ -439,6 +448,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "upVote_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -504,7 +516,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "64e33f3fed598601b3d9dae9a54317cefda97591c8587de8317715a74e372a68"
+    "storageHash": "79d2ddc4bb621bd431f563a89975c26387754fc0e3242bafc86f9a8e29f7ca2b"
   },
   "capabilities": {
     "postgres": {

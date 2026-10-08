@@ -1,7 +1,9 @@
 import type {
   MigrationPlannerConflict,
+  MigrationSubjectJson,
   OperationPreview,
 } from '@internal/framework-components/control';
+import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 
 /**
@@ -44,6 +46,16 @@ export function previewBlockHeader(preview: OperationPreview): string {
 /**
  * Shared CLI output type for migration commands (db init, db update).
  */
+/** An operation of a plan, by its position in `plan.operations`, and its subject. */
+export interface PlannedSubjectJson {
+  readonly operationIndex: number;
+  readonly subject: MigrationSubjectJson;
+  /** The subject as the apply's question writes it, and as `--delete` or `--allow` takes it. */
+  readonly text: string;
+  /** Whether a `--delete` or `--allow` the dry run was given answers this question. */
+  readonly answered: boolean;
+}
+
 export interface MigrationCommandResult {
   readonly ok: true;
   readonly mode: 'plan' | 'apply';
@@ -81,6 +93,12 @@ export interface MigrationCommandResult {
    * into a single ambiguous list. See {@link PerSpaceExecutionEntry}.
    */
   readonly perSpace?: ReadonlyArray<PerSpaceExecutionEntry>;
+  /** `db update` only: the statements the plan applied, in order; empty when none were given. */
+  readonly appliedStatements?: readonly AppliedStatementReport[];
+  /** `db update --dry-run` only: the operations an apply would ask about because they lose data. */
+  readonly dataLoss?: readonly PlannedSubjectJson[];
+  /** `db update --dry-run` only: the operations an apply would ask about because they widen access. */
+  readonly accessWidening?: readonly PlannedSubjectJson[];
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef?: { readonly name: string; readonly hash: string } | null;
   readonly summary: string;

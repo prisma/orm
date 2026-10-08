@@ -309,6 +309,26 @@ describe('postgresCodec', () => {
     expect(withoutParams.isParameterized).toBe(false);
   });
 
+  it("keeps the wrapped descriptor's reason an enum cannot use it", () => {
+    class PrintedTextDescriptor extends GenericVectorDescriptor {
+      override readonly enumRefusal =
+        'A query reads its values as text the contract does not store.';
+    }
+    const adapt = (wrapped: GenericVectorDescriptor) =>
+      postgresCodec(wrapped, {
+        dataType: fixtureVectorType,
+        jsonProjection: (expression) => expression,
+      });
+
+    expect({
+      refused: adapt(new PrintedTextDescriptor()).enumRefusal,
+      usable: adapt(genericVectorDescriptor).enumRefusal,
+    }).toEqual({
+      refused: 'A query reads its values as text the contract does not store.',
+      usable: undefined,
+    });
+  });
+
   it('accepts an array override only after typed parameter validation', () => {
     const overrideCalls: VectorParams[] = [];
     const descriptor = postgresCodec(genericVectorDescriptor, {

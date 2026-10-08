@@ -15,6 +15,7 @@ import {
   JsonObjectExpr,
   ListExpression,
   LiteralExpr,
+  LockingClause,
   NativeJsonValueProjection,
   NotExpr,
   NullCheckExpr,
@@ -566,6 +567,16 @@ describe('bindWhereExpr', () => {
       const select = (bound as ExistsExpr).subquery as SelectAst;
       expect(select.limit).toBe(10);
       expect(select.offset).toBe(5);
+    });
+
+    it('preserves locking clauses', () => {
+      const locking = [LockingClause.of('forUpdate', { of: ['posts'], waitPolicy: 'skipLocked' })];
+      const bound = bindWhereExpr(
+        contract,
+        ExistsExpr.exists(subqueryWithLiteral().withLocking(locking)),
+      );
+
+      expect(((bound as ExistsExpr).subquery as SelectAst).locking).toEqual(locking);
     });
   });
 

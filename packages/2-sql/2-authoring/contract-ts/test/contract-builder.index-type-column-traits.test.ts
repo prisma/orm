@@ -40,7 +40,6 @@ const searchIndexPack = {
   version: '0.0.1',
   indexTypes: defineIndexTypes().add('search', {
     options: type('object'),
-    backsForeignKey: false,
     columnTraits: ['textual'],
   }),
 } as const;

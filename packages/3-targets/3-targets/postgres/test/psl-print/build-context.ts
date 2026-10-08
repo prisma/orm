@@ -5,12 +5,10 @@ import {
   createDataTypeLookup,
   type DataType,
 } from '@internal/framework-components/codec';
-import { indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/codec-descriptor';
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
-import { postgresIndexTypes } from '../../src/core/index-types';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
 import { postgresPslTypeConstructors } from '../../src/core/type-constructors';
 
@@ -49,7 +47,6 @@ export function testBuildContext(
         ...postgresPslTypeConstructors,
         ...extra.types,
       },
-      dataTypes: postgresDataTypeEntries(),
     },
     codecLookup: {
       get: () => undefined,
@@ -57,7 +54,9 @@ export function testBuildContext(
       descriptorFor: (codecId) =>
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),
     },
-    dataTypeLookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
-    indexTypes: indexTypeRegistryOf({ id: 'postgres', indexTypes: postgresIndexTypes }),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
+    },
   };
 }

@@ -255,7 +255,7 @@ namespace auth {
     createdAt            Timestamptz @map("created_at")
     updatedAt            Timestamptz @map("updated_at")
     authenticationMethod String      @map("authentication_method")
-    session              AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "mfa_amr_claims_session_id_fkey", index: false)
+    session              AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "mfa_amr_claims_session_id_fkey", index: "mfa_amr_claims_session_id_authentication_method_pkey")
 
     @@unique([sessionId, authenticationMethod], map: "mfa_amr_claims_session_id_authentication_method_pkey")
     @@rls
@@ -353,7 +353,7 @@ namespace auth {
     grantedAt Timestamptz  @default(now()) @map("granted_at")
     revokedAt Timestamptz? @map("revoked_at")
     client    OauthClients @relation(fields: [clientId], references: [id], onDelete: Cascade, map: "oauth_consents_client_id_fkey", index: false)
-    user      AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_consents_user_id_fkey", index: false)
+    user      AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_consents_user_id_fkey", index: "oauth_consents_user_client_unique")
 
     @@unique([userId, clientId], map: "oauth_consents_user_client_unique")
     @@index([clientId], map: "oauth_consents_active_client_idx", where: "(revoked_at IS NULL)")
@@ -373,7 +373,7 @@ namespace auth {
     relatesTo String                    @map("relates_to")
     createdAt CreatedAt                 @default(now()) @map("created_at")
     updatedAt CreatedAt                 @default(now()) @map("updated_at")
-    user      AuthUser                  @relation(fields: [userId], references: [id], onDelete: Cascade, map: "one_time_tokens_user_id_fkey", index: false)
+    user      AuthUser                  @relation(fields: [userId], references: [id], onDelete: Cascade, map: "one_time_tokens_user_id_fkey", index: "one_time_tokens_user_id_token_type_key")
 
     @@index([relatesTo], map: "one_time_tokens_relates_to_hash_idx", type: "hash")
     @@index([tokenHash], map: "one_time_tokens_token_hash_hash_idx", type: "hash")
@@ -393,7 +393,7 @@ namespace auth {
     updatedAt  Timestamptz? @map("updated_at")
     parent     Parent?
     sessionId  Id?          @map("session_id")
-    session    AuthSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "refresh_tokens_session_id_fkey", index: false)
+    session    AuthSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "refresh_tokens_session_id_fkey", index: "refresh_tokens_session_id_revoked_idx")
 
     @@index([instanceId], map: "refresh_tokens_instance_id_idx")
     @@index([instanceId, userId], map: "refresh_tokens_instance_id_user_id_idx")

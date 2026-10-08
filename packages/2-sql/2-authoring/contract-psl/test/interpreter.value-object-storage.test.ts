@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -40,7 +40,7 @@ function interpretPostgres(
     },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
@@ -94,7 +94,7 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: {} },
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       });
@@ -203,11 +203,11 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
+        message: 'Field "User.home": Expected json`...`; got a list',
         sourceId: 'schema.prisma',
         span: {
-          start: { offset: 81, line: 7, column: 16 },
-          end: { offset: 93, line: 7, column: 28 },
+          start: { offset: 90, line: 7, column: 25 },
+          end: { offset: 92, line: 7, column: 27 },
         },
       },
     ]);
@@ -251,6 +251,7 @@ model Child {
           source: { namespaceId: 'public', tableName: 'child', columns: ['key'] },
           target: { namespaceId: 'public', tableName: 'Base', columns: ['key'] },
           onDelete: 'cascade',
+          index: { primaryKey: true },
         },
       ],
     });

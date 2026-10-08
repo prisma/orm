@@ -1,6 +1,6 @@
 # ADR 210 — Index-type registry
 
-> **Decision (in one sentence):** Index types live in a per-contract registry assembled from the contract's target and extension packs; each entry names a `type` literal, an `arktype` validator for its `options`, the access method an index of the type is created with (by default the literal itself), and whether an index of the type can back a foreign key; the type and validator are what the authoring DSL narrows against, what the lowering validates against, and what the framework-owned Postgres renderer reads from when emitting `CREATE INDEX … USING <method> WITH (…)` (for a type whose access method is not its literal, such as Postgres's `fullText`, through the target's contract-to-schema conversion), and the foreign-key flag is what decides whether a foreign key needs a derived backing index.
+> **Decision (in one sentence):** Index types live in a per-contract registry assembled from the contract's target and extension packs; each entry names a `type` literal, an `arktype` validator for its `options` and the access method an index of the type is created with (by default the literal itself); the type and validator are what the authoring DSL narrows against, what the lowering validates against, and what the framework-owned Postgres renderer reads from when emitting `CREATE INDEX … USING <method> WITH (…)` (for a type whose access method is not its literal, such as Postgres's `fullText`, through the target's contract-to-schema conversion).
 
 ## A grounding example
 
@@ -20,7 +20,6 @@ export const paradedbIndexTypes = defineIndexTypes().add('bm25', {
     '+': 'reject',         // reject any extra option keys (registrant opt-in)
     key_field: 'string',
   }),
-  backsForeignKey: false,  // a search index cannot serve a foreign key's lookups
 });
 ```
 
@@ -79,13 +78,12 @@ The registry resolves all three by giving the system one place that knows which 
 
 ## The registry primitive
 
-An entry names a `type` literal, carries a validator describing the entry's `options`, and says whether an index of the type can back a foreign key. It may also name the access method an index of the type is created with, and traits that the codec of every column an index of the type covers must carry.
+An entry names a `type` literal and carries a validator describing the entry's `options`. It may also name the access method an index of the type is created with, and traits that the codec of every column an index of the type covers must carry.
 
 ```ts
 type IndexTypeEntry<TOptions> = {
   readonly type: string;
   readonly options: arktype.Type<TOptions>;
-  readonly backsForeignKey: boolean;
   readonly accessMethod?: string;
   readonly columnTraits?: readonly string[];
 };
@@ -105,19 +103,13 @@ Entries are produced by a small fluent builder. The builder is the only way an e
 
 ```ts
 defineIndexTypes()
-  .add('bm25',  { options: type({ '+': 'reject', key_field: 'string' }), backsForeignKey: false })
-  .add('vector', { options: type({ '+': 'reject', m: 'number', ef_construction: 'number' }), backsForeignKey: false });
+  .add('bm25',  { options: type({ '+': 'reject', key_field: 'string' }) })
+  .add('vector', { options: type({ '+': 'reject', m: 'number', ef_construction: 'number' }) });
 ```
 
 `defineIndexTypes()` returns a value carrying both the runtime entry list and a TypeScript-only phantom map of `type` literal → `options` shape. The same value is what a pack stores on its descriptor; both halves stay in lockstep automatically because both come from the same builder call. Drift between the runtime shape and the TS shape becomes a TypeScript error at the `.add(…)` call site, not a runtime surprise downstream.
 
 Calling `.add(name, …)` twice with the same `name` is a builder-time error naming the duplicate. The builder is immutable — every `.add(…)` returns a new builder — so the resulting registration is safe to share across contracts that attach the same pack.
-
-### Foreign-key backing
-
-A foreign key gets a derived backing index unless an index of its table already covers its columns in order. Whether an index can stand in for that backing index depends on its access method: a btree or hash index serves the equality lookups a foreign key needs; a search, spatial or range-summary index does not. The SQL family does not know the access methods, so each entry declares it with `backsForeignKey`, and the registry answers `backsForeignKey(type)`, which is `false` for a type nobody registered. An index counts as backing when it has no `where` predicate and either has no `type` (the target's default access method) or a type whose entry declares `backsForeignKey: true`. Unique constraints and the primary key always count.
-
-`contract emit` and `contract infer` read the same registry: `indexTypeRegistryOf` assembles it from the target and the extension packs, the contract build calls it with the contract's packs, and the SQL family instance calls it with the stack's packs and hands its answer to the target's infer hook. An entry without `backsForeignKey` is refused when the registry is assembled, naming the type and the pack, as is an extension pack's entry that is not an access method. Postgres declares it for `btree` and `hash`, and not for `gin`, `gist`, `spgist`, `brin` or `fullText`; ParadeDB's `bm25` does not back a foreign key.
 
 ## How packs and contracts compose
 
@@ -128,7 +120,7 @@ A pack publishes its registration on its descriptor under a single field (`index
 | Layer    | What composes                                                                                                                                                                                                                                              |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Type** | The contract's authoring DSL accepts `IndexTypes = TargetIndexTypes & PackAIndexTypes & PackBIndexTypes & …`. `constraints.index(cols, { type, options })` discriminates on `type`; `options` narrows to the entry's shape; an unknown `type` is a compile error. |
-| **Runtime** | `indexTypeRegistryOf(target, extensions)` builds a fresh registry from the target and the contract's extension packs. The contract build and the SQL family instance call it and pass the registry on to the checks that need it, such as `assertStorageSemantics`. It refuses a `type` literal registered twice, naming the type, and an extension pack's entry whose `accessMethod` differs from its type literal, because only the target converts such a type into an index of its access method. Both refusals are `CONTRACT.PACK_CONTRIBUTION_INVALID`. |
+| **Runtime** | `indexTypeRegistryOf(target, extensions)` builds a fresh registry from the target and the contract's extension packs. The contract build calls it and passes the registry on to the checks that need it, such as `assertStorageSemantics`. It refuses a `type` literal registered twice, naming the type, and an extension pack's entry whose `accessMethod` differs from its type literal, because only the target converts such a type into an index of its access method. Both refusals are `CONTRACT.PACK_CONTRIBUTION_INVALID`. |
 
 No `declare module` augmentation is used. A global module augmentation would mean every contract in the workspace saw every loaded pack's index types — wrong by composition: a contract that didn't attach `paradedb` shouldn't see `bm25`. The per-pack registration value avoids this entirely.
 

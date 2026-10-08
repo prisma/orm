@@ -79,7 +79,7 @@ flowchart LR
 **Tests:**
 
 - `framework-components/test/written-value.test.ts`: `readWrittenValue` for each written kind and refusal; `castTypedValue` same type, cast, no cast, throwing cast, and the returned `TypedValue`; `admittedTags` and `describeAdmittedForms` for `sql/expression`, a boolean type, a number type reached through a classifier's `types`, a type casting from a tag type.
-- `psl-parser/test/written-literal.test.ts`: every row of the table in design section 5.
+- `psl-parser/test/written-scalar.test.ts`: every row of the table in design section 5.
 - `psl-parser/test/attribute-spec-combinators.data-type-value.test.ts`: label and metadata; every diagnostic in design section 6 with exact code, message and span, including each `found` word; success returns the typed value; construction does not throw for an unregistered type, and `parse` throws `InternalError` for it.
 - The same combinator test file: `dataTypeValue` for `pg/int4`, a type without a tag; and as a parameter of a `funcCall` that is an arm of `oneOf`.
 - The existing `@default` tests pass unchanged.
@@ -120,6 +120,16 @@ flowchart LR
 - `sqlTextReadsBack` and its tests move here from slice 2a, next to their only caller (design section 11.2). Its test: true for canonical text (a single line, several lines, an empty text); false for indented text, a blank first or last line, a carriage return and a NUL character. Add `canonicalizeTaggedLiteralBody` to the framework's `authoring` export with it.
 - Before writing ADR 256, check the ADR numbering: three files are already numbered 255.
 - `docs/architecture docs/subsystems/6. Ecosystem Extensions & Packs.md`, section "Template-Tagged Literals": add an `` @@index(where: sql`...`) `` example.
+
+**Carried over from the slice 2t review:**
+
+- Put `defaultFunctionRegistry` directly on `AttributeSpecContext` and delete `ControlDefaultRegistries`, which now holds only that registry under a third name; this slice builds every spec context again.
+- Let the `@default` literal arms yield a written scalar with its span, for example a small combinator on `readWrittenScalar`, so `lowerDataTypeDefault` reports at the span it is given and `writtenScalar`, `defaultValueExpression` and `listElements` in `psl-column-resolution.ts` go.
+- A number of the wrong size reads `pg/int4 has no cast from pg/int8; write a number` to an author who wrote a number. This is shipped behaviour of `@default` since slice 2t (`@default(100000000000000099)` on an `Int` column gives exactly that message, as manual QA case 4 of slice 2t shows), and applies to a number-typed `dataTypeValue` too; word that case in both, in the caller's choice of what follows `write`, before a number-typed place ships or in the release notes.
+- When the first attribute place uses `dataTypeValue`, update its doc comment: cite ADR 256 and say it also serves as a named attribute argument, not only a `funcCall` parameter.
+- The rewrite for a plain string whose text is not canonical, such as `where: "  x"`, reads back as different text; check the rewrite with `sqlTextReadsBack` (design section 11.2) before offering it.
+- Test that the Mongo provider forwards the stack's data types, in the block spec context test of design section 9.1.
+- `describeAdmittedForms` returns `no written form` for a type nothing can write. `@default` now says `` write sql`...` `` in that case, because it always takes a `sql` literal; a `dataTypeValue` position for such a type would still end `write no written form`, which is a pack bug rather than a user error, so word it as one if a place ever hits it.
 
 ## Slice 3 — The TypeScript builder takes `sql` values
 

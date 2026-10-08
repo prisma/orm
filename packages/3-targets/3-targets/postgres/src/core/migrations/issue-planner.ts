@@ -94,6 +94,7 @@ import {
   postgresPlannerStrategies,
   type StrategyContext,
 } from './planner-strategies';
+import { liveColumnWidensSafely } from './safe-widenings';
 
 export type { CallMigrationStrategy, StrategyContext };
 
@@ -178,6 +179,7 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
     case 'dropRlsPolicy':
       return 'drop';
     case 'addColumn':
+    case 'renameColumn':
       return 'column';
     case 'alterColumnType':
     case 'setNotNull':
@@ -533,7 +535,7 @@ function nativeEnumMemberChangeRefusal(options: {
 /**
  * Managed native-enum issue -> op lowering. A missing declared type creates
  * it; an unclaimed live type drops it (ownership-scoped upstream by
- * `retainUnownedExtras`, destructiveness gated by the operation-class
+ * `retainUnownedExtras`, and the `widening` drop gated by the operation-class
  * policy); a paired member-value mismatch lowers to one `ALTER TYPE ... ADD
  * VALUE` per appended member when the database's members are a strict,
  * order-preserving prefix of the contract's — any other change (rename,
@@ -686,11 +688,13 @@ function mapColumnNodeIssue(
   if (columnTypeChanged(expected, actual)) {
     const { qualifiedTargetType, formatTypeExpected } = renderColumnAlterType(expected, types);
     calls.push(
-      new AlterColumnTypeCall(schemaName, tableName, expected.name, {
-        qualifiedTargetType,
-        formatTypeExpected,
-        rawTargetTypeForLabel: qualifiedTargetType,
-      }),
+      new AlterColumnTypeCall(
+        schemaName,
+        tableName,
+        expected.name,
+        { qualifiedTargetType, formatTypeExpected, rawTargetTypeForLabel: qualifiedTargetType },
+        liveColumnWidensSafely(expected, actual, types) ? 'widening' : 'destructive',
+      ),
     );
   }
   if (expected.nullable !== actual.nullable) {

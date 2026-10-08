@@ -106,6 +106,8 @@ describe('raw SQL bytea defaults, read as PostgreSQL bytea input', { concurrent:
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

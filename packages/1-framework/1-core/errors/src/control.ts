@@ -1,3 +1,8 @@
+import {
+  migrationStatementJson,
+  type ResolvedMigrationStatement,
+} from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
@@ -35,6 +40,10 @@ export interface CliErrorConflict {
   readonly kind: string;
   readonly summary: string;
   readonly why?: string;
+  /** The statement the conflict refuses, in domain coordinates. */
+  readonly refusedStatement?: ResolvedMigrationStatement;
+  /** Where the conflict is; `namespaceId` is left out of JSON output for the unbound namespace. */
+  readonly location?: Readonly<Record<string, unknown>> & { readonly namespaceId?: string };
 }
 
 /**
@@ -375,6 +384,22 @@ export function errorContractMissingExtensions(options: {
   );
 }
 
+function locationJson(location: NonNullable<CliErrorConflict['location']>) {
+  if (location.namespaceId !== UNBOUND_NAMESPACE_ID) return location;
+  const { namespaceId: _unbound, ...rest } = location;
+  return rest;
+}
+
+function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
+  return {
+    ...conflict,
+    ...(conflict.location === undefined ? {} : { location: locationJson(conflict.location) }),
+    ...(conflict.refusedStatement === undefined
+      ? {}
+      : { refusedStatement: migrationStatementJson(conflict.refusedStatement) }),
+  };
+}
+
 /**
  * Migration planning failed due to conflicts.
  */
@@ -396,7 +421,7 @@ export function errorMigrationPlanningFailed(options: {
   return new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
     why: computedWhy,
     fix: computedFix,
-    meta: { conflicts: options.conflicts },
+    meta: { conflicts: options.conflicts.map(conflictJson) },
     docsUrl: docsUrlFor('MIGRATION.PLANNING_FAILED'),
   });
 }

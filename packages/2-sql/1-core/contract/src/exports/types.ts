@@ -28,6 +28,7 @@ export type {
   ExtractTypeMapsFromContract,
   FieldInputTypesOf,
   FieldOutputTypesOf,
+  ForeignKeyIndex,
   ForeignKeyInput,
   ForeignKeyOptions,
   ForeignKeyReferenceInput,

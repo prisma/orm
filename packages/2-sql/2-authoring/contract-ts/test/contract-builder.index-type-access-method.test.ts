@@ -32,7 +32,6 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 
 const convertedSearch = defineIndexTypes().add('search', {
   options: type('object'),
-  backsForeignKey: false,
   accessMethod: 'gin',
 });
 

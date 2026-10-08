@@ -125,7 +125,7 @@ function parseAndInterpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -310,7 +310,6 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     typeMap: createPostgresTypeMap(new Set()),
     defaultMapping: createPostgresDefaultMapping(),
     parseRawDefault: parsePostgresDefault,
-    backsForeignKey: (indexType) => inferBuildContext.indexTypes.backsForeignKey(indexType),
   };
 
   const foreignKeyExtras = {

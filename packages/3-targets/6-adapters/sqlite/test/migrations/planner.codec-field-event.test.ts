@@ -1,7 +1,11 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { CodecControlHooks, SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import { APP_SPACE_ID, type OpFactoryCall } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type OpFactoryCall,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
@@ -121,6 +125,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: makeFrameworkComponents(hooks),
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -182,6 +188,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       },
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract,
+      origin: planOriginOf(fromContract),
+      statements: [],
       frameworkComponents: makeFrameworkComponents(hooks),
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -206,6 +214,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -250,6 +260,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: fc,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -259,6 +271,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: fc,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

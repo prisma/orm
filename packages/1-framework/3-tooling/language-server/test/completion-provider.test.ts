@@ -5,7 +5,10 @@ import type {
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
   DataTypeAuthoringEntry,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -270,6 +273,7 @@ function completeWithSource(input: {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
+  readonly dataTypes?: DataTypeSupport;
   readonly clientSupportsSnippets?: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
   readonly clientSupportsTriggerParameterHintsCommand?: boolean;
@@ -313,6 +317,7 @@ function completeWithSource(input: {
         ...(input.controlMutationDefaults === undefined
           ? {}
           : { controlMutationDefaults: input.controlMutationDefaults }),
+        ...(input.dataTypes === undefined ? {} : { dataTypes: input.dataTypes }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
       clientSupportsTriggerSuggestCommand: input.clientSupportsTriggerSuggestCommand === true,
@@ -382,14 +387,13 @@ function completeWithActualStack(
     readonly dataTypes?: Readonly<Record<string, DataTypeAuthoringEntry>>;
   } = {},
 ) {
-  const contributions = actualAuthoringContributions(stack);
   return completeWithSource({
     markedSource,
     pslBlockDescriptors: stack.pslBlockDescriptors,
-    authoringContributions:
-      options.dataTypes === undefined
-        ? contributions
-        : { ...contributions, dataTypes: options.dataTypes },
+    authoringContributions: actualAuthoringContributions(stack),
+    ...(options.dataTypes === undefined
+      ? {}
+      : { dataTypes: { entries: options.dataTypes, lookup: createDataTypeLookup([]) } }),
     controlMutationDefaults: options.controlMutationDefaults ?? controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
   });
@@ -1669,11 +1673,11 @@ namespace app {
     ).toEqual(['NoAction', 'Restrict', 'Cascade', 'SetNull', 'SetDefault']);
   }, 5_000);
 
-  it('uses actual Mongo field-named functions and keeps distinct snippet edits', async () => {
+  it('uses actual Mongo sort functions and completes their positional arguments', async () => {
     const stack = await actualMongoStack();
     const schema = (args: string) => `model Post { title String\n slug String\n @@index(${args}) }`;
     const plain = completeWithActualStack(schema('[|]'), stack).items;
-    expect(plain.map((item) => item.label)).toEqual(['title', 'slug', 'wildcard']);
+    expect(plain.map((item) => item.label)).toEqual(['title', 'slug', 'wildcard', 'sort']);
     const snippets = completeWithActualStack(schema('[|]'), stack, {
       clientSupportsSnippets: true,
     }).items;
@@ -1681,14 +1685,13 @@ namespace app {
       ['title', 'title'],
       ['slug', 'slug'],
       ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
-      ['title', 'title(sort: $' + '{1:sort})'],
-      ['slug', 'slug(sort: $' + '{1:sort})'],
+      ['sort', 'sort($' + '{1:field}, $' + '{2:direction})'],
     ]);
     expect(
-      completeWithActualStack(schema('[title(|)]'), stack).items.map((item) => item.label),
-    ).toEqual(['sort']);
+      completeWithActualStack(schema('[sort(|)]'), stack).items.map((item) => item.label),
+    ).toEqual(['title', 'slug']);
     expect(
-      completeWithActualStack(schema('[title(sort: |)]'), stack).items.map((item) => item.label),
+      completeWithActualStack(schema('[sort(title, |)]'), stack).items.map((item) => item.label),
     ).toEqual(['Asc', 'Desc']);
     expect(completeWithActualStack(schema('[wildcard(|)]'), stack).items).toEqual([]);
     expect(
@@ -1696,7 +1699,7 @@ namespace app {
     ).toEqual(['1', '-1', '"text"', '"2dsphere"', '"2d"', '"hashed"']);
   }, 5_000);
 
-  it('scopes actual Mongo dynamic function names to the declaring namespace model', async () => {
+  it('scopes actual Mongo sort fields to the declaring namespace model', async () => {
     const stack = await actualMongoStack();
     const schema =
       'model Post { topOnly String }\nnamespace scoped { model Post { scopedOnly String\n @@index([|]) } }';
@@ -1708,8 +1711,13 @@ namespace app {
     ).toEqual([
       ['scopedOnly', 'scopedOnly'],
       ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
-      ['scopedOnly', 'scopedOnly(sort: $' + '{1:sort})'],
+      ['sort', 'sort($' + '{1:field}, $' + '{2:direction})'],
     ]);
+    expect(
+      completeWithActualStack(schema.replace('[|]', '[sort(|)]'), stack).items.map(
+        (item) => item.label,
+      ),
+    ).toEqual(['scopedOnly']);
   }, 5_000);
 
   it('does not return generic block symbols as model field type candidates', () => {

@@ -36,4 +36,4 @@ if (CliStructuredError.is(caught)) {
 | Entry point | Domain | Code range | Contents |
 |---|---|---|---|
 | `./control` | CLI | `PN-CLI-4xxx` | `CliStructuredError` class, `CliErrorEnvelope`/`CliErrorConflict` types, 14 CLI factory functions, `errorUnexpected` |
-| `./execution` | RUN | `PN-RUN-3xxx` | 8 runtime factory functions, `ERROR_CODE_DESTRUCTIVE_CHANGES` constant |
+| `./execution` | RUN | `PN-RUN-3xxx` | Runtime factory functions |

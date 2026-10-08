@@ -177,7 +177,7 @@ The whole job is one command:
 
 `migration status --to staging --db $URL` is what a human or agent runs to answer *"what will run on deploy?"* before merging: it reports the path from the live marker to the ref without changing anything. `db migrate --show --db $URL` gives the same path as an ordered preview; `migration log --db $URL` gives the applied history after a deploy.
 
-`db migrate` is interactive-free and has no destructive-op confirmation prompt — the safety rails that prompt for destructive changes live on `db update` (see the `references/migrations.md` skill). Whatever the planner put in the migration graph is what `db migrate` runs; review happens at `migration plan` and at `migration status` time, before the apply step.
+`db migrate` is interactive-free and asks nothing — the questions about data loss are asked by `migration plan` when it writes the package, and by `db update` (see the `references/migrations.md` skill). Whatever the planner put in the migration graph is what `db migrate` runs; review happens at `migration plan` and at `migration status` time, before the apply step.
 
 ## Common Pitfalls
 

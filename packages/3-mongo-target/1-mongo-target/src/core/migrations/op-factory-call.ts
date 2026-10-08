@@ -112,7 +112,7 @@ export class CreateIndexCall extends OpFactoryCallNode {
 
 export class DropIndexCall extends OpFactoryCallNode {
   readonly factoryName = 'dropIndex' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly collection: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
   readonly label: string;
@@ -195,7 +195,7 @@ export class CollModCall extends OpFactoryCallNode {
     this.collection = collection;
     this.options = options;
     this.meta = meta;
-    this.operationClass = meta?.operationClass ?? 'destructive';
+    this.operationClass = meta?.operationClass ?? 'widening';
     this.label = meta?.label ?? `Modify collection ${collection}`;
     this.freeze();
   }

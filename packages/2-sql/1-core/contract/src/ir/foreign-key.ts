@@ -4,12 +4,24 @@ import { SqlNode } from './sql-node';
 
 export type ReferentialAction = 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
 
+/**
+ * What serves a foreign key's lookups on its own table, each in the way the contract identifies it: an index by its stored name, the primary key by kind, a unique constraint by its columns. The first columns of each are the foreign key's columns.
+ */
+export type ForeignKeyIndex =
+  | { readonly name: string }
+  | { readonly primaryKey: true }
+  | { readonly unique: readonly string[] };
+
 export interface ForeignKeyInput {
   readonly source: ForeignKeyReference | ForeignKeyReferenceInput;
   readonly target: ForeignKeyReference | ForeignKeyReferenceInput;
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
+  /**
+   * A `contract.json` emitted before 0.16 stores `true` or `false` here, the superseded per-foreign-key flag; it says nothing about the table's indexes and reads as absent.
+   */
+  readonly index?: ForeignKeyIndex | boolean;
 }
 
 /**
@@ -21,7 +33,8 @@ export interface ForeignKeyInput {
  * authoring-time decisions (PSL `@relation(index:)`, TS `fk({ constraint,
  * index })`) resolved once at `contract emit` — a `constraint: false` FK
  * simply has no entry here, and a backing index (if any) is its own discrete,
- * named entry in the table's `indexes[]`.
+ * named entry in the table's `indexes[]`. `index` says what serves the
+ * foreign key's lookups; it is absent when nothing backs the foreign key.
  *
  * Each FK carries explicit `source` and `target` {@link ForeignKeyReference}
  * coordinates (namespace, table, columns). For single-namespace contracts the
@@ -38,6 +51,7 @@ export class ForeignKey extends SqlNode {
   declare readonly name?: string;
   declare readonly onDelete?: ReferentialAction;
   declare readonly onUpdate?: ReferentialAction;
+  declare readonly index?: ForeignKeyIndex;
 
   constructor(input: ForeignKeyInput) {
     super();
@@ -46,6 +60,7 @@ export class ForeignKey extends SqlNode {
     if (input.name !== undefined) this.name = input.name;
     if (input.onDelete !== undefined) this.onDelete = input.onDelete;
     if (input.onUpdate !== undefined) this.onUpdate = input.onUpdate;
+    if (typeof input.index === 'object') this.index = input.index;
     freezeNode(this);
   }
 

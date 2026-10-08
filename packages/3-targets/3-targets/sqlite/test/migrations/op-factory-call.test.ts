@@ -364,12 +364,13 @@ describe('CreateIndexCall', () => {
 });
 
 describe('DropIndexCall', () => {
-  it('produces a destructive DROP INDEX IF EXISTS op', async () => {
+  it('produces a widening DROP INDEX IF EXISTS op, since an index holds no stored data', async () => {
     const lowerer = stubLowerer('CHECK SQL');
     const call = new DropIndexCall('user', 'idx_email');
     const op = await call.toOp(lowerer);
+    expect(call.operationClass).toBe('widening');
     expect(op.id).toBe('dropIndex.user.idx_email');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
     expect(op.execute[0]?.sql).toBe('DROP INDEX IF EXISTS "idx_email"');
   });
 
@@ -424,6 +425,30 @@ describe('RecreateTableCall', () => {
     expect(descriptions[4]).toContain('idx_email');
 
     expect(op.postcheck.some((s) => s.description.includes('type'))).toBe(true);
+  });
+
+  it('keeps its lossy columns out of the operation and the rendered migration', async () => {
+    const args = {
+      tableName: 'user',
+      contractTable: tableSpec([
+        colSpec({ name: 'id', typeSql: 'INTEGER', nullable: false }),
+        colSpec({ name: 'age', typeSql: 'INTEGER', nullable: true }),
+      ]),
+      schemaColumnNames: ['id', 'age'],
+      indexes: [],
+      summary: 'Recreates table user to apply schema changes: type mismatch on age',
+      postchecks: [],
+      operationClass: 'destructive' as const,
+    };
+    const withLossy = new RecreateTableCall(args, ['age']);
+    const without = new RecreateTableCall(args);
+
+    expect(withLossy.lossyColumns).toEqual(['age']);
+    expect(without.lossyColumns).toEqual([]);
+    expect(withLossy.renderTypeScript()).toBe(without.renderTypeScript());
+    expect(JSON.stringify(await withLossy.toOp(stubLowerer('CHECK SQL')))).toBe(
+      JSON.stringify(await without.toOp(stubLowerer('CHECK SQL'))),
+    );
   });
 
   it('writes each column default the adapter renders, and checks the recreated table carries it', async () => {
@@ -624,8 +649,10 @@ describe('DataTransformCall', () => {
       'email',
     );
 
-  it('toOp() throws MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', () => {
-    expect(() => makeCall().toOp()).toThrowError(/MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i);
+  it('toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', async () => {
+    await expect(makeCall().toOp()).rejects.toThrowError(
+      /MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i,
+    );
   });
 
   it('renderTypeScript() emits a dataTransform({...}) call with a placeholder run slot', () => {

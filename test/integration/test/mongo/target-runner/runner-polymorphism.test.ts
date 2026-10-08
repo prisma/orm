@@ -143,7 +143,7 @@ function makeContractFromPsl(): MongoContract {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: mongoDataTypeLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -181,6 +181,8 @@ function planForContract(
     schema: origin,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

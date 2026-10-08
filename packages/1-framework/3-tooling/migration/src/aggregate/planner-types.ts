@@ -1,12 +1,15 @@
 import type { Contract } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  AppliedMigrationStatement,
   ControlAdapterInstance,
   ControlFamilyInstance,
   MigrationOperationPolicy,
   MigrationPlan,
   MigrationPlannerConflict,
   MigrationPlanOperation,
+  MigrationPlanSubjects,
+  ResolvedMigrationStatement,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import type { Result } from '@internal/utils/result';
@@ -84,26 +87,23 @@ export interface PlannerInput<TFamilyId extends string, TTargetId extends string
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly callerPolicy: CallerPolicy;
   readonly operationPolicy: MigrationOperationPolicy;
+  /**
+   * What the application space's diff plan starts from: the contract the
+   * database is at, when the caller knows it, and the statements the user gave.
+   * Other spaces plan with no origin contract and no statements. Statements need the app space
+   * in `callerPolicy.ignoreGraphFor`; otherwise the planner refuses them with `policyConflict`.
+   */
+  readonly appSpace: AppSpacePlanningInputs;
+  /** The name the database knows the object an operation acts on by; names what a recorded drop loses. */
+  readonly storageNameOf: (operation: MigrationPlanOperation) => string;
 }
 
-/**
- * Per-space output of the planner. The runner ingests this
- * shape directly via a thin `toRunnerInput` adapter at the CLI.
- *
- * - `plan`: ready-to-execute `MigrationPlan` with `targetId` already
- *   set from `aggregate.targetId`.
- * - `displayOps`: same operation list, surfaced separately so plan-mode
- *   output can render without touching the runner-bound `plan`.
- * - `destinationContract`: the typed contract value the runner uses
- *   for post-apply verification. For the app space, the user's
- *   contract; for extension spaces, the on-disk `contract.json`.
- * - `strategy`: which operation produced this plan — `'resolve-recorded-path'`
- *   (walked a recorded migration path), `'plan-from-diff'` (fabricated a
- *   plan from a state diff), or `'declared-state'` (the space ships no
- *   migration packages at all; the aggregate declares the no-op directly
- *   without invoking either). Surfaced for diagnostics; not consumed by
- *   the runner.
- */
+/** See {@link PlannerInput.appSpace}. */
+export interface AppSpacePlanningInputs {
+  readonly fromContract: Contract | null;
+  readonly statements: readonly ResolvedMigrationStatement[];
+}
+
 /**
  * Per-edge metadata for the chain assembled by resolving a contract
  * space's recorded migration path. Lets `migrate` surface a per-migration
@@ -132,12 +132,36 @@ export interface AggregateMigrationEdgeRef {
   readonly destinationContractJson?: unknown;
 }
 
-export interface PerSpacePlan {
+/**
+ * Per-space output of the planner. The runner ingests this
+ * shape directly via a thin `toRunnerInput` adapter at the CLI.
+ *
+ * - `plan`: ready-to-execute `MigrationPlan` with `targetId` already
+ *   set from `aggregate.targetId`.
+ * - `displayOps`: same operation list, surfaced separately so plan-mode
+ *   output can render without touching the runner-bound `plan`.
+ * - `destinationContract`: the typed contract value the runner uses
+ *   for post-apply verification. For the app space, the user's
+ *   contract; for extension spaces, the on-disk `contract.json`.
+ * - `strategy`: which operation produced this plan — `'resolve-recorded-path'`
+ *   (walked a recorded migration path), `'plan-from-diff'` (fabricated a
+ *   plan from a state diff), or `'declared-state'` (the space ships no
+ *   migration packages at all; the aggregate declares the no-op directly
+ *   without invoking either). Surfaced for diagnostics; not consumed by
+ *   the runner.
+ * - `dataLoss` and `accessWidening`: what the operations of `plan` lose
+ *   and whose access they widen. A recorded path names each destructive
+ *   operation by its storage name, since no planner mapped it to a model,
+ *   and lists no widening: a written migration is reviewed before it runs.
+ */
+export interface PerSpacePlan extends MigrationPlanSubjects {
   readonly plan: MigrationPlan;
   readonly displayOps: readonly MigrationPlanOperation[];
   readonly destinationContract: Contract;
   readonly strategy: 'resolve-recorded-path' | 'plan-from-diff' | 'declared-state';
   readonly warnings?: readonly MigrationPlannerConflict[];
+  /** The statements the plan applied; empty for a space planned without statements. */
+  readonly appliedStatements: readonly AppliedMigrationStatement[];
   /**
    * Per-edge breakdown of the chain. `resolve-recorded-path` plans carry
    * one entry per authored edge; `plan-from-diff` and `declared-state`

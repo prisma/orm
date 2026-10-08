@@ -1,4 +1,7 @@
-import type { AuthoringModelAttributeDescriptor } from '@internal/framework-components/authoring';
+import type {
+  AuthoringModelAttributeDescriptor,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -54,6 +57,7 @@ import type {
   PslSources,
 } from '@internal/psl-parser/syntax';
 import { FunctionCallAst } from '@internal/psl-parser/syntax';
+import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
@@ -203,21 +207,34 @@ type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFu
 
 function scalarDefaultArms(
   isList: boolean,
+  dataTypes: DataTypeSupport,
   registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   // One arm per distinct documentation, so each tag's completion and signature help carries the
   // text of the tag it names rather than every registered tag's text run together.
-  const tagsByDocumentation = new Map<string, string[]>();
-  for (const entry of Object.values(registries.dataTypeEntries)) {
-    if (entry.written.kind !== 'tag') continue;
-    const tags = tagsByDocumentation.get(entry.documentation);
-    if (tags === undefined) tagsByDocumentation.set(entry.documentation, [entry.written.tag]);
-    else tags.push(entry.written.tag);
-  }
-  const tagArms = () =>
-    [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));
-  // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
-  const literal = () => oneOf(str(), numLiteral(), bool(), nullLiteral(), ...tagArms());
+  const tagArms = (admits: (dataType: string) => boolean) => {
+    const tagsByDocumentation = new Map<string, string[]>();
+    for (const [dataType, entry] of Object.entries(dataTypes.entries)) {
+      if (entry.written.kind !== 'tag' || !admits(dataType)) continue;
+      const tags = tagsByDocumentation.get(entry.documentation);
+      if (tags === undefined) tagsByDocumentation.set(entry.documentation, [entry.written.tag]);
+      else tags.push(entry.written.tag);
+    }
+    return [...tagsByDocumentation].map(([documentation, tags]) =>
+      taggedLiteral(tags, { documentation }),
+    );
+  };
+  const anyTag = () => tagArms(() => true);
+  // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses. A
+  // SQL expression is never a list element, so the list does not offer its tag.
+  const literal = () =>
+    oneOf(
+      str(),
+      numLiteral(),
+      bool(),
+      nullLiteral(),
+      ...tagArms((dataType) => dataType !== SQL_EXPRESSION_DATA_TYPE_ID),
+    );
   const listArm = () => list(literal(), { label: `list of (${literal().label})` });
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
@@ -229,8 +246,8 @@ function scalarDefaultArms(
     ),
   );
   return isList
-    ? [listArm(), ...funcArms, ...tagArms()]
-    : [str(), numLiteral(), bool(), nullLiteral(), ...funcArms, ...tagArms(), listArm()];
+    ? [listArm(), ...funcArms, ...anyTag()]
+    : [str(), numLiteral(), bool(), nullLiteral(), ...funcArms, ...anyTag(), listArm()];
 }
 
 /**
@@ -302,7 +319,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const members = enumMemberNames(ctx);
   const valueArms =
     members === undefined
-      ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
+      ? scalarDefaultArms(ctx.field.list, ctx.dataTypes, ctx.controlMutationDefaults)
       : enumDefaultArms(members, ctx.field.typeName, ctx.field.list);
   return fieldAttribute('default', {
     documentation: 'Supplies a default value when this field is omitted from a mutation.',
@@ -682,8 +699,9 @@ const relationFieldSpec = fieldAttribute('relation', {
       documentation: 'The referential action when a referenced key is updated.',
     },
     index: {
-      type: optional(bool()),
-      documentation: 'Whether to create an index for the relation’s foreign-key fields.',
+      type: optional(oneOf(bool(), str())),
+      documentation:
+        'Whether to create an index for the relation’s foreign-key fields (`false` for none), or the name of an index, unique constraint or primary key on this model to use instead. The name is the `name` or `map` it was given, or an index’s stored name, and its first columns must be the foreign-key fields in order.',
     },
   },
   refine: relationInvariants,
@@ -695,11 +713,13 @@ export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     controlMutationDefaults: input.controlMutationDefaults,
+    dataTypes: input.dataTypes,
   };
 }
 
@@ -709,6 +729,7 @@ export function fieldSpecContext(input: {
   readonly field: FieldSymbol;
   readonly binder: Binder;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
 }): FieldAttributeSpecContext {
   const node = typeReferenceNode(input.field);
   return {
@@ -717,6 +738,7 @@ export function fieldSpecContext(input: {
     field: input.field,
     typeResolution: node === undefined ? undefined : input.binder.symbolForNode(node),
     controlMutationDefaults: input.controlMutationDefaults,
+    dataTypes: input.dataTypes,
   };
 }
 

@@ -92,7 +92,7 @@ function pslIndexes() {
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       resolvedInputs: [],
       capabilities: {},

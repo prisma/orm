@@ -5,6 +5,7 @@ import {
   pgEnumDescriptor,
   pgFloat4Descriptor,
   pgFloat8Descriptor,
+  pgFloatDescriptor,
   pgInt2Descriptor,
   pgInt4Descriptor,
   pgInt8Descriptor,
@@ -79,6 +80,19 @@ describe('codec renderValueLiteral', () => {
   describe('pg/float8@1', () => {
     it('renders a numeric literal', () => {
       expect(valueRendererFor(pgFloat8Descriptor)?.(3.14, 'output')).toBe('3.14');
+    });
+  });
+
+  describe.each([
+    ['pg/float4@1', pgFloat4Descriptor],
+    ['pg/float8@1', pgFloat8Descriptor],
+    ['pg/float@1', pgFloatDescriptor],
+  ])('%s', (_codecId, descriptor) => {
+    it('renders no literal for NaN or an infinity, whose stored form is text', () => {
+      const renderer = valueRendererFor(descriptor);
+      expect(
+        ['NaN', 'Infinity', '-Infinity', 2.5].map((value) => renderer?.(value, 'output')),
+      ).toEqual([undefined, undefined, undefined, '2.5']);
     });
   });
 

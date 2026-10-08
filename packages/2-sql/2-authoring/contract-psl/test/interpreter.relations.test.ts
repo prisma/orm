@@ -1,7 +1,7 @@
 import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -13,7 +13,7 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 import { unboundTables } from './unbound-tables';
 
 const baseInput = {
-  ...fixtureTypeLookups,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -524,7 +524,7 @@ model Member {
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
-    expect(fks[0]).not.toHaveProperty('index');
+    expect(fks[0]).toMatchObject({ index: { name: 'Member_teamId_idx_f2b72ab3' } });
     expect(memberTable?.indexes).toEqual([
       {
         name: 'Member_teamId_idx_f2b72ab3',

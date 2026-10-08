@@ -281,6 +281,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "companyLocation_companyId_idx_33acc5ed"
+                  },
                   "source": {
                     "columns": [
                       "companyId"
@@ -297,6 +300,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "companyLocation_locationId_idx_7aae3038"
+                  },
                   "source": {
                     "columns": [
                       "locationId"
@@ -367,7 +373,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "12d43add3a1a40fbd1798621086579bc6a234a56812d54ea366965a5fda3aeeb"
+    "storageHash": "08c0d1a25982824095badf2a0c8734ed769451f8f40b098c8376ccaaaa8a5950"
   },
   "capabilities": {
     "postgres": {

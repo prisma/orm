@@ -1,11 +1,11 @@
 import { describe, expectTypeOf, test } from 'vitest';
-import type { Collection } from '../src/collection';
+import { Collection } from '../src/collection';
 import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  Fragment,
   Ordered,
-  Scope,
 } from '../src/collection-types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';
@@ -64,8 +64,8 @@ describe('class methods keep the class', () => {
     >();
   });
 
-  test('inside apply', () => {
-    expectTypeOf(Post.apply((posts) => posts.published()).recent()).toEqualTypeOf<
+  test('inside with', () => {
+    expectTypeOf(Post.with((posts) => posts.published()).recent()).toEqualTypeOf<
       Filtered<Ordered<PostCollection>>
     >();
   });
@@ -130,23 +130,36 @@ describe('select and variant leave the class', () => {
   });
 });
 
-describe('apply', () => {
-  const published: Scope<PostCollection, Filtered<PostCollection>> = (posts) => posts.published();
+describe('with', () => {
+  const published: Fragment<PostCollection, Filtered<PostCollection>> = (posts) =>
+    posts.published();
 
-  test('returns what the scope returns', () => {
-    expectTypeOf(Post.apply(published)).toEqualTypeOf<Filtered<PostCollection>>();
-    expectTypeOf(Post.apply(published)).toEqualTypeOf(Post.published());
+  test('returns what the fragment returns', () => {
+    expectTypeOf(Post.with(published)).toEqualTypeOf<Filtered<PostCollection>>();
+    expectTypeOf(Post.with(published)).toEqualTypeOf(Post.published());
   });
 
-  test('a scope written against the shared Collection type applies to the class and returns the shared type', () => {
+  test('a fragment written against the shared Collection type applies to the class and returns the shared type', () => {
     const titled = (posts: Collection<TestContract, 'Post'>) => posts.where({ title: 'x' });
-    expectTypeOf(Post.apply(titled)).toEqualTypeOf<Filtered<Collection<TestContract, 'Post'>>>();
+    expectTypeOf(Post.with(titled)).toEqualTypeOf<Filtered<Collection<TestContract, 'Post'>>>();
   });
 
-  test('a scope for another class is refused', () => {
+  test('a fragment for another class is refused', () => {
     const named = (users: ReturnType<typeof createChainingOrm>['db']['User']) => users.named('x');
-    // @ts-expect-error the scope takes a UserCollection, the receiver is a PostCollection
-    Post.apply(named);
+    // @ts-expect-error the fragment takes a UserCollection, the receiver is a PostCollection
+    Post.with(named);
+  });
+});
+
+describe('fragment is a member of every collection', () => {
+  test('a class cannot declare fragment with another signature', () => {
+    class ShadowingPostCollection extends Collection<TestContract, 'Post'> {
+      // @ts-expect-error fragment is a member of every collection
+      override fragment(title: string) {
+        return this.where({ title });
+      }
+    }
+    expectTypeOf<ShadowingPostCollection>().not.toBeAny();
   });
 });
 

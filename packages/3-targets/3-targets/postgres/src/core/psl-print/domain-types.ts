@@ -42,7 +42,7 @@ function dataTypeOfMember(
   const { codecId } = type;
   const descriptor = context.codecLookup.descriptorFor(codecId);
   if (descriptor === undefined) refuseMemberCodecWithoutNativeType(codecId, coordinate);
-  const dataType = context.dataTypeLookup.get(descriptor.dataType);
+  const dataType = context.dataTypes.lookup.get(descriptor.dataType);
   if (dataType === undefined || !isSqlDataType(dataType)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
@@ -94,7 +94,7 @@ function buildMemberType(input: {
     }),
     typeMap: input.typeMap,
     authoringTypes: input.context.authoringContributions.type,
-    dataTypeLookup: input.context.dataTypeLookup,
+    dataTypeLookup: input.context.dataTypes.lookup,
     enumBlockNames: input.enumBlockNames,
     coordinate,
   });
@@ -162,7 +162,7 @@ export function buildTypesBlock(
       }),
       typeMap,
       authoringTypes: context.authoringContributions.type,
-      dataTypeLookup: context.dataTypeLookup,
+      dataTypeLookup: context.dataTypes.lookup,
       enumBlockNames: new Map(),
       coordinate: `types.${name}`,
     });

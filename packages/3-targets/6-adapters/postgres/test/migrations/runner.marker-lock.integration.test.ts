@@ -48,6 +48,8 @@ describe('PostgresMigrationRunner marker lock', { concurrent: false }, () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

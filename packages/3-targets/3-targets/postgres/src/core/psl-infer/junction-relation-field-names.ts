@@ -62,7 +62,6 @@ export function junctionRelationFieldNames(
       defaultMapping: createPostgresDefaultMapping(),
       parseRawDefault: parsePostgresDefault,
       columnDefaults: noColumnDefaults,
-      backsForeignKey: () => false,
     },
     EMPTY_FOREIGN_KEY_EXTRAS,
   );

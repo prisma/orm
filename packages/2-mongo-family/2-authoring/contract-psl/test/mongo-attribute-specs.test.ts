@@ -1,5 +1,5 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type {
   ArgType,
   AttributeCtx,
@@ -10,7 +10,12 @@ import type {
   ResolvedEntityReference,
   SymbolTable,
 } from '@internal/psl-parser';
-import { buildSymbolTable, createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  createPslDiagnosticCollector,
+  EMPTY_DATA_TYPES,
+} from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -36,7 +41,7 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-    dataTypeLookup: createDataTypeLookup([]),
+    dataTypes: EMPTY_DATA_TYPES,
     resolvedInputs: [],
     capabilities: {},
   };
@@ -100,10 +105,8 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    dataTypes: EMPTY_DATA_TYPES,
   };
   return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };
 }
@@ -195,7 +198,7 @@ model Base { id String }`,
     });
   });
 
-  it('exposes model-specific index field alternatives from the actual factory', () => {
+  it('exposes stable index field alternatives from the actual factory', () => {
     const { model } = contexts();
     const fields = listMetadata(positionalType(mongoAttributeSpecs.model.index(model)));
     const element = oneOfMetadata(fields.of);
@@ -211,14 +214,19 @@ model Base { id String }`,
       optional: true,
     });
     expect(element.alternatives.slice(2).map((alt) => funcCallMetadata(alt).name)).toEqual([
-      'id',
-      'name',
+      'sort',
     ]);
 
-    const nameField = funcCallMetadata(element.alternatives[3]);
-    const sort = nameField.signature.named?.['sort'];
-    if (sort === undefined) throw new Error('field sort argument is present');
-    expect(nameField.signature.documentation).toBe(
+    const sortFunction = funcCallMetadata(element.alternatives[2]);
+    expect(sortFunction.signature.positional?.[0]).toMatchObject({
+      key: 'field',
+      type: { kind: 'fieldRef' },
+    });
+    const sort = sortFunction.signature.positional?.[1];
+    if (sort === undefined) throw new Error('sort direction argument is present');
+    expect(sort.key).toBe('direction');
+    expect(sortFunction.signature.named).toBeUndefined();
+    expect(sortFunction.signature.documentation).toBe(
       'Selects an index field with an explicit sort direction.',
     );
     expect(sort.documentation).toBe('The index order for this field: `Asc` or `Desc`.');

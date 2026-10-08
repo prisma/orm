@@ -10,7 +10,7 @@ import { defineIndexTypes } from '@internal/sql-contract/index-types';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -28,7 +28,7 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
  */
 const targetWithIndexTypes = {
   ...postgresTarget,
-  indexTypes: defineIndexTypes().add('gin', { options: type('object'), backsForeignKey: false }),
+  indexTypes: defineIndexTypes().add('gin', { options: type('object') }),
 };
 
 const searchIndexSpecFactory: ModelAttributeSpecFactory = () =>
@@ -89,7 +89,7 @@ function interpret(schema: string, authoringContributions?: AuthoringContributio
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),
   });
 }

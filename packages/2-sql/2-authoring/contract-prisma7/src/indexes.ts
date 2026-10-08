@@ -8,6 +8,7 @@ import {
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import type { IndexNode } from '@internal/sql-contract-ts/contract-builder';
+import { clipToUtf8Bytes, utf8ByteLength } from '@internal/utils/text';
 import { prisma7Diagnostic } from './diagnostics';
 
 /** `@@index([...])`, `@@unique([...])`, `@unique`, `@@id([...])`, `@id` as Prisma 7 spells them. */
@@ -98,8 +99,6 @@ export function parseIndexAttribute(
   return { fields, map, type, span: attribute.span };
 }
 
-const utf8 = new TextEncoder();
-
 /**
  * A generated constraint name as Prisma 7 spells it: `base` cut so that
  * `base + suffix` is at most `maxBytes` bytes, cut on a character boundary,
@@ -108,15 +107,7 @@ const utf8 = new TextEncoder();
  * and cuts a multi-byte name before the character that would cross the budget.
  */
 export function prisma7ConstraintName(base: string, suffix: string, maxBytes: number): string {
-  const budget = maxBytes - utf8.encode(suffix).length;
-  let bytes = 0;
-  let kept = '';
-  for (const character of base) {
-    bytes += utf8.encode(character).length;
-    if (bytes > budget) break;
-    kept += character;
-  }
-  return `${kept}${suffix}`;
+  return `${clipToUtf8Bytes(base, maxBytes - utf8ByteLength(suffix))}${suffix}`;
 }
 
 /** Prisma 7's default index name: `{table}_{columns}_idx`, or `_key` for a unique index, cut to `maxBytes`. */

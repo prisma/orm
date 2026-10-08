@@ -201,6 +201,27 @@ await db.transaction(async (tx) => {
 // ... ORDER BY "createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED
 ```
 
+**✅ CORRECT: The same two patterns on the ORM client**
+
+```typescript
+await db.transaction(async (tx) => {
+  const product = await tx.orm.public.Product.where({ id: productId }).forUpdate().first();
+  if (product !== null && product.stock > 0) {
+    await tx.orm.public.Product.where({ id: productId }).update({ stock: product.stock - 1 });
+  }
+});
+// ... WHERE "product"."id" = $1 LIMIT 1 FOR UPDATE OF "product"
+
+await db.transaction(async (tx) => {
+  const job = await tx.orm.public.Job.where({ state: 'queued' })
+    .orderBy((j) => j.createdAt.asc())
+    .forUpdate({ skipLocked: true })
+    .first();
+  // ... process the job and mark it done through tx
+});
+// ... ORDER BY "job"."createdAt" ASC LIMIT 1 FOR UPDATE OF "job" SKIP LOCKED
+```
+
 The four methods are named after the SQL they render:
 
 | Method | SQL | What it blocks |
@@ -218,12 +239,15 @@ Each method takes an optional object:
 
 Each method and each option exists only when the adapter reports its capability (see [Capabilities](capabilities.md)). Postgres reports all of them; SQLite reports none, because SQLite has no row locks.
 
+The ORM client has the same four methods with `nowait` and `skipLocked`, but no `of`: it always renders `OF` the model's own table, so only the model's rows are locked, even when a polymorphic model joins its variant tables. Its methods therefore also need the `sql.lockOf` capability.
+
 **What to know:**
 - A lock lasts until the transaction ends, so use it inside `db.transaction(...)`. Outside a transaction the lock is released as soon as the statement ends.
 - Prefer `forNoKeyUpdate()` when other transactions insert or update rows that reference the locked row. Every such write takes `FOR KEY SHARE` on the referenced row to check the foreign key. `forUpdate()` conflicts with that lock and can deadlock two transactions that lock a parent and write a child in opposite orders; `forNoKeyUpdate()` does not.
 - `skipLocked` with `limit` is the work-queue pattern. On a sharded target it can lock up to `limit` rows per shard.
 - Under `nowait` a locked row fails the statement with SQLSTATE `55P03`.
 - A lock is refused together with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection, because Postgres refuses those statements. A locked select cannot be used as a subquery.
+- On the ORM client, a lock is refused together with `include`, `groupBy`, `aggregate`, `distinct` or `distinctOn`, and a mutation terminal (`create`, `update`, `delete`, `upsert` and their variants) on a locked collection is refused, because a mutation already locks the rows it changes.
 
 ## Anti-Patterns
 

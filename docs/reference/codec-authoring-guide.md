@@ -38,6 +38,10 @@ The guarantee rests on the codec, not on the database's own JSON conversion, whi
 
 Non-finite floats read back as the numbers they are. JSON has no number for `NaN` or an infinity, and PostgreSQL writes them in JSON as the text `"NaN"`, `"Infinity"` and `"-Infinity"`, so every float codec's `encodeJson` writes that text and its `decodeJson` reads it back as the number. SQLite writes an infinity in JSON as `9.0e+999`, so the SQLite float codecs' JSON projection writes the same text instead, and `decodeJson` refuses a number that is not finite. SQLite cannot store `NaN`, which it turns into `NULL`, so on SQLite `sqlite/real@1` and `sql/float@1` refuse `NaN` in `encode` and in both JSON directions, and the SQLite driver refuses a NaN parameter no codec encoded. `pg/numeric@1` reads all three, because its application value is already text.
 
+A value in a contract, a literal default or an enum member, decodes to the value a query returns for it: the value `decodeJson` reads from the contract's stored form equals the value a query returns, and `db.enums` compares with that value ([ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). The stored form need not be the text the database prints: `pg/bytea@1` stores base64 where PostgreSQL prints hex, and the timestamp codecs store ISO 8601. Where the stored form is text the database normalises, the stored form is the normalised spelling, so `encodeJson` writes it and `decodeJson` refuses any other spelling, naming the text to write: `pg/uuid@1` writes lower case, `pg/numeric@1`, `pg/int8@1`, `pg/int8number@1` and `pg/unboundedint@1` drop leading zeros and the minus sign on zero, and `pg/inet@1` drops `/32` or `/128` on a host address and writes IPv6 in lower case with PostgreSQL's zero compression.
+
+An enum compares values with its members, so every enum authoring surface (`enumType` in `defineContract` and the PSL enum block, in both families) refuses a codec whose descriptor does not declare the `equality` trait. A codec that declares it, but whose values read back can never equal a member as the contract stores it, sets `enumRefusal` on its descriptor: one or two sentences saying why, ending with what to use instead. A codec without equality may set it too, to replace the generic reason. `enumRefusalOf` from `@internal/framework-components/codec` reads both rules, and every surface refuses through it. On Postgres, `pg/timestamp-string@1` and `pg/timestamptz-string@1` set it, because they read PostgreSQL's own text while the contract stores ISO 8601; `pg/bytea@1`, because its CHECK would compare a value with the bytes of the stored base64 text; `pg/tsquery@1`, because PostgreSQL normalises the query text; and `pg/json@1`, to name `pg/jsonb@1`.
+
 The consumer-facing [`BigInt`, `BigIntNumber`, and `UnboundedInt` representation choices](./integer-representation-types.md), including `BigIntNumber`'s deliberate JSON-number exception, are documented separately from this contributor guide.
 
 The PostgreSQL temporal codecs pair a `Temporal`-valued codec with a raw-text one for each native type — `pg/timestamptz-temporal@1` reads a `Temporal.Instant`, `pg/timestamptz-string@1` reads PostgreSQL's own text, and the contract names which one a column uses.
@@ -613,8 +617,8 @@ A value is written either with a tag — a qualified name followed by a string i
   documentation: 'Text.',
 },
 [pgJson.id]: {
-  written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-  print: printJsonBody,
+  written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+  print: printJsonText,
   documentation: 'Reads the text as a JSON document and stores it as the default value.',
 },
 ```
@@ -623,9 +627,9 @@ A tag whose value is a type that another syntax already reads sits under `tagEnt
 
 ```ts
 [tagEntryKey('json')]: {
-  written: { kind: 'tag', tag: 'json', type: sqliteText.id, parse: (text) => canonicalizeJson(parseJsonBody(text)) },
+  written: { kind: 'tag', tag: 'json', type: sqliteText.id, parse: (text) => canonicalizeJson(parseJsonText(text)) },
   print: (value) => String(value),
-  documentation: 'Reads the body as a JSON document and stores its JSON text as the default value.',
+  documentation: 'Reads the text as a JSON document and stores its JSON text as the default value.',
 },
 ```
 

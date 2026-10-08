@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3459224762709b5036ccb3056baa08205be1f1c1f26e2b65ca6c94761302b671'>;
+  StorageHashBase<'2305d490334b597068b99893980289bcbeae96967101f7dc1ee8b8c128fb0e84'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -471,6 +471,13 @@ type ContractBase = Omit<
               { readonly name: 'Blue'; readonly value: 'Blue' },
             ];
           };
+        };
+        readonly enumMemberTypes?: {
+          readonly Color: readonly [
+            { readonly name: 'Red'; readonly value: 'Red' },
+            { readonly name: 'Green'; readonly value: 'Green' },
+            { readonly name: 'Blue'; readonly value: 'Blue' },
+          ];
         };
       };
     };

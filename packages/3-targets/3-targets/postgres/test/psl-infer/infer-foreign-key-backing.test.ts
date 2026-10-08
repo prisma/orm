@@ -1,18 +1,13 @@
-/**
- * `contract infer` writes `index: false` on a relation whose foreign key no live index backs, so
- * that `contract emit` derives no backing index the database lacks. Which live indexes back a
- * foreign key comes from the index type registrations of the whole stack, the same registry
- * `contract emit` reads: the target's own types and those of every extension pack.
- */
-import { defineIndexTypes, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
-import { postgresIndexTypes } from '../../src/core/index-types';
-import { inferBuildContext, printPslFromFlat } from './fixtures';
+import { printPslFromFlat } from './fixtures';
 
-function schemaWithIndexOnForeignKey(indexType: string): SqlSchemaIR {
+function schemaWithIndexOnForeignKey(index: {
+  readonly type: string | undefined;
+  readonly where: string | undefined;
+  readonly columns?: readonly string[];
+}): SqlSchemaIR {
   return new SqlSchemaIR({
     tables: {
       user: {
@@ -34,12 +29,12 @@ function schemaWithIndexOnForeignKey(indexType: string): SqlSchemaIR {
         uniques: [],
         indexes: [
           {
-            naming: parseNaming('post_user_id_idx', undefined),
-            columns: ['user_id'],
-            where: undefined,
+            naming: parseNaming('post_user_id_live', undefined),
+            columns: index.columns ?? ['user_id'],
+            where: index.where,
             unique: false,
-            partial: false,
-            type: indexType,
+            partial: index.where !== undefined,
+            type: index.type,
             options: undefined,
             annotations: undefined,
             dependsOn: undefined,
@@ -52,38 +47,37 @@ function schemaWithIndexOnForeignKey(indexType: string): SqlSchemaIR {
 
 const relationLine = (psl: string) => psl.split('\n').find((line) => line.includes('@relation'));
 
-describe('contract infer and foreign key backing', () => {
-  it('stamps index: false when the live index is of a type that cannot back a foreign key', () => {
-    expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey('gist')))).toContain(
-      'index: false',
-    );
-  });
-
-  it('leaves index unset when the live index is of a type that can', () => {
-    expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey('hash')))).not.toContain(
-      'index: false',
-    );
-  });
-
-  it("reads an extension pack's registration, not only the target's", () => {
-    const withPack = {
-      ...inferBuildContext,
-      indexTypes: indexTypeRegistryOf({ id: 'postgres', indexTypes: postgresIndexTypes }, [
-        {
-          id: 'ordered-pack',
-          indexTypes: defineIndexTypes().add('ordered', {
-            options: type('object'),
-            backsForeignKey: true,
-          }),
-        },
-      ]),
-    };
-
-    expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey('ordered')))).toContain(
-      'index: false',
-    );
+describe('contract infer and the backing index of a foreign key', () => {
+  it.each([
+    ['no access method', undefined],
+    ['btree', 'btree'],
+  ])('leaves index unset beside a live index with %s', (_label, type) => {
     expect(
-      relationLine(printPslFromFlat(schemaWithIndexOnForeignKey('ordered'), withPack)),
-    ).not.toContain('index: false');
+      relationLine(printPslFromFlat(schemaWithIndexOnForeignKey({ type, where: undefined }))),
+    ).not.toContain('index:');
+  });
+
+  it.each([
+    ['a hash index', { type: 'hash', where: undefined }],
+    ['a gin index', { type: 'gin', where: undefined }],
+    ['a partial index', { type: undefined, where: '(id > 0)' }],
+  ])('writes index: false beside %s, the only index on the columns', (_label, index) => {
+    expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey(index)))).toContain(
+      'index: false',
+    );
+  });
+
+  it('names a live index whose first columns are the foreign key columns', () => {
+    expect(
+      relationLine(
+        printPslFromFlat(
+          schemaWithIndexOnForeignKey({
+            type: undefined,
+            where: undefined,
+            columns: ['user_id', 'id'],
+          }),
+        ),
+      ),
+    ).toContain('index: "post_user_id_live"');
   });
 });

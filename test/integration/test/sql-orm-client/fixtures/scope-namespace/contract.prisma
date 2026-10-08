@@ -1,0 +1,22 @@
+// use prisma-8
+
+// Emitted fixture for the sql-orm-client fragment tests: a contract with a
+// namespace named `scope`, a name the client does not reserve.
+
+namespace public {
+  model Post {
+    id    Int    @id @default(autoincrement())
+    title String
+
+    @@map("posts")
+  }
+}
+
+namespace scope {
+  model Audit {
+    id      Int    @id @default(autoincrement())
+    message String
+
+    @@map("audits")
+  }
+}

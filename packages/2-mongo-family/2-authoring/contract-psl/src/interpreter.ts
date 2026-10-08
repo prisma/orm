@@ -22,6 +22,7 @@ import type {
   AuthoringEntityContext,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
+  DataTypeSupport,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
@@ -29,10 +30,7 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -57,7 +55,6 @@ import type {
   PslSpan,
   Resolution,
   SymbolTable,
-  TypedFuncCall,
 } from '@internal/psl-parser';
 import {
   contributedTypeOf,
@@ -90,7 +87,7 @@ import {
   type PslSources,
   type SyntaxNode,
 } from '@internal/psl-parser/syntax';
-import { assertDefined } from '@internal/utils/assertions';
+import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -119,8 +116,8 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly binder: Binder;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly dataTypes: DataTypeSupport;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
@@ -671,16 +668,21 @@ type ParsedIndexField =
       readonly scope?: string;
     };
 
-function normalizeIndexField(element: string | TypedFuncCall): ParsedIndexField {
+function normalizeIndexField(element: NormalIndexArgs['fields'][number]): ParsedIndexField {
   if (typeof element === 'string') {
     return { kind: 'field', name: element };
   }
-  if (element.fn === 'wildcard' && element.args['sort'] === undefined) {
+  if (element.fn === 'wildcard') {
     const scope = element.args['scope'];
     return typeof scope === 'string' ? { kind: 'wildcard', scope } : { kind: 'wildcard' };
   }
-  const sort = element.args['sort'];
-  return { kind: 'field', name: element.fn, direction: sort === 'Desc' ? -1 : 1 };
+  const field = element.args['field'];
+  invariant(typeof field === 'string', 'The sort function spec requires a field reference');
+  return {
+    kind: 'field',
+    name: field,
+    direction: element.args['direction'] === 'Desc' ? -1 : 1,
+  };
 }
 
 interface SpecCollationArgs {
@@ -925,7 +927,6 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
   });
 }
 
-/** The first field-list element that is a dotted path, such as `address.city` or `address.city(sort: Desc)`. */
 function nestedIndexPath(
   node: ModelAttributeAst,
 ): { readonly path: readonly string[]; readonly syntax: SyntaxNode } | undefined {
@@ -934,9 +935,12 @@ function nestedIndexPath(
     const list = arg.value();
     if ((name !== undefined && name !== 'fields') || !(list instanceof ArrayLiteralAst)) continue;
     for (const element of list.elements()) {
-      const path =
-        element instanceof PathExprAst || element instanceof FunctionCallAst ? element.path() : [];
-      if (path.length > 1) return { path, syntax: element.syntax };
+      const field =
+        element instanceof FunctionCallAst && element.name()?.identifier()?.token()?.text === 'sort'
+          ? [...element.args()][0]?.value()
+          : element;
+      const path = field instanceof PathExprAst ? field.path() : [];
+      if (field instanceof PathExprAst && path.length > 1) return { path, syntax: field.syntax };
     }
   }
   return undefined;
@@ -1352,6 +1356,7 @@ export function interpretPslDocumentToMongoContract(
     symbols: symbolTable,
     model,
     controlMutationDefaults: input.controlMutationDefaults,
+    dataTypes: input.dataTypes,
   });
   const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();
   for (const model of allModels) {
@@ -1387,7 +1392,7 @@ export function interpretPslDocumentToMongoContract(
       target: 'mongo',
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
       codecLookup,
-      dataTypeLookup: input.dataTypeLookup,
+      dataTypeLookup: input.dataTypes.lookup,
       diagnostics: {
         push: (d) => {
           diagnostics.pushExternal(
@@ -1713,14 +1718,14 @@ export function interpretPslDocumentToMongoContract(
         modelEntry.fields,
         modelEntry.discriminator.field,
         variantEntries,
-        { codecLookup, dataTypeLookup: input.dataTypeLookup },
+        { codecLookup, dataTypeLookup: input.dataTypes.lookup },
         valueObjects,
         storageValueSets,
       );
     } else {
       coll['validator'] = deriveJsonSchema(
         modelEntry.fields,
-        { codecLookup, dataTypeLookup: input.dataTypeLookup },
+        { codecLookup, dataTypeLookup: input.dataTypes.lookup },
         valueObjects,
         storageValueSets,
       );

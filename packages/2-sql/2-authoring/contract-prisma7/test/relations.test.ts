@@ -74,3 +74,25 @@ describe('implicit many-to-many junction relation fields', () => {
     });
   });
 });
+
+describe('the index a foreign key from a Prisma 7 schema states', () => {
+  const indexes = async (caseName: string, tableName: string) =>
+    (await loadFixtureTable(caseName, tableName)).foreignKeys.map((fk) => fk['index']);
+
+  it('is the unique index on its columns', async () => {
+    expect(await indexes('explicit-relations', 'Profile')).toEqual([
+      { name: 'Profile_userId_key' },
+    ]);
+  });
+
+  it('is absent where no index or key serves its lookups, because Prisma 7 created no backing index', async () => {
+    expect(await indexes('explicit-relations', 'Post')).toEqual([undefined, undefined]);
+  });
+
+  it('is the junction primary key for the first junction column, which leads it, and the index on the second', async () => {
+    expect(await indexes('implicit-many-to-many', '_PostToTag')).toEqual([
+      { primaryKey: true },
+      { name: '_PostToTag_B_index' },
+    ]);
+  });
+});

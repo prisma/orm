@@ -10,7 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -67,7 +67,7 @@ function interpret(schema: string) {
     controlMutationDefaults: builtinControlMutationDefaults,
     authoringContributions,
     createNamespace: createTestSqlNamespace,
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     codecLookup: testSqlTypeLookups({}, testCodecLookup).codecLookup,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
     capabilities: { sql: { scalarList: true } },

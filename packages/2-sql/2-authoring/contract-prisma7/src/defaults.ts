@@ -1,5 +1,10 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
+import {
+  type DataTypeSupport,
+  entryForTag,
+  type WrittenValue,
+} from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
@@ -14,13 +19,7 @@ import {
   printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
-import {
-  type DataTypeSupport,
-  type DefaultRefusal,
-  entryForTag,
-  readDataTypeDefault,
-  type WrittenValue,
-} from '@internal/sql-contract-psl/resolution';
+import { type DefaultRefusal, readDataTypeDefault } from '@internal/sql-contract-psl/resolution';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
@@ -45,7 +44,7 @@ export interface LowerPrisma7DefaultInput {
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
   readonly controlMutationDefaults: ControlMutationDefaults;
   /** The stack's data types and the PSL support for them, which this reader maps its syntax onto. */
-  readonly dataTypeSupport: DataTypeSupport;
+  readonly dataTypes: DataTypeSupport;
   readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }
@@ -167,7 +166,7 @@ function scalarValue(
     isList: input.field.list,
     column: { codecId: input.codecId, typeParams: input.typeParams },
     codecLookup: input.codecLookup,
-    support: input.dataTypeSupport,
+    dataTypes: input.dataTypes,
     fieldPath: `${input.modelName}.${input.field.name}`,
   });
   return read.ok ? read.value : unknown(refusalReason(read.refusal), span);
@@ -291,7 +290,7 @@ function jsonDocumentOf(
   written: WrittenValue,
   input: LowerPrisma7DefaultInput,
 ): JsonValue | undefined {
-  const entry = entryForTag(input.dataTypeSupport, 'json');
+  const entry = entryForTag(input.dataTypes, 'json');
   if (entry === undefined || entry.entry.written.kind !== 'tag') return undefined;
   const bodies =
     written.kind === 'list'
@@ -321,10 +320,18 @@ function refusalReason(refusal: DefaultRefusal): string {
     case 'not-a-list':
       return 'holds a single value on a list column, which takes a list literal.';
     case 'no-cast':
-      return `holds a ${refusal.valueType} value${at}, which ${refusal.columnType} has no cast from; ${refusal.casts.length === 0 ? 'it casts from nothing' : `it casts from ${refusal.casts.join(', ')}`}.`;
+      return `holds a ${refusal.valueType} value${at}, which ${refusal.receivingType} has no cast from; ${describeCasts(refusal.casts)}.`;
+    case 'no-list-cast':
+      return `holds a list, which ${refusal.receivingType} has no cast from; ${describeCasts(refusal.casts)}.`;
+    case 'no-element-cast':
+      return `holds a ${refusal.valueType} value${at}, which the list cast of ${refusal.receivingType} does not take; it takes ${refusal.elementTypes.join(', ')}.`;
     case 'refused-by-codec':
       return `holds a value${at} that ${refusal.codecId} does not read: ${refusal.message}`;
   }
+}
+
+function describeCasts(casts: readonly string[]): string {
+  return casts.length === 0 ? 'it casts from nothing' : `it casts from ${casts.join(', ')}`;
 }
 
 function lowerFunction(

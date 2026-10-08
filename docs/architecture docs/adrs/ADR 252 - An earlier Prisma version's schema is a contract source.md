@@ -78,7 +78,21 @@ Fidelity is defined by the comparison `db verify` makes against the database the
 | check constraints, by name | |
 | native enums, by type name and ordered member list | |
 
-That table decides several lowering rules on its own. Index names are reproduced exactly, because they are compared. Primary key and foreign key names are left to Prisma 8, because they are not. Referential actions are always written out, and enum member order is preserved. The measure of the reader is a real database, built by the earlier version's own migrations, that verifies with zero findings.
+That table decides several lowering rules on its own. Index names are reproduced exactly, because they are compared. Referential actions are always written out, and enum member order is preserved. The measure of the reader is a real database, built by the earlier version's own migrations, that verifies with zero findings.
+
+`db verify` is not the only consumer of the contract, though. The migration planner drops and renames primary keys and foreign keys by name, so a name verify ignores still has to be the one the database holds, or a later migration fails. The reader therefore works out the name the earlier version gave each primary key and foreign key, and compares it with the name Prisma 8 derives for an unnamed one, which the target supplies through its binding. It states the name in the contract only where the two differ: a `map` that is not the derived name, an implicit junction's primary key (`_PostToTag_AB_pkey` where Prisma 8 derives `_PostToTag_pkey`), and a foreign key name the earlier version cut to 63 bytes. Names that agree stay unnamed, so `contract print` writes no `map` for them:
+
+```prisma
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], map: "post_written_by")
+}
+```
+
+Here the foreign key is stated as `post_written_by` and the primary key stays unnamed, because the earlier version's `Post_pkey` is also the name Prisma 8 derives.
+
+One consequence is a compatibility commitment. Whether a name is stated, and so the storage hash of a contract the reader produces, depends on Prisma 8's naming rule. Changing how Prisma 8 derives a primary key or foreign key name changes the storage hash of every affected contract from an earlier version's schema, and needs an upgrade instruction telling those users to re-sign or plan a migration.
 
 Every lowering rule is checked against SQL that the earlier version's own toolchain generated, not against its documentation. The proof schemas in the repository carry that SQL beside them.
 

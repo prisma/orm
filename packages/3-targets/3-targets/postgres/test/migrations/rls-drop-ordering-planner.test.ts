@@ -13,7 +13,11 @@ import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { CodecControlHooks } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import { APP_SPACE_ID, type MigrationOperationClass } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type MigrationOperationClass,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import {
   indexInputFromSerialized,
   SqlStorage,
@@ -253,6 +257,8 @@ async function planOpIds(
     schema,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: [...postgresTypeComponents, ...frameworkComponents],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
