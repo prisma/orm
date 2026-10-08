@@ -186,9 +186,10 @@ function ownedBy<C extends Collection<Contract, 'Post'>>(post: UniquelyFiltered<
 }
 ```
 
-Three cases are not refused:
+Four cases are not refused:
 
 - A method of a custom collection class, or a fragment run with `with`, can still add an order or a limit to a uniquely filtered collection, and the result of `with(fragment)` for a fragment made by `collection.fragment` no longer records the unique filter. The query still matches at most one record.
+- Inside a method of a custom collection class, `.prepared` after `this.whereUnique(...)` loses the unique filter, as `.prepared` after `.include(...)` loses what `include` established (see [Custom collections](#custom-collections)): `this.whereUnique({ id }).prepared.all()` compiles there, while the same call from outside the class is refused.
 - The row-lock methods return the plain `Collection` type for every receiver, so after `whereUnique(...).forUpdate()` the many-record methods compile again and `update` and `delete` do not. Read the locked record with `first()`.
 - A conditional that mixes a uniquely filtered collection with another one, such as `flag ? db.Post.whereUnique({ id }) : db.Post.where({ userId })`, has the many-record methods.
 

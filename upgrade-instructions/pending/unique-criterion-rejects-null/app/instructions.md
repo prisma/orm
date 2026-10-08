@@ -7,6 +7,13 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\bconflictOn\b|\.(?:connect|disconnect)\s*\(|\bUniqueConstraintCriterion\b'
+  - id: prepared-all-and-aggregate-need-their-receiver
+    summary: |
+      On every collection of the SQL ORM client, `prepared.all` and `prepared.aggregate` no longer compile when called without the `prepared` object as their receiver, such as after `const { all } = collection.prepared`. Call them on the `prepared` object. `prepared.first` is not affected, and nothing changes at run time.
+    detection:
+      glob: "**/*.{ts,tsx,mts,cts}"
+      matches:
+        - '\{[^}]*\b(?:all|aggregate)\b[^}]*\}\s*=\s*[^;\n]*\.prepared\b'
 ---
 
 ## `unique-criterion-rejects-null`
@@ -52,3 +59,23 @@ What to write instead:
 - To read or write the rows whose column is `NULL`, use `where({ handle: null })`. It can match more than one row.
 
 - Where your own code declares a variable, a parameter or a return value as `UniqueConstraintCriterion<...>`, the same rule applies to the values assigned to it.
+
+## `prepared-all-and-aggregate-need-their-receiver`
+
+`all` and `aggregate` on a collection's `prepared` object now declare the object they are called on. This applies to every collection, not only one filtered with `whereUnique`. A call without that receiver no longer compiles:
+
+```ts
+const { all, aggregate } = db.orm.Post.prepared;
+all(); // error: The 'this' context of type 'void' is not assignable to method's 'this'
+aggregate((a) => ({ posts: a.count() })); // the same error
+```
+
+Call the method on the `prepared` object instead:
+
+```ts
+const prepared = db.orm.Post.prepared;
+prepared.all();
+prepared.aggregate((a) => ({ posts: a.count() }));
+```
+
+These still compile and need no change: a destructured `first`, as in `const { first } = db.orm.Post.prepared; first()`, and `prepared.all` passed as a callback without being called. What the methods do at run time is unchanged.
