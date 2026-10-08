@@ -1306,6 +1306,13 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         ...ifDefined('onUpdate', onUpdate),
         ...ifDefined('index', parsedRelation.index),
       });
+      if (typeof parsedRelation.index === 'string') {
+        relationIndexLocations.push({
+          tableName,
+          columns: localColumns,
+          location: source.at(relationAttribute.relation.span),
+        });
+      }
 
       // Build the cross-space RelationNode directly (no local back-relation candidate).
       // `buildSqlContractFromDefinition` recognises `spaceId` on a RelationNode and routes it
