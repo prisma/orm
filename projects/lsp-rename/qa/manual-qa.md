@@ -42,7 +42,7 @@
 | DoD-6 — model and namespace with the same name (`auth.auth`) | Covered by `rename.test.ts`; not added to the scratch project to keep the table rows readable. |
 | DoD-7 — `references.ts`, `cursor-resolution.ts`, psl-parser unchanged | A `git diff`; the reviewer checked it. |
 | DoD-12 — a field typed by a model of another contract space; a control stack that defines no `map` | The scratch projects have one contract space and the real Postgres stack defines `map`. Covered by `rename.test.ts`. |
-| DoD-13 — CRLF files, a one-line model, an unterminated model, a comment before the closing brace | Covered by `rename.test.ts`; not repeated against the real target. |
+| DoD-13 — formatter options with tabs and CRLF, a one-line model, an unterminated model | Covered by `rename.test.ts`; not repeated against the real target. |
 | DoD-14 — Mongo | The scratch projects use the Postgres target. Covered by the Mongo interpreter test. |
 | DoD-9 — READMEs | A file read; the reviewer checked it. |
 | DoD-11 — team gates | CI gates. |
@@ -259,7 +259,7 @@ The steps file ends with a `diagnostics` step. Expected: no diagnostic in any fi
 ### What you should see
 
 - Three name edits, one per file, each replacing `User` alone: in `auth.User` the qualifier and the dot are outside the range.
-- One insertion, in auth.prisma whatever file the cursor was in: a blank line and `@@map("User")` at the four-space indent of the model's fields, before the line of the model's closing brace.
+- One insertion, in auth.prisma whatever file the cursor was in: a line break, two indent units of the project's formatter options (four spaces here, the default), `@@map("User")` and a line break, before the model's closing brace. In this file that reads as a blank line and the attribute at the indent of the model's fields.
 - The response uses `changes` keyed by file URI, not `documentChanges`.
 - The raw JSON of 1.1, 1.2 and 1.3 is identical.
 
