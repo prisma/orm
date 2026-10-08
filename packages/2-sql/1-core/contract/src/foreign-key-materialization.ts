@@ -19,6 +19,9 @@ import type { PrimaryKeyInput } from './ir/primary-key';
 import type { IndexInput } from './ir/sql-index';
 import type { UniqueConstraintInput } from './ir/unique-constraint';
 
+/** The `meta.reason` of the refusal of a relation's `index: "<name>"`, which a source can report at the relation. */
+export const FOREIGN_KEY_INDEX_UNRESOLVED = 'foreign-key-index-unresolved';
+
 /**
  * A foreign key as authored: the referential coordinates plus the `constraint` and `index` intent. `index` is `true` for a derived backing index, `false` for none, or the name of an index, unique constraint or primary key the source declares on the same table.
  */
@@ -118,7 +121,7 @@ function namedBackingObject(
   },
 ): ForeignKeyIndex {
   const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
-  const meta = { tableName, columns, index: name };
+  const meta = { reason: FOREIGN_KEY_INDEX_UNRESOLVED, tableName, columns, index: name };
   const indexes = table.declaredIndexes.filter(
     (candidate) =>
       (candidate.namedByUser && writtenName(candidate.index) === name) ||

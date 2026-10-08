@@ -1,4 +1,5 @@
 export {
+  FOREIGN_KEY_INDEX_UNRESOLVED,
   type ForeignKeyAuthoringInput,
   type MaterializedTableConstraints,
   materializeForeignKeysAndIndexes,
