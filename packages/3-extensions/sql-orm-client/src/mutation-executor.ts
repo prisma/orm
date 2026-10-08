@@ -866,14 +866,9 @@ async function applyChildOwnedMutation(
 
   if (operation.kind === 'connect') {
     for (const criterionWhere of operation.criteria) {
-      await executeUpdateCount(
-        scope,
-        contract,
-        relation.relatedNamespaceId,
-        relation.relatedTableName,
-        Object.fromEntries(parentValues),
-        [criterionWhere],
-      );
+      await updateRelatedRows(scope, contract, relation, Object.fromEntries(parentValues), [
+        criterionWhere,
+      ]);
     }
     return;
   }
@@ -889,14 +884,7 @@ async function applyChildOwnedMutation(
       ? [parentJoinWhere]
       : operation.criteria.map((criterionWhere) => and(parentJoinWhere, criterionWhere));
   for (const filter of disconnectFilters) {
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [filter],
-    );
+    await updateRelatedRows(scope, contract, relation, setValues, [filter]);
   }
 }
 
@@ -923,7 +911,7 @@ async function applyFilteredWrite(
   }
 
   applyUpdateDefaults(context, namespaceId, tableName, setValues);
-  await executeUpdateCount(scope, contract, namespaceId, tableName, setValues, filters);
+  await updateRelatedRows(scope, contract, relation, setValues, filters);
 }
 
 async function applyJunctionOwnedMutation(
@@ -1324,16 +1312,22 @@ async function findFirstByFilters(
   return mapStorageRowToModelFields(contract, namespaceId, modelName, firstRow);
 }
 
-async function executeUpdateCount(
+async function updateRelatedRows(
   scope: RuntimeScope,
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  relation: RelationDefinitionBase,
   setValues: Record<string, unknown>,
   filters: readonly AnyExpression[],
 ): Promise<void> {
-  const compiled = compileUpdateCount(contract, namespaceId, tableName, setValues, filters);
-  await scope.execute(compiled);
+  await scope.execute(
+    compileUpdateCount(
+      contract,
+      relation.relatedNamespaceId,
+      relation.relatedTableName,
+      setValues,
+      filters,
+    ),
+  );
 }
 
 const relationDefsCache = new WeakMap<object, Map<string, RelationDefinition[]>>();
