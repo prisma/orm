@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { isUniqueConstraintViolation } from '@internal/sql-errors';
-import { type AnyExpression, BinaryExpr, LiteralExpr } from '@internal/sql-relational-core/ast';
+import { type AnyExpression, BinaryExpr } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
@@ -42,6 +42,7 @@ import type {
   RuntimeTransaction,
 } from './types';
 import { emptyState } from './types';
+import { paramRefForStorageColumn } from './where-binding';
 
 interface JunctionThrough {
   readonly table: string;
@@ -699,7 +700,7 @@ async function applyChildOwnedMutation(
   if (!mutation.criteria || mutation.criteria.length === 0) {
     const related = bindRelatedTable(relation);
     await executeUpdateCount(scope, contract, related, setValues, [
-      buildChildJoinWhere(related.root, parentValues),
+      buildChildJoinWhere(contract, related.root, parentValues),
     ]);
     return;
   }
@@ -724,7 +725,7 @@ async function applyChildOwnedMutation(
     }
 
     await executeUpdateCount(scope, contract, related, setValues, [
-      and(buildChildJoinWhere(related.root, parentValues), criterionWhere),
+      and(buildChildJoinWhere(contract, related.root, parentValues), criterionWhere),
     ]);
   }
 }
@@ -1092,7 +1093,12 @@ async function deleteJunctionLink(
   });
   const exprs: AnyExpression[] = [];
   for (const [column, value] of Object.entries(junctionRow)) {
-    exprs.push(BinaryExpr.eq(junction.root.column(column), LiteralExpr.of(value)));
+    exprs.push(
+      BinaryExpr.eq(
+        junction.root.column(column),
+        paramRefForStorageColumn(context.contract, junction.root.storage, column, value),
+      ),
+    );
   }
 
   const first = exprs[0];
@@ -1139,13 +1145,19 @@ function bindRelatedTable(relation: RelationDefinition): CollectionTables {
 }
 
 function buildChildJoinWhere(
+  contract: Contract<SqlStorage>,
   related: TableBinding,
   childValues: Map<string, unknown>,
 ): AnyExpression {
   const exprs: AnyExpression[] = [];
 
   for (const [childColumn, parentValue] of childValues.entries()) {
-    exprs.push(BinaryExpr.eq(related.column(childColumn), LiteralExpr.of(parentValue)));
+    exprs.push(
+      BinaryExpr.eq(
+        related.column(childColumn),
+        paramRefForStorageColumn(contract, related.storage, childColumn, parentValue),
+      ),
+    );
   }
 
   const first = exprs[0];

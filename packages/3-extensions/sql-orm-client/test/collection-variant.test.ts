@@ -120,8 +120,7 @@ describe('Collection.variant()', () => {
     const binExpr = filter as BinaryExpr;
     expect(binExpr.left).toBeInstanceOf(ColumnRef);
     expect((binExpr.left as ColumnRef).column).toBe('kind');
-    expect(binExpr.right).toBeInstanceOf(LiteralExpr);
-    expect((binExpr.right as LiteralExpr).value).toBe('admin');
+    expect(binExpr.right).toEqual(ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }));
   });
 
   it('sets variantName on state', () => {
@@ -207,7 +206,10 @@ describe('Collection.variant()', () => {
 
     expect(narrowed.state.filters).toEqual([
       ...withWhere.state.filters,
-      BinaryExpr.eq(ColumnRef.of('users', 'kind'), LiteralExpr.of('admin')),
+      BinaryExpr.eq(
+        ColumnRef.of('users', 'kind'),
+        ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }),
+      ),
     ]);
     expect(withWhere.state.filters).toHaveLength(1);
   });

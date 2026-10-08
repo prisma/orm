@@ -270,6 +270,12 @@ describe('integration/polymorphism-self-relation', () => {
         const sql = runtime.executions[0]?.sql;
         expect(sql).toContain('FROM "public"."tasks" AS "tasks_3"');
         expect(sql).toContain('FROM "public"."tasks" AS "tasks_2"');
+        expect(sql).toContain('"tasks"."type" = $2');
+        expect(runtime.executions[0]?.params).toEqual([
+          { kind: 'literal', value: 'Has feature subtasks' },
+          { kind: 'literal', value: 'feature' },
+          { kind: 'literal', value: 'feature' },
+        ]);
       });
     },
     timeouts.spinUpPpgDev,

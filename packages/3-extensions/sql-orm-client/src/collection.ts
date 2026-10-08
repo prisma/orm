@@ -11,7 +11,6 @@ import {
   BinaryExpr,
   checkLimitOffset,
   isWhereExpr,
-  LiteralExpr,
   LockingClause,
   type LockOptionCapabilities,
   type LockStrength,
@@ -186,6 +185,7 @@ import {
   type VariantNameForValue,
   type WithNsId,
 } from './types';
+import { paramRefForStorageColumn } from './where-binding';
 import { normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
@@ -638,7 +638,12 @@ export class CollectionBase<
     const columnName = polyInfo.discriminatorColumn;
     const filter = BinaryExpr.eq(
       this.state.tables.root.column(columnName),
-      LiteralExpr.of(variantInfo.value),
+      paramRefForStorageColumn(
+        this.contract,
+        this.state.tables.root.storage,
+        columnName,
+        variantInfo.value,
+      ),
     );
 
     return this.#cloneWithRow<

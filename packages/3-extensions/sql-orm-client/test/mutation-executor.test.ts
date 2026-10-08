@@ -5,6 +5,7 @@ import {
   BinaryExpr,
   ColumnRef,
   LiteralExpr,
+  ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { bindCollectionTables } from '../src/collection-tables';
@@ -433,25 +434,27 @@ describe('mutation-executor', () => {
     throw new Error(`no ${kind} on "${table}" found in executions`);
   }
 
-  function collectLiterals(node: unknown): unknown[] {
+  function collectParams(node: unknown): ParamRef[] {
     if (!node || typeof node !== 'object') {
       return [];
     }
+    if (node instanceof ParamRef) {
+      return [node];
+    }
     const expr = node as {
-      kind?: string;
-      value?: unknown;
       left?: unknown;
       right?: unknown;
       exprs?: readonly unknown[];
     };
-    if (expr.kind === 'literal') {
-      return [expr.value];
-    }
     return [
-      ...collectLiterals(expr.left),
-      ...collectLiterals(expr.right),
-      ...(expr.exprs ?? []).flatMap(collectLiterals),
+      ...collectParams(expr.left),
+      ...collectParams(expr.right),
+      ...(expr.exprs ?? []).flatMap(collectParams),
     ];
+  }
+
+  function collectParamValues(node: unknown): unknown[] {
+    return collectParams(node).map((param) => param.value);
   }
 
   it('executeNestedCreateMutation() routes M:N connect through a junction INSERT', async () => {
@@ -894,7 +897,11 @@ describe('mutation-executor', () => {
 
     const del = findJunctionDml(runtime, 'delete', 'parent_child');
     expect(del.kind).toBe('delete');
-    expect(collectLiterals(del.where).sort()).toEqual([1, 10]);
+    expect(collectParamValues(del.where).sort()).toEqual([1, 10]);
+    expect(collectParams(del.where).map((param) => param.codec)).toEqual([
+      { codecId: 'pg/int4@1' },
+      { codecId: 'pg/int4@1' },
+    ]);
   });
 
   it('executeNestedUpdateMutation() rejects conflicting values for shared junction columns on disconnect', async () => {
@@ -956,7 +963,7 @@ describe('mutation-executor', () => {
     });
 
     const del = findJunctionDml(runtime, 'delete', 'parent_child');
-    expect(collectLiterals(del.where)).toEqual([7]);
+    expect(collectParamValues(del.where)).toEqual([7]);
   });
 
   it('executeNestedCreateMutation() rejects M:N disconnect (update-only)', async () => {
@@ -1126,6 +1133,10 @@ describe('mutation-executor', () => {
 
     const del = findJunctionDml(runtime, 'delete', 'user_roles');
     expect(del.kind).toBe('delete');
+    expect(collectParams(del.where)).toEqual([
+      ParamRef.of(1, { codec: { codecId: 'pg/int4@1' } }),
+      ParamRef.of('admin', { codec: { codecId: 'sql/char@1', typeParams: { length: 36 } } }),
+    ]);
   });
 
   it('executeNestedCreateMutation() allows M:N create on pure junction (no required payload)', async () => {
@@ -1288,6 +1299,50 @@ describe('mutation-executor', () => {
     });
 
     expect(updated).toEqual({ id: 1, name: 'Alice', email: 'alice@example.com' });
+  });
+
+  it('executeNestedUpdateMutation() sends child-owned connect and disconnect criteria as parameters with the column codec', async () => {
+    const contract = getTestContract();
+    const updatePlans = async (
+      data: Record<string, unknown>,
+    ): Promise<ReadonlyArray<{ ast: { where?: unknown }; params: readonly unknown[] }>> => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'alice@example.com' }], []]);
+      await executeNestedUpdateMutation({
+        context: { ...getTestContext(), contract },
+        runtime,
+        namespaceId: 'public',
+        modelName: 'User',
+        tables: bindCollectionTables(contract, 'public', 'User'),
+        filters: [userIdFilter],
+        data: data as never,
+      });
+      return runtime.executions
+        .map((execution) => execution.plan as { ast: { kind?: string; where?: unknown } })
+        .filter((plan) => plan.ast.kind === 'update') as never;
+    };
+
+    const [connect] = await updatePlans({
+      posts: (posts: { connect: (criterion: Record<string, unknown>) => unknown }) =>
+        posts.connect({ title: 'Hello' }),
+    });
+    expect(connect?.ast.where).toEqual(
+      BinaryExpr.eq(
+        ColumnRef.of('posts', 'title'),
+        ParamRef.of('Hello', { codec: { codecId: 'pg/text@1' } }),
+      ),
+    );
+    expect(connect?.params).toEqual([1, 'Hello']);
+
+    const [disconnect] = await updatePlans({
+      posts: (posts: { disconnect: (criteria: readonly Record<string, unknown>[]) => unknown }) =>
+        posts.disconnect([{ title: 'Hello' }]),
+    });
+    expect(collectParams(disconnect?.ast.where)).toEqual([
+      ParamRef.of(1, { codec: { codecId: 'pg/int4@1' } }),
+      ParamRef.of('Hello', { codec: { codecId: 'pg/text@1' } }),
+    ]);
+    expect(disconnect?.params).toEqual([null, 1, 'Hello']);
   });
 
   it('executeNestedUpdateMutation() validates child-owned connect and disconnect criteria', async () => {

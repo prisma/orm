@@ -59,21 +59,19 @@ describe('table bindings in collection state', () => {
       [{ id: 2, title: 'Dark mode', type: 'feature', features__priority: 7 }],
     ]);
 
-    const rows = await collection
-      .where({
-        toWhereExpr: () => BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
-      })
-      .all()
-      .toArray();
+    const filtered = collection.where({
+      toWhereExpr: () => BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+    });
+    const rows = await filtered.all().toArray();
 
-    expect(rows).toEqual([{ id: 2, title: 'Dark mode', type: 'feature', priority: 7 }]);
-    const ast = runtime.executions[0]?.plan.ast;
-    expect(isSelectAst(ast) ? ast.where : undefined).toEqual(
-      BinaryExpr.gte(
-        ColumnRef.of('features', 'priority'),
-        ParamRef.of(3, { codec: { codecId: 'pg/int4@1' } }),
-      ),
+    const bound = BinaryExpr.gte(
+      ColumnRef.of('features', 'priority'),
+      ParamRef.of(3, { codec: { codecId: 'pg/int4@1' } }),
     );
+    expect(rows).toEqual([{ id: 2, title: 'Dark mode', type: 'feature', priority: 7 }]);
+    expect(filtered.state.filters).toEqual([bound]);
+    const ast = runtime.executions[0]?.plan.ast;
+    expect(isSelectAst(ast) ? ast.where : undefined).toEqual(bound);
   });
 
   it('gives composite-key identity filter parameters the codec of their column', async () => {
@@ -173,8 +171,9 @@ describe('table bindings in collection state', () => {
       params: plan.params,
     }).sql;
     expect(sql).toMatchInlineSnapshot(
-      `"UPDATE "public"."tasks" SET "title" = $1 WHERE EXISTS (SELECT "tasks_3"."id" AS "id" FROM "public"."tasks" AS "tasks_3" INNER JOIN "public"."features" ON "tasks_3"."id" = "features"."id" WHERE ("tasks_3"."id" = "tasks"."id" AND "tasks"."type" = 'feature' AND EXISTS (SELECT "tasks_2"."parent_id" AS "_exists" FROM "public"."tasks" AS "tasks_2" WHERE "tasks_2"."parent_id" = "tasks"."id")))"`,
+      `"UPDATE "public"."tasks" SET "title" = $1 WHERE EXISTS (SELECT "tasks_3"."id" AS "id" FROM "public"."tasks" AS "tasks_3" INNER JOIN "public"."features" ON "tasks_3"."id" = "features"."id" WHERE ("tasks_3"."id" = "tasks"."id" AND "tasks"."type" = $2 AND EXISTS (SELECT "tasks_2"."parent_id" AS "_exists" FROM "public"."tasks" AS "tasks_2" WHERE "tasks_2"."parent_id" = "tasks"."id")))"`,
     );
+    expect(plan.params).toEqual(['Queued', 'feature']);
   });
 
   it('aliases a relation filter that targets one of the base model MTI variant tables', () => {

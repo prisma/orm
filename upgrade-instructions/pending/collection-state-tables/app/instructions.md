@@ -9,7 +9,7 @@ changes:
         - '\.include\s*[(<]'
   - id: sql-orm-table-references-renamed
     summary: |
-      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. Query results are unchanged; code and tests that match on SQL text need updating.
+      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
     detection:
       glob: "**/*.{ts,tsx,mts,cts,snap}"
       matches:
@@ -63,5 +63,12 @@ Text also changes in cases that had no alias before:
 - an include that returns to a table an enclosing level already uses (for example users → posts → author);
 - the variant table of an included polymorphic model whose table already appears in the chain: the table is aliased and its projected column labels become `<table>_<n>__<column>`;
 - the derived tables of an include (`<relation>__rows` and the like) when the same relation is included at two levels of one statement, or in two `combine()` branches: the second gets a `_2` suffix.
+
+Values that were written into the SQL text are now parameters:
+
+- the discriminator comparison of a variant collection in `updateAndCount` / `deleteAndCount`: `"tasks"."type" = 'feature'` becomes `"tasks"."type" = $n`;
+- object-filter values in the statements a nested write runs: the `UPDATE` of a `connect` or `disconnect` on a to-many relation, the lookup `SELECT` of a to-one `connect`, the identity `UPDATE` of a nested `update`, and the junction `DELETE` of a many-to-many `disconnect`.
+
+The parameter list of those statements grows by the same values, and the numbers of later parameters shift. Each value is encoded by its column's codec, as in every other filter.
 
 Names follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their names in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.

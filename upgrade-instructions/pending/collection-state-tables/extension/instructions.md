@@ -8,6 +8,13 @@ changes:
       matches:
         - '\bemptyState\('
         - '\bCollectionState\b'
+  - id: state-filters-planned-as-written
+    summary: |
+      The SQL ORM planners no longer turn a literal in `CollectionState.filters` into a parameter. A filter put into a hand-built state is planned as written, so a `LiteralExpr` compared with a column is rendered into the SQL text. Filters added through `collection.where(...)` are unaffected.
+    detection:
+      glob: "**/*.{ts,tsx,mts,cts}"
+      matches:
+        - '\bfilters\s*:'
   - id: create-model-accessor-takes-tables
     summary: |
       `createModelAccessor` takes the collection's tables as its fourth argument, before the optional variant name: `createModelAccessor(context, namespaceId, modelName, tables, variantName?)`.
@@ -31,7 +38,7 @@ changes:
         - '\.include\s*[(<]'
   - id: sql-orm-table-references-renamed
     summary: |
-      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. Query results are unchanged; code and tests that match on SQL text need updating.
+      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
     detection:
       glob: "**/*.{ts,tsx,mts,cts,snap}"
       matches:
@@ -73,6 +80,25 @@ A state passed to `new Collection(ctx, modelName, { state })` needs it too. A `C
 Do not build a `CollectionTables` or a table scope by hand. The scope must be one the package created.
 
 A state built by hand for an include child must not reuse the parent's table names. Prefer building includes through `collection.include(...)` and reading `collection.state`, which binds the child from the parent's scope. Where a child state is built by hand for a relation whose target table already appears in the parent chain (a self-relation, or an include that returns to an ancestor's table), build it through `include()` instead; `bindCollectionTables` starts a fresh scope and would give the child the same reference as its parent.
+
+## `state-filters-planned-as-written`
+
+This affects only code that writes expressions into `CollectionState.filters` itself (a hand-built state, an `IncludeExpr.nested` state, a `combine()` branch state). Such a filter used to have each literal compared with a column replaced by a parameter carrying the column's codec when the statement was planned. The planners now use stored filters unchanged.
+
+Build the filter through the collection, which binds it when `where()` is called, and read the state from the result:
+
+```ts
+// before
+const state = {
+  ...emptyState(),
+  filters: [BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of(email))],
+};
+
+// after
+const state = users.where(BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of(email))).state;
+```
+
+A filter that must be written by hand needs a `ParamRef` with the column's codec in place of the literal. A literal left in place still produces valid SQL, but its value is written into the statement text and is not encoded by the column's codec.
 
 ## `create-model-accessor-takes-tables`
 
@@ -143,5 +169,12 @@ Text also changes in cases that had no alias before:
 - an include that returns to a table an enclosing level already uses (for example users → posts → author);
 - the variant table of an included polymorphic model whose table already appears in the chain: the table is aliased and its projected column labels become `<table>_<n>__<column>`;
 - the derived tables of an include (`<relation>__rows` and the like) when the same relation is included at two levels of one statement, or in two `combine()` branches: the second gets a `_2` suffix.
+
+Values that were written into the SQL text are now parameters:
+
+- the discriminator comparison of a variant collection in `updateAndCount` / `deleteAndCount`: `"tasks"."type" = 'feature'` becomes `"tasks"."type" = $n`;
+- object-filter values in the statements a nested write runs: the `UPDATE` of a `connect` or `disconnect` on a to-many relation, the lookup `SELECT` of a to-one `connect`, the identity `UPDATE` of a nested `update`, and the junction `DELETE` of a many-to-many `disconnect`.
+
+The parameter list of those statements grows by the same values, and the numbers of later parameters shift. Each value is encoded by its column's codec, as in every other filter.
 
 Names follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their names in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.

@@ -3,7 +3,6 @@ import {
   BinaryExpr,
   ColumnRef,
   ListExpression,
-  LiteralExpr,
   NotExpr,
   NullCheckExpr,
   OrExpr,
@@ -158,7 +157,7 @@ describe('filters', () => {
 
     expect(expr).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('posts', 'id'), LiteralExpr.of(1)),
+        BinaryExpr.eq(ColumnRef.of('posts', 'id'), paramRef('posts', 'id', 1)),
         NullCheckExpr.isNull(ColumnRef.of('posts', 'user_id')),
       ]),
     );
@@ -251,7 +250,12 @@ describe('filters', () => {
         },
         bindCollectionTables(context.contract, 'public', 'User').root,
       ),
-    ).toEqual(BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@example.com')));
+    ).toEqual(
+      BinaryExpr.eq(
+        ColumnRef.of('users', 'email'),
+        paramRef('users', 'email', 'alice@example.com'),
+      ),
+    );
 
     const withoutStorageFields = withPatchedDomainModels(contract, (models) => ({
       ...models,

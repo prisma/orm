@@ -29,7 +29,6 @@ import {
 import {
   type CollectionTables,
   requireVariantBinding,
-  tableReferences,
   variantColumnLabel,
 } from './collection-tables';
 import { assertCursorCompatibleOrder } from './order-by-guards';
@@ -37,7 +36,7 @@ import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import type { TableBinding } from './table-scope';
 import type { CollectionState } from './types';
-import { bindWhereExpr, paramRefForStorageColumn } from './where-binding';
+import { paramRefForStorageColumn } from './where-binding';
 import { combineWhereExprs } from './where-utils';
 
 type CursorOrderEntry = {
@@ -141,10 +140,8 @@ function buildStateWhere(
   contract: Contract<SqlStorage>,
   state: CollectionState,
 ): AnyExpression | undefined {
-  const references = tableReferences(state.tables);
   const cursorWhere = buildCursorWhere(contract, state.tables.root, state.orderBy, state.cursor);
-  const boundFilters = state.filters.map((filter) => bindWhereExpr(contract, filter, references));
-  return combineWhereExprs(cursorWhere ? [...boundFilters, cursorWhere] : boundFilters);
+  return combineWhereExprs(cursorWhere ? [...state.filters, cursorWhere] : state.filters);
 }
 
 /**

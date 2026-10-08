@@ -35,19 +35,15 @@ export function normalizeWhereArg(
     );
   }
 
-  if (isToWhereExpr(arg)) {
-    const expr = arg.toWhereExpr();
-    return options?.rebaseOnto ? rebaseOntoRoot(expr, options.rebaseOnto) : expr;
+  const expr = isToWhereExpr(arg) ? arg.toWhereExpr() : arg;
+  if (!options) {
+    return expr;
   }
-
-  if (options) {
-    return bindWhereExpr(
-      options.contract,
-      options.rebaseOnto ? rebaseOntoRoot(arg, options.rebaseOnto) : arg,
-      options.tables,
-    );
-  }
-  return arg;
+  return bindWhereExpr(
+    options.contract,
+    options.rebaseOnto ? rebaseOntoRoot(expr, options.rebaseOnto) : expr,
+    options.tables,
+  );
 }
 
 function isToWhereExpr(arg: WhereArg): arg is ToWhereExpr {
