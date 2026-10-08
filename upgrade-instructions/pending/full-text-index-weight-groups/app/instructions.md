@@ -66,7 +66,7 @@ A full-text index can now cover several fields, each top-level item a weight gro
 @@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
-In an index of several fields, every column is wrapped in `coalesce(column, '')`, so the index does not change when a column becomes optional or required. To search it, pass the same groups to `fns.fullTextMatches` and `fns.fullTextRank` in the SQL builder: `fns.fullTextMatches([[f.title, f.subtitle], [f.body]], q)`.
+In an index of several fields, every column is wrapped in `coalesce(column, '')`, so the index does not change when a column becomes optional or required. To search it, pass the index from the table's `indexes` to `fns.fullTextMatches` and `fns.fullTextRank` in the SQL builder, which then search its weight groups in its language: `fns.fullTextMatches(post.indexes.post_search, q)`. To search several columns without an index, wrap the groups in `fullTextDocument` from `@prisma/orm-postgres/target/full-text`.
 
 ## `full-text-index-one-field-diagnostic-removed`
 

@@ -1,6 +1,6 @@
 import type { BooleanCodecType, Expression } from '@internal/sql-builder/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { tsquery } from '@internal/target-postgres/full-text';
+import { fullTextDocument, tsquery } from '@internal/target-postgres/full-text';
 import { expectTypeOf, test } from 'vitest';
 import { db } from './preamble';
 
@@ -166,4 +166,53 @@ test('a parser takes a varchar column, but not a non-textual one', () => {
   db.public.comments
     // @ts-expect-error an integer column is not text
     .select('query', (f, fns) => fns.websearchToTsquery(f.id));
+});
+
+test("a table's indexes are keyed by the name the source gave each, with the stored type and options", () => {
+  const search = db.public.documents.indexes.documents_search;
+
+  expectTypeOf(search.type).toEqualTypeOf<'fullText'>();
+  expectTypeOf(search.options).toEqualTypeOf<{
+    readonly language: 'english';
+    readonly weightGroups: readonly [readonly ['title', 'subtitle'], readonly ['body']];
+  }>();
+  expectTypeOf<keyof typeof search.columns>().toEqualTypeOf<'title' | 'subtitle' | 'body'>();
+  expectTypeOf(search.columns.subtitle.returnType.nullable).toEqualTypeOf<true>();
+  expectTypeOf<keyof typeof db.public.comments.indexes>().toEqualTypeOf<
+    'comments_body_search' | 'comments_subject_search' | 'comments_body_live'
+  >();
+  // @ts-expect-error a table has only the indexes its contract declares
+  db.public.documents.indexes.documents_search_2f1bb221;
+});
+
+test('fullTextMatches and fullTextRank search a full-text index from the table, aliased or not', () => {
+  const documents = db.public.documents;
+  const aliased = documents.as('d');
+
+  documents
+    .select('id')
+    .select('rank', (_f, fns) =>
+      fns.fullTextRank(documents.indexes.documents_search, fns.websearchToTsquery('zebra')),
+    )
+    .where((_f, fns) =>
+      fns.fullTextMatches(aliased.indexes.documents_search, fns.websearchToTsquery('zebra')),
+    );
+  documents.select('id').where((_f, fns) =>
+    // @ts-expect-error the index states its language
+    fns.fullTextMatches(documents.indexes.documents_search, fns.websearchToTsquery('zebra'), {
+      language: 'german',
+    }),
+  );
+});
+
+test('weight groups are searched through fullTextDocument, not a bare array', () => {
+  db.public.documents.select('id').where((f, fns) =>
+    fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), tsquery`${'zeb'}:*`, {
+      language: 'german',
+    }),
+  );
+  db.public.documents.select('id').where((f, fns) =>
+    // @ts-expect-error a bare array of weight groups is neither an index nor a document
+    fns.fullTextMatches([[f.title, f.subtitle], [f.body]], tsquery`${'zeb'}:*`),
+  );
 });

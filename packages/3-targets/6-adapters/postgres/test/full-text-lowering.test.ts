@@ -97,14 +97,19 @@ describe('full-text lowering', () => {
     });
   });
 
-  it('renders a weighted document over each column once, coalescing every column', () => {
+  it('renders the weighted document of a full-text index over each column once, coalescing every column', () => {
     const body = {
       returnType: { codecId: 'pg/text@1', nullable: true },
       buildAst: () => ColumnRef.of('post', 'body'),
     };
+    const searchIndex = {
+      columns: { title, body },
+      type: 'fullText',
+      options: { weightGroups: [['title'], ['body']], language: 'german' },
+    };
     const operations = postgresTargetDescriptor.queryOperations();
     const rank = operations['fullTextRank']!.impl(
-      ...([[[title], [body]], websearchToTsquery('zebra'), { language: 'german' }] as never[]),
+      ...([searchIndex, websearchToTsquery('zebra')] as never[]),
     ) as Expression<ScopeField>;
     const plan = rawSql`SELECT ${rank} AS rank FROM "post"`
       .returnsRow({ rank: 'pg/float4@1' })

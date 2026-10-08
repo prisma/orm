@@ -1,15 +1,15 @@
 /**
  * Does Postgres use the GIN index a weighted `fullTextIndex` declares, for the
- * SQL the builder lowers from `fns.fullTextMatches` over the same weight
- * groups? The index is created from the DDL the migration planner renders for
- * the fixture contract, and `EXPLAIN (FORMAT JSON)` on the real lowered SQL
- * has to name it. Negative controls change the grouping, the order and the
- * language, and must not use it.
+ * SQL the builder lowers from `fns.fullTextMatches` given that index from the
+ * table's `indexes`? The index is created from the DDL the migration planner
+ * renders for the fixture contract, and `EXPLAIN (FORMAT JSON)` on the real
+ * lowered SQL has to name it. Negative controls search a `fullTextDocument`
+ * with another grouping, order or language, and must not use it.
  *
  * `enable_seqscan = off` makes this a question of whether the index is usable
  * at all rather than one about cost estimates on a small table.
  */
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import { fullTextDocument, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { type PlannedIndex, plannedExpressionIndexes } from './full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from './setup';
@@ -53,15 +53,19 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
     await client().query('SET enable_seqscan = off');
   }, timeouts.spinUpPpgDev);
 
+  const documents = () => db().public.documents;
+
   const matchesQuery = () =>
-    db()
-      .public.documents.select('id')
-      .where((f, fns) =>
-        fns.fullTextMatches([[f.title, f.subtitle], [f.body]], fns.websearchToTsquery(QUERY)),
+    documents()
+      .select('id')
+      .where((_f, fns) =>
+        fns.fullTextMatches(documents().indexes.documents_search, fns.websearchToTsquery(QUERY)),
       )
       .build();
 
   const document = `(setweight(to_tsvector('english', coalesce("title", '')), 'A') || setweight(to_tsvector('english', coalesce("subtitle", '')), 'A') || setweight(to_tsvector('english', coalesce("body", '')), 'B'))`;
+  const documentOf = (alias: string) =>
+    document.replaceAll(/"(title|subtitle|body)"/g, `"${alias}"."$1"`);
 
   it('renders the same search document in the DDL, the schema node and the query', () => {
     expect(searchIndex.expression).toBe(document);
@@ -69,7 +73,7 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
       `CREATE INDEX "${searchIndex.name}" ON "public"."documents" USING "gin" (${document})`,
     );
     expect(lower(matchesQuery()).sql).toBe(
-      `SELECT "id" AS "id" FROM "public"."documents" WHERE ${document} @@ websearch_to_tsquery('english', $1)`,
+      `SELECT "id" AS "id" FROM "public"."documents" WHERE ${documentOf('documents')} @@ websearch_to_tsquery('english', $1)`,
     );
   });
 
@@ -98,27 +102,47 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
   it('searches the same document text over the nullable side of an outer join', () => {
     const joined = lower(
       db()
-        .public.users.outerLeftJoin(db().public.documents, (f, fns) =>
-          fns.eq(f.users.id, f.documents.id),
-        )
+        .public.users.outerLeftJoin(documents(), (f, fns) => fns.eq(f.users.id, f.documents.id))
         .select('name')
-        .where((f, fns) =>
-          fns.fullTextMatches(
-            [[f.documents.title, f.documents.subtitle], [f.documents.body]],
-            fns.websearchToTsquery(QUERY),
-          ),
+        .where((_f, fns) =>
+          fns.fullTextMatches(documents().indexes.documents_search, fns.websearchToTsquery(QUERY)),
         )
         .build(),
     );
 
-    const plain = lower(matchesQuery()).sql;
     const searchOf = (sql: string) => sql.slice(sql.indexOf('WHERE '));
 
-    expect(searchOf(joined.sql).replaceAll('"documents".', '')).toBe(searchOf(plain));
-    expect(searchOf(plain)).toBe(`WHERE ${document} @@ websearch_to_tsquery('english', $1)`);
+    expect(searchOf(joined.sql)).toBe(searchOf(lower(matchesQuery()).sql));
   });
 
-  it('uses the index for fullTextMatches over the same weight groups', async () => {
+  describe('in a self-join', () => {
+    const selfJoined = () => {
+      const first = documents().as('first');
+      const second = documents().as('second');
+      return first
+        .innerJoin(second, (f, fns) => fns.eq(f.first.id, f.second.id))
+        .select('id', (f) => f.first.id)
+        .where((_f, fns) =>
+          fns.fullTextMatches(second.indexes.documents_search, fns.websearchToTsquery(QUERY)),
+        )
+        .build();
+    };
+
+    it('searches the columns of the aliased table the index was read from', () => {
+      expect(lower(selfJoined()).sql).toContain(
+        `WHERE ${documentOf('second')} @@ websearch_to_tsquery('english', $1)`,
+      );
+    });
+
+    it('uses the index of the aliased table', async () => {
+      const lowered = lower(selfJoined());
+
+      const plan = await explain(lowered.sql, lowered.params);
+      expect(indexNames(plan)).toContain(searchIndex.name);
+    });
+  });
+
+  it('uses the index for fullTextMatches given the index', async () => {
     const lowered = lower(matchesQuery());
 
     const plan = await explain(lowered.sql, lowered.params);
@@ -135,14 +159,14 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
 
   it('uses the index when the predicate is ordered by rank and limited', async () => {
     const lowered = lower(
-      db()
-        .public.documents.select('id')
-        .where((f, fns) =>
-          fns.fullTextMatches([[f.title, f.subtitle], [f.body]], fns.websearchToTsquery(QUERY)),
+      documents()
+        .select('id')
+        .where((_f, fns) =>
+          fns.fullTextMatches(documents().indexes.documents_search, fns.websearchToTsquery(QUERY)),
         )
         .orderBy(
-          (f, fns) =>
-            fns.fullTextRank([[f.title, f.subtitle], [f.body]], fns.websearchToTsquery(QUERY)),
+          (_f, fns) =>
+            fns.fullTextRank(documents().indexes.documents_search, fns.websearchToTsquery(QUERY)),
           { direction: 'desc' },
         )
         .limit(5)
@@ -155,15 +179,15 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
 
   it('ranks a title match above a body match', async () => {
     const ranked = await runtime().query(
-      db()
-        .public.documents.select('id')
-        .select('rank', (f, fns) =>
-          fns.fullTextRank([[f.title, f.subtitle], [f.body]], websearchToTsquery(QUERY)),
+      documents()
+        .select('id')
+        .select('rank', (_f, fns) =>
+          fns.fullTextRank(documents().indexes.documents_search, websearchToTsquery(QUERY)),
         )
         .where((f, fns) => fns.or(fns.eq(f.id, 89), fns.eq(f.id, 97)))
         .orderBy(
-          (f, fns) =>
-            fns.fullTextRank([[f.title, f.subtitle], [f.body]], websearchToTsquery(QUERY)),
+          (_f, fns) =>
+            fns.fullTextRank(documents().indexes.documents_search, websearchToTsquery(QUERY)),
           { direction: 'desc' },
         )
         .build(),
@@ -171,6 +195,24 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
 
     expect(ranked.map((row) => row.id)).toEqual([97, 89]);
     expect(ranked[0]!.rank).toBeGreaterThan(ranked[1]!.rank);
+  });
+
+  it('uses the index for a fullTextDocument over the same weight groups and language', async () => {
+    const lowered = lower(
+      documents()
+        .select('id')
+        .where((f, fns) =>
+          fns.fullTextMatches(
+            fullTextDocument([[f.title, f.subtitle], [f.body]]),
+            fns.websearchToTsquery(QUERY),
+          ),
+        )
+        .build(),
+    );
+
+    expect(lowered.sql).toContain(`WHERE ${document} @@`);
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain(searchIndex.name);
   });
 
   describe('negative controls', () => {
@@ -195,7 +237,7 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
                 : variant.groups === 'reversed'
                   ? [[f.body], [f.title, f.subtitle]]
                   : [[f.title, f.subtitle], [f.body]];
-            return fns.fullTextMatches(groups, fns.websearchToTsquery(QUERY), {
+            return fns.fullTextMatches(fullTextDocument(groups), fns.websearchToTsquery(QUERY), {
               language: variant.language,
             });
           })

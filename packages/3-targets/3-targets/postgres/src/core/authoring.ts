@@ -616,7 +616,7 @@ const fullTextField = fieldRef();
 
 const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
   documentation:
-    'Indexes text fields for full-text search. Each item of the list is a weight group, strongest first; a nested list puts several fields in one group. `fullTextMatches` and `fullTextRank` search the same document.',
+    "Indexes text fields for full-text search. Each item of the list is a weight group, strongest first; a nested list puts several fields in one group. Pass the index from the table's `indexes` to `fullTextMatches` and `fullTextRank` to search the same document.",
   positional: [
     {
       key: 'fields',

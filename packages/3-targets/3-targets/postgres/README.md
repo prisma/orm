@@ -201,18 +201,21 @@ model('Post', { fields: { id, title, subtitle, body } }).sql(({ cols }) => ({
 
 Both take an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:`; both are repeatable. The column names come from the resolved storage columns, so `@map` is honoured. With `map:` the index keeps the exact database name you give it, and `db verify` compares the rendered search document with the text Postgres prints back for the index exactly, character for character. Postgres prints it in its own form (`to_tsvector('english'::regconfig, title)`), so a `map:` full-text index reports drift; `@@fullTextIndex` and `fullTextIndex` warn about this with `PN_EXACT_NAME_BODY_COMPARISON`. Use `name:` unless the database already has the index under that name.
 
-To search a document of several columns, pass the same weight groups to `fns.fullTextMatches` and `fns.fullTextRank` in the SQL builder:
+To search a full-text index from the SQL builder, pass the index itself, read from the table's `indexes` by the name the contract gave it. `fullTextMatches` and `fullTextRank` then search the document the index was built over, with its weight groups and its language, so the query always matches the index:
 
 ```typescript
 const q = websearchToTsquery(query);
-db.sql.public.post
+const post = db.sql.public.post;
+post
   .select('id')
-  .where((f, fns) => fns.fullTextMatches([[f.title, f.subtitle], [f.body]], q))
-  .orderBy((f, fns) => fns.fullTextRank([[f.title, f.subtitle], [f.body]], q), { direction: 'desc' })
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((_f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' })
   .build();
 ```
 
-Pass the same groups, in the same order, and the same `language` as the index: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+The index states its language, so passing `language` with one is a type error and raises `RUNTIME.ARGUMENT_INVALID`; so is an index of another type. An index read from an aliased table, `post.as('p').indexes.post_search`, searches that alias's columns.
+
+The document is one of three things: a full-text index, one column, or a document built by `fullTextDocument` from `./full-text`, which takes weight groups of columns, checks them by the same rules as an index, and searches several columns no index covers: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. With a column or a `fullTextDocument`, Postgres uses an index only when the groups, their order and the `language` are the index's; a mismatch is not an error, the query just falls back to a sequential scan. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
 ## Codec descriptor authoring
 

@@ -49,9 +49,9 @@ function isColumnRef(value: unknown): value is ColumnRef {
  * columns. Each top-level item is a weight group, strongest first, at most
  * four. The contract stores the groups as storage column names, resolved at
  * lowering, so a `.column()` override or a column naming convention is
- * honoured rather than guessed. Pass the same groups and `language` to the
- * query operations: a mismatch is not an error, the query simply stops using
- * the index.
+ * honoured rather than guessed. To search it, pass the index from the
+ * table's `indexes` to the query operations, which then search its groups in
+ * its language.
  */
 export function fullTextIndex<const Name extends string>(
   fields: FullTextFieldsInput<ColumnRef>,

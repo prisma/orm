@@ -123,18 +123,21 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 @@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
-In the SQL builder, pass the same weight groups, in the same order, to `fns.fullTextMatches` and `fns.fullTextRank`, so the query searches the expression the index covers and a title match ranks above a body match:
+**Searching an index from the SQL builder.** A table's `indexes` holds each of its indexes under the name the contract gave it, `name:` or `map:`. Pass the full-text index to `fns.fullTextMatches` and `fns.fullTextRank` in place of a column: the operation searches the document the index was built over, with the index's weight groups and language, so the query always matches the index and a title match ranks above a body match. The index states its language, so passing `language` with one is a type error. An index of another type is a type error too.
 
 ```typescript
 const q = websearchToTsquery(query);
-const posts = db.sql.public.post
+const post = db.sql.public.post;
+const posts = post
   .select('id', 'title')
-  .where((f, fns) => fns.fullTextMatches([[f.title, f.subtitle], [f.body]], q))
-  .orderBy((f, fns) => fns.fullTextRank([[f.title, f.subtitle], [f.body]], q), { direction: 'desc' })
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((_f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' })
   .build();
 ```
 
-A different grouping, order or language is not an error; the query just does not use the index. `fullTextHeadline` stays per column. The column methods (`row.title.fullTextMatches(q)`) search one column, and use a single-field index.
+An index read from an aliased table searches that alias's columns, so `post.as('p').indexes.post_search` works in a self-join.
+
+To search several columns that no index covers, build the document with `fullTextDocument` from `@prisma/orm-postgres/target/full-text`, which takes the weight groups of columns, and pass the language in the options: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. Postgres uses an index only for a query over the same document, so a document with another grouping, order or language than an index runs without it, and raises no error. `fullTextHeadline` stays per column. One column, `fns.fullTextMatches(f.title, q)` or `row.title.fullTextMatches(q)`, searches that column and uses a single-field index with the same language.
 
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
