@@ -117,4 +117,15 @@ describe('the index field of a stored foreign key', () => {
   ])('refuses %j', (foreignKeyIndex) => {
     expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).toBeInstanceOf(type.errors);
   });
+
+  it.each([true, false])(
+    'reads index: %s, which contract.json stored before 0.16, as absent',
+    (legacy) => {
+      expect(ForeignKeySchema({ ...stored, index: legacy })).not.toBeInstanceOf(type.errors);
+      expect(ForeignKey.from({ ...stored, index: legacy })).toEqual({
+        source: stored.source,
+        target: stored.target,
+      });
+    },
+  );
 });

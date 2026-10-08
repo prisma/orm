@@ -18,7 +18,10 @@ export interface ForeignKeyInput {
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
-  readonly index?: ForeignKeyIndex;
+  /**
+   * A `contract.json` emitted before 0.16 stores `true` or `false` here, the superseded per-foreign-key flag; it says nothing about the table's indexes and reads as absent.
+   */
+  readonly index?: ForeignKeyIndex | boolean;
 }
 
 /**
@@ -57,7 +60,7 @@ export class ForeignKey extends SqlNode {
     if (input.name !== undefined) this.name = input.name;
     if (input.onDelete !== undefined) this.onDelete = input.onDelete;
     if (input.onUpdate !== undefined) this.onUpdate = input.onUpdate;
-    if (input.index !== undefined) this.index = input.index;
+    if (typeof input.index === 'object') this.index = input.index;
     freezeNode(this);
   }
 
