@@ -6,7 +6,7 @@
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, planOriginOf } from '@internal/framework-components/control';
 import type { SerializedIndex } from '@internal/sql-contract/types';
 import {
   CheckConstraint,
@@ -133,6 +133,8 @@ function plan(kind: Naming, objects: readonly SqlObject[] = EVERY_OBJECT) {
     }),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: from,
+    origin: planOriginOf(from),
+    statements: [],
     frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -187,7 +189,7 @@ describe('a stored text that becomes canonical', () => {
       expect.objectContaining({
         id: 'rlsPolicy.public.posts.posts_owner_read_adopted.drop',
         label: 'Drop RLS policy "posts_owner_read_adopted" on "posts"',
-        operationClass: 'destructive',
+        operationClass: 'widening',
       }),
       expect.objectContaining({
         id: 'rlsPolicy.public.posts.posts_owner_read_adopted',
