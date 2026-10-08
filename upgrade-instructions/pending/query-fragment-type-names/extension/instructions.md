@@ -28,6 +28,6 @@ Rename `Scope` to `QueryFragment` and `FieldScope` to `DeclaredFieldsFragment` d
 + const newest: QueryFragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
 ```
 
-Rename every use of these types in the extension's code and in the declarations it exports, including a re-export such as `export type { Scope } from '@prisma/orm-postgres/orm-client'`, a qualified name such as `Orm.Scope` after `import * as Orm from '@prisma/orm-postgres/orm-client'`, and an inline type such as `import('@prisma/orm-postgres/orm-client').Scope`. After renaming, sort the named imports again, since `QueryFragment` sorts in a different place than `Scope` or `Fragment`.
+Rename every use of these types in the extension's code and in the declarations it exports, including a re-export such as `export type { Scope } from '@prisma/orm-postgres/orm-client'`, a qualified name such as `Orm.Scope` after `import * as Orm from '@prisma/orm-postgres/orm-client'`, and an inline type such as `import('@prisma/orm-postgres/orm-client').Scope`. After renaming, sort the named imports again, since `QueryFragment` sorts in a different place than `Scope` or `Fragment`, and wrap any line the longer names make too long for the formatter.
 
 Do not rename React's `Fragment`, the SQL builder's `Scope` and `ScopeField` (imported from a `builder` entry or `@internal/sql-builder`), or any `Fragment` or `Scope` that is not imported from the ORM client. Do not rename `FragmentFacts` or `DeclaredField`, which keep their names.
