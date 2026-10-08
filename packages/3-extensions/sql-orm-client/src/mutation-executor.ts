@@ -64,7 +64,7 @@ interface JunctionThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface RelationDefinition {
+interface RelationDefinitionBase {
   readonly relationName: string;
   readonly relatedModelName: string;
   readonly relatedNamespaceId: string;
@@ -72,16 +72,20 @@ interface RelationDefinition {
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly localColumns: readonly string[];
   readonly targetColumns: readonly string[];
-  readonly through: JunctionThrough | undefined;
 }
 
-export interface JunctionRelationDefinition extends RelationDefinition {
+export interface JunctionRelationDefinition extends RelationDefinitionBase {
   readonly through: JunctionThrough;
 }
 
-function hasThrough(relation: RelationDefinition): relation is JunctionRelationDefinition {
-  return relation.through !== undefined;
-}
+type RelationDefinition =
+  | (RelationDefinitionBase & { readonly ownership: 'parent' })
+  | (RelationDefinitionBase & { readonly ownership: 'child' })
+  | (JunctionRelationDefinition & { readonly ownership: 'junction' });
+
+type RelationOwnership = RelationDefinition['ownership'];
+
+const resolutionOrder: Record<RelationOwnership, number> = { parent: 0, junction: 1, child: 2 };
 
 interface ParsedRelationMutation {
   readonly relation: RelationDefinition;
@@ -263,61 +267,67 @@ async function applyResolvedGraph(
   input: ResolvedMutationInput,
   writeParent: (scalarData: Record<string, unknown>) => Promise<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> {
-  const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(input.relationMutations);
-
   const scalarData = { ...input.scalarData };
 
-  for (const { relation, operations } of parentOwned) {
-    for (const operation of operations) {
-      await applyParentOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        scalarData,
-        relation,
-        operation,
-      );
-    }
+  for (const { relation, operation } of operationsOwnedBy(input, 'parent')) {
+    await applyParentOwnedMutation(
+      scope,
+      context,
+      namespaceId,
+      modelName,
+      scalarData,
+      relation,
+      operation,
+    );
   }
 
-  for (const { relation, operations } of junctionOwned) {
-    for (const operation of operations) {
-      await preflightJunctionOwnedCreateMutation(scope, context, relation, operation);
-    }
+  for (const { relation, operation } of operationsOwnedBy(input, 'junction')) {
+    await preflightJunctionOwnedCreateMutation(scope, context, relation, operation);
   }
 
   const parentRow = await writeParent(scalarData);
 
-  for (const { relation, operations } of childOwned) {
-    for (const operation of operations) {
-      await applyChildOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        parentRow,
-        relation,
-        operation,
-      );
-    }
+  for (const { relation, operation } of operationsOwnedBy(input, 'child')) {
+    await applyChildOwnedMutation(
+      scope,
+      context,
+      namespaceId,
+      modelName,
+      parentRow,
+      relation,
+      operation,
+    );
   }
 
-  for (const { relation, operations } of junctionOwned) {
-    for (const operation of operations) {
-      await applyJunctionOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        parentRow,
-        relation,
-        operation,
-      );
-    }
+  for (const { relation, operation } of operationsOwnedBy(input, 'junction')) {
+    await applyJunctionOwnedMutation(
+      scope,
+      context,
+      namespaceId,
+      modelName,
+      parentRow,
+      relation,
+      operation,
+    );
   }
 
   return parentRow;
+}
+
+function isOwnedBy<Ownership extends RelationOwnership>(
+  relation: RelationDefinition,
+  ownership: Ownership,
+): relation is Extract<RelationDefinition, { readonly ownership: Ownership }> {
+  return relation.ownership === ownership;
+}
+
+function operationsOwnedBy<Ownership extends RelationOwnership>(
+  input: ResolvedMutationInput,
+  ownership: Ownership,
+) {
+  return input.relationMutations.flatMap(({ relation, operations }) =>
+    isOwnedBy(relation, ownership) ? operations.map((operation) => ({ relation, operation })) : [],
+  );
 }
 
 function createResolvedGraph(
@@ -660,11 +670,11 @@ function resolveParsedInput(
   parsed: ParsedMutationInput,
   entryPoint: 'create' | 'update',
 ): ResolvedMutationInput {
-  const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(parsed.relationMutations);
   return {
     scalarData: parsed.scalarData,
-    relationMutations: [...parentOwned, ...junctionOwned, ...childOwned].map(
-      ({ relation, mutations }) => ({
+    relationMutations: [...parsed.relationMutations]
+      .sort((a, b) => resolutionOrder[a.relation.ownership] - resolutionOrder[b.relation.ownership])
+      .map(({ relation, mutations }) => ({
         relation,
         operations: mutations.map((mutation) => {
           if (entryPoint === 'create') {
@@ -672,8 +682,7 @@ function resolveParsedInput(
           }
           return resolveOperation(context, relation, mutation);
         }),
-      }),
-    ),
+      })),
   };
 }
 
@@ -711,15 +720,15 @@ function resolveOperation(
   const contract = context.contract;
   const namespaceId = relation.relatedNamespaceId;
   const modelName = relation.relatedModelName;
-  const junction = hasThrough(relation);
-  const parentOwned = !junction && relation.cardinality === 'N:1';
-  if (junction) {
+  const junction = relation.ownership === 'junction';
+  const parentOwned = relation.ownership === 'parent';
+  if (relation.ownership === 'junction') {
     assertJunctionMetadataShape(relation);
     assertJunctionPayloadWritable(relation, mutation.kind);
   }
 
   if (isFilteredWrite(mutation)) {
-    if (parentOwned || (!junction && relation.cardinality === '1:1')) {
+    if (parentOwned || (relation.ownership === 'child' && relation.cardinality === '1:1')) {
       throw toOneFilteredWriteError(relation, mutation.kind);
     }
     const filters = mutation.filters.flatMap((input) => {
@@ -790,39 +799,6 @@ function resolveOperation(
         ? modelCriterionWhere(context, namespaceId, modelName, criterion)
         : relationCriterionWhere(context, relation, mutation.kind, criterion),
     ),
-  };
-}
-
-function partitionByOwnership<T extends { readonly relation: RelationDefinition }>(
-  relationMutations: readonly T[],
-): {
-  parentOwned: T[];
-  childOwned: T[];
-  junctionOwned: (T & { readonly relation: JunctionRelationDefinition })[];
-} {
-  const parentOwned: T[] = [];
-  const childOwned: T[] = [];
-  const junctionOwned: (T & { readonly relation: JunctionRelationDefinition })[] = [];
-
-  for (const relationMutation of relationMutations) {
-    const relation = relationMutation.relation;
-    if (hasThrough(relation)) {
-      junctionOwned.push({ ...relationMutation, relation });
-      continue;
-    }
-
-    if (relation.cardinality === 'N:1') {
-      parentOwned.push(relationMutation);
-      continue;
-    }
-
-    childOwned.push(relationMutation);
-  }
-
-  return {
-    parentOwned,
-    childOwned,
-    junctionOwned,
   };
 }
 
@@ -1028,7 +1004,7 @@ async function applyChildOwnedMutation(
 async function applyFilteredWrite(
   scope: RuntimeScope,
   context: ExecutionContext,
-  relation: RelationDefinition,
+  relation: RelationDefinitionBase,
   relatedToParent: AnyExpression,
   operation: Extract<ResolvedOperation, { kind: 'updateAll' | 'deleteAll' }>,
 ): Promise<void> {
@@ -1603,29 +1579,30 @@ function getRelationDefinitions(
   // carried by the cross-reference) so a cross-namespace relation does not
   // fall back to the default/first-match path.
   const relations = resolveModelRelations(contract, namespaceId, modelName);
-  const definitions = Object.entries(relations).map(([relationName, relation]) => ({
-    relationName,
-    relatedModelName: relation.to,
-    relatedNamespaceId: relation.toNamespace,
-    relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
-    cardinality: relation.cardinality,
-    localColumns: relation.on.localFields.map((f) =>
-      resolveFieldToColumn(contract, namespaceId, modelName, f),
-    ),
-    targetColumns: relation.on.targetFields.map((f) =>
-      resolveFieldToColumn(contract, relation.toNamespace, relation.to, f),
-    ),
-    through: relation.through
-      ? {
-          table: relation.through.table,
-          namespaceId: relation.through.namespaceId,
-          parentColumns: relation.through.parentColumns,
-          childColumns: relation.through.childColumns,
-          targetColumns: relation.through.targetColumns,
-          requiredPayloadColumns: relation.through.requiredPayloadColumns,
-        }
-      : undefined,
-  }));
+  const definitions = Object.entries(relations).map(
+    ([relationName, relation]): RelationDefinition => {
+      const definition: RelationDefinitionBase = {
+        relationName,
+        relatedModelName: relation.to,
+        relatedNamespaceId: relation.toNamespace,
+        relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
+        cardinality: relation.cardinality,
+        localColumns: relation.on.localFields.map((f) =>
+          resolveFieldToColumn(contract, namespaceId, modelName, f),
+        ),
+        targetColumns: relation.on.targetFields.map((f) =>
+          resolveFieldToColumn(contract, relation.toNamespace, relation.to, f),
+        ),
+      };
+      if (relation.through) {
+        return { ...definition, ownership: 'junction', through: relation.through };
+      }
+      return {
+        ...definition,
+        ownership: relation.cardinality === 'N:1' ? 'parent' : 'child',
+      };
+    },
+  );
 
   perContract.set(cacheKey, definitions);
   return definitions;
