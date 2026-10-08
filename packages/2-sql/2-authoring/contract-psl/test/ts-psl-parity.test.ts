@@ -12,7 +12,7 @@ import { countSemanticLines } from '@repo/test-utils/semantic-lines';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -33,7 +33,6 @@ const sqlFamilyPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sql/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -41,7 +40,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'test/timestamp@1',
-            nativeType: 'timestamp',
             default: {
               kind: 'function',
               expression: 'now()',
@@ -81,7 +79,6 @@ const pgvectorExtensionPack = {
           args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
           output: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
             typeParams: {
               length: { kind: 'arg', index: 0 },
             },
@@ -102,20 +99,18 @@ const authoringContributions = {
 } as const satisfies AuthoringContributions;
 
 const scalarColumnDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'sql/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'test/timestamp@1', nativeType: 'timestamp' }],
-  ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'sql/text@1' }],
+  ['DateTime', { codecId: 'test/timestamp@1' }],
+  ['Bytes', { codecId: 'pg/bytea@1' }],
 ] as const);
 
 const int4Column = {
   codecId: 'pg/int4@1',
-  nativeType: 'int4',
 } as const satisfies ColumnTypeDescriptor;
 
 const textColumn = {
   codecId: 'sql/text@1',
-  nativeType: 'text',
 } as const satisfies ColumnTypeDescriptor;
 
 const bareSqlFamilyPack = {
@@ -138,14 +133,12 @@ const sqliteTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/integer@1',
-          nativeType: 'integer',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/text@1',
-          nativeType: 'text',
         },
       },
       temporal: temporalConvenienceMirrors.sqlite,
@@ -166,14 +159,12 @@ const postgresTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/int4@1',
-          nativeType: 'int4',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -189,11 +180,11 @@ const postgresTimestampTargetPack = {
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
 const postgresTimestampScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }],
-  ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-  ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'pg/text@1' }],
+  ['DateTime', { codecId: 'pg/timestamptz-temporal@1' }],
+  ['Json', { codecId: 'pg/json@1' }],
+  ['Jsonb', { codecId: 'pg/jsonb@1' }],
 ] as const);
 
 const postgresTimestampAuthoringContributions = {
@@ -201,10 +192,10 @@ const postgresTimestampAuthoringContributions = {
 } as const satisfies AuthoringContributions;
 
 const sqliteTimestampScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'sqlite/integer@1', nativeType: 'integer' }],
-  ['String', { codecId: 'sqlite/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'sqlite/datetime@1', nativeType: 'text' }],
-  ['Json', { codecId: 'sqlite/json@1', nativeType: 'text' }],
+  ['Int', { codecId: 'sqlite/integer@1' }],
+  ['String', { codecId: 'sqlite/text@1' }],
+  ['DateTime', { codecId: 'sqlite/datetime@1' }],
+  ['Json', { codecId: 'sqlite/json@1' }],
 ] as const);
 
 const sqliteTimestampAuthoringContributions = {
@@ -243,7 +234,7 @@ model Post {
 
 const representativeTsAuthoring = `const Role = enumType('Role', pgText, member('USER', 'user'), member('ADMIN', 'admin'));
 defineContract(
-  { family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
+  { ...fixtureTypeLookups, family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
   ({ type, field, model, rel }) => {
     const types = {
       Embedding1536: type.pgvector.Vector(1536),
@@ -277,6 +268,7 @@ defineContract(
 function buildSqliteTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: sqliteTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -299,6 +291,7 @@ function buildSqliteTimestampTsContract() {
 function buildPostgresTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: postgresTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -350,7 +343,7 @@ describe('TS and PSL authoring parity', () => {
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions: target.authoringContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -401,7 +394,7 @@ model Post {
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         authoringContributions,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -432,6 +425,7 @@ model Post {
     });
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       namespaces: ['auth'],
@@ -476,13 +470,14 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -542,7 +537,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -550,6 +545,7 @@ model Post {
 
     const tsContract = defineContract(
       {
+        ...fixtureTypeLookups,
         family: sqlFamilyPack,
         target: portablePostgresTargetPack,
         extensions: { indexTypes: indexTypesPack },
@@ -614,13 +610,14 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -664,13 +661,14 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
       },
     );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -719,7 +717,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
       },
     );
 
@@ -727,6 +725,7 @@ model Post {
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -779,7 +778,7 @@ model Post {
           controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
           authoringContributions: postgresTimestampAuthoringContributions,
           createNamespace: createTestSqlNamespace,
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          ...fixtureInterpreterTypes,
           capabilities: { sql: { scalarList: true } },
         },
       );
@@ -791,6 +790,7 @@ model Post {
     const buildTsFullForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -810,6 +810,7 @@ model Post {
     const buildTsConvenienceForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,

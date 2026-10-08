@@ -9,14 +9,14 @@ import type {
   ControlFamilyDescriptor,
   ControlFamilyInstance,
   ControlTargetDescriptor,
-  SignDatabaseResult,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
-import { timeouts } from '@repo/test-utils';
+import { createContract, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
@@ -64,6 +64,7 @@ function createMockComponents() {
     introspect: async () => ({ tables: [] }),
     deserializeContract: (ir: unknown) => ir as Contract,
     readMarker: async () => null,
+    readAllMarkers: async () => new Map(),
     readLedger: async () => [],
     verify: async (): Promise<VerifyDatabaseResult> => ({
       ok: true,
@@ -83,14 +84,12 @@ function createMockComponents() {
       },
       timings: { total: 10 },
     }),
-    sign: async (): Promise<SignDatabaseResult> => ({
-      ok: true,
-      summary: 'Database signed successfully',
-      contract: { storageHash: 'test-hash' },
-      target: { expected: 'postgres' },
-      marker: { created: false, updated: true },
-      timings: { total: 10 },
-    }),
+    signSpaces: async ({ spaces }: { readonly spaces: readonly SpaceToSign[] }) =>
+      spaces.map(({ space, contract }) => ({
+        status: 'created',
+        space,
+        contract: { storageHash: contract.storage.storageHash, profileHash: contract.profileHash },
+      })),
   } as unknown as ControlFamilyInstance<string, unknown>;
 
   const mockHook: EmissionSpi = {
@@ -309,10 +308,11 @@ describe('ControlClient progress emission', () => {
     });
   });
 
-  describe('sign()', () => {
-    it('emits connect and sign spans when connection provided', async () => {
+  describe('dbSign()', () => {
+    it('emits connect, introspect and sign spans when connection provided', async () => {
       const events: ControlProgressEvent[] = [];
       const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor } = createMockComponents();
+      const contract = createContract();
 
       const client = createControlClient({
         family: mockFamily,
@@ -321,29 +321,40 @@ describe('ControlClient progress emission', () => {
         driver: mockDriverDescriptor,
       });
 
-      await client.sign({
-        contract: {},
+      const result = await client.dbSign({
+        contract,
+        migrationsDir: '/tmp/__test-client-migrations',
         connection: 'postgres://test',
         onProgress: (event) => events.push(event),
       });
 
       await client.close();
 
-      // Should emit connect span
-      const connectStart = events.find((e) => e.kind === 'spanStart' && e.spanId === 'connect');
-      const connectEnd = events.find((e) => e.kind === 'spanEnd' && e.spanId === 'connect');
-      expect(connectStart).toBeDefined();
-      expect(connectEnd).toMatchObject({ outcome: 'ok' });
-
-      // Should emit sign span
-      const signStart = events.find((e) => e.kind === 'spanStart' && e.spanId === 'sign');
-      const signEnd = events.find((e) => e.kind === 'spanEnd' && e.spanId === 'sign');
-      expect(signStart).toBeDefined();
-      expect(signEnd).toMatchObject({ outcome: 'ok' });
-
-      // All events should have action = 'sign'
+      expect(result).toEqual(
+        ok({
+          spaces: [
+            {
+              space: 'app',
+              status: 'created',
+              contract: {
+                storageHash: contract.storage.storageHash,
+                profileHash: contract.profileHash,
+              },
+            },
+          ],
+        }),
+      );
+      expect(
+        events.flatMap((event) =>
+          event.kind === 'spanEnd' ? [[event.spanId, event.outcome]] : [],
+        ),
+      ).toEqual([
+        ['connect', 'ok'],
+        ['introspect', 'ok'],
+        ['sign', 'ok'],
+      ]);
       for (const event of events) {
-        expect(event.action).toBe('sign');
+        expect(event.action).toBe('dbSign');
       }
     });
   });
@@ -707,6 +718,9 @@ describe('ControlClient progress emission', () => {
         createPlanner: () => ({
           plan: () => ({
             kind: 'success',
+            appliedStatements: [],
+            dataLoss: [],
+            accessWidening: [],
             plan: {
               targetId: 'postgres',
               destination: { storageHash: 'dest' },
@@ -773,6 +787,7 @@ describe('ControlClient progress emission', () => {
         mode: 'apply',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
         acceptDataLoss: true,
         onProgress: (event) => events.push(event),
       });
@@ -835,6 +850,7 @@ describe('ControlClient progress emission', () => {
         mode: 'plan',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
       });
 
       expect(result.ok).toBe(true);
@@ -861,6 +877,7 @@ describe('ControlClient progress emission', () => {
         mode: 'plan',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
       });
 
       await client.close();
@@ -1079,7 +1096,7 @@ describe('ControlClient progress emission', () => {
       expect(result.ok).toBe(true);
     });
 
-    it('does not throw when onProgress is omitted from sign', async () => {
+    it('does not throw when onProgress is omitted from dbSign', async () => {
       const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor } = createMockComponents();
 
       const client = createControlClient({
@@ -1089,8 +1106,9 @@ describe('ControlClient progress emission', () => {
         driver: mockDriverDescriptor,
       });
 
-      const result = await client.sign({
-        contract: {},
+      const result = await client.dbSign({
+        contract: createContract(),
+        migrationsDir: '/tmp/__test-client-migrations',
         connection: 'postgres://test',
       });
 

@@ -6,12 +6,12 @@
  * `column()` is a trivial, non-polymorphic packager. Generic over `R` (the codec instance type returned by the descriptor's curried factory) and `P` (the typeParams record). The framework does NOT try to infer `R` and `P` from a descriptor — that path is the variance trap. Per-codec helpers absorb the descriptor relationship instead and tie themselves to their descriptor via `satisfies ColumnHelperFor<D>` or `satisfies ColumnHelperForStrict<D>`.
  */
 
-import type { ValueSetRef } from '@internal/contract/types';
+import type { ContractField, ValueSetRef } from '@internal/contract/types';
 import type { CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecInstanceContext } from './codec-types';
 
 /**
- * Authored column-type descriptor — the data shape an authoring site (PSL or TypeScript builders) attaches to a column to identify its codec and its native database type.
+ * Authored column-type descriptor — the data shape an authoring site (PSL or TypeScript builders) attaches to a column to identify its codec.
  *
  * Lives at the framework-components layer alongside the codec types so codec-author packages (e.g. column-spec / `column()` packagers) can extend it directly without crossing layer boundaries.
  *
@@ -19,7 +19,6 @@ import type { CodecInstanceContext } from './codec-types';
  */
 export type ColumnTypeDescriptor<TCodecId extends string = string> = {
   readonly codecId: TCodecId;
-  readonly nativeType: string;
   readonly typeParams?: Record<string, unknown> | undefined;
   readonly typeRef?: string;
   /**
@@ -33,6 +32,31 @@ export type ColumnTypeDescriptor<TCodecId extends string = string> = {
   readonly valueSet?: ValueSetRef;
   readonly entityRef?: EntityRef;
 };
+
+/** The codec part of a type descriptor, which is all a reader of a field declaration needs. */
+export interface CodecDescriptorRef<CodecId extends string = string> {
+  readonly codecId: CodecId;
+}
+
+/**
+ * What a field builder declares about its field: the descriptor of the field's type, when the builder names one, whether the value may be null, and whether the field is a list, recorded as a contract field records it: `false` for one value, `{ elementNullable }` for a list. Readers that only need the codec, the nullability and the list kind read this instead of the builder's own type.
+ */
+export interface ScalarFieldDeclaration<
+  Descriptor extends CodecDescriptorRef = CodecDescriptorRef,
+  Nullable extends boolean = boolean,
+> {
+  readonly descriptor?: Descriptor | undefined;
+  readonly nullable: Nullable;
+  readonly many?: ContractField['many'];
+}
+
+/** A field builder, read through the declaration its `build()` returns. */
+export interface ScalarFieldDeclarationBuilder<
+  Descriptor extends CodecDescriptorRef = CodecDescriptorRef,
+  Nullable extends boolean = boolean,
+> {
+  build(): ScalarFieldDeclaration<Descriptor, Nullable>;
+}
 
 /**
  * Late-resolved pack-entity reference — a field on the type descriptor it is
@@ -60,20 +84,16 @@ export interface ColumnSpec<R, P extends Record<string, unknown> | undefined>
 
 /**
  * Trivial column packager. Per-codec helpers call this directly with the result of `descriptor.factory(params)` — direct method invocation binds the descriptor's method-level generic at the call site and the literal flows through `R`.
- *
- * `nativeType` is the column's database-native type spelling — the value the postgres adapter's migration planner, the SQL renderer's cast policy, and the emitted contract's column `nativeType` slot read. Per-codec helpers pass the literal native-type string for their codec (e.g. `'text'`, `'int4'`, `'character varying'`); for codecs whose native-type spelling depends on parameters (none today; reserved for future shapes), the helper computes the rendered string before calling `column`. The framework does not derive the value from `codecId` — that mapping is target-specific and lives at the helper.
  */
 export function column<R, P extends Record<string, unknown> | undefined>(
   codecFactory: (ctx: CodecInstanceContext) => R,
   codecId: string,
   typeParams: P,
-  nativeType: string,
 ): ColumnSpec<R, P> {
   return {
     codecFactory,
     codecId,
     typeParams,
-    nativeType,
   };
 }
 

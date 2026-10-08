@@ -36,7 +36,7 @@ declare const textColumn: ColumnTypeDescriptor<'pg/text@1'>;
 
 const Status = enumType(
   'Status',
-  { codecId: 'pg/text@1', nativeType: 'text' },
+  { codecId: 'pg/text@1' },
   member('Active', 'active'),
   member('Done', 'done'),
 );

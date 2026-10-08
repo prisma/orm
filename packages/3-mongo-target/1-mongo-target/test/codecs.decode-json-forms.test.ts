@@ -178,6 +178,22 @@ describe('decodeJson reads the stored JSON form of its type and refuses any othe
   }
 });
 
+describe.each([mongoInt64Codec, mongoInt64NumberCodec])(
+  '$id digit text without leading zeros or a minus sign on zero',
+  (codec) => {
+    it.each([
+      ['a leading zero', '007', '7'],
+      ['a negative zero', '-0', '0'],
+      ['a negative number with a leading zero', '-007', '-7'],
+      ['two zeros', '00', '0'],
+    ])('refuses %s, naming the text to write', (_name, json, printed) => {
+      expect(() => codec.decodeJson(json)).toThrow(
+        `${codec.id} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+      );
+    });
+  },
+);
+
 describe('encodeJson writes only a form decodeJson reads', () => {
   it('mongo/double@1 writes NaN and the infinities as text and reads them back', () => {
     const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5];

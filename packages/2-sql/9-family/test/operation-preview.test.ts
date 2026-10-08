@@ -1,3 +1,4 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { hasOperationPreview } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
@@ -99,20 +100,22 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
         targetId: 'postgres',
         familyId: 'sql',
         kind: 'target',
-        types: { storage: [] },
+        types: {},
       },
       adapter: {
         targetId: 'postgres',
         familyId: 'sql',
         kind: 'adapter',
-        types: { storage: [] },
+        types: {},
         // biome-ignore lint/suspicious/noExplicitAny: minimal stub for capability test
         create: () => ({ introspect: () => ({}), readMarker: () => null }) as any,
       },
       extensions: [],
       codecTypeImports: [],
       extensionIds: [],
+      dataTypeLookup: createDataTypeLookup([]),
       declaredDataTypes: [],
+      codecDescriptors: [],
       // biome-ignore lint/suspicious/noExplicitAny: minimal stub
     } as any;
     return sqlFamilyDescriptor.create(stack);

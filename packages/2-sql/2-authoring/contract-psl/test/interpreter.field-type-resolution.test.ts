@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -20,7 +20,7 @@ const authoringTypes = {
   db: {
     Text: {
       kind: 'typeConstructor',
-      output: { codecId: 'pg/text@1', nativeType: 'text' },
+      output: { codecId: 'pg/text@1' },
     },
   },
 } satisfies AuthoringTypeNamespace;
@@ -31,7 +31,7 @@ const authoringContributions = {
     db: {
       uuid: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/uuid@1', nativeType: 'uuid', id: true },
+        output: { codecId: 'pg/uuid@1', id: true },
       },
     },
   },
@@ -41,7 +41,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,
@@ -76,7 +76,7 @@ describe('SQL field types from the binder resolution', () => {
       unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc']?.columns[
         'body'
       ],
-    ).toMatchObject({ codecId: 'pg/text@1', nativeType: 'text' });
+    ).toMatchObject({ codecId: 'pg/text@1', dataType: 'pg/text' });
   });
 
   it('resolves a preset and a type constructor that share a namespace', () => {
@@ -92,7 +92,7 @@ describe('SQL field types from the binder resolution', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc'];
-    expect(table?.columns['id']).toMatchObject({ codecId: 'pg/uuid@1', nativeType: 'uuid' });
+    expect(table?.columns['id']).toMatchObject({ codecId: 'pg/uuid@1', dataType: 'pg/uuid' });
     expect(table?.primaryKey).toEqual({ columns: ['id'] });
   });
 

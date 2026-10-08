@@ -99,7 +99,7 @@ sqliteBigintNumberDescriptor.factory() satisfies (
 test('strict satisfies catches wrong codec wired in', () => {
   // Wire the integer descriptor's factory into the bigint descriptor's slot. Coarse satisfies passes (both have `void` typeParams); strict satisfies fails because the codec types differ (SqliteIntegerCodec ≠ SqliteBigintCodec).
   const wrongCodecHelper = () =>
-    column(sqliteIntegerDescriptor.factory(), sqliteBigintDescriptor.codecId, undefined, 'integer');
+    column(sqliteIntegerDescriptor.factory(), sqliteBigintDescriptor.codecId, undefined);
   wrongCodecHelper satisfies ColumnHelperFor<SqliteBigintDescriptor>;
   // @ts-expect-error -- codec is SqliteIntegerCodec, not SqliteBigintCodec
   wrongCodecHelper satisfies ColumnHelperForStrict<SqliteBigintDescriptor>;

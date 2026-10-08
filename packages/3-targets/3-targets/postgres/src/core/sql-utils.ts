@@ -10,18 +10,13 @@
  * home that both adapters can depend on without crossing planes.
  */
 
+import { utf8ByteLength } from '@internal/utils/text';
 import { postgresError } from './errors';
+import { POSTGRES_QUOTED_KEYWORDS } from './postgres-keywords';
 
 const MAX_IDENTIFIER_BYTES = 63;
 
 const MAX_UTF8_BYTES_PER_UTF16_UNIT = 3;
-
-const utf8 = new TextEncoder();
-
-/** UTF-8 byte length — the unit PostgreSQL measures identifiers and enum labels in. */
-function byteLength(value: string): number {
-  return utf8.encode(value).length;
-}
 
 /**
  * Validates and quotes a PostgreSQL identifier (table, column, type, schema names).
@@ -46,13 +41,24 @@ export function quoteIdentifier(identifier: string): string {
   }
   if (
     identifier.length * MAX_UTF8_BYTES_PER_UTF16_UNIT > MAX_IDENTIFIER_BYTES &&
-    byteLength(identifier) > MAX_IDENTIFIER_BYTES
+    utf8ByteLength(identifier) > MAX_IDENTIFIER_BYTES
   ) {
     console.warn(
       `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_BYTES}-byte limit and will be truncated`,
     );
   }
   return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Quotes `identifier` only where Postgres's `quote_ident` would: when it is not all lower-case
+ * letters, digits and underscores, starts with a digit, or is a keyword that is not unreserved. This is how
+ * `format_type` prints a type name.
+ */
+export function quoteIdentifierWhereNeeded(identifier: string): string {
+  return /^[a-z_][a-z0-9_]*$/.test(identifier) && !POSTGRES_QUOTED_KEYWORDS.has(identifier)
+    ? identifier
+    : quoteIdentifier(identifier);
 }
 
 /**
@@ -107,7 +113,7 @@ export function quoteQualifiedName(name: string): string {
  * @throws `CONTRACT.IDENTIFIER_INVALID` structured error If the value exceeds the maximum length
  */
 export function validateEnumValueLength(value: string, enumTypeName: string): void {
-  if (byteLength(value) > MAX_IDENTIFIER_BYTES) {
+  if (utf8ByteLength(value) > MAX_IDENTIFIER_BYTES) {
     throw postgresError(
       'CONTRACT.IDENTIFIER_INVALID',
       `Enum value "${value.slice(0, 20)}..." for type "${enumTypeName}" exceeds PostgreSQL's ` +

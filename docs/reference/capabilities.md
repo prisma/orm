@@ -23,6 +23,11 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 | `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
 | `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
 | `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. | Stable |
+| `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. | Stable |
+| `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. | Stable |
+| `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
+| `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
+| `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
@@ -34,6 +39,8 @@ PostgreSQL-specific capabilities managed by the adapter.
 | `savepoints` | boolean | Supports savepoint transactions | Stable |
 | `transactionalDDL` | boolean | Supports transactional DDL | Stable |
 | `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
+| `forNoKeyUpdate` | boolean | Can render the row-locking clause `FOR NO KEY UPDATE` on a select. Gates `forNoKeyUpdate()`. | Stable |
+| `forKeyShare` | boolean | Can render the row-locking clause `FOR KEY SHARE` on a select. Gates `forKeyShare()`. | Stable |
 
 ### `mysql`
 MySQL-specific capabilities managed by the adapter.

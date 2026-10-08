@@ -1,22 +1,45 @@
 /**
  * Reading a `@default(...)` value: a written value is read by the authoring entry for the syntax it
  * is written in, which gives it a data type; the column's type takes it directly or through a cast;
- * and the column's codec, built with the column's type parameters, reads the canonical form with
- * `decodeJson`, which refuses a value the column would not store, before it is stored.
+ * the column's codec, built with the column's type parameters, reads it with `decodeJson`, which
+ * refuses a value the column would not store; and it is stored in the canonical form of the
+ * column's values, which `canonicalFormOf` gives.
  *
  * No per-type code and no per-codec branch live here. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import {
+  admittedForms,
+  type CastRefusal,
+  castTypedValue,
+  type DataTypeSupport,
+  describeExpected,
+  describeRefusal,
+  describeRefusedValueType,
+  exactRewrite,
+  type ReadRefusal,
+  type RefusalGuidance,
+  readWrittenValue,
+  type TypedValue,
+  tagForm,
+  type WrittenForm,
+  type WrittenScalar,
+  type WrittenValue,
+} from '@internal/framework-components/authoring';
 import type {
   AnyCodecDescriptor,
   CodecLookupWithDescriptors,
   DataTypeId,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { codecForRef } from '@internal/framework-components/codec';
+import {
+  canonicalFormOf,
+  codecForRef,
+  type ToCanonicalForm,
+} from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import { SQL_EXPRESSION_TAG } from '@internal/sql-contract/sql-expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
@@ -32,201 +55,108 @@ export const PSL_VALUE_TYPE_INCOMPATIBLE: ContributedPslDiagnosticCode =
 /** A single value written as the default of a column that holds a list. */
 export const PSL_DEFAULT_LIST_EXPECTED: ContributedPslDiagnosticCode = 'PSL_DEFAULT_LIST_EXPECTED';
 
-/** One written value, in the syntax a contract source wrote it in. */
-export type WrittenValue =
-  | { readonly kind: 'tag'; readonly tag: string; readonly text: string }
-  | { readonly kind: 'string'; readonly text: string }
-  | { readonly kind: 'boolean'; readonly value: boolean }
-  | { readonly kind: 'number'; readonly text: string }
-  | { readonly kind: 'list'; readonly elements: readonly WrittenValue[] };
-
-/** The assembled data types of a stack and the PSL support for them. */
-export interface DataTypeSupport {
-  readonly entries: Readonly<Record<string, DataTypeAuthoringEntry>>;
-  readonly lookup: DataTypeLookup;
-}
-
 export interface DefaultColumn {
   readonly codecId: string;
   readonly typeParams?: Record<string, unknown> | undefined;
 }
 
-/** A value of a known data type: what an authoring entry reads written text into. */
-interface TypedValue {
-  readonly type: DataTypeId;
-  readonly value: JsonValue;
-}
+/** A value in its stored JSON form that the column's codec refuses. */
+type CodecRefusal = {
+  readonly kind: 'refused-by-codec';
+  readonly codecId: string;
+  readonly message: string;
+  readonly elementIndex: number | undefined;
+};
 
 /**
- * Why a default was refused, in parts, so each contract source words its own diagnostic: PSL says
- * `pg/int4 has no cast from pg/int8`, and the reader for the earlier schema language says what its
- * own users need to hear.
+ * Why a default was refused, in parts, so each contract source words its own diagnostic: the cast
+ * rule's refusals, plus the refusals only a default has.
  */
 export type DefaultRefusal = {
   /** Which element of a written list the refusal is about; `undefined` for the whole value. */
   readonly elementIndex: number | undefined;
 } & (
-  | { readonly kind: 'unreadable'; readonly message: string }
-  | { readonly kind: 'unknown-tag'; readonly tag: string; readonly known: readonly string[] }
-  | { readonly kind: 'unwritable'; readonly syntax: string }
+  | ReadRefusal
+  | CastRefusal
   | { readonly kind: 'not-a-list' }
   | {
-      readonly kind: 'no-cast';
-      readonly columnType: string;
-      readonly valueType: string;
+      readonly kind: 'no-list-cast';
+      readonly receivingType: DataTypeId;
       readonly casts: readonly string[];
     }
-  | { readonly kind: 'refused-by-codec'; readonly codecId: string; readonly message: string }
+  | {
+      readonly kind: 'no-element-cast';
+      readonly receivingType: DataTypeId;
+      readonly valueType: DataTypeId;
+      /** The element types the receiving type's list cast takes. */
+      readonly elementTypes: readonly DataTypeId[];
+    }
+  | Omit<CodecRefusal, 'elementIndex'>
 );
 
 export type ReadDefaultResult =
   | { readonly ok: true; readonly value: JsonValue }
-  | { readonly ok: false; readonly refusal: DefaultRefusal };
+  | {
+      readonly ok: false;
+      readonly refusal: DefaultRefusal;
+      /** The types whose written forms a diagnostic suggests instead. */
+      readonly suggestedTypes: readonly DataTypeId[];
+    };
+
+/** A value in its stored JSON form that has no canonical form of the column's values. */
+type CanonicalFormRefusal = {
+  readonly kind: 'unreadable';
+  readonly message: string;
+  readonly elementIndex: number | undefined;
+};
+
+type StoredRefusal = CodecRefusal | CanonicalFormRefusal;
+
+type StoredReadResult =
+  | { readonly ok: true; readonly value: JsonValue }
+  | {
+      readonly ok: false;
+      readonly refusal: StoredRefusal;
+      readonly suggestedTypes: readonly DataTypeId[];
+    };
+
+type DefaultFailure = Extract<ReadDefaultResult, { readonly ok: false }>;
+
+/**
+ * Where a refused default is reported: a cast-rule refusal at the written value, or the element of
+ * a written list it is about; a refusal only defaults have at the `@default` attribute.
+ */
+export type DefaultRefusalPlace =
+  | { readonly kind: 'written-value'; readonly elementIndex: number | undefined }
+  | { readonly kind: 'attribute' };
 
 export type DefaultDiagnosticResult =
   | { readonly ok: true; readonly value: JsonValue }
-  | { readonly ok: false; readonly code: string; readonly message: string };
-
-/** The entry a tag names, or `undefined` when no pack registered that tag. */
-export function entryForTag(
-  support: DataTypeSupport,
-  tag: string,
-): { readonly key: string; readonly entry: DataTypeAuthoringEntry } | undefined {
-  for (const [key, entry] of Object.entries(support.entries)) {
-    if (entry.written.kind === 'tag' && entry.written.tag === tag) return { key, entry };
-  }
-  return undefined;
-}
-
-/** Every tag a stack registers, in the order the entries were merged, for a diagnostic. */
-export function knownTags(support: DataTypeSupport): readonly string[] {
-  return Object.values(support.entries).flatMap((entry) =>
-    entry.written.kind === 'tag' ? [entry.written.tag] : [],
-  );
-}
-
-function entryForPlain(
-  support: DataTypeSupport,
-  syntax: 'string' | 'boolean' | 'number',
-): { readonly key: string; readonly entry: DataTypeAuthoringEntry } | undefined {
-  for (const [key, entry] of Object.entries(support.entries)) {
-    if (entry.written.kind === 'plain' && entry.written.syntax === syntax) return { key, entry };
-  }
-  return undefined;
-}
-
-/** The text an entry reads: a tag's text, a string's value, or the word a boolean is written as. */
-function plainText(written: Exclude<WrittenValue, { kind: 'list' }>): string {
-  switch (written.kind) {
-    case 'tag':
-      return written.text;
-    case 'string':
-      return written.text;
-    case 'boolean':
-      return String(written.value);
-    case 'number':
-      return written.text;
-  }
-}
+  | {
+      readonly ok: false;
+      readonly code: string;
+      readonly message: string;
+      readonly place: DefaultRefusalPlace;
+    };
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Read one written value through the entry for its syntax. */
-export function readValue(
-  support: DataTypeSupport,
-  written: Exclude<WrittenValue, { kind: 'list' }>,
-  elementIndex: number | undefined,
-):
-  | { readonly ok: true; readonly typed: TypedValue }
-  | { readonly ok: false; readonly refusal: DefaultRefusal } {
-  type RefusalBody = DefaultRefusal extends infer R
-    ? R extends { readonly elementIndex: number | undefined }
-      ? Omit<R, 'elementIndex'>
-      : never
-    : never;
-  const refuse = (refusal: RefusalBody) => ({
-    ok: false as const,
-    refusal: blindCast<DefaultRefusal, 'every refusal kind carries the same element index'>({
-      ...refusal,
-      elementIndex,
-    }),
-  });
-
-  const found =
-    written.kind === 'tag'
-      ? entryForTag(support, written.tag)
-      : entryForPlain(support, written.kind);
-  if (found === undefined) {
-    return written.kind === 'tag'
-      ? refuse({ kind: 'unknown-tag', tag: written.tag, known: knownTags(support) })
-      : refuse({ kind: 'unwritable', syntax: written.kind });
-  }
-
-  const form = found.entry.written;
-  if (form.kind === 'plain' && form.syntax === 'number') {
-    const text = plainText(written);
-    const classified = form.classify(text);
-    if (classified === undefined) {
-      return refuse({
-        kind: 'unreadable',
-        message: `no data type of this target holds the number ${text}`,
-      });
-    }
-    return { ok: true, typed: classified };
-  }
-
-  const text = plainText(written);
-  try {
-    return {
-      ok: true,
-      typed: {
-        type: blindCast<DataTypeId, 'an entry key is the id of the type it reads'>(found.key),
-        value: form.parse(text),
-      },
-    };
-  } catch (error) {
-    if (isInternalError(error)) throw error;
-    return refuse({ kind: 'unreadable', message: messageOf(error) });
-  }
+function refused(refusal: DefaultRefusal, suggestedTypes: readonly DataTypeId[]): DefaultFailure {
+  return { ok: false, refusal, suggestedTypes };
 }
 
-/** Convert a value of one data type into the form another stores, when that type takes it. */
-function castInto(
-  support: DataTypeSupport,
-  columnType: DataTypeId,
-  typed: TypedValue,
+function readOneValue(
+  dataTypes: DataTypeSupport,
+  written: WrittenScalar,
   elementIndex: number | undefined,
-): ReadDefaultResult {
-  if (typed.type === columnType) return { ok: true, value: typed.value };
-  const declaration = support.lookup.get(columnType);
-  const cast = declaration?.casts[typed.type];
-  if (cast === undefined) {
-    return {
-      ok: false,
-      refusal: {
-        kind: 'no-cast',
-        columnType,
-        valueType: typed.type,
-        casts: Object.keys(declaration?.casts ?? {}),
-        elementIndex,
-      },
-    };
-  }
-  try {
-    return { ok: true, value: cast(typed.value) };
-  } catch (error) {
-    if (isInternalError(error)) throw error;
-    return {
-      ok: false,
-      refusal: {
-        kind: 'unreadable',
-        message: messageOf(error),
-        elementIndex,
-      },
-    };
-  }
+  suggestedTypes: readonly DataTypeId[],
+): { readonly ok: true; readonly typed: TypedValue } | DefaultFailure {
+  const read = readWrittenValue(dataTypes, written);
+  return read.ok
+    ? { ok: true, typed: read.value }
+    : refused({ ...read.failure, elementIndex }, suggestedTypes);
 }
 
 /** The column's `typeParams` as the codec reference carries them, so `vector(3)` checks its length. */
@@ -240,22 +170,38 @@ function codecRefTypeParams(
       );
 }
 
+/** A value in the canonical form of the column's values, when they have one. */
+function inCanonicalForm(
+  toCanonicalForm: ToCanonicalForm | undefined,
+  value: JsonValue,
+  elementIndex: number | undefined,
+  suggestedTypes: readonly DataTypeId[],
+): StoredReadResult {
+  if (toCanonicalForm === undefined) return { ok: true, value };
+  try {
+    return { ok: true, value: toCanonicalForm(value) };
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return {
+      ok: false,
+      refusal: { kind: 'unreadable', message: messageOf(error), elementIndex },
+      suggestedTypes,
+    };
+  }
+}
+
 /**
- * The column's codec descriptor, and `read`, which reads a value in its stored JSON form with the column's codec, built with the column's type parameters.
+ * The column's codec descriptor, and `read`, which reads a value in its stored JSON form with the column's codec, built with the column's type parameters, and gives it the canonical form of the column's values.
  */
 function storedValueReader(input: {
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly fieldPath: string;
 }): {
   readonly descriptor: AnyCodecDescriptor;
-  readonly read: (value: JsonValue, elementIndex: number | undefined) => ReadDefaultResult;
+  readonly read: (value: JsonValue, elementIndex: number | undefined) => StoredReadResult;
 } {
-  if (input.codecLookup === undefined) {
-    throw new InternalError(
-      `Field "${input.fieldPath}": no codec lookup was given, but the column was resolved from a codec descriptor.`,
-    );
-  }
   const descriptor = input.codecLookup.descriptorFor(input.column.codecId);
   const codec = codecForRef(input.codecLookup, {
     codecId: input.column.codecId,
@@ -266,10 +212,11 @@ function storedValueReader(input: {
       `Field "${input.fieldPath}": no codec descriptor is registered for "${input.column.codecId}", but the column was resolved from one.`,
     );
   }
-  const read = (value: JsonValue, elementIndex: number | undefined): ReadDefaultResult => {
+  const suggestedTypes = [descriptor.dataType];
+  const toCanonicalForm = canonicalFormOf(descriptor, input.dataTypeLookup);
+  const read = (written: JsonValue, elementIndex: number | undefined): StoredReadResult => {
     try {
-      codec.decodeJson(value);
-      return { ok: true, value };
+      codec.decodeJson(written);
     } catch (error) {
       if (isInternalError(error)) throw error;
       return {
@@ -280,23 +227,28 @@ function storedValueReader(input: {
           message: messageOf(error),
           elementIndex,
         },
+        suggestedTypes,
       };
     }
+    return inCanonicalForm(toCanonicalForm, written, elementIndex, suggestedTypes);
   };
   return { descriptor, read };
 }
 
 /**
- * Reads a value already in its stored JSON form, such as one member of a JSON document default, with the column's codec. Worded as {@link lowerDataTypeDefault} words a codec refusal.
+ * Reads a value already in its stored JSON form, such as one member of a JSON document default, with the column's codec, and gives it the canonical form of the column's values. Worded as {@link lowerDataTypeDefault} words the same refusals.
  */
 export function readStoredValue(input: {
   readonly value: JsonValue;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly fieldPath: string;
 }): DefaultDiagnosticResult {
   const reading = storedValueReader(input).read(input.value, undefined);
-  return reading.ok ? reading : refusalDiagnostic(reading.refusal, input.fieldPath);
+  return reading.ok
+    ? reading
+    : storedRefusalDiagnostic(reading.refusal, `Field "${input.fieldPath}"`);
 }
 
 /**
@@ -309,27 +261,28 @@ export function readDataTypeDefault(input: {
   readonly written: WrittenValue;
   readonly isList: boolean;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
-  readonly support: DataTypeSupport;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypes: DataTypeSupport;
   readonly fieldPath: string;
 }): ReadDefaultResult {
-  const { descriptor, read: readStored } = storedValueReader(input);
+  const { descriptor, read: readStored } = storedValueReader({
+    ...input,
+    dataTypeLookup: input.dataTypes.lookup,
+  });
   const columnType = descriptor.dataType;
+  const suggestedTypes = [columnType];
 
-  const readOne = (
-    written: Exclude<WrittenValue, { kind: 'list' }>,
-    elementIndex: number | undefined,
-  ): ReadDefaultResult => {
-    const read = readValue(input.support, written, elementIndex);
+  const readOne = (written: WrittenScalar, elementIndex: number | undefined): ReadDefaultResult => {
+    const read = readOneValue(input.dataTypes, written, elementIndex, suggestedTypes);
     if (!read.ok) return read;
-    const cast = castInto(input.support, columnType, read.typed, elementIndex);
-    if (!cast.ok) return cast;
-    return readStored(cast.value, elementIndex);
+    const cast = castTypedValue(input.dataTypes, columnType, read.typed);
+    if (!cast.ok) return refused({ ...cast.failure, elementIndex }, suggestedTypes);
+    return readStored(cast.value.value, elementIndex);
   };
 
   if (input.written.kind !== 'list') {
     if (input.isList) {
-      return { ok: false, refusal: { kind: 'not-a-list', elementIndex: undefined } };
+      return refused({ kind: 'not-a-list', elementIndex: undefined }, suggestedTypes);
     }
     return readOne(input.written, undefined);
   }
@@ -337,16 +290,7 @@ export function readDataTypeDefault(input: {
   if (input.isList) {
     const elements: JsonValue[] = [];
     for (const [elementIndex, written] of input.written.elements.entries()) {
-      if (written.kind === 'list') {
-        return {
-          ok: false,
-          refusal: {
-            kind: 'unreadable',
-            message: 'a list holds values, not other lists',
-            elementIndex,
-          },
-        };
-      }
+      if (written.kind === 'list') return nestedList(elementIndex, suggestedTypes);
       const element = readOne(written, elementIndex);
       if (!element.ok) return element;
       elements.push(element.value);
@@ -357,52 +301,50 @@ export function readDataTypeDefault(input: {
   return readListIntoScalar({ ...input, written: input.written, columnType, readStored });
 }
 
+function nestedList(elementIndex: number, suggestedTypes: readonly DataTypeId[]): DefaultFailure {
+  return refused(
+    { kind: 'unreadable', message: 'a list holds values, not other lists', elementIndex },
+    suggestedTypes,
+  );
+}
+
 /** A written list on a column that is not a list: the column's type takes it through its list cast. */
 function readListIntoScalar(input: {
   readonly written: Extract<WrittenValue, { kind: 'list' }>;
-  readonly support: DataTypeSupport;
+  readonly dataTypes: DataTypeSupport;
   readonly columnType: DataTypeId;
   readonly readStored: (value: JsonValue, elementIndex: number | undefined) => ReadDefaultResult;
 }): ReadDefaultResult {
-  const listCast = input.support.lookup.get(input.columnType)?.listCast;
+  const declaration = input.dataTypes.lookup.get(input.columnType);
+  const listCast = declaration?.listCast;
   if (listCast === undefined) {
-    return {
-      ok: false,
-      refusal: {
-        kind: 'no-cast',
-        columnType: input.columnType,
-        valueType: 'a list',
-        casts: Object.keys(input.support.lookup.get(input.columnType)?.casts ?? {}),
+    return refused(
+      {
+        kind: 'no-list-cast',
+        receivingType: input.columnType,
+        casts: Object.keys(declaration?.casts ?? {}),
         elementIndex: undefined,
       },
-    };
+      [input.columnType],
+    );
   }
 
   const elements: JsonValue[] = [];
   for (const [elementIndex, written] of input.written.elements.entries()) {
-    if (written.kind === 'list') {
-      return {
-        ok: false,
-        refusal: {
-          kind: 'unreadable',
-          message: 'a list holds values, not other lists',
-          elementIndex,
-        },
-      };
-    }
-    const read = readValue(input.support, written, elementIndex);
+    if (written.kind === 'list') return nestedList(elementIndex, listCast.of);
+    const read = readOneValue(input.dataTypes, written, elementIndex, listCast.of);
     if (!read.ok) return read;
     if (!listCast.of.includes(read.typed.type)) {
-      return {
-        ok: false,
-        refusal: {
-          kind: 'no-cast',
-          columnType: input.columnType,
+      return refused(
+        {
+          kind: 'no-element-cast',
+          receivingType: input.columnType,
           valueType: read.typed.type,
-          casts: [...listCast.of],
+          elementTypes: listCast.of,
           elementIndex,
         },
-      };
+        listCast.of,
+      );
     }
     elements.push(read.typed.value);
   }
@@ -411,20 +353,40 @@ function readListIntoScalar(input: {
     return input.readStored(listCast.cast(elements), undefined);
   } catch (error) {
     if (isInternalError(error)) throw error;
-    return {
-      ok: false,
-      refusal: {
-        kind: 'unreadable',
-        message: messageOf(error),
-        elementIndex: undefined,
-      },
-    };
+    return refused({ kind: 'unreadable', message: messageOf(error), elementIndex: undefined }, [
+      input.columnType,
+    ]);
   }
 }
 
-/** Where in a written list a diagnostic is about, for a message: ` at element 2`. */
-function at(elementIndex: number | undefined): string {
-  return elementIndex === undefined ? '' : ` at element ${elementIndex + 1}`;
+/** Where a diagnostic is about, for a message: `Field "N.count" at element 2`. */
+function location(subject: string, elementIndex: number | undefined): string {
+  return elementIndex === undefined ? subject : `${subject} at element ${elementIndex + 1}`;
+}
+
+/**
+ * What may be written where every one of `types` is received, each form once: `a number`. A column
+ * whose type nothing writes still takes a `sql` literal, which `@default` stores as a SQL expression.
+ */
+function formsOf(dataTypes: DataTypeSupport, types: readonly DataTypeId[]): readonly WrittenForm[] {
+  const forms = admittedForms(dataTypes, types);
+  return forms.length === 0 ? [tagForm(SQL_EXPRESSION_TAG)] : forms;
+}
+
+/** The exact rewrite of the written value a `no-cast` refusal is about, before list elements are renumbered to the source list. */
+function rewriteOf(
+  refusal: DefaultRefusal,
+  written: WrittenValue,
+  dataTypes: DataTypeSupport,
+): string | undefined {
+  if (refusal.kind !== 'no-cast') return undefined;
+  const refused =
+    refusal.elementIndex === undefined || written.kind !== 'list'
+      ? written
+      : written.elements[refusal.elementIndex];
+  return refused === undefined || refused.kind === 'list'
+    ? undefined
+    : exactRewrite(dataTypes, refusal.receivingType, refused);
 }
 
 /** {@link readDataTypeDefault} worded as a PSL diagnostic's code and message. */
@@ -432,60 +394,133 @@ export function lowerDataTypeDefault(input: {
   readonly written: WrittenValue;
   readonly isList: boolean;
   readonly column: DefaultColumn;
-  readonly codecLookup: CodecLookupWithDescriptors | undefined;
-  readonly support: DataTypeSupport;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypes: DataTypeSupport;
   readonly fieldPath: string;
+  /** For a written list that leaves out the source list's `null` elements: the source index of each written element. */
+  readonly sourceElementIndexes: readonly number[] | undefined;
 }): DefaultDiagnosticResult {
   const read = readDataTypeDefault(input);
-  return read.ok ? read : refusalDiagnostic(read.refusal, input.fieldPath);
+  return read.ok
+    ? read
+    : refusalDiagnostic(
+        atSourceElement(read.refusal, input.sourceElementIndexes),
+        `Field "${input.fieldPath}"`,
+        input.dataTypes,
+        guidanceFor(read, input.written, input.dataTypes),
+      );
 }
 
-/** A refusal worded as a PSL diagnostic's code and message. */
+/**
+ * Reads one number literal written in a contract source outside a default, such as an enum member's value, from its source text for a codec, as {@link lowerDataTypeDefault} reads a default: the number's entry gives it a data type, the codec's data type takes it directly or through a cast, and the codec checks it. A refusal is worded for `subject`.
+ */
+export function readWrittenNumberForCodec(input: {
+  readonly text: string;
+  readonly codecId: string;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypes: DataTypeSupport;
+  readonly subject: string;
+}): DefaultDiagnosticResult {
+  const written: WrittenValue = { kind: 'number', text: input.text };
+  const read = readDataTypeDefault({
+    written,
+    isList: false,
+    column: { codecId: input.codecId },
+    codecLookup: input.codecLookup,
+    dataTypes: input.dataTypes,
+    fieldPath: input.subject,
+  });
+  return read.ok
+    ? read
+    : refusalDiagnostic(
+        read.refusal,
+        input.subject,
+        input.dataTypes,
+        guidanceFor(read, written, input.dataTypes),
+      );
+}
+
+/** What a refusal of `written` tells the author to write instead. */
+function guidanceFor(
+  failure: DefaultFailure,
+  written: WrittenValue,
+  dataTypes: DataTypeSupport,
+): RefusalGuidance {
+  return {
+    forms: formsOf(dataTypes, failure.suggestedTypes),
+    rewrite: rewriteOf(failure.refusal, written, dataTypes),
+  };
+}
+
+function atSourceElement(
+  refusal: DefaultRefusal,
+  sourceElementIndexes: readonly number[] | undefined,
+): DefaultRefusal {
+  if (refusal.elementIndex === undefined) return refusal;
+  const elementIndex = sourceElementIndexes?.[refusal.elementIndex];
+  return elementIndex === undefined ? refusal : { ...refusal, elementIndex };
+}
+
+type DefaultDiagnostic = Extract<DefaultDiagnosticResult, { readonly ok: false }>;
+
+function codecRefusalDiagnostic(refusal: CodecRefusal, subject: string): DefaultDiagnostic {
+  return {
+    ok: false,
+    code: PSL_INVALID_DEFAULT_LITERAL,
+    message: `${location(subject, refusal.elementIndex)}: ${refusal.message}`,
+    place: { kind: 'attribute' },
+  };
+}
+
+function storedRefusalDiagnostic(refusal: StoredRefusal, subject: string): DefaultDiagnostic {
+  if (refusal.kind === 'refused-by-codec') return codecRefusalDiagnostic(refusal, subject);
+  return {
+    ok: false,
+    code: 'PSL_INVALID_LITERAL',
+    message: `${location(subject, refusal.elementIndex)}: ${refusal.message}`,
+    place: { kind: 'attribute' },
+  };
+}
+
+/** A refusal worded as a PSL diagnostic's code, message and place; `guidance` says what to write instead. */
 function refusalDiagnostic(
   refusal: DefaultRefusal,
-  fieldPath: string,
-): Extract<DefaultDiagnosticResult, { readonly ok: false }> {
-  const where = `Field "${fieldPath}"${at(refusal.elementIndex)}`;
+  subject: string,
+  dataTypes: DataTypeSupport,
+  guidance: RefusalGuidance,
+): DefaultDiagnostic {
+  const where = location(subject, refusal.elementIndex);
+  const atWrittenValue: DefaultRefusalPlace = {
+    kind: 'written-value',
+    elementIndex: refusal.elementIndex,
+  };
   switch (refusal.kind) {
-    case 'unreadable':
-      return {
-        ok: false,
-        code: 'PSL_INVALID_LITERAL',
-        message: `${where}: ${refusal.message}`,
-      };
-    case 'unknown-tag':
-      return {
-        ok: false,
-        code: 'PSL_UNKNOWN_LITERAL_TAG',
-        message: `Unknown literal tag "${refusal.tag}". Known tags: ${refusal.known.join(', ')}.`,
-      };
-    case 'unwritable':
-      return {
-        ok: false,
-        code: PSL_VALUE_TYPE_INCOMPATIBLE,
-        message: `${where}: this target has no data type for a ${refusal.syntax} value`,
-      };
     case 'not-a-list':
       return {
         ok: false,
         code: PSL_DEFAULT_LIST_EXPECTED,
         message: `${where}: this column holds a list, so its default is a list literal, as in [1, 2]`,
+        place: { kind: 'attribute' },
       };
-    case 'no-cast':
+    case 'refused-by-codec':
+      return codecRefusalDiagnostic(refusal, subject);
+    case 'no-list-cast':
       return {
         ok: false,
         code: PSL_VALUE_TYPE_INCOMPATIBLE,
-        message: `${where}: ${refusal.columnType} has no cast from ${refusal.valueType}; ${describeCasts(refusal.casts)}`,
+        message: `${where}: ${describeExpected(guidance.forms)}; got a list`,
+        place: atWrittenValue,
       };
-    case 'refused-by-codec':
+    case 'no-element-cast':
       return {
         ok: false,
-        code: PSL_INVALID_DEFAULT_LITERAL,
-        message: `${where}: ${refusal.message}`,
+        code: PSL_VALUE_TYPE_INCOMPATIBLE,
+        message: `${where}: ${describeRefusedValueType(refusal, dataTypes, guidance)}`,
+        place: atWrittenValue,
       };
+    default: {
+      const { code, message } = describeRefusal(refusal, dataTypes, guidance);
+      return { ok: false, code, message: `${where}: ${message}`, place: atWrittenValue };
+    }
   }
-}
-
-function describeCasts(casts: readonly string[]): string {
-  return casts.length === 0 ? 'it casts from nothing' : `it casts from ${casts.join(', ')}`;
 }

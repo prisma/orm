@@ -41,6 +41,7 @@ import {
   DropTableCall,
   EnableRowLevelSecurityCall,
   RawSqlCall,
+  RenameColumnCall,
   RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
@@ -51,6 +52,7 @@ import {
 import { renderCallsToTypeScript } from '../../src/core/migrations/render-typescript';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import * as migrationFacade from '../../src/exports/migration';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
 const FROM_HASH = 'a'.repeat(64);
@@ -179,7 +181,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
   };
 
   const storageColumn = new StorageColumn({
-    nativeType: 'text',
+    dataType: 'pg/text',
     codecId: 'pg/text@1',
     nullable: false,
   });
@@ -201,7 +203,8 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       ],
     ),
     new DropTableCall('public', 'stale'),
-    new RenameTableCall('public', 'stale', 'archived'),
+    new RenameTableCall('public', 'stale', 'archived', []),
+    new RenameColumnCall('public', 'archived', 'title', 'heading', []),
     new AddColumnCall('public', 'note', col('nickname', 'text')),
     new DropColumnCall('public', 'note', 'nickname'),
     new AlterColumnTypeCall('public', 'note', 'kind', {
@@ -219,7 +222,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       tableName: 'note',
       columnName: 'title',
       column: storageColumn,
-      codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     }),

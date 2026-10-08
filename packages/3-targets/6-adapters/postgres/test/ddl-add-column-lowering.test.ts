@@ -14,11 +14,15 @@ import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { addColumnAction, alterTable } from '@internal/target-postgres/contract-free';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresAlterTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 
-const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const adapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 
 describe('PostgresAlterTable ADD COLUMN lowering', () => {
   it('plain nullable column (no default, no NOT NULL)', async () => {
@@ -145,7 +149,6 @@ describe('PostgresAlterTable ADD COLUMN lowering', () => {
     const descriptor = {
       codecId: 'test/vector@1',
       traits: ['equality'],
-      targetTypes: ['vector'],
       isParameterized: true,
       paramsSchema: {
         '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
@@ -165,16 +168,19 @@ describe('PostgresAlterTable ADD COLUMN lowering', () => {
     } as unknown as AnyPostgresCodecDescriptor;
 
     const builtin = createPostgresBuiltinCodecLookup();
-    const withVector = new PostgresControlAdapter({
-      ...builtin,
-      // The representative instance carries no params, as the control stack's does.
-      get: (id: string) =>
-        id === 'test/vector@1' ? descriptor.factory({})({ name: id }) : builtin.get(id),
-      descriptorFor: (id: string): AnyPostgresCodecDescriptor | undefined =>
-        id === 'test/vector@1'
-          ? descriptor
-          : (builtin.descriptorFor(id) as AnyPostgresCodecDescriptor | undefined),
-    });
+    const withVector = new PostgresControlAdapter(
+      {
+        ...builtin,
+        // The representative instance carries no params, as the control stack's does.
+        get: (id: string) =>
+          id === 'test/vector@1' ? descriptor.factory({})({ name: id }) : builtin.get(id),
+        descriptorFor: (id: string): AnyPostgresCodecDescriptor | undefined =>
+          id === 'test/vector@1'
+            ? descriptor
+            : (builtin.descriptorFor(id) as AnyPostgresCodecDescriptor | undefined),
+      },
+      createPostgresBuiltinDataTypeLookup(),
+    );
 
     const vectorColumn = (length: number) =>
       alterTable({

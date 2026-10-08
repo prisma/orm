@@ -8,9 +8,9 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir } from '../utils/cli-test-helpers';
 import {
-  consentTokenFor,
   engineError,
   type JourneyContext,
+  parseJsonOutput,
   runContractEmit,
   runDbInit,
   runDbUpdate,
@@ -94,7 +94,7 @@ function setupPslProject(connectionString: string): JourneyContext {
   return { testDir, configPath, outputDir };
 }
 
-describe('Journey: Mongo db update confirms destructive changes', {
+describe('Journey: Mongo db update asks for consent only to lose data', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
   let replSet: MongoMemoryReplSet;
@@ -124,7 +124,7 @@ describe('Journey: Mongo db update confirms destructive changes', {
     await replSet?.stop().catch(() => {});
   }, timeouts.spinUpMongoMemoryServer);
 
-  it('drops an index once the database name is passed with --confirm', async () => {
+  it('drops an index without consent, because dropping an index loses no documents', async () => {
     const connectionString = withDatabase(replSet.getUri(), DB_NAME);
     const ctx = setupProject(connectionString);
     created.add(ctx.testDir);
@@ -136,17 +136,43 @@ describe('Journey: Mongo db update confirms destructive changes', {
     copyFileSync(join(FIXTURES_DIR, 'contract-base.ts'), join(ctx.testDir, 'contract.ts'));
     expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
-    const destructive = await runDbUpdate(ctx, [
-      '--no-interactive',
-      '--confirm',
-      consentTokenFor(connectionString),
-    ]);
+    const widening = await runDbUpdate(ctx, ['--no-interactive']);
 
-    expect(destructive.exitCode, stripAnsi(destructive.stderr)).toBe(0);
+    expect(widening.exitCode, stripAnsi(widening.stderr)).toBe(0);
     const indexKeys = (await client.db(DB_NAME).collection('users').indexes()).map(
       (index) => index.key,
     );
     expect(indexKeys).toEqual([{ _id: 1 }, { email: 1 }]);
+  });
+
+  it('drops a collection once --delete names its model', async () => {
+    const dbName = 'mongo_consent_drop_collection';
+    const connectionString = withDatabase(replSet.getUri(), dbName);
+    const ctx = setupProject(connectionString);
+    created.add(ctx.testDir);
+
+    copyFileSync(join(FIXTURES_DIR, 'contract-with-events.ts'), join(ctx.testDir, 'contract.ts'));
+    expect((await runContractEmit(ctx)).exitCode).toBe(0);
+    const additive = await runDbUpdate(ctx, ['--no-interactive']);
+    expect(additive.exitCode, stripAnsi(additive.stderr)).toBe(0);
+
+    copyFileSync(join(FIXTURES_DIR, 'contract-additive.ts'), join(ctx.testDir, 'contract.ts'));
+    expect((await runContractEmit(ctx)).exitCode).toBe(0);
+
+    const unconfirmed = await runDbUpdate(ctx, ['--json', '--no-interactive']);
+    expect(unconfirmed.exitCode).toBe(2);
+    expect(parseJsonOutput(unconfirmed)).toMatchObject({
+      code: 'CLI.CONSENT_REQUIRED',
+      meta: { unanswered: [{ subject: 'Event', verbs: ['delete'] }] },
+    });
+    const kept = await client.db(dbName).listCollections({ name: 'events' }).toArray();
+    expect(kept.map(({ name }) => name)).toEqual(['events']);
+
+    const destructive = await runDbUpdate(ctx, ['--no-interactive', '--delete', 'Event']);
+
+    expect(destructive.exitCode, stripAnsi(destructive.stderr)).toBe(0);
+    const collections = await client.db(dbName).listCollections({ name: 'events' }).toArray();
+    expect(collections).toEqual([]);
   });
 
   it('points db init at db update when a collection with data needs a validator', async () => {
@@ -168,11 +194,7 @@ describe('Journey: Mongo db update confirms destructive changes', {
       ],
     });
 
-    const update = await runDbUpdate(ctx, [
-      '--no-interactive',
-      '--confirm',
-      consentTokenFor(connectionString),
-    ]);
+    const update = await runDbUpdate(ctx, ['--no-interactive']);
     expect(update.exitCode, stripAnsi(update.stderr)).toBe(0);
     const [collection] = await client.db(dbName).listCollections({ name: 'events' }).toArray();
     expect(collection).toMatchObject({

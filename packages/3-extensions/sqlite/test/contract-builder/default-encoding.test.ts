@@ -45,8 +45,8 @@ describe('sqlite defineContract encodes literal defaults through the column code
   });
 
   it.each([
-    ['sql/float@1', { codecId: 'sql/float@1', nativeType: 'real' }],
-    ['sqlite/real@1', { codecId: 'sqlite/real@1', nativeType: 'real' }],
+    ['sql/float@1', { codecId: 'sql/float@1' }],
+    ['sqlite/real@1', { codecId: 'sqlite/real@1' }],
   ] as const)(
     'refuses a NaN default on a %s column, which SQLite cannot store',
     (codecId, type) => {

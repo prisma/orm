@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -40,7 +40,8 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
-      | 'dataTypeLookup'
+      | 'dataTypes'
+      | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -51,7 +52,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureInterpreterTypes,
       ...input,
     });
 
@@ -64,13 +65,13 @@ describe('interpretPslDocumentToSqlContract', () => {
       {
         target: postgresTarget,
         scalarColumnDescriptors: new Map([
-          ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-          ['String', { codecId: 'custom/text@1', nativeType: 'custom_text' }],
+          ['Int', { codecId: 'pg/int4@1' }],
+          ['String', { codecId: 'custom/text@1' }],
         ]),
         composedExtensionContracts: new Map(),
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -86,7 +87,6 @@ describe('interpretPslDocumentToSqlContract', () => {
                 columns: {
                   email: {
                     codecId: 'custom/text@1',
-                    nativeType: 'custom_text',
                   },
                 },
               },
@@ -133,7 +133,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -157,7 +157,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         controlMutationDefaults: {
           defaultFunctionRegistry: new Map([
             [
@@ -195,7 +195,6 @@ describe('interpretPslDocumentToSqlContract', () => {
                 columns: {
                   slug: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                 },
               },
@@ -267,8 +266,8 @@ model Comment {
             table: {
               User: {
                 columns: {
-                  id: { codecId: 'pg/int4@1', nativeType: 'int4' },
-                  email: { codecId: 'pg/text@1', nativeType: 'text' },
+                  id: { codecId: 'pg/int4@1' },
+                  email: { codecId: 'pg/text@1' },
                 },
                 primaryKey: { columns: ['id'] },
               },
@@ -313,8 +312,8 @@ model Comment {
             table: {
               IdlessThing: {
                 columns: {
-                  email: { codecId: 'pg/text@1', nativeType: 'text' },
-                  token: { codecId: 'pg/text@1', nativeType: 'text' },
+                  email: { codecId: 'pg/text@1' },
+                  token: { codecId: 'pg/text@1' },
                 },
                 uniques: [{ columns: ['email'] }],
               },
@@ -464,14 +463,14 @@ model Member {
             table: {
               org_team: {
                 columns: {
-                  team_id: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  team_id: { codecId: 'pg/int4@1' },
                 },
                 primaryKey: { columns: ['team_id'] },
               },
               team_member: {
                 columns: {
-                  member_id: { codecId: 'pg/int4@1', nativeType: 'int4' },
-                  team_ref: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  member_id: { codecId: 'pg/int4@1' },
+                  team_ref: { codecId: 'pg/int4@1' },
                 },
                 primaryKey: { columns: ['member_id'] },
                 indexes: [{ columns: ['team_ref'] }],

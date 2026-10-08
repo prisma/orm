@@ -35,6 +35,8 @@ const everyCodecHolds: Readonly<Record<string, readonly string[]>> = {
   'pg/timetz': ['12:34:56+02:00', '12:34:56Z'],
   'pg/interval': ['P1Y2M3DT4H5M6.5S', 'PT0S'],
   'pg/int8': ['0', '-1', '9007199254740991'],
+  'pg/bytea': ['aGVsbG8=', 'AAE=', ''],
+  'pg/inet': ['192.168.0.1', '10.0.0.0/8', '2001:db8::1/64', '::ffff:1.2.3.4'],
 };
 
 /** Values in canonical form that only some codecs of the type hold. */

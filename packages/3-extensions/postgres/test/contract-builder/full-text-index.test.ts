@@ -6,7 +6,7 @@
  */
 
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -16,6 +16,7 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
@@ -36,6 +37,7 @@ import {
 } from '../../src/exports/contract-builder';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 /**
  * Both surfaces file the index onto the namespace's `message` table; the two
@@ -57,8 +59,8 @@ function indexesOfPublicMessage(
   return table?.['message']?.indexes ?? [];
 }
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textColumn = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
+const textColumn = { codecId: 'pg/text@1' } as const;
 
 const PSL = `
 model Message {
@@ -75,8 +77,8 @@ model Message {
 const assembled = assembleAuthoringContributions([postgresTargetControl]);
 
 const scalarColumnDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'pg/text@1' }],
 ]);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
@@ -99,8 +101,8 @@ function pslIndexes() {
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
-      dataTypeLookup: postgresDataTypeLookup,
+      codecLookup: postgresCodecLookup,
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       resolvedInputs: [],
       capabilities: {},

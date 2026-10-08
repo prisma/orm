@@ -28,7 +28,7 @@ const contract: Contract<SqlStorage> = createTestContract({
             Thing: {
               columns: {
                 tags: {
-                  nativeType: 'text',
+                  dataType: 'pg/text',
                   codecId: 'pg/text@1',
                   nullable: false,
                   many: true,

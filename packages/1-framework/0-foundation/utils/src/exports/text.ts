@@ -1,1 +1,1 @@
-export { counted, withoutTrailing } from '../text';
+export { clipToUtf8Bytes, counted, utf8ByteLength, withoutTrailing } from '../text';

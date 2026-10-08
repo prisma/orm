@@ -1,6 +1,6 @@
 # Prisma 8 language server
 
-The Prisma 8 language server provides diagnostics, formatting, code completion, attribute signature help, and hover for PSL schemas through the Language Server Protocol.
+The Prisma 8 language server provides diagnostics, formatting, code completion, attribute signature help, hover, go-to-definition, and find references for PSL schemas through the Language Server Protocol.
 
 ## Project membership and diagnostics
 
@@ -59,8 +59,28 @@ The client controls tooltip presentation and the shortcut for an explicit signat
 
 ## Hover
 
-In an open, configured PSL input, clients can request hover over a model, composite type, field, named type, or generic block, at either its declaration or a reference to it. The tooltip shows the declaration line — `model User`, a field's full declaration, a named type's binding, or a block's keyword and name — followed by its `///` documentation comment, when one is present.
+In an open, configured PSL input, clients can request hover over a model, composite type, field, named type, or generic block, at either its declaration or a reference to it. The tooltip shows the declaration line — `model User`, a field's full declaration, a named type's binding, or a block's keyword and name — followed by its `///` documentation comment, when one is present. Hovering a namespace, at the name of a `namespace` block or at a qualifier such as `auth` in `auth.User`, shows `namespace auth`.
 
-Hovering a model or field attribute shows the same signature label signature help renders for it, followed by the attribute's documentation. Hovering a contributed type (a scalar constructor such as a database-specific type) shows its dotted path with its argument types, followed by the contributing extension's documentation for it. Hovering a generic block's keyword (`policy`, `view`, and similar) shows the extension's documentation for that kind of block, with no declaration line.
+Hovering a model, field, or block attribute shows the same signature label signature help renders for it, followed by the attribute's documentation; field attributes take the `@` prefix, model and block attributes take `@@`. Hovering a contributed type (a scalar constructor such as a database-specific type) shows its dotted path with its argument types, followed by the contributing extension's documentation for it. Hovering a generic block's keyword (`policy`, `view`, and similar) shows the extension's documentation for that kind of block, with no declaration line.
 
-A declaration, attribute, or contributed type with no documentation to show omits that section rather than leaving a blank one; a block keyword with no contributed documentation shows no hover at all. Closed or unmanaged documents, and positions with nothing to show, also receive no hover.
+Hovering a named argument's key — in an attribute call, a function call, or a struct-block entry — shows that key with its type, e.g. `fields: field name`, followed by the parameter's documentation. Hovering a function call's name, such as `autoincrement()` or `uuid((4 | 7)?)`, shows its signature label followed by the function's documentation. Hovering a fixed-identifier constant, such as `Cascade` in a referential-action argument, shows the constant's name followed by its documentation.
+
+A declaration, attribute, contributed type, parameter, function, or constant with no documentation to show omits that section rather than leaving a blank one; a block keyword with no contributed documentation shows no hover at all. Closed or unmanaged documents, and positions with nothing to show, also receive no hover.
+
+## Go to definition
+
+In an open, configured PSL input, clients can jump from a name to the declaration it refers to. A type reference leads to the model, composite type, named type, or generic block it names. A field or entity reference in an attribute argument or a generic block's value leads to that field or declaration. The qualifier of a qualified name, such as `auth` in `auth.User`, leads to every `namespace auth { … }` block, including those in other files of the project.
+
+A declaration's own name leads to that declaration: `User` in `model User` leads to the model itself, and the name of a `namespace` block leads to every block of that namespace. Editors that run find references when a definition is the position the cursor is already on, such as VS Code, show the usages from there.
+
+A name with no declaration in the schema has no definition: a contributed type or namespace, a cross-space reference, an attribute name, a named argument's key, a function name, or a fixed-identifier constant. A name that does not resolve has none either.
+
+## Find references
+
+In an open, configured PSL input, clients can request the usages of a model, composite type, named type, generic block (including an enum), field, or namespace. The cursor can be on the declaration name or on any reference; both return the same list. Usages come from every schema file of the project, including files that are not open.
+
+A usage is a name that resolves to the same declaration, so the result agrees with go-to-definition: two fields named `id` on different models have separate usage lists, and a longer name, a comment or a string that contains the name is not a usage. Each result is the range of one identifier: `User` alone in `auth.User` for the model, `auth` alone for the namespace.
+
+The declaration's name is returned only when the client asks to include the declaration. A namespace is the exception: the name of every `namespace` block is always returned, because each block both declares the namespace and uses it.
+
+Enum members, attributes, argument keys, functions, contributed types and namespaces, cross-space references and unresolved names have no usages to list and return an empty result. Closed or unmanaged documents also return an empty result.

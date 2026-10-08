@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { type ContractInput, defineContract, field, model, rel } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { testIndexPack } from './helpers/test-index-pack';
@@ -32,10 +33,11 @@ function defineTestContract<
 >(
   definition: Omit<
     ContractInput<typeof bareFamilyPack, typeof postgresTargetPack, Types, Models, Extensions>,
-    'family' | 'target' | 'createNamespace'
+    'family' | 'target' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
   >,
 ) {
   return defineContract({
+    ...testTypeLookups,
     family: bareFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -264,6 +266,7 @@ describe('contract definition constraint support', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         // The pack is intentionally malformed for this test; the runtime
@@ -285,6 +288,7 @@ describe('contract definition constraint support', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: bareFamilyPack,
           target: postgresTargetPack,
           extensions: { testIndexes: testIndexPack },

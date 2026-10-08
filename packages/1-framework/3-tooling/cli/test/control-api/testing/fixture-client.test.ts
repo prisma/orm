@@ -24,9 +24,6 @@ describe('createFixtureControlClient', () => {
     expect(schemaVerify.ok).toBe(true);
     expect(schemaVerify.schema.issues).toEqual([]);
 
-    const sign = await client.sign({ contract: {} });
-    expect(sign.marker).toEqual({ created: true, updated: false });
-
     const dbInit = await client.dbInit({
       contract: {},
       mode: 'apply',
@@ -41,6 +38,7 @@ describe('createFixtureControlClient', () => {
       contract: {},
       mode: 'plan',
       migrationsDir: 'migrations',
+      answerQuestions: async () => [],
     });
     expect(dbUpdate.ok).toBe(true);
 
@@ -52,6 +50,9 @@ describe('createFixtureControlClient', () => {
       skipMarker: false,
     });
     expect(dbVerify.assertOk().appSpaceId).toBe(APP_SPACE_ID);
+
+    const dbSign = await client.dbSign({ contract: {} as never, migrationsDir: 'migrations' });
+    expect(dbSign.assertOk().spaces).toMatchObject([{ space: APP_SPACE_ID, status: 'created' }]);
 
     const marker = await client.readMarker();
     expect(marker?.storageHash).toBe(FIXTURE_STORAGE_HASH);
@@ -100,7 +101,11 @@ describe('createFixtureControlClient', () => {
     });
     await client.connect('postgres://fixture');
 
-    const dbInit = await client.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'migrations' });
+    const dbInit = await client.dbInit({
+      contract: {},
+      mode: 'plan',
+      migrationsDir: 'migrations',
+    });
     expect(dbInit.assertNotOk().summary).toBe('planner exploded');
     expect(await client.readMarker()).toBeNull();
 
@@ -153,9 +158,26 @@ describe('createFixtureControlClient', () => {
     > = [
       ['verify', (c) => c.verify({ contract: {} })],
       ['schemaVerify', (c) => c.schemaVerify({ contract: {} })],
-      ['sign', (c) => c.sign({ contract: {} })],
-      ['dbInit', (c) => c.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
-      ['dbUpdate', (c) => c.dbUpdate({ contract: {}, mode: 'plan', migrationsDir: 'migrations' })],
+      ['dbSign', (c) => c.dbSign({ contract: {} as never, migrationsDir: 'migrations' })],
+      [
+        'dbInit',
+        (c) =>
+          c.dbInit({
+            contract: {},
+            mode: 'plan',
+            migrationsDir: 'migrations',
+          }),
+      ],
+      [
+        'dbUpdate',
+        (c) =>
+          c.dbUpdate({
+            contract: {},
+            mode: 'plan',
+            migrationsDir: 'migrations',
+            answerQuestions: async () => [],
+          }),
+      ],
       [
         'dbVerify',
         (c) =>

@@ -1,5 +1,5 @@
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -12,6 +12,7 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresSchema,
@@ -21,6 +22,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const postgresTargetPackRef: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -31,9 +33,7 @@ const postgresTargetPackRef: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const postgresScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-] as const);
+const postgresScalarTypeDescriptors = new Map([['Int', { codecId: 'pg/int4@1' }]] as const);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
   Object.fromEntries(
@@ -57,9 +57,9 @@ function emit(schema: string) {
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

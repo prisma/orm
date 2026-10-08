@@ -1,0 +1,191 @@
+{
+  "contract": "test/integration/test/planner-golden/fixtures/postgres/generated/contract.json",
+  "target": "postgres",
+  "extensions": [
+    "pgvector",
+    "postgis"
+  ],
+  "planned": {
+    "kind": "success",
+    "operations": [
+      {
+        "id": "createNativeEnumType.Mood",
+        "label": "Create enum type \"Mood\"",
+        "operationClass": "additive",
+        "target": {
+          "id": "postgres",
+          "details": {
+            "schema": "public",
+            "objectType": "type",
+            "name": "Mood"
+          }
+        },
+        "precheck": [],
+        "execute": [
+          {
+            "description": "create enum type \"Mood\"",
+            "sql": "CREATE TYPE \"public\".\"Mood\" AS ENUM ('happy', 'sad')",
+            "params": []
+          }
+        ],
+        "postcheck": []
+      },
+      {
+        "id": "table.alias",
+        "label": "Create table \"alias\"",
+        "summary": "Creates table \"alias\"",
+        "operationClass": "additive",
+        "target": {
+          "id": "postgres",
+          "details": {
+            "schema": "public",
+            "objectType": "table",
+            "name": "alias"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"alias\" does not exist",
+            "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+            "params": [
+              "\"public\".\"alias\""
+            ]
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"alias\"",
+            "sql": "CREATE TABLE \"public\".\"alias\" (\n  \"code\" character NOT NULL,\n  \"embedding\" vector(3) NOT NULL,\n  \"id\" uuid NOT NULL,\n  \"money\" numeric(10,2) NOT NULL,\n  \"shortText\" character varying(255) NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"alias\" exists",
+            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "params": [
+              "\"public\".\"alias\""
+            ]
+          }
+        ]
+      },
+      {
+        "id": "table.list",
+        "label": "Create table \"list\"",
+        "summary": "Creates table \"list\"",
+        "operationClass": "additive",
+        "target": {
+          "id": "postgres",
+          "details": {
+            "schema": "public",
+            "objectType": "table",
+            "name": "list"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"list\" does not exist",
+            "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+            "params": [
+              "\"public\".\"list\""
+            ]
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"list\"",
+            "sql": "CREATE TABLE \"public\".\"list\" (\n  \"bit\" bit[] NOT NULL,\n  \"bitLength\" bit(8)[] NOT NULL,\n  \"char\" character[] NOT NULL,\n  \"charLength\" character(5)[] NOT NULL,\n  \"geometrySrid\" geometry(Geometry,4326)[] NOT NULL,\n  \"id\" int4 NOT NULL,\n  \"int4\" int4[] NOT NULL,\n  \"interval\" interval[] NOT NULL,\n  \"jsonb\" jsonb[] NOT NULL,\n  \"mood\" \"Mood\"[] NOT NULL,\n  \"numeric\" numeric[] NOT NULL,\n  \"numericPrecision\" numeric(10)[] NOT NULL,\n  \"numericPrecisionScale\" numeric(10,2)[] NOT NULL,\n  \"text\" text[] NOT NULL,\n  \"timePrecision\" time(3)[] NOT NULL,\n  \"timestamptz\" timestamptz[] NOT NULL,\n  \"timestamptzPrecision\" timestamptz(3)[] NOT NULL,\n  \"uuid\" uuid[] NOT NULL,\n  \"varbitLength\" bit varying(16)[] NOT NULL,\n  \"varchar\" character varying[] NOT NULL,\n  \"varcharLength\" character varying(255)[] NOT NULL,\n  \"vector\" vector(3)[] NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"list_bitLength_elem_not_null_3a420871\" CHECK (array_position(\"bitLength\", NULL) IS NULL),\n  CONSTRAINT \"list_bit_elem_not_null_1a49e5ce\" CHECK (array_position(\"bit\", NULL) IS NULL),\n  CONSTRAINT \"list_charLength_elem_not_null_07c29b12\" CHECK (array_position(\"charLength\", NULL) IS NULL),\n  CONSTRAINT \"list_char_elem_not_null_a4377e40\" CHECK (array_position(\"char\", NULL) IS NULL),\n  CONSTRAINT \"list_geometrySrid_elem_not_null_88e834b5\" CHECK (array_position(\"geometrySrid\", NULL) IS NULL),\n  CONSTRAINT \"list_int4_elem_not_null_939b8454\" CHECK (array_position(\"int4\", NULL) IS NULL),\n  CONSTRAINT \"list_interval_elem_not_null_edd3df78\" CHECK (array_position(\"interval\", NULL) IS NULL),\n  CONSTRAINT \"list_jsonb_elem_not_null_4a57ec8c\" CHECK (array_position(\"jsonb\", NULL) IS NULL),\n  CONSTRAINT \"list_mood_elem_not_null_d46f43af\" CHECK (array_position(\"mood\", NULL) IS NULL),\n  CONSTRAINT \"list_numericPrecisionScale_elem_not_null_e86c0277\" CHECK (array_position(\"numericPrecisionScale\", NULL) IS NULL),\n  CONSTRAINT \"list_numericPrecision_elem_not_null_9f256751\" CHECK (array_position(\"numericPrecision\", NULL) IS NULL),\n  CONSTRAINT \"list_numeric_elem_not_null_ab28b080\" CHECK (array_position(\"numeric\", NULL) IS NULL),\n  CONSTRAINT \"list_text_elem_not_null_a7b74e98\" CHECK (array_position(\"text\", NULL) IS NULL),\n  CONSTRAINT \"list_timePrecision_elem_not_null_e82af8dd\" CHECK (array_position(\"timePrecision\", NULL) IS NULL),\n  CONSTRAINT \"list_timestamptzPrecision_elem_not_null_4ca2a30b\" CHECK (array_position(\"timestamptzPrecision\", NULL) IS NULL),\n  CONSTRAINT \"list_timestamptz_elem_not_null_b54ef01e\" CHECK (array_position(\"timestamptz\", NULL) IS NULL),\n  CONSTRAINT \"list_uuid_elem_not_null_49778f89\" CHECK (array_position(\"uuid\", NULL) IS NULL),\n  CONSTRAINT \"list_varbitLength_elem_not_null_db55eceb\" CHECK (array_position(\"varbitLength\", NULL) IS NULL),\n  CONSTRAINT \"list_varcharLength_elem_not_null_9819a838\" CHECK (array_position(\"varcharLength\", NULL) IS NULL),\n  CONSTRAINT \"list_varchar_elem_not_null_651dc1b0\" CHECK (array_position(\"varchar\", NULL) IS NULL),\n  CONSTRAINT \"list_vector_elem_not_null_20b4417b\" CHECK (array_position(\"vector\", NULL) IS NULL)\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"list\" exists",
+            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "params": [
+              "\"public\".\"list\""
+            ]
+          }
+        ]
+      },
+      {
+        "id": "table.other_codec",
+        "label": "Create table \"other_codec\"",
+        "summary": "Creates table \"other_codec\"",
+        "operationClass": "additive",
+        "target": {
+          "id": "postgres",
+          "details": {
+            "schema": "public",
+            "objectType": "table",
+            "name": "other_codec"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"other_codec\" does not exist",
+            "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+            "params": [
+              "\"public\".\"other_codec\""
+            ]
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"other_codec\"",
+            "sql": "CREATE TABLE \"public\".\"other_codec\" (\n  \"dateString\" date NOT NULL,\n  \"id\" BIGSERIAL NOT NULL,\n  \"int8Number\" int8 NOT NULL,\n  \"pgChar\" character(5) NOT NULL,\n  \"pgFloat\" float8 NOT NULL,\n  \"pgInt\" int4 NOT NULL,\n  \"pgVarchar\" character varying NOT NULL,\n  \"small\" SMALLSERIAL NOT NULL,\n  \"sqlFloat\" float8 NOT NULL,\n  \"sqlInt\" int4 NOT NULL,\n  \"sqlText\" text NOT NULL,\n  \"timeString\" time(3) NOT NULL,\n  \"timestampString\" timestamp NOT NULL,\n  \"timestamptzDate\" timestamptz NOT NULL,\n  \"timestamptzString\" timestamptz NOT NULL,\n  \"unboundedInt\" numeric NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"other_codec\" exists",
+            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "params": [
+              "\"public\".\"other_codec\""
+            ]
+          }
+        ]
+      },
+      {
+        "id": "table.scalar",
+        "label": "Create table \"scalar\"",
+        "summary": "Creates table \"scalar\"",
+        "operationClass": "additive",
+        "target": {
+          "id": "postgres",
+          "details": {
+            "schema": "public",
+            "objectType": "table",
+            "name": "scalar"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"scalar\" does not exist",
+            "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+            "params": [
+              "\"public\".\"scalar\""
+            ]
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"scalar\"",
+            "sql": "CREATE TABLE \"public\".\"scalar\" (\n  \"bit\" bit NOT NULL,\n  \"bitLength\" bit(8) NOT NULL,\n  \"bool\" bool NOT NULL,\n  \"bytea\" bytea NOT NULL,\n  \"char\" character NOT NULL,\n  \"charLength\" character(5) NOT NULL,\n  \"date\" date NOT NULL,\n  \"float4\" float4 NOT NULL,\n  \"float8\" float8 NOT NULL,\n  \"geometry\" geometry NOT NULL,\n  \"geometrySrid\" geometry(Geometry,4326) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"inet\" inet NOT NULL,\n  \"int2\" int2 NOT NULL,\n  \"int8\" int8 NOT NULL,\n  \"interval\" interval NOT NULL,\n  \"intervalPrecision\" interval(3) NOT NULL,\n  \"json\" json NOT NULL,\n  \"jsonb\" jsonb NOT NULL,\n  \"mood\" \"Mood\" NOT NULL,\n  \"numeric\" numeric NOT NULL,\n  \"numericPrecision\" numeric(10) NOT NULL,\n  \"numericPrecisionScale\" numeric(10,2) NOT NULL,\n  \"text\" text NOT NULL,\n  \"time\" time NOT NULL,\n  \"timePrecision\" time(3) NOT NULL,\n  \"timestamp\" timestamp NOT NULL,\n  \"timestampPrecision\" timestamp(3) NOT NULL,\n  \"timestamptz\" timestamptz NOT NULL,\n  \"timestamptzPrecision\" timestamptz(3) NOT NULL,\n  \"timetz\" timetz NOT NULL,\n  \"timetzPrecision\" timetz(3) NOT NULL,\n  \"tsquery\" tsquery NOT NULL,\n  \"uuid\" uuid NOT NULL,\n  \"varbit\" bit varying NOT NULL,\n  \"varbitLength\" bit varying(16) NOT NULL,\n  \"varchar\" character varying NOT NULL,\n  \"varcharLength\" character varying(255) NOT NULL,\n  \"vector\" vector(3) NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"scalar\" exists",
+            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "params": [
+              "\"public\".\"scalar\""
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -61,22 +61,22 @@ function buildContract(): Contract<SqlStorage> {
             table: {
               Moments: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  d: { nativeType: 'date', codecId: DATE_CODEC.codecId, nullable: true },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  d: { dataType: 'pg/date', codecId: DATE_CODEC.codecId, nullable: true },
                   ts: {
-                    nativeType: 'timestamp',
+                    dataType: 'pg/timestamp',
                     codecId: TIMESTAMP_CODEC.codecId,
                     typeParams: TIMESTAMP_CODEC.typeParams,
                     nullable: true,
                   },
                   tstz: {
-                    nativeType: 'timestamptz',
+                    dataType: 'pg/timestamptz',
                     codecId: TIMESTAMPTZ_CODEC.codecId,
                     typeParams: TIMESTAMPTZ_CODEC.typeParams,
                     nullable: true,
                   },
                   t: {
-                    nativeType: 'time',
+                    dataType: 'pg/time',
                     codecId: TIME_CODEC.codecId,
                     typeParams: TIME_CODEC.typeParams,
                     nullable: true,

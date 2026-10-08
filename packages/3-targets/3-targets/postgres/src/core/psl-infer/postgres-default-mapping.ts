@@ -1,11 +1,12 @@
 import type { DefaultMappingOptions } from '@internal/family-sql/psl-build';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { postgresDataTypeEntries } from '../data-type-entries';
-import { postgresDataTypes } from '../data-types';
+import { createPostgresBuiltinDataTypeLookup } from '../data-types';
 
 export function createPostgresDefaultMapping(): DefaultMappingOptions {
   return {
-    dataTypeEntries: postgresDataTypeEntries(),
-    dataTypes: createDataTypeLookup(postgresDataTypes),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createPostgresBuiltinDataTypeLookup(),
+    },
   };
 }

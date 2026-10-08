@@ -307,12 +307,15 @@ jobs:
 
   test:
     name: Test
-    needs: [build, changes, test-packages, test-examples, coverage]
+    needs: [build, changes, test-packages, test-examples, coverage, test-integration]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Propagate test failures
         if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.coverage.result != 'success')) }}
+        run: exit 1
+      - name: Require integration tests in the merge queue
+        if: ${{ github.event_name == 'merge_group' && needs.changes.outputs.inert != 'true' && needs.test-integration.result != 'success' }}
         run: exit 1
 
   test-e2e:
@@ -356,12 +359,10 @@ jobs:
   test-integration:
     name: Integration Tests (${{ matrix.shard }})
     needs: [build, changes]
-    # Launch window (until ~2026-08-21): not run in merge-queue groups, so
-    # queue throughput is not spent on a check that no longer blocks the
-    # merge. Still runs on every PR, and nightly on main
-    # (integration-nightly.yml). Remove this condition after launch, when
-    # the check becomes required again.
-    if: github.event_name != 'merge_group'
+    # Runs only in the merge queue, where `Test` requires it. The suite is
+    # slow, so pull requests do not run it; run it on a branch with
+    # `gh workflow run integration.yml --ref <branch>`.
+    if: github.event_name == 'merge_group' && needs.changes.outputs.inert != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -373,19 +374,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: Install dependencies
-        if: needs.changes.outputs.inert != 'true'
-        run: pnpm install --frozen-lockfile
-      - name: Build (restored from Turbo cache)
-        if: needs.changes.outputs.inert != 'true'
-        run: pnpm build
-      - name: Run Integration tests
-        if: needs.changes.outputs.inert != 'true'
-        run: pnpm test:integration --shard=${{ matrix.shard }}
-      - name: Check working tree is clean
-        if: needs.changes.outputs.inert != 'true'
-        run: pnpm check:clean-tree
+      - uses: ./.github/actions/integration-tests
+        with:
+          shard: ${{ matrix.shard }}
 
   # Runs the real-Supabase acceptance harness against a live local Supabase
   # stack (`supabase start`), so the extension's role/grant/JWT behaviour is

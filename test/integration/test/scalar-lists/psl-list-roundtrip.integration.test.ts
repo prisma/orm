@@ -55,6 +55,8 @@ async function migrateContract(
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -119,10 +121,9 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       const tagsColumn = findStorageColumn(contract, 'tags');
       expect(tagsColumn).toMatchObject({
         codecId: 'pg/text@1',
-        nativeType: 'text',
         many: { elementNullable: false },
       });
-      expect(tagsColumn?.['nativeType']).not.toBe('jsonb');
+      expect(tagsColumn?.['dataType']).toBe('pg/text');
 
       await withClient(database.connectionString, async (client) => {
         await client.query('DROP SCHEMA IF EXISTS public CASCADE');

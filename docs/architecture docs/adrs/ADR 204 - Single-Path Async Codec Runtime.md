@@ -1,5 +1,7 @@
 # ADR 204 — Single-Path Async Codec Runtime
 
+> **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
+
 > **Retrospective note.** This ADR documents the single-path async codec runtime through the `defineCodec({...})` / `mongoCodec({...})` factories of the time. The `defineCodec({...})` factory was later retired in favor of class-based codecs extending `CodecImpl` with `async encode` / `async decode` methods. The decision this ADR records — that `encode` and `decode` are uniformly Promise-returning at the public boundary, and the runtime always awaits — is unchanged. The sync-lifting that the factory used to perform is now a property of the abstract base class's method signatures: subclasses author `async` methods directly, and synchronous bodies are returned as resolved promises by the engine without an explicit lift step. See [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md). The examples' `decodeJson` returns its input unchecked, which the rule on [`Codec.decodeJson`](../../../packages/1-framework/1-core/framework-components/src/shared/codec.ts) no longer allows: `decodeJson` reads a stored JSON form of the codec's type and throws on anything else.
 
 ## Context

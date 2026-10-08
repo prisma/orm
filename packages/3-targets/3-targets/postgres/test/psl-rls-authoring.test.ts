@@ -13,9 +13,14 @@
 
 import type { Contract } from '@internal/contract/types';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  EMPTY_DATA_TYPES,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { type BoundPslSchema, bindPslSchema } from '@internal/psl-parser/test';
@@ -34,6 +39,7 @@ import {
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
 import { PostgresRlsEnablement } from '../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
@@ -41,6 +47,7 @@ import { PostgresRole } from '../src/core/postgres-role';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -65,6 +72,7 @@ function blockResolutionBinder(
         pslBlockDescriptors: assembled.pslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      dataTypes: EMPTY_DATA_TYPES,
     },
   }).binder;
 }
@@ -79,9 +87,9 @@ const postgresTarget = {
   defaultNamespaceId: 'public',
 };
 
-const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarTypeDescriptors = new Map<string, { codecId: string }>([
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
@@ -102,9 +110,9 @@ function contextFor(authoringContributions: typeof assembled): BoundPslSchema['c
       attributeSpecs: sqlAttributeSpecs,
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    codecLookup: postgresCodecLookup,
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-    dataTypeLookup: postgresDataTypeLookup,
+    dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
   };
@@ -439,7 +447,7 @@ describe('PostgresContractSerializer rls round-trip survives serialize → deser
               table: {
                 profile: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],

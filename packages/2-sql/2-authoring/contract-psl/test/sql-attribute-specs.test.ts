@@ -7,7 +7,7 @@ import type {
   ModelSymbol,
   Param,
 } from '@internal/psl-parser';
-import { createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
+import { createBinder, createPslDiagnosticCollector, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { getAttribute } from '../src/psl-attribute-parsing';
 import {
@@ -24,10 +24,7 @@ import {
   createPostgresTestContext,
 } from './fixtures';
 
-const controlMutationDefaults = {
-  ...createBuiltinLikeControlMutationDefaults(),
-  dataTypeEntries: fixtureDataTypeSupport.entries,
-};
+const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function project(schema: string, modelName: string, namespaceName?: string) {
   const input = buildSymbolTableInput(schema);
@@ -99,6 +96,7 @@ function interpretDefault(schema: string, fieldName: string, namespaceName?: str
         field: target,
         binder,
         controlMutationDefaults,
+        dataTypes: fixtureDataTypeSupport,
       }),
     ),
     model,
@@ -152,6 +150,7 @@ describe('sqlAttributeSpecs', () => {
     symbols: symbolTable,
     model,
     controlMutationDefaults,
+    dataTypes: fixtureDataTypeSupport,
   });
   const fieldCtx = fieldSpecContext({
     symbols: symbolTable,
@@ -159,6 +158,7 @@ describe('sqlAttributeSpecs', () => {
     field: field(model, 'id'),
     binder,
     controlMutationDefaults,
+    dataTypes: fixtureDataTypeSupport,
   });
 
   it('registers every model factory under its own attribute name at model level', () => {
@@ -262,6 +262,7 @@ describe('sqlAttributeSpecs.field.default', () => {
     field: field(model, 'id'),
     binder,
     controlMutationDefaults,
+    dataTypes: fixtureDataTypeSupport,
   });
 
   it('exposes scalar default alternatives from the actual registry-backed factory', () => {
@@ -309,8 +310,8 @@ describe('sqlAttributeSpecs.field.default', () => {
       binder,
       controlMutationDefaults: {
         defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-        dataTypeEntries: {},
       },
+      dataTypes: EMPTY_DATA_TYPES,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
     expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
@@ -324,6 +325,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       field: field(model, 'tags'),
       binder,
       controlMutationDefaults,
+      dataTypes: fixtureDataTypeSupport,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
 
@@ -348,6 +350,23 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('offers every tag but sql as a list element', () => {
+    const listCtx = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'tags'),
+      binder,
+      controlMutationDefaults,
+      dataTypes: fixtureDataTypeSupport,
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
+    const element = oneOfMetadata(listMetadata(value.alternatives[0]).of);
+    expect(
+      element.alternatives.filter((alt) => alt.kind === 'taggedLiteral').map((alt) => alt.tags),
+    ).toEqual([['json']]);
+    expect(element.label).toBe('string | number | boolean | null | json`...`');
+  });
+
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {
     const enumProject = project(
       'enum Priority {\n  Low\n  High\n}\nmodel Post {\n  id Int @id\n  priority Priority\n}\n',
@@ -360,6 +379,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       field: priority,
       binder: enumProject.binder,
       controlMutationDefaults,
+      dataTypes: fixtureDataTypeSupport,
     });
     const enumDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(enumCtx)));
     expect(enumDefault.alternatives).toEqual([
@@ -378,6 +398,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       field: kind,
       binder: emptyProject.binder,
       controlMutationDefaults,
+      dataTypes: fixtureDataTypeSupport,
     });
     const emptyDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(emptyCtx)));
     expect(emptyDefault.alternatives).toEqual([

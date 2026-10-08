@@ -11,6 +11,7 @@ import {
   createControlStack,
   hasMigrations,
   type MigrationRunnerPerSpaceOptions,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
@@ -243,6 +244,8 @@ function planFor(contract: MongoContract, fromContract: MongoContract | null) {
     schema: contractToMongoSchemaIR(fromContract),
     policy: ALL_POLICY,
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

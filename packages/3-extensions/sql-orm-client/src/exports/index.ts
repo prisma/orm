@@ -1,5 +1,26 @@
 export { Collection } from '../collection';
+export type {
+  CollectionRowOf,
+  CollectionTypeStateOf,
+  Filtered,
+  Fragment,
+  HasNoVariant,
+  HasOrderBy,
+  HasRow,
+  HasTypeState,
+  HasWhere,
+  Including,
+  Ordered,
+  RowType,
+  TypeState,
+} from '../collection-types';
 export { all, and, not, or } from '../filters';
+export {
+  type DeclaredField,
+  type FieldFragment,
+  type FragmentFacts,
+  orderByField,
+} from '../fragments';
 export { GroupedCollection } from '../grouped-collection';
 export { createModelAccessor } from '../model-accessor';
 export type { OrmOptions } from '../orm';
@@ -13,8 +34,12 @@ export {
 } from '../prepared-row-query';
 export type {
   AggregateBuilder,
+  AggregateIncludeReducers,
   AggregateResult,
+  AggregateSelector,
   AggregateSpec,
+  CodecField,
+  CodecListField,
   CollectionContext,
   CollectionModelName,
   CollectionState,
@@ -24,9 +49,11 @@ export type {
   DefaultCollectionTypeState,
   DefaultModelRow,
   IncludeExpr,
+  IncludeScalar,
   ModelAccessor,
   NumericFieldNames,
   Orderable,
+  OrderableFieldNames,
   OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,

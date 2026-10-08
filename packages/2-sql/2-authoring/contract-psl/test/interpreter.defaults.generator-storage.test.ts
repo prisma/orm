@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarAuthoringTypes, postgresTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { builtinControlMutationDefaults } from './interpreter-defaults-support';
@@ -15,13 +15,12 @@ describe('generator defaults never mutate storage — the type position is the o
   // the same way the provider derives it (collectScalarTypeConstructors).
   const authoringTypes = {
     ...postgresScalarAuthoringTypes,
-    Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
+    Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
     Char: {
       kind: 'typeConstructor',
       args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
       output: {
         codecId: 'sql/char@1',
-        nativeType: 'character',
         typeParams: { length: { kind: 'arg', index: 0 } },
       },
     },
@@ -36,7 +35,7 @@ describe('generator defaults never mutate storage — the type position is the o
 
   const interpret = (schema: string) =>
     interpretSqlContract(schema, {
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureInterpreterTypes,
       target: postgresTarget,
       scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
       authoringContributions,
@@ -58,7 +57,7 @@ id Uuid @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['F']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -85,7 +84,7 @@ id TUuid @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['E']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
       typeRef: 'TUuid',
     });
@@ -103,7 +102,7 @@ id Char(30) @id @default(cuid(2))
     expect(storage.namespaces['public']?.entries.table?.['M']?.columns['id']).toEqual({
       many: false,
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 30 },
     });
@@ -127,7 +126,7 @@ id String @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['L']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -150,7 +149,7 @@ id String() @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['P']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
   });
@@ -170,19 +169,19 @@ ref String @default(cuid(2))
     expect(columns?.['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['sized']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['ref']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual(
@@ -211,7 +210,7 @@ id TId @id @default(uuid())
     expect(storage.namespaces['public']?.entries.table?.['T']?.columns['id']).toEqual({
       many: false,
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
       typeRef: 'TId',
     });

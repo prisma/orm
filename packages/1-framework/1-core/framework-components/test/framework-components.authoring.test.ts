@@ -21,11 +21,11 @@ import {
 describe('authoring template resolution', () => {
   const typeConstructor = {
     kind: 'typeConstructor',
-    output: { codecId: 'test/text@1', nativeType: 'text' },
+    output: { codecId: 'test/text@1' },
   } satisfies AuthoringTypeConstructorDescriptor;
   const fieldPreset = {
     kind: 'fieldPreset',
-    output: { codecId: 'test/text@1', nativeType: 'text' },
+    output: { codecId: 'test/text@1' },
   } satisfies AuthoringFieldPresetDescriptor;
 
   it('narrows a descriptor by kind', () => {
@@ -204,7 +204,6 @@ describe('authoring template resolution', () => {
       kind: 'typeConstructor',
       output: {
         codecId: 'test/text@1',
-        nativeType: 'text',
         typeParams: {
           label: {
             kind: 'arg',
@@ -220,20 +219,17 @@ describe('authoring template resolution', () => {
 
     expect(instantiateAuthoringTypeConstructor(descriptor, args)).toEqual({
       codecId: 'test/text@1',
-      nativeType: 'text',
       typeParams: { label: 'fallback' },
     });
   });
 
-  it('rejects instantiation of an output template without a nativeType', () => {
+  it('instantiates an output template to its codec and parameters, naming no database type', () => {
     const descriptor = {
       kind: 'typeConstructor',
       output: { codecId: 'test/text@1' },
     } as const;
 
-    expect(() => instantiateAuthoringTypeConstructor(descriptor, [])).toThrow(
-      /declares no nativeType; only entity-ref constructors may omit it/,
-    );
+    expect(instantiateAuthoringTypeConstructor(descriptor, [])).toEqual({ codecId: 'test/text@1' });
   });
 
   it('rejects malformed resolved typeParams values', () => {
@@ -241,7 +237,6 @@ describe('authoring template resolution', () => {
       kind: 'typeConstructor',
       output: {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
         typeParams: {
           kind: 'arg',
           index: 0,
@@ -260,7 +255,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/text@1',
-        nativeType: 'text',
         default: {
           kind: 'function',
           expression: {
@@ -281,7 +275,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/text@1',
-        nativeType: 'text',
         default: {
           kind: 'literal',
           value: {
@@ -303,7 +296,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
         typeParams: {
           length: {
             kind: 'arg',
@@ -339,7 +331,6 @@ describe('authoring template resolution', () => {
     ).toEqual({
       descriptor: {
         codecId: 'test/vector@1',
-        nativeType: 'vector',
         typeParams: { length: 1536 },
       },
       nullable: true,
@@ -362,7 +353,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
         executionDefaults: {
           onCreate: {
             kind: 'arg',
@@ -388,7 +378,6 @@ describe('authoring template resolution', () => {
     ).toEqual({
       descriptor: {
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
       },
       nullable: false,
       executionDefaults: {
@@ -405,7 +394,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
         executionDefaults: {
           onCreate: {
             kind: 'arg',
@@ -425,7 +413,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
         executionDefaults: {
           onUpdate: {
             kind: 'arg',
@@ -551,7 +538,6 @@ describe('authoring template resolution', () => {
         args: [{ name: 'onCreate', kind: 'option', values: ['now'], optional: true }],
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           executionDefaults: {
             onCreate: { kind: 'select', index: 0, cases: { now: { kind: 'generator', id: 'g' } } },
           },
@@ -574,7 +560,6 @@ describe('authoring template resolution', () => {
         args,
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           executionDefaults: { onCreate },
         },
       },
@@ -687,7 +672,6 @@ describe('authoring template resolution', () => {
         kind: 'fieldPreset',
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           executionDefaults: {
             onCreate: { kind: 'arg', index: 0 },
             onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -705,7 +689,6 @@ describe('authoring template resolution', () => {
         kind: 'fieldPreset',
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           executionDefaults: {
             onCreate: { kind: 'arg', index: 0 },
             onUpdate: { kind: 'arg', index: 1 },
@@ -722,7 +705,6 @@ describe('authoring template resolution', () => {
         kind: 'fieldPreset',
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           executionDefaults: {
             onCreate: { kind: 'arg', index: 0 },
             onUpdate: { kind: 'arg', index: 1 },
@@ -745,14 +727,12 @@ describe('authoring template resolution', () => {
         kind: 'typeConstructor',
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           typeParams: { precision: { kind: 'arg', index: 0 } },
         },
       } as const;
 
       expect(instantiateAuthoringTypeConstructor(descriptor, [undefined])).toEqual({
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
       });
     });
 
@@ -761,14 +741,12 @@ describe('authoring template resolution', () => {
         kind: 'typeConstructor',
         output: {
           codecId: 'test/timestamp@1',
-          nativeType: 'timestamp',
           typeParams: { precision: { kind: 'arg', index: 0 } },
         },
       } as const;
 
       expect(instantiateAuthoringTypeConstructor(descriptor, [3])).toEqual({
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
         typeParams: { precision: 3 },
       });
     });
@@ -779,7 +757,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/timestamp@1',
-        nativeType: 'timestamp',
         executionDefaults: {
           onCreate: { kind: 'generator', id: 'timestampNow' },
           onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -788,7 +765,7 @@ describe('authoring template resolution', () => {
     } as const;
 
     expect(instantiateAuthoringFieldPreset(descriptor, [])).toEqual({
-      descriptor: { codecId: 'test/timestamp@1', nativeType: 'timestamp' },
+      descriptor: { codecId: 'test/timestamp@1' },
       nullable: false,
       executionDefaults: {
         onCreate: { kind: 'generator', id: 'timestampNow' },
@@ -804,7 +781,6 @@ describe('authoring template resolution', () => {
       kind: 'fieldPreset',
       output: {
         codecId: 'test/text@1',
-        nativeType: 'text',
         default: {
           kind: 'function',
           expression: {
@@ -823,26 +799,26 @@ describe('authoring template resolution', () => {
 });
 
 describe('collectScalarTypeConstructors', () => {
-  it('collects top-level zero-arg constructors with explicit nativeType as {codecId, nativeType}', () => {
+  it('collects top-level zero-arg constructors as {codecId}', () => {
     const namespace = {
-      String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
-      Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
+      String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
+      Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
     } satisfies AuthoringTypeNamespace;
 
     expect(Object.fromEntries(collectScalarTypeConstructors(namespace))).toEqual({
-      String: { codecId: 'pg/text@1', nativeType: 'text' },
-      Int: { codecId: 'pg/int4@1', nativeType: 'int4' },
+      String: { codecId: 'pg/text@1' },
+      Int: { codecId: 'pg/int4@1' },
     });
   });
 
   it('excludes namespaced constructors from the scalar view', () => {
     const namespace = {
-      String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
+      String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
       sql: {
         String: {
           kind: 'typeConstructor',
           args: [{ kind: 'number', name: 'length' }],
-          output: { codecId: 'sql/varchar@1', nativeType: 'character varying' },
+          output: { codecId: 'sql/varchar@1' },
         },
       },
     } satisfies AuthoringTypeNamespace;
@@ -855,7 +831,7 @@ describe('collectScalarTypeConstructors', () => {
       Vector: {
         kind: 'typeConstructor',
         args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
-        output: { codecId: 'pg/vector@1', nativeType: 'vector' },
+        output: { codecId: 'pg/vector@1' },
       },
     } satisfies AuthoringTypeNamespace;
 
@@ -868,7 +844,6 @@ describe('collectScalarTypeConstructors', () => {
       args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
       output: {
         codecId: 'sql/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: { kind: 'arg', index: 0 } },
       },
     } satisfies AuthoringTypeConstructorDescriptor;
@@ -878,7 +853,6 @@ describe('collectScalarTypeConstructors', () => {
     expect(bare).toEqual(instantiateAuthoringTypeConstructor(VarCharish, []));
     expect(bare).toEqual({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
     });
   });
 
@@ -888,7 +862,6 @@ describe('collectScalarTypeConstructors', () => {
       args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
       output: {
         codecId: 'sql/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
       },
     } satisfies AuthoringTypeConstructorDescriptor;
@@ -898,7 +871,6 @@ describe('collectScalarTypeConstructors', () => {
     expect(bare).toEqual(instantiateAuthoringTypeConstructor(Defaulted, []));
     expect(bare).toEqual({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: 191 },
     });
   });
@@ -911,7 +883,7 @@ describe('collectScalarTypeConstructors', () => {
           { kind: 'number', name: 'precision', integer: true },
           { kind: 'number', name: 'scale', integer: true, optional: true },
         ],
-        output: { codecId: 'pg/numeric@1', nativeType: 'numeric' },
+        output: { codecId: 'pg/numeric@1' },
       },
     } satisfies AuthoringTypeNamespace;
 
@@ -924,7 +896,7 @@ describe('collectScalarTypeConstructors', () => {
         kind: 'typeConstructor',
         args: [{ kind: 'string', name: 'entity', optional: true }],
         entityRefArg: { index: 0, entityKind: 'native_enum' },
-        output: { codecId: 'pg/enum@1', nativeType: 'enum' },
+        output: { codecId: 'pg/enum@1' },
       },
     } satisfies AuthoringTypeNamespace;
 
@@ -945,11 +917,11 @@ describe('collectScalarTypeConstructors', () => {
 
   it('treats an explicit empty args array as zero-arg', () => {
     const namespace = {
-      Plain: { kind: 'typeConstructor', args: [], output: { codecId: 'a@1', nativeType: 'text' } },
+      Plain: { kind: 'typeConstructor', args: [], output: { codecId: 'a@1' } },
     } satisfies AuthoringTypeNamespace;
 
     expect(Object.fromEntries(collectScalarTypeConstructors(namespace))).toEqual({
-      Plain: { codecId: 'a@1', nativeType: 'text' },
+      Plain: { codecId: 'a@1' },
     });
   });
 });

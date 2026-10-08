@@ -1,5 +1,7 @@
 # ADR 207 — Codec call context: per-query `AbortSignal` and column metadata
 
+> **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
+
 ## Status
 
 Accepted. Apr 30, 2026.

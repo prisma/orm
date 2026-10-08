@@ -1,0 +1,51 @@
+{
+  "contract": "test/integration/test/planner-golden/fixtures/sqlite/generated/contract.json",
+  "target": "sqlite",
+  "extensions": [],
+  "planned": {
+    "kind": "success",
+    "operations": [
+      {
+        "id": "table.scalar",
+        "label": "Create table scalar",
+        "summary": "Creates table scalar with required columns",
+        "operationClass": "additive",
+        "target": {
+          "id": "sqlite",
+          "details": {
+            "schema": "main",
+            "objectType": "table",
+            "name": "scalar"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"scalar\" does not exist",
+            "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ? AND \"name\" = ?)",
+            "params": [
+              "table",
+              "scalar"
+            ]
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"scalar\"",
+            "sql": "CREATE TABLE \"scalar\" (\n  \"bigint\" INTEGER NOT NULL,\n  \"bigintNumber\" INTEGER NOT NULL,\n  \"blob\" BLOB NOT NULL,\n  \"char\" CHARACTER NOT NULL,\n  \"charLength\" CHARACTER NOT NULL,\n  \"datetime\" TEXT NOT NULL,\n  \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,\n  \"integer\" INTEGER NOT NULL,\n  \"json\" TEXT NOT NULL,\n  \"real\" REAL NOT NULL,\n  \"shortText\" CHARACTER VARYING NOT NULL,\n  \"sqlFloat\" REAL NOT NULL,\n  \"sqlInt\" INTEGER NOT NULL,\n  \"text\" TEXT NOT NULL,\n  \"varchar\" CHARACTER VARYING NOT NULL,\n  \"varcharLength\" CHARACTER VARYING NOT NULL\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"scalar\" exists",
+            "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ? AND \"name\" = ?)",
+            "params": [
+              "table",
+              "scalar"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

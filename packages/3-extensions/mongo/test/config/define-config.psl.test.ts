@@ -31,7 +31,7 @@ async function load(schema: string) {
     pslDiagnostics: stack.family.pslDiagnostics,
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     resolvedInputs: [path],
     capabilities: stack.capabilities,
   });
@@ -39,10 +39,10 @@ async function load(schema: string) {
 
 describe('a Prisma 8 Mongo schema read through defineConfig', () => {
   it.each([
-    ['BigInt', 'Int64', 'long'],
-    ['Decimal', 'Decimal128', 'decimal'],
-    ['Bytes', 'Binary', 'binData'],
-  ])('refuses the Prisma 6 name %s and names %s', async (oldName, newName, bsonType) => {
+    ['BigInt', 'Int64'],
+    ['Decimal', 'Decimal128'],
+    ['Bytes', 'Binary'],
+  ])('refuses the Prisma 6 name %s and names %s', async (oldName, newName) => {
     const result = await load(
       `// use prisma-8\nmodel Post {\n  id ObjectId @id @map("_id")\n  value ${oldName}\n}\n`,
     );
@@ -51,7 +51,7 @@ describe('a Prisma 8 Mongo schema read through defineConfig', () => {
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_UNRESOLVED_REFERENCE',
-        message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}" (stored as BSON ${bsonType}).`,
+        message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}".`,
       }),
     ]);
   });

@@ -1,7 +1,7 @@
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -24,7 +24,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
         authoringContributions: { type: postgresScalarAuthoringTypes },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: { scalarList: true } },
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       },
@@ -32,7 +32,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const text = { nativeType: 'text', codecId: 'pg/text@1', many: { elementNullable: false } };
+    const text = { dataType: 'pg/text', codecId: 'pg/text@1', many: { elementNullable: false } };
     expect({
       fields: result.value.domain.namespaces['public']?.models['User']?.fields,
       columns: (result.value.storage as SqlStorage).namespaces['public']?.entries.table?.['User']
@@ -52,7 +52,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
         },
       },
       columns: {
-        id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+        id: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
         tags: { ...text, nullable: false },
         aliases: { ...text, nullable: true },
       },

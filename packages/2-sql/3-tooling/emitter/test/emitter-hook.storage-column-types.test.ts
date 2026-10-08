@@ -15,7 +15,6 @@ const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-h
 function vectorCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: (id, params) =>
       id === 'pg/vector@1' ? `Vector<${params['length']}>` : undefined,
     renderInputTypeFor: (id, params) =>
@@ -75,7 +74,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -149,7 +148,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 user: {
                   columns: {
-                    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -218,7 +217,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: 'pg/int4@1',
                       nullable: false,
                       valueSet: {
@@ -290,7 +289,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 tag: {
                   columns: {
-                    name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -343,9 +342,9 @@ describe('StorageColumnTypes', () => {
               table: {
                 audit: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     action: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -437,7 +436,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -511,7 +510,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: true,
                       typeRef: 'Embedding1536',
@@ -528,7 +527,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -590,12 +589,12 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeRef: 'Embedding1536',
                     },
-                    title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -608,7 +607,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -671,7 +670,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -732,7 +731,7 @@ describe('StorageColumnTypes', () => {
         tables: {
           config: {
             columns: {
-              tags: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+              tags: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
             },
             primaryKey: { columns: ['tags'] },
             uniques: [],
@@ -791,7 +790,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: NON_IDENTITY_CODEC_ID,
                       nullable: false,
                       valueSet: {
@@ -838,7 +837,6 @@ describe('StorageColumnTypes', () => {
   it('falls back to the codec output type when a value is not literal-expressible', () => {
     const fallbackLookup: CodecLookup = {
       get: () => undefined,
-      targetTypesFor: () => undefined,
       renderOutputTypeFor: (id) => (id === NON_IDENTITY_CODEC_ID ? 'Level' : undefined),
       // Returns undefined for every value, forcing the codec-output fallback.
       renderValueLiteralFor: () => undefined,
@@ -933,7 +931,7 @@ describe('StorageColumnTypes', () => {
                   authSession: {
                     columns: {
                       aal: {
-                        nativeType: 'aal_level',
+                        dataType: 'pg/enum',
                         codecId: 'pg/enum@1',
                         nullable: false,
                         valueSet: {
@@ -962,7 +960,6 @@ describe('StorageColumnTypes', () => {
     function pgEnumCodecLookup(): CodecLookup {
       return {
         get: () => undefined,
-        targetTypesFor: () => undefined,
         renderOutputTypeFor: () => undefined,
         renderValueLiteralFor: (id, value) =>
           id === 'pg/enum@1' ? renderTsLiteral(value) : undefined,
@@ -1058,13 +1055,13 @@ describe('StorageColumnTypes', () => {
           post: {
             columns: {
               tags: {
-                nativeType: 'text',
+                dataType: 'pg/text',
                 codecId: 'pg/text@1',
                 nullable: false,
                 many: { elementNullable: false },
               },
               labels: {
-                nativeType: 'text',
+                dataType: 'pg/text',
                 codecId: 'pg/text@1',
                 nullable: true,
                 many: { elementNullable: false },
@@ -1152,26 +1149,26 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     tags: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: true },
                     },
                     labels: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: true,
                       many: { elementNullable: true },
                     },
                     waived: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: false },
                       noCheck: ['elementNotNull'],
                     },
                     priorities: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       many: { elementNullable: true },
@@ -1183,7 +1180,7 @@ describe('StorageColumnTypes', () => {
                       },
                     },
                     vectors: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       many: { elementNullable: true },

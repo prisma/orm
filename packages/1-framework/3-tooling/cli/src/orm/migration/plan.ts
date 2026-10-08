@@ -1,5 +1,4 @@
 import { ormConfigSection } from '@internal/config-loader';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text, TreeNode } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -8,19 +7,20 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { createControlClient } from '../../control-api/client';
 import type { ContractSpaceSeedPhaseRecord } from '../../control-api/operations/contract-space-seed-phase';
-import type {
-  DestructiveBaselineVerdict,
-  MigrationPlanResult,
-} from '../../control-api/operations/migration-plan';
+import type { MigrationPlanResult } from '../../control-api/operations/migration-plan';
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
-import type { CreateControlClient, DestructivePlanOperation } from '../../control-api/types';
-import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
+import type { CreateControlClient } from '../../control-api/types';
+import {
+  RECORDED_CONTRACT_REF_FORMS,
+  RECORDED_OR_EMPTY_CONTRACT_REF_FORMS,
+} from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
-import { destructiveOperationList, errorConsentOperationsMissing } from '../db/consent';
 import { defineOrmCommand } from '../define-command';
-import { consentToken } from '../init-inputs';
 import { normalizeError } from '../normalize-error';
+import { promptPlanQuestions } from '../plan-question-prompt';
+import { appliedStatementBlocks } from '../statement-blocks';
+import { ormStatementVerbs } from '../statement-verbs';
 import {
   appMigrationsDirFor,
   baseDirFor,
@@ -157,7 +157,12 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
   if (result.noOp) {
     return [
       ...warningBlocks(result),
-      { kind: 'summary', status: 'ok', text: 'No changes detected' },
+      {
+        kind: 'summary',
+        status: 'ok',
+        text: result.appliedStatements.length > 0 ? result.summary : 'No changes detected',
+      },
+      ...appliedStatementBlocks(result.appliedStatements),
       outcome,
     ];
   }
@@ -166,6 +171,8 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
       ...warningBlocks(result),
       { kind: 'summary', status: 'warn', text: result.summary },
       ...originNoticeBlocks(result),
+      ...operationBlocks(result),
+      ...appliedStatementBlocks(result.appliedStatements),
       outcome,
     ];
   }
@@ -174,6 +181,7 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
     { kind: 'summary', status: 'ok', text: result.summary },
     ...originNoticeBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements),
     outcome,
     ...previewBlocks(result),
   ];
@@ -248,14 +256,6 @@ function planPresentations(inputs: {
   };
 }
 
-/** The question the user answers before a destructive baseline is written. */
-function destructiveBaselineQuestion(operations: readonly DestructivePlanOperation[]): string {
-  return [
-    `Write a baseline migration containing ${operations.length} destructive operation(s)? Applying it would remove data that cannot be recovered:`,
-    destructiveOperationList(operations),
-  ].join('\n');
-}
-
 export function createMigrationPlanCommand(createClient: CreateControlClient) {
   return defineOrmCommand({
     help: {
@@ -264,15 +264,16 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         'Compares the emitted contract against the latest on-disk migration state\n' +
         'and produces a new migration package with the required operations.\n' +
         'On an empty migrations directory a baseline package is derived from the\n' +
-        '`db` ref first; a baseline containing destructive operations is only\n' +
-        'written with your consent: the command asks you to type the project\n' +
-        'directory name, or takes `--confirm <directory>` where there is nobody\n' +
-        'to ask. Offline — does not consult the database.',
+        '`db` ref first. A plan that would lose data is written only once you say\n' +
+        'what each such operation means: --rename to keep the data under a new\n' +
+        'name, or --delete to let it go. Where nobody can answer, the command\n' +
+        'refuses and lists every question. Offline — does not consult the database.',
       examples: [
         'migration plan',
         // biome-ignore lint/plugin/no-family-vocabulary: a migration slug a user would plausibly type, not a schema concept
         'migration plan --name add-users-table',
         'migration plan --to <migration-dir>^ --name rollback',
+        'migration plan --rename Profile:User --delete Legacy',
         'migration plan --json',
       ],
     },
@@ -280,29 +281,21 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
       flags: {
         name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
         from: flag.string({
-          brief:
-            'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, @empty, or ./path)',
+          brief: `Starting contract reference (${RECORDED_OR_EMPTY_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         to: flag.string({
-          brief:
-            'Destination contract reference; defaults to the emitted contract. Same grammar as --from',
+          brief: `Destination contract reference (${RECORDED_CONTRACT_REF_FORMS}); defaults to the emitted contract`,
           placeholder: 'contract',
         }),
       },
     },
+    statements: { rename: ormStatementVerbs.rename, delete: ormStatementVerbs.delete },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      // Dirs the seed phase materialised across this invocation's run(s): the
-      // consented re-run finds them already on disk, so its own seed records
-      // come back `unchanged` and the accumulated list is threaded back in.
-      const seededDirs: { spaceId: string; dirName: string }[] = [];
       const seeded = (record: ContractSpaceSeedPhaseRecord): void => {
         if (record.action !== 'updated') {
           return;
-        }
-        for (const dirName of record.newMigrationDirs) {
-          seededDirs.push({ spaceId: record.spaceId, dirName });
         }
         const step = `Seed contract space ${record.spaceId}`;
         ctx.report({ kind: 'step-started', step, id: record.spaceId });
@@ -314,65 +307,29 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
           data: { newHash: record.newHash, newMigrationDirs: record.newMigrationDirs },
         });
       };
-
-      const plan = (consent?: { readonly planHash: string }) =>
-        executeMigrationPlanCommand(
-          {
-            config: ctx.config,
-            cwd: ctx.cwd,
-            projectDir: baseDirFor(ctx.config),
-            ...ifDefined('name', args.flags.name),
-            ...ifDefined('from', args.flags.from),
-            ...ifDefined('to', args.flags.to),
-            ...ifDefined('consent', consent),
-            ...ifDefined(
-              'carryEmittedExtensionDirs',
-              consent !== undefined && seededDirs.length > 0 ? [...seededDirs] : undefined,
-            ),
-            client: createClient({
-              family: ctx.config.family,
-              target: ctx.config.target,
-              adapter: ctx.config.adapter,
-              ...ifDefined('driver', ctx.config.driver),
-              extensions: ctx.config.extensions ?? [],
-            }),
-          },
-          Date.now(),
-          { onSeeded: seeded },
-        );
-
-      let planned = await plan();
-      // The destructive verdict is the planner's own: an auto-baseline whose
-      // operations would remove data is refused before anything is written.
-      // Consent is asked for here and the plan re-run carrying the refused
-      // plan's hash — the operation layer refuses if the recomputed baseline is
-      // no longer that plan. Mirrors the `db update` consent flow.
-      if (!planned.ok && planned.failure.code === ERROR_CODE_DESTRUCTIVE_CHANGES) {
-        const verdict = blindCast<
-          Partial<DestructiveBaselineVerdict>,
-          'the meta envelope is produced by refuseUnconsentedDestructiveBaseline; presence is checked below'
-        >(planned.failure.meta ?? {});
-        if (
-          verdict.destructiveOperations === undefined ||
-          verdict.destructiveOperations.length === 0 ||
-          verdict.planHash === undefined
-        ) {
-          return notOk(
-            normalizeError(
-              errorConsentOperationsMissing({ previewCommand: '{bin} migration plan' }),
-            ),
-          );
-        }
-        const token = consentToken(ctx.cwd);
-        const granted = await ctx.prompt.consent(
-          destructiveBaselineQuestion(verdict.destructiveOperations),
-          { token },
-        );
-        if (!granted) {
-          return notOk(normalizeError(planned.failure));
-        }
-        planned = await plan({ planHash: verdict.planHash });
-      }
+      const planned = await executeMigrationPlanCommand(
+        {
+          config: ctx.config,
+          cwd: ctx.cwd,
+          projectDir: baseDirFor(ctx.config),
+          ...ifDefined('name', args.flags.name),
+          ...ifDefined('from', args.flags.from),
+          ...ifDefined('to', args.flags.to),
+          statements: ctx.statements
+            .take('rename')
+            .map(({ text }) => ({ verb: 'rename' as const, text })),
+          answerQuestions: promptPlanQuestions(ctx.prompt),
+          client: createClient({
+            family: ctx.config.family,
+            target: ctx.config.target,
+            adapter: ctx.config.adapter,
+            ...ifDefined('driver', ctx.config.driver),
+            extensions: ctx.config.extensions ?? [],
+          }),
+        },
+        Date.now(),
+        { onSeeded: seeded },
+      );
       if (!planned.ok) {
         return notOk(normalizeError(planned.failure));
       }

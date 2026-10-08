@@ -60,17 +60,17 @@
               "columns": {
                 "embedding": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": false,
                   "typeRef": "Embedding1536"
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 }
               },
@@ -86,12 +86,12 @@
         "id": "public"
       }
     },
-    "storageHash": "ff63e0564aa010f48167cabf78c1b7a0b425da312d3d6bb2b3ce43378d4bc6f8",
+    "storageHash": "54b62b0ce6cfc50c5e3fc60e985f777882f4d67650cd4dc69a78b0070adc6941",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",
+        "dataType": "pgvector/vector",
         "kind": "codec-instance",
-        "nativeType": "vector",
         "typeParams": {
           "length": 1536
         }
@@ -101,6 +101,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -112,9 +114,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
@@ -158,15 +165,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-pgvector/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "vector",
-            "targetId": "postgres",
-            "typeId": "pg/vector@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

@@ -1,3 +1,4 @@
+import type { EnumAccessor } from '@internal/contract/enum-accessor';
 import {
   type ContractField,
   type ContractReferenceRelation,
@@ -66,13 +67,15 @@ import {
 import { ormError } from './orm-errors';
 import type {
   DefaultModelRow,
+  DiscriminatorValues,
   IncludedRow,
   MongoIncludeSpec,
   MongoWhereFilter,
   NoIncludes,
   ReferenceRelationKeys,
   ResolvedCreateInput,
-  VariantNames,
+  VariantNameForValue,
+  VariantSelectable,
 } from './types';
 import { upsertPipeline } from './upsert-pipeline';
 
@@ -88,10 +91,15 @@ export interface MongoCollection<
   TVariant extends string = never,
 > {
   readonly _row?: SimplifyDeep<IncludedRow<TContract, ModelName, TIncludes>>;
-  /** Narrows to a specific variant, injecting a discriminator filter. */
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
-  ): MongoCollection<TContract, ModelName, TIncludes, V>;
+  /**
+   * Narrows to the variant declared with the given discriminator value,
+   * injecting a discriminator filter. Call it once, on the base collection:
+   * a collection that already has a variant selected refuses it.
+   */
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    this: VariantSelectable<TVariant>,
+    value: V,
+  ): MongoCollection<TContract, ModelName, TIncludes, VariantNameForValue<TContract, ModelName, V>>;
   /** Appends equality filters from a plain object. Values are encoded through codecs. */
   where(
     filter: MongoWhereFilter<TContract, ModelName>,
@@ -203,6 +211,22 @@ function topLevelUpdateFields(
   return fields;
 }
 
+/**
+ * The contract's enum accessors by namespace and enum name, as `db.enums` holds them. The ORM checks a written enum value against them.
+ */
+export type MongoOrmEnums = Readonly<
+  Record<string, Readonly<Record<string, Pick<EnumAccessor, 'has' | 'values'>>>>
+>;
+
+function describeValue(value: unknown): string {
+  if (typeof value === 'bigint') return `${value}n`;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -218,6 +242,7 @@ class MongoCollectionImpl<
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults | undefined;
+  readonly #enums: MongoOrmEnums;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
@@ -227,11 +252,13 @@ class MongoCollectionImpl<
     modelName: ModelName,
     executor: MongoQueryExecutor,
     mutationDefaults: MutationDefaults | undefined,
+    enums: MongoOrmEnums,
   ) {
     this.#contract = contract;
     this.#modelName = modelName;
     this.#executor = executor;
     this.#mutationDefaults = mutationDefaults;
+    this.#enums = enums;
     const model = blindCast<
       MongoModelDefinition,
       'modelName is constrained to Mongo contract model keys but namespace lookup erases storage type'
@@ -240,36 +267,67 @@ class MongoCollectionImpl<
     this.#state = emptyCollectionState();
   }
 
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
-  ): MongoCollection<TContract, ModelName, TIncludes, V> {
+  variant<V extends DiscriminatorValues<TContract, ModelName>>(
+    value: V,
+  ): MongoCollection<
+    TContract,
+    ModelName,
+    TIncludes,
+    VariantNameForValue<TContract, ModelName, V>
+  > {
     const model = blindCast<
       MongoModelDefinition | undefined,
       'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
     >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
-    if (!model?.discriminator || !model.variants) {
-      // No polymorphism metadata on this model — return unchanged. Cast required
-      // because TS cannot verify TVariant (the current variant) is assignable to V.
-      return blindCast<
-        MongoCollection<TContract, ModelName, TIncludes, V>,
-        'no-op variant refinement preserves runtime state while changing only the type-level variant'
-      >(this);
+    const discriminator = model?.discriminator;
+    const selectedVariantName = this.#variantName;
+
+    if (selectedVariantName !== undefined) {
+      const selectedValue = model?.variants?.[selectedVariantName]?.value;
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `variant("${value}") cannot be called on model "${this.#modelName}" because variant("${selectedValue}") is already selected; call variant() on the base collection instead`,
+        {
+          meta: {
+            method: 'variant',
+            model: this.#modelName,
+            variant: selectedVariantName,
+            selectedValue,
+            reason: 'variant-already-selected',
+          },
+        },
+      );
     }
 
-    const variantEntry = model.variants[variantName];
-    if (!variantEntry) {
-      // Unknown variant name at runtime — return unchanged. Same cast rationale.
-      return blindCast<
-        MongoCollection<TContract, ModelName, TIncludes, V>,
-        'unknown variant fallback preserves runtime state while changing only the type-level variant'
-      >(this);
+    const variantEntries = Object.entries(model?.variants ?? {});
+    const variantName = discriminator
+      ? variantEntries.find(([, entry]) => entry.value === value)?.[0]
+      : undefined;
+
+    if (!discriminator || variantName === undefined) {
+      const declaredValues = discriminator ? variantEntries.map(([, entry]) => entry.value) : [];
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        declaredValues.length === 0
+          ? `variant("${value}") cannot narrow model "${this.#modelName}": it declares no discriminator values`
+          : `variant("${value}") cannot narrow model "${this.#modelName}": the declared discriminator values are ${declaredValues.map((declared) => `"${declared}"`).join(', ')}`,
+        {
+          meta: {
+            method: 'variant',
+            argument: 'value',
+            model: this.#modelName,
+            value,
+            declaredValues,
+          },
+        },
+      );
     }
 
-    const filter = MongoFieldFilter.eq(
-      model.discriminator.field,
-      new MongoParamRef(variantEntry.value),
+    const filter = MongoFieldFilter.eq(discriminator.field, new MongoParamRef(value));
+    return this.#cloneWithVariant<VariantNameForValue<TContract, ModelName, V>>(
+      { filters: [...this.#state.filters, filter] },
+      variantName,
     );
-    return this.#cloneWithVariant<V>({ filters: [...this.#state.filters, filter] }, variantName);
   }
 
   where(
@@ -964,19 +1022,32 @@ class MongoCollectionImpl<
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
     if (contractEnum === undefined) return;
-    const allowed = contractEnum.members.map((member) => member.value);
-    const values = field.many && Array.isArray(value) ? value : [value];
-    const outside = values.find((entry) => entry !== null && !allowed.includes(entry));
-    if (outside === undefined) return;
-    const quoted = allowed.map((entry) => JSON.stringify(entry));
+    const accessor = this.#enums[valueSet.namespaceId]?.[valueSet.entityName];
+    if (accessor === undefined) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `The ORM has no accessor for enum ${valueSet.entityName}, so it cannot check the value written to ${path} in collection '${this.#collectionName}'. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).`,
+        { meta: { argument: 'enums', enum: valueSet.entityName } },
+      );
+    }
+    const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
+    const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
+    if (outside === -1) return;
+    const received = values[outside];
+    const described = accessor.values.map(describeValue);
     const list =
-      quoted.length > 1
-        ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`
-        : quoted.join('');
+      described.length > 1
+        ? `${described.slice(0, -1).join(', ')} and ${described.at(-1)}`
+        : described.join('');
     throw runtimeError(
       'RUNTIME.ENCODE_FAILED',
-      `Failed to encode field ${path} in collection '${this.#collectionName}': ${JSON.stringify(outside)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
-      { label: path, collection: this.#collectionName, received: outside, allowed },
+      `Failed to encode field ${path} in collection '${this.#collectionName}': ${describeValue(received)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
+      {
+        label: path,
+        collection: this.#collectionName,
+        received,
+        allowed: contractEnum.members.map((member) => member.value),
+      },
     );
   }
 
@@ -1227,6 +1298,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1243,6 +1315,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1258,7 +1331,8 @@ export function createMongoCollection<
   contract: TContract,
   modelName: ModelName,
   executor: MongoQueryExecutor,
+  enums: MongoOrmEnums,
   mutationDefaults?: MutationDefaults,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults);
+  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults, enums);
 }

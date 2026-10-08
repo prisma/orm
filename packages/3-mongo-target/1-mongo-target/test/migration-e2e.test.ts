@@ -284,7 +284,7 @@ describe('migration file E2E', () => {
           {
             id: 'validator.users.add',
             label: 'Add validator on users',
-            operationClass: 'destructive',
+            operationClass: 'widening',
           },
         ),
       ];
@@ -306,7 +306,7 @@ describe('migration file E2E', () => {
       expect(ops).toHaveLength(1);
       expect(ops[0].id).toBe('validator.users.add');
       expect(ops[0].label).toBe('Add validator on users');
-      expect(ops[0].operationClass).toBe('destructive');
+      expect(ops[0].operationClass).toBe('widening');
       expect(ops[0].execute[0].command.kind).toBe('collMod');
     });
 

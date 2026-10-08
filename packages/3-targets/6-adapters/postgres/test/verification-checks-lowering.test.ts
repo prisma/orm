@@ -2,6 +2,7 @@ import { cfExpr, cfTable, exprSelect } from '@internal/sql-relational-core/contr
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   columnDefaultAst,
+  columnDefaultSequenceAst,
   columnExistsAst,
   columnNullabilityAst,
   columnTypeAst,
@@ -11,15 +12,20 @@ import {
   noNullValuesAst,
   rlsEnabledAst,
   rlsPolicyExistsAst,
+  sequenceNameAvailableAst,
   tableExistsAst,
   tableIsEmptyAst,
   tablePrimaryKeyAst,
 } from '@internal/target-postgres/contract-free';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import type { PostgresContract } from '../src/core/types';
 
-const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const adapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const ctx = { contract: {} as PostgresContract };
 
 describe('tableExistsAst lowering — to_regclass verification checks', () => {
@@ -255,6 +261,45 @@ describe('D3 catalog check builders — lowering pins', () => {
     expect(noDefault.sql).toBe(
       `SELECT NOT EXISTS (${infoSchemaBody} AND "column_default" IS NOT NULL)) AS "result"`,
     );
+  });
+
+  it('columnDefaultSequenceAst — an attached sequence and a nextval default', async () => {
+    const ast = columnDefaultSequenceAst({ schema: 'public', table: 'Post', column: 'serial' });
+
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+
+    expect(result.sql).toBe(
+      'SELECT ((pg_get_serial_sequence($1, $2)) IS NOT NULL AND EXISTS (SELECT 1 AS "one" FROM "information_schema"."columns" WHERE ("table_schema" = $3 AND "table_name" = $4 AND "column_name" = $5 AND starts_with("column_default", $6)))) AS "result"',
+    );
+    expect(result.params).toEqual([
+      '"public"."Post"',
+      'serial',
+      'public',
+      'Post',
+      'serial',
+      'nextval(',
+    ]);
+  });
+
+  it("sequenceNameAvailableAst — the name is free or is the column's own sequence", async () => {
+    const ast = sequenceNameAvailableAst({
+      schema: 'public',
+      table: 'Post',
+      column: 'serial',
+      sequence: 'Post_serial_seq',
+    });
+
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+
+    expect(result.sql).toBe(
+      'SELECT ((to_regclass($1)) IS NULL OR (to_regclass($2)) = pg_get_serial_sequence($3, $4)::regclass) AS "result"',
+    );
+    expect(result.params).toEqual([
+      '"public"."Post_serial_seq"',
+      '"public"."Post_serial_seq"',
+      '"public"."Post"',
+      'serial',
+    ]);
   });
 
   it('tablePrimaryKeyAst — pg_index joins with LEFT JOIN and bare boolean conjunct', async () => {

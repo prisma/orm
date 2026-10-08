@@ -2,11 +2,11 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
-  postgresCodecLookup,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -38,10 +38,9 @@ function interpretPostgres(
       dataTypes: fixtureDataTypeSupport.entries,
       ...valueObjectStorage,
     },
-    codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
@@ -58,7 +57,7 @@ model User {
 }`;
 
 const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false };
-const idColumn = { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const idColumn = { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 const addressFields = {
   home: { nullable: true, type: { kind: 'valueObject', name: 'Address' }, many: false },
   addresses: {
@@ -79,8 +78,8 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         fields: { id: idField, ...addressFields },
         columns: {
           id: idColumn,
-          home: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
-          addresses: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+          home: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: true },
+          addresses: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
         },
       });
     });
@@ -95,7 +94,7 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: {} },
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       });
@@ -112,9 +111,19 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
           ...addressFields,
         },
         columns: {
-          id: { many: false, nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-          home: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-          addresses: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+          id: {
+            many: false,
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          },
+          home: { many: false, dataType: 'sqlite/text', codecId: 'sqlite/json@1', nullable: true },
+          addresses: {
+            many: false,
+            dataType: 'sqlite/text',
+            codecId: 'sqlite/json@1',
+            nullable: false,
+          },
         },
       });
     });
@@ -140,7 +149,7 @@ model User {
           id: idColumn,
           home: {
             many: false,
-            nativeType: 'jsonb',
+            dataType: 'pg/jsonb',
             codecId: 'pg/jsonb@1',
             nullable: false,
             default: { kind: 'function', expression: "'{}'::jsonb" },
@@ -167,7 +176,7 @@ model User {
     if (!result.ok) return;
     const jsonbWithDefault = (value: unknown) => ({
       many: false,
-      nativeType: 'jsonb',
+      dataType: 'pg/jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
       default: { kind: 'literal', value },
@@ -194,11 +203,11 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
+        message: 'Field "User.home": Expected json`...`; got a list',
         sourceId: 'schema.prisma',
         span: {
-          start: { offset: 81, line: 7, column: 16 },
-          end: { offset: 93, line: 7, column: 28 },
+          start: { offset: 90, line: 7, column: 25 },
+          end: { offset: 92, line: 7, column: 27 },
         },
       },
     ]);
@@ -231,8 +240,8 @@ model Child {
     const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
     expect(tables?.['child']).toEqual({
       columns: {
-        key: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
-        extra: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        key: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        extra: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['key'] },
       uniques: [],

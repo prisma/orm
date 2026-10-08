@@ -6,14 +6,25 @@ import {
   recreateTableStrategy,
   type StrategyContext,
 } from '../../src/core/migrations/planner-strategies';
-import { actualColumn, expectedColumn, issue, primaryKey, table } from './node-issue-helpers';
+import { sqliteTestComponents, sqliteTestTypes } from '../sqlite-test-types';
+import {
+  actualColumn,
+  columnDefault,
+  expectedColumn,
+  foreignKey,
+  issue,
+  primaryKey,
+  table,
+  unique,
+} from './node-issue-helpers';
 
 function makeContext(overrides: Partial<StrategyContext> = {}): StrategyContext {
   return {
     expected: new SqlSchemaIR({ tables: {} }),
     actual: new SqlSchemaIR({ tables: {} }),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
-    frameworkComponents: [],
+    frameworkComponents: sqliteTestComponents,
+    types: sqliteTestTypes,
     ...overrides,
   };
 }
@@ -83,52 +94,161 @@ describe('recreateTableStrategy', () => {
   });
 
   it('destructive wins over widening when both occur on the same table', () => {
-    const defaultDrift = issue({
-      path: ['database', 'user', 'column:email', 'default'],
-      expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
-      actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
-    });
     const pkDrift = issue({
       path: ['database', 'user', 'primary-key'],
       expected: primaryKey(['id']),
       actual: primaryKey(['id', 'email']),
     });
+    const typeDrift = issue({
+      path: ['database', 'user', 'column:email'],
+      expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
+      actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
+    });
     const ctx = makeContext({
       expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
       actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
     });
-    const result = recreateTableStrategy([defaultDrift, pkDrift], ctx);
+    const result = recreateTableStrategy([pkDrift, typeDrift], ctx);
     expect(result.kind).toBe('match');
     if (result.kind !== 'match') return;
     expect((result.calls[0] as RecreateTableCall).operationClass).toBe('destructive');
     expect(result.issues).toHaveLength(0);
   });
 
-  it('relaxing nullability (NOT NULL → nullable) is widening, tightening is destructive', () => {
+  it.each([
+    [
+      'a changed primary key',
+      issue({
+        path: ['database', 'user', 'primary-key'],
+        expected: primaryKey(['id']),
+        actual: primaryKey(['id', 'email']),
+      }),
+    ],
+    [
+      'a dropped unique constraint',
+      issue({ path: ['database', 'user', 'unique:email'], actual: unique(['email']) }),
+    ],
+    [
+      'a dropped foreign key',
+      issue({
+        path: ['database', 'user', 'foreign-key:org_id'],
+        actual: foreignKey({
+          columns: ['email'],
+          referencedTable: 'org',
+          referencedColumns: ['id'],
+        }),
+      }),
+    ],
+    [
+      'a removed column default',
+      issue({
+        path: ['database', 'user', 'column:email', 'default'],
+        actual: columnDefault({ raw: "'x'" }),
+      }),
+    ],
+  ])('classifies a recreate for %s alone as widening', (_label, constraintIssue) => {
     const ctx = makeContext({
       expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
       actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
     });
+    const result = recreateTableStrategy([constraintIssue], ctx);
+    expect(result.kind).toBe('match');
+    if (result.kind !== 'match') return;
+    expect((result.calls[0] as RecreateTableCall).operationClass).toBe('widening');
+  });
 
+  it('classifies a recreate for a nullability change alone as widening, in either direction', () => {
+    const ctx = makeContext({
+      expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
+      actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
+    });
+    const nullabilityChange = (expectedNullable: boolean) =>
+      issue({
+        path: ['database', 'user', 'column:email'],
+        expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: expectedNullable }),
+        actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: !expectedNullable }),
+      });
+
+    const classes = [true, false].map((expectedNullable) => {
+      const result = recreateTableStrategy([nullabilityChange(expectedNullable)], ctx);
+      return result.kind === 'match'
+        ? (result.calls[0] as RecreateTableCall).operationClass
+        : result.kind;
+    });
+
+    expect(classes).toEqual(['widening', 'widening']);
+  });
+
+  it('classifies a recreate that leaves a live column out as destructive', () => {
+    const actualWithNickname = table({
+      name: 'user',
+      columns: {
+        id: actualColumn({ name: 'id', nativeType: 'INTEGER', nullable: false }),
+        email: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: false }),
+        nickname: actualColumn({ name: 'nickname', nativeType: 'TEXT', nullable: true }),
+      },
+      primaryKey: primaryKey(['id']),
+    });
     const relaxing = issue({
       path: ['database', 'user', 'column:email'],
       expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
       actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: false }),
     });
-    const widening = recreateTableStrategy([relaxing], ctx);
-    expect(widening.kind).toBe('match');
-    if (widening.kind !== 'match') return;
-    expect((widening.calls[0] as RecreateTableCall).operationClass).toBe('widening');
+    const result = recreateTableStrategy(
+      [relaxing],
+      makeContext({
+        expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
+        actual: new SqlSchemaIR({ tables: { user: actualWithNickname } }),
+      }),
+    );
 
-    const tightening = issue({
+    expect(result.kind === 'match' && (result.calls[0] as RecreateTableCall).operationClass).toBe(
+      'destructive',
+    );
+  });
+
+  it('records the columns whose type changes as the lossy columns of the recreate', () => {
+    const ctx = makeContext({
+      expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
+      actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
+    });
+    const typeChange = issue({
+      path: ['database', 'user', 'column:email'],
+      expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
+      actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
+    });
+    const pkDrift = issue({
+      path: ['database', 'user', 'primary-key'],
+      expected: primaryKey(['id']),
+      actual: primaryKey(['id', 'email']),
+    });
+
+    const lossy = recreateTableStrategy([typeChange, pkDrift], ctx);
+    const lossless = recreateTableStrategy([pkDrift], ctx);
+
+    expect(
+      [lossy, lossless].map((result) =>
+        result.kind === 'match' ? (result.calls[0] as RecreateTableCall).lossyColumns : result.kind,
+      ),
+    ).toEqual([['email'], []]);
+  });
+
+  it('classifies a recreate for a nullability tightening and a type change as destructive', () => {
+    const ctx = makeContext({
+      expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
+      actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
+    });
+    const tighteningAndTypeChange = issue({
       path: ['database', 'user', 'column:email'],
       expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: false }),
-      actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
+      actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
     });
-    const destructive = recreateTableStrategy([tightening], ctx);
-    expect(destructive.kind).toBe('match');
-    if (destructive.kind !== 'match') return;
-    expect((destructive.calls[0] as RecreateTableCall).operationClass).toBe('destructive');
+
+    const result = recreateTableStrategy([tighteningAndTypeChange], ctx);
+
+    expect(result.kind).toBe('match');
+    if (result.kind !== 'match') return;
+    expect((result.calls[0] as RecreateTableCall).operationClass).toBe('destructive');
   });
 
   it('groups issues by table and emits one RecreateTableCall per affected table', () => {

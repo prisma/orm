@@ -7,6 +7,7 @@ import { type ParamRef, RawQueryAst } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../../1-core/contract/test/test-type-lookups';
 import type { BuilderContext } from '../../src/runtime/builder-base';
 import { createRawLane } from '../../src/runtime/raw-lane';
 import { sql } from '../../src/runtime/sql';
@@ -131,6 +132,7 @@ describe('a storage namespace named raw', () => {
   // could really produce: the target pack's default namespace names it.
   const rawNamespaceContract = defineContract(
     {
+      ...testTypeLookups,
       family: {
         kind: 'family',
         id: 'sql',
@@ -138,7 +140,7 @@ describe('a storage namespace named raw', () => {
         version: '0.0.1',
         authoring: {
           field: {
-            text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1', nativeType: 'text' } },
+            text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1' } },
           },
         },
       } as const satisfies FamilyPackRef<'sql'>,
@@ -191,8 +193,8 @@ describe('storage column names that collide with object machinery', () => {
   // express the name, so the getter is exercised against its own typed input.
   const table = new StorageTable({
     columns: Object.fromEntries([
-      ['id', { many: false, codecId: 'pg/text@1', nullable: false, nativeType: 'text' }],
-      ['__proto__', { many: false, codecId: 'pg/text@1', nullable: true, nativeType: 'text' }],
+      ['id', { many: false, codecId: 'pg/text@1', nullable: false, dataType: 'pg/text' }],
+      ['__proto__', { many: false, codecId: 'pg/text@1', nullable: true, dataType: 'pg/text' }],
     ]),
     uniques: [],
     indexes: [],

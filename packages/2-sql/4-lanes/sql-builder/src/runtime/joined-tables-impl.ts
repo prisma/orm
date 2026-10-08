@@ -203,7 +203,11 @@ export class JoinedTablesImpl<QC extends QueryContext, AvailableScope extends Sc
         return new SelectQueryImpl(
           emptyState(other.buildAst() as TableSource, parentMerged),
           this.ctx,
-        ) as unknown as SelectQuery<QC, AvailableScope, EmptyRow>;
+        ) as unknown as SelectQuery<
+          QC,
+          MergeScopes<AvailableScope, (typeof other)[typeof JoinOuterScope]>,
+          EmptyRow
+        >;
       },
     };
 

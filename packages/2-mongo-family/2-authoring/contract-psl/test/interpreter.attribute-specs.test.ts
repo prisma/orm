@@ -1,5 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
@@ -12,10 +14,9 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: EMPTY_DATA_TYPES,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
   });
 }
 

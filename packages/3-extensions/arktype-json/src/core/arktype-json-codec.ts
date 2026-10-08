@@ -20,7 +20,7 @@ import {
   type ColumnSpec,
   column,
 } from '@internal/framework-components/codec';
-import { isRuntimeError, runtimeError } from '@internal/framework-components/runtime';
+import { runtimeError } from '@internal/framework-components/runtime';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
@@ -106,44 +106,11 @@ function serializeJson<TInferred>(value: TInferred): JsonValue {
   return JSON.parse(serializeWire(value)) as JsonValue;
 }
 
-function parseJsonText(wire: string): JsonValue | undefined {
-  try {
-    return JSON.parse(wire) as JsonValue;
-  } catch {
-    return undefined;
-  }
-}
-
 function decodeWireValue<TInferred>(
   schema: ArktypeSchemaLike,
   wire: string | JsonValue,
 ): TInferred {
-  if (typeof wire !== 'string') return validateSchema<TInferred>(schema, wire);
-
-  // Try the wire as the literal value first. Under `pg` + `jsonb` (the
-  // documented native type), wire arrives already-parsed: a JSON object
-  // surfaces as a JS object, a JSON string surfaces as a JS string. For
-  // string columns that means the wire IS the user's value — including
-  // strings whose literal characters happen to start and end with `"`.
-  // A `"…"`-shape unwrap heuristic would silently truncate them (the
-  // 7-char `"hello"` would decode to the 5-char `hello`).
-  //
-  // Fall back to JSON.parse only when schema validation rejects the raw
-  // wire: that path covers object/array shapes received as raw JSON
-  // text (legacy `json` text-OID adapters, or any code path that hands
-  // us un-pre-parsed JSON).
-  try {
-    return validateSchema<TInferred>(schema, wire);
-  } catch (error) {
-    if (!isRuntimeError(error) || error.code !== 'RUNTIME.JSON_SCHEMA_VALIDATION_FAILED') {
-      throw error;
-    }
-    const parsed = parseJsonText(wire);
-    if (parsed === undefined) {
-      throw error;
-    }
-    return validateSchema<TInferred>(schema, parsed);
-  }
+  return validateSchema<TInferred>(schema, typeof wire === 'string' ? JSON.parse(wire) : wire);
 }
 
 function rehydrateSchema(jsonIr: object): ArktypeSchemaLike {
@@ -211,16 +178,12 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
-  protected override nativeType(): string {
-    return ARKTYPE_JSON_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
   override readonly dataType = pgJsonb.id;
   override readonly codecId = ARKTYPE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = [ARKTYPE_JSON_NATIVE_TYPE] as const;
   override readonly paramsSchema: StandardSchemaV1<ArktypeJsonTypeParams> = arktypeJsonParamsSchema;
   override renderOutputType(params: ArktypeJsonTypeParams): string {
     return renderArktypeJsonOutputType(params);
@@ -280,7 +243,6 @@ export function arktypeJsonColumn<S extends Type<unknown>>(
       new ArktypeJsonCodecClass<S['infer']>(arktypeJsonDescriptor, schema),
     arktypeJsonDescriptor.codecId,
     params,
-    ARKTYPE_JSON_NATIVE_TYPE,
   );
 }
 

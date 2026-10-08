@@ -1,0 +1,343 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "sqlite",
+  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "roots": {
+    "scalar": {
+      "model": "Scalar",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Scalar": {
+            "fields": {
+              "bigint": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/bigint@1",
+                  "kind": "scalar"
+                }
+              },
+              "bigintNumber": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/bigintnumber@1",
+                  "kind": "scalar"
+                }
+              },
+              "blob": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/blob@1",
+                  "kind": "scalar"
+                }
+              },
+              "char": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar"
+                }
+              },
+              "charLength": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "datetime": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "integer": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "json": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "real": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/real@1",
+                  "kind": "scalar"
+                }
+              },
+              "shortText": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
+                }
+              },
+              "sqlFloat": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/float@1",
+                  "kind": "scalar"
+                }
+              },
+              "sqlInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "text": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "varchar": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar"
+                }
+              },
+              "varcharLength": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bigint": {
+                  "column": "bigint"
+                },
+                "bigintNumber": {
+                  "column": "bigintNumber"
+                },
+                "blob": {
+                  "column": "blob"
+                },
+                "char": {
+                  "column": "char"
+                },
+                "charLength": {
+                  "column": "charLength"
+                },
+                "datetime": {
+                  "column": "datetime"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "integer": {
+                  "column": "integer"
+                },
+                "json": {
+                  "column": "json"
+                },
+                "real": {
+                  "column": "real"
+                },
+                "shortText": {
+                  "column": "shortText"
+                },
+                "sqlFloat": {
+                  "column": "sqlFloat"
+                },
+                "sqlInt": {
+                  "column": "sqlInt"
+                },
+                "text": {
+                  "column": "text"
+                },
+                "varchar": {
+                  "column": "varchar"
+                },
+                "varcharLength": {
+                  "column": "varcharLength"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "scalar"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "scalar": {
+              "columns": {
+                "bigint": {
+                  "codecId": "sqlite/bigint@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "bigintNumber": {
+                  "codecId": "sqlite/bigintnumber@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "blob": {
+                  "codecId": "sqlite/blob@1",
+                  "dataType": "sqlite/blob",
+                  "nullable": false
+                },
+                "char": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false
+                },
+                "charLength": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "datetime": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "integer": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "json": {
+                  "codecId": "sqlite/json@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "real": {
+                  "codecId": "sqlite/real@1",
+                  "dataType": "sqlite/real",
+                  "nullable": false
+                },
+                "shortText": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "sqlite/character-varying",
+                  "nullable": false,
+                  "typeRef": "ShortText"
+                },
+                "sqlFloat": {
+                  "codecId": "sql/float@1",
+                  "dataType": "sqlite/real",
+                  "nullable": false
+                },
+                "sqlInt": {
+                  "codecId": "sql/int@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "text": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "varchar": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "sqlite/character-varying",
+                  "nullable": false
+                },
+                "varcharLength": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "sqlite/character-varying",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 255
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607",
+    "types": {
+      "ShortText": {
+        "codecId": "sql/varchar@1",
+        "dataType": "sqlite/character-varying",
+        "kind": "codec-instance",
+        "typeParams": {
+          "length": 255
+        }
+      }
+    }
+  },
+  "capabilities": {
+    "sql": {
+      "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

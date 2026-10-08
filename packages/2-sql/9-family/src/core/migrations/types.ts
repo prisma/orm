@@ -16,6 +16,8 @@ import type {
   MigrationRunnerResult,
   OperationContext,
   OpFactoryCall,
+  PlanOrigin,
+  ResolvedMigrationStatement,
   SchemaDiffIssue,
   SchemaOwnership,
 } from '@internal/framework-components/control';
@@ -39,15 +41,6 @@ export interface StorageTypePlanResult<TTargetDetails> {
 }
 
 /**
- * Input for expanding parameterized native types.
- */
-export interface ExpandNativeTypeInput {
-  readonly nativeType: string;
-  readonly codecId?: string;
-  readonly typeParams?: Record<string, unknown>;
-}
-
-/**
  * Input for resolving an identity-value SQL literal used to backfill existing rows when
  * adding a NOT NULL column without an explicit default.
  *
@@ -55,7 +48,8 @@ export interface ExpandNativeTypeInput {
  * (0 for numbers, '' for strings, false for booleans, etc.).
  */
 export interface ResolveIdentityValueInput {
-  readonly nativeType: string;
+  /** The id of the data type the column's codec represents. */
+  readonly dataType: string;
   readonly codecId?: string;
   readonly typeParams?: Record<string, unknown>;
 }
@@ -125,17 +119,6 @@ export interface CodecControlHooks<TTargetDetails = unknown> {
     readonly driver: SqlControlDriverInstance<string>;
     readonly schemaName?: string;
   }) => Promise<Record<string, StorageTypeInstance>>;
-  /**
-   * Expands a parameterized native type to its full SQL representation.
-   * Used by schema verification to compare contract types against database types.
-   *
-   * For example, expands:
-   * - { nativeType: 'character varying', typeParams: { length: 255 } } -> 'character varying(255)'
-   * - { nativeType: 'numeric', typeParams: { precision: 10, scale: 2 } } -> 'numeric(10,2)'
-   *
-   * Returns the expanded type string, or the original nativeType if no expansion is needed.
-   */
-  expandNativeType?: (input: ExpandNativeTypeInput) => string;
   /**
    * Resolves the identity value (monoid neutral element) as a SQL literal for safely adding
    * a NOT NULL column without an explicit default to a non-empty table.
@@ -281,7 +264,8 @@ export type SqlPlannerConflictKind =
   | 'missingButNonAdditive'
   | 'unsupportedOperation'
   | 'controlPolicySuppressedCall'
-  | 'tableNameCaseChanged';
+  | 'tableNameCaseChanged'
+  | 'statementRefused';
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;
@@ -344,11 +328,15 @@ export interface SqlMigrationPlannerPlanOptions {
    * need from/to column-shape comparisons (unsafe type change, nullability
    * tightening) use this to decide whether to emit `dataTransform`
    * placeholders; they short-circuit when it is `null`.
-   *
-   * Planners also derive the "from" identity they stamp onto the produced
-   * plan's `describe()` as `fromContract?.storage.storageHash ?? null`.
    */
   readonly fromContract: Contract<SqlStorage> | null;
+  /** The origin the produced plan asserts; see the framework planner's `origin` option. */
+  readonly origin: PlanOrigin | null;
+  /**
+   * Statements the user gave, resolved against `fromContract` and `contract`, in the order
+   * given. Empty when the user gave none.
+   */
+  readonly statements: readonly ResolvedMigrationStatement[];
   /**
    * POSIX-relative path from the migration package dir to
    * `migrations/snapshots`, e.g. `'../../snapshots'`. Threaded straight
@@ -367,7 +355,7 @@ export interface SqlMigrationPlannerPlanOptions {
    * Ownership oracle over the whole contract-space composition (the passive
    * aggregate). The planner asks it, per live extra node, whether any space
    * declares that entity: a sibling-owned node is left untouched, an unowned
-   * node is a genuine extra it may drop under a destructive policy. The
+   * node is a genuine extra it may drop under a policy that allows the drop's class. The
    * planner holds no list of other spaces' names — ownership lives in the
    * aggregate; it only asks. Absent for a single-space plan handed no
    * aggregate. See {@link SchemaOwnership}.
@@ -405,7 +393,6 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
    * The runner validates each operation against this policy before execution.
    */
   readonly policy: MigrationOperationPolicy;
-  readonly schemaName?: string;
   readonly strictVerification?: boolean;
   readonly callbacks?: SqlMigrationRunnerExecuteCallbacks<TTargetDetails>;
   readonly context?: OperationContext;

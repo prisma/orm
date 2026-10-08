@@ -5,7 +5,11 @@ import {
   mongoFamilyPslBlockDescriptors,
 } from '@internal/family-mongo/pack';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type CodecLookup,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -17,9 +21,13 @@ import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
@@ -34,16 +42,11 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['Int32', 'mongo/int32@1'],
 ]);
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/objectId@1': ['objectId'],
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-};
+const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.values());
 
 const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
+    if (!mongoCodecIds.has(id)) return undefined;
     return {
       id,
       encode: async (v: unknown) => v,
@@ -56,16 +59,15 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
       },
     } as ReturnType<CodecLookup['get']>;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
 };
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
   Object.fromEntries(
     [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
       name,
-      { kind: 'typeConstructor' as const, output: { codecId, nativeType: codecId } },
+      { kind: 'typeConstructor' as const, output: { codecId } },
     ]),
   );
 
@@ -90,7 +92,7 @@ function interpret(
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: overrides?.codecLookup ?? mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },

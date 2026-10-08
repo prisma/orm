@@ -1,4 +1,5 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type {
   ArgType,
   AttributeCtx,
@@ -9,7 +10,12 @@ import type {
   ResolvedEntityReference,
   SymbolTable,
 } from '@internal/psl-parser';
-import { buildSymbolTable, createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  createPslDiagnosticCollector,
+  EMPTY_DATA_TYPES,
+} from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -33,14 +39,9 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
       dataTypes: {},
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
-    codecLookup: {
-      get: () => undefined,
-      targetTypesFor: () => undefined,
-      renderOutputTypeFor: () => undefined,
-      descriptorFor: () => undefined,
-    },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-    dataTypeLookup: { has: () => false, get: () => undefined },
+    dataTypes: EMPTY_DATA_TYPES,
     resolvedInputs: [],
     capabilities: {},
   };
@@ -104,10 +105,8 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    dataTypes: EMPTY_DATA_TYPES,
   };
   return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };
 }

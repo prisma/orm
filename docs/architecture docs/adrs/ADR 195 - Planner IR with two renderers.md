@@ -1,5 +1,7 @@
 # ADR 195 — Planner IR with two renderers (OpFactoryCall pattern)
 
+> **Note (2026-10-07).** A MongoDB validator change and a change-stream image setting are now classed `widening` whatever they change, because neither removes a document; the planner no longer runs `classifyValidatorUpdate`. The planner still chooses the class where it depends on the origin: a Postgres type change is `widening` when it keeps every value and `destructive` otherwise, so `AlterColumnTypeCall` carries a computed `operationClass` too.
+
 ## At a glance
 
 The planner diffs two contracts and determines that a unique ascending index on `users.email` needs to be created. Rather than directly constructing the full operation ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)), it produces an IR node:

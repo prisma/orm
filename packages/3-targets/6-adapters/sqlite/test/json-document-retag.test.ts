@@ -86,10 +86,8 @@ describe('SQLite JSON-document retag', () => {
     );
   });
 
-  it('is what the registered sqlite/json@1 descriptor projects through', () => {
+  it('is not applied by the sqlite/json@1 descriptor, whose canonical form is the stored text', () => {
     const descriptor = sqliteCodecDescriptorRegistry.descriptorFor('sqlite/json@1');
-    expect(descriptor?.projectJson(column, { codecId: 'sqlite/json@1' })).toEqual(
-      jsonDocumentRetag(column),
-    );
+    expect(descriptor?.projectJson(column, { codecId: 'sqlite/json@1' })).toBe(column);
   });
 });

@@ -5,6 +5,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { unboundTables } from './unbound-tables';
@@ -37,6 +38,7 @@ function tableEffectiveControl(
 describe('defineContract defaultControlPolicy', () => {
   it('lowers defaultControlPolicy to Contract.defaultControlPolicy', () => {
     const built = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -53,6 +55,7 @@ describe('defineContract defaultControlPolicy', () => {
 
   it('omits defaultControlPolicy when unset', () => {
     const built = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -78,6 +81,7 @@ describe('defineContract per-table control', () => {
   it('accepts each ControlPolicy on the table sql stage', () => {
     for (const control of policies) {
       const built = defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -98,6 +102,7 @@ describe('defineContract per-table control', () => {
 
   it('omits per-node control and defaultControlPolicy when neither is authored', () => {
     const built = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -117,6 +122,7 @@ describe('defineContract per-table control', () => {
 describe('defineContract mixed default and per-table control', () => {
   it('resolves effective control per table and round-trips through the canonical deserializer', () => {
     const built = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

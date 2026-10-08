@@ -1,4 +1,5 @@
 import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
@@ -8,7 +9,8 @@ function interpret(schema: string) {
       ['String', 'mongo/string@1'],
       ['ObjectId', 'mongo/objectId@1'],
     ]),
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    dataTypes: EMPTY_DATA_TYPES,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
   });
 }

@@ -10,9 +10,11 @@ import {
   type IReference,
   type ITextFileEditorModel,
 } from '@codingame/monaco-vscode-api/monaco';
+import { getService, ICodeEditorService } from '@codingame/monaco-vscode-api/services';
 import { SnippetController2 } from '@codingame/monaco-vscode-api/vscode/vs/editor/contrib/snippet/browser/snippetController2';
 import { KeyCode } from '@codingame/monaco-vscode-editor-api';
 import editorWorkerUrl from '@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker?worker&url';
+import type { OpenEditor } from '@codingame/monaco-vscode-editor-service-override';
 import getFilesServiceOverride, {
   RegisteredFileSystemProvider,
   RegisteredMemoryFile,
@@ -221,11 +223,33 @@ async function main(): Promise<void> {
     throw new InternalError('Playground runtime config carries no scratch-project members');
   }
 
+  const entryForUri = (uri: vscode.Uri): FileEntry | undefined =>
+    entries.find((entry) => vscode.Uri.parse(entry.uri).toString() === uri.toString());
+
+  const openEditorFunc: OpenEditor = async (modelRef) => {
+    const uri = modelRef.object.textEditorModel.uri;
+    const entry = entryForUri(uri);
+    if (entry === undefined) {
+      return undefined;
+    }
+    await enqueueSelectEntry(entry);
+    const codeEditorService = await getService(ICodeEditorService);
+    const editor = codeEditorService
+      .listCodeEditors()
+      .find((candidate) => candidate.getModel()?.uri.toString() === uri.toString());
+    if (editor === undefined) {
+      return undefined;
+    }
+    modelRef.dispose();
+    return editor;
+  };
+
   const vscodeApiConfig: MonacoVscodeApiConfig = {
     $type: 'extended',
     viewsConfig: {
       $type: 'EditorService',
       htmlContainer,
+      openEditorFunc,
     },
     logLevel: LogLevel.Warning,
     serviceOverrides: {
@@ -378,7 +402,7 @@ async function main(): Promise<void> {
   // ends up active and no two opens for the same entry ever overlap.
   let pendingSelection: Promise<void> = openEntry(firstEntry);
 
-  function enqueueSelectEntry(entry: FileEntry): void {
+  function enqueueSelectEntry(entry: FileEntry): Promise<void> {
     pendingSelection = pendingSelection
       .then(
         () => selectEntry(entry),
@@ -387,10 +411,13 @@ async function main(): Promise<void> {
       .catch((error: unknown) => {
         console.error(error);
       });
+    return pendingSelection;
   }
 
   for (const entry of entries) {
-    entry.button.addEventListener('click', () => enqueueSelectEntry(entry));
+    entry.button.addEventListener('click', () => {
+      void enqueueSelectEntry(entry);
+    });
   }
 
   // The first file opens on startup exactly as the single-schema playground

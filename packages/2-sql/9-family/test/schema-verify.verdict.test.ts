@@ -26,9 +26,10 @@ import {
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
+import { testTypeLookups } from '../../1-core/contract/test/test-type-lookups';
 import { extractCodecControlHooks } from '../src/core/assembly';
 import { computeSqlDiffVerdict, computeStorageTypeVerdict } from '../src/core/diff/schema-verify';
-import type { DefaultNormalizer, NativeTypeNormalizer } from '../src/core/diff/sql-schema-diff';
+import type { DefaultNormalizer } from '../src/core/diff/sql-schema-diff';
 import { contractToSchemaIR } from '../src/core/migrations/contract-to-schema-ir';
 import {
   createContractTable,
@@ -53,7 +54,7 @@ const testNormalizer: DefaultNormalizer = (rawDefault: string): ColumnDefault | 
   return { kind: 'function', expression: trimmed };
 };
 
-const identityNativeNormalizer: NativeTypeNormalizer = (nativeType: string) =>
+const identityNativeNormalizer = (nativeType: string): string =>
   nativeType === 'varchar' ? 'character varying' : nativeType;
 
 /** Stamps resolved values onto a raw actual tree the way introspection does. */
@@ -126,6 +127,8 @@ function runVerdict(options: {
 
   const expected = contractToSchemaIR(options.contract, {
     annotationNamespace: 'pg',
+    dataTypeLookup: testTypeLookups.dataTypeLookup,
+    codecLookup: testTypeLookups.codecLookup,
   });
   const actual = stampLikeIntrospection(options.schema);
   const issues = diffSchemas(expected, actual);
@@ -173,7 +176,7 @@ function failureOutcomesByNodeKind(run: VerdictRun): ReadonlyArray<readonly [str
 describe('differ verdict — basic drift', () => {
   it('identical schema verifies in both modes', () => {
     const contract = createTestContract({
-      user: createContractTable({ id: { nativeType: 'int4', nullable: false } }),
+      user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable('user', { id: { nativeType: 'int4', nullable: false } }),
@@ -185,7 +188,7 @@ describe('differ verdict — basic drift', () => {
 
   it('missing table fails both modes as not-found', () => {
     const contract = createTestContract({
-      user: createContractTable({ id: { nativeType: 'int4', nullable: false } }),
+      user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }),
     });
     const schema = createTestSchemaIR({});
     const { strict, lenient } = runBothModes({ contract, schema });
@@ -196,7 +199,7 @@ describe('differ verdict — basic drift', () => {
 
   it('extra table fails strict only', () => {
     const contract = createTestContract({
-      user: createContractTable({ id: { nativeType: 'int4', nullable: false } }),
+      user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable('user', { id: { nativeType: 'int4', nullable: false } }),
@@ -211,8 +214,8 @@ describe('differ verdict — basic drift', () => {
   it('missing column fails both modes; extra column fails strict only', () => {
     const contract = createTestContract({
       user: createContractTable({
-        id: { nativeType: 'int4', nullable: false },
-        email: { nativeType: 'text', nullable: false },
+        id: { dataType: 'pg/int4', nullable: false },
+        email: { dataType: 'pg/text', nullable: false },
       }),
     });
     const schema = createTestSchemaIR({
@@ -232,8 +235,8 @@ describe('differ verdict — basic drift', () => {
   it('type mismatch and nullability mismatch fail both modes as not-equal', () => {
     const contract = createTestContract({
       user: createContractTable({
-        id: { nativeType: 'int4', nullable: false },
-        email: { nativeType: 'text', nullable: false },
+        id: { dataType: 'pg/int4', nullable: false },
+        email: { dataType: 'pg/text', nullable: false },
       }),
     });
     const schema = createTestSchemaIR({
@@ -250,7 +253,7 @@ describe('differ verdict — basic drift', () => {
 
   it('normalized native types verify (varchar vs character varying)', () => {
     const contract = createTestContract({
-      user: createContractTable({ name: { nativeType: 'character varying', nullable: false } }),
+      user: createContractTable({ name: { dataType: 'pg/varchar', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable('user', { name: { nativeType: 'varchar', nullable: false } }),
@@ -265,7 +268,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
     const contract = createTestContract({
       user: createContractTable({
         status: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           nullable: false,
           default: { kind: 'literal', value: 'draft' },
         },
@@ -284,7 +287,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
     const contract = createTestContract({
       user: createContractTable({
         status: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           nullable: false,
           default: { kind: 'literal', value: 'draft' },
         },
@@ -303,7 +306,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
     const contract = createTestContract({
       user: createContractTable({
         status: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           nullable: false,
           default: { kind: 'literal', value: 'draft' },
         },
@@ -321,7 +324,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
 
   it('EXTRA default fails strict only (the reason-lifecycle case that forced the node design)', () => {
     const contract = createTestContract({
-      user: createContractTable({ status: { nativeType: 'text', nullable: false } }),
+      user: createContractTable({ status: { dataType: 'pg/text', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable('user', {
@@ -341,7 +344,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
     const contract = createTestContract({
       user: createContractTable({
         created: {
-          nativeType: 'timestamptz',
+          dataType: 'pg/timestamptz',
           codecId: 'pg/timestamptz-temporal@1',
           nullable: false,
           default: { kind: 'function', expression: 'now()' },
@@ -361,7 +364,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
     const contract = createTestContract({
       user: createContractTable({
         status: {
-          nativeType: 'text',
+          dataType: 'pg/text',
           nullable: false,
           default: { kind: 'literal', value: 'draft' },
         },
@@ -381,7 +384,7 @@ describe('differ verdict — primary keys', () => {
   const contractWithPk = () =>
     createTestContract({
       user: createContractTable(
-        { id: { nativeType: 'int4', nullable: false } },
+        { id: { dataType: 'pg/int4', nullable: false } },
         { primaryKey: { columns: ['id'] } },
       ),
     });
@@ -407,7 +410,7 @@ describe('differ verdict — primary keys', () => {
     expect(failureOutcomesByNodeKind(lenient)).toContainEqual(['sql-primary-key', 'not-found']);
 
     const contractNoPk = createTestContract({
-      user: createContractTable({ id: { nativeType: 'int4', nullable: false } }),
+      user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }),
     });
     const extra = createTestSchemaIR({
       user: createSchemaTable(
@@ -435,8 +438,8 @@ describe('differ verdict — primary keys', () => {
     const contract = createTestContract({
       user: createContractTable(
         {
-          id: { nativeType: 'int4', nullable: false },
-          tenant: { nativeType: 'int4', nullable: false },
+          id: { dataType: 'pg/int4', nullable: false },
+          tenant: { dataType: 'pg/int4', nullable: false },
         },
         { primaryKey: { columns: ['id'] } },
       ),
@@ -452,13 +455,13 @@ describe('differ verdict — foreign keys', () => {
   const contractWithFk = (actions?: { onDelete?: 'cascade' | 'noAction' }) =>
     createTestContract({
       user: createContractTable(
-        { id: { nativeType: 'int4', nullable: false } },
+        { id: { dataType: 'pg/int4', nullable: false } },
         { primaryKey: { columns: ['id'] } },
       ),
       post: createContractTable(
         {
-          id: { nativeType: 'int4', nullable: false },
-          user_id: { nativeType: 'int4', nullable: false },
+          id: { dataType: 'pg/int4', nullable: false },
+          user_id: { dataType: 'pg/int4', nullable: false },
         },
         {
           primaryKey: { columns: ['id'] },
@@ -574,7 +577,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('contract @@unique matched by a live unique CONSTRAINT is clean (the round-trip)', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         { uniques: [{ columns: ['email'] }] },
       ),
     });
@@ -593,7 +596,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('contract @@unique vs a live unique INDEX fails both modes (constraint missing + index extra)', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         { uniques: [{ columns: ['email'] }] },
       ),
     });
@@ -616,7 +619,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('contract @@index vs a live unique CONSTRAINT fails both modes (index missing + constraint extra)', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         { indexes: [{ name: 'user_email_idx', columns: ['email'], unique: false }] },
       ),
     });
@@ -637,7 +640,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('contract @@index (with a type) vs a live unique constraint fails both modes', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         { indexes: [{ name: 'user_email_idx', columns: ['email'], unique: false, type: 'gin' }] },
       ),
     });
@@ -654,7 +657,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
 
   it('a stray live unique INDEX is an ordinary extra: strict-fails / lenient-passes', () => {
     const contract = createTestContract({
-      user: createContractTable({ email: { nativeType: 'text', nullable: false } }),
+      user: createContractTable({ email: { dataType: 'pg/text', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable(
@@ -671,7 +674,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
 
   it('a stray live non-unique index is an extra in strict only', () => {
     const contract = createTestContract({
-      user: createContractTable({ email: { nativeType: 'text', nullable: false } }),
+      user: createContractTable({ email: { dataType: 'pg/text', nullable: false } }),
     });
     const schema = createTestSchemaIR({
       user: createSchemaTable(
@@ -688,7 +691,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('missing unique fails both modes; stray live unique constraint is strict-only', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         { uniques: [{ columns: ['email'] }] },
       ),
     });
@@ -699,7 +702,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
     expect(missingRuns.lenient.ok).toBe(false);
 
     const contractNone = createTestContract({
-      user: createContractTable({ email: { nativeType: 'text', nullable: false } }),
+      user: createContractTable({ email: { dataType: 'pg/text', nullable: false } }),
     });
     const stray = createTestSchemaIR({
       user: createSchemaTable(
@@ -716,7 +719,7 @@ describe('differ verdict — uniques and indexes (structural equality)', () => {
   it('index options compare loosely (typed contract vs stringly introspection)', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { email: { nativeType: 'text', nullable: false } },
+        { email: { dataType: 'pg/text', nullable: false } },
         {
           indexes: [
             {
@@ -841,7 +844,7 @@ describe('differ verdict — control policies', () => {
   it('an observed table warns instead of failing (both modes pass)', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { id: { nativeType: 'int4', nullable: false } },
+        { id: { dataType: 'pg/int4', nullable: false } },
         { control: 'observed' },
       ),
     });
@@ -858,7 +861,7 @@ describe('differ verdict — control policies', () => {
     const contract = createTestContract({
       user: createContractTable(
         {
-          id: { nativeType: 'int4', nullable: false },
+          id: { dataType: 'pg/int4', nullable: false },
         },
         { control: 'external' },
       ),
@@ -882,7 +885,7 @@ describe('differ verdict — control policies', () => {
   it('a tolerated table suppresses extra columns only', () => {
     const contract = createTestContract({
       user: createContractTable(
-        { id: { nativeType: 'int4', nullable: false } },
+        { id: { dataType: 'pg/int4', nullable: false } },
         { control: 'tolerated' },
       ),
     });
@@ -909,7 +912,7 @@ describe('differ verdict — control policies', () => {
   it('a defaultControlPolicy of observed downgrades an extra table to a warning', () => {
     const contract = createTestContract(
       {
-        user: createContractTable({ id: { nativeType: 'int4', nullable: false } }),
+        user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }),
       },
       {},
       undefined,
@@ -949,13 +952,13 @@ describe('differ verdict — storage types (verifyType hook)', () => {
 
   function contractWithType(): ReturnType<typeof createTestContract> {
     return createTestContract(
-      { user: createContractTable({ id: { nativeType: 'int4', nullable: false } }) },
+      { user: createContractTable({ id: { dataType: 'pg/int4', nullable: false } }) },
       {},
       {
         user_status: {
           kind: 'codec-instance',
           codecId: 'app/enum@1',
-          nativeType: 'user_status',
+          dataType: 'app/enum',
           typeParams: { values: ['a'] },
         },
       },

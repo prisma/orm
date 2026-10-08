@@ -1,5 +1,7 @@
 # ADR 155 — Driver/Codec boundary value representation and responsibilities
 
+> **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
+
 Prisma Next executes parameterized query Plans:
 
 - lanes build an AST and a separate `params[]` array (no SQL literal concatenation)
@@ -44,7 +46,7 @@ Finally: we explicitly do **not** solve this by inlining SQL literals. Parameter
 
 - **Parameterized Plans**: we execute `sql + params`, not “SQL with values substituted”.
 - **Lowering must be value-independent**: adapters must not call `encode(value)` or otherwise depend on runtime values to decide SQL shape. Plans and lowering should be stable across different parameter values.
-  - Lowering can use type metadata (for example `codecId`, `nativeType`, and column references), but not the runtime value in `params[]`.
+  - Lowering can use type metadata (for example `codecId`, `dataType`, and column references), but not the runtime value in `params[]`.
 - **Codecs are component-provided**: adapters, targets, and extension packs can contribute codecs; codecs are not owned by drivers.
 - **Drivers are swappable**: a Prisma Next driver is a wrapper around an underlying library (e.g. `pg`); swapping that wrapper should not require rewriting codecs.
 - **No SQL literal codecs**: codecs do not generate SQL fragments; SQL text is produced by lowering.
@@ -94,9 +96,9 @@ Many Postgres JS libraries return `int8` as **strings** by default to avoid prec
 
 **Resolved.** `pg/int8@1` carries `bigint` as its application value, and its canonical JSON is decimal text rather than a JSON number, which cannot hold the int64 range. Neither side depends on how a driver library chooses to parse `int8`.
 
-### The current Postgres driver does not normalize row values
+### The Postgres driver did not normalize row values
 
-The driver yields rows directly from `pg` without normalization:
+When this ADR was written, the driver yielded rows directly from `pg` without normalization:
 
 ```ts
 // packages/3-targets/7-drivers/postgres/src/postgres-driver.ts
@@ -104,7 +106,9 @@ const result = await client.query(sql, params as unknown[] | undefined);
 for (const row of result.rows as Record<string, unknown>[]) yield row;
 ```
 
-With no normalization at the driver boundary, codecs inevitably become coupled to the underlying library’s choices.
+With no normalization at the driver boundary, codecs inevitably become coupled to the underlying library’s choices. Three readers did become coupled, and `pg` hid the coupling: the runtime marker check read `canonical_version` as a number, computed `select` projections with no codec returned whatever `pg` parsed, and the interval codec read only the ISO 8601 text it writes itself, never the text Postgres prints.
+
+**Resolved.** The runtime driver now passes `serverTextTypes` to `pg` on every `query` path, so every row value arrives as the server's text output and `pg` parses nothing ([`server-text-types.ts`](../../../packages/3-targets/7-drivers/postgres/src/server-text-types.ts), [driver README](../../../packages/3-targets/7-drivers/postgres/README.md#row-parser-policy)). The three readers were fixed to read text. The control-plane driver still lets `pg` parse scalar values; it reads catalog rows without codecs and is the remaining exception to this ADR.
 
 ### Lowering already emits casts for determinism (`::vector`)
 
@@ -140,7 +144,7 @@ Adapters do **not** serialize JS values into SQL literals.
 Adapters also do **not** inspect codec implementations or encoded parameter values to decide casts. Cast decisions are based on:
 
 - **SQL context** (is the parameter already typed by a target column? is it an operator/function argument?)
-- **type intent** available from the contract/plan (e.g. `ParamDescriptor.nativeType`, column refs)
+- **type intent** available from the contract/plan (e.g. the parameter's codec id and the data type it represents, column refs)
 
 #### Encoding/decoding (codec responsibility)
 
@@ -181,9 +185,11 @@ The boundary between codecs and drivers is standardized as:
 
 Meaning:
 
-- `string` is the canonical string encoding for the type (as defined by the codec’s policy for that `codecId`).
+- `string` is the canonical string encoding for the type. For a parameter, the codec’s policy for that `codecId` defines it. For a row value, it is the text the database server prints for the type, unchanged by the driver: `t` for a Postgres `bool`, `NaN` for a `float8`, `{a,b}` for an array, the JSON text for `jsonb`. A codec decodes that text and nothing else, so it may not depend on any parsing the driver’s underlying library would do.
 - `Uint8Array` is an opaque **binary blob** when a codec/target chooses a binary representation.
 - `null` is SQL `NULL`.
+
+A row value with no codec, such as a computed projection whose codec the composed stack cannot build, reaches the user as that server text. The driver does not fall back to library parsing for it.
 
 This intentionally excludes driver-library-specific JS types (`Date`, `bigint`, `Buffer`, custom wrappers).
 In Node, `Buffer` is a `Uint8Array`; drivers may accept `Buffer` internally but must expose `Uint8Array` at the boundary.
@@ -209,9 +215,9 @@ Plans already have a place to carry type information separately from values (e.g
 
 We expect users (via PSL/TS authoring) to select codecs for columns. To keep adapters and drivers generic, codec↔column compatibility is validated when building/emitting/validating the contract:
 
-- a column chooses a `codecId` and a target-native type name (`nativeType`)
-- a codec declares which target-native type names it supports (e.g. `targetTypes`)
-- contract authoring/validation rejects incompatible combinations early
+- a column chooses a `codecId`; the contract stores the data type that codec represents (`dataType`, [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md))
+- a codec declares the one data type it represents
+- contract authoring/validation rejects a column whose stored `dataType` is not its codec's
 
 This avoids pushing codec-specific logic into adapters at lowering time and prevents late, driver-specific failures at runtime.
 
@@ -223,6 +229,8 @@ This is a behavioral contract, not just a TS type alias. We enforce it via:
   - returned row values normalize to `string | Uint8Array | null` for representative types
   - bound params accept `string | Uint8Array | null` and execute correctly
 - **Optional dev-mode validation:** fail fast if a driver returns a row value outside the canonical set (e.g. a `Date`).
+
+For the Postgres driver, [`driver.server-text.integration.test.ts`](../../../packages/3-targets/7-drivers/postgres/test/driver.server-text.integration.test.ts) is that conformance test. It reads `bool`, `int2`, `int4`, `float8` (including `NaN` and both infinities), `bytea`, `oid`, `interval`, `json` and `jsonb` through the buffered, cursor and named-cursor paths and asserts that every value is the server's text, and that the global `pg` type parsers are unchanged.
 
 ## FAQ (questions a reader is likely to ask)
 
@@ -253,7 +261,7 @@ This ADR does not require us to implement type-specific binary encodings for eve
 
 Each Prisma Next driver is allowed to configure its underlying library and/or post-process values so the driver outputs only `string | Uint8Array | null`.
 
-For example, if an underlying library returns timestamps as `Date`, the wrapper would convert them to ISO strings before the codec layer sees them.
+For example, if an underlying library returns timestamps as `Date`, the wrapper would convert them to ISO strings before the codec layer sees them. The Postgres driver takes the simpler route: it configures `pg` with a type parser that returns the server's text for every type OID, so there is nothing to convert back.
 
 ## Worked example: `pg/vector@1`
 
@@ -261,7 +269,7 @@ This example mirrors the current pgvector codec behavior (pgvector text format l
 
 ### Scenario
 
-- column: `embedding` with `codecId: 'pg/vector@1'`, `nativeType: 'vector'`
+- column: `embedding` with `codecId: 'pg/vector@1'`, `dataType: 'pgvector/vector'`
 - query: insert a row with `embedding`
 - JS value: `[0.1, 1, 42]` (the exact domain type can vary; the boundary stays the same)
 

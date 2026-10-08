@@ -68,15 +68,12 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
                   // position alone decides the column type (pg: text).
                   idUuidV4: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   idNanoidDefault: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   idNanoidSized: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   dbExpr: {
                     default: {
@@ -136,11 +133,9 @@ model UuidNative {
     const uuidNativeTable = storage.namespaces['public']?.entries.table?.['UuidNative'];
     expect(uuidNativeTable?.columns['idV4']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
     expect(uuidNativeTable?.columns['idV7']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
   });
 
@@ -177,7 +172,6 @@ model Profile {
     const profileTable = storage.namespaces['public']?.entries.table?.['Profile'];
     expect(profileTable?.columns['id']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
   });
 
@@ -208,7 +202,7 @@ model UuidNativeBad {
     );
   });
 
-  it('returns diagnostics for unsupported default functions and invalid arguments', () => {
+  it('reports invalid default function arguments with the diagnostics of the function', () => {
     const result = interpretPostgresSchema(
       `model InvalidDefaults {
   id Int @id
@@ -224,14 +218,35 @@ model UuidNativeBad {
     expect(result.ok).toBe(false);
     if (result.ok) return;
 
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          sourceId: 'schema.prisma',
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Attribute "cuid" is missing required argument "version"',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { line: 3, column: 29, offset: 65 },
+          end: { line: 3, column: 35, offset: 71 },
+        },
+      },
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected one of: 4 | 7',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { line: 4, column: 32, offset: 104 },
+          end: { line: 4, column: 33, offset: 105 },
+        },
+      },
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected an integer between 2 and 255',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { line: 5, column: 36, offset: 143 },
+          end: { line: 5, column: 37, offset: 144 },
+        },
+      },
+    ]);
   });
 
   it('reports dbgenerated as removed and names the tagged literal that replaces it', () => {

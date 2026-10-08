@@ -28,8 +28,7 @@ import {
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
 } from '../src/core/authoring';
-import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
-import { pgEnumDescriptor } from '../src/core/codecs';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
@@ -57,21 +56,16 @@ const postgresTarget = {
   indexTypes: postgresIndexTypes,
 };
 
-const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarTypeDescriptors = new Map<string, { codecId: string }>([
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
   // The family's varchar codec, to prove the attribute accepts every `textual`
   // codec rather than `pg/text@1` alone.
-  ['Varchar', { codecId: 'sql/varchar@1', nativeType: 'character varying' }],
+  ['Varchar', { codecId: 'sql/varchar@1' }],
 ]);
 
 // `pg.enum(Ref)` resolves its column through the enum codec's descriptor.
-const codecLookup: CodecLookupWithDescriptors = {
-  get: () => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumDescriptor : undefined),
-};
+const codecLookup: CodecLookupWithDescriptors = createPostgresBuiltinCodecLookup();
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
   Object.fromEntries(
@@ -102,7 +96,7 @@ function interpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

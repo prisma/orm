@@ -1,9 +1,10 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
+import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
-import type { RefEntry, Refs } from '@internal/migration-tools/refs';
+import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
+import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -29,7 +30,11 @@ import {
   type ContractIR,
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
-import { resolveContractRef } from '../control-api/operations/ref-resolution';
+import {
+  type RefResolutionContext,
+  resolveContractRef,
+  retryCommandFor,
+} from '../control-api/operations/ref-resolution';
 import type {
   CreateControlClient,
   MigratePathDecision,
@@ -37,6 +42,7 @@ import type {
 } from '../control-api/types';
 import { errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
+import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
 import {
   migrateShowRunListRows,
@@ -179,28 +185,38 @@ interface RequestedTarget {
   readonly refName: string | undefined;
 }
 
+const EMITTED_CONTRACT_TARGET: RequestedTarget = { entry: undefined, refName: undefined };
+
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
- * the ref declares; a bare hash carries none. Omitting `--to` targets the
- * emitted contract, which needs no resolution at all.
+ * the ref declares; a bare hash or `@empty` carries none. An omitted `--to`
+ * and `@contract` both target the emitted contract. `@db` is not resolved
+ * here: it needs the live marker, which is read only once the connection is
+ * open.
  */
 function resolveRequestedTarget(
   to: string | undefined,
-  refs: Refs,
-  graph: MigrationGraph,
+  context: RefResolutionContext,
 ): Result<RequestedTarget, CliStructuredError> {
   if (to === undefined) {
-    return ok({ entry: undefined, refName: undefined });
+    return ok(EMITTED_CONTRACT_TARGET);
   }
-  const resolved = resolveContractRef(to, { graph, refs });
+  const resolved = resolveContractRef(to, context);
   if (!resolved.ok) {
     return notOk(normalizeError(resolved.failure));
+  }
+  if (resolved.value.provenance.kind === 'reserved-contract') {
+    return ok(EMITTED_CONTRACT_TARGET);
   }
   if (resolved.value.provenance.kind !== 'ref') {
     return ok({ entry: { hash: resolved.value.hash, invariants: [] }, refName: undefined });
   }
   const refName = resolved.value.provenance.refName;
-  return ok({ entry: refs[refName], refName });
+  return ok({ entry: context.refs[refName], refName });
+}
+
+function liveMarkerTarget(appMarker: { readonly storageHash: string } | null): RequestedTarget {
+  return { entry: { hash: contractHashAtMarker(appMarker), invariants: [] }, refName: undefined };
 }
 
 export function createMigrateCommand(createClient: CreateControlClient) {
@@ -211,8 +227,8 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'Walks every contract space (app + extensions) and applies pending on-disk\n' +
         'migrations in canonical order (extensions alphabetically, then app). It\n' +
         'replays the on-disk migration graph and never invents an edge. Use --to to\n' +
-        'target a specific contract (hash, ref name, or migration directory) and\n' +
-        '--show for a read-only preview of the route it would take.',
+        'target a specific contract and --show for a read-only preview of the route\n' +
+        'it would take.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',
@@ -225,8 +241,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       flags: {
         db: dbFlag,
         to: flag.string({
-          brief:
-            'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+          brief: `Target contract reference (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -235,7 +250,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         }),
         show: flag.boolean({ brief: 'Preview the migration route without applying (read-only)' }),
         from: flag.string({
-          brief: 'From-state for the --show preview (@contract, @db, hash, ref name, or dir)',
+          brief: `From-state for the --show preview (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
       },
@@ -281,7 +296,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               runList: migrateShowRunListRows(plan.migrations, rendering, paint),
               migrationsDir: migrationsRelative,
               database:
-                args.flags.from === undefined && typeof dbConnection === 'string'
+                plan.databaseMarkerHashBySpace !== undefined && typeof dbConnection === 'string'
                   ? maskConnectionUrl(dbConnection)
                   : undefined,
               from: args.flags.from,
@@ -291,6 +306,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         );
       }
 
+      const liveTarget = isLiveMarkerRef(args.flags.to);
       const startedAt = Date.now();
       const prepared = await prepareMigrationRun({
         config: ctx.config,
@@ -298,6 +314,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db migrate',
         createClient,
+        retryCommand: retryCommandFor({
+          commandName: 'db migrate',
+          to: args.flags.to,
+          advanceRef: args.flags.advanceRef,
+          canRunOffline: false,
+        }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);
@@ -346,13 +368,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(integrityFailure));
       }
 
-      const target = resolveRequestedTarget(
-        args.flags.to,
-        aggregate.app.refs,
-        aggregate.app.graph(),
-      );
-      if (!target.ok) {
-        return notOk(target.failure);
+      const offlineTarget = liveTarget
+        ? undefined
+        : resolveRequestedTarget(args.flags.to, {
+            graph: aggregate.app.graph(),
+            refs: aggregate.app.refs,
+            contractHash: aggregate.app.contract().storage.storageHash,
+          });
+      if (offlineTarget !== undefined && !offlineTarget.ok) {
+        return notOk(offlineTarget.failure);
       }
 
       let document: MigrateDocument;
@@ -371,13 +395,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           }
         }
 
-        const refEntry = target.value.entry;
+        const target: RequestedTarget =
+          offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
+        const refEntry = target.entry;
         if (refEntry !== undefined && refEntry.invariants.length > 0) {
           const invariantRefusal = refuseUnknownInvariants({
             graph: appGraph,
             markerInvariants: appMarker?.invariants ?? [],
             refInvariants: refEntry.invariants,
-            ...ifDefined('refName', args.flags.to),
+            ...ifDefined('refName', target.refName),
           });
           if (invariantRefusal) {
             return notOk(normalizeError(invariantRefusal));
@@ -395,7 +421,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             try {
               const at = await aggregate.app.contractAt(
                 refEntry.hash,
-                target.value.refName === undefined ? undefined : { refName: target.value.refName },
+                target.refName === undefined ? undefined : { refName: target.refName },
               );
               applyContract = at.contract;
               snapshotContractJson = blindCast<
@@ -440,7 +466,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('refHash', refEntry?.hash),
           ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),
-          ...(refEntry === undefined ? {} : ifDefined('refName', args.flags.to)),
+          ...ifDefined('refName', target.refName),
         });
         if (!applied.ok) {
           return notOk(normalizeError(mapMigrateFailure(applied.failure)));

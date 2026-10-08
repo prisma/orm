@@ -4,7 +4,7 @@ import { INT_FIELD, printingWidget, refusal, TEXT_FIELD } from './refusal-suppor
 const SHORT_TEXT = {
   kind: 'codec-instance',
   codecId: 'pg/text@1',
-  nativeType: 'text',
+  dataType: 'pg/text',
   typeParams: {},
 };
 const COORDINATE = '"public"."Widget"."label"';
@@ -16,7 +16,7 @@ describe('a column typed by a named type', () => {
         storageTypes: { ShortText: SHORT_TEXT },
         columns: {
           label: {
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             typeRef: 'ShortText',
@@ -30,11 +30,11 @@ describe('a column typed by a named type', () => {
   const MONEY = {
     kind: 'codec-instance',
     codecId: 'pg/numeric@1',
-    nativeType: 'numeric',
+    dataType: 'pg/numeric',
     typeParams: { precision: 10, scale: 2 },
   };
   const moneyColumn = {
-    nativeType: 'numeric',
+    dataType: 'pg/numeric',
     codecId: 'pg/numeric@1',
     nullable: false,
     typeRef: 'Money',
@@ -81,7 +81,7 @@ describe('a column typed by a named type', () => {
         storageTypes: { ShortText: SHORT_TEXT },
         columns: {
           label: {
-            nativeType: 'int4',
+            dataType: 'pg/int4',
             codecId: 'pg/int4@1',
             nullable: false,
             typeRef: 'ShortText',
@@ -97,7 +97,7 @@ describe('a column typed by a named type', () => {
       printingWidget({
         columns: {
           label: {
-            nativeType: 'text',
+            dataType: 'pg/text',
             codecId: 'pg/text@1',
             nullable: false,
             typeRef: 'ShortText',

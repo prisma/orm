@@ -10,7 +10,7 @@ import { defineIndexTypes } from '@internal/sql-contract/index-types';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -89,7 +89,7 @@ function interpret(schema: string, authoringContributions?: AuthoringContributio
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),
   });
 }

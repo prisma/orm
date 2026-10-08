@@ -1,11 +1,15 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
 function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
   const result = interpretMongoContract(schema, {
     scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: EMPTY_DATA_TYPES,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
   });
   if (result.ok) throw new Error('Expected interpretation to fail');
   return result.failure.diagnostics;

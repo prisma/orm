@@ -1,4 +1,4 @@
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -11,6 +11,8 @@ import {
   type UniqueConstraintInput,
 } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
+import { PostgresRlsEnablement } from '../../src/core/postgres-rls-enablement';
+import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import { postgresCreateNamespace } from '../../src/core/postgres-schema';
 
 export const stubLowerer: ExecuteRequestLowerer = {
@@ -19,11 +21,14 @@ export const stubLowerer: ExecuteRequestLowerer = {
   renderColumnDefault: async () => '',
 };
 
-const text = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
-const int4 = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const text = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
+const int4 = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 export const NICKNAME_CHECK = 'length(nickname) > 0';
 
 export interface ProfileSpec {
+  readonly control?: ControlPolicy;
+  /** Enables row-level security on the profile table with one select policy. */
+  readonly rlsPolicy?: string;
   readonly primaryKey?: PrimaryKeyInput;
   readonly uniques?: readonly UniqueConstraintInput[];
   readonly foreignKeys?: (tableName: string) => readonly ForeignKeyInput[];
@@ -39,7 +44,26 @@ function profileTable(tableName: string, spec: ProfileSpec): StorageTable {
     indexes: spec.indexes?.(tableName) ?? [],
     foreignKeys: spec.foreignKeys?.(tableName) ?? [],
     checks: spec.checks?.(tableName) ?? [],
+    ...(spec.control === undefined ? {} : { control: spec.control }),
   });
+}
+
+function rlsEntries(tableName: string, spec: ProfileSpec, namespaceId: string) {
+  if (spec.rlsPolicy === undefined) return { policy: {} };
+  const policy = new PostgresRlsPolicy({
+    naming: { kind: 'exact', name: spec.rlsPolicy },
+    tableName,
+    namespaceId,
+    operation: 'select',
+    roles: ['app_user'],
+    using: '(id > 0)',
+    withCheck: undefined,
+    permissive: true,
+  });
+  return {
+    policy: { [policy.name]: policy },
+    rls: { [tableName]: new PostgresRlsEnablement({ tableName, namespaceId }) },
+  };
 }
 
 export function reference(tableName: string, columns: readonly string[]) {
@@ -91,7 +115,7 @@ export function contractOf(
               account: accountTable,
               ...extraTables(profileTableName),
             },
-            policy: {},
+            ...rlsEntries(profileTableName, spec, namespaceId),
           },
         }),
       },
@@ -101,5 +125,25 @@ export function contractOf(
     capabilities: {},
     extensions: {},
     meta: {},
+  };
+}
+
+/** `contract` with one model per entry of `tables`, each stored in the named table. */
+export function withModels(
+  contract: Contract<SqlStorage>,
+  tables: Record<string, string>,
+  namespaceId: string = UNBOUND_NAMESPACE_ID,
+): Contract<SqlStorage> {
+  return {
+    ...contract,
+    domain: applicationDomainOf({
+      namespaceId,
+      models: Object.fromEntries(
+        Object.entries(tables).map(([model, table]) => [
+          model,
+          { fields: {}, relations: {}, storage: { table, namespaceId, fields: {} } },
+        ]),
+      ),
+    }),
   };
 }

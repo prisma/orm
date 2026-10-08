@@ -17,10 +17,6 @@
  *
  *   - `contractSpace.{contractJson,migrations,headRef}` — sourced from
  *     the on-disk artefacts emitted by `build:contract-space`.
- *   - `types.codecTypes.controlPlaneHooks[POSTGIS_GEOMETRY_CODEC_ID]` —
- *     codec control hooks (`expandNativeType`, `resolveIdentityValue`)
- *     the SQL planner extracts via `extractCodecControlHooks` and uses
- *     to render `geometry(Geometry,${srid})` column types.
  *
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  *   (contract-space package layout convention).
@@ -49,16 +45,6 @@ import {
 import { postgisPackMeta, postgisQueryOperations } from '../core/descriptor-meta';
 
 const geometryControlPlaneHooks: CodecControlHooks = {
-  expandNativeType: ({ nativeType, typeParams }) => {
-    const srid = typeParams?.['srid'];
-    if (typeof srid === 'number' && Number.isInteger(srid) && srid >= 0) {
-      // PostGIS prints the type-modifier list without a space — match
-      // it here so the verifier doesn't see `geometry(Geometry, 4326)`
-      // (DDL) mismatch `geometry(Geometry,4326)` (introspected).
-      return `${nativeType}(Geometry,${srid})`;
-    }
-    return nativeType;
-  },
   // PostGIS has no canonical "identity" geometry; backfilling a
   // non-null column requires the user to supply a valid value, so we
   // don't synthesise one here.

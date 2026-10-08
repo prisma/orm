@@ -1,8 +1,7 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { pgGeometryColumn, postgisGeometryDescriptor } from '../src/core/codecs';
+import { postgisGeometryDescriptor } from '../src/core/codecs';
 import type { Geometry } from '../src/core/geojson';
-import { geometry } from '../src/exports/column-types';
 import { bboxPolygon, point, polygon } from '../src/exports/geojson';
 
 type AsyncGeometryCodec = {
@@ -84,28 +83,6 @@ describe('geometry helpers raise POSTGIS.GEOMETRY_INVALID', () => {
       code: 'POSTGIS.GEOMETRY_INVALID',
       message: 'bboxPolygon: inverted bbox [10, 0, 0, 10] (expected minX <= maxX and minY <= maxY)',
       meta: { helper: 'bboxPolygon', reason: 'inverted bbox' },
-    });
-  });
-});
-
-describe('column helpers raise CONTRACT.ARGUMENT_INVALID', () => {
-  it('geometry() with a negative srid', () => {
-    const error = capture(() => geometry({ srid: -1 }));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.ARGUMENT_INVALID',
-      message: 'postgis: srid must be a non-negative integer, got -1',
-      meta: { helperPath: 'geometry', expected: 'non-negative integer', received: -1 },
-    });
-  });
-
-  it('pgGeometryColumn() with a non-integer srid', () => {
-    const error = capture(() => pgGeometryColumn({ srid: 1.5 }));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.ARGUMENT_INVALID',
-      message: 'postgis: srid must be a non-negative integer, got 1.5',
-      meta: { helperPath: 'pgGeometryColumn' },
     });
   });
 });

@@ -8,16 +8,19 @@ import type { IndexInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { sqliteContractToSchema } from '../../src/core/migrations/diff-database-schema';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
+import { sqliteTestComponents, sqliteTestTypes } from '../sqlite-test-types';
 import { contractOf, HANDLE_INDEX_HASH, handleIndex, stubLowerer } from './rename-table-fixtures';
 
 async function plannedLabels(liveIndexTable: string, contractIndexTable: string) {
   const live = contractOf('UserProfile', { indexes: () => [handleIndex(liveIndexTable)] }, 'live');
   const result = createSqliteMigrationPlanner(stubLowerer).plan({
     contract: contractOf('UserProfile', { indexes: () => [handleIndex(contractIndexTable)] }, 'to'),
-    schema: sqliteContractToSchema(live),
+    schema: sqliteContractToSchema(live, sqliteTestTypes),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
-    frameworkComponents: [],
+    origin: null,
+    statements: [],
+    frameworkComponents: sqliteTestComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -64,10 +67,12 @@ describe('SQLite planner index names that differ only in case', () => {
         { indexes: () => [exactIndex('Idx_Handle', ['handle', 'email'])] },
         'to',
       ),
-      schema: sqliteContractToSchema(live),
+      schema: sqliteContractToSchema(live, sqliteTestTypes),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });

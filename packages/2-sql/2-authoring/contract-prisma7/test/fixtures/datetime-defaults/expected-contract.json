@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "8e20f6d9fb0fd0cfbec8c8166a0bc2228952d2f1c7efeefb580d487e5f440902",
+    "storageHash": "df80016cb23a5782ec3462471c551fbca83be48f591e80bca6ca2fe1b8168f8d",
     "namespaces": {
       "public": {
         "id": "public",
@@ -264,13 +264,13 @@
             "Scalars": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "tsZ": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -283,7 +283,7 @@
                   }
                 },
                 "tsMs": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -296,7 +296,7 @@
                   }
                 },
                 "tsPlus": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -309,7 +309,7 @@
                   }
                 },
                 "tsMinus": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -322,7 +322,7 @@
                   }
                 },
                 "tsMicro": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "many": false,
@@ -335,7 +335,7 @@
                   }
                 },
                 "tzZ": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
@@ -348,7 +348,7 @@
                   }
                 },
                 "tzPlus": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "many": false,
@@ -361,7 +361,7 @@
                   }
                 },
                 "dZ": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
@@ -371,7 +371,7 @@
                   }
                 },
                 "dMidnight": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
@@ -381,7 +381,7 @@
                   }
                 },
                 "dMinus": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-string@1",
                   "nullable": false,
                   "many": false,
@@ -391,7 +391,7 @@
                   }
                 },
                 "tZ": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
@@ -404,7 +404,7 @@
                   }
                 },
                 "tMs": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
@@ -417,7 +417,7 @@
                   }
                 },
                 "tPlus": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-string@1",
                   "nullable": false,
                   "many": false,
@@ -430,7 +430,7 @@
                   }
                 },
                 "ttzZ": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false,
                   "many": false,
@@ -443,7 +443,7 @@
                   }
                 },
                 "ttzPlus": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false,
                   "many": false,
@@ -456,7 +456,7 @@
                   }
                 },
                 "bytes": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": false,
                   "many": false,

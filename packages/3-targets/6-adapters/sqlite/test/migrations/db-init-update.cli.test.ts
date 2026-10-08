@@ -26,6 +26,7 @@ import {
   sqliteTargetDescriptor,
   type TestDatabase,
 } from './fixtures/runner-fixtures';
+import { textCodecDescriptor } from './fixtures/sqlite-components';
 
 /**
  * End-to-end coverage for the CLI aggregate `db init` / `db update`
@@ -71,10 +72,10 @@ function buildExtensionContract(version: 1 | 2): Contract<SqlStorage> {
             table: {
               _ext_helper: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
                   ...(version === 2
                     ? {
-                        note: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: true },
+                        note: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: true },
                       }
                     : {}),
                 },
@@ -371,6 +372,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     }
 
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,
@@ -462,7 +468,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                    id: {
+                      dataType: 'sqlite/integer',
+                      codecId: 'sqlite/integer@1',
+                      nullable: false,
+                    },
                     email: {
                       nativeType: 'text',
                       codecId: HOOKED_CODEC,
@@ -488,7 +498,12 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
       familyId: 'sql',
       targetId: 'sqlite',
       version: '0.0.0-test',
-      types: { codecTypes: { controlPlaneHooks: { [HOOKED_CODEC]: hooks } } },
+      types: {
+        codecTypes: {
+          codecDescriptors: [textCodecDescriptor(HOOKED_CODEC)],
+          controlPlaneHooks: { [HOOKED_CODEC]: hooks },
+        },
+      },
     } as TargetBoundComponentDescriptor<'sql', 'sqlite'>;
 
     const result = await executeDbInit({
@@ -573,6 +588,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     // a no-op — proves the aggregate path's marker / hash check still
     // short-circuits when n=1.
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,
@@ -650,6 +670,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     }
 
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,

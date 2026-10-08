@@ -38,7 +38,7 @@ it(
         { id: 1, title: 'Bug', type: 'bug' },
         { id: 2, title: 'Feature', type: 'feature' },
       ]);
-      const selected = db.orm.public.Task.variant('Bug')
+      const selected = db.orm.public.Task.variant('bug')
         .where((task) => task.severity.eq('critical'))
         .select('id', 'title', 'type');
       const first = await db.prepare({ id: 'pg/int4@1' }, (p) =>

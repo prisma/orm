@@ -3,7 +3,7 @@ import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { entityRef, modelAttribute, optional, structBlock } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 const pslBlockDescriptors = {
@@ -57,7 +57,7 @@ function interpretWith(schema: string) {
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true } },
     authoringContributions: auditContributions,
   });

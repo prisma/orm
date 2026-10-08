@@ -29,7 +29,7 @@ const sourceContext: ContractSourceContext = {
   composedExtensionContracts: new Map(),
   authoringContributions: mongoStack.authoringContributions,
   codecLookup: mongoStack.codecLookup,
-  dataTypeLookup: mongoStack.dataTypeLookup,
+  dataTypes: mongoStack.dataTypes,
   controlMutationDefaults: mongoStack.controlMutationDefaults,
   resolvedInputs: [],
   capabilities: mongoStack.capabilities,

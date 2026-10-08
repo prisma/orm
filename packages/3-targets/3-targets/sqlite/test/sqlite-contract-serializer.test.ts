@@ -27,8 +27,8 @@ function makeContractWithTablesJson() {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'INTEGER', codecId: 'sqlite/integer@1', nullable: false },
-                  email: { nativeType: 'TEXT', codecId: 'sqlite/text@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+                  email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -103,12 +103,12 @@ describe('control-policy round-trip fidelity', () => {
                   user: {
                     columns: {
                       id: {
-                        nativeType: 'INTEGER',
+                        dataType: 'sqlite/integer',
                         codecId: 'sqlite/integer@1',
                         nullable: false,
                         control: 'observed',
                       },
-                      email: { nativeType: 'TEXT', codecId: 'sqlite/text@1', nullable: false },
+                      email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],

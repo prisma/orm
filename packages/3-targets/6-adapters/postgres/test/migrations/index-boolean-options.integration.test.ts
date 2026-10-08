@@ -49,8 +49,8 @@ function buildContract(): Contract<SqlStorage> {
             table: {
               doc: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  tags: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  tags: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -114,6 +114,8 @@ describe('boolean reloption round trip', { concurrent: false }, () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

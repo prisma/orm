@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
-  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresTarget,
@@ -12,13 +12,12 @@ import {
 
 const baseInput = {
   target: postgresTarget,
-  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
     type: postgresScalarAuthoringTypes,
     dataTypes: fixtureDataTypeSupport.entries,
   },
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureInterpreterTypes,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },

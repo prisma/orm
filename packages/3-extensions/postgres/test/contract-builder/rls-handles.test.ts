@@ -25,8 +25,8 @@ import {
   role,
 } from '../../src/exports/contract-builder';
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textColumn = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
+const textColumn = { codecId: 'pg/text@1' } as const;
 
 const Profile = model('Profile', {
   fields: {

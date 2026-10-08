@@ -4,9 +4,9 @@
  * D — Direct update without migrations: swap to an additive contract, dry-run
  *     to preview changes, apply, confirm noop on re-run, then verify.
  *
- * E — Destructive update with confirmation: swap to a contract that drops a
- *     column, test that --no-interactive blocks destructive changes, --json
- *     returns an error envelope, and --json -y auto-accepts and succeeds.
+ * E — Destructive update answered by a statement: swap to a contract that
+ *     drops a column, test that --no-interactive and --yes refuse it and name
+ *     the question, that --confirm answers nothing, and that --delete applies.
  *
  * Marker-aware violations (orphan markers, declared-but-unmigrated
  * extension spaces) are caught by the contract-space verifier — see
@@ -18,7 +18,6 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
-  consentTokenFor,
   type JourneyContext,
   parseJsonOutput,
   runContractEmit,
@@ -107,11 +106,12 @@ withTempDir(({ createTempDir }) => {
         const dryRun = await runDbUpdate(ctx, ['--dry-run']);
         expect(dryRun.exitCode, 'E.02: db update dry-run').toBe(0);
 
-        // E.03: db update --no-interactive — nobody to ask, so consent is required
+        // E.03: db update --no-interactive — nobody to ask, so the question is unanswered
         const noInteractive = await runDbUpdate(ctx, ['--json', '--no-interactive']);
         expect(noInteractive.exitCode, 'E.03: non-interactive destructive fails').toBe(2);
         expect(parseJsonOutput(noInteractive), 'E.03: consent error').toMatchObject({
           code: 'CLI.CONSENT_REQUIRED',
+          meta: { unanswered: [{ subject: 'User.email', verbs: ['rename', 'delete'] }] },
         });
 
         // E.04: db update --yes — --yes accepts declared defaults, never data loss
@@ -121,14 +121,25 @@ withTempDir(({ createTempDir }) => {
           code: 'CLI.CONSENT_REQUIRED',
         });
 
-        // E.05: db update --confirm <database> — the non-interactive grant
+        // E.05: db update --confirm <database> — answers no question
         const confirmed = await runDbUpdate(ctx, [
           '--json',
+          '--no-interactive',
           '--confirm',
-          consentTokenFor(db.connectionString),
+          'postgres',
         ]);
-        expect(confirmed.exitCode, 'E.05: --confirm applies').toBe(0);
-        expect(parseJsonOutput(confirmed), 'E.05: success envelope').toMatchObject({ ok: true });
+        expect(confirmed.exitCode, 'E.05: --confirm does not answer').toBe(2);
+        expect(parseJsonOutput(confirmed), 'E.05: consent error').toMatchObject({
+          code: 'CLI.CONSENT_REQUIRED',
+        });
+
+        // E.06: db update --delete User.email — the statement that answers it
+        const deleted = await runDbUpdate(ctx, ['--json', '--delete', 'User.email']);
+        expect(deleted.exitCode, 'E.06: --delete applies').toBe(0);
+        expect(parseJsonOutput(deleted), 'E.06: the delete is applied').toMatchObject({
+          ok: true,
+          appliedStatements: [{ verb: 'delete', description: 'delete field "User.email"' }],
+        });
       },
       timeouts.spinUpPpgDev,
     );

@@ -30,6 +30,12 @@ import {
 export interface ColumnDescriptor {
   readonly codecId: string;
   readonly nullable: boolean;
+  /** The column holds a list of the codec's values. */
+  readonly many?: true;
+}
+
+function codecRefOf(desc: ColumnDescriptor): { readonly codecId: string; readonly many?: true } {
+  return desc.many === true ? { codecId: desc.codecId, many: true } : { codecId: desc.codecId };
 }
 
 export type ColumnSchema = Record<string, ColumnDescriptor>;
@@ -501,8 +507,7 @@ function makeColumnProxy(
     isNull: () => new CfExpr(NullCheckExpr.isNull(ref)),
     isNotNull: () => new CfExpr(NullCheckExpr.isNotNull(ref)),
     toRef: () => ref,
-    toProjectionItem: (alias = columnName) =>
-      ProjectionItem.of(alias, ref, { codecId: desc.codecId }),
+    toProjectionItem: (alias = columnName) => ProjectionItem.of(alias, ref, codecRefOf(desc)),
   };
 }
 
@@ -534,14 +539,14 @@ function toInsertValue(value: unknown, desc: ColumnDescriptor): InsertValue {
       return expr;
     }
   }
-  return ParamRef.of(value, { codec: { codecId: desc.codecId } });
+  return ParamRef.of(value, { codec: codecRefOf(desc) });
 }
 
 function toSetExpression(value: unknown, desc: ColumnDescriptor): AnyExpression {
   if (isExpressionSource(value)) {
     return value.toExpr();
   }
-  return ParamRef.of(value, { codec: { codecId: desc.codecId } });
+  return ParamRef.of(value, { codec: codecRefOf(desc) });
 }
 
 function buildInsertRow<Schema extends ColumnSchema>(

@@ -42,8 +42,8 @@ const contractWithUuid: Contract<SqlStorage> = {
           table: {
             item: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                label: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                label: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -97,6 +97,8 @@ describe('pg/uuid@1 — end-to-end PGlite coverage', { concurrent: false }, () =
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

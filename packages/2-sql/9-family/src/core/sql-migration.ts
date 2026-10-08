@@ -34,7 +34,7 @@ export abstract class SqlMigration<
 > extends Migration<SqlMigrationPlanOperation<TDetails>, 'sql', TTargetId, Start, End> {
   /**
    * Sorted, deduplicated invariant ids declared by this migration's
-   * data-transform ops. Derived from `this.operations` so the field remains
+   * data-transform ops. Derived from a fresh read of the operations (`Migration.readOperations`) so the field remains
    * consistent with the operation list — planner-built plans (`db init`,
    * `db update`) yield `[]` because they emit no data-transform ops.
    *
@@ -43,7 +43,7 @@ export abstract class SqlMigration<
    * `MigrationPlan.providedInvariants?` stays optional.
    */
   get providedInvariants(): readonly string[] {
-    const ops = this.operations.filter(
+    const ops = Migration.readOperations(this).filter(
       (op): op is SqlMigrationPlanOperation<TDetails> => !isThenable(op),
     );
     return deriveProvidedInvariants(ops);

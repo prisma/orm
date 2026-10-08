@@ -47,6 +47,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
 import {
+  canonicalFormOf,
   createDataTypeLookup,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
@@ -325,14 +326,14 @@ export async function runSqliteCodecProjection(
 
   let canonical: JsonValue;
   try {
-    const toCanonicalForm = dataTypes.get(descriptor.dataType)?.toCanonicalForm;
+    const toCanonicalForm = canonicalFormOf(descriptor, dataTypes);
     canonical = toCanonicalForm === undefined ? projected : toCanonicalForm(projected);
   } catch (error) {
     return {
       ...base,
       failure: {
         kind: 'mismatch',
-        detail: `the data type ${descriptor.dataType} refuses the projected ${JSON.stringify(projected)}: ${describeError(error)}`,
+        detail: `the canonical form of ${descriptor.codecId} refuses the projected ${JSON.stringify(projected)}: ${describeError(error)}`,
       },
     };
   }

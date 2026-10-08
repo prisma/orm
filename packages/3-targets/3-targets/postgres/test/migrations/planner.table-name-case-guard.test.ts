@@ -15,7 +15,11 @@ import type {
   ExecuteRequestLowerer,
   SqlControlAdapter,
 } from '@internal/family-sql/control-adapter';
-import { APP_SPACE_ID, type ControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type ControlStack,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -23,13 +27,14 @@ import { describe, expect, it } from 'vitest';
 import { postgresResolveDefault } from '../../src/core/default-normalizer';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
+import { postgresRenderDefault } from '../../src/core/migrations/postgres-contract-to-schema';
 import { PostgresMigration } from '../../src/core/migrations/postgres-migration';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { type PostgresContract, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { postgresRenderDefault } from '../../src/exports/control';
+import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower(_ast, _ctx) {
@@ -59,11 +64,11 @@ function storageTable(
 ) {
   return new StorageTable({
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       ...(extraColumn === undefined
         ? {}
-        : { [extraColumn]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true } }),
+        : { [extraColumn]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true } }),
     },
     primaryKey: { columns: ['id'], name: `${tableName}_pkey` },
     foreignKeys: [],
@@ -155,7 +160,9 @@ function planFromLive(
       schema: liveSchema(previousTables, options.schemaName),
       policy: DESTRUCTIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -290,12 +297,15 @@ function planMigration(from: PostgresContract, to: PostgresContract) {
     contract: to,
     schema: contractToPostgresDatabaseSchemaNode(from, {
       annotationNamespace: 'pg',
+      ...postgresTypeLookups,
       renderDefault: postgresRenderDefault,
       resolveDefault: postgresResolveDefault,
     }),
     policy: DESTRUCTIVE_POLICY,
     fromContract: from,
-    frameworkComponents: [],
+    origin: planOriginOf(from),
+    statements: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -305,7 +315,10 @@ type ContractJson = { readonly storage: { readonly storageHash: string } };
 type RenameTableOptions = { readonly schema?: string; readonly table: string; readonly to: string };
 
 const stack = {
-  adapter: { create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'> },
+  adapter: {
+    ...postgresTypeComponents[0],
+    create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'>,
+  },
   target: { kind: 'target', familyId: 'sql', targetId: 'postgres' },
   extensions: [],
 } as unknown as ControlStack<'sql', 'postgres'>;
@@ -361,7 +374,12 @@ describe('the renameTable call the Postgres case guard suggests', () => {
 
     expect(result).toEqual({
       call: '...this.renameTable({ schema: "public", table: "userProfile", to: "UserProfile" })',
-      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
+      statements: [
+        ['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"'],
+        [
+          'ALTER TABLE "public"."UserProfile" RENAME CONSTRAINT "userProfile_pkey" TO "UserProfile_pkey"',
+        ],
+      ],
     });
   });
 

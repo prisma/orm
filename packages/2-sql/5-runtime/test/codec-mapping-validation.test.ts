@@ -8,6 +8,17 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import { validateContractCodecMappings } from '../src/codecs/validation';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'ext/missing@1': 'ext/missing',
+  'pg/text@1': 'pg/text',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 function registryWith(...codecIds: string[]): CodecDescriptorRegistry {
   const descriptors = new Map(
     codecIds.map((id) => [id, { codecId: id } as CodecDescriptor<unknown>]),
@@ -16,13 +27,12 @@ function registryWith(...codecIds: string[]): CodecDescriptorRegistry {
     descriptorFor: (codecId) => descriptors.get(codecId),
     codecRefForColumn: () => undefined,
     values: () => descriptors.values(),
-    byTargetType: () => [],
   };
 }
 
 function tableWithColumn(codecId: string) {
   return {
-    columns: { value: { nativeType: 'text', codecId } },
+    columns: { value: { dataType: dataTypeOf(codecId), codecId } },
     uniques: [],
     indexes: [],
     foreignKeys: [],

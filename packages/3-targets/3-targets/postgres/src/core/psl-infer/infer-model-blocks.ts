@@ -10,6 +10,7 @@ import {
 } from '@internal/family-sql/psl-build';
 import type { PslPrinterOptions, RelationField } from '@internal/family-sql/psl-infer';
 import { toFieldName, toModelName } from '@internal/family-sql/psl-infer';
+import { canonicalFormOf } from '@internal/framework-components/codec';
 import type {
   PslAttributeArgument,
   PslField,
@@ -18,7 +19,7 @@ import type {
   PslModelAttribute,
   PslTypeConstructorCall,
 } from '@internal/framework-components/psl-ast';
-import { escapePslString } from '@internal/sql-relational-core/ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -291,7 +292,7 @@ function buildScalarField(
     rawDefaultParser,
     {
       ...defaultMapping,
-      ...ifDefined('columnDataType', columnDefaults.dataTypeOf(resolution.pslType, isEnumColumn)),
+      ...ifDefined('columnCodec', columnDefaults.codecOf(resolution.pslType, isEnumColumn)),
       list: column.many === true,
     },
     (value) =>
@@ -403,9 +404,9 @@ function literalOrRawAttribute(
           kind: 'literal',
           value: defaultInCanonicalForm(
             columnDefault.value,
-            defaultMapping.columnDataType === undefined
+            defaultMapping.columnCodec === undefined || defaultMapping.dataTypes === undefined
               ? undefined
-              : defaultMapping.dataTypes?.get(defaultMapping.columnDataType)?.toCanonicalForm,
+              : canonicalFormOf(defaultMapping.columnCodec, defaultMapping.dataTypes.lookup),
             defaultMapping.list === true,
           ).value,
         }

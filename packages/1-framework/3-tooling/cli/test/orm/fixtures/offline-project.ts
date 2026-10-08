@@ -36,24 +36,68 @@ export async function removeOfflineProjects(): Promise<void> {
   }
 }
 
-export function contractJson(storageHash: string): Record<string, unknown> {
+/**
+ * An emitted contract. With `models`, it carries an application domain whose
+ * one namespace `app` declares those models, so statements can resolve.
+ */
+/** A model of a fixture contract: its name, or its name and the names of its scalar fields. */
+export type FixtureModel = string | { readonly name: string; readonly fields: readonly string[] };
+
+function modelEntry(model: FixtureModel): readonly [string, Record<string, unknown>] {
+  const name = typeof model === 'string' ? model : model.name;
+  const fields = typeof model === 'string' ? [] : model.fields;
+  return [
+    name,
+    {
+      fields: Object.fromEntries(
+        fields.map((field) => [
+          field,
+          { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        ]),
+      ),
+      relations: {},
+      storage: {},
+    },
+  ];
+}
+
+export function contractJson(
+  storageHash: string,
+  models?: readonly FixtureModel[],
+): Record<string, unknown> {
   return {
     storage: { storageHash, namespaces: {} },
     schemaVersion: '1.0.0',
     target: 'postgres',
     targetFamily: 'sql',
     models: {},
+    ...(models === undefined
+      ? {}
+      : {
+          domain: {
+            namespaces: {
+              app: {
+                models: Object.fromEntries(models.map(modelEntry)),
+              },
+            },
+          },
+        }),
   };
 }
 
 export async function createOfflineProject(options: {
   readonly storageHash: string;
+  readonly models?: readonly FixtureModel[];
 }): Promise<OfflineProject> {
   const dir = createTestProjectDir('orm-offline');
   created.push(dir);
   const contractPath = join(dir, 'output', 'contract.json');
   await mkdir(join(dir, 'output'), { recursive: true });
-  await writeFile(contractPath, JSON.stringify(contractJson(options.storageHash)), 'utf-8');
+  await writeFile(
+    contractPath,
+    JSON.stringify(contractJson(options.storageHash, options.models)),
+    'utf-8',
+  );
   await writeFile(
     join(dir, 'package.json'),
     JSON.stringify({ name: 'offline-fixture', dependencies: {} }),
@@ -118,9 +162,10 @@ export async function seedMigrationPackage(options: {
 export async function seedContractSnapshot(options: {
   readonly migrationsDir: string;
   readonly storageHash: string;
+  readonly models?: readonly FixtureModel[];
 }): Promise<void> {
   await writeContractSnapshot(options.migrationsDir, options.storageHash, {
-    contractJson: contractJson(options.storageHash),
+    contractJson: contractJson(options.storageHash, options.models),
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -141,32 +186,93 @@ export async function seedDbRef(options: {
  * the test asked for; `emptyMigration` renders the stub `migration new` writes.
  * With `throwOnOperations`, any scripted `operations` still resolve alongside
  * the rejection — mirroring a real plan where some operations resolve and a
- * placeholder op rejects.
+ * placeholder op rejects. `operationsByPlan` gives each successive `plan`
+ * call its own operations, such as an auto-baseline's baseline and delta legs.
  */
 export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
+  readonly operationsByPlan?: ReadonlyArray<readonly MigrationPlanOperation[]>;
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
   readonly throwOnOperations?: unknown;
   readonly throwOnPlan?: unknown;
+  /** Receives the statements of every `plan` call, in call order. */
+  readonly statementsReceived?: unknown[][];
+  /** Fails every `plan` call that is given statements, as a planner that refuses them does. */
+  readonly refuseStatements?: boolean;
+  /** What every `plan` call reports would lose data. */
+  readonly dataLoss?: readonly ScriptedDataLoss[];
+  /** What each successive `plan` call reports would lose data; overrides `dataLoss`. */
+  readonly dataLossByPlan?: ReadonlyArray<readonly ScriptedDataLoss[]>;
+  /** Reports `dataLoss` only from a `plan` call given no statements, as a rename removes a loss. */
+  readonly statementsResolveDataLoss?: boolean;
+  /** Reports `dataLoss` only from a `plan` call given fewer statements than this. */
+  readonly statementsResolvingDataLoss?: number;
+  /** Where in the operations the placeholder that `throwOnOperations` rejects sits; last by default. */
+  readonly placeholderAt?: number;
+  /** Makes the plan's `operations` accessor throw this synchronously. */
+  readonly operationsAccessorThrows?: unknown;
+}
+
+/** A `dataLoss` entry of a scripted plan: the position of an operation and what it loses. */
+export interface ScriptedDataLoss {
+  readonly operationIndex: number;
+  readonly subject:
+    | { readonly kind: 'model'; readonly namespaceId: string; readonly model: string }
+    | {
+        readonly kind: 'field';
+        readonly namespaceId: string;
+        readonly model: string;
+        readonly field: string;
+      }
+    | { readonly kind: 'storage'; readonly name: string };
 }
 
 function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
+  let planCalls = 0;
   return {
-    plan: () => {
+    plan: (options: { readonly statements: readonly unknown[] }) => {
+      script.statementsReceived?.push([...options.statements]);
       if (script.throwOnPlan !== undefined) {
         throw script.throwOnPlan;
+      }
+      const operations = script.operationsByPlan?.[planCalls] ?? script.operations;
+      const dataLoss =
+        (script.statementsResolveDataLoss === true && options.statements.length > 0) ||
+        options.statements.length >=
+          (script.statementsResolvingDataLoss ?? Number.POSITIVE_INFINITY)
+          ? []
+          : (script.dataLossByPlan?.[planCalls] ?? script.dataLoss ?? []);
+      planCalls += 1;
+      const [refused] = script.refuseStatements === true ? options.statements : [];
+      if (refused !== undefined) {
+        return {
+          kind: 'failure',
+          conflicts: [{ kind: 'statementRefused', summary: 'Refused', refusedStatement: refused }],
+        };
       }
       return script.conflicts === undefined
         ? {
             kind: 'success',
+            dataLoss,
+            accessWidening: [],
+            appliedStatements: options.statements.map((statement) => ({
+              statement,
+              operationIndexes: (operations ?? [ADDITIVE_OP]).map((_, index) => index),
+            })),
             plan: {
-              operations:
-                script.throwOnOperations === undefined
-                  ? (script.operations ?? [ADDITIVE_OP]).map((op) => Promise.resolve(op))
-                  : [
-                      ...(script.operations ?? []).map((op) => Promise.resolve(op)),
-                      Promise.reject(script.throwOnOperations),
-                    ],
+              get operations() {
+                if (script.operationsAccessorThrows !== undefined) {
+                  throw script.operationsAccessorThrows;
+                }
+                if (script.throwOnOperations === undefined) {
+                  return (operations ?? [ADDITIVE_OP]).map((op) => Promise.resolve(op));
+                }
+                const resolved = (operations ?? []).map((op) => Promise.resolve(op));
+                const placeholder = Promise.reject(script.throwOnOperations);
+                placeholder.catch(() => undefined);
+                const at = script.placeholderAt ?? resolved.length;
+                return [...resolved.slice(0, at), placeholder, ...resolved.slice(at)];
+              },
               renderTypeScript: () => '// planned migration\n',
             },
           }

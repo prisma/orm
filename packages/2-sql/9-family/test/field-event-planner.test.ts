@@ -1,117 +1,56 @@
-import { type Contract, profileHash, type StorageHashBase } from '@internal/contract/types';
-import type { MigrationPlanOperation, OpFactoryCall } from '@internal/framework-components/control';
+import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
-import { planFieldEventOperations } from '../src/core/migrations/field-event-planner';
-import type {
-  CodecControlHooks,
-  FieldEventContext,
-  SqlMigrationPlanOperation,
-} from '../src/core/migrations/types';
+import {
+  planFieldEventCalls,
+  planFieldEventOperations,
+} from '../src/core/migrations/field-event-planner';
+import type { CodecControlHooks } from '../src/core/migrations/types';
+import { col, contract, makeOp, recordingHook, table } from './field-event-fixtures';
 
-type Op = SqlMigrationPlanOperation<unknown>;
-
-function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
-  return {
-    nativeType: 'text',
-    nullable: false,
-    many: false,
-    ...overrides,
-  };
-}
-
-function table(columns: Record<string, StorageColumn>): StorageTable {
-  return {
-    columns,
-    uniques: [],
-    indexes: [],
-    foreignKeys: [],
-  };
-}
-
-function contract(tables: Record<string, StorageTable>): Contract<SqlStorage> {
-  const storage = new SqlStorage({
-    storageHash: 'test' as StorageHashBase<string>,
-    namespaces: {
-      [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
-        id: UNBOUND_NAMESPACE_ID,
-        entries: { table: tables },
+describe('planFieldEventCalls', () => {
+  it('returns each call with the column of the field event it was returned for', () => {
+    const fromContract = contract({
+      User: table({
+        id: col({ codecId: 'pg/text@1' }),
+        email: col({ codecId: 'cs/string@1' }),
+        bio: col({ codecId: 'cs/string@1' }),
       }),
-    },
+    });
+    const newContract = contract({ User: table({ id: col({ codecId: 'pg/text@1' }) }) });
+    const cs = recordingHook((call) => [makeOp(`drop-${call.fieldName}`)]);
+
+    const calls = planFieldEventCalls({
+      priorContract: fromContract,
+      newContract,
+      codecHooks: new Map<string, CodecControlHooks>([['cs/string@1', cs.hook]]),
+      tableRenames: [],
+      columnRenames: [],
+    });
+
+    expect(
+      calls.map(({ call, namespaceId, tableName, columnName }) => ({
+        factoryName: call.factoryName,
+        namespaceId,
+        tableName,
+        columnName,
+      })),
+    ).toEqual([
+      {
+        factoryName: 'drop-bio',
+        namespaceId: UNBOUND_NAMESPACE_ID,
+        tableName: 'User',
+        columnName: 'bio',
+      },
+      {
+        factoryName: 'drop-email',
+        namespaceId: UNBOUND_NAMESPACE_ID,
+        tableName: 'User',
+        columnName: 'email',
+      },
+    ]);
   });
-  return {
-    target: 'postgres',
-    targetFamily: 'sql',
-    profileHash: profileHash('test'),
-    storage,
-    domain: applicationDomainOf({ models: {} }),
-    roots: {},
-    capabilities: {},
-    extensions: {},
-    meta: {},
-  };
-}
-
-function makeOp(id: string, label = id): OpFactoryCall {
-  const op: Op = {
-    id,
-    label,
-    operationClass: 'additive',
-    invariantId: `inv:${id}`,
-    target: { id: 'postgres' },
-    precheck: [],
-    execute: [{ description: label, sql: `-- ${id}` }],
-    postcheck: [],
-  };
-  return {
-    factoryName: id,
-    operationClass: 'additive',
-    label,
-    renderTypeScript: () => `${id}()`,
-    importRequirements: () => [],
-    toOp: () => op,
-  };
-}
-
-interface RecordedCall {
-  readonly event: 'added' | 'dropped' | 'altered';
-  readonly namespaceId: string;
-  readonly tableName: string;
-  readonly fieldName: string;
-  readonly priorCodecId: string | undefined;
-  readonly newCodecId: string | undefined;
-  readonly priorTablePresent: boolean;
-  readonly newTablePresent: boolean;
-}
-
-function recordingHook(
-  opsPerCall: readonly OpFactoryCall[] | ((call: RecordedCall) => readonly OpFactoryCall[]),
-): {
-  readonly hook: CodecControlHooks;
-  readonly calls: readonly RecordedCall[];
-} {
-  const calls: RecordedCall[] = [];
-  const hook: CodecControlHooks = {
-    onFieldEvent: (event, ctx: FieldEventContext) => {
-      const recorded: RecordedCall = {
-        event,
-        namespaceId: ctx.namespaceId,
-        tableName: ctx.tableName,
-        fieldName: ctx.fieldName,
-        priorCodecId: ctx.priorField?.codecId,
-        newCodecId: ctx.newField?.codecId,
-        priorTablePresent: ctx.priorTable !== undefined,
-        newTablePresent: ctx.newTable !== undefined,
-      };
-      calls.push(recorded);
-      return typeof opsPerCall === 'function' ? opsPerCall(recorded) : opsPerCall;
-    },
-  };
-  return { hook, calls };
-}
+});
 
 describe('planFieldEventOperations', () => {
   it("fires 'added' once per added field on the new field's codec", () => {
@@ -132,6 +71,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls).toEqual([
@@ -169,6 +110,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls).toEqual([
@@ -203,6 +146,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls).toHaveLength(1);
@@ -231,6 +176,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['altered']);
@@ -256,6 +203,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['altered']);
@@ -281,6 +230,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(text.calls).toHaveLength(0);
@@ -300,6 +251,8 @@ describe('planFieldEventOperations', () => {
       priorContract: same,
       newContract: same,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls).toHaveLength(0);
@@ -321,6 +274,8 @@ describe('planFieldEventOperations', () => {
       priorContract: null,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['added']);
@@ -343,6 +298,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(ops).toHaveLength(0);
@@ -360,6 +317,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(ops).toHaveLength(0);
@@ -378,6 +337,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(ops.map((o) => (o.toOp() as MigrationPlanOperation).id)).toEqual([
@@ -400,6 +361,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls).toHaveLength(1);
@@ -427,6 +390,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['added', 'dropped', 'altered']);
@@ -457,6 +422,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => `${c.tableName}.${c.fieldName}`)).toEqual([
@@ -487,6 +454,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(cs.calls.map((c) => c.fieldName)).toEqual(['secret']);
@@ -517,8 +486,20 @@ describe('planFieldEventOperations', () => {
       ],
     ]);
 
-    const opsA = planFieldEventOperations({ priorContract: fromContract, newContract, codecHooks });
-    const opsB = planFieldEventOperations({ priorContract: fromContract, newContract, codecHooks });
+    const opsA = planFieldEventOperations({
+      priorContract: fromContract,
+      newContract,
+      codecHooks,
+      tableRenames: [],
+      columnRenames: [],
+    });
+    const opsB = planFieldEventOperations({
+      priorContract: fromContract,
+      newContract,
+      codecHooks,
+      tableRenames: [],
+      columnRenames: [],
+    });
 
     // Materialise each `OpFactoryCall` rather than `JSON.stringify`-ing
     // the array — function members like `toOp` / `renderTypeScript` get
@@ -552,6 +533,8 @@ describe('planFieldEventOperations', () => {
       priorContract: fromContract,
       newContract,
       codecHooks,
+      tableRenames: [],
+      columnRenames: [],
     });
 
     expect(ops.map((o) => (o.toOp() as MigrationPlanOperation).id)).toEqual([

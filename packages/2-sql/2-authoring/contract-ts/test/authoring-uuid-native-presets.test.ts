@@ -2,6 +2,7 @@ import type { AuthoringFieldNamespace } from '@internal/framework-components/aut
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
 import { defineContract } from '../src/contract-builder';
 import { unboundTables } from './unbound-tables';
@@ -22,7 +23,6 @@ function makeFamilyPack() {
           kind: 'fieldPreset',
           output: {
             codecId: 'sql/char@1',
-            nativeType: 'character',
             typeParams: { length: 36 },
           },
         },
@@ -31,7 +31,6 @@ function makeFamilyPack() {
             kind: 'fieldPreset',
             output: {
               codecId: 'sql/char@1',
-              nativeType: 'character',
               typeParams: { length: 36 },
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
               id: true,
@@ -41,7 +40,6 @@ function makeFamilyPack() {
             kind: 'fieldPreset',
             output: {
               codecId: 'sql/char@1',
-              nativeType: 'character',
               typeParams: { length: 36 },
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
               id: true,
@@ -67,7 +65,6 @@ function makePostgresPack() {
           kind: 'fieldPreset',
           output: {
             codecId: 'pg/uuid@1',
-            nativeType: 'uuid',
           },
         },
         id: {
@@ -75,7 +72,6 @@ function makePostgresPack() {
             kind: 'fieldPreset',
             output: {
               codecId: 'pg/uuid@1',
-              nativeType: 'uuid',
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
               id: true,
             },
@@ -84,7 +80,6 @@ function makePostgresPack() {
             kind: 'fieldPreset',
             output: {
               codecId: 'pg/uuid@1',
-              nativeType: 'uuid',
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
               id: true,
             },
@@ -100,6 +95,7 @@ describe('uuid native presets', () => {
     it('family id.uuidv4String and target id.uuidv4Native compose without a duplicate error', () => {
       expect(() =>
         createComposedAuthoringHelpers({
+          ...testTypeLookups,
           family: makeFamilyPack(),
           target: makePostgresPack(),
           extensions: {},
@@ -109,6 +105,7 @@ describe('uuid native presets', () => {
 
     it('composed helpers expose both uuidString and uuidNative at the top level', () => {
       const helpers = createComposedAuthoringHelpers({
+        ...testTypeLookups,
         family: makeFamilyPack(),
         target: makePostgresPack(),
         extensions: {},
@@ -120,6 +117,7 @@ describe('uuid native presets', () => {
 
     it('composed helpers expose all four id variants', () => {
       const helpers = createComposedAuthoringHelpers({
+        ...testTypeLookups,
         family: makeFamilyPack(),
         target: makePostgresPack(),
         extensions: {},
@@ -133,9 +131,10 @@ describe('uuid native presets', () => {
   });
 
   describe('emit-then-consume', () => {
-    it('uuidNative emits pg/uuid@1 with nativeType uuid in contract JSON', () => {
+    it('uuidNative emits pg/uuid@1 with data type pg/uuid in contract JSON', () => {
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: makeFamilyPack(),
           target: makePostgresPack(),
           createNamespace: createTestSqlNamespace,
@@ -155,12 +154,13 @@ describe('uuid native presets', () => {
       const col = unboundTables(json.storage)['widget']!.columns['externalId']!;
 
       expect(col.codecId).toBe('pg/uuid@1');
-      expect(col.nativeType).toBe('uuid');
+      expect(col.dataType).toBe('pg/uuid');
     });
 
     it('id.uuidv4Native emits pg/uuid@1 with uuidv4 onCreate generator in contract JSON', () => {
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: makeFamilyPack(),
           target: makePostgresPack(),
           createNamespace: createTestSqlNamespace,
@@ -180,7 +180,7 @@ describe('uuid native presets', () => {
       const col = unboundTables(json.storage)['widget']!.columns['id']!;
 
       expect(col.codecId).toBe('pg/uuid@1');
-      expect(col.nativeType).toBe('uuid');
+      expect(col.dataType).toBe('pg/uuid');
 
       const defaults = json.execution?.mutations.defaults ?? [];
       const idDefault = defaults.find((d) => d.ref.entry === 'widget' && d.ref.field === 'id');
@@ -190,6 +190,7 @@ describe('uuid native presets', () => {
     it('id.uuidv7Native emits pg/uuid@1 with uuidv7 onCreate generator in contract JSON', () => {
       const contract = defineContract(
         {
+          ...testTypeLookups,
           family: makeFamilyPack(),
           target: makePostgresPack(),
           createNamespace: createTestSqlNamespace,

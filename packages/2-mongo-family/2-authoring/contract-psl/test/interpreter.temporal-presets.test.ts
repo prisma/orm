@@ -5,12 +5,12 @@ import {
   temporalAuthoringPresets,
   temporalCodecPreset,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
-const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
+const mongoDate = { codecId: 'mongo/date@1' } as const;
 
 const authoringContributions: AuthoringContributions = {
   field: {
@@ -27,28 +27,6 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['Date', 'mongo/date@1'],
 ]);
 
-const targetTypes: Record<string, readonly string[]> = {
-  'mongo/objectId@1': ['objectId'],
-  'mongo/string@1': ['string'],
-  'mongo/date@1': ['date'],
-};
-
-const codecLookup: CodecLookupWithDescriptors = {
-  get(id: string) {
-    if (!targetTypes[id]) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypes[id],
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
-
 function interpret(
   schema: string,
   options?: {
@@ -58,8 +36,9 @@ function interpret(
 ) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    codecLookup: mongoCodecLookup,
+    dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),
   });
@@ -298,7 +277,7 @@ model Post {
               Sized: {
                 kind: 'typeConstructor',
                 args: [{ kind: 'number', name: 'length' }],
-                output: { codecId: 'mongo/string@1', nativeType: 'string' },
+                output: { codecId: 'mongo/string@1' },
               },
             },
           },

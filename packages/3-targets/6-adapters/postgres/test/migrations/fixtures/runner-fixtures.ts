@@ -20,6 +20,7 @@ import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { buildControlTableBootstrapQueries } from '@internal/target-postgres/contract-free';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import {
@@ -44,8 +45,8 @@ export const contract: Contract<SqlStorage> = {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [{ columns: ['email'] }],
@@ -168,7 +169,10 @@ export function createLedgerTestPlan<TDetails extends PostgresPlanTargetDetails>
   });
 }
 
-const postgresControlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const postgresControlAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const postgresControlLowererContext = { contract: {} as PostgresContract };
 
 export async function bootstrapPostgresControlSchema(driver: PostgresControlDriver): Promise<void> {

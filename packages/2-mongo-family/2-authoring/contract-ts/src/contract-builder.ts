@@ -45,7 +45,8 @@ import {
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { assembleDataTypes, enumRefusalOf } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -95,6 +96,23 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
     throw errorEnumCodecNotInPackStack({ codecId });
   }
   return codec.encodeJson(value);
+}
+
+function assertEnumCanUseCodec(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors,
+): void {
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
+  if (enumRefusal === undefined) return;
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
+    {
+      fix: 'Type the enum with another codec.',
+      meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
+    },
+  );
 }
 
 // `canonicalStringify` rejects non-plain objects so a `Map` or class
@@ -756,14 +774,17 @@ type MaybeValueObjectsSection<ValueObjects extends Record<string, AnyValueObject
         readonly valueObjects: ContractValueObjectsFromRecord<ValueObjects>;
       };
 
-// Project EnumTypeHandle to the namespace enum-entry shape.
-// Uses enumMembers (which carries Values[number] literals) rather than
-// ContractEnum.members (which uses JsonValue and erases literals).
+// Project EnumTypeHandle to the namespace enum-entry shape. A member is stored in its codec's
+// JSON form, which is the authored literal only when that literal is JSON (a bigint or a Date
+// member is stored as text), so a member whose value is not JSON is typed as `JsonValue`.
 type EnumHandleToEntry<Handle> =
   Handle extends EnumTypeHandle<string, infer Values, infer _Names, infer _MembersMap>
     ? {
         readonly codecId: string;
-        readonly members: readonly { readonly name: string; readonly value: Values[number] }[];
+        readonly members: readonly {
+          readonly name: string;
+          readonly value: Values[number] extends JsonValue ? Values[number] : JsonValue;
+        }[];
       }
     : never;
 
@@ -1188,7 +1209,12 @@ function composeMongoAuthoringHelpers<
     'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
-      ctx: { family: family.familyId, target: target.targetId },
+      ctx: {
+        family: family.familyId,
+        target: target.targetId,
+        codecLookup: extractCodecLookup(components),
+        dataTypeLookup: assembleDataTypes(components).lookup,
+      },
     }),
     field: composeMongoFieldHelpers(fieldNamespace),
     index,
@@ -2071,6 +2097,8 @@ function buildModels(
       );
     }
 
+    assertUniqueDiscriminatorValues(modelBuilder);
+
     const storage = {
       ...(modelBuilder.__collection ? { collection: modelBuilder.__collection } : {}),
       ...(modelBuilder.__storageRelations ? { relations: modelBuilder.__storageRelations } : {}),
@@ -2092,6 +2120,28 @@ function buildModels(
   }
 
   return builtModels;
+}
+
+function assertUniqueDiscriminatorValues(modelBuilder: AnyModelBuilder): void {
+  const variantsByValue = new Map<string, string>();
+  for (const [variantName, { value }] of Object.entries(modelBuilder.__variants ?? {})) {
+    const existingVariant = variantsByValue.get(value);
+    if (existingVariant !== undefined) {
+      throw contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `Discriminator value "${value}" is used by both "${existingVariant}" and "${variantName}" on base model "${modelBuilder.__name}".`,
+        {
+          meta: {
+            modelName: modelBuilder.__name,
+            value,
+            variants: [existingVariant, variantName],
+            reason: 'duplicate-discriminator-value',
+          },
+        },
+      );
+    }
+    variantsByValue.set(value, variantName);
+  }
 }
 
 function deriveRoots(
@@ -2515,6 +2565,7 @@ function buildContractFromDefinition<
   // The value set stores each enum's codec-encoded member values (mirroring SQL's build-contract).
   const storageValueSets: Record<string, MongoValueSetInput> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    assertEnumCanUseCodec(handle, codecLookup);
     storageValueSets[enumName] = {
       kind: 'valueSet',
       values: handle.values.map((v) => encodeEnumValue(v, handle.codecId, codecLookup)),

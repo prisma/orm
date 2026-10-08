@@ -1,11 +1,12 @@
 /**
- * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each object on the table whose name the planner derived from the old table name: unnamed primary keys, unique constraints and foreign keys, and wire-named indexes and checks. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. Explicitly named objects keep their names. A table missing from either contract is refused.
+ * `this.renameTable` in a hand-written Postgres migration. It reads the migration's start and end contracts and emits the table rename, then a rename of each primary key, unique constraint and foreign key whose name changes (stated, or derived from the table name), and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; a constraint the end contract also changes keeps its name. A table missing from either contract is refused.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
+import { Migration } from '@internal/migration-tools/migration';
 import {
   type CheckConstraintInput,
   type ForeignKeyInput,
@@ -22,6 +23,7 @@ import { PostgresContractSerializer } from '../../src/core/postgres-contract-ser
 import { PostgresRlsEnablement } from '../../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import { PostgresSchema } from '../../src/core/postgres-schema';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 import {
   contractOf,
   NICKNAME_CHECK,
@@ -35,7 +37,10 @@ type Op = SqlMigrationPlanOperation<PostgresPlanTargetDetails>;
 type ContractJson = { readonly storage: { readonly storageHash: string } };
 
 const stack = {
-  adapter: { create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'> },
+  adapter: {
+    ...postgresTypeComponents[0],
+    create: () => stubLowerer as unknown as SqlControlAdapter<'postgres'>,
+  },
   target: { kind: 'target', familyId: 'sql', targetId: 'postgres' },
   extensions: [],
 } as unknown as ControlStack<'sql', 'postgres'>;
@@ -44,16 +49,19 @@ function jsonOf(contract: Contract<SqlStorage>): ContractJson {
   return new PostgresContractSerializer().serializeContract(contract) as unknown as ContractJson;
 }
 
+type TableRenameOptions = { readonly schema?: string; readonly table: string; readonly to: string };
+
 function renameMigration(
   start: Contract<SqlStorage> | null,
   end: Contract<SqlStorage>,
-  rename: { readonly schema?: string; readonly table: string; readonly to: string },
-): { readonly operations: readonly Promise<Op>[] } {
+  rename: TableRenameOptions,
+  ...more: readonly TableRenameOptions[]
+): PostgresMigration & { readonly operations: readonly Promise<Op>[] } {
   const endJson = jsonOf(end);
   class WithoutStart extends PostgresMigration {
     override readonly endContractJson = endJson;
     override get operations(): readonly Promise<Op>[] {
-      return [...this.renameTable(rename)];
+      return [rename, ...more].flatMap((each) => this.renameTable(each));
     }
   }
   if (start === null) return new WithoutStart(stack);
@@ -136,8 +144,8 @@ function rlsContract(tableName: string, hashSeed: string): Contract<SqlStorage> 
             table: {
               [tableName]: new StorageTable({
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  tenant_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  tenant_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'], name: 'profile_pk' },
                 foreignKeys: [],
@@ -183,7 +191,7 @@ describe('PostgresMigration.renameTable', () => {
     ]);
   });
 
-  it('renames an unnamed constraint to the explicit name the end contract gives it', async () => {
+  it('renames an unnamed constraint to the name the end contract states', async () => {
     expect(
       await renameLabels(
         { uniques: [{ columns: ['email'] }] },
@@ -195,10 +203,10 @@ describe('PostgresMigration.renameTable', () => {
     ]);
   });
 
-  it('leaves a foreign key the end contract points at another table under its current name', async () => {
+  it('renames a foreign key the end contract points at another table, which the plan then replaces under its new name', async () => {
     const memberTable = () => ({
       member: new StorageTable({
-        columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+        columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
         primaryKey: { columns: ['id'], name: 'member_pk' },
         uniques: [],
         indexes: [],
@@ -228,7 +236,10 @@ describe('PostgresMigration.renameTable', () => {
       ),
     );
 
-    expect(ops.map((op) => op.label)).toEqual(['Rename table "userProfile" to "UserProfile"']);
+    expect(ops.map((op) => op.label)).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename foreign key "userProfile_accountId_fkey" to "profile_member_fk" on "UserProfile"',
+    ]);
   });
 
   it('leaves a primary key whose columns the end contract changes under its current name', async () => {
@@ -240,7 +251,7 @@ describe('PostgresMigration.renameTable', () => {
     ).toEqual(['Rename table "userProfile" to "UserProfile"']);
   });
 
-  it('leaves explicitly named objects alone', async () => {
+  it('leaves objects whose stated names stay the same alone', async () => {
     const spec: ProfileSpec = {
       primaryKey: { columns: ['id'], name: 'profile_pk' },
       uniques: [{ columns: ['email'], name: 'profile_email_unique' }],
@@ -251,6 +262,57 @@ describe('PostgresMigration.renameTable', () => {
     };
 
     expect(await renameLabels(spec)).toEqual(['Rename table "userProfile" to "UserProfile"']);
+  });
+
+  it('renames a named primary key and foreign key to the different names the end contract states', async () => {
+    expect(
+      await renameLabels(
+        {
+          primaryKey: { columns: ['id'], name: 'userProfile_primary' },
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'userProfile_account_link' },
+          ],
+        },
+        {
+          primaryKey: { columns: ['id'], name: 'UserProfile_primary' },
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'UserProfile_account_link' },
+          ],
+        },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename primary key "userProfile_primary" to "UserProfile_primary" on "UserProfile"',
+      'Rename foreign key "userProfile_account_link" to "UserProfile_account_link" on "UserProfile"',
+    ]);
+  });
+
+  it('renames a named foreign key to the derived name when the end contract stops stating one', async () => {
+    expect(
+      await renameLabels(
+        {
+          foreignKeys: (tableName) => [
+            { ...accountForeignKey(tableName), name: 'userProfile_account_link' },
+          ],
+        },
+        { foreignKeys: (tableName) => [accountForeignKey(tableName)] },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename foreign key "userProfile_account_link" to "UserProfile_accountId_fkey" on "UserProfile"',
+    ]);
+  });
+
+  it('renames a named unique constraint to the different name the end contract states', async () => {
+    expect(
+      await renameLabels(
+        { uniques: [{ columns: ['email'], name: 'userProfile_email_unique' }] },
+        { uniques: [{ columns: ['email'], name: 'UserProfile_email_unique' }] },
+      ),
+    ).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename unique constraint "userProfile_email_unique" to "UserProfile_email_unique" on "UserProfile"',
+    ]);
   });
 
   it('leaves a foreign key on another table that references the renamed table alone', async () => {
@@ -283,7 +345,7 @@ describe('PostgresMigration.renameTable', () => {
     ]);
   });
 
-  it('refuses a table the start contract does not have', async () => {
+  it('refuses a table that does not exist at this point of the migration', async () => {
     expect(
       () =>
         renameMigration(
@@ -294,7 +356,9 @@ describe('PostgresMigration.renameTable', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'MIGRATION.TABLE_RENAME_UNMATCHED',
-        message: expect.stringContaining('table "ghost" does not exist in the start contract'),
+        message: expect.stringContaining(
+          'table "ghost" does not exist at this point of the migration',
+        ),
       }),
     );
   });
@@ -315,10 +379,10 @@ describe('PostgresMigration.renameTable', () => {
     );
   });
 
-  it('refuses a new name the start contract already has', async () => {
+  it('refuses a new name that already exists at this point of the migration', async () => {
     const withBoth = contractOf('userProfile', {}, 'from', () => ({
       UserProfile: new StorageTable({
-        columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+        columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
         primaryKey: { columns: ['id'], name: 'other_pk' },
         uniques: [],
         indexes: [],
@@ -331,7 +395,7 @@ describe('PostgresMigration.renameTable', () => {
       expect.objectContaining({
         code: 'MIGRATION.TABLE_RENAME_UNMATCHED',
         message: expect.stringContaining(
-          'table "UserProfile" already exists in the start contract',
+          'table "UserProfile" already exists at this point of the migration',
         ),
       }),
     );
@@ -341,5 +405,74 @@ describe('PostgresMigration.renameTable', () => {
     expect(
       () => renameMigration(null, contractOf('UserProfile', {}, 'to'), RENAME).operations,
     ).toThrow(expect.objectContaining({ code: 'MIGRATION.TABLE_RENAME_UNMATCHED' }));
+  });
+
+  it('renames a table twice in one migration when the end contract declares both new names, each rename from where the last left it', async () => {
+    const intermediate = () => ({
+      UserProfile: new StorageTable({
+        columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
+        primaryKey: { columns: ['id'], name: 'profile_pk' },
+        uniques: [],
+        indexes: [],
+        foreignKeys: [],
+      }),
+    });
+    const ops = await Promise.all(
+      renameMigration(
+        contractOf('userProfile', {}, 'from'),
+        contractOf('Member', {}, 'to', intermediate),
+        { table: 'userProfile', to: 'UserProfile' },
+        { table: 'UserProfile', to: 'Member' },
+      ).operations,
+    );
+
+    expect(ops.map((op) => op.label)).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename table "UserProfile" to "Member"',
+    ]);
+  });
+
+  it('refuses a table an earlier rename in the migration took away', () => {
+    expect(
+      () =>
+        renameMigration(
+          contractOf('userProfile', {}, 'from'),
+          contractOf('UserProfile', {}, 'to'),
+          RENAME,
+          RENAME,
+        ).operations,
+    ).toThrow(
+      expect.objectContaining({
+        code: 'MIGRATION.TABLE_RENAME_UNMATCHED',
+        message: expect.stringContaining(
+          'table "userProfile" does not exist at this point of the migration',
+        ),
+      }),
+    );
+  });
+
+  it('reads the same operations again through Migration.readOperations', async () => {
+    const migration = renameMigration(
+      contractOf('userProfile', withObjects, 'from'),
+      contractOf('UserProfile', withObjects, 'to'),
+      RENAME,
+    );
+    const first = await Promise.all(Migration.readOperations(migration));
+    const second = await Promise.all(Migration.readOperations(migration));
+
+    expect(second).toEqual(first);
+  });
+
+  it('refuses a second direct read of the operations, since the table is already renamed', () => {
+    const migration = renameMigration(
+      contractOf('userProfile', {}, 'from'),
+      contractOf('UserProfile', {}, 'to'),
+      RENAME,
+    );
+    void migration.operations;
+
+    expect(() => migration.operations).toThrow(
+      expect.objectContaining({ code: 'MIGRATION.TABLE_RENAME_UNMATCHED' }),
+    );
   });
 });

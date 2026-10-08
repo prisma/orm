@@ -12,7 +12,7 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 interface GuardEntity {
@@ -100,7 +100,7 @@ function interpretWith(schema: string, contributions: AuthoringContributions) {
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true } },
     authoringContributions: contributions,
   });

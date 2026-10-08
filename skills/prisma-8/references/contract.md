@@ -180,7 +180,7 @@ export const contract = defineContract(
 );
 ```
 
-Then `pnpm prisma contract emit`. The `field.<scalar>()` helpers are only available inside the callback overload; outside the callback only `field.column(...)`, `field.generated(...)`, `field.namedType(...)` exist.
+Then `pnpm prisma contract emit`. On Postgres, the `field` that `@prisma/orm-postgres/contract-builder` exports has the same `field.<scalar>()` helpers as the callback's, without the helpers an extension adds (such as pgvector's); for those, use the callback's `field`. On other targets the `field.<scalar>()` helpers are only available inside the callback overload; outside the callback only `field.column(...)`, `field.generated(...)`, `field.namedType(...)` exist.
 
 For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The Mongo builder also exposes `index` and `valueObject`.
 
@@ -280,7 +280,7 @@ model User {
 }
 ```
 
-Emitted `contract.json` carries `domain.namespaces.<ns>.valueObjects.Address` with its field descriptors, and the `address` column lands as `codecId: "pg/jsonb@1"` / `nativeType: "jsonb"` in `storage`.
+Emitted `contract.json` carries `domain.namespaces.<ns>.valueObjects.Address` with its field descriptors, and the `address` column lands as `codecId: "pg/jsonb@1"` / `dataType: "pg/jsonb"` in `storage`.
 
 Canonical worked example: `examples/prisma-8-demo/src/prisma/contract.prisma`.
 
@@ -300,6 +300,12 @@ model User {
   kind user_type
 }
 ```
+
+**Reading members at runtime (`db.enums`).** `db.enums.<namespace>.<Enum>` on Postgres, and `db.enums.<Enum>` on SQLite and Mongo, holds each member as a query returns it: a `pg/int8@1` member written `Low = "1"` is `1n`, a date or timestamp member is the `Date` or Temporal value its codec reads, and a float member written `"NaN"` is `NaN`. So `db.enums.public.Level.members.Low === row.level` holds wherever `===` applies. `has(value)`, `nameOf(value)` and `ordinalOf(value)` find a value equal to a member: a string, number or bigint must be the member itself, and an object such as a `Date` must be of the member's kind and stored as the member is, so a date equal to a member matches although it is a different object. Text a codec would normalize, such as an upper-case uuid, is no member. Each read of a mutable member, such as a `Date` or a `Uint8Array`, returns a fresh copy, so changing it does not change the enum; a Temporal member is immutable and is the same value on every read. An enum's members are decoded when the enum is first read, so a client builds without `Temporal` even when its contract has a Temporal enum. `contract.d.ts` types each member as that same value. The rule behind this: the value a codec reads from the contract's stored form equals the value a query returns for it. The stored form itself can differ from the text the database prints, such as ISO 8601 for a timestamp.
+
+**Codecs an enum cannot use.** An enum compares values with its members, so a codec whose values cannot be compared for equality, or whose values read back never equal a member as the contract stores it, is refused, in TypeScript with `CONTRACT.ENUM_INVALID` and in PSL with `PSL_EXTENSION_INVALID_VALUE` at the `@@type`. The message says why and what to use instead. On Postgres: `pg/timestamp-string@1` and `pg/timestamptz-string@1` (use `pg/timestamp-temporal@1` or `pg/timestamptz-temporal@1`), `pg/json@1` (use `pg/jsonb@1`), and `pg/bytea@1` and `pg/tsquery@1`, for which no enum is possible (use a text enum).
+
+**Mongo enums.** A Mongo PSL contract's collection validator lists each enum's members in their stored JSON forms, so a PSL enum needs a codec whose BSON type JSON holds: string, int, double, bool, object or array, with finite numbers for doubles. An enum over `mongo/int64@1`, `mongo/date@1` or `mongo/objectId@1` is refused with `PSL_EXTENSION_INVALID_VALUE`. A TypeScript Mongo contract has no collection validator and accepts these enums.
 
 **Waiving enforcement (`@noCheck`).** A field can decline the generated CHECK constraints for its column: bare `@noCheck` waives every kind the column's shape derives; `@noCheck(membership)` and `@noCheck(elementNotNull)` waive one kind (`membership` is the enum value-set check; `elementNotNull` is the no-NULL-elements check every list column gets). The TS authoring equivalent is `.noCheck(...)` on the field builder. Declared types do not change: the field still types as the enum union, and a list still types with non-null elements — once enforcement is waived, runtime values may diverge from what the types claim. That divergence is the author's accepted risk, and it is scoped to the kinds actually waived: waiving `membership` stops the database rejecting out-of-set values, waiving `elementNotNull` stops it rejecting NULL elements. A list that waives only `membership` still rejects NULL elements. `contract infer` emits `@noCheck(elementNotNull)` automatically for list columns whose source database does not carry the generated check.
 
@@ -423,15 +429,15 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 
 1. **Forgetting to re-emit after an edit.** `contract.json` and `contract.d.ts` go stale; downstream typecheck and `migration plan` see the old shape. Re-emit, or install the Vite plugin (`references/build.md`).
 2. **Editing the emitted artefacts.** `contract.json` and `contract.d.ts` are emitted; edits there round-trip away on the next emit. Edit the source.
-3. **Wrong factory/import path for the TS builder.** `defineContract`, `field`, `model`, `rel` come from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). Outside the callback overload, the available field constructors are `field.column(...)`, `field.generated(...)`, `field.namedType(...)`.
+3. **Wrong factory/import path for the TS builder.** `defineContract`, `field`, `model`, `rel` come from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). On Postgres the imported `field` has the target's presets (`field.text()`, `field.temporal.timestamptz()`, `field.uuidString()`, …) but not an extension's; elsewhere, outside the callback overload, the available field constructors are `field.column(...)`, `field.generated(...)`, `field.namedType(...)`.
 4. **Reaching into internal packages from user code.** User-authored files (`prisma.config.ts`, `contract.ts`, `db.ts`, control clients) import only from `@internal/<target>/<subpath>` and `@internal/extension-<name>/<subpath>`. Imports from `@internal/cli/*`, `@internal/family-*`, `@internal/target-*`, `@internal/adapter-*`, `@internal/driver-*`, or `@internal/sql-contract-*` are framework-internal — the façade composes them for you. If a façade subpath you need is missing for your target, see *What Prisma 8 doesn't do yet* and route to `references/feedback.md`. The canonical worked examples are `examples/multi-extension-monorepo/app/prisma.config.ts` and `examples/prisma-8-postgis-demo/prisma.config.ts`.
 5. **Confusing the config `extensions` with the TS builder's `extensions`.** Same packs, two surfaces, one field name but two shapes: `ormConfig({ extensions: [pgvector] })` (array of *control* descriptors from `@internal/extension-<name>/control`) versus `defineContract({ extensions: { pgvector } })` (record of *pack* descriptors from `@internal/extension-<name>/pack`).
 6. **Writing a flat `prisma.config.ts`.** `export default defineConfig({ contract, extensions })` from the target config alone is the pre-rc.4 shape and fails with `CONFIG.VERSION_MARKER_MISSING`. Wrap it: `definePrismaConfig({ orm: ormConfig({...}) })`.
-7. **Renaming a field and expecting the planner to detect it.** Prisma 8 has no in-contract rename hint; the planner sees a destructive drop+add. Hand-edit `migration.ts` after `migration plan` (see `references/migrations.md`), or use the keep-then-drop two-migration pattern.
+7. **Renaming a model or field and expecting the planner to detect it.** The contract does not record renames, so the planner sees a destructive drop+add. State the rename on the command line with `--rename old:new` on `migration plan` or `db update` (see `references/migrations.md`); the planner then renames instead of dropping. Do not invent a rename attribute in the contract source.
 
 ## What Prisma 8 doesn't do yet
 
-- **In-contract rename hint.** No `@@rename(old: ..., new: ...)` or similar. Use the workarounds in *Common Pitfalls* #7. To request first-class rename, file via `references/feedback.md`.
+- **In-contract rename hint.** No `@@rename(old: ..., new: ...)` or similar; renames are stated with `--rename` on the command line, as in *Common Pitfalls* #7.
 - **Model validations.** No declarative `@validates(...)` surface. Validate in application code (arktype). To request declarative validations in the contract, file via `references/feedback.md`.
 - **Lifecycle callbacks** (`beforeSave`, `afterCreate`, etc.). Not supported. Use middleware (`references/runtime.md`) or app code. To request lifecycle callbacks, file via `references/feedback.md`.
 - **Soft delete / `paranoid: true`.** No built-in soft-delete column. Add a nullable `deletedAt DateTime?` and filter explicitly in queries (or in middleware). To request built-in soft delete, file via `references/feedback.md`.
@@ -454,8 +460,8 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 - [ ] Edited the contract source (`contract.prisma` or `contract.ts`), not an emitted artefact.
 - [ ] For new extension namespaces: added the package, imported its control descriptor (`@internal/extension-<name>/control`), added it to `extensions: [...]` in `ormConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
 - [ ] `prisma.config.ts` is the envelope form — `definePrismaConfig({ orm: ormConfig({...}) })` — not a flat `defineConfig({...})`.
-- [ ] For renames: hand-edited `migration.ts` after `migration plan` (or used the keep-then-drop two-migration pattern) — Prisma 8 has no rename hint today.
+- [ ] For renames: passed `--rename old:new` to `migration plan` or `db update` (or hand-edited `migration.ts` where statements do not cover the rename).
 - [ ] Ran `pnpm prisma contract emit` after the edit (or let the Vite plugin re-emit on save).
 - [ ] Confirmed `contract.json` and `contract.d.ts` updated next to the source.
 - [ ] Did **not** hand-edit `contract.json` / `contract.d.ts`.
-- [ ] Did **not** confabulate a missing feature (validations, callbacks, soft delete, scopes, in-contract rename hint) — referred the user to *What Prisma 8 doesn't do yet* + `references/feedback.md`.
+- [ ] Did **not** confabulate a missing feature (validations, callbacks, soft delete, scopes, a rename attribute in the contract source) — referred the user to *What Prisma 8 doesn't do yet* + `references/feedback.md`.

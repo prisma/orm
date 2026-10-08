@@ -37,9 +37,11 @@ export function buildSqliteStaticContext<TContract extends Contract<SqlStorage>>
     'Db<TContract> indexed by a literal key widens NsId to string; TableProxy is invariant in NsId via insert()/update() parameter positions, so the indexed-access type cannot be proven to match the literal-keyed Namespace without this cast'
   >(sqlNamespace);
   const raw: RawLane<TContract> = createRawLane<TContract>({ context, rawCodecInferer });
-  const enums = Object.freeze(buildNamespacedEnums<TContract>(context.contract.domain))[
-    UNBOUND_NAMESPACE_ID
-  ];
+  const enums = Object.freeze(
+    buildNamespacedEnums<TContract>(context.contract.domain, (codecId) =>
+      context.contractCodecs.forCodecRef({ codecId }),
+    ),
+  )[UNBOUND_NAMESPACE_ID];
   assertDefined(enums, 'the unbound namespace always exists on a sqlite builder output');
   return { context, contract: context.contract, enums, sql: sqlDb, raw };
 }

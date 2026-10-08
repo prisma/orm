@@ -7,8 +7,10 @@ import type {
   TargetBoundComponentDescriptor,
   TargetInstance,
 } from '../shared/framework-components';
+import type { MigrationPlanOperation } from './control-migration-types';
 import type {
-  SignDatabaseResult,
+  SpaceSignature,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from './control-operation-results';
@@ -24,6 +26,9 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
    * `pnpm lint:no-contract-cast`.
    */
   deserializeContract(contractJson: unknown): Contract;
+
+  /** The name the database knows the object an operation acts on by. */
+  storageNameOf(operation: MigrationPlanOperation): string;
 
   verify(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
@@ -51,12 +56,13 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
     readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, string>>;
   }): VerifyDatabaseSchemaResult;
 
-  sign(options: {
+  /**
+   * Writes the marker of every space in `spaces` with its contract's hashes. Does not check the schema: callers verify each space first. A space whose marker no longer holds `expected`, when it is read or when it is written, is reported as a conflict and its marker is left as it was. The SQL family takes the migration runner's marker lock, one lock for the whole marker table, and writes every marker in one transaction, so a failed write leaves every marker as it was. The Mongo family writes the markers one by one, so a failed write can leave earlier markers written; running the command again finishes the job.
+   */
+  signSpaces(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
-    readonly contract: unknown;
-    readonly contractPath: string;
-    readonly configPath?: string;
-  }): Promise<SignDatabaseResult>;
+    readonly spaces: readonly SpaceToSign[];
+  }): Promise<readonly SpaceSignature[]>;
 
   /**
    * Reads the contract marker for `space` from the database, returning

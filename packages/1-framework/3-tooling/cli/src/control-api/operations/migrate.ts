@@ -8,6 +8,7 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import {
@@ -16,9 +17,11 @@ import {
   buildFabricatedMigrationEdge,
   type ContractMarkerRecordLike,
   type ContractSpaceAggregate,
+  contractHashAtMarker,
   type PerSpacePlan,
   requireHeadRef,
   resolveRecordedPath,
+  spacesInApplyOrder,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
@@ -155,12 +158,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // to their own head ref.
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
   const perSpacePlans = new Map<string, PerSpacePlan>();
-  // Already-at-head empty-graph spaces (typically extensions whose
-  // head ref is the empty sentinel, or whose live marker already
-  // matches the target). Kept out of the runner schedule so we don't
-  // write spurious markers for greenfield extensions, but merged back
-  // into the success envelope so every loaded space is represented.
-  const atHeadResolutions = new Map<string, PerSpacePlan>();
+  // An empty-graph space already at its target, or a space with no marker
+  // whose plan moves nothing. The runner would write a marker for each, so
+  // they stay out of its schedule; the success envelope still lists them.
+  const plansKeptFromRunner = new Map<string, PerSpacePlan>();
   for (const space of allSpaces) {
     const isAppSpace = space.spaceId === aggregate.app.spaceId;
     // The aggregate passed the integrity gate, so every space's head ref
@@ -177,14 +178,11 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       refInvariants: spaceRefInvariants,
       liveMarker,
       ...(isAppSpace ? { refName } : {}),
+      storageNameOf: (operation) => familyInstance.storageNameOf(operation),
     });
 
     if (outcome.kind === 'at-head') {
-      // Empty-graph space whose live marker already matches the target.
-      // Kept out of the runner schedule so we don't write spurious markers
-      // for greenfield extensions, but merged back into the success envelope
-      // so every loaded space is represented.
-      atHeadResolutions.set(space.spaceId, outcome.plan);
+      plansKeptFromRunner.set(space.spaceId, outcome.plan);
       continue;
     }
     if (outcome.kind === 'never-planned') {
@@ -230,27 +228,29 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       });
     }
 
-    perSpacePlans.set(space.spaceId, outcome.plan);
+    if (leavesUnmarkedSpaceUntouched(outcome.plan)) {
+      plansKeptFromRunner.set(space.spaceId, outcome.plan);
+    } else {
+      perSpacePlans.set(space.spaceId, outcome.plan);
+    }
   }
 
-  const canonicalOrder = [...aggregate.extensions.map((m) => m.spaceId), aggregate.app.spaceId];
+  const canonicalOrder = spacesInApplyOrder(aggregate).map((space) => space.spaceId);
   const applyOrder = canonicalOrder.filter((spaceId) => perSpacePlans.has(spaceId));
 
-  // Short-circuit: nothing pending across any space (no runner-bound
-  // plans). Surfaces every loaded space — including at-head empty-
-  // graph extensions — in `perSpace[]` so the result reflects the
-  // full aggregate, not just the spaces the runner would have touched.
-  // A zero-op plan still counts as pending when it advances a marker
-  // (declared-state resolution for an all-external extension space).
+  // Short-circuit when no space has work. `perSpace[]` still lists every
+  // loaded space, including those kept from the runner. A zero-op plan
+  // counts as work when it advances a marker (declared-state resolution for
+  // an all-external extension space).
   const hasPendingWork = applyOrder.some((spaceId) => {
     const entry = perSpacePlans.get(spaceId);
     return entry !== undefined && planRequiresExecution(entry);
   });
   if (!hasPendingWork) {
     const ordered = canonicalOrder
-      .filter((spaceId) => perSpacePlans.has(spaceId) || atHeadResolutions.has(spaceId))
+      .filter((spaceId) => perSpacePlans.has(spaceId) || plansKeptFromRunner.has(spaceId))
       .map((spaceId) => {
-        const entry = perSpacePlans.get(spaceId) ?? atHeadResolutions.get(spaceId);
+        const entry = perSpacePlans.get(spaceId) ?? plansKeptFromRunner.get(spaceId);
         if (entry === undefined) {
           throw new InternalError(`Unreachable: missing per-space plan for "${spaceId}"`);
         }
@@ -300,17 +300,17 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     return notOk(failure);
   }
 
-  // Merge at-head zero-op resolutions back into the canonical order
-  // so the success envelope surfaces every loaded space, not just
-  // those the runner executed.
+  // Merge the plans kept from the runner back into the canonical order so
+  // the success envelope lists every loaded space, not just those the runner
+  // executed.
   const orderedAll = canonicalOrder
-    .filter((spaceId) => perSpacePlans.has(spaceId) || atHeadResolutions.has(spaceId))
+    .filter((spaceId) => perSpacePlans.has(spaceId) || plansKeptFromRunner.has(spaceId))
     .map((spaceId) => {
       if (perSpacePlans.has(spaceId)) {
         const fromRunner = applied.value.orderedResolutions.find((r) => r.spaceId === spaceId);
         if (fromRunner !== undefined) return fromRunner;
       }
-      const entry = atHeadResolutions.get(spaceId);
+      const entry = plansKeptFromRunner.get(spaceId);
       if (entry === undefined) {
         throw new InternalError(`Unreachable: missing per-space plan for "${spaceId}"`);
       }
@@ -389,6 +389,7 @@ export function planSpacePath({
   refInvariants,
   liveMarker,
   refName,
+  storageNameOf,
 }: {
   readonly space: AggregateContractSpace;
   readonly aggregate: Pick<ContractSpaceAggregate, 'targetId' | 'app'>;
@@ -396,6 +397,7 @@ export function planSpacePath({
   readonly refInvariants: readonly string[] | undefined;
   readonly liveMarker: ContractMarkerRecordLike | null;
   readonly refName?: string;
+  readonly storageNameOf: (operation: MigrationPlanOperation) => string;
 }): SpacePathOutcome {
   const isAppSpace = space.spaceId === aggregate.app.spaceId;
   const headRef = requireHeadRef(space);
@@ -461,6 +463,7 @@ export function planSpacePath({
     space: targetSpace,
     currentMarker: liveMarker,
     ...(isAppSpace && refName !== undefined ? { refName } : {}),
+    storageNameOf,
   });
 
   if (walked.kind === 'unreachable') {
@@ -510,6 +513,9 @@ function buildAtHeadResolution(args: {
     displayOps: [],
     destinationContract: space.contract(),
     strategy: 'declared-state',
+    appliedStatements: [],
+    dataLoss: [],
+    accessWidening: [],
     migrationEdges: [
       buildFabricatedMigrationEdge({
         currentMarkerStorageHash: liveMarker?.storageHash,
@@ -520,6 +526,11 @@ function buildAtHeadResolution(args: {
   };
 }
 
+/** Handing this plan to the runner would write a marker the database never had. */
+function leavesUnmarkedSpaceUntouched(entry: PerSpacePlan): boolean {
+  return !entry.plan.origin && !planRequiresExecution(entry);
+}
+
 /**
  * A plan needs the runner when it executes operations or advances the
  * space's marker (a declared-state resolution has zero operations but a
@@ -527,7 +538,7 @@ function buildAtHeadResolution(args: {
  */
 function planRequiresExecution(entry: PerSpacePlan): boolean {
   if (entry.plan.operations.length > 0) return true;
-  return entry.plan.origin?.storageHash !== entry.plan.destination.storageHash;
+  return contractHashAtMarker(entry.plan.origin) !== entry.plan.destination.storageHash;
 }
 
 interface BuildSuccessArgs {

@@ -1,5 +1,6 @@
-import type { DataType } from '@internal/framework-components/codec';
+import { canonicalFormOf, type DataType } from '@internal/framework-components/codec';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import {
   pgDate,
@@ -13,8 +14,7 @@ import {
   buildSetDefaultColumn,
   renderColumnDdl,
 } from '../../src/core/migrations/column-ddl-rendering';
-
-const noHooks = new Map();
+import { postgresTypeLookups as types } from '../postgres-type-lookups';
 
 function column(
   nativeType: string,
@@ -23,6 +23,7 @@ function column(
   value: string | readonly (string | null)[],
 ): SqlColumnIR {
   const many = Array.isArray(value);
+  const codec = types.codecLookup.descriptorFor(codecId);
   return new SqlColumnIR({
     name: 'v',
     nativeType,
@@ -33,6 +34,7 @@ function column(
     codecRef: { codecId, ...(many ? { many: true } : {}) },
     codecBaseNativeType: nativeType,
     dataType,
+    ...ifDefined('toCanonicalForm', codec && canonicalFormOf(codec, types.dataTypeLookup)),
   });
 }
 
@@ -104,8 +106,8 @@ describe('a date or time default written by the planner', () => {
     (nativeType, codecId, dataType, written, canonical) => {
       const node = column(nativeType, codecId, dataType, written);
       expect({
-        createTable: renderColumnDdl('v', node, noHooks).default,
-        setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks)?.default,
+        createTable: renderColumnDdl('v', node, types).default,
+        setDefault: buildSetDefaultColumn('v', defaultNode(node), types)?.default,
       }).toEqual({
         createTable: { kind: 'literal', value: canonical },
         setDefault: { kind: 'literal', value: canonical },
@@ -126,8 +128,8 @@ describe('a date or time default written by the planner', () => {
       dataType: pgTimestamptz,
     });
     expect({
-      createTable: renderColumnDdl('v', node, noHooks).default,
-      setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks)?.default,
+      createTable: renderColumnDdl('v', node, types).default,
+      setDefault: buildSetDefaultColumn('v', defaultNode(node), types)?.default,
     }).toEqual({
       createTable: { kind: 'literal', value: null },
       setDefault: { kind: 'literal', value: null },
@@ -145,8 +147,8 @@ describe('a date or time default written by the planner', () => {
       value: ['2024-01-01T00:00:00Z', null, '-000043-03-15T00:00:00Z'],
     };
     expect({
-      createTable: renderColumnDdl('v', node, noHooks).default,
-      setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks),
+      createTable: renderColumnDdl('v', node, types).default,
+      setDefault: buildSetDefaultColumn('v', defaultNode(node), types),
     }).toEqual({
       createTable: canonical,
       setDefault: expect.objectContaining({ type: 'timestamptz[]', default: canonical }),
@@ -165,7 +167,7 @@ describe('a date or time default written by the planner', () => {
       message:
         'Column "v": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.',
     });
-    expect(() => renderColumnDdl('v', node, noHooks)).toThrow(refusal);
-    expect(() => buildSetDefaultColumn('v', defaultNode(node), noHooks)).toThrow(refusal);
+    expect(() => renderColumnDdl('v', node, types)).toThrow(refusal);
+    expect(() => buildSetDefaultColumn('v', defaultNode(node), types)).toThrow(refusal);
   });
 });

@@ -20,7 +20,7 @@ import { notOk, ok } from '@internal/utils/result';
 import { mongoTargetDescriptorMeta } from '../descriptor-meta';
 import type { MongoTargetContract } from '../mongo-target-contract';
 import { MongoTargetContractSerializer } from '../mongo-target-contract-serializer';
-import { MongoMigrationPlanner } from './mongo-planner';
+import { keepDataByHand, MongoMigrationPlanner } from './mongo-planner';
 import { MongoMigrationRunner, type MongoMigrationRunnerExecuteOptions } from './mongo-runner';
 import { MongoTargetSchemaVerifier } from './mongo-target-schema-verifier';
 import { entityNamesDeclaredBy, scopeVerifyResultToSpace } from './scope-verify-result';
@@ -42,6 +42,7 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
   contractSerializer: new MongoTargetContractSerializer(),
   schemaVerifier: new MongoTargetSchemaVerifier(),
   migrations: {
+    renameStatements: { refused: true, keepDataByHand },
     createPlanner(_adapter: MongoControlAdapter<'mongo'>) {
       return new MongoMigrationPlanner();
     },

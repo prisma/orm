@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import sqliteControlDriverDescriptor, { SqliteControlDriver } from '../src/exports/control';
 
@@ -71,5 +72,39 @@ describe('SqliteControlDriverDescriptor', () => {
     const result = await driver.query<{ foreign_keys: number }>('PRAGMA foreign_keys');
     expect(result.rows[0]?.foreign_keys).toBe(1);
     await driver.close();
+  });
+
+  it('waits for another connection to release the write lock instead of failing at once', async () => {
+    const setup = await sqliteControlDriverDescriptor.create(testPath);
+    await setup.query('CREATE TABLE t(id INTEGER PRIMARY KEY)');
+    await setup.close();
+    const holder = new Worker(
+      `
+        const { DatabaseSync } = require('node:sqlite');
+        const { parentPort, workerData } = require('node:worker_threads');
+        const db = new DatabaseSync(workerData.path);
+        db.exec('BEGIN EXCLUSIVE');
+        db.exec('INSERT INTO t VALUES (1)');
+        parentPort.postMessage('locked');
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+        db.exec('COMMIT');
+        db.close();
+      `,
+      { eval: true, workerData: { path: testPath } },
+    );
+    try {
+      await new Promise((resolve) => holder.once('message', resolve));
+      const driver = await sqliteControlDriverDescriptor.create(testPath);
+
+      await driver.query('BEGIN IMMEDIATE');
+      await driver.query('INSERT INTO t VALUES (2)');
+      await driver.query('COMMIT');
+
+      const result = await driver.query<{ n: number }>('SELECT count(*) AS n FROM t');
+      expect(result.rows[0]?.n).toBe(2);
+      await driver.close();
+    } finally {
+      await holder.terminate();
+    }
   });
 });

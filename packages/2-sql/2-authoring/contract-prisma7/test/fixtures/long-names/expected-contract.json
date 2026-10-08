@@ -301,7 +301,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "40c7273dadf53f2f415c2a8199295cc80705b6f10cd7f96ce607ad50b5cf4aea",
+    "storageHash": "772fd3c323de4abfe207848b2f82489ed298f5557edde59ea97cad82c74de7db",
     "namespaces": {
       "public": {
         "id": "public",
@@ -311,25 +311,25 @@
             "AVeryLongModelNameThatKeepsGoingAndGoingForever": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
                 },
                 "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
                 },
                 "short": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
@@ -361,13 +361,13 @@
             "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
@@ -389,7 +389,7 @@
             "AVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -405,7 +405,7 @@
             "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -421,13 +421,13 @@
             "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "col": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
@@ -449,13 +449,13 @@
             "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
@@ -481,6 +481,7 @@
                     "tableName": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX",
                     "columns": ["id"]
                   },
+                  "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnoth_A_fkey",
                   "onDelete": "cascade",
                   "onUpdate": "cascade"
                 },
@@ -495,12 +496,14 @@
                     "tableName": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing",
                     "columns": ["id"]
                   },
+                  "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnoth_B_fkey",
                   "onDelete": "cascade",
                   "onUpdate": "cascade"
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnot_AB_pkey"
               }
             }
           }

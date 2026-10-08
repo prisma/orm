@@ -8,6 +8,7 @@
 
 import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import {
   AddColumnCall,
   CreateSchemaCall,
@@ -17,7 +18,10 @@ import {
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 
 describe('Postgres call classes - construction + toOp parity', () => {
   it('CreateTableCall freezes, labels from the table name, and lowers to a createTable op', async () => {
@@ -38,14 +42,14 @@ describe('Postgres call classes - construction + toOp parity', () => {
     });
   });
 
-  it('DataTransformCall carries its slot names and a caller-supplied operationClass; toOp throws MIGRATION.UNFILLED_PLACEHOLDER', () => {
+  it('DataTransformCall carries its slot names and a caller-supplied operationClass; toOp rejects with MIGRATION.UNFILLED_PLACEHOLDER', async () => {
     const call = new DataTransformCall('Backfill', 'slot-check', 'slot-run', 'widening');
 
     expect(call.checkSlot).toBe('slot-check');
     expect(call.runSlot).toBe('slot-run');
     expect(call.operationClass).toBe('widening');
 
-    expect(() => call.toOp()).toThrow(/Unfilled migration placeholder/);
+    await expect(call.toOp()).rejects.toThrow(/Unfilled migration placeholder/);
   });
 
   it('CreateTableCall.toOp produces byte-identical SQL for a composite-PK table', async () => {

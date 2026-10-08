@@ -5,7 +5,7 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -23,7 +23,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -32,7 +31,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
     },
   },
@@ -41,7 +39,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
     output: {
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -61,7 +58,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,
@@ -90,7 +87,6 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
     });
   });
 
@@ -112,7 +108,6 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: 191 },
     });
   });
@@ -140,7 +135,7 @@ model Doc {
     expect(types?.['Slug']).toEqual({
       kind: 'codec-instance',
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
+      dataType: 'pg/varchar',
       typeParams: { length: 191 },
     });
   });

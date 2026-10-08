@@ -1,10 +1,10 @@
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
-  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
   temporalCodecPresetMirrors,
@@ -25,12 +25,13 @@ export const interpretPostgresSchema = (
     | 'composedExtensionContracts'
     | 'createNamespace'
     | 'capabilities'
-    | 'dataTypeLookup'
+    | 'dataTypes'
+    | 'codecLookup'
   > &
     Partial<
       Pick<
         InterpretPslDocumentToSqlContractInput,
-        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypeLookup'
+        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypes' | 'codecLookup'
       >
     >,
 ) => {
@@ -38,20 +39,19 @@ export const interpretPostgresSchema = (
     input;
   return interpretSqlContract(schema, {
     target: postgresTarget,
-    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
-    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
     ...interpreterInput,
-    dataTypeLookup: interpreterInput.dataTypeLookup ?? fixtureDataTypeSupport.lookup,
-    authoringContributions: {
-      ...interpreterInput.authoringContributions,
-      dataTypes: {
+    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
+    codecLookup: interpreterInput.codecLookup ?? fixtureTypeLookups.codecLookup,
+    dataTypes: interpreterInput.dataTypes ?? {
+      entries: {
         ...fixtureDataTypeSupport.entries,
         ...interpreterInput.authoringContributions?.dataTypes,
       },
+      lookup: fixtureTypeLookups.dataTypeLookup,
     },
   });
 };

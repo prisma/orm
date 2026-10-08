@@ -4,6 +4,7 @@ import type { MigrationPlanOperation, OpFactoryCall } from '@internal/framework-
 import { blindCast } from '@internal/utils/casts';
 import { isThenable } from '@internal/utils/promise';
 import { sqliteError } from '../errors';
+import { isSqliteOpFactoryCall } from './op-factory-call';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
@@ -22,22 +23,36 @@ function assertSqliteOp(op: MigrationPlanOperation, callFactoryName: string): as
   }
 }
 
+function checkedOp(
+  opOrPromise: MigrationPlanOperation | Promise<MigrationPlanOperation>,
+  callFactoryName: string,
+): Op | Promise<Op> {
+  if (isThenable(opOrPromise)) {
+    const checked = opOrPromise.then((op) => {
+      assertSqliteOp(op, callFactoryName);
+      return op;
+    });
+    // A reader may take a plan's operations without awaiting each one, as with a placeholder's.
+    checked.catch(() => undefined);
+    return checked;
+  }
+  assertSqliteOp(opOrPromise, callFactoryName);
+  return opOrPromise;
+}
+
 export function renderOps(
   calls: readonly OpFactoryCall[],
   lowerer?: ExecuteRequestLowerer,
 ): (Op | Promise<Op>)[] {
-  return calls.map((c) => {
-    const opOrPromise = blindCast<
-      { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
-      'SQLite OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the SQLite target overrides with this extended signature'
-    >(c).toOp(lowerer);
-    if (isThenable(opOrPromise)) {
-      return opOrPromise.then((op) => {
-        assertSqliteOp(op, c.factoryName);
-        return op;
-      });
-    }
-    assertSqliteOp(opOrPromise, c.factoryName);
-    return opOrPromise;
+  return calls.flatMap((c) => {
+    const lowered = isSqliteOpFactoryCall(c)
+      ? c.toOps(lowerer)
+      : [
+          blindCast<
+            { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
+            'SQLite OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the SQLite target overrides with this extended signature'
+          >(c).toOp(lowerer),
+        ];
+    return lowered.map((opOrPromise) => checkedOp(opOrPromise, c.factoryName));
   });
 }

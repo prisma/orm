@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-postgres",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.16",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,9 +15,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.16",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.16",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.16",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
@@ -28,11 +28,11 @@
     "postgres-array": "2.0.0"
   },
   "devDependencies": {
-    "@internal/adapter-postgres": "workspace:8.0.0-rc.14",
-    "@internal/driver-postgres": "workspace:8.0.0-rc.14",
-    "@internal/target-postgres": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.16",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.16",
+    "@internal/target-postgres": "workspace:8.0.0-rc.16",
+    "@repo/tsconfig": "workspace:8.0.0-rc.16",
+    "@repo/tsdown": "workspace:8.0.0-rc.16",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -73,6 +73,7 @@
     "./target/errors": "./dist/target__errors.mjs",
     "./target/full-text": "./dist/target__full-text.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
+    "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",
     "./target/op-factory-call": "./dist/target__op-factory-call.mjs",

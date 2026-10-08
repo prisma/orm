@@ -19,7 +19,6 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   codecId: id,
   dataType: dataTypeId('demo/fixture'),
   traits: ['equality'],
-  targetTypes: ['string'],
   paramsSchema: undefined,
   isParameterized: false,
   factory: () => () =>
@@ -42,7 +41,7 @@ const mongoTargetPack = {
   types: { codecTypes: { codecDescriptors: [identityDescriptor('mongo/string@1')] } },
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
-const mongoString = { codecId: 'mongo/string@1' as const, nativeType: 'string' } as const;
+const mongoString = { codecId: 'mongo/string@1' as const } as const;
 
 describe('member()', () => {
   it('preserves name and value as literal types', () => {
@@ -85,9 +84,8 @@ describe('enumType() — Mongo binding', () => {
     expect(Role.ordinalOf(notAMember)).toBe(-1);
   });
 
-  it('stores codecId and nativeType', () => {
+  it('stores codecId', () => {
     expect(Role.codecId).toBe('mongo/string@1');
-    expect(Role.nativeType).toBe('string');
   });
 });
 
@@ -263,12 +261,11 @@ describe('defineContract() — enum declaration key mismatch', () => {
 });
 
 describe('defineContract() — codec-encoded value set', () => {
-  const upperCodec = { codecId: 'test/upper@1' as const, nativeType: 'string' } as const;
+  const upperCodec = { codecId: 'test/upper@1' as const } as const;
   const upperDescriptor: AnyCodecDescriptor = {
     codecId: 'test/upper@1',
     dataType: dataTypeId('test/upper'),
     traits: ['equality'],
-    targetTypes: ['string'],
     paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>
@@ -337,5 +334,39 @@ describe('defineContract() — codec-encoded value set', () => {
         models: { WithMissing },
       }),
     ).toThrow('test/upper@1');
+  });
+});
+
+describe('an enum whose codec does not declare the equality trait', () => {
+  it('is refused, saying so', () => {
+    const unequalCodec = { codecId: 'test/unequal@1' as const } as const;
+    const Shape = enumType('Shape', unequalCodec, member('Round', 'round'));
+    const target = {
+      ...mongoTargetPack,
+      types: {
+        codecTypes: {
+          codecDescriptors: [
+            identityDescriptor('mongo/string@1'),
+            { ...identityDescriptor('test/unequal@1'), traits: [] },
+          ],
+        },
+      },
+    } as const satisfies TargetPackRef<'mongo', 'mongo'>;
+    const WithShape = model('WithShape', {
+      collection: 'withShape',
+      fields: { _id: field.objectId(), shape: field.namedType(Shape) },
+    });
+
+    expect(() =>
+      defineContract({ family: mongoFamilyPack, target, enums: { Shape }, models: { WithShape } }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Shape"): an enum cannot use the codec test/unequal@1. The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
+        fix: 'Type the enum with another codec.',
+        meta: { enumName: 'Shape', codecId: 'test/unequal@1', reason: 'codec-not-for-enums' },
+      }),
+    );
   });
 });

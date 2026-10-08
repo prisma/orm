@@ -11,7 +11,7 @@ import {
   type ResolvedPackEntityHandle,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { AuthoredIndexMethod } from '@internal/sql-contract/index-naming';
-import type { StorageTypeInstance } from '@internal/sql-contract/types';
+import type { AuthoredStorageTypeInstance } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -75,15 +75,15 @@ type RuntimeModelSpec = {
 };
 
 type RuntimeCollection = {
-  readonly storageTypes: Record<string, StorageTypeInstance>;
+  readonly storageTypes: Record<string, AuthoredStorageTypeInstance>;
   readonly models: Record<string, RuntimeModel>;
   readonly modelSpecs: ReadonlyMap<string, RuntimeModelSpec>;
 };
 
 function buildStorageTypeReverseLookup(
-  storageTypes: Record<string, StorageTypeInstance>,
-): ReadonlyMap<StorageTypeInstance, string> {
-  const lookup = new Map<StorageTypeInstance, string>();
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
+): ReadonlyMap<AuthoredStorageTypeInstance, string> {
+  const lookup = new Map<AuthoredStorageTypeInstance, string>();
   for (const [key, instance] of Object.entries(storageTypes)) {
     lookup.set(instance, key);
   }
@@ -94,8 +94,8 @@ function resolveFieldDescriptor(
   modelName: string,
   fieldName: string,
   fieldState: FieldStateOf<ScalarFieldBuilder>,
-  storageTypes: Record<string, StorageTypeInstance>,
-  storageTypeReverseLookup: ReadonlyMap<StorageTypeInstance, string>,
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
+  storageTypeReverseLookup: ReadonlyMap<AuthoredStorageTypeInstance, string>,
 ): ColumnTypeDescriptor {
   if ('descriptor' in fieldState && fieldState.descriptor) {
     return fieldState.descriptor;
@@ -103,16 +103,13 @@ function resolveFieldDescriptor(
 
   if ('typeRef' in fieldState && fieldState.typeRef) {
     if (isEnumTypeHandle(fieldState.typeRef)) {
-      return {
-        codecId: fieldState.typeRef.codecId,
-        nativeType: fieldState.typeRef.nativeType,
-      };
+      return { codecId: fieldState.typeRef.codecId };
     }
 
     const typeRef =
       typeof fieldState.typeRef === 'string'
         ? fieldState.typeRef
-        : storageTypeReverseLookup.get(fieldState.typeRef as StorageTypeInstance);
+        : storageTypeReverseLookup.get(fieldState.typeRef as AuthoredStorageTypeInstance);
 
     if (!typeRef) {
       throw contractError(
@@ -131,11 +128,7 @@ function resolveFieldDescriptor(
       );
     }
 
-    return {
-      codecId: referencedType.codecId,
-      nativeType: referencedType.nativeType,
-      typeRef,
-    };
+    return { codecId: referencedType.codecId, typeRef };
   }
 
   throw contractError(
@@ -845,8 +838,8 @@ function resolveDeferredColumns(
 function resolveModelNode(
   spec: RuntimeModelSpec,
   allSpecs: ReadonlyMap<string, RuntimeModelSpec>,
-  storageTypes: Record<string, StorageTypeInstance>,
-  storageTypeReverseLookup: ReadonlyMap<StorageTypeInstance, string>,
+  storageTypes: Record<string, AuthoredStorageTypeInstance>,
+  storageTypeReverseLookup: ReadonlyMap<AuthoredStorageTypeInstance, string>,
   extensions?: Record<string, ExtensionPackRef<'sql', string>>,
 ): ModelNode {
   const fields: FieldNode[] = [];
@@ -969,12 +962,15 @@ function resolveModelNode(
  * `ContractInput`'s `Extensions` parameter defaults to `undefined`, but lowering
  * reads the extension-pack record at runtime, so the input is widened here.
  */
-type LoweringInput = Omit<ContractInput, 'extensions'> & {
+type LoweringInput = Omit<ContractInput, 'extensions' | 'codecLookup' | 'dataTypeLookup'> & {
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>> | undefined;
 };
 
 function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection {
-  const storageTypes = { ...(definition.types ?? {}) } as Record<string, StorageTypeInstance>;
+  const storageTypes = { ...(definition.types ?? {}) } as Record<
+    string,
+    AuthoredStorageTypeInstance
+  >;
   const models = { ...(definition.models ?? {}) } as Record<string, RuntimeModel>;
 
   emitTypedNamedTypeFallbackWarnings(models, storageTypes);

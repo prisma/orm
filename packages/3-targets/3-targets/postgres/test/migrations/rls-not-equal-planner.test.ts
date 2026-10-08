@@ -1,7 +1,7 @@
 /**
  * A `not-equal` policy issue — reachable once exact-named (prefix-absent)
  * policies compare by content — maps to drop + create: the drop is
- * destructive-gated, and without the destructive allowance the plan fails
+ * widening-gated, and without the widening allowance the plan fails
  * with the existing disallowed-call conflict instead of silently skipping
  * the drift.
  */
@@ -22,6 +22,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'profiles';
 const EXACT_NAME = 'Tenant members can read';
@@ -34,7 +35,7 @@ const stubLowerer: ExecuteRequestLowerer = {
 const ALL_CLASSES_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-const NO_DESTRUCTIVE_POLICY = { allowedOperationClasses: ['additive', 'widening'] as const };
+const ADDITIVE_ONLY_POLICY = { allowedOperationClasses: ['additive'] as const };
 
 function exactPolicy(using: string): PostgresRlsPolicy {
   return new PostgresRlsPolicy({
@@ -59,8 +60,8 @@ function buildContract(
       table: {
         [TABLE_NAME]: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            tenant_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            tenant_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
@@ -93,7 +94,7 @@ function buildContract(
 
 function actualSchema(
   livePolicy: PostgresRlsPolicy,
-  options?: { readonly extraColumn?: boolean },
+  options?: { readonly nullableTenantId?: boolean },
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
     namespaces: {
@@ -104,10 +105,11 @@ function actualSchema(
             name: TABLE_NAME,
             columns: {
               id: { name: 'id', nativeType: 'int4', nullable: false },
-              tenant_id: { name: 'tenant_id', nativeType: 'int4', nullable: false },
-              ...(options?.extraColumn
-                ? { stale: { name: 'stale', nativeType: 'int4', nullable: true } }
-                : {}),
+              tenant_id: {
+                name: 'tenant_id',
+                nativeType: 'int4',
+                nullable: options?.nullableTenantId === true,
+              },
             },
             primaryKey: { columns: ['id'] },
             foreignKeys: [],
@@ -148,7 +150,9 @@ function plan(
     schema,
     policy: { allowedOperationClasses: [...policy.allowedOperationClasses] },
     fromContract: null,
-    frameworkComponents: [],
+    origin: null,
+    statements: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -169,11 +173,25 @@ describe('not-equal policy issue (exact-mode content drift)', () => {
     ]);
   });
 
-  it('fails with the policy-incompatible conflict, naming the policy structurally, when destructive is not allowed', () => {
+  it('maps to drop + create under a policy that allows widening but not destructive', async () => {
     const contract = buildContract(exactPolicy('(tenant_id = 1)'));
     const schema = actualSchema(exactPolicy('(tenant_id = 2)'));
 
-    const result = plan(contract, schema, NO_DESTRUCTIVE_POLICY);
+    const result = plan(contract, schema, { allowedOperationClasses: ['additive', 'widening'] });
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    const ops = await Promise.all(result.plan.operations);
+    expect(ops.map((op) => op.id)).toEqual([
+      `rlsPolicy.public.${TABLE_NAME}.${EXACT_NAME}.drop`,
+      `rlsPolicy.public.${TABLE_NAME}.${EXACT_NAME}`,
+    ]);
+  });
+
+  it('fails with the policy-incompatible conflict, naming the policy structurally, when widening is not allowed', () => {
+    const contract = buildContract(exactPolicy('(tenant_id = 1)'));
+    const schema = actualSchema(exactPolicy('(tenant_id = 2)'));
+
+    const result = plan(contract, schema, ADDITIVE_ONLY_POLICY);
     expect(result.kind).toBe('failure');
     if (result.kind !== 'failure') return;
     expect(result.conflicts).toContainEqual(
@@ -202,13 +220,13 @@ describe('not-equal policy issue (exact-mode content drift)', () => {
 
   it('composes the policy conflict with relational conflicts in one failure', () => {
     const contract = buildContract(exactPolicy('(tenant_id = 1)'));
-    const schema = actualSchema(exactPolicy('(tenant_id = 2)'), { extraColumn: true });
+    const schema = actualSchema(exactPolicy('(tenant_id = 2)'), { nullableTenantId: true });
 
-    const result = plan(contract, schema, NO_DESTRUCTIVE_POLICY);
+    const result = plan(contract, schema, ADDITIVE_ONLY_POLICY);
     expect(result.kind).toBe('failure');
     if (result.kind !== 'failure') return;
     expect(result.conflicts).toContainEqual(
-      expect.objectContaining({ summary: expect.stringContaining('stale') }),
+      expect.objectContaining({ summary: expect.stringContaining('tenant_id') }),
     );
     expect(result.conflicts).toContainEqual(
       expect.objectContaining({
@@ -262,7 +280,7 @@ describe('not-equal policy under non-managed control policies', () => {
 
   it('a suppressed relational change and a suppressed policy replacement on one table are two distinguishable warnings', async () => {
     const contract = buildContract(exactPolicy('(tenant_id = 1)'), 'tolerated');
-    const schema = actualSchema(exactPolicy('(tenant_id = 2)'), { extraColumn: true });
+    const schema = actualSchema(exactPolicy('(tenant_id = 2)'), { nullableTenantId: true });
 
     const result = plan(contract, schema, ALL_CLASSES_POLICY);
     expect(result.kind).toBe('success');
@@ -276,11 +294,11 @@ describe('not-equal policy under non-managed control policies', () => {
     expect(new Set(summaries).size).toBe(2);
   });
 
-  it('tolerated drift without the destructive allowance is still a suppression, not a conflict', async () => {
+  it('tolerated drift without the widening allowance is still a suppression, not a conflict', async () => {
     const contract = buildContract(exactPolicy('(tenant_id = 1)'), 'tolerated');
     const schema = actualSchema(exactPolicy('(tenant_id = 2)'));
 
-    const result = plan(contract, schema, NO_DESTRUCTIVE_POLICY);
+    const result = plan(contract, schema, ADDITIVE_ONLY_POLICY);
     expect(result.kind).toBe('success');
     if (result.kind !== 'success') return;
     const ops = await Promise.all(result.plan.operations);

@@ -61,7 +61,7 @@ Codecs already own three of the four representations of a type:
 |---|---|---|
 | Wire format (driver ↔ database) | Codec | `encode` / `decode` |
 | Contract JSON (serialized values) | Codec | `encodeJson` / `decodeJson` ([ADR 184](ADR%20184%20-%20Codec-owned%20value%20serialization.md)) |
-| DDL string (migration SQL) | Target-layer codec hook | `expandNativeType` ([ADR 171](ADR%20171%20-%20Parameterized%20native%20types%20in%20contracts.md)) |
+| DDL string (migration SQL) | Data type the codec represents | its written texts ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which superseded the `expandNativeType` hook of ADR 171) |
 | **TypeScript type in contract.d.ts** | **Scattered** | See below |
 
 The fourth representation — the TypeScript output type in `contract.d.ts` — is currently spread across three systems: a `CodecTypes` type map (handles non-parameterized codecs), a `parameterized` renderer map in descriptor metadata (produces type expression strings at emit time), and a `parameterizedOutput` function type on `CodecTypes` (handles the no-emit path). These systems don't share an interface or abstraction.
@@ -128,7 +128,6 @@ Here's what the JSONB codec looks like with `renderOutputType`:
 ```ts
 const pgJsonbCodec = defineCodec({
   typeId: 'pg/jsonb@1',
-  targetTypes: ['jsonb'],
   encode: (value): string => JSON.stringify(value),
   decode: (wire): JsonValue => typeof wire === 'string' ? JSON.parse(wire) : wire,
   renderOutputType(typeParams) {

@@ -9,6 +9,7 @@ import { renderOps } from '../src/core/migrations/render-ops';
 import { createSqliteMigrationRunner } from '../src/core/migrations/runner';
 import { escapeLiteral, quoteIdentifier } from '../src/core/sql-utils';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { sqliteTestTypes } from './sqlite-test-types';
 
 function capture(fn: () => unknown): unknown {
   try {
@@ -85,34 +86,9 @@ describe('structured error codes', () => {
     expect(error).toMatchObject({ code: 'CONTRACT.TARGET_MISMATCH' });
   });
 
-  it('unsafe native type raises CONTRACT.NATIVE_TYPE_INVALID', () => {
-    const error = capture(() =>
-      buildColumnTypeSql({
-        many: false,
-        nativeType: 'TEXT; DROP',
-        nullable: true,
-        codecId: 'sqlite/text@1',
-      }),
-    );
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.NATIVE_TYPE_INVALID',
-      meta: { nativeType: 'TEXT; DROP' },
-    });
-  });
-
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {
     const error = capture(() =>
-      buildColumnTypeSql(
-        {
-          many: false,
-          nativeType: 'unused',
-          nullable: true,
-          codecId: 'sqlite/text@1',
-          typeRef: 'missing',
-        },
-        {},
-      ),
+      buildColumnTypeSql({ codecId: 'sqlite/text@1', typeRef: 'missing' }, sqliteTestTypes, {}),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.TYPE_UNKNOWN', meta: { typeRef: 'missing' } });

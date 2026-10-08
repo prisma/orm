@@ -77,6 +77,8 @@ describe('Schema verification after runner - integration', { concurrent: false }
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -140,18 +142,18 @@ describe('Schema verification after runner - integration', { concurrent: false }
                   user: {
                     columns: {
                       id: {
-                        nativeType: 'int4',
+                        dataType: 'pg/int4',
                         codecId: 'pg/int4@1',
                         nullable: false,
                         default: { kind: 'function', expression: 'autoincrement()' },
                       },
                       createdAt: {
-                        nativeType: 'timestamptz',
+                        dataType: 'pg/timestamptz',
                         codecId: 'pg/timestamptz-temporal@1',
                         nullable: false,
                         default: { kind: 'function', expression: 'now()' },
                       },
-                      email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                      email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],

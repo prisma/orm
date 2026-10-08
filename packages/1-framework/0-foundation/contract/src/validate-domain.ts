@@ -2,6 +2,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ContractValidationError } from './contract-validation-error';
 import type { CrossReference } from './cross-reference';
 import type { ContractWithDomain } from './domain-envelope';
+import type { ContractVariantEntry } from './domain-types';
 import { asNamespaceId, type NamespaceId } from './namespace-id';
 
 export interface DomainRelationShape {
@@ -15,7 +16,7 @@ export interface DomainModelShape {
   readonly fields: Record<string, unknown>;
   readonly relations?: Record<string, DomainRelationShape>;
   readonly discriminator?: { readonly field: string };
-  readonly variants?: Record<string, unknown>;
+  readonly variants?: Record<string, ContractVariantEntry>;
   readonly base?: CrossReference;
   readonly owner?: string;
 }
@@ -202,6 +203,20 @@ function validateDiscriminators(modelIndex: ModelIndex, errors: string[]): void 
         errors.push(
           `Discriminator field "${model.discriminator.field}" is not a field on model "${namespaceId}:${modelName}"`,
         );
+      }
+    }
+
+    if (model.variants) {
+      const variantsByValue = new Map<string, string>();
+      for (const [variantName, { value }] of Object.entries(model.variants)) {
+        const existingVariant = variantsByValue.get(value);
+        if (existingVariant !== undefined) {
+          errors.push(
+            `Discriminator value "${value}" is used by both "${namespaceId}:${existingVariant}" and "${namespaceId}:${variantName}" on base model "${namespaceId}:${modelName}"`,
+          );
+          continue;
+        }
+        variantsByValue.set(value, variantName);
       }
     }
 

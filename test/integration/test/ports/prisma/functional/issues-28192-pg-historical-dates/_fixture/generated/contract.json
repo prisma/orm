@@ -77,22 +77,22 @@
               "columns": {
                 "date": {
                   "codecId": "pg/date-temporal@1",
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "timestamp": {
                   "codecId": "pg/timestamp-temporal@1",
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "nullable": false
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 }
               },
@@ -111,7 +111,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "87aa20f2dcef84b910b4b7424d488f4a1d5e2b96a3d9ad4a54934857ec6c1246"
+    "storageHash": "983e9c76a3d431ab6d3342f0c4f3208973ac20d26f16d99b4634be04ff070797"
   },
   "execution": {
     "executionHash": "d5be646e59bb09298fecb9012b2343864907fd9cebb3b76b84916bf58b1d7bbe",
@@ -134,6 +134,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -144,9 +146,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

@@ -4,6 +4,7 @@ export {
   CONTRACT_SNAPSHOTS_DIRNAME,
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
+  isStorageHashHex,
   storageHashHex,
 } from '../control/contract-snapshot-layout';
 export type {
@@ -60,10 +61,12 @@ export type {
   MigrationRunnerSuccessValue,
   MigrationScaffoldContext,
   OpFactoryCall,
+  PlanOrigin,
   SchemaEntityCoordinate,
   SchemaOwnership,
   TargetMigrationsCapability,
 } from '../control/control-migration-types';
+export { planOriginOf } from '../control/control-migration-types';
 export type {
   OperationPreview,
   OperationPreviewStatement,
@@ -71,12 +74,17 @@ export type {
 export type {
   EmitContractResult,
   IntrospectSchemaResult,
+  MarkerHashes,
   OperationContext,
-  SignDatabaseResult,
+  SpaceMarkerConflict,
+  SpaceSignature,
+  SpaceSigned,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '../control/control-operation-results';
 export {
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_SCHEMA_FAILURE,
@@ -105,7 +113,6 @@ export {
   assembleAuthoringContributions,
   assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
-  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
@@ -115,6 +122,29 @@ export {
   extractComponentIds,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export type {
+  AppliedMigrationStatement,
+  FieldCoordinate,
+  FieldCoordinateJson,
+  MigrationAccessChange,
+  MigrationOperationSubject,
+  MigrationPlanSubjects,
+  MigrationStatementJson,
+  MigrationSubject,
+  MigrationSubjectJson,
+  ModelCoordinate,
+  ModelCoordinateJson,
+  ResolvedFieldRenameStatement,
+  ResolvedMigrationStatement,
+  ResolvedModelRenameStatement,
+} from '../control/migration-statements';
+export {
+  describeMigrationStatement,
+  migrationStatementJson,
+  migrationSubjectJson,
+  migrationSubjectKey,
+  modelDisplayName,
+} from '../control/migration-statements';
 export { orderIssuesByDependencies } from '../control/order-issues-by-dependencies';
 export type {
   DiffableNode,

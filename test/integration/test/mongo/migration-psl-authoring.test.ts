@@ -3,7 +3,11 @@ import type { JsonValue } from '@internal/contract/types';
 import mongoControlDriver from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
+import { planOriginOf } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import {
@@ -15,16 +19,20 @@ import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
@@ -51,12 +59,8 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
       decodeJson: (v: JsonValue) => v,
     };
   },
-  targetTypesFor(id: string) {
-    const bsonType = bsonTypesByCodecId[id];
-    return bsonType ? [bsonType] : undefined;
-  },
+  descriptorFor: (id: string) => (bsonTypesByCodecId[id] ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
 };
 
 function pslToContract(schema: string): MongoContract {
@@ -72,7 +76,7 @@ function pslToContract(schema: string): MongoContract {
     Object.fromEntries(
       [...scalarTypeCodecIds].map(([name, codecId]) => [
         name,
-        { kind: 'typeConstructor' as const, output: { codecId, nativeType: codecId } },
+        { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
     );
   const bound = bindPslSchema(schema, {
@@ -92,7 +96,7 @@ function pslToContract(schema: string): MongoContract {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -125,6 +129,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

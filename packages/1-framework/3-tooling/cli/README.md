@@ -656,15 +656,18 @@ The SQL family provides this via `@internal/family-sql/control`. The `introspect
 
 ### `prisma db sign`
 
-Mark the database as matching the emitted contract by writing or updating the contract marker. This command verifies that the database schema satisfies the contract before signing, ensuring the marker is only written when the database is fully aligned.
+Verify that the database satisfies the contract of every contract space (the application's and each extension's that ships one), then write or update the signature (contract marker) of each space that does. A signature records that this database is aligned with a specific contract version; `migrate` and the runtime compare it with the contract they are given.
 
 **Command:**
 ```bash
-prisma db sign [--db <url>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db sign [<contract> | --contract <contract>] [--db <url>] [--advance-ref <name> | --no-advance-ref] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 Options:
+- `<contract>` / `--contract <contract>`: Optional. The application contract to sign with: a hash, hash prefix, ref name, migration directory name, or `<dir>^`. Defaults to the emitted `contract.json`
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection` if set)
+- `--advance-ref <name>`: Advance the named ref of every signed space instead of `db`
+- `--no-advance-ref`: Sign without writing any ref or snapshot
 - `--config <path>`: Optional. Path to `prisma.config.ts` (defaults to `./prisma.config.ts` if present)
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
@@ -674,91 +677,35 @@ Options:
 
 Examples:
 ```bash
-# Use config defaults
 prisma db sign
-
-# Specify database URL
-prisma db sign --db postgresql://user:pass@localhost/db
-
-# JSON output
-prisma db sign --json
-
-# Verbose output
-prisma db sign -v
+prisma db sign --db $DATABASE_URL
+prisma db sign production --db $DATABASE_URL
+prisma db sign --db $DATABASE_URL --advance-ref production
+prisma db sign --db $DATABASE_URL --no-advance-ref
 ```
 
-**Config File Requirements:**
-
-The `db sign` command requires a `driver` in the config to connect to the database and a `contract.output` path to locate the emitted contract:
-
-```typescript
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import postgresDriver from '@internal/driver-postgres/control';
-import postgres from '@internal/target-postgres/control';
-import sql from '@internal/family-sql/control';
-import { contract } from './prisma/contract';
-
-export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
-  driver: postgresDriver,
-  extensions: [],
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
-  db: {
-    connection: process.env.DATABASE_URL, // Optional: can also use --db flag
-  },
-});
-```
+The command needs a `driver` in the config, as `db verify` does.
 
 **Signing Process:**
 
-1. **Load Contract**: Reads the emitted `contract.json` from `config.contract.output`
-2. **Connect to Database**: Uses `config.driver.create(url)` to create a driver
-3. **Create Family Instance**: Creates a `ControlStack` via `createControlStack()` and passes it to `config.family.create(stack)` to create a family instance
-4. **Schema Verification (Precondition)**: Calls `familyInstance.schemaVerify()` to verify the database schema matches the contract:
-   - If verification fails: Prints schema verification output and exits with code 1 (marker is not written)
-   - If verification passes: Proceeds to marker signing
-5. **Sign**: Calls `familyInstance.sign()` which:
-   - Ensures the marker schema and table exist
-   - Reads any existing marker from the database
-   - Compares contract hashes with existing marker:
-     - If marker is missing: Inserts a new marker row
-     - If hashes differ: Updates the existing marker row
-     - If hashes match: No-op (idempotent)
+1. **Load the contract spaces**: the application contract (emitted, or the one the contract reference names) and the contract space of every extension in `config.extensions`, as `migrate` loads them.
+2. **Read the markers**: the marker of every space is read before the schema is.
+3. **Verify each space**: each space's contract is checked against the live schema without strict mode.
+4. **Sign**: the family's `signSpaces` writes the marker of every space that verified, but only while the marker still holds what step 2 read. On PostgreSQL and SQLite it first takes the lock `migrate` takes (one transaction-scoped advisory lock for the marker table on PostgreSQL, `BEGIN IMMEDIATE` on SQLite), and all markers are written in one transaction, so a failed write leaves every marker as it was. A marker that already holds the contract's hashes is left unchanged.
+5. **Advance refs**: each signed or unchanged space's `db` ref (or the `--advance-ref` name) is advanced to its contract hash, and the contract is written into that space's snapshot store. `--no-advance-ref` skips this step. A ref or snapshot that cannot be written does not undo the markers: the command still writes every other ref, then fails with `MIGRATION.SIGN_REFS_NOT_WRITTEN`, which says the database was signed, names each ref it could not write and why, and gives the `db sign` command to run again once the cause is fixed.
+
+A space that fails verification is not signed. Its differences are reported, the other spaces are still signed, and the command exits with code 4. A space whose marker another process, such as `migrate`, changed after step 2 is not signed either: its marker is left as that process wrote it, the other spaces are still signed, and the command exits with code 4. Running `db sign` again once the other process has finished signs it.
 
 **Output Format (TTY):**
 
-Success (new marker):
 ```
-✔ Database signed (marker created)
-  storageHash: abc123...
-  profileHash: def456...
-  Total time: 42ms
-```
-
-Success (updated marker):
-```
-✔ Database signed (marker updated from old-hash)
-  storageHash: abc123...
-  profileHash: def456...
-  previous storageHash: old-hash
-  Total time: 42ms
-```
-
-Success (already up-to-date):
-```
-✔ Database already signed with this contract
-  storageHash: abc123...
-  profileHash: def456...
-  Total time: 42ms
-```
-
-Failure (schema mismatch):
-```
-✖ Schema verification failed
-  [Schema verification tree output]
+contract  output/contract.json
+database  postgresql://localhost/app
+✔ app: signed 6b4636f8… (was 93be6c20…)
+✔ pgvector: unchanged, already signed with 0b8e2c5a…
+✔ Database signed
+✔ Advanced ref "db" → 6b4636f8… (was 93be6c20…)
+✔ Advanced ref "db" of space "pgvector" → 0b8e2c5a…
 ```
 
 **Output Format (JSON):**
@@ -766,76 +713,43 @@ Failure (schema mismatch):
 ```json
 {
   "ok": true,
-  "summary": "Database signed (marker created)",
-  "contract": {
-    "storageHash": "abc123...",
-    "profileHash": "def456..."
-  },
-  "target": {
-    "expected": "postgres",
-    "actual": "postgres"
-  },
-  "marker": {
-    "created": true,
-    "updated": false
-  },
-  "meta": {
-    "configPath": "/path/to/prisma.config.ts",
-    "contractPath": "/path/to/src/prisma/contract.json"
-  },
-  "timings": {
-    "total": 42
-  }
-}
-```
-
-For updated markers:
-```json
-{
-  "ok": true,
-  "summary": "Database signed (marker updated from old-hash)",
-  "contract": {
-    "storageHash": "abc123...",
-    "profileHash": "def456..."
-  },
-  "target": {
-    "expected": "postgres",
-    "actual": "postgres"
-  },
-  "marker": {
-    "created": false,
-    "updated": true,
-    "previous": {
-      "storageHash": "old-hash",
-      "profileHash": "old-profile-hash"
+  "summary": "Database signed",
+  "spaces": [
+    {
+      "space": "app",
+      "status": "updated",
+      "contract": { "storageHash": "6b4636f8…", "profileHash": "c1d2…" },
+      "previous": { "storageHash": "93be6c20…", "profileHash": "c1d2…" }
+    },
+    {
+      "space": "pgvector",
+      "status": "unchanged",
+      "contract": { "storageHash": "0b8e2c5a…", "profileHash": "c1d2…" }
     }
-  },
-  "meta": {
-    "configPath": "/path/to/prisma.config.ts",
-    "contractPath": "/path/to/src/prisma/contract.json"
-  },
-  "timings": {
-    "total": 42
-  }
+  ],
+  "advancedRefs": [
+    { "space": "app", "name": "db", "hash": "6b4636f8…" },
+    { "space": "pgvector", "name": "db", "hash": "0b8e2c5a…" }
+  ]
 }
 ```
 
-**Error Codes:**
-- `PN-CLI-4010`: Missing driver in config — provide a driver descriptor
-- `PN-CLI-4005`: Missing database connection — provide `--db <url>` or set `db.connection` in config
-- Exit code 1: Schema verification failed — database schema does not match contract (marker is not written)
+Each space has `space`, `status` and `contract`. `status` is `created` (the space had no marker), `updated` (with `previous`, the hashes the marker held), `unchanged` (the marker already held the contract's hashes), `failed` or `conflict`. A failed space also carries `schema`, the schema verification result; `ok` is then `false` and `summary` names the failed and the signed spaces, for example `Database schema does not satisfy contract for space "app"; signed "pgvector"`. Each failed space also produces one `CONTRACT.SCHEMA_VERIFICATION_FAILED` diagnostic with `space` in its meta. A space in conflict carries `expected` and `found`, the marker hashes `db sign` read and the ones it found when it came to write; `summary` then says, for example, `Marker of space "app" changed while db sign ran; signed "pgvector"`, and the space produces one `MIGRATION.MARKER_CAS_FAILURE` diagnostic with `space`, `expectedStorageHash`, `foundStorageHash` and `destinationStorageHash` in its meta.
+
+**Exit codes:**
+- `0`: every space signed or already signed
+- `2`: the command could not run (unresolvable contract reference, no emitted contract, unreachable database, missing driver or connection), or it signed the database but could not write every ref (`MIGRATION.SIGN_REFS_NOT_WRITTEN`)
+- `4`: schema verification failed for at least one space, or its marker changed while `db sign` ran; that space's signature was not written
 
 **Relationship to Other Commands:**
-- **`db verify`**: `db verify` checks that the marker exists and matches the contract, then runs schema verification by default. `db sign` writes the marker that `db verify` checks. Use `db verify --marker-only` for marker-only verification and `db verify --schema-only` to inspect only the live schema.
+- **`db verify`**: checks that the marker exists and matches the contract, then runs schema verification by default. `db sign` writes the marker that `db verify` checks.
+- **`migrate`**: refuses with `MIGRATION.MARKER_MISMATCH` when the marker names a hash the migration history does not contain, for example after an upgrade that changed every contract's storage hash. `db sign` brings the marker back in step when the database already satisfies the contract.
 
 **Idempotency:**
-The `db sign` command is idempotent and safe to run multiple times:
-- If the marker already matches the contract (same hashes), no database changes are made
-- The command reports success in all cases (new marker, updated marker, or already up-to-date)
-- Safe to run in CI/deployment pipelines
+Running `db sign` again changes nothing: every marker already holds its contract's hashes and each ref already points at it. It is safe to run in CI and deployment pipelines.
 
 **Family Requirements:**
-The family must provide a `create()` method in the family descriptor that returns a `ControlFamilyInstance` with `schemaVerify()` and `sign()` methods:
+The family instance implements `schemaVerify()` and `signSpaces()`:
 
 ```typescript
 interface ControlFamilyInstance {
@@ -847,16 +761,18 @@ interface ControlFamilyInstance {
     configPath?: string;
   }): Promise<VerifyDatabaseSchemaResult>;
 
-  sign(options: {
+  signSpaces(options: {
     driver: ControlDriverInstance;
-    contract: Contract;
-    contractPath: string;
-    configPath?: string;
-  }): Promise<SignDatabaseResult>;
+    spaces: readonly {
+      space: string;
+      contract: Contract;
+      expected: { storageHash: string; profileHash: string } | null;
+    }[];
+  }): Promise<readonly SpaceSignature[]>;
 }
 ```
 
-The SQL family provides this via `@internal/family-sql/control`. The `sign()` method handles ensuring the marker schema/table exist, reading existing markers, comparing hashes, and writing/updating markers internally.
+`signSpaces` writes the marker of each space it is given with its contract's hashes, if the marker still holds `expected`, and returns one `SpaceSignature` per space: `{ status, space, contract }`, where `status` is `created`, `updated` (with `previous`, the hashes the marker held) or `unchanged`, or `{ status: 'conflict', space, contract, expected, found }` for a space whose marker no longer holds `expected` when it is read or when it is written. It does not verify; the command verifies every space first, and gives the spaces in the order `migrate` applies them, extension spaces first. The SQL family implements it through `SqlControlAdapter.withTransaction` and `SqlControlAdapter.lockMarker`, which takes the one lock the migration runner holds while it reads and writes markers, whatever the space. The Mongo family writes each marker on its own.
 
 ### `prisma db init`
 
@@ -1027,16 +943,28 @@ Update your database schema to match the currently emitted contract.
 - Allows `additive`, `widening`, and `destructive` operation classes where supported by planner/runner
 - Disables per-operation runner execution checks by default (precheck/postcheck/idempotency)
 - In `--dry-run` mode for SQL targets, prints a DDL preview derived from planned operations
-- In interactive mode, destructive plans require confirmation before apply
-- In non-interactive mode, destructive plans fail unless `-y, --yes` is provided
+- Before an apply, asks what each operation that would lose data means and whether each that would widen access may run (see **Questions before an apply** below)
 
 **Command:**
 ```bash
-prisma db update [--db <url>] [--config <path>] [--dry-run] [-y|--yes] [--interactive|--no-interactive] [--json] [-v] [-q] [--color/--no-color]
+prisma db update [--db <url>] [--to <contract>] [--advance-ref <name>] [--config <path>] [--dry-run] [--rename <old:new>]... [--delete <subject>]... [--allow <subject>]... [--interactive|--no-interactive] [--json] [-v] [-q] [--color/--no-color]
 ```
+
+**Rename statements (`--rename <old>:<new>`, repeatable):** tell `db update` that a model or field was renamed, so it renames the table or column instead of dropping and creating it. The statements work exactly as they do for `migration plan` (see below), and produce the same operations. The origin contract they resolve against is the contract the database's marker names, read from the local snapshot store (`migrations/snapshots/<hash>/`). The snapshot is read on every run, so the planner sees the prior contract whenever one is stored; a missing or unreadable snapshot fails only a run with `--rename`. Either way the plan applies from whatever state the database is in, as `db update` always has. `db update` keeps a snapshot of the contract it applies whenever it advances a ref: the `db` ref by default, or with `--db <url>` only the ref you name with `--advance-ref <name>`. So to use renames against a database you update with `--db <url>`, give that earlier run `--advance-ref <name>`. Without a readable snapshot, a run with statements fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`, naming the hash and the directory it looked in, and gives the steps that store the missing snapshot: emit the contract the database is at, run `db update --advance-ref <name> --dry-run` against it and check that it plans no operations, then run it without `--dry-run`, which changes nothing in the database and stores the snapshot, then emit the new contract and run the rename. A database with no marker has nothing to rename, and fails the same way. Running the same statements a second time fails with `MIGRATION.STATEMENT_UNRESOLVED`, because the database is now at a contract that no longer has the old names. The statements the plan applied are listed under `Statements applied` after the operations (dry run and apply), and as `appliedStatements` in `--json` output, each with its `description` and `operationIndexes`, the positions in `operations` of the operations it accounts for.
+
+**Questions before an apply:** an apply asks one question per model, field or storage name whose data an operation would lose (dropping a table or a column, or a type change that can change values), and one per model whose rows an operation would let more people read or write (disabling row-level security, for example). It asks before it applies anything. Subjects are named through the origin contract read from the snapshot store, as `migration plan` names them; without a readable snapshot each subject is its storage name, which can only be deleted or allowed, and the question says the origin contract is unknown. Recorded migrations of extension spaces are asked about for the data they would lose, never for widened access. Each question is answered with a statement:
+
+- `--delete <subject>` lets the update lose that data, for example `--delete Legacy` or `--delete User.nickname`. A field of a model the update renames is named through the model's new name.
+- `--rename <subject>:<new name>` keeps the data of a model or field under a new name instead. A field's new name keeps its model: `--rename User.nickname:User.handle`, which the question writes as `User.nickname:User.<new name>`.
+- `--allow <subject>` lets the update change who can read or write that model's rows, for example `--allow User`. Each such operation is its own question: dropping a policy and disabling row-level security on one model take two `--allow User` flags. The question says disabling row-level security widens access, and that dropping a policy changes it, since a permissive policy grants access.
+
+Where nobody can answer (the run is not interactive, or `--yes` is set), the command fails with `CLI.CONSENT_REQUIRED` and lists every unanswered question with the flags that answer it. In a terminal it asks each question in turn; a typed rename is planned again, and when the plan still loses the subject's data the command fails with `MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS`. A `--delete` or `--allow` that answers no question fails with `CLI.CONSENT_UNUSED` before anything is applied. `--confirm` no longer consents to anything here. A dry run asks nothing: it lists the questions an apply would ask under `An apply asks about`, each with the flag that answers it, and as `dataLoss` and `accessWidening` in `--json` output, each entry's `text` being the subject as `--delete` or `--allow` takes it. A dry run checks its `--delete` and `--allow` values against those subjects and refuses one that matches none with `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`, so the exact command an apply will run can be previewed first. A question the dry run's flags answer is marked `(answered)` (`answered: true` in JSON), and the apply it suggests repeats the statement flags it was given, `--to` and `--advance-ref`, and `--db <url>` as a placeholder when the dry run named its database (the URL is never printed). The answers are listed under `Statements applied` after the renames, for example `delete field "User.nickname" (1 operation)`, and as `appliedStatements` entries with `verb` `delete` or `allow`. Programmatic callers of `dbUpdate` pass `answerQuestions`, which answers every question in order or throws to refuse. It is called at least once per apply, with an empty list when nothing is in question, even under `acceptDataLoss: true`; return `[]` then. `delete` and `allow` statements in `statements` answer their questions without asking (an `allow` answers one operation, so two operations on one model take two `allow` statements, as on the command line), and one that answers no question fails with `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`, in plan mode as in apply mode, before anything is applied. `acceptDataLoss: true` answers every data-loss question, and `acceptAccessWidening: true` every access-widening question.
 
 **Error codes (additional to shared CLI/runtime codes):**
 - `RUNNER_FAILED`: runner rejected apply (origin mismatch, failed checks, policy failures, or execution errors)
+- `CLI.CONSENT_REQUIRED`, `CLI.CONSENT_UNUSED`: a question nobody answered, or a `--delete` or `--allow` that answered no question
+- `MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS`: a rename typed at the prompt did not stop the loss it answered
+- `MIGRATION.STATEMENT_INVALID`, `MIGRATION.STATEMENT_UNRESOLVED`, `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`: a `--rename` statement is malformed, does not resolve in the contracts, or has no origin contract to resolve against
 
 **Config File (`prisma.config.ts`):**
 
@@ -1084,14 +1012,16 @@ The `contract.output` field specifies the path to `contract.json`. This is the c
 Plan a migration from contract changes. Compares a starting contract against a destination contract and produces a new migration package with the required operations. No database connection is needed — fully offline.
 
 ```bash
-prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--json] [-v] [-q] [--color/--no-color]
+prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--rename <old:new>]... [--delete <subject>]... [--interactive|--no-interactive] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
 - `--config <path>`: Path to `prisma.config.ts`
 - `--name <slug>`: Name slug for the migration directory (default: `migration`)
-- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@empty`, or filesystem path). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
-- `--to <contract>`: Destination contract reference (same grammar as `--from`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
+- `--from <contract>`: Starting contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or `@empty`). `@empty` names the empty-database origin deliberately. Defaults to the `db` ref; when the ref is absent, greenfield only on an empty graph — over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed.
+- `--to <contract>`: Destination contract reference (hash, prefix, ref name, migration directory, or `<dir>^`). Defaults to the emitted `contract.json`. Use `--to <migration-dir>^` to plan a rollback toward a predecessor state.
+- `--rename <old>:<new>`: Rename a model or a field instead of dropping and creating it. Repeat the flag for several statements; they apply in the order given. See **Rename statements** below.
+- `--delete <subject>`: Let the plan lose the data of a model, a field, or a storage name the refusal lists. Repeat the flag for several. See **Data loss** below.
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output (debug info, timings)
@@ -1102,13 +1032,22 @@ prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--t
 3. Determines the starting point: `--from <contract>` if provided, otherwise the `db` ref. When the ref is absent, greenfield only on an empty graph; over existing migrations the command refuses (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) unless `--from @empty` is passed
 4. Diffs the starting contract against the destination using the target's migration planner
 5. Scaffolds a new migration package: `migration.ts` (containing `placeholder(...)` lambdas for any data transforms), `migration.json` (with a content-addressed `migrationHash` over the planned ops, or over `[]` when the planner could not lower any calls because of placeholders), and `ops.json` (the planned ops, or `[]` in the placeholder-blocked case). The bookend contracts are written write-if-absent into the shared snapshot store at `migrations/snapshots/<hex>/contract.{json,d.ts}`. The package is **always** fully attested — there is no draft state on disk.
-6. If the plan has unfilled `placeholder(...)` slots, the command returns a successful `pendingPlaceholders` envelope (a warning, not a failure) asking the developer to fill in the slots before re-emitting. The on-disk `ops.json` is `[]` and `migrationHash` is the hash of `(metadata, [])`, so applying the migration as-written will not advance the storage hash to the intended destination — the runner's destination-hash post-check surfaces this as a state mismatch. After filling in the placeholders, run `node migrations/<dir>/migration.ts` to re-emit `ops.json` and the corresponding `migrationHash`. `PN-MIG-2001` is raised only at self-emit time when a slot is still unfilled.
+6. If the plan has unfilled `placeholder(...)` slots, the command returns a successful `pendingPlaceholders` envelope (a warning, not a failure) asking the developer to fill in the slots before re-emitting. The output still lists the operations that resolved, and any `Statements applied`, so a rename and the drops beside it show; JSON `operations` lists the same operations, so the `operationIndexes` of `appliedStatements` point into it. The on-disk `ops.json` is `[]` and `migrationHash` is the hash of `(metadata, [])`, so applying the migration as-written will not advance the storage hash to the intended destination — the runner's destination-hash post-check surfaces this as a state mismatch. After filling in the placeholders, run `node migrations/<dir>/migration.ts` to re-emit `ops.json` and the corresponding `migrationHash`. `PN-MIG-2001` is raised only at self-emit time when a slot is still unfilled.
 
 **Outputs:**
 - `migrations/<dir>/migration.ts` — editable migration source (with `placeholder(...)` slots when the planner inserted them)
 - `migrations/<dir>/migration.json` — fully attested metadata (`migrationHash: string`, never null)
 - `migrations/<dir>/ops.json` — planned operations (empty list `[]` if placeholders blocked the planner)
 - `migrations/snapshots/<hex>/contract.{json,d.ts}` — bookend contracts, written write-if-absent, keyed by each contract's storage hash (one entry for `from` when applicable, one for `to`)
+
+**Rename statements:** each `--rename` names the old and the new name in contract vocabulary, never a table or a column. Each side is one of `Model`, `namespace.Model`, `Model.field` or `namespace.Model.field`; both sides name a model, or both name a field of the same model. Names match exactly, including case. A name without a namespace resolves when exactly one namespace declares the model. A field's model is named as the destination contract names it, so a model rename followed by a field rename on it is `--rename Profile:User --rename User.name:User.fullName`. The old name must exist in the starting contract and not in the destination; the new name must exist in the destination and not in the starting contract. Statements resolve before anything is written; a statement that is malformed fails with `MIGRATION.STATEMENT_INVALID`, and one that does not resolve fails with `MIGRATION.STATEMENT_UNRESOLVED`, naming what it searched and what it found. Each error's next step is the statement to type instead: the accepted forms, the statement written the right way round, the statements a model-and-field mix may have meant, or the order that works. A statement that has already been applied (the origin already has the new name and not the old one) says to leave it out. Statements cannot swap two names in one plan, and the error gives the three plans that do, through a temporary name. A plan from an empty database (`--from @empty`, or greenfield) has no models to rename, so every statement is unresolved. Moving a model to another namespace and renaming value objects are not supported in this release. On MongoDB the planner refuses every statement in this release: planning fails with `MIGRATION.PLANNING_FAILED`, carrying the statement, and nothing is planned. The planner renames the table or column, and the constraints and indexes named after it, ahead of the rest of the plan. On Postgres, a check, a row-level-security policy, or an expression or partial index whose SQL names a renamed column is dropped and created again, and adding a check back reads every row of the table under an exclusive lock, so on a large table such a rename takes time; `migration.ts` contains the same `...this.renameTable(...)` and `...this.renameColumn(...)` calls you could have written by hand. The statements are listed under `Statements applied` after the operations, each with its number of operations, and as `appliedStatements` in `--json` output, each with its `statement`, `description` and `operationIndexes`, the positions in `operations` of the operations it accounts for. A coordinate in a contract with no namespaces has no `namespaceId` in the JSON. A statement whose storage does not change, such as a model whose table name is kept with `@@map`, is listed with no operations. When the storage did not change at all and no statement needs an operation, no migration package is written and the output says so; when the storage changed but the planner planned nothing, planning fails with `MIGRATION.PLANNING_FAILED`, statements or not. A statement the planner cannot carry out, for example on a table whose control policy is not `managed`, fails planning with `MIGRATION.PLANNING_FAILED`, and the refused statement is carried in the error's conflicts.
+
+**Data loss:** a plan that would lose data is written only once you say what each such operation means. The command asks one question per model, field or storage name whose data an operation would lose (dropping a table or a column, or a type change that can change values), before it writes anything, including the baseline package of an auto-baseline. Each question is answered with a statement:
+
+- `--delete <subject>` lets the plan lose that data, for example `--delete Legacy` for a model or `--delete User.nickname` for a field. Data that no model of the starting contract stores is named by its storage name, as the question gives it, and can only be deleted. A field of a model the plan renames is named through the model's new name, as a field rename is written: after `--rename Profile:User`, a dropped `nickname` field is answered with `--delete User.nickname` or `--rename User.nickname:User.handle`.
+- `--rename <subject>:<new name>` keeps the data of a model or field under a new name; a field's new name keeps its model (`--rename User.nickname:User.handle`). A rename on the command line is planned from the start, so the drop it replaces is never asked about. The question offers it only for a model or field the destination no longer has, so a field whose type changes is answered with `--delete`, and not on MongoDB, whose planner refuses renames in this release. There the question says how to keep the documents instead: rename the collection in `mongosh` on each database before a plan that drops it is applied; `db update` then drops nothing, and a migration written by `migration plan` still drops it.
+
+Where nobody can answer (the run is not interactive, or `--yes` is set), the command fails with `CLI.CONSENT_REQUIRED` and lists every unanswered question with the flags that answer it. In a terminal it asks each question in turn: type `delete` to let the data go, or `rename <subject>:<new name>`; a rejected answer is asked again. A typed rename is planned again with the other renames, and when the plan still loses the subject's data the command fails with `MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS`. A `--delete` that answers no question fails with `CLI.CONSENT_UNUSED` before anything is written. `--confirm` no longer consents to anything here. The deletes are listed under `Statements applied` after the renames, for example `delete model "Legacy" (1 operation)`, and in `--json` output each `appliedStatements` entry carries its `verb`, `rename` or `delete`; a delete's `statement` is `{ kind: 'delete', subject }`. The `⚠` marker stays on each destructive operation.
 
 **Branching with `--from` and `--to`:** Use `--from` to create a migration edge from a specific contract hash instead of the default starting point. Use `--to` to plan toward any resolved contract — including a rollback via `<migration-dir>^` — instead of the emitted contract. This enables branched migration graphs and arbitrary-target (including reverse) edges without editing contract source.
 
@@ -1137,45 +1076,47 @@ prisma migration show [target] [--config <path>] [--json] [-v] [-q] [--color/--n
 
 ### `prisma migration status`
 
-Show the migration graph and applied status. Adapts based on context:
-
-- **With DB connection**: Shows applied/pending markers and "you are here" indicators
-- **Without DB connection**: Shows the graph structure from disk only
-- **With `--ref`**: Targets a specific ref instead of the contract hash; all refs from `refs.json` are rendered on the graph
+Shows which migrations are pending between the database marker and the target contract. It reads the database marker by default and needs a connection. `--from` names the origin instead and runs offline, unless `--from` or `--to` is `@db`, which reads the database.
 
 ```bash
-prisma migration status [--db <url>] [--ref <name>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma migration status [--db <url>] [--to <contract>] [--from <contract>] [--space <id>] [--legend] [--ascii] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
-- `--db <url>`: Database connection string (enables online mode)
-- `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
+- `--db <url>`: Database connection string
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration dir name, `<dir>^`, `@contract`, `@db`, or `@empty`). Defaults to the emitted contract.
+- `--from <contract>`: Origin contract reference, with the same forms as `--to`. Defaults to the database marker. With `--from`, the path is computed without reading the database, unless `--from` or `--to` is `@db`.
+- `--space <id>`: Narrow output to a single contract space
+- `--legend`: Print a key for the tree glyphs and lane colors
+- `--ascii`: Use ASCII glyphs
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output
 
+`@db` in either `--to` or `--from` resolves to the database marker, so the command reads the database and needs a connection. `--from` and `--to` apply to the app space. Each extension space goes to its own head: from its own marker when the command reads the database for the origin (no `--from`, or `--from @db`), and from the empty contract when `--from` names a contract.
+
 **What it does:**
-1. Reads migration packages from disk and reconstructs the migration graph
-2. Loads all refs from `migrations/refs.json` (if present) and renders them on the graph
-3. If `--ref` is provided, uses the ref's hash as the target instead of the contract hash; the active ref is highlighted in bold, other refs are dimmed
-4. If a DB connection is available, reads the marker to determine applied/pending status and shows distance from the ref target (e.g., "2 edge(s) behind ref")
-5. Displays the graph with `◄ DB`, `◄ Contract`, and `◄ ref:<name>` markers
-6. Shows operation summaries with destructive operation highlighting
-7. In `--ref` mode, the `CONTRACT.AHEAD` warning is suppressed — contract being ahead of a ref target is expected in multi-environment workflows
+1. Reads migration packages from disk and reconstructs each space's migration graph
+2. Resolves the origin (the database marker, or `--from`) and the target (the emitted contract, or `--to`)
+3. With a database connection, reads each space's marker and ledger to mark migrations applied or pending
+4. Draws each space's graph with `@db`, `@contract` and ref labels, and summarises what is pending
+5. Warns `MIGRATION.MARKER_NOT_IN_HISTORY` when a marker is not in its space's history (a graph node, or the head of a space with no migrations)
 
 ### `prisma db migrate`
 
 Apply planned migrations to the database. Executes previously planned migrations (created by `migration plan`). Compares the database marker against the migration graph to determine which migrations are pending, then executes them sequentially. Each migration runs in its own transaction. Does not plan new migrations — run `migration plan` first.
 
 ```bash
-prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show] [--from <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection`)
-- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, or filesystem path). When omitted, applies toward the emitted `contract.json`. When `--to` resolves to an on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source.
-- `--ref <name>`: Target a named ref from `migrations/refs.json` instead of the current contract hash
+- `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@contract`, `@db`, or `@empty`). When omitted, applies toward the emitted `contract.json`; `--to @contract` does the same. When `--to` resolves to another on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source. A ref name is a `--to` form; refs live in `migrations/<space>/refs/<name>.json`.
+- `--advance-ref <name>`: After a successful apply, advance the named ref to the new marker
+- `--show`: Preview the migration route without applying anything (read-only)
+- `--from <contract>`: The origin for the `--show` preview, with the same forms as `--to`. Defaults to the database marker. A contract other than `@db` makes the preview start offline; it still reads the database when `--to` is `@db`.
 - `--config <path>`: Path to `prisma.config.ts`
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)
@@ -1184,7 +1125,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v]
 **What it does:**
 1. Reads migration packages from `config.migrations.dir`. Every package is attested — there is no on-disk draft state. The loader (`readMigrationPackage` in `@internal/migration-tools/io`) rehashes `(metadata, ops)` for each `MigrationPackage` it returns and confirms the result matches the stored `migrationHash`. If a package has been hand-edited or partially written since emit, the load fails with `MIGRATION.HASH_MISMATCH` pointing at the offending directory and asks the developer to re-run `node migrations/<dir>/migration.ts` (or restore from version control).
 2. Reconstructs the migration graph from all loaded packages
-3. Determines the destination hash and apply contract: from `--to` / `--ref`, or from `contract.json` when neither is supplied
+3. Determines the destination hash and apply contract: from `--to`, or from `contract.json` when `--to` is omitted or `@contract`
 4. Connects to the database and reads the current marker hash
 5. Finds the shortest path from the marker hash to the destination using graph pathfinding
 6. Executes each pending migration in order using the target's `MigrationRunner`
@@ -1196,8 +1137,6 @@ prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v]
 **Config requirements:** Requires `driver` and `db.connection` (or `--db`). `migrations.dir` is optional and defaults to `migrations/`.
 
 **Resume semantics:** If a migration fails, previously applied migrations are preserved. Re-running `db migrate` resumes from the last successful migration.
-
-**Ref-based routing:** With `--ref`, apply targets the ref's hash instead of the contract hash. This enables multi-environment workflows where staging and production track different points in the migration graph.
 
 ### Emitting `ops.json` and computing `migrationHash`
 
@@ -1216,7 +1155,7 @@ The scaffolded `migration.ts` calls `MigrationCLI.run(import.meta.url, ...)` fro
 
 ### `prisma migration ref`
 
-Manage named refs in `migrations/refs.json`. Refs map logical environment names (e.g., `staging`, `production`) to contract hashes, enabling multi-environment migration workflows where different environments track different points in the migration graph.
+Manage named refs, one file per ref at `migrations/<space>/refs/<name>.json`. Refs map logical environment names (e.g., `staging`, `production`) to contract hashes, enabling multi-environment migration workflows where different environments track different points in the migration graph.
 
 ```bash
 prisma migration ref set <name> <contract>          # Set a ref to a contract (hash, ref, dir, ...)
@@ -1233,7 +1172,7 @@ prisma migration ref delete <name>                  # Delete a ref
 
 **Ref values:** Must be valid contract hashes (64 lowercase hex chars, or the `empty` sentinel).
 
-**Atomic writes:** `refs.json` is written atomically via temp file + rename to prevent corruption from concurrent writes.
+**Atomic writes:** each ref file is written atomically via temp file + rename to prevent corruption from concurrent writes.
 
 ## Architecture
 
@@ -1375,7 +1314,6 @@ See `.cursor/rules/config-validation-and-normalization.mdc` for detailed pattern
     - **`types`**: Type import specs and type IDs contributed by the component. Common examples:
       - `types.codecTypes.import`: Where to import codec type mappings for `contract.d.ts`.
       - `types.queryOperationTypes.import`: Where to import flat query-builder operation type signatures for `contract.d.ts` (adapters/extensions).
-      - `types.storage`: Storage type bindings (`typeId`, `nativeType`, etc.) used in authoring/emission.
     - **`operations`**: Operation signatures the component contributes (extensions), used for type generation and (optionally) validation/lowering.
     - **Component-specific metadata**:
       - Extensions may also include control-plane-only metadata like `contractSpace` (used by verify, planning, and migration flows and not required at runtime).
@@ -1516,8 +1454,18 @@ try {
 
   // Run operations
   const verifyResult = await client.verify({ contract });
-  const initResult = await client.dbInit({ contract, mode: 'apply' });
-  const updateResult = await client.dbUpdate({ contract, mode: 'apply' });
+  const initResult = await client.dbInit({ contract, mode: 'apply', migrationsDir: 'migrations' });
+  const updateResult = await client.dbUpdate({
+    contract,
+    mode: 'apply',
+    migrationsDir: 'migrations',
+    // Asked before an apply about each operation that would lose data or widen access.
+    // Answer each question in order, as `{ verb, text }`, or throw to refuse.
+    answerQuestions: async (questions) => {
+      if (questions.length > 0) throw new Error('db update would lose data or widen access');
+      return [];
+    },
+  });
   const introspectResult = await client.introspect();
 } finally {
   // Clean up
@@ -1534,7 +1482,7 @@ try {
 | `readMarker()` | Reads contract marker from database (null if none) |
 | `verify(options)` | Verifies database marker matches contract |
 | `schemaVerify(options)` | Verifies database schema satisfies contract |
-| `sign(options)` | Writes contract marker to database |
+| `dbSign(options)` | Verifies every contract space and writes the marker of each space that verified, as `db sign` does |
 | `dbInit(options)` | Initializes database schema from contract |
 | `dbUpdate(options)` | Updates database schema to match contract |
 | `migrate(options)` | Advances the database to the target contract via the migration graph |
@@ -1547,7 +1495,7 @@ Operations return structured result types:
 - `readMarker()` → `ContractMarkerRecord | null`
 - `verify()` → `VerifyDatabaseResult`
 - `schemaVerify()` → `VerifyDatabaseSchemaResult`
-- `sign()` → `SignDatabaseResult`
+- `dbSign()` → `ExecuteDbSignResult`, a `Result` whose success lists one `DbSignSpaceOutcome` per contract space
 - `dbInit()` → `Result<DbInitSuccess, DbInitFailure>` (uses Result pattern)
 - `dbUpdate()` → `Result<DbUpdateSuccess, DbUpdateFailure>` (uses Result pattern)
 - `migrate()` → `Result<MigrateSuccess, MigrateFailure>` (uses Result pattern)

@@ -22,6 +22,7 @@ import { runPostgresCodecProjection } from '@internal/postgres-codec-testkit';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pgVectorDescriptor } from '../src/core/codecs';
+import { pgvectorVector } from '../src/core/data-types';
 
 const INSTALL_VECTOR = ['CREATE EXTENSION IF NOT EXISTS vector'] as const;
 
@@ -37,6 +38,7 @@ function vectorCase(
   return {
     codecId: 'pg/vector@1',
     descriptor: pgVectorDescriptor,
+    dataType: pgvectorVector,
     label,
     value,
     typeParams: { length: options.length ?? value.length },
@@ -93,6 +95,7 @@ const manyVectorCases: readonly PostgresCodecConformanceCase[] = [
   {
     codecId: 'pg/vector@1',
     descriptor: pgVectorDescriptor,
+    dataType: pgvectorVector,
     label: 'a column of several vectors',
     value: [
       [1, 2, 3],
@@ -105,6 +108,7 @@ const manyVectorCases: readonly PostgresCodecConformanceCase[] = [
   {
     codecId: 'pg/vector@1',
     descriptor: pgVectorDescriptor,
+    dataType: pgvectorVector,
     label: 'a null column of vectors',
     value: null,
     typeParams: { length: 3 },
@@ -114,6 +118,7 @@ const manyVectorCases: readonly PostgresCodecConformanceCase[] = [
   {
     codecId: 'pg/vector@1',
     descriptor: pgVectorDescriptor,
+    dataType: pgvectorVector,
     label: 'a column of vectors with a null element',
     value: [[1, 2, 3], null],
     typeParams: { length: 3 },

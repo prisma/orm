@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
+import type { CodecDescriptor, CodecTrait, DataType } from '@internal/framework-components/codec';
 import {
   decodeJsonBoolean,
   decodeJsonFloat,
@@ -242,9 +242,9 @@ export const mongoStandardCodecs = [
 function descriptorFor<Id extends string>(
   codec: MongoCodec<Id, readonly CodecTrait[]>,
   metadata: {
-    readonly dataType: DataTypeId;
+    /** The data type the codec represents; its parameter schema is the codec's. */
+    readonly dataType: DataType;
     readonly traits: readonly CodecTrait[];
-    readonly targetTypes: readonly string[];
     readonly renderOutputType?: (typeParams: Record<string, unknown>) => string | undefined;
     readonly renderValueLiteral?: CodecDescriptor['renderValueLiteral'];
   },
@@ -255,14 +255,13 @@ function descriptorFor<Id extends string>(
   >(metadata.renderOutputType);
   return {
     codecId: codec.id,
-    dataType: metadata.dataType,
+    dataType: metadata.dataType.id,
     traits: metadata.traits,
-    targetTypes: metadata.targetTypes,
     paramsSchema: blindCast<
       CodecDescriptor['paramsSchema'],
-      'a non-parameterized codec has no params schema'
-    >(undefined),
-    isParameterized: false,
+      "the codec takes exactly its data type's parameters, and the descriptor list erases each codec's own parameter type"
+    >(metadata.dataType.params),
+    isParameterized: metadata.dataType.params !== undefined,
     factory: blindCast<
       CodecDescriptor['factory'],
       'every call hands out the one shared codec, which ignores params'
@@ -284,87 +283,74 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
     throw mongoTargetError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       'renderOutputType: expected positive integer "length" for Vector',
-      { meta: { nativeType: 'Vector', param: 'length', received: length } },
+      { meta: { typeName: 'Vector', param: 'length', received: length } },
     );
   }
   return `Vector<${length}>`;
 };
 
 /**
- * Mongo wire-type codec descriptors. Static metadata for `traits`, `targetTypes`, and `renderOutputType` lives here (the descriptor shape) — `MongoCodec` itself is narrow and only carries the four conversion methods (TML-2357).
+ * Mongo wire-type codec descriptors. Static metadata for `traits` and `renderOutputType` lives here (the descriptor shape) — `MongoCodec` itself is narrow and only carries the four conversion methods (TML-2357).
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   descriptorFor(mongoObjectIdCodec, {
-    dataType: mongoObjectId.id,
+    dataType: mongoObjectId,
     traits: ['equality'],
-    targetTypes: ['objectId'],
   }),
   descriptorFor(mongoStringCodec, {
-    dataType: mongoString.id,
+    dataType: mongoString,
     traits: ['equality', 'order', 'textual'],
-    targetTypes: ['string'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDoubleCodec, {
-    dataType: mongoDouble.id,
+    dataType: mongoDouble,
     traits: ['equality', 'order', 'numeric'],
-    targetTypes: ['double'],
     renderValueLiteral: (value) => (typeof value === 'number' ? String(value) : undefined),
   }),
   descriptorFor(mongoInt32Codec, {
-    dataType: mongoInt32.id,
+    dataType: mongoInt32,
     traits: ['equality', 'order', 'numeric'],
-    targetTypes: ['int'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoBooleanCodec, {
-    dataType: mongoBool.id,
+    dataType: mongoBool,
     traits: ['equality', 'boolean'],
-    targetTypes: ['bool'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDateCodec, {
-    dataType: mongoDate.id,
+    dataType: mongoDate,
     traits: ['equality', 'order'],
-    targetTypes: ['date'],
   }),
   descriptorFor(mongoVectorCodec, {
-    dataType: mongoVector.id,
+    dataType: mongoVector,
     traits: ['equality'],
-    targetTypes: ['vector'],
     renderOutputType: renderVectorOutputType,
   }),
   descriptorFor(mongoInt64Codec, {
-    dataType: mongoInt64.id,
+    dataType: mongoInt64,
     traits: ['equality', 'order', 'numeric'],
-    targetTypes: ['long'],
     renderValueLiteral: decimalTextBigintLiteral,
   }),
   descriptorFor(mongoInt64NumberCodec, {
-    dataType: mongoInt64.id,
+    dataType: mongoInt64,
     traits: ['equality', 'order', 'numeric'],
-    targetTypes: ['long'],
     renderValueLiteral: decimalTextNumberLiteral,
   }),
   descriptorFor(mongoDecimal128Codec, {
-    dataType: mongoDecimal128.id,
+    dataType: mongoDecimal128,
     traits: ['equality', 'order', 'numeric'],
-    targetTypes: ['decimal'],
   }),
   descriptorFor(mongoBinaryCodec, {
-    dataType: mongoBinary.id,
+    dataType: mongoBinary,
     traits: ['equality'],
-    targetTypes: ['binData'],
   }),
   descriptorFor(mongoJsonCodec, {
-    dataType: mongoJson.id,
+    dataType: mongoJson,
     traits: [],
-    targetTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
   }),
   descriptorFor(mongoBsonCodec, {
-    dataType: mongoBson.id,
+    dataType: mongoBson,
     traits: [],
-    targetTypes: [],
   }),
 ];
 

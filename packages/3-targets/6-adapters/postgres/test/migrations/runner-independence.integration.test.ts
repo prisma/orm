@@ -63,10 +63,10 @@ function buildAppContract(version: 1 | 2): Contract<SqlStorage> {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   ...(version === 2
-                    ? { name: { nativeType: 'text', codecId: 'pg/text@1', nullable: true } }
+                    ? { name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true } }
                     : {}),
                 },
                 primaryKey: { columns: ['id'] },

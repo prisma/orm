@@ -16,6 +16,7 @@ import {
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
+import { buildMongoEnums } from '@internal/mongo-runtime';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -24,6 +25,8 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
@@ -71,12 +74,12 @@ const postgresTarget = {
 };
 
 const postgresScalarTypeDescriptors = new Map([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['Boolean', { codecId: 'pg/bool@1', nativeType: 'bool' }],
-  ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-  ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
-]) as ReadonlyMap<string, { codecId: string; nativeType: string }>;
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['Boolean', { codecId: 'pg/bool@1' }],
+  ['Json', { codecId: 'pg/json@1' }],
+  ['Jsonb', { codecId: 'pg/jsonb@1' }],
+]) as ReadonlyMap<string, { codecId: string }>;
 
 function interpretMongoPsl(schema: string) {
   const mongoScalarTypeDescriptors = new Map([
@@ -91,7 +94,7 @@ function interpretMongoPsl(schema: string) {
     Object.fromEntries(
       [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
         name,
-        { kind: 'typeConstructor' as const, output: { codecId, nativeType: codecId } },
+        { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
     );
   const bound = bindPslSchema(schema, {
@@ -111,7 +114,7 @@ function interpretMongoPsl(schema: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: { entries: {}, lookup: createDataTypeLookup(mongoDataTypes) },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -129,11 +132,11 @@ function interpretMongoPsl(schema: string) {
 }
 
 const postgresScalarAuthoringTypes = Object.fromEntries(
-  [...postgresScalarTypeDescriptors].map(([name, { codecId, nativeType }]) => [
+  [...postgresScalarTypeDescriptors].map(([name, { codecId }]) => [
     name,
     {
       kind: 'typeConstructor' as const,
-      output: { codecId, nativeType },
+      output: { codecId },
     },
   ]),
 );
@@ -157,9 +160,9 @@ function interpretSqlPsl(schema: string) {
         valueObjectStorageType: 'Jsonb',
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      codecLookup: createPostgresBuiltinCodecLookup(),
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },
@@ -202,7 +205,11 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
 
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const orm = mongoOrm({
+      contract: validated.contract,
+      executor: ctx.runtime,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
+    });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -233,7 +240,11 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const orm = mongoOrm({
+      contract: validated.contract,
+      executor: ctx.runtime,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
+    });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -272,7 +283,11 @@ type Address {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const orm = mongoOrm({
+      contract: validated.contract,
+      executor: ctx.runtime,
+      enums: buildMongoEnums(validated.contract, ctx.codecs),
+    });
     const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<
@@ -309,13 +324,13 @@ describe('value objects: end-to-end SQL pipeline', () => {
     const storage = contract.storage as unknown as {
       namespaces: Record<
         string,
-        { entries: { table: Record<string, { columns: Record<string, { nativeType: string }> }> } }
+        { entries: { table: Record<string, { columns: Record<string, { dataType: string }> }> } }
       >;
     };
     const userTable = storage.namespaces['public']!.entries.table['User'];
     expect(userTable).toBeDefined();
     expect(userTable!.columns['homeAddress']).toBeDefined();
-    expect(userTable!.columns['homeAddress']!.nativeType).toBe('jsonb');
+    expect(userTable!.columns['homeAddress']!.dataType).toBe('pg/jsonb');
   });
 });
 

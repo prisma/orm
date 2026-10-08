@@ -70,7 +70,6 @@ class TestVectorDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = dataTypeId('test/vector');
   override readonly codecId = 'test/vector@1' as const;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['vector'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => TestVectorCodec {
     return () => new TestVectorCodec(this);

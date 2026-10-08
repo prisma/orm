@@ -5,11 +5,11 @@ import { SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   buildSymbolTableInput,
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
   postgresScalarAuthoringTypes,
 } from './fixtures';
 
@@ -42,14 +42,14 @@ const fieldPresets: AuthoringFieldNamespace = {
   temporal: {
     createdAt: {
       kind: 'fieldPreset',
-      output: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' },
+      output: { codecId: 'pg/timestamptz@1' },
     },
   },
 };
 
 const authoringType = {
   ...postgresScalarAuthoringTypes,
-  Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1', nativeType: 'numeric' } },
+  Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1' } },
 } as const;
 
 function normalize(resolution: unknown): unknown {
@@ -80,7 +80,10 @@ function normalize(resolution: unknown): unknown {
     case 'namedType':
     case 'block':
     case 'namespace':
-    case 'field': {
+    case 'field':
+    case 'parameter':
+    case 'function':
+    case 'constant': {
       const symbol = r.symbol as { readonly name: string };
       return { kind: r.kind, name: symbol.name };
     }
@@ -123,9 +126,8 @@ describe('createBinder', () => {
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: postgresCodecLookup,
       controlMutationDefaults: controlMutationDefaultsBase,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureInterpreterTypes,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     };
@@ -163,6 +165,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'id', level: 'field' },
       { kind: 'field', name: 'createdAt' },
       { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'price' },
       { kind: 'contributedType', name: 'Money', path: ['Money'] },
       { kind: 'field', name: 'weird' },
@@ -173,6 +176,7 @@ describe('createBinder', () => {
       { kind: 'model', name: 'Session' },
       { kind: 'attribute', name: 'index', level: 'model' },
       { kind: 'field', name: 'id' },
+      { kind: 'namespace', name: 'auth' },
       { kind: 'model', name: 'Account' },
       { kind: 'field', name: 'id' },
       { kind: 'contributedType', name: 'Int', path: ['Int'] },
@@ -185,8 +189,11 @@ describe('createBinder', () => {
       { kind: 'contributedType', name: 'Int', path: ['Int'] },
       { kind: 'field', name: 'account' },
       { kind: 'model', name: 'Account' },
+      { kind: 'namespace', name: 'auth' },
       { kind: 'attribute', name: 'relation', level: 'field' },
+      { kind: 'parameter', name: 'fields' },
       { kind: 'field', name: 'accountId' },
+      { kind: 'parameter', name: 'references' },
       { kind: 'field', name: 'id' },
     ]);
   });

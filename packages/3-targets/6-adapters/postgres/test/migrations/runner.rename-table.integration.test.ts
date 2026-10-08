@@ -52,7 +52,7 @@ describe('PostgresMigrationRunner - renameTable', { concurrent: false }, () => {
       origin: null,
       destination: toPlanContractInfo(contract),
       operations: [
-        await new RenameTableCall('public', 'userProfile', 'UserProfile').toOp(controlAdapter),
+        await new RenameTableCall('public', 'userProfile', 'UserProfile', []).toOp(controlAdapter),
       ],
       providedInvariants: [],
     });

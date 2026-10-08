@@ -15,6 +15,8 @@ import { instantiateAuthoringFieldPreset } from '@internal/framework-components/
 import type {
   CodecLookupWithDescriptors,
   ColumnTypeDescriptor,
+  DataTypeLookup,
+  ScalarFieldDeclarationBuilder,
 } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
@@ -22,9 +24,9 @@ import type {
   TargetPackRef,
 } from '@internal/framework-components/components';
 import type {
+  AuthoredStorageTypeInstance,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -41,7 +43,7 @@ export type NamingConfig = {
   readonly columns?: NamingStrategy;
 };
 
-type NamedStorageTypeRef = string | StorageTypeInstance | EnumTypeHandle;
+type NamedStorageTypeRef = string | AuthoredStorageTypeInstance | EnumTypeHandle;
 
 type NamedConstraintNameSpec<Name extends string = string> = {
   readonly name: Name;
@@ -239,7 +241,9 @@ export type ManyOptions =
   | { readonly elementsNullable: true }
   | { readonly elementsNullable: false };
 
-export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState> {
+export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState>
+  implements ScalarFieldDeclarationBuilder
+{
   declare readonly __state: State;
 
   constructor(private readonly state: State) {}
@@ -587,7 +591,7 @@ export type NamedTypeFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfN
   <TypeRef extends string>(
     typeRef: TypeRef,
   ): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
-  <TypeRef extends StorageTypeInstance>(
+  <TypeRef extends AuthoredStorageTypeInstance>(
     typeRef: TypeRef,
   ): ScalarFieldBuilder<
     ScalarFieldState<
@@ -1932,7 +1936,7 @@ function normalizeRelationModelSource(
 export type ContractInput<
   Family extends FamilyPackRef<string> = FamilyPackRef<string>,
   Target extends TargetPackRef<'sql', string> = TargetPackRef<'sql', string>,
-  Types extends Record<string, StorageTypeInstance> = Record<never, never>,
+  Types extends Record<string, AuthoredStorageTypeInstance> = Record<never, never>,
   Models extends Record<
     string,
     ContractModelBuilder<
@@ -1993,7 +1997,10 @@ export type ContractInput<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookupWithDescriptors;
+  /** The codecs of the packs the contract is authored with; a column's database type is its codec's data type's. */
+  readonly codecLookup: CodecLookupWithDescriptors;
+  /** The data types of the packs the contract is authored with. */
+  readonly dataTypeLookup: DataTypeLookup;
   /**
    * Domain enum handles authored via `enumType()`. Each handle lowers to a
    * domain `enum` entry and a storage `valueSet` entry in the target's

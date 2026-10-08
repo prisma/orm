@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import sqlFamilyPack from '@internal/family-sql/pack';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { buildBoundContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
@@ -14,6 +15,8 @@ import {
   SelectAst,
   TableSource,
 } from '@internal/sql-relational-core/ast';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { timeouts } from '@repo/test-utils';
@@ -34,7 +37,12 @@ import {
   synthEdges,
 } from './fixtures/runner-fixtures';
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' };
+const postgresTypeLookups = {
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
+
+const pgText = { codecId: 'pg/text@1' as const };
 
 // Declaration order: low → high → medium. Lexical order would be high, low, medium.
 const Priority = enumType(
@@ -49,7 +57,7 @@ function makeTaskContract(): PostgresContract {
   return buildBoundContract(
     sqlFamilyPack,
     postgresPack,
-    { enums: { Priority }, createNamespace: postgresCreateNamespace },
+    { ...postgresTypeLookups, enums: { Priority }, createNamespace: postgresCreateNamespace },
     ({ field: f, model: m }) => ({
       models: {
         Task: m('Task', {
@@ -69,7 +77,7 @@ function makeTaskNoteContract(): PostgresContract {
   return buildBoundContract(
     sqlFamilyPack,
     postgresPack,
-    { enums: { Priority }, createNamespace: postgresCreateNamespace },
+    { ...postgresTypeLookups, enums: { Priority }, createNamespace: postgresCreateNamespace },
     ({ field: f, model: m }) => ({
       models: {
         Task: m('Task', {
@@ -97,6 +105,8 @@ async function migrate(driver: PostgresControlDriver, contract: PostgresContract
     schema: emptySchema,
     policy: INIT_ADDITIVE_POLICY,
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',

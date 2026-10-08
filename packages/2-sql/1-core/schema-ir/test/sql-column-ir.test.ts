@@ -47,7 +47,6 @@ describe('SqlColumnIR', () => {
         resolvedDefault: { kind: 'literal', value: ['asc'] },
         codecRef,
         codecBaseNativeType: 'order',
-        codecNamedType: true,
       });
 
       const defaultNode = column.children()[0] as SqlColumnDefaultIR;
@@ -56,12 +55,10 @@ describe('SqlColumnIR', () => {
       expect({
         codecRef: defaultNode.codecRef,
         codecBaseNativeType: defaultNode.codecBaseNativeType,
-        codecNamedType: defaultNode.codecNamedType,
         enumerableKeys: Object.keys(defaultNode),
       }).toEqual({
         codecRef,
         codecBaseNativeType: 'order',
-        codecNamedType: true,
         enumerableKeys: ['nodeKind', 'resolved', 'nativeTypeContext'],
       });
     });

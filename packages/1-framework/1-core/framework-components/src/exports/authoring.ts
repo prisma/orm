@@ -46,6 +46,7 @@ export type {
 export {
   assertNoCrossRegistryCollisions,
   assertResolvableTypeConstructorTemplates,
+  authoringEntryType,
   classifyEnumMemberType,
   collectScalarTypeConstructors,
   flushAuthoringWarnings,
@@ -59,10 +60,13 @@ export {
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isTagEntryKey,
   mergeAuthoringNamespaces,
   resolveAuthoringTemplateValue,
   resolveEnumCodecId,
+  tagEntryKey,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeParams,
 } from '../shared/framework-authoring';
 export type { AuthoringOption } from '../shared/option-descriptor';
 export type {
@@ -81,3 +85,29 @@ export {
   temporalCodecPreset,
   temporalPhaseTemplate,
 } from '../shared/temporal-presets';
+export type {
+  CastRefusal,
+  DataTypeSupport,
+  ReadRefusal,
+  RefusalDescription,
+  RefusalGuidance,
+  TypedValue,
+  WrittenForm,
+  WrittenScalar,
+  WrittenValue,
+} from '../shared/written-value';
+export {
+  admittedForms,
+  admittedTags,
+  castTypedValue,
+  describeAdmittedForms,
+  describeExpected,
+  describeRefusal,
+  describeRefusedValueType,
+  entryForPlain,
+  entryForTag,
+  exactRewrite,
+  knownTags,
+  readWrittenValue,
+  tagForm,
+} from '../shared/written-value';

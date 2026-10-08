@@ -28,7 +28,7 @@ import { SupabaseRole } from '../src/contract/roles';
 import supabasePack from '../src/exports/pack';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
-const pgUuid = { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
+const pgUuid = { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false } as const;
 
 function buildAppContract() {
   const Item = model('Item', {

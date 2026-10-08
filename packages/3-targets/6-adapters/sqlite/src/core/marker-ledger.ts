@@ -5,6 +5,7 @@ import {
   RawExpr,
 } from '@internal/sql-relational-core/ast';
 import { SQLITE_DATETIME_CODEC_ID } from '@internal/target-sqlite/codec-ids';
+import { SQLITE_NOW_EXPRESSION } from '@internal/target-sqlite/codecs';
 import {
   datetime,
   integer,
@@ -59,7 +60,7 @@ export const ledgerReadShape = sqliteTable('_prisma_ledger', {
 export const sqliteCatalog = sqliteTable('sqlite_master', { type: text(), name: text() });
 
 export const NOW = new RawExpr({
-  parts: ["datetime('now')"],
+  parts: [SQLITE_NOW_EXPRESSION],
   returns: { codecId: SQLITE_DATETIME_CODEC_ID, nullable: false },
 });
 

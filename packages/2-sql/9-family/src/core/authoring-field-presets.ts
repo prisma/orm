@@ -22,7 +22,6 @@ import type { AuthoringFieldNamespace } from '@internal/framework-components/aut
  */
 
 const CHARACTER_CODEC_ID = 'sql/char@1';
-const CHARACTER_NATIVE_TYPE = 'character';
 
 const nanoidOptionsArgument = {
   kind: 'object',
@@ -43,7 +42,6 @@ export const sqlFamilyAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: CHARACTER_CODEC_ID,
-      nativeType: CHARACTER_NATIVE_TYPE,
       typeParams: {
         length: 36,
       },
@@ -53,7 +51,6 @@ export const sqlFamilyAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: CHARACTER_CODEC_ID,
-      nativeType: CHARACTER_NATIVE_TYPE,
       typeParams: {
         length: 26,
       },
@@ -64,7 +61,6 @@ export const sqlFamilyAuthoringFieldPresets = {
     args: [nanoidOptionsArgument],
     output: {
       codecId: CHARACTER_CODEC_ID,
-      nativeType: CHARACTER_NATIVE_TYPE,
       typeParams: {
         length: {
           kind: 'arg',
@@ -79,7 +75,6 @@ export const sqlFamilyAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: CHARACTER_CODEC_ID,
-      nativeType: CHARACTER_NATIVE_TYPE,
       typeParams: {
         length: 24,
       },
@@ -89,7 +84,6 @@ export const sqlFamilyAuthoringFieldPresets = {
     kind: 'fieldPreset',
     output: {
       codecId: CHARACTER_CODEC_ID,
-      nativeType: CHARACTER_NATIVE_TYPE,
       typeParams: {
         length: 27,
       },
@@ -100,7 +94,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: 36,
         },
@@ -117,7 +110,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: 36,
         },
@@ -134,7 +126,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: 26,
         },
@@ -152,7 +143,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       args: [nanoidOptionsArgument],
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: {
             kind: 'arg',
@@ -181,7 +171,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: 24,
         },
@@ -198,7 +187,6 @@ export const sqlFamilyAuthoringFieldPresets = {
       kind: 'fieldPreset',
       output: {
         codecId: CHARACTER_CODEC_ID,
-        nativeType: CHARACTER_NATIVE_TYPE,
         typeParams: {
           length: 27,
         },

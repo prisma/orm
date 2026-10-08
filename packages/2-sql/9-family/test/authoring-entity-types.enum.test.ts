@@ -1,145 +1,16 @@
-import type { JsonValue } from '@internal/contract/types';
-import type {
-  AuthoringDiagnosticSink,
-  AuthoringEntityContext,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/authoring';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
-import { sqlFamilyEnumEntityDescriptor } from '../src/core/authoring-entity-types';
-
-const SPAN = {
-  start: { offset: 0, line: 1, column: 1 },
-  end: { offset: 0, line: 1, column: 1 },
-};
-
-function enumBlock(input: {
-  readonly name: string;
-  readonly values: Record<string, JsonValue | undefined>;
-  readonly typeCodecId?: string;
-}): ParsedPslExtensionBlock<Record<string, JsonValue | undefined>> {
-  return {
-    kind: 'enum',
-    keyword: 'enum',
-    name: input.name,
-    values: input.values,
-    parameterSpans: Object.fromEntries(Object.keys(input.values).map((key) => [key, SPAN])),
-    attributes:
-      input.typeCodecId !== undefined
-        ? { type: { args: { codecId: input.typeCodecId }, span: SPAN } }
-        : {},
-    span: SPAN,
-  };
-}
-
-const TEXT_CODEC_ID = 'pg/text@1';
-const INT_CODEC_ID = 'pg/int@1';
-const JSON_CODEC_ID = 'test/json@1';
-const FOLDING_CODEC_ID = 'test/folding-text@1';
-const ENCODE_FOLDING_CODEC_ID = 'test/encode-folding-text@1';
-const BROKEN_CODEC_ID = 'test/broken@1';
-
-const textCodec: Codec = {
-  id: TEXT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-const intCodec: Codec = {
-  id: INT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
-    return json;
-  },
-};
-
-const jsonCodec: Codec = {
-  id: JSON_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (json === null) throw new Error('expected a non-null JSON value');
-    return json;
-  },
-};
-
-const foldingCodec: Codec = {
-  id: FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json.toLowerCase();
-  },
-};
-
-const encodeFoldingCodec: Codec = {
-  id: ENCODE_FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => String(value).toLowerCase(),
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-const brokenCodec: Codec = {
-  ...textCodec,
-  id: BROKEN_CODEC_ID,
-  decodeJson() {
-    throw new InternalError('a codec broke an invariant');
-  },
-};
-
-const testCodecLookup: CodecLookup = {
-  get(id: string): Codec | undefined {
-    if (id === TEXT_CODEC_ID) return textCodec;
-    if (id === INT_CODEC_ID) return intCodec;
-    if (id === JSON_CODEC_ID) return jsonCodec;
-    if (id === FOLDING_CODEC_ID) return foldingCodec;
-    if (id === ENCODE_FOLDING_CODEC_ID) return encodeFoldingCodec;
-    if (id === BROKEN_CODEC_ID) return brokenCodec;
-    return undefined;
-  },
-  targetTypesFor(id: string): readonly string[] | undefined {
-    if (id === TEXT_CODEC_ID) return ['text'];
-    if (id === INT_CODEC_ID) return ['int'];
-    if (id === JSON_CODEC_ID) return ['json'];
-    if (id === FOLDING_CODEC_ID) return ['text'];
-    if (id === ENCODE_FOLDING_CODEC_ID) return ['text'];
-    if (id === BROKEN_CODEC_ID) return ['text'];
-    return undefined;
-  },
-  renderOutputTypeFor: () => undefined,
-};
-
-function makeContext(diagnostics: unknown[]): AuthoringEntityContext {
-  const sink: AuthoringDiagnosticSink = {
-    push: (d) => diagnostics.push(d),
-  };
-  return {
-    family: 'sql',
-    target: 'postgres',
-    codecLookup: testCodecLookup,
-    sourceId: 'schema.prisma',
-    diagnostics: sink,
-    enumInferenceCodecs: { text: TEXT_CODEC_ID, int: INT_CODEC_ID },
-  };
-}
-
-const factory = sqlFamilyEnumEntityDescriptor.output.factory;
+import {
+  BROKEN_CODEC_ID,
+  ENCODE_FOLDING_CODEC_ID,
+  enumBlock,
+  FOLDING_CODEC_ID,
+  factory,
+  INT_CODEC_ID,
+  JSON_CODEC_ID,
+  makeContext,
+  TEXT_CODEC_ID,
+} from './enum-entity-fixtures';
 
 describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members', () => {
   it('bare members infer the text codec and decode from their key', () => {
@@ -152,7 +23,6 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'text',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -167,7 +37,6 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: TEXT_CODEC_ID,
-      nativeType: 'text',
       members: { admin: 'admin', user: 'user' },
     });
   });
@@ -180,7 +49,7 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID });
   });
 
   it('integer members infer the int codec', () => {
@@ -193,7 +62,6 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
       codecId: INT_CODEC_ID,
-      nativeType: 'int',
       members: { low: 1, high: 2 },
     });
   });
@@ -284,7 +152,7 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID });
   });
 
   it('an explicit codec receives structured JSON media through the shared grammar', () => {
@@ -331,22 +199,6 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC' }),
-    ]);
-  });
-
-  it('an unknown codec id is reported', () => {
-    const diagnostics: unknown[] = [];
-    const handle = factory(
-      enumBlock({ name: 'Role', values: { admin: 'admin' }, typeCodecId: 'nope/missing@1' }),
-      makeContext(diagnostics),
-    );
-
-    expect(handle).toBeUndefined();
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message: expect.stringContaining('unknown codec'),
-      }),
     ]);
   });
 

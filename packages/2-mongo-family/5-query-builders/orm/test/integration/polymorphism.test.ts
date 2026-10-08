@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { createMongoDriver } from '@internal/driver-mongo';
 import {
+  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -13,6 +14,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
+import type { MongoOrmEnums } from '../../src/collection';
 import { mongoOrm } from '../../src/mongo-orm';
 
 const contract = ormContractJson as unknown as Contract;
@@ -23,6 +25,7 @@ describe('Mongo ORM polymorphism integration', {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   let runtime: MongoRuntime;
+  let enums: MongoOrmEnums;
   const dbName = 'polymorphism_test';
 
   beforeAll(async () => {
@@ -39,6 +42,7 @@ describe('Mongo ORM polymorphism integration', {
     const context = createMongoExecutionContext({ contract: {}, stack });
     const driver = await createMongoDriver(replSet.getUri(), dbName);
     runtime = createMongoRuntime({ context, driver });
+    enums = buildMongoEnums(contract, context.codecs);
   }, timeouts.spinUpMongoMemoryServer);
 
   beforeEach(async () => {
@@ -50,7 +54,7 @@ describe('Mongo ORM polymorphism integration', {
   }, timeouts.spinUpMongoMemoryServer);
 
   it('base query returns rows with discriminator values', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -76,8 +80,8 @@ describe('Mongo ORM polymorphism integration', {
     expect(types).toEqual(['bug', 'feature']);
   });
 
-  it('variant("Bug") filters to only Bug rows', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+  it('variant("bug") filters to only Bug rows', async () => {
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -97,14 +101,14 @@ describe('Mongo ORM polymorphism integration', {
       assigneeId: user._id as string,
     } as never);
 
-    const bugs = await orm.tasks.variant('Bug').all();
+    const bugs = await orm.tasks.variant('bug').all();
     expect(bugs).toHaveLength(1);
     expect(bugs[0]!.type).toBe('bug');
     expect(bugs[0]!.title).toBe('Fix crash');
   });
 
-  it('variant("Feature") filters to only Feature rows', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+  it('variant("feature") filters to only Feature rows', async () => {
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -124,14 +128,14 @@ describe('Mongo ORM polymorphism integration', {
       assigneeId: user._id as string,
     } as never);
 
-    const features = await orm.tasks.variant('Feature').all();
+    const features = await orm.tasks.variant('feature').all();
     expect(features).toHaveLength(1);
     expect(features[0]!.type).toBe('feature');
     expect(features[0]!.title).toBe('Add login');
   });
 
   it('variant create injects discriminator and persists it', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -140,7 +144,7 @@ describe('Mongo ORM polymorphism integration', {
       homeAddress: null,
     });
 
-    const bug = await orm.tasks.variant('Bug').create({
+    const bug = await orm.tasks.variant('bug').create({
       title: 'Null pointer',
       severity: 'critical',
       assigneeId: user._id as string,
@@ -155,7 +159,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('round-trip: create via variant, read back via base', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -164,13 +168,13 @@ describe('Mongo ORM polymorphism integration', {
       homeAddress: null,
     });
 
-    await orm.tasks.variant('Bug').create({
+    await orm.tasks.variant('bug').create({
       title: 'Memory leak',
       severity: 'high',
       assigneeId: user._id as string,
     } as never);
 
-    await orm.tasks.variant('Feature').create({
+    await orm.tasks.variant('feature').create({
       title: 'Dashboard',
       priority: 'p1',
       targetRelease: 'v2.0',
@@ -186,7 +190,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('non-polymorphic model unaffected by polymorphism changes', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
 
     await orm.users.createAll([
       {
@@ -212,7 +216,7 @@ describe('Mongo ORM polymorphism integration', {
   });
 
   it('variant().first() returns narrowed result', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -221,20 +225,20 @@ describe('Mongo ORM polymorphism integration', {
       homeAddress: null,
     });
 
-    await orm.tasks.variant('Bug').create({
+    await orm.tasks.variant('bug').create({
       title: 'Fix crash',
       severity: 'high',
       assigneeId: user._id as string,
     } as never);
 
-    const bug = await orm.tasks.variant('Bug').first();
+    const bug = await orm.tasks.variant('bug').first();
     expect(bug).not.toBeNull();
     expect(bug!.type).toBe('bug');
     expect(bug!.title).toBe('Fix crash');
   });
 
   it('variant createAll injects discriminator into each document', async () => {
-    const orm = mongoOrm({ contract, executor: runtime });
+    const orm = mongoOrm({ contract, executor: runtime, enums });
     const user = await orm.users.create({
       name: 'Alice',
       email: 'alice@test.com',
@@ -243,12 +247,12 @@ describe('Mongo ORM polymorphism integration', {
       homeAddress: null,
     });
 
-    await orm.tasks.variant('Bug').createAll([
+    await orm.tasks.variant('bug').createAll([
       { title: 'Bug 1', severity: 'low', assigneeId: user._id as string },
       { title: 'Bug 2', severity: 'high', assigneeId: user._id as string },
     ] as never);
 
-    const bugs = await orm.tasks.variant('Bug').all();
+    const bugs = await orm.tasks.variant('bug').all();
     expect(bugs).toHaveLength(2);
     for (const b of bugs) {
       expect(b.type).toBe('bug');

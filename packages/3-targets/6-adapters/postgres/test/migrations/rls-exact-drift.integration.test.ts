@@ -37,7 +37,7 @@ const BODY = '(tenant_id = 1)';
 const ALL_CLASSES_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-const NO_DESTRUCTIVE_POLICY = { allowedOperationClasses: ['additive', 'widening'] as const };
+const ADDITIVE_ONLY_POLICY = { allowedOperationClasses: ['additive'] as const };
 
 const WIRE_NAME = `tenant_read_${computeContentHash({
   using: BODY,
@@ -60,8 +60,8 @@ function buildContract(policyName: string, prefix?: string): Contract<SqlStorage
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  tenant_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  tenant_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -162,7 +162,7 @@ describe('out-of-band body drift on an exact-named policy', { concurrent: false 
     expect(notEqual.length).toBeGreaterThan(0);
   });
 
-  it('a destructive-allowed plan replaces the drifted policy: drop before create, same name', {
+  it('a widening-allowed plan replaces the drifted policy: drop before create, same name', {
     timeout: testTimeout,
   }, async () => {
     await createLivePolicy(driver!, EXACT_NAME);
@@ -175,6 +175,8 @@ describe('out-of-band body drift on an exact-named policy', { concurrent: false 
       schema: await familyInstance.introspect({ driver: driver!, contract }),
       policy: { allowedOperationClasses: [...ALL_CLASSES_POLICY.allowedOperationClasses] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -188,7 +190,7 @@ describe('out-of-band body drift on an exact-named policy', { concurrent: false 
     ]);
   });
 
-  it('without the destructive allowance the plan fails with the conflict naming the policy', {
+  it('without the widening allowance the plan fails with the conflict naming the policy', {
     timeout: testTimeout,
   }, async () => {
     await createLivePolicy(driver!, EXACT_NAME);
@@ -199,8 +201,10 @@ describe('out-of-band body drift on an exact-named policy', { concurrent: false 
     const result = planner.plan({
       contract,
       schema: await familyInstance.introspect({ driver: driver!, contract }),
-      policy: { allowedOperationClasses: [...NO_DESTRUCTIVE_POLICY.allowedOperationClasses] },
+      policy: { allowedOperationClasses: [...ADDITIVE_ONLY_POLICY.allowedOperationClasses] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

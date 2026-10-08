@@ -57,16 +57,16 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "instant": {
                   "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01T00:00:00.5Z"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -82,7 +82,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "a6836768aea40a07eb15b3eba3d1d1cec515aa5a0b0f876b77ef395f46d92307"
+    "storageHash": "9bb4818341af35a3b5cc8a240e8b12cb6b9f29f28057775f3b57859a63d5779e"
   },
   "capabilities": {
     "sql": {
