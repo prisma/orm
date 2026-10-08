@@ -36,7 +36,21 @@ class ScopedPostCollection extends Collection<TestContract, 'Post'> {
   titled(title: string) {
     return this.where({ title });
   }
+
+  perUser() {
+    return this.groupBy('userId').aggregate((a) => ({ n: a.count() }));
+  }
+
+  preparedRows() {
+    return this.prepared.all();
+  }
+
+  preparedTotal() {
+    return this.prepared.aggregate((a) => ({ n: a.count() }));
+  }
 }
+
+declare const flag: boolean;
 
 declare const scoped: ScopedPostCollection;
 declare const tasks: Collection<PolyContract, 'Task'>;
@@ -308,6 +322,13 @@ describe('whereUnique inside an include refinement', () => {
     // @ts-expect-error whereUnique is not available inside an include refinement
     plain.Post.include('author', (author) => author.whereUnique({ id: 1 }));
   });
+
+  test('a model fragment that returns a uniquely filtered collection is refused', () => {
+    const onePost = plain.Post.fragment((posts) => posts.whereUnique({ id: 1 }));
+    // @ts-expect-error a refinement cannot return a uniquely filtered collection
+    plain.User.include('posts', (posts) => posts.with(onePost));
+    expectTypeOf(plain.User.include('posts', (posts) => posts.with(summary))).not.toBeAny();
+  });
 });
 
 describe('a class whose methods call many-record methods on this', () => {
@@ -344,5 +365,91 @@ describe('collections without whereUnique', () => {
     expectTypeOf(
       Post.where({ id: 1 }).updateAndCount({ title: 'x' }),
     ).resolves.toEqualTypeOf<number>();
+  });
+});
+
+describe('groupBy', () => {
+  const unique = Post.whereUnique({ id: 1 });
+
+  test('refused after whereUnique', () => {
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    unique.groupBy('userId');
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    unique.where({ title: 'x' }).groupBy('userId');
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    unique.include('author').groupBy('userId');
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    unique.select('id').groupBy('userId');
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    plain.Post.whereUnique({ id: 1 }).groupBy('userId');
+  });
+
+  test('accepted on a collection without a unique filter', () => {
+    type Groups = Array<{ userId: number; n: number }>;
+    const count = (a: Parameters<Parameters<PostCollection['aggregate']>[0]>[0]) => ({
+      n: a.count(),
+    });
+    expectTypeOf(Post.groupBy('userId').aggregate(count)).resolves.toEqualTypeOf<Groups>();
+    expectTypeOf(
+      Post.published().recent().limit(5).groupBy('userId').aggregate(count),
+    ).resolves.toEqualTypeOf<Groups>();
+    expectTypeOf(plain.Post.groupBy('userId').aggregate(count)).resolves.toEqualTypeOf<Groups>();
+    expectTypeOf(
+      Post.where({ id: 1 }).include('author').groupBy('userId').aggregate(count),
+    ).resolves.toEqualTypeOf<Groups>();
+  });
+
+  test('accepted on a union of collections and on an Omit of a collection', () => {
+    const either = flag ? Post.published() : Post.recent();
+    expectTypeOf(either.groupBy('userId')).toEqualTypeOf(Post.groupBy('userId'));
+    const partial: Omit<PostCollection, 'all'> = Post;
+    expectTypeOf(partial.groupBy('userId')).toEqualTypeOf(Post.groupBy('userId'));
+  });
+
+  test('accepted on this in a class', () => {
+    expectTypeOf(scoped.perUser()).resolves.toEqualTypeOf<Array<{ userId: number; n: number }>>();
+    expectTypeOf(scoped.whereUnique({ id: 1 }).perUser()).resolves.toEqualTypeOf<
+      Array<{ userId: number; n: number }>
+    >();
+  });
+});
+
+describe('prepared', () => {
+  const unique = Post.whereUnique({ id: 1 });
+
+  test('has no all and no aggregate after whereUnique', () => {
+    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
+    unique.prepared.all();
+    // @ts-expect-error prepared.aggregate is not available on a uniquely filtered collection
+    unique.prepared.aggregate((a) => ({ n: a.count() }));
+    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
+    unique.where({ title: 'x' }).prepared.all();
+    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
+    unique.select('id').prepared.all();
+    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
+    plain.Post.whereUnique({ id: 1 }).prepared.all();
+    expectTypeOf<keyof typeof unique.prepared>().toEqualTypeOf<'first'>();
+  });
+
+  test('keeps first after whereUnique', () => {
+    expectTypeOf(unique.prepared.first()).toEqualTypeOf(Post.where({ id: 1 }).prepared.first());
+    expectTypeOf(unique.select('id').prepared.first()).toEqualTypeOf(
+      Post.where({ id: 1 }).select('id').prepared.first(),
+    );
+  });
+
+  test('has every member on a collection without a unique filter', () => {
+    expectTypeOf<keyof typeof Post.prepared>().toEqualTypeOf<'all' | 'aggregate' | 'first'>();
+    const filtered = Post.where({ id: 1 });
+    expectTypeOf<keyof typeof filtered.prepared>().toEqualTypeOf<'all' | 'aggregate' | 'first'>();
+    expectTypeOf(filtered.prepared.all()).not.toBeAny();
+    expectTypeOf(filtered.prepared.aggregate((a) => ({ n: a.count() }))).not.toBeAny();
+    expectTypeOf(filtered.prepared.first()).not.toBeAny();
+  });
+
+  test('has every member on this in a class', () => {
+    expectTypeOf(scoped.preparedRows()).not.toBeAny();
+    expectTypeOf(scoped.preparedRows()).toEqualTypeOf(plain.Post.prepared.all());
+    expectTypeOf(scoped.preparedTotal()).not.toBeAny();
   });
 });

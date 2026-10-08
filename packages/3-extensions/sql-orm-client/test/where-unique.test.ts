@@ -52,4 +52,26 @@ describe('whereUnique', () => {
     expect(unique?.plan.ast).toBeDefined();
     expect(unique?.plan.ast).toEqual(filtered?.plan.ast);
   });
+
+  it('throws inside an include refinement reached through a model fragment', () => {
+    const { plain } = createChainingOrm();
+    const summary = plain.Post.fragment((posts) => posts.select('id', 'title'));
+    const onePost = plain.Post.fragment((posts) => posts.whereUnique({ id: 1 }).with(summary));
+    expect(() => plain.User.include('posts', (posts) => posts.with(onePost))).toThrow(
+      expect.objectContaining({
+        code: 'ORM.INCLUDE_INVALID',
+        message: 'whereUnique() is not available inside include() refinement callbacks',
+        meta: { action: 'whereUnique()' },
+      }),
+    );
+  });
+
+  it('the same model fragment works on a top-level collection', () => {
+    const { plain } = createChainingOrm();
+    const summary = plain.Post.fragment((posts) => posts.select('id', 'title'));
+    const onePost = plain.Post.fragment((posts) => posts.whereUnique({ id: 1 }).with(summary));
+    expect(plain.Post.with(onePost).state).toEqual(
+      plain.Post.where({ id: 1 }).select('id', 'title').state,
+    );
+  });
 });

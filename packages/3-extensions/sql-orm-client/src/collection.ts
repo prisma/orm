@@ -131,7 +131,7 @@ import {
 } from './mutation-executor';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import type { PreparedCollection } from './prepared-collection';
+import type { PreparedCollection, PreparedCollectionFor } from './prepared-collection';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -494,6 +494,13 @@ export class CollectionBase<
     criterion: UniqueConstraintCriterion<TContract, ModelName>,
   ): UniquelyFiltered<Self>;
   whereUnique(criterion: UniqueConstraintCriterion<TContract, ModelName>): UniquelyFiltered<this> {
+    if (this.includeRefinementMode) {
+      throw ormError(
+        'ORM.INCLUDE_INVALID',
+        'whereUnique() is not available inside include() refinement callbacks',
+        { meta: { action: 'whereUnique()' } },
+      );
+    }
     const filter = normalizeWhereArg(
       shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, criterion),
       { contract: this.contract, namespaceId: this.namespaceId },
@@ -1130,6 +1137,16 @@ export class CollectionBase<
       keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
       ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
+    Self = unknown,
+  >(
+    this: Self & HasNoUniqueFilter,
+    ...fields: Fields
+  ): GroupedCollection<TContract, ModelName, Fields, State['nsId']>;
+  groupBy<
+    Fields extends readonly [
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
+    ],
   >(...fields: Fields): GroupedCollection<TContract, ModelName, Fields, State['nsId']> {
     assertLockCompatible(this.state, 'groupBy');
     const groupByColumns = mapFieldsToColumns(
@@ -1509,7 +1526,7 @@ export class CollectionBase<
     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
   }
 
-  get prepared(): PreparedCollection<
+  get prepared(): PreparedCollectionFor<
     TContract,
     ModelName,
     CollectionRowOf<this>,
@@ -1531,7 +1548,12 @@ export class CollectionBase<
       },
     };
     return blindCast<
-      PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionTypeStateOf<this>>,
+      PreparedCollectionFor<
+        TContract,
+        ModelName,
+        CollectionRowOf<this>,
+        CollectionTypeStateOf<this>
+      >,
       'the row this collection reads is the row its type carries'
     >(prepared);
   }
