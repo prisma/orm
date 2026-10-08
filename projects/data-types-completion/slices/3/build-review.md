@@ -6,6 +6,7 @@ Reviewer-maintained. Contract: [ADR 254](../../../../docs/architecture%20docs/ad
 
 - Implementer: slice 3 implementer (Opus), dispatch a rounds 1 and 2
 - Reviewer: slice 3 reviewer (Opus), dispatch a rounds 1 and 2, started 2026-10-08
+- Implementer and reviewer, dispatch b round 1: slice 3 implementer and reviewer (Opus)
 
 ## Orchestrator rulings
 
@@ -26,6 +27,7 @@ Dispatch a, given during the dispatch and recorded in `wip/s3/report-a.md`. They
 | --- | --- | --- |
 | a | 1 (`650fff0614..def805947b`) | ANOTHER ROUND NEEDED: 1 must-fix, 1 should-fix, 4 low |
 | a | 2 (`e2ecf45352^..7396cff3b8`) | ANOTHER ROUND NEEDED: 0 must-fix, 1 should-fix, 3 low |
+| b | 1 (`682ee5dd54..7e742de7c9`) | ANOTHER ROUND NEEDED: 3 must-fix, 1 should-fix, 6 low |
 
 ## Findings log
 
@@ -126,3 +128,95 @@ Dispatch a, given during the dispatch and recorded in `wip/s3/report-a.md`. They
 ## Dispatch a, round 3 (orchestrator)
 
 `bcf3a33c78` fixes S3-a-R2-1 to R2-4, each with a test: an unset fractional-second precision means microseconds, invalid geometry hex is refused through `refuseJsonValue`, `mongo/vector` checks its `length`, and the `readCharacter` doc comment is back. Dispatch a is closed. Carried forward: dispatch f removes `contract infer`'s `readsBack` use of `readReportedValue`; dispatch g's upgrade instruction covers Postgres contracts with a default in another spelling than their parameters give; dispatch h documents `DataType.fromCodec`.
+
+## Dispatch b, round 1
+
+Brief: `projects/data-types-completion/slices/3/briefs/s3-dispatch-b.md`. Range `682ee5dd54..7e742de7c9`.
+
+### Orchestrator rulings for dispatch b
+
+1. The `jsonb`, `json`, `arktype/json@1` and `pg/vector@1` projections are `CAST(x AS text)`, not the column itself. Accepted; the ADR text is corrected separately.
+2. `sqlite/datetime@1` and `sqlite/json@1` readers are narrowed in dispatch d, not here.
+3. An include of an interval column failing under `IntervalStyle = sql_standard` is not accepted. It is finding S3-b-R1-1.
+4. `docs/reference/aggregate-descriptor-guide.md` and `error-reference.md` still say `emptyResultJson`; the orchestrator updates docs.
+
+### Checks of the implementer's claims
+
+- `CAST(x AS text)` for `json` and `jsonb`: confirmed. With both projections set back to the column itself and the target rebuilt, five kit cases fail: the four new string-document cases (`'42'` and `'hello'`, `json` and `jsonb`) and the array case `string document elements`. Restored and rebuilt afterwards.
+- `pg/vector@1`: with the old widened `array_to_json(...float8[])` projection, all nine pgvector cases fail, but with `fromWire rejects the projected [ 1, 2, 3 ]`, not because of the widened numbers. See S3-b-R1-5.
+- Widened `fromWire`s, against a real database (`node:sqlite` and PGlite, built packages). `pg/text-array@1` reads `{a,"b c",NULL,"\"q\""}`, `{}`, `[0:1]={a,b}`, quoted `"NULL"` and backslashes correctly, and refuses a two-dimensional array (S3-b-R1-8). The SQLite results are in S3-b-R1-3.
+- The linear Promise-count check: it does not fail when per-cell work grows. See S3-b-R1-4.
+- PostGIS: unit test only, and `deferred.md` names the missing conformance file. Accepted.
+
+### S3-b-R1-1 (must-fix, orchestrator ruling): `pg/interval@1`'s `fromWire` reads two of PostgreSQL's four interval styles
+
+- Where: `pgIntervalDecode` and `intervalTextFields` in `packages/3-targets/3-targets/postgres/src/core/codec-helpers.ts`; the two `notYetCanonical` "hostile session" interval cases in `packages/3-targets/6-adapters/postgres-codec-testkit/test/codec-conformance/cases.ts`; the interval line in `projects/data-types-completion/deferred.md`.
+- What is wrong: against PGlite, `fromWire` reads the `postgres` and `iso_8601` text and refuses every `postgres_verbose` text (`@ 1 year 2 mons 3 days 4 hours 5 mins 6.5 secs`, `@ 1 year 2 mons -3 days 4 hours ago`, `@ 0`) and every `sql_standard` text with a year-month or day part (`+1-2 +3 +4:05:06.5`, `+0-1 -1 +0:00:00`, `0`). `-0:00:01.5` reads only because it matches the `postgres` pattern. Since this dispatch an include reads that text, so an include fails where it read the ISO duration before.
+- Change: `fromWire` reads the text of all four styles, for rows and includes. In `sql_standard` a single leading sign applies to every field when no other field has a sign (`-1 2:03:04` is minus one day, two hours, three minutes, four seconds), so test that case. Add a kit case per style with a mixed-sign and a zero interval, remove the two `notYetCanonical` marks, and remove or rewrite the deferred line (it also names `DateStyle`, which is unchanged by this dispatch because the date and time projections were already `CAST(x AS text)`).
+
+### S3-b-R1-2 (must-fix, the same defect as S3-b-R1-1): `pg/bytea@1` refuses the text `bytea_output = escape` prints
+
+- Where: `PgByteaDescriptor.jsonProjection` and `pgByteaDecodeWire` in `packages/3-targets/3-targets/postgres/src/core/`.
+- What is wrong: the old projection, `encode(x, 'base64')`, gave the same text in every session. `CAST(x AS text)` follows `bytea_output`. Against PGlite with `SET bytea_output = 'escape'`, the cast gives `\000\377A` and `fromWire` throws `pg/bytea@1 wire value must be a bytea hex string or Uint8Array`. So an include of a `bytea` column now fails in that session, as an ordinary row already did. It is the class the interval ruling names: a session setting changes the text PostgreSQL prints, and `fromWire` reads only the default.
+- Change: `fromWire` also reads the escape format (octal `\nnn`, `\\`, and printable bytes as themselves). Add a kit case with `bytea_output = escape` in `setupSql`.
+
+### S3-b-R1-3 (must-fix, a "must not change" item): plain SQLite reads that returned a value now throw, and a BLOB column's text can change type silently
+
+- Where: `safeIntegerWire`, `floatWire` and `SqliteBlobCodec.fromWire` in `packages/3-targets/3-targets/sqlite/src/core/codecs.ts`; `test/integration/test/sql-orm-client/sqlite-float-non-finite-include.test.ts`, whose flat-read assertions were rewritten from a returned value to a refusal.
+- What is wrong: the brief says what a query returns does not change. Outside a STRICT table SQLite keeps text and blobs in any column. Against `node:sqlite`, a flat read that returned the stored value before now throws `RUNTIME.DECODE_FAILED` for:
+  - `sqlite/real@1` and `sql/float@1` holding `'abc'` or `x'00ff'` (the implementer's report names these two);
+  - `sqlite/integer@1` and `sql/int@1` holding `'abc'` or `x'00ff'` (the report does not name these);
+  - `sqlite/blob@1` holding text that is not uppercase hex, such as `'hello'`.
+  Worse, a `sqlite/blob@1` column holding the text `'ABCD'` used to read as the string `'ABCD'` and now reads as the bytes `[171, 205]`, with no error. A number in a BLOB column still passes through as a number. Values that read the same as before: numbers, infinities, `''`-free blobs, and the text `'Infinity'` in a REAL column (now the number, before the string).
+- Change: the orchestrator rules. Either (a) the refusals are wanted, as they make a flat read and an include agree; then record them for dispatch g's upgrade instruction and the ADR, and keep the integration test as rewritten; or (b) flat reads keep passing a value they cannot read through, as before. In both cases the BLOB reinterpretation goes: an include cannot tell hex text from row text, so the projection must carry something a row never holds, for example `json_array(hex(x))` for a blob, which `fromWire` reads as bytes while a row's string stays a string (or is refused under (a)).
+
+### S3-b-R1-4 (should-fix): the Promise-count test passes when per-cell work grows
+
+- Where: `creates Promise resources in proportion to the included cells it reads` in `packages/3-extensions/sql-orm-client/test/collection-row-query.test.ts`.
+- What is wrong: `hundred - one === 99 * (two - one)` catches growth faster than linear but not more Promises per cell. With two extra `await Promise.resolve()` calls added before `codec.fromWire` in `decodeIncludedJsonValue`, the test still passes.
+- Change: also assert `two - one` equals the exact number of Promises one included row costs today (its two cells and one nested include), so a change to per-row work has to update the number.
+
+### S3-b-R1-5 (low): the pgvector conformance file compares the projection with the row as `real`s
+
+- Where: `vectorsEqualAsReals` as the case's `valueEquality` in `packages/3-extensions/pgvector/test/codec-conformance.integration.test.ts`; `valuesAgree` in `packages/3-targets/6-adapters/postgres-codec-testkit/src/index.ts`.
+- What is wrong: the kit uses `valueEquality` for the projection against the row as well as for the row against the case. For vectors that comparison rounds both sides to `real`, so a projection that printed widened doubles (`0.10000000149011612` where the row reads `0.1`), the defect this dispatch's projection fixes, would pass.
+- Change: compare the projection with the row by deep equality, and use `valueEquality` only for the row against the case value. Where a case needs `valueEquality` for both (Temporal values have no own properties for deep equality to compare), give the case a separate projection comparison.
+
+### S3-b-R1-6 (low): an include's call context drops the row's `signal`
+
+- Where: `resolveIncludedColumnBinding` and `consumeScalarInclude` in `packages/3-extensions/sql-orm-client/src/collection-dispatch.ts`.
+- What is wrong: brief item 1 asks for the call context an ordinary row gets. `decodeField` in `packages/2-sql/5-runtime/src/codecs/decoding.ts` gives a cell `{ ...rowCtx, column }`, where `rowCtx` carries the query's `signal`. An include cell gets `{ column }` and a scalar include `{}`, so a codec that honours `signal` cannot cancel inside an include.
+- Change: pass the query's `signal` into the include read if the ORM has it; otherwise record that the ORM has none and the context is otherwise the row's.
+
+### S3-b-R1-7 (low): an orphaned doc comment in `codec-helpers.ts`
+
+- Where: `/** Reads the ISO-8601 duration `pg/interval` stores. */` above `intervalTextFields` in `packages/3-targets/3-targets/postgres/src/core/codec-helpers.ts`.
+- What is wrong: its function, `readPgIntervalJson`, was deleted and the comment left behind (`.agents/rules/jsdoc-line-width.mdc`).
+- Change: delete it.
+
+### S3-b-R1-8 (low): `pg/text-array@1` refuses a multi-dimensional array
+
+- Where: `readTextArrayWire` in `packages/3-targets/3-targets/postgres/src/core/codecs.ts`.
+- What is wrong: a `text[]` column may hold `{{a,b},{c,d}}`. A plain read returned that text before; now it throws `pg/text-array@1 wire value must be text[] text`. Separately, `min`/`max` of a `text[]` column now returns an array where it returned the array's text, which matches the codec's declared type, so it is a fix, but it changes what a query returns.
+- Change: refuse with a message naming the multi-dimensional array, or read it; and list the `min`/`max` change in the report for dispatch g.
+
+### S3-b-R1-9 (low, for the orchestrator): `emptyResultWire` is missing from dispatch g's extension instruction
+
+- Where: plan row g in `projects/data-types-completion/slices/3/plan.md`.
+- What is wrong: an extension's aggregate descriptor with `emptyResultJson` is now refused by `isAggregateDescriptor`, and the value's meaning changed from stored JSON to a wire value (`emptyResultJson: 0` under `pg/int8number@1` must become what that codec's `fromWire` reads). Row g lists the codec methods, `DataTypeValue`, parameter limits and projections, not this field.
+- Change: add the rename and its meaning to dispatch g's extension instruction.
+
+### S3-b-R1-10 (low): the SQLite kit no longer checks the projection of an integer past 2^53
+
+- Where: the three `sqlite/bigint@1` cases marked `row-execution` in `packages/3-targets/6-adapters/sqlite-codec-testkit/test/codec-conformance/cases.ts`.
+- What is wrong: the runtime driver does not ask `node:sqlite` for bigints, so the row read throws and the case stops there. Before, these cases checked the projection's decimal text. The underlying gap is older: a plain read of a `sqlite/bigint@1` column holding such a value fails in the runtime, while an include reads it.
+- Change: when the row cannot be read, the kit still checks that `fromWire` reads the projection to the case's value. Add a deferred line for the runtime driver's reading of integers past 2^53.
+
+### Checks run for dispatch b round 1
+
+- Root `typecheck:agent`: pass. `lint:agent`: pass. `lint:deps`: pass. `lint:framework-vocabulary`: 254 at threshold 254. `pnpm build`: pass. `fixtures:check:agent`: pass, working tree clean.
+- Package tests of the 14 touched packages (framework-components, sql-relational-core, sql-builder, sql-contract-emitter, sql-runtime, target-postgres, target-sqlite, both codec test kits with their integration files, extension-pgvector and extension-arktype-json with their conformance files, extension-postgis, postgres, sql-orm-client): all pass.
+- Integration: the 26 `test/sql-orm-client/` files whose names contain include, relation or aggregate, plus `json-projection-variants.test.ts` (54 files with the filter's substring matches, 372 tests), pass. `test/planner-golden` re-recorded with `PLANNER_GOLDEN_WRITE=1`, `test/authoring` and `test/date-time-defaults`: 48 files, 1104 tests, pass, and `git status` clean.
+- Sweeps: no `emptyResultJson` outside `docs/`, `projects/` and the historical rc.1 to rc.2 upgrade instruction; no `canonicalFormOf` in either kit; no `any`, `@ts-expect-error`, lint suppression or bare `as` added in production code.
+- Must-not-change: no committed `contract.json`, `contract.d.ts`, migration, snapshot or golden recording changed. The SQL snapshot `json-projection-variants.test.ts.snap` changed for the vector projection, as ruling 1 accepts. What queries return changed in S3-b-R1-3 and S3-b-R1-8.
+- Commits: the two `test(...)` commits carry the implementation with the tests, so the history cannot show the tests red first; the mutations above show the new tests can fail.
