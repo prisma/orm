@@ -3,7 +3,11 @@ import {
   getAuthoringTypeConstructor,
   instantiateAuthoringTypeConstructor,
 } from '@internal/framework-components/authoring';
-import { type Codec, materializeCodec } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  materializeCodec,
+  readReportedValue,
+} from '@internal/framework-components/codec';
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -14,7 +18,7 @@ import { type CatalogColumnType, introspectedNativeType } from '../src/core/nati
 import { createPostgresTypeMap } from '../src/core/psl-build/postgres-type-map';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import { postgresPslTypeConstructors } from '../src/core/type-constructors';
-import { fromContractJson, toContractJson } from './contract-json';
+import { toContractJson } from './contract-json';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
 type Compared = JsonValue | ColumnDefault | undefined;
@@ -157,10 +161,10 @@ function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
   if (value === null) return null;
   const { codec, typeParams } = columnCodec(nativeType);
   if (!nativeType.endsWith('[]') || !Array.isArray(value)) {
-    return toContractJson(codec, fromContractJson(codec, value, typeParams));
+    return toContractJson(codec, readReportedValue(codec, value, typeParams));
   }
   return value.map((element) =>
-    element === null ? null : toContractJson(codec, fromContractJson(codec, element, typeParams)),
+    element === null ? null : toContractJson(codec, readReportedValue(codec, element, typeParams)),
   );
 }
 

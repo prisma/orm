@@ -51,7 +51,14 @@ const listDefaults: readonly ListDefaultCase[] = [
       codecId: 'pg/numeric@1',
       typeParams: { precision: 65, scale: 30 },
     },
-    default: { kind: 'literal', value: ['1.5', '-2.25', '12345678901234567890.123456789'] },
+    default: {
+      kind: 'literal',
+      value: [
+        '1.500000000000000000000000000000',
+        '-2.250000000000000000000000000000',
+        '12345678901234567890.123456789000000000000000000000',
+      ],
+    },
   },
   {
     column: 'unscaledDecimals',

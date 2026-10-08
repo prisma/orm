@@ -88,7 +88,7 @@ export const rows: readonly FidelityRow[] = [
   literal('float8_exponent', 'float8', "'1e300'::float8"),
   literal('date_plain', 'date', "'2024-02-29'::date"),
   literal('timestamp_millis', 'timestamp(3)', "'2024-01-02 03:04:05.678'::timestamp"),
-  literal('timestamp_excess_precision', 'timestamp(3)', "'2024-01-02 03:04:05.6789'"),
+  refusedByCodec('timestamp_excess_precision', 'timestamp(3)', "'2024-01-02 03:04:05.6789'"),
   literal('timestamptz_utc', 'timestamptz', "'2024-01-02 03:04:05+00'::timestamptz"),
   literal('timestamptz_offset', 'timestamptz', "'2024-01-02 03:04:05+05:30'"),
   literal('uuid_lower', 'uuid', "'0e0f0a0b-0000-4000-8000-000000000001'::uuid"),

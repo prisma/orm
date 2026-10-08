@@ -1,5 +1,5 @@
 import type { DataType } from '@internal/framework-components/codec';
-import { readContractValue } from '@internal/framework-components/codec';
+import { dataTypeValueFor, readContractValue } from '@internal/framework-components/codec';
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
 import { pgInt8NumberDescriptor, pgNumericDescriptor } from '../src/core/codecs';
@@ -10,10 +10,12 @@ import {
   pgFloat4,
   pgInt2,
   pgInt4,
+  pgInterval,
   pgNumeric,
   pgTime,
   pgTimestamp,
   pgTimestamptz,
+  pgTimetz,
   pgVarbit,
   pgVarchar,
 } from '../src/core/data-types';
@@ -103,7 +105,6 @@ describe('a type checks the limits of its parameters and its range', () => {
   });
 
   it.each([
-    [pgChar, 'a  ', {}],
     [pgChar, 'abc', { length: 3 }],
     [pgVarchar, 'abc', { length: 3 }],
     [pgVarchar, 'any length', {}],
@@ -148,5 +149,66 @@ describe("a codec checks only its application value's own limits", () => {
     expect(() => readContractValue(codec, digits, {})).toThrow(
       refusedBy({ codecId: 'pg/int8number@1' }),
     );
+  });
+});
+
+describe('a fractional-second precision limits a value, which the type refuses rather than rounds', () => {
+  it.each([
+    [pgTime, '00:00:00.5', { precision: 0 }],
+    [pgTime, '00:00:00.1234', { precision: 3 }],
+    [pgTimetz, '00:00:00.5+02:00', { precision: 0 }],
+    [pgTimestamp, '2024-01-01T00:00:00.05', { precision: 1 }],
+    [pgTimestamptz, '2024-01-01T00:00:00.5Z', { precision: 0 }],
+    [pgTimestamptz, '2024-01-15 01:00:00.25+01', { precision: 1 }],
+    [pgInterval, 'PT1.5S', { precision: 0 }],
+  ])('%s refuses %s under %j', (type, text, params) => {
+    expect(read(type, text, params)).toThrow(refusedBy({ dataType: type.id }));
+  });
+
+  it.each([
+    [pgTime, '00:00:00.5', { precision: 1 }],
+    [pgTime, '00:00:00', { precision: 0 }],
+    [pgTimestamptz, '2024-01-01T00:00:00.123Z', { precision: 3 }],
+    [pgTimestamptz, 'infinity', { precision: 0 }],
+    [pgInterval, 'PT1.5S', { precision: 1 }],
+    [pgInterval, 'P1Y', { precision: 0 }],
+  ])('%s reads %s under %j', (type, text, params) => {
+    expect(type.fromContract(text, params).value).toBe(text);
+  });
+
+  it('withParams refuses a value with more fraction digits than the precision', () => {
+    expect(() =>
+      pgTime.withParams(pgTime.fromContract('00:00:00.5', {}), { precision: 0 }),
+    ).toThrow(refusedBy({ dataType: 'pg/time' }));
+  });
+});
+
+describe('a character value is spelled without the spaces that pad it to its length', () => {
+  it('refuses a padded value, naming the value without the padding', () => {
+    expect(read(pgChar, 'a  ', { length: 3 })).toThrow(
+      expect.objectContaining({
+        message: 'pg/char JSON value must be "a", the spelling its parameters give this value',
+      }),
+    );
+  });
+
+  it('a value a codec hands over drops the padding', () => {
+    expect(dataTypeValueFor(pgChar, { length: 3 }, 'a  ').value).toBe('a');
+  });
+});
+
+describe('a numeric(precision, scale) value has one spelling', () => {
+  it('refuses a value without the fraction digits its scale gives, naming the spelling', () => {
+    expect(read(pgNumeric, '1.5', { precision: 10, scale: 2 })).toThrow(
+      expect.objectContaining({
+        message:
+          'pg/numeric JSON value must be "1.50", the spelling its parameters give this value',
+        meta: { dataType: 'pg/numeric', received: '"1.5"' },
+      }),
+    );
+  });
+
+  it('reads the value with its scale', () => {
+    expect(pgNumeric.fromContract('1.50', { precision: 10, scale: 2 }).value).toBe('1.50');
   });
 });

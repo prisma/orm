@@ -201,6 +201,10 @@ const readFloat4: DataTypeReader = (json) => {
 };
 
 /** A `character` column holds its length in characters, and one with no length is `character(1)`; the spaces that pad a value to its length do not count. */
+/** A `character` value is spelled without the spaces that pad it to its length, as the application reads it. */
+const spellCharacter = (json: JsonValue): JsonValue =>
+  typeof json === 'string' ? withoutTrailing(json, ' ') : json;
+
 const readCharacter: DataTypeReader = (json, params) => {
   const length = integerParam(params, 'length') ?? 1;
   if (!fitsCharacterLength(readJsonString('pg/char', json), length, true)) {
@@ -281,10 +285,47 @@ const readInet: DataTypeReader = (json) => {
   );
 };
 
+/**
+ * A value with more fraction digits of a second than the column's `precision`, which PostgreSQL would round, is refused rather than rounded. Trailing zeros of a fraction are not digits of the value.
+ */
+function refuseFinerThanPrecision(
+  typeId: string,
+  json: JsonValue,
+  fraction: string | undefined,
+  params: DataTypeParams,
+): JsonValue {
+  const precision = integerParam(params, 'precision');
+  if (precision === undefined || withoutTrailing(fraction ?? '', '0').length <= precision) {
+    return json;
+  }
+  return refuseJsonValue(
+    typeId,
+    `a value with at most ${counted(precision, 'fraction digit')} of a second, which precision ${precision} holds without rounding`,
+    json,
+  );
+}
+
+const SECONDS_FRACTION = /:\d{2}\.(\d+)/;
+
 const readDateTime =
   (stored: StoredDateTimeText): DataTypeReader =>
-  (json) =>
-    readJsonDateTimeText(json, stored);
+  (json, params) =>
+    refuseFinerThanPrecision(
+      stored.dataType,
+      json,
+      SECONDS_FRACTION.exec(readJsonDateTimeText(json, stored))?.[1],
+      params,
+    );
+
+const INTERVAL_SECONDS_FRACTION = /\d\.(\d+)S$/;
+
+const readInterval: DataTypeReader = (json, params) =>
+  refuseFinerThanPrecision(
+    'pg/interval',
+    json,
+    INTERVAL_SECONDS_FRACTION.exec(String(readPgIntervalJson('pg/interval', json)))?.[1],
+    params,
+  );
 
 /** The precision and scale of `numeric`. PostgreSQL 15 and later take a negative scale and one above the precision. */
 export const pgNumericParams = arktype({
@@ -447,6 +488,7 @@ export const pgChar = sqlDataType('pg/char', {
     claimsOnly('char({length})'),
   ],
   read: readCharacter,
+  spell: spellCharacter,
   normalize: withDefaultLength,
   casts: fromText,
 });
@@ -606,7 +648,7 @@ export const pgTimetz = typeCanonicalFromText('pg/timetz', pgTimetzCanonical, {
 });
 
 export const pgInterval = typeCanonicalFromText('pg/interval', pgIntervalCanonical, {
-  read: (json) => readPgIntervalJson('pg/interval', json),
+  read: readInterval,
   params: pgPrecisionParams,
   texts: [writtenAndCatalog('interval'), writtenAndCatalog('interval({precision})')],
 });

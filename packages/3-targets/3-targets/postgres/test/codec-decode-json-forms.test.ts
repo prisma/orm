@@ -100,10 +100,10 @@ const cases: readonly ContractJsonCase[] = [
     {
       codec: descriptor.factory({ length: 3 })(ctx),
       params: { length: 3 },
-      accepts: ['abc', 'ab', 'abc  ', '\u{1F600}\u{1F600}\u{1F600}'],
-      rejects: ['abcd', ' abc', 1, null],
+      accepts: ['abc', 'ab', '\u{1F600}\u{1F600}\u{1F600}'],
+      rejects: ['abcd', ' abc', 'abc  ', 'ab ', 1, null],
     },
-    { codec: descriptor.factory({})(ctx), accepts: ['a', 'a  ', ''], rejects: ['ab'] },
+    { codec: descriptor.factory({})(ctx), accepts: ['a', ''], rejects: ['ab', 'a  '] },
   ]),
   ...[pgVarcharDescriptor, postgresSqlVarcharDescriptor].flatMap((descriptor) => [
     {
@@ -139,8 +139,20 @@ const cases: readonly ContractJsonCase[] = [
   {
     codec: pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
     params: { precision: 5, scale: 2 },
-    accepts: ['123.45', '-999.99', '1.5', '1.50', '0', '0.01', 'NaN'],
-    rejects: ['1234.5', '1000', '1.555', '0.001', 'Infinity', '-Infinity', '1e3', '+1', 'abc'],
+    accepts: ['123.45', '-999.99', '1.50', '0.00', '0.01', 'NaN'],
+    rejects: [
+      '1.5',
+      '0',
+      '1234.5',
+      '1000',
+      '1.555',
+      '0.001',
+      'Infinity',
+      '-Infinity',
+      '1e3',
+      '+1',
+      'abc',
+    ],
   },
   {
     codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
@@ -451,7 +463,7 @@ describe('the length and scale checks on a long run of padding', () => {
     }
     expect({ withinBound: performance.now() - started < timeouts.default, refused }).toEqual({
       withinBound: true,
-      refused: _name.startsWith('pg/numeric'),
+      refused: true,
     });
   });
 });

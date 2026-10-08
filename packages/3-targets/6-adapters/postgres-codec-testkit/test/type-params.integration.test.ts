@@ -18,7 +18,7 @@ interface TypeCase {
   readonly numeric?: true;
 }
 
-// Each candidate is stored in a column of the type and compared with itself as written: reading it as contract JSON (the data type, then `fromDataTypeValue`) must take exactly the values PostgreSQL stores without changing them, and the JSON PostgreSQL writes for each stored value.
+// Each candidate is stored in a column of the type and compared with itself as written: reading it as contract JSON (the data type, then `fromDataTypeValue`) must take exactly the values PostgreSQL stores without changing them and in the spelling PostgreSQL writes for them, and the JSON PostgreSQL writes for each stored value.
 const typeCases: readonly TypeCase[] = [
   {
     codecId: 'sql/varchar@1',
@@ -269,7 +269,7 @@ describe('the data types check the parameters PostgreSQL enforces', { concurrent
 
   for (const typeCase of typeCases) {
     it(
-      `${typeCase.codecId} ${JSON.stringify(typeCase.typeParams ?? {})} takes exactly the values ${typeCase.columnType} stores unchanged`,
+      `${typeCase.codecId} ${JSON.stringify(typeCase.typeParams ?? {})} takes exactly the values ${typeCase.columnType} stores unchanged, as PostgreSQL spells them`,
       async () => {
         const descriptor = postgresCodecDescriptorRegistry.descriptorFor(typeCase.codecId)!;
         const codec = descriptor.factory(
@@ -287,9 +287,11 @@ describe('the data types check the parameters PostgreSQL enforces', { concurrent
           }
         };
         const results = [];
+        const spelledAsStored: boolean[] = [];
         for (const [value] of typeCase.candidates) {
           const written = typeCase.numeric === true ? Number(value) : value;
           const stored = await store(typeCase, value);
+          spelledAsStored.push(typeCase.numeric === true || stored.json === written);
           results.push({
             value,
             postgres: stored.unchanged,
@@ -299,10 +301,10 @@ describe('the data types check the parameters PostgreSQL enforces', { concurrent
         }
 
         expect(results).toEqual(
-          typeCase.candidates.map(([value, unchanged]) => ({
+          typeCase.candidates.map(([value, unchanged], index) => ({
             value,
             postgres: unchanged,
-            readsJson: unchanged,
+            readsJson: unchanged && spelledAsStored[index] === true,
             databaseJson: unchanged ? true : undefined,
           })),
         );

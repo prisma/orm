@@ -397,7 +397,7 @@ describe('PostgresCreateTable DDL lowering', () => {
           codecRef: { codecId: 'pg/int8@1', many: true },
         }),
         col('amounts', 'numeric(10,2)[]', {
-          default: lit(['1.5', '-2.25']),
+          default: lit(['1.50', '-2.25']),
           codecRef: {
             codecId: 'pg/numeric@1',
             typeParams: { precision: 10, scale: 2 },
@@ -424,7 +424,7 @@ describe('PostgresCreateTable DDL lowering', () => {
       `"ids" int8[] DEFAULT ARRAY['1', '-2', '9007199254740993']::int8[]`,
     );
     expect(lowered.sql).toContain(
-      `"amounts" numeric(10,2)[] DEFAULT ARRAY['1.5', '-2.25']::numeric(10,2)[]`,
+      `"amounts" numeric(10,2)[] DEFAULT ARRAY['1.50', '-2.25']::numeric(10,2)[]`,
     );
     expect(lowered.sql).toContain(
       `"stamps" timestamp(3)[] DEFAULT ARRAY['2024-01-01T00:00:00']::timestamp(3)[]`,
