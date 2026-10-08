@@ -122,3 +122,7 @@ Dispatch a, given during the dispatch and recorded in `wip/s3/report-a.md`. They
 - Integration: `test/planner-golden` re-recorded with `PLANNER_GOLDEN_WRITE=1`, `test/authoring` and `test/date-time-defaults`: 48 files, 1104 tests, pass, and `git status` clean. The adapter's two list and cast default files, both kits' new and changed integration files, and the Postgres default-fidelity file: pass.
 - Probes against PGlite and the built packages: the `pg/char` read-back above; `pg/interval` and `pg/time` fraction limits (S3-a-R2-1).
 - Must-not-change: no committed `contract.json`, `contract.d.ts`, migration, snapshot or golden recording changed in the range.
+
+## Dispatch a, round 3 (orchestrator)
+
+`bcf3a33c78` fixes S3-a-R2-1 to R2-4, each with a test: an unset fractional-second precision means microseconds, invalid geometry hex is refused through `refuseJsonValue`, `mongo/vector` checks its `length`, and the `readCharacter` doc comment is back. Dispatch a is closed. Carried forward: dispatch f removes `contract infer`'s `readsBack` use of `readReportedValue`; dispatch g's upgrade instruction covers Postgres contracts with a default in another spelling than their parameters give; dispatch h documents `DataType.fromCodec`.
