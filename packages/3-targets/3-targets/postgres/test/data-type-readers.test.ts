@@ -212,3 +212,19 @@ describe('a numeric(precision, scale) value has one spelling', () => {
     expect(pgNumeric.fromContract('1.50', { precision: 10, scale: 2 }).value).toBe('1.50');
   });
 });
+
+describe('an interval with no precision holds microseconds', () => {
+  it('refuses a seventh fraction digit of a second', () => {
+    expect(read(pgInterval, 'PT1.1234567S', {})).toThrow(refusedBy({ dataType: 'pg/interval' }));
+  });
+
+  it('refuses a seventh fraction digit in a value a codec hands over', () => {
+    expect(() => dataTypeValueFor(pgInterval, {}, 'PT1.1234567S')).toThrow(
+      refusedBy({ dataType: 'pg/interval' }),
+    );
+  });
+
+  it('reads six fraction digits', () => {
+    expect(pgInterval.fromContract('PT1.123456S', {}).value).toBe('PT1.123456S');
+  });
+});

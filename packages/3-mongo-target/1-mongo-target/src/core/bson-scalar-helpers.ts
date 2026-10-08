@@ -10,6 +10,7 @@ import {
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
+import { counted } from '@internal/utils/text';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
@@ -205,11 +206,16 @@ export function readDateJson(owner: string, json: JsonValue): JsonValue {
   return json;
 }
 
-export function readVectorJson(owner: string, json: JsonValue): number[] {
-  if (!Array.isArray(json)) return refuseJsonValue(owner, 'an array of numbers', json);
+/** Reads an array of numbers, of exactly `length` numbers when the column sets one. */
+export function readVectorJson(owner: string, json: JsonValue, length?: number): number[] {
+  const expected =
+    length === undefined ? 'an array of numbers' : `an array of ${counted(length, 'number')}`;
+  if (!Array.isArray(json) || (length !== undefined && json.length !== length)) {
+    return refuseJsonValue(owner, expected, json);
+  }
   const numbers: number[] = [];
   for (const element of json) {
-    if (typeof element !== 'number') return refuseJsonValue(owner, 'an array of numbers', element);
+    if (typeof element !== 'number') return refuseJsonValue(owner, expected, element);
     numbers.push(element);
   }
   return numbers;

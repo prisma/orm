@@ -23,7 +23,7 @@ import {
   readVectorJson,
 } from './bson-scalar-helpers';
 
-/** The vector's dimension, which only the TypeScript type `Vector<n>` reads. */
+/** The vector's dimension: the TypeScript type `Vector<n>` and the type's reader read it. */
 export const mongoVectorParams = arktype({ 'length?': 'number.integer >= 1' });
 
 export const mongoObjectId = mongoDataType('mongo/objectid', {
@@ -54,7 +54,12 @@ export const mongoDate = mongoDataType('mongo/date', {
   bsonTypes: ['date'],
 });
 export const mongoVector = mongoDataType('mongo/vector', {
-  read: (json) => readVectorJson('mongo/vector', json),
+  read: (json, params) =>
+    readVectorJson(
+      'mongo/vector',
+      json,
+      typeof params['length'] === 'number' ? params['length'] : undefined,
+    ),
   bsonTypes: ['vector'],
   params: mongoVectorParams,
 });

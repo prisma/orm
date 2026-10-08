@@ -413,13 +413,19 @@ describe('adapter-postgres codecs', () => {
     /**
      * PostgreSQL rounds sub-microsecond fractional seconds rather than
      * truncating: `INTERVAL '1.1234567 seconds'` is `1.123457`, and
-     * `'1.9999999'` carries into `2`. Both paths into the value agree.
+     * `'1.9999999'` carries into `2`. A wire value is read the same way.
      */
-    it('rounds fractional seconds past microsecond resolution', () => {
-      expect(fromContractJson(codec, 'PT1.1234567S')).toEqual(fields({ micros: 1_123_457n }));
-      expect(fromContractJson(codec, 'PT1.9999999S')).toEqual(fields({ micros: 2_000_000n }));
-      expect(fromContractJson(codec, 'PT-1.1234567S')).toEqual(fields({ micros: -1_123_457n }));
+    it('rounds fractional seconds past microsecond resolution in a wire value', async () => {
+      expect(await codec.fromWire('PT1.1234567S', {})).toEqual(fields({ micros: 1_123_457n }));
+      expect(await codec.fromWire('PT1.9999999S', {})).toEqual(fields({ micros: 2_000_000n }));
+      expect(await codec.fromWire('PT-1.1234567S', {})).toEqual(fields({ micros: -1_123_457n }));
       expect(toContractJson(codec, fields({ micros: 1_123_457n }))).toBe('PT1.123457S');
+    });
+
+    it('refuses a stored value past microsecond resolution, which PostgreSQL would round', () => {
+      expect(() => fromContractJson(codec, 'PT1.1234567S')).toThrow(
+        expect.objectContaining({ meta: expect.objectContaining({ dataType: 'pg/interval' }) }),
+      );
     });
   });
 

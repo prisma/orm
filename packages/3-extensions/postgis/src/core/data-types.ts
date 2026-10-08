@@ -8,6 +8,7 @@ import {
 } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import { pgText } from '@internal/target-postgres/data-types';
+import { isInternalError } from '@internal/utils/internal-error';
 import { type as arktype } from 'arktype';
 import { decodeEWKBHex } from './ewkb';
 
@@ -15,11 +16,21 @@ export const postgisGeometryParams = arktype({ 'srid?': 'number.integer >= 1' })
 
 const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
 
+/** The SRID HEXEWKB carries, or `undefined` when it carries none or is not EWKB. */
+function sridOf(hex: string): number | undefined {
+  try {
+    return decodeEWKBHex(hex).srid;
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return undefined;
+  }
+}
+
 /** A column with an SRID holds only geometries in that SRID, as PostGIS refuses any other. */
 const readGeometry: DataTypeReader = (json, params) => {
   const hex = readJsonMatching('postgis/geometry', json, HEX_TEXT, 'a HEXEWKB string');
   const srid = params['srid'];
-  if (typeof srid !== 'number' || decodeEWKBHex(hex).srid === srid) return json;
+  if (typeof srid !== 'number' || sridOf(hex) === srid) return json;
   return refuseJsonValue(
     'postgis/geometry',
     `a HEXEWKB string of a geometry with SRID ${srid}`,

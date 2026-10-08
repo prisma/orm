@@ -200,11 +200,11 @@ const readFloat4: DataTypeReader = (json) => {
   return json;
 };
 
-/** A `character` column holds its length in characters, and one with no length is `character(1)`; the spaces that pad a value to its length do not count. */
 /** A `character` value is spelled without the spaces that pad it to its length, as the application reads it. */
 const spellCharacter = (json: JsonValue): JsonValue =>
   typeof json === 'string' ? withoutTrailing(json, ' ') : json;
 
+/** A `character` column holds its length in characters, and one with no length is `character(1)`; the spaces that pad a value to its length do not count. */
 const readCharacter: DataTypeReader = (json, params) => {
   const length = integerParam(params, 'length') ?? 1;
   if (!fitsCharacterLength(readJsonString('pg/char', json), length, true)) {
@@ -285,8 +285,11 @@ const readInet: DataTypeReader = (json) => {
   );
 };
 
+/** The fraction digits of a second the date, time and interval types hold when a column sets no precision: microseconds. */
+const MICROSECOND_DIGITS = 6;
+
 /**
- * A value with more fraction digits of a second than the column's `precision`, which PostgreSQL would round, is refused rather than rounded. Trailing zeros of a fraction are not digits of the value.
+ * A value with more fraction digits of a second than the column's `precision`, or than microseconds when it sets none, which PostgreSQL would round, is refused rather than rounded. Trailing zeros of a fraction are not digits of the value.
  */
 function refuseFinerThanPrecision(
   typeId: string,
@@ -294,8 +297,8 @@ function refuseFinerThanPrecision(
   fraction: string | undefined,
   params: DataTypeParams,
 ): JsonValue {
-  const precision = integerParam(params, 'precision');
-  if (precision === undefined || withoutTrailing(fraction ?? '', '0').length <= precision) {
+  const precision = integerParam(params, 'precision') ?? MICROSECOND_DIGITS;
+  if (withoutTrailing(fraction ?? '', '0').length <= precision) {
     return json;
   }
   return refuseJsonValue(
