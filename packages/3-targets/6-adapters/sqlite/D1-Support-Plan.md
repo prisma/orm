@@ -130,7 +130,7 @@ The driver implements `RuntimeDriverInstance & SqlDriver<D1Binding>`. Query exec
 
 ### Capability gating: `interactiveTransaction`
 
-Today the ORM at `packages/3-extensions/sql-orm-client/src/mutation-executor.ts` checks `typeof runtime.transaction === 'function'` and falls through silently if the method is absent, running nested writes without atomicity. That's a latent bug regardless of D1 — any driver that ships without a transaction method loses atomicity invisibly.
+Today the ORM at `packages/3-extensions/sql-orm-client/src/mutation-scope.ts` checks `typeof runtime.transaction === 'function'` and falls through silently if the method is absent, running nested writes without atomicity. That's a latent bug regardless of D1 — any driver that ships without a transaction method loses atomicity invisibly.
 
 We introduce a new capability `interactiveTransaction: boolean` declared on the driver side:
 
@@ -140,7 +140,7 @@ We introduce a new capability `interactiveTransaction: boolean` declared on the 
 
 The ORM's `withMutationScope` is replaced with an explicit assertion following the existing `assertReturningCapability` pattern (`packages/3-extensions/sql-orm-client/src/collection-contract.ts`, lines 325–331). The assertion fires at the same mutation entry points that today call `assertReturningCapability` — create, createAll, upsert, update, updateAll, delete, deleteAll — but only when the operation produces nested work (relations with writes) or the user calls the explicit `.transaction()` API. Flat single-statement operations (`find*`, flat `create`/`update`/`delete`, `updateMany`, `deleteMany`, `upsert`, homogeneous `createMany`) don't need the capability and remain available on D1.
 
-The silent-fallthrough branch in `mutation-executor.ts` is removed: reaching that code with nested work and no transaction is a bug, not a runtime condition to tolerate.
+The silent-fallthrough branch in `mutation-scope.ts` is removed: reaching that code with nested work and no transaction is a bug, not a runtime condition to tolerate.
 
 ### User-facing `.transaction()` API
 
