@@ -25,6 +25,6 @@ These changes apply to the SQL ORM client only. The MongoDB ORM client did not c
 + const newest: QueryFragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
 ```
 
-Rename every use of these types in the file, including a re-export such as `export type { Fragment } from '@prisma/orm-postgres/orm-client'` and a qualified name such as `Orm.Fragment` after `import * as Orm from '@prisma/orm-postgres/orm-client'`. Code that still uses the earlier names `Scope` and `FieldScope` from the ORM client renames them directly: `Scope` to `QueryFragment` and `FieldScope` to `DeclaredFieldsFragment`.
+Rename every use of these types in the file, including a re-export such as `export type { Fragment } from '@prisma/orm-postgres/orm-client'` and a qualified name such as `Orm.Fragment` after `import * as Orm from '@prisma/orm-postgres/orm-client'`. Code that still uses the earlier names `Scope` and `FieldScope` from the ORM client renames them directly: `Scope` to `QueryFragment` and `FieldScope` to `DeclaredFieldsFragment`. After renaming, sort the named imports again, since `QueryFragment` sorts in a different place than `Fragment`.
 
 Do not rename React's `Fragment`, or any `Fragment` that is not imported from the ORM client. Do not rename `FragmentFacts` or `DeclaredField`, which keep their names.
