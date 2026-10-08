@@ -501,7 +501,7 @@ describe('contract DSL authoring surface', () => {
       }))
       .sql(({ cols, constraints }) => ({
         table: 'app_user',
-        indexes: [constraints.index([cols.email, cols.email])],
+        indexes: [constraints.index([cols.email, cols.email], { name: 'app_user_email_twice' })],
       }));
 
     expect(() =>

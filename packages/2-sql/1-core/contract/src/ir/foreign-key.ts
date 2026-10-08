@@ -10,6 +10,7 @@ export interface ForeignKeyInput {
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
+  readonly index?: string;
 }
 
 /**
@@ -21,7 +22,9 @@ export interface ForeignKeyInput {
  * authoring-time decisions (PSL `@relation(index:)`, TS `fk({ constraint,
  * index })`) resolved once at `contract emit` — a `constraint: false` FK
  * simply has no entry here, and a backing index (if any) is its own discrete,
- * named entry in the table's `indexes[]`.
+ * named entry in the table's `indexes[]`. `index` names that entry, or the
+ * unique constraint or primary key of the same table that serves the foreign
+ * key's lookups; it is absent when nothing backs the foreign key.
  *
  * Each FK carries explicit `source` and `target` {@link ForeignKeyReference}
  * coordinates (namespace, table, columns). For single-namespace contracts the
@@ -38,6 +41,7 @@ export class ForeignKey extends SqlNode {
   declare readonly name?: string;
   declare readonly onDelete?: ReferentialAction;
   declare readonly onUpdate?: ReferentialAction;
+  declare readonly index?: string;
 
   constructor(input: ForeignKeyInput) {
     super();
@@ -46,6 +50,7 @@ export class ForeignKey extends SqlNode {
     if (input.name !== undefined) this.name = input.name;
     if (input.onDelete !== undefined) this.onDelete = input.onDelete;
     if (input.onUpdate !== undefined) this.onUpdate = input.onUpdate;
+    if (input.index !== undefined) this.index = input.index;
     freezeNode(this);
   }
 

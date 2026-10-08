@@ -608,6 +608,7 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
  * - nullable columns in primary key definitions
  * - `setNull` referential action on a non-nullable FK column (would fail at runtime)
  * - `setDefault` referential action on a non-nullable FK column without a DEFAULT (would fail at runtime)
+ * - a foreign key whose `index` names no index, unique constraint or primary key of its table
  */
 export function validateStorageSemantics(storage: SqlStorage): string[] {
   const errors: string[] = [];
@@ -686,6 +687,19 @@ export function validateStorageSemantics(storage: SqlStorage): string[] {
     const tableCoordinate = `Namespace "${namespaceId}" table "${tableName}"`;
     rejectRepeatedIndexColumns(table.indexes, tableCoordinate, errors);
     rejectDuplicateWireNamedIndexContent(table.indexes, tableCoordinate, errors);
+
+    const backingNames = new Set(
+      [table.primaryKey?.name, ...table.uniques.map((unique) => unique.name)]
+        .filter((name) => name !== undefined)
+        .concat(table.indexes.map((index) => index.name)),
+    );
+    for (const fk of table.foreignKeys) {
+      if (fk.index !== undefined && !backingNames.has(fk.index)) {
+        errors.push(
+          `${tableCoordinate}: foreign key on columns [${fk.source.columns.join(', ')}] names index "${fk.index}", but the table has no index, unique constraint or primary key with that name`,
+        );
+      }
+    }
 
     const seenForeignKeyDefinitions = new Set<string>();
     for (const fk of table.foreignKeys) {

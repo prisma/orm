@@ -943,7 +943,8 @@ type ForeignKeyOptions<Name extends string | undefined = string | undefined> =
     readonly onDelete?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
     readonly onUpdate?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
     readonly constraint?: boolean;
-    readonly index?: boolean;
+    /** `false` for no backing index, or the name of an index, unique constraint or primary key the table declares that backs the foreign key instead of a derived one. */
+    readonly index?: boolean | string;
   };
 
 type BelongsToRelationSqlSpec<Name extends string | undefined = string | undefined> = {
@@ -1066,7 +1067,7 @@ export type ForeignKeyConstraint<
   readonly onDelete?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
   readonly onUpdate?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
   readonly constraint?: boolean;
-  readonly index?: boolean;
+  readonly index?: boolean | string;
 };
 
 function normalizeFieldRefInput(input: ColumnRef | readonly ColumnRef[]): readonly string[] {

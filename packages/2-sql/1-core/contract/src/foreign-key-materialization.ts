@@ -1,4 +1,16 @@
-import { defaultIndexName, truncateToWireNamePrefixBytes } from '@internal/sql-schema-ir/naming';
+import type { AuthoringWarningSink } from '@internal/framework-components/authoring';
+import {
+  defaultIndexName,
+  nameOf,
+  truncateToWireNamePrefixBytes,
+} from '@internal/sql-schema-ir/naming';
+import { contractError } from './contract-errors';
+import {
+  deduplicateIndexes,
+  type IndexCandidate,
+  type IndexReplacement,
+  writtenName,
+} from './index-deduplication';
 import { lowerAuthoredIndex } from './index-naming';
 import type { ForeignKeyInput, ReferentialAction } from './ir/foreign-key';
 import type { ForeignKeyReferenceInput } from './ir/foreign-key-reference';
@@ -6,49 +18,8 @@ import type { PrimaryKeyInput } from './ir/primary-key';
 import type { IndexInput } from './ir/sql-index';
 import type { UniqueConstraintInput } from './ir/unique-constraint';
 
-export type BackingIndexCandidates = {
-  readonly indexes: readonly { readonly columns?: readonly string[] }[];
-  readonly uniques: readonly { readonly columns: readonly string[] }[];
-  readonly primaryKey?: { readonly columns: readonly string[] } | undefined;
-};
-
 /**
- * The column-list keys (`"colA,colB"`, order preserved) a table's own
- * indexes, unique constraints, and primary key already back. A foreign key
- * whose source columns join to one of these keys needs no separately
- * derived backing index.
- *
- * Shared by {@link isBackedByColumnKeys}'s callers: `materializeForeignKeysAndIndexes`
- * (deriving the discrete backing-index entities persisted at `contract emit`)
- * and the postgres PSL inferrer (deciding whether an introspected relation
- * needs an explicit `index: false`).
- */
-export function backingIndexColumnKeys(table: BackingIndexCandidates): readonly string[] {
-  return [
-    ...table.indexes.flatMap((index) =>
-      index.columns !== undefined ? [index.columns.join(',')] : [],
-    ),
-    ...table.uniques.map((unique) => unique.columns.join(',')),
-    ...(table.primaryKey ? [table.primaryKey.columns.join(',')] : []),
-  ];
-}
-
-/**
- * Whether `columns`, in order, matches one of `backingKeys` (see
- * {@link backingIndexColumnKeys}). Order-sensitive: `(a, b)` does not
- * satisfy a backing index declared as `(b, a)`.
- */
-export function isBackedByColumnKeys(
-  columns: readonly string[],
-  backingKeys: readonly string[],
-): boolean {
-  return backingKeys.includes(columns.join(','));
-}
-
-/**
- * A foreign key as authored, before FK1 materialization: the referential
- * coordinates plus the `constraint`/`index` intent booleans that drive
- * whether — and how — it survives into the persisted contract.
+ * A foreign key as authored: the referential coordinates plus the `constraint` and `index` intent. `index` is `true` for a derived backing index, `false` for none, or the name of an index, unique constraint or primary key the source declares on the same table.
  */
 export interface ForeignKeyAuthoringInput {
   readonly source: ForeignKeyReferenceInput;
@@ -57,7 +28,7 @@ export interface ForeignKeyAuthoringInput {
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
   readonly constraint: boolean;
-  readonly index: boolean;
+  readonly index: boolean | string;
 }
 
 export interface MaterializedTableConstraints {
@@ -65,55 +36,138 @@ export interface MaterializedTableConstraints {
   readonly indexes: readonly IndexInput[];
 }
 
-/**
- * Lowers a table's authored foreign keys into the discrete entities
- * `contract.json` persists: a `constraint: false` FK contributes no
- * `foreignKeys[]` entry, and an `index: true` FK whose columns aren't already
- * backed by a declared index/unique/primary-key contributes a wire-named
- * `indexes[]` entry (byte-budgeted default prefix + content-hash wire name).
- * Declared indexes always survive unchanged; a second FK sharing an already
- * synthesized backing index does not mint a duplicate.
- */
-export function materializeForeignKeysAndIndexes(
-  tableName: string,
-  foreignKeys: readonly ForeignKeyAuthoringInput[],
-  declaredIndexes: readonly IndexInput[],
-  uniques: readonly UniqueConstraintInput[],
-  primaryKey: PrimaryKeyInput | undefined,
-): MaterializedTableConstraints {
-  const satisfiedIndexColumns = new Set(
-    backingIndexColumnKeys({ indexes: declaredIndexes, uniques, primaryKey }),
-  );
-  const synthesizedIndexes: IndexInput[] = [];
-  const materializedForeignKeys: ForeignKeyInput[] = [];
+type BackingObject =
+  | { readonly kind: 'index'; readonly index: IndexCandidate }
+  | { readonly kind: 'uniqueConstraint'; readonly unique: UniqueConstraintInput }
+  | { readonly kind: 'primaryKey'; readonly primaryKey: PrimaryKeyInput };
 
-  for (const { constraint, index, ...reference } of foreignKeys) {
-    if (constraint !== false) {
-      materializedForeignKeys.push(reference);
+/**
+ * Lowers a table's authored foreign keys and indexes into the entities `contract.json` persists. A `constraint: false` foreign key contributes no `foreignKeys[]` entry. A foreign key with `index: true` gets a derived backing index; one with `index: "<name>"` uses what the table declares under that name. The table's indexes then pass through {@link deduplicateIndexes}, and each foreign key names the index, unique constraint or primary key that backs it in the result.
+ */
+export function materializeForeignKeysAndIndexes(input: {
+  readonly tableName: string;
+  readonly foreignKeys: readonly ForeignKeyAuthoringInput[];
+  readonly declaredIndexes: readonly IndexCandidate[];
+  readonly uniques: readonly UniqueConstraintInput[];
+  readonly primaryKey: PrimaryKeyInput | undefined;
+  readonly warnings: AuthoringWarningSink;
+}): MaterializedTableConstraints {
+  const { tableName, declaredIndexes, uniques, primaryKey } = input;
+  const derivedIndexes: IndexCandidate[] = [];
+  const backed = input.foreignKeys.map((foreignKey) => {
+    const { constraint, index, ...reference } = foreignKey;
+    if (index === false) return { constraint, reference, backing: undefined };
+    if (index === true) {
+      const derived = derivedBackingIndex(tableName, reference.source.columns);
+      derivedIndexes.push(derived);
+      return { constraint, reference, backing: { kind: 'index', index: derived } as const };
     }
-    if (index !== false) {
-      const key = reference.source.columns.join(',');
-      if (!satisfiedIndexColumns.has(key)) {
-        synthesizedIndexes.push(
-          lowerAuthoredIndex(tableName, {
-            columns: reference.source.columns,
-            where: undefined,
-            unique: undefined,
-            map: undefined,
-            name: truncateToWireNamePrefixBytes(
-              defaultIndexName(tableName, reference.source.columns),
-            ),
-            type: undefined,
-            options: undefined,
-          }),
-        );
-        satisfiedIndexColumns.add(key);
-      }
-    }
-  }
+    return {
+      constraint,
+      reference,
+      backing: declaredBackingObject(tableName, reference.source.columns, index, {
+        declaredIndexes,
+        uniques,
+        primaryKey,
+      }),
+    };
+  });
+
+  const deduplicated = deduplicateIndexes({
+    tableName,
+    indexes: [...declaredIndexes, ...derivedIndexes],
+    uniques,
+    primaryKey,
+    warnings: input.warnings,
+  });
 
   return {
-    foreignKeys: materializedForeignKeys,
-    indexes: [...declaredIndexes, ...synthesizedIndexes],
+    foreignKeys: backed.flatMap(({ constraint, reference, backing }) => {
+      if (!constraint) return [];
+      const backingName =
+        backing === undefined
+          ? undefined
+          : nameOfBackingObject(resolveReplacement(backing, deduplicated.replacements));
+      return [backingName === undefined ? reference : { ...reference, index: backingName }];
+    }),
+    indexes: deduplicated.indexes.map((candidate) => candidate.index),
   };
+}
+
+function derivedBackingIndex(tableName: string, columns: readonly string[]): IndexCandidate {
+  return {
+    index: lowerAuthoredIndex(tableName, {
+      columns,
+      where: undefined,
+      unique: undefined,
+      map: undefined,
+      name: truncateToWireNamePrefixBytes(defaultIndexName(tableName, columns)),
+      type: undefined,
+      options: undefined,
+    }),
+    namedByUser: false,
+  };
+}
+
+function declaredBackingObject(
+  tableName: string,
+  columns: readonly string[],
+  name: string,
+  table: {
+    readonly declaredIndexes: readonly IndexCandidate[];
+    readonly uniques: readonly UniqueConstraintInput[];
+    readonly primaryKey: PrimaryKeyInput | undefined;
+  },
+): BackingObject {
+  const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
+  const indexes = table.declaredIndexes.filter(
+    (candidate) => writtenName(candidate.index) === name || nameOf(candidate.index.naming) === name,
+  );
+  const [index, ...others] = indexes;
+  if (others.length > 0) {
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `${subject}, but table "${tableName}" has more than one index with that name.`,
+      { meta: { tableName, columns, index: name } },
+    );
+  }
+  if (index !== undefined) return { kind: 'index', index };
+  const unique = table.uniques.find((constraint) => constraint.name === name);
+  if (unique !== undefined) return { kind: 'uniqueConstraint', unique };
+  if (table.primaryKey?.name === name) return { kind: 'primaryKey', primaryKey: table.primaryKey };
+  throw contractError(
+    'CONTRACT.ARGUMENT_INVALID',
+    `${subject}, but table "${tableName}" has no index, unique constraint or primary key with that name.`,
+    {
+      fix: `Declare an index, unique constraint or primary key named "${name}" on table "${tableName}", or drop the index argument so the foreign key gets its own backing index.`,
+      meta: { tableName, columns, index: name },
+    },
+  );
+}
+
+function resolveReplacement(
+  backing: BackingObject,
+  replacements: ReadonlyMap<IndexCandidate, IndexReplacement>,
+): BackingObject {
+  let current = backing;
+  while (current.kind === 'index') {
+    const replacement = replacements.get(current.index);
+    if (replacement === undefined) break;
+    current = replacement;
+  }
+  return current;
+}
+
+/**
+ * The stored name of what backs a foreign key. A unique constraint or primary key the contract leaves unnamed has no stored name, because the target names it; the foreign key then names nothing.
+ */
+function nameOfBackingObject(backing: BackingObject): string | undefined {
+  switch (backing.kind) {
+    case 'index':
+      return nameOf(backing.index.index.naming);
+    case 'uniqueConstraint':
+      return backing.unique.name;
+    case 'primaryKey':
+      return backing.primaryKey.name;
+  }
 }

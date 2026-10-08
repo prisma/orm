@@ -699,8 +699,9 @@ const relationFieldSpec = fieldAttribute('relation', {
       documentation: 'The referential action when a referenced key is updated.',
     },
     index: {
-      type: optional(bool()),
-      documentation: 'Whether to create an index for the relation’s foreign-key fields.',
+      type: optional(oneOf(bool(), str())),
+      documentation:
+        'Whether to create an index for the relation’s foreign-key fields, or the name of an index, unique constraint or primary key on this model that serves the foreign key instead.',
     },
   },
   refine: relationInvariants,

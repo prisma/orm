@@ -574,8 +574,7 @@ type BuiltStorageTables<Definition> = {
       readonly name?: string;
       readonly onDelete?: ReferentialAction;
       readonly onUpdate?: ReferentialAction;
-      readonly constraint: boolean;
-      readonly index: boolean;
+      readonly index?: string;
     }>;
   } & (ModelIdFieldNames<Definition, ModelName> extends readonly string[]
     ? {

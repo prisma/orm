@@ -666,7 +666,7 @@ function lowerLocalForeignKeyNode(
     readonly onDelete?: ForeignKeyConstraint['onDelete'] | undefined;
     readonly onUpdate?: ForeignKeyConstraint['onUpdate'] | undefined;
     readonly constraint?: boolean | undefined;
-    readonly index?: boolean | undefined;
+    readonly index?: boolean | string | undefined;
   },
 ): ForeignKeyNode {
   return {
@@ -701,7 +701,7 @@ function lowerCrossSpaceForeignKeyNode(
     readonly onDelete?: ForeignKeyConstraint['onDelete'] | undefined;
     readonly onUpdate?: ForeignKeyConstraint['onUpdate'] | undefined;
     readonly constraint?: boolean | undefined;
-    readonly index?: boolean | undefined;
+    readonly index?: boolean | string | undefined;
   },
 ): ForeignKeyNode {
   if (foreignKey.targetTableName === undefined) {

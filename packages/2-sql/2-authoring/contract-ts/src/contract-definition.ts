@@ -154,7 +154,8 @@ export interface ForeignKeyNode {
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
   readonly constraint?: boolean;
-  readonly index?: boolean;
+  /** `true` for a derived backing index, `false` for none, or the name of an index, unique constraint or primary key of the same table that backs the foreign key. */
+  readonly index?: boolean | string;
 }
 
 export interface RelationNode {

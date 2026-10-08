@@ -66,6 +66,7 @@ export type ForeignKeyOptions = {
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
+  readonly index?: string;
 };
 
 export type SqlModelFieldStorage = {
@@ -84,9 +85,9 @@ export const DEFAULT_FK_CONSTRAINT = true;
 export const DEFAULT_FK_INDEX = true;
 
 export function applyFkDefaults(
-  fk: { constraint?: boolean | undefined; index?: boolean | undefined },
+  fk: { constraint?: boolean | undefined; index?: boolean | string | undefined },
   overrideDefaults?: { constraint?: boolean | undefined; index?: boolean | undefined },
-): { constraint: boolean; index: boolean } {
+): { constraint: boolean; index: boolean | string } {
   return {
     constraint: fk.constraint ?? overrideDefaults?.constraint ?? DEFAULT_FK_CONSTRAINT,
     index: fk.index ?? overrideDefaults?.index ?? DEFAULT_FK_INDEX,

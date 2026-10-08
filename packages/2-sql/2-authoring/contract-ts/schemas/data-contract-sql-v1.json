@@ -647,6 +647,9 @@
                                 "required": ["columns", "namespaceId", "tableName"],
                                 "additionalProperties": false
                               },
+                              "index": {
+                                "type": "string"
+                              },
                               "name": {
                                 "type": "string"
                               },

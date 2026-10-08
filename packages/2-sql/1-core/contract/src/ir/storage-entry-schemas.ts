@@ -129,6 +129,7 @@ export const ForeignKeySchema = type.declare<ForeignKeyInput>().type({
   'name?': 'string',
   'onDelete?': ReferentialActionSchema,
   'onUpdate?': ReferentialActionSchema,
+  'index?': 'string',
 });
 
 export const CheckConstraintSchema = type({

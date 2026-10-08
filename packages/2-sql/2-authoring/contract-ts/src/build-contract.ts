@@ -1494,8 +1494,9 @@ export function buildSqlContractFromDefinition(
         columns: u.columns,
         ...ifDefined('name', u.name),
       }));
-      const declaredIndexes = (semanticModel.indexes ?? []).map((i) =>
-        lowerAuthoredIndex(
+      const declaredIndexes = (semanticModel.indexes ?? []).map((i) => ({
+        namedByUser: i.name !== undefined || i.map !== undefined,
+        index: lowerAuthoredIndex(
           tableName,
           blindCast<
             AuthoredIndexInput,
@@ -1512,7 +1513,7 @@ export function buildSqlContractFromDefinition(
           }),
           authoringWarnings,
         ),
-      );
+      }));
       // Authored checks are lowered and merged into `checksForTable`
       // unconditionally — outside the `derivesChecks` guard above. A derived
       // check is a Prisma 8 prescription, scoped to tables it manages; an
@@ -1542,22 +1543,14 @@ export function buildSqlContractFromDefinition(
       const primaryKey = semanticModel.id
         ? { columns: semanticModel.id.columns, ...ifDefined('name', semanticModel.id.name) }
         : undefined;
-      // FK1: lower each FK's `constraint`/`index` authoring intent into
-      // discrete persisted entities here — the one place a table's full
-      // constraint context (its own declared indexes/uniques/primary key)
-      // is available. A `constraint: false` FK contributes no
-      // `foreignKeys[]` entry; an `index: true` FK not already backed by a
-      // declared index/unique/primary-key contributes a named `indexes[]`
-      // entry. This authoring pipeline is shared by both the TS DSL and the
-      // PSL interpreter (which calls `buildSqlContractFromDefinition`
-      // directly), so both authoring surfaces materialize identically.
-      const { foreignKeys, indexes } = materializeForeignKeysAndIndexes(
+      const { foreignKeys, indexes } = materializeForeignKeysAndIndexes({
         tableName,
-        authoringForeignKeys,
+        foreignKeys: authoringForeignKeys,
         declaredIndexes,
         uniques,
         primaryKey,
-      );
+        warnings: authoringWarnings,
+      });
 
       const tableInput: StorageTableInput = {
         columns,
