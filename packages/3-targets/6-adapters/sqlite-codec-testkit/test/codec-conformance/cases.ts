@@ -2,24 +2,11 @@
  * Representative application values for every built-in SQLite codec descriptor,
  * exercised against a real database by the conformance suite.
  *
- * `notYetCanonical` marks a case whose projection disagrees with the codec's
- * **current** `toDataTypeValue` / `fromDataTypeValue` — the projection will not execute, or
- * the parsed value differs from what `toDataTypeValue` produces, or the value does
- * not survive the round trip back. The suite asserts a marked case still fails
- * and still fails the recorded way, so a projection cannot be brought into
- * agreement without updating this file.
- *
- * A green run is therefore not a claim that every codec's JSON is canonical.
- * Both conditions are measured against the codec's own two methods, so a codec
- * whose `toDataTypeValue` is itself not canonical conforms here: its projection
- * faithfully realizes a representation that is simply not the one the codec ends
- * up with. Such a codec conforms, then transits through a failing state when its
- * canonical form lands, then conforms again.
- *
- * Which codecs are in that position is deliberately not listed here — that list
- * lives in the plan, and a copy of it in this header would go stale every time
- * one of them landed. What this file names is narrower and self-maintaining: the
- * cases that fail *today*, each carrying its own `notYetCanonical` reason.
+ * `notYetCanonical` marks a case that fails today: the projection will not
+ * execute, or `fromWire` refuses the row's or the projection's value, or reads
+ * them to different application values. The suite asserts a marked case still
+ * fails and still fails the recorded way, so a case cannot be fixed without
+ * updating this file.
  *
  * A case is only as good as the boundary it crosses. A value chosen for being
  * typical is the one least likely to expose a format defect, so prefer values
@@ -143,18 +130,33 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     label: 'integer beyond double precision',
     value: 9007199254740993n,
     storageType: 'INTEGER',
+    notYetCanonical: {
+      kind: 'row-execution',
+      reason:
+        'node:sqlite reads an INTEGER past 2^53 only when asked for a bigint, and the runtime driver does not ask, so a row cannot hold this value; the projection carries it as decimal text',
+    },
   },
   {
     codecId: 'sqlite/bigint@1',
     label: 'int64 lower bound',
     value: -9223372036854775808n,
     storageType: 'INTEGER',
+    notYetCanonical: {
+      kind: 'row-execution',
+      reason:
+        'node:sqlite reads an INTEGER past 2^53 only when asked for a bigint, and the runtime driver does not ask, so a row cannot hold this value; the projection carries it as decimal text',
+    },
   },
   {
     codecId: 'sqlite/bigint@1',
     label: 'int64 upper bound',
     value: 9223372036854775807n,
     storageType: 'INTEGER',
+    notYetCanonical: {
+      kind: 'row-execution',
+      reason:
+        'node:sqlite reads an INTEGER past 2^53 only when asked for a bigint, and the runtime driver does not ask, so a row cannot hold this value; the projection carries it as decimal text',
+    },
   },
   // The safe-range boundaries are the values a JSON-number canonical form is
   // most likely to mangle, so they are the ones that pin it.

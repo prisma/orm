@@ -2,31 +2,18 @@
  * Database-backed conformance harness for SQLite codec JSON projections.
  *
  * For one codec descriptor and one representative application value the harness
- * encodes the value through the codec, stores it in a column of the case's
- * storage type, projects the stored column through `descriptor.projectJson()`,
- * renders the projection inside a JSON constructor, executes it, and parses the
- * JSON text the database produced.
+ * writes the value through the codec's `toWire`, stores it in a column of the
+ * case's storage type, and reads the column back twice: as an ordinary row, and
+ * through `descriptor.projectJson()` inside a JSON constructor, the way an
+ * `include` reads it.
  *
- * A projection conforms when both of these hold:
- *
- * 1. the parsed value, in the canonical form of the codec's data type when the
- *    type declares one (ADR 254), deep-equals the stored JSON of
- *    `codec.toDataTypeValue(value)` — the codec's current `toDataTypeValue` is
- *    the yardstick and the projection is its SQL realization; and
- * 2. the codec's data type reads the parsed value as the database spells it and `codec.fromDataTypeValue`
- *    turns it back into the application value the case started from.
- *
- * Both conditions are measured against the codec's methods as they stand.
- * Conformance is therefore agreement with today's `toDataTypeValue` /
- * `fromDataTypeValue`, not a claim that either is already in its final form.
+ * A projection conforms when the codec's `fromWire` reads the projected value to
+ * the same application value it reads the ordinary row's value to (ADR 254,
+ * "Rows the database returns as JSON"), and that value is the one the case
+ * started from.
  *
  * For every case the harness also checks that `toDataTypeValue(fromDataTypeValue(v))`
  * equals `v`, where `v` is the value `toDataTypeValue` gives for the case.
- *
- * The second condition is what makes the harness an oracle rather than a
- * tautology: a codec whose `toDataTypeValue` loses information the same way the
- * database's native JSON conversion does satisfies condition 1 while still
- * failing to carry the value.
  *
  * `projectJson()` is called directly rather than reached through a
  * query-planning or rendering path, which is what lets the harness measure
@@ -40,20 +27,14 @@
  * assertion style and case enumeration stay with the caller.
  */
 
-import { isDeepStrictEqual } from 'node:util';
+import { inspect, isDeepStrictEqual } from 'node:util';
 import { renderLoweredSql } from '@internal/adapter-sqlite/sql-renderer';
 import type { SqliteContract } from '@internal/adapter-sqlite/types';
 import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
 import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import {
-  canonicalFormOf,
-  createDataTypeLookup,
-  dataTypeValuesEqual,
-  readReportedValue,
-  validateCodecTypeParams,
-} from '@internal/framework-components/codec';
+import { dataTypeValuesEqual, validateCodecTypeParams } from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   ColumnRef,
@@ -61,25 +42,25 @@ import {
   NativeJsonValueProjection,
   ProjectionItem,
   SelectAst,
+  type SqlCodecCallContext,
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { AnySqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
 import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
-import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 
 /**
  * Minimal execution surface the harness needs from a live database. A caller
- * adapts whichever client it already owns.
+ * adapts whichever client it already owns, as long as each row carries its
+ * values as the runtime driver returns them: the wire values `fromWire` reads.
  */
 export interface ConformanceConnection {
   query(sql: string, params?: readonly unknown[]): Promise<ReadonlyArray<Record<string, unknown>>>;
 }
 
 /**
- * How a projection can disagree with its codec's current `toDataTypeValue` /
- * `fromDataTypeValue`. The kinds are materially different — a projection whose SQL
+ * How a case can fail. The kinds are materially different — a projection whose SQL
  * will not execute and one that merely rounds a digit are not the same defect —
  * so a case that records one kind is not satisfied by another.
  */
@@ -90,12 +71,16 @@ export type ProjectionFailureKind =
   | 'to-data-type-value-rejects'
   /** `toDataTypeValue(fromDataTypeValue(v))` is not `v`. */
   | 'value-round-trip'
-  /** The parsed value disagrees with `toDataTypeValue`. */
-  | 'mismatch'
-  /** The data type or `fromDataTypeValue` refused the projected value. */
-  | 'from-data-type-value-rejects'
-  /** The parsed value agrees with `toDataTypeValue` but does not carry the application value back. */
-  | 'lossy-round-trip';
+  /** The driver could not read the ordinary row, though `fromWire` reads the projected value to the application value the case wrote. */
+  | 'row-execution'
+  /** `fromWire` refused the ordinary row's value. */
+  | 'row-from-wire-rejects'
+  /** `fromWire` of the ordinary row's value is not the application value the case wrote. */
+  | 'lossy-round-trip'
+  /** `fromWire` refused the projected value. */
+  | 'projection-from-wire-rejects'
+  /** `fromWire` reads the projected value to another application value than the ordinary row's, or a NULL column projected as a value. */
+  | 'mismatch';
 
 export interface ProjectionFailure {
   readonly kind: ProjectionFailureKind;
@@ -142,8 +127,7 @@ export interface SqliteCodecConformanceCase {
    */
   readonly nullValue?: true;
   /**
-   * How this case's projection currently disagrees with the codec's
-   * `toDataTypeValue` / `fromDataTypeValue`, when it does. The suite asserts that a marked
+   * How this case currently fails, when it does. The suite asserts that a marked
    * case still fails *and still fails this way*, so neither the marker nor its
    * recorded kind can rot as projections change.
    */
@@ -157,12 +141,9 @@ export interface CodecProjectionOutcome {
   readonly rawJson: string | undefined;
   /** The projected value parsed out of that document. */
   readonly projected: JsonValue | undefined;
-  /** The stored JSON of `codec.toDataTypeValue(value)`, which the projected value must equal. */
-  readonly expected: JsonValue | undefined;
-  /**
-   * How the projection disagreed with the codec's current `toDataTypeValue` /
-   * `fromDataTypeValue`, or `undefined` when it agreed and the value round-tripped.
-   */
+  /** The value the ordinary row carried, as the connection returned it. */
+  readonly rowWire: unknown;
+  /** How the case failed, or `undefined` when it conforms. */
   readonly failure: ProjectionFailure | undefined;
 }
 
@@ -200,7 +181,7 @@ function buildConformanceContract(): SqliteContract {
 
 const conformanceContract: SqliteContract = buildConformanceContract();
 
-const dataTypes = createDataTypeLookup(sqliteDataTypes);
+const CALL_CONTEXT: SqlCodecCallContext = { column: { table: STORAGE_TABLE, name: VALUE_COLUMN } };
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -248,6 +229,47 @@ export function buildProjectionSql(conformanceCase: SqliteCodecConformanceCase):
   return renderLoweredSql(select, conformanceContract, sqliteCodecDescriptorRegistry).sql;
 }
 
+type RowRead =
+  | { readonly ok: true; readonly wire: unknown }
+  | { readonly ok: false; readonly error: unknown };
+
+async function readRow(connection: ConformanceConnection): Promise<RowRead> {
+  try {
+    const [row] = await connection.query(`SELECT "${VALUE_COLUMN}" FROM "${STORAGE_TABLE}"`);
+    return { ok: true, wire: row?.[VALUE_COLUMN] };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/** A row the driver cannot read still leaves the projection to check: the failure is the row's only when the projection reads to the value the case wrote. */
+async function rowExecutionFailure(
+  codec: { fromWire(wire: unknown, ctx: SqlCodecCallContext): Promise<unknown> },
+  conformanceCase: SqliteCodecConformanceCase,
+  projected: JsonValue,
+  rowRead: { readonly error: unknown },
+): Promise<ProjectionFailure> {
+  let fromProjection: unknown;
+  try {
+    fromProjection = await codec.fromWire(projected, CALL_CONTEXT);
+  } catch (error) {
+    return {
+      kind: 'projection-from-wire-rejects',
+      detail: `fromWire rejects the projected ${inspect(projected)}: ${describeError(error)}`,
+    };
+  }
+  if (!isDeepStrictEqual(fromProjection, conformanceCase.value)) {
+    return {
+      kind: 'mismatch',
+      detail: `fromWire read the projected ${inspect(projected)} as ${inspect(fromProjection)} for an application value of ${inspect(conformanceCase.value)}`,
+    };
+  }
+  return {
+    kind: 'row-execution',
+    detail: `the driver could not read the row: ${describeError(rowRead.error)}`,
+  };
+}
+
 export async function runSqliteCodecProjection(
   connection: ConformanceConnection,
   conformanceCase: SqliteCodecConformanceCase,
@@ -269,6 +291,8 @@ export async function runSqliteCodecProjection(
     await connection.query(`INSERT INTO "${STORAGE_TABLE}" ("${VALUE_COLUMN}") VALUES (?)`, [wire]);
   }
 
+  const rowRead = await readRow(connection);
+  const rowWire = rowRead.ok ? rowRead.wire : undefined;
   const sql = buildProjectionSql(conformanceCase);
 
   let rawJson: string;
@@ -280,7 +304,7 @@ export async function runSqliteCodecProjection(
       sql,
       rawJson: undefined,
       projected: undefined,
-      expected: undefined,
+      rowWire,
       failure: {
         kind: 'execution',
         detail: `the projection failed to execute: ${describeError(error)}`,
@@ -298,12 +322,13 @@ export async function runSqliteCodecProjection(
     );
   }
 
+  const base = { sql, rawJson, projected, rowWire } as const;
+
   if (conformanceCase.nullValue === true) {
-    const nullBase = { sql, rawJson, projected, expected: null } as const;
     return projected === null
-      ? { ...nullBase, failure: undefined }
+      ? { ...base, failure: undefined }
       : {
-          ...nullBase,
+          ...base,
           failure: {
             kind: 'mismatch',
             detail: `a NULL column projected as ${JSON.stringify(projected)} rather than null`,
@@ -311,25 +336,18 @@ export async function runSqliteCodecProjection(
         };
   }
 
-  let expected: JsonValue;
   let value: ReturnType<typeof codec.toDataTypeValue>;
   try {
     value = codec.toDataTypeValue(conformanceCase.value);
-    expected = codec.dataType.toContract(value);
   } catch (error) {
     return {
-      sql,
-      rawJson,
-      projected,
-      expected: undefined,
+      ...base,
       failure: {
         kind: 'to-data-type-value-rejects',
         detail: `toDataTypeValue rejects the value: ${describeError(error)}`,
       },
     };
   }
-
-  const base = { sql, rawJson, projected, expected } as const;
 
   const again = codec.toDataTypeValue(codec.fromDataTypeValue(value));
   if (!dataTypeValuesEqual(again, value)) {
@@ -342,48 +360,53 @@ export async function runSqliteCodecProjection(
     };
   }
 
-  let canonical: JsonValue;
+  if (!rowRead.ok) {
+    return {
+      ...base,
+      failure: await rowExecutionFailure(codec, conformanceCase, projected, rowRead),
+    };
+  }
+
+  let fromRow: unknown;
   try {
-    const toCanonicalForm = canonicalFormOf(descriptor, dataTypes);
-    canonical = toCanonicalForm === undefined ? projected : toCanonicalForm(projected);
+    fromRow = await codec.fromWire(rowWire, CALL_CONTEXT);
   } catch (error) {
     return {
       ...base,
       failure: {
-        kind: 'mismatch',
-        detail: `the canonical form of ${descriptor.codecId} refuses the projected ${JSON.stringify(projected)}: ${describeError(error)}`,
+        kind: 'row-from-wire-rejects',
+        detail: `fromWire rejects the row's ${inspect(rowWire)}: ${describeError(error)}`,
       },
     };
   }
-  if (!isDeepStrictEqual(canonical, expected)) {
-    return {
-      ...base,
-      failure: {
-        kind: 'mismatch',
-        detail: `projected ${JSON.stringify(projected)} but toDataTypeValue specifies ${JSON.stringify(expected)}`,
-      },
-    };
-  }
-
-  let roundTripped: unknown;
-  try {
-    roundTripped = readReportedValue(codec, projected, conformanceCase.typeParams);
-  } catch (error) {
-    return {
-      ...base,
-      failure: {
-        kind: 'from-data-type-value-rejects',
-        detail: `the data type or fromDataTypeValue rejects the projected value: ${describeError(error)}`,
-      },
-    };
-  }
-
-  if (!isDeepStrictEqual(roundTripped, conformanceCase.value)) {
+  if (!isDeepStrictEqual(fromRow, conformanceCase.value)) {
     return {
       ...base,
       failure: {
         kind: 'lossy-round-trip',
-        detail: `the projection loses information: fromDataTypeValue returned ${String(roundTripped)} for an application value of ${String(conformanceCase.value)}`,
+        detail: `fromWire read the row's ${inspect(rowWire)} as ${inspect(fromRow)} for an application value of ${inspect(conformanceCase.value)}`,
+      },
+    };
+  }
+
+  let fromProjection: unknown;
+  try {
+    fromProjection = await codec.fromWire(projected, CALL_CONTEXT);
+  } catch (error) {
+    return {
+      ...base,
+      failure: {
+        kind: 'projection-from-wire-rejects',
+        detail: `fromWire rejects the projected ${inspect(projected)}: ${describeError(error)}`,
+      },
+    };
+  }
+  if (!isDeepStrictEqual(fromProjection, fromRow)) {
+    return {
+      ...base,
+      failure: {
+        kind: 'mismatch',
+        detail: `fromWire read the projected ${inspect(projected)} as ${inspect(fromProjection)} and the row's ${inspect(rowWire)} as ${inspect(fromRow)}`,
       },
     };
   }

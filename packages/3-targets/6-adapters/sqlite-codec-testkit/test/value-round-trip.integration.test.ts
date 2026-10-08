@@ -5,7 +5,7 @@ import {
   type CodecInstanceContext,
   type DataTypeValue,
 } from '@internal/framework-components/codec';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { SqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
 import { sqliteText } from '@internal/target-sqlite/data-types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -41,6 +41,35 @@ class MarkingTextDescriptor extends SqliteCodecDescriptor<void> {
   }
 }
 
+class TextCodec extends CodecImpl<'test/upper-casing-text@1', readonly [], string, string> {
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
+  }
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
+  }
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+  async toWire(input: string, _ctx: CodecCallContext): Promise<string> {
+    return input;
+  }
+}
+
+/** A text codec whose projection changes the text, so the projected value reads to another value than the row. */
+class UpperCasingTextDescriptor extends SqliteCodecDescriptor<void> {
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return FunctionCallExpr.of('upper', [expression]);
+  }
+  override readonly dataType = sqliteText.id;
+  override readonly codecId = 'test/upper-casing-text@1';
+  override readonly traits = [] as const;
+  override readonly paramsSchema = undefined;
+  override factory(): (ctx: CodecInstanceContext) => TextCodec {
+    return () => new TextCodec(this, sqliteText);
+  }
+}
+
 describe('the harness checks that a value comes back from the application value', () => {
   let database: DatabaseSync | undefined;
   let connection: ConformanceConnection | undefined;
@@ -69,6 +98,21 @@ describe('the harness checks that a value comes back from the application value'
     expect(outcome.failure).toEqual({
       kind: 'value-round-trip',
       detail: 'toDataTypeValue(fromDataTypeValue(v)) is not v: "hello" came back as "hello!"',
+    });
+  });
+
+  it('fails a codec whose fromWire reads the projected value to another value than the row', async () => {
+    const outcome = await runSqliteCodecProjection(connection!, {
+      codecId: 'test/upper-casing-text@1',
+      descriptor: new UpperCasingTextDescriptor(),
+      label: 'a projection that changes the text',
+      value: 'hello',
+      storageType: 'TEXT',
+    });
+
+    expect(outcome.failure).toEqual({
+      kind: 'mismatch',
+      detail: "fromWire read the projected 'HELLO' as 'HELLO' and the row's 'hello' as 'hello'",
     });
   });
 });

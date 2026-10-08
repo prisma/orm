@@ -196,6 +196,9 @@ export class SqliteFloatCodec extends SqlFloatCodec {
   override async toWire(value: number, ctx: CodecCallContext): Promise<number> {
     return super.toWire(refuseNaN(this.id, value), ctx);
   }
+  override async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return floatWire(this.id, wire);
+  }
   override fromDataTypeValue(value: DataTypeValue): number {
     return readJsonFloatWithoutNaN(this.id, value.value);
   }
@@ -298,6 +301,38 @@ const digitTextOfSafeInteger = (codecId: string, value: number): string =>
   String(encodableSafeInteger(codecId, value));
 
 /**
+ * Reads an INTEGER's wire value into a `number`: the number the driver returns for a row, or the decimal text an include carries, because its projection casts the integer to text so that no digit is lost in JSON.
+ */
+function safeIntegerWire(codecId: string, wire: number | string): number {
+  if (typeof wire === 'number') return wire;
+  if (!DECIMAL_INTEGER.test(wire)) {
+    throw sqliteError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} wire value must be an integer or its decimal text`,
+      { meta: { codecId, received: wire } },
+    );
+  }
+  return safeIntegerFromBigint(codecId, BigInt(wire));
+}
+
+/**
+ * Reads a REAL's wire value: the number the driver returns for a row, or the text `Infinity` or `-Infinity` an include carries, because JSON has no infinity.
+ */
+function floatWire(codecId: string, wire: number | string): number {
+  if (typeof wire === 'number') return wire;
+  if (wire === 'Infinity') return Number.POSITIVE_INFINITY;
+  if (wire === '-Infinity') return Number.NEGATIVE_INFINITY;
+  throw sqliteError(
+    'RUNTIME.DECODE_FAILED',
+    `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
+    { meta: { codecId, received: wire } },
+  );
+}
+
+/** The hex text SQLite's `hex()` writes: two uppercase digits for each byte. */
+const BLOB_HEX_TEXT = /^(?:[0-9A-F]{2})*$/;
+
+/**
  * Projects a `sql/char@1` value without trailing spaces, as its `decode` reads it on a flat read, so an include reads the same value. SQLite does not pad the value; the rule is the family codec's.
  */
 const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
@@ -324,6 +359,9 @@ export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {
 
 /** `sql/int@1` as SQLite stores it: its canonical form is `sqlite/integer`'s digit text. */
 export class SqliteSqlIntCodec extends SqlIntCodec {
+  override async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return safeIntegerWire(this.id, wire);
+  }
   override fromDataTypeValue(value: DataTypeValue): number {
     return safeIntegerFromDigitText(this.id, value.value);
   }
@@ -388,14 +426,14 @@ sqliteTextColumn satisfies ColumnHelperForStrict<SqliteTextDescriptor>;
 export class SqliteIntegerCodec extends CodecImpl<
   typeof SQLITE_INTEGER_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  number,
+  number | string,
   number
 > {
   async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
-    return wire;
+  async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): number {
     return safeIntegerFromDigitText(SQLITE_INTEGER_CODEC_ID, value.value);
@@ -429,14 +467,14 @@ sqliteIntegerColumn satisfies ColumnHelperForStrict<SqliteIntegerDescriptor>;
 export class SqliteRealCodec extends CodecImpl<
   typeof SQLITE_REAL_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  number,
+  number | string,
   number
 > {
   async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return refuseNaN(SQLITE_REAL_CODEC_ID, value);
   }
-  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
-    return wire;
+  async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return floatWire(SQLITE_REAL_CODEC_ID, wire);
   }
   fromDataTypeValue(value: DataTypeValue<JsonValue>): number {
     return readJsonFloatWithoutNaN(SQLITE_REAL_CODEC_ID, value.value);
@@ -470,14 +508,23 @@ sqliteRealColumn satisfies ColumnHelperForStrict<SqliteRealDescriptor>;
 export class SqliteBlobCodec extends CodecImpl<
   typeof SQLITE_BLOB_CODEC_ID,
   readonly ['equality'],
-  Uint8Array,
+  Uint8Array | string,
   Uint8Array
 > {
   async toWire(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return value;
   }
-  async fromWire(wire: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
-    return wire;
+  /** A row carries the blob's bytes; an include carries the hex text its projection writes, because SQLite's JSON functions refuse a blob. */
+  async fromWire(wire: Uint8Array | string, _ctx: CodecCallContext): Promise<Uint8Array> {
+    if (typeof wire !== 'string') return wire;
+    if (!BLOB_HEX_TEXT.test(wire)) {
+      throw sqliteError(
+        'RUNTIME.DECODE_FAILED',
+        'sqlite/blob@1 wire value must be bytes or the uppercase hex text of bytes',
+        { meta: { codecId: SQLITE_BLOB_CODEC_ID, received: wire } },
+      );
+    }
+    return new Uint8Array(Buffer.from(wire, 'hex'));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Uint8Array {
     return new Uint8Array(Buffer.from(value.value, 'hex'));
