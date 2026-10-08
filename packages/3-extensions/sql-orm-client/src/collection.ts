@@ -121,8 +121,8 @@ import {
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
-  withMutationScope,
 } from './mutation-executor';
+import { withMutationScope } from './mutation-scope';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';

@@ -9,14 +9,16 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  assertJunctionParentMetadataLength,
-  assertJunctionTargetMetadataLength,
   buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
-  type JunctionRelationDefinition,
 } from '../src/mutation-executor';
+import {
+  assertJunctionParentMetadataLength,
+  assertJunctionTargetMetadataLength,
+  type JunctionRelationDefinition,
+} from '../src/relation-definitions';
 import { defineContract, field, model, rel } from './contract-builder';
 import type { MockRuntime } from './helpers';
 import {

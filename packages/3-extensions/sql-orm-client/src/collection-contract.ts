@@ -250,6 +250,16 @@ export function getColumnToFieldMap(
   return cached;
 }
 
+export function resolveColumnToField(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  columnName: string,
+): string {
+  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  return columnToField[columnName] ?? columnName;
+}
+
 const completeColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
 
 /**
