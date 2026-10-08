@@ -103,6 +103,7 @@ function collectStorageNamespaceCoordinateIds(definition: ContractDefinition): S
   }
   return ids;
 }
+
 function ensureUnboundNamespaceSlot(
   namespaces: SqlStorageInput['namespaces'],
   createNamespace: ContractDefinition['createNamespace'],
@@ -188,9 +189,8 @@ export function buildSqlContractFromDefinition(
   // persisted JSON envelope produced from the SqlStorage class instance
   // (which always carries the discriminator). Each entry stores the data type
   // its codec represents.
-  const rawStorageTypes = definition.storageTypes ?? {};
   const documentTypes: Record<string, StorageTypeInstance> = Object.fromEntries(
-    Object.entries(rawStorageTypes).map(([name, entry]) => [
+    Object.entries(storageTypes).map(([name, entry]) => [
       name,
       toStorageTypeInstance({
         codecId: entry.codecId,
@@ -335,7 +335,7 @@ export function buildSqlContractFromDefinition(
               fields: Object.fromEntries(
                 vo.fields.map((f) => [
                   f.fieldName,
-                  buildDomainField(f, defaultNamespaceId, definition.storageTypes ?? {}),
+                  buildDomainField(f, defaultNamespaceId, storageTypes),
                 ]),
               ),
             },
