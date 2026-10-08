@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +49,21 @@ withTempDir(({ createTempDir }) => {
               id int4 PRIMARY KEY,
               user_id int4 NOT NULL UNIQUE REFERENCES users(id)
             );
+
+            CREATE TABLE settings (
+              user_id int4 PRIMARY KEY REFERENCES users(id)
+            );
+
+            CREATE TABLE label_sets (
+              id int4 PRIMARY KEY,
+              labels text[] NOT NULL UNIQUE
+            );
+
+            CREATE TABLE labelled (
+              id int4 PRIMARY KEY,
+              labels text[] NOT NULL REFERENCES label_sets(labels)
+            );
+            CREATE INDEX labelled_labels_gin ON labelled USING gin (labels);
           `),
         ),
     });
@@ -75,11 +92,47 @@ withTempDir(({ createTempDir }) => {
         expect(relationOf('Profiles'), 'a unique constraint serves the lookups').not.toContain(
           'index:',
         );
+        expect(relationOf('Settings'), 'the primary key serves the lookups').not.toContain(
+          'index:',
+        );
         expect(relationOf('Drafts'), 'a partial index does not').toContain('index: false');
         expect(relationOf('Notes'), 'a hash index does not').toContain('index: false');
+        expect(relationOf('Labelled'), 'a gin index does not').toContain('index: false');
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
+
+        const contract = JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')) as {
+          readonly storage: {
+            readonly namespaces: Record<
+              string,
+              {
+                readonly entries: {
+                  readonly table?: Record<
+                    string,
+                    { readonly foreignKeys: readonly { readonly index?: unknown }[] }
+                  >;
+                };
+              }
+            >;
+          };
+        };
+        const tables = contract.storage.namespaces['public']?.entries.table ?? {};
+        expect(
+          Object.fromEntries(
+            ['posts', 'drafts', 'notes', 'profiles', 'settings', 'labelled'].map((table) => [
+              table,
+              tables[table]?.foreignKeys.map((foreignKey) => foreignKey.index),
+            ]),
+          ),
+        ).toEqual({
+          posts: [{ name: 'posts_user_id_live' }],
+          drafts: [undefined],
+          notes: [undefined],
+          profiles: [{ unique: true }],
+          settings: [{ primaryKey: true }],
+          labelled: [undefined],
+        });
 
         await expectVerifiesCleanAfterPull(ctx, 'foreign key backing indexes');
 
