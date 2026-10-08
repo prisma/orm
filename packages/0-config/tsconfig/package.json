@@ -2,7 +2,7 @@
   "name": "@repo/tsconfig",
   "private": true,
   "sideEffects": false,
-  "version": "8.0.0-rc.16",
+  "version": "8.0.0-rc.17",
   "description": "Base tsconfig providing package for the monorepo",
   "license": "MIT",
   "files": [
