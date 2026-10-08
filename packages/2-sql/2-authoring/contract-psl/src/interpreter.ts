@@ -1905,9 +1905,6 @@ function materializeMtiVariantStorageLinks(
         ...ifDefined('namespaceId', baseNode.namespaceId),
       },
       constraint: true,
-      // The link columns are the variant's own primary key, which already
-      // carries a unique index — a separate FK backing index would be redundant.
-      index: false,
       // Deleting a base row must delete its variant extension row — classic
       // multi-table-inheritance semantics.
       onDelete: 'cascade',
