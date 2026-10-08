@@ -153,18 +153,6 @@ describe('enumType() — well-formedness guards', () => {
       /duplicate.*name/i,
     );
   });
-
-  it('throws on duplicate values', () => {
-    expect(() => enumType('Dupe', pgText, member('User', 'same'), member('Admin', 'same'))).toThrow(
-      /duplicate.*value/i,
-    );
-  });
-
-  it('throws when two members collapse to the same lowered value', () => {
-    expect(() => enumType('Dupe', pgText, member('One', 1), member('TextOne', '1'))).toThrow(
-      /duplicate member value "1"/i,
-    );
-  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,8 @@
-import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import {
+  type ColumnTypeDescriptor,
+  duplicateStoredMembers,
+  type StoredEnumMember,
+} from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import { contractError } from './contract-errors';
 
@@ -131,7 +135,8 @@ export type CodecInput<
  *   value tuple so `Role.values` is `readonly ['user','admin']`, not
  *   `string[]`.
  * - Well-formedness assertions at construction: non-empty member list;
- *   unique names; unique values.
+ *   unique names. The contract build refuses two members that store the
+ *   same value, because only the codec knows how a value is stored.
  *
  * The returned handle wires into `field.namedType(handle)` to set
  * `valueSet` refs on both the domain field and the storage column.
@@ -183,7 +188,6 @@ export function enumType(
   }
 
   const seenNames = new Set<string>();
-  const seenValues = new Set<string>();
   for (const m of members) {
     if (seenNames.has(m.name)) {
       throw contractError(
@@ -193,16 +197,6 @@ export function enumType(
       );
     }
     seenNames.add(m.name);
-
-    const loweredValue = String(m.value);
-    if (seenValues.has(loweredValue)) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${name}"): duplicate member value "${loweredValue}". Member values must be unique.`,
-        { meta: { enumName: name, member: loweredValue, reason: 'duplicate-member-value' } },
-      );
-    }
-    seenValues.add(loweredValue);
   }
 
   const values = Object.freeze(members.map((m) => m.value));
@@ -227,6 +221,28 @@ export function enumType(
     nameOf: (v: unknown) => valueToName.get(v),
     ordinalOf: (v: unknown) => valueToOrdinal.get(v) ?? -1,
   };
+}
+
+/**
+ * Refuses two members of an `enumType` that store the same value, as `CONTRACT.ENUM_INVALID` naming both members and the stored value. `enumType` has no codec, so the contract build calls this once it has each member's stored form.
+ */
+export function assertEnumMembersStoredUniquely(
+  enumName: string,
+  members: readonly StoredEnumMember[],
+): void {
+  const [duplicate] = duplicateStoredMembers(members);
+  if (duplicate === undefined) return;
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" both store ${JSON.stringify(duplicate.stored)}. Member values must be unique as the column stores them.`,
+    {
+      meta: {
+        enumName,
+        members: [duplicate.earlier, duplicate.later],
+        reason: 'duplicate-member-value',
+      },
+    },
+  );
 }
 
 /**

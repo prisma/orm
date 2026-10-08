@@ -150,25 +150,29 @@ describe('enumType validation errors', () => {
     });
   });
 
-  it('rejects a duplicate member value with CONTRACT.ENUM_INVALID', () => {
-    let thrown: unknown;
-    try {
-      enumType('Status', textCodec, member('active', 'x'), member('inactive', 'x'));
-    } catch (error) {
-      thrown = error;
-    }
-    expect(isStructuredError(thrown)).toBe(true);
-    if (!isStructuredError(thrown)) {
-      throw new Error('expected a structured error');
-    }
-    expect(thrown.code).toBe('CONTRACT.ENUM_INVALID');
-    expect(thrown.message).toBe(
-      'enumType("Status"): duplicate member value "x". Member values must be unique.',
+  it('leaves member values to the contract build, which compares them as the codec stores them', () => {
+    const shapes = enumType(
+      'Shape',
+      { codecId: 'pg/jsonb@1' },
+      member('Square', { sides: 4 }),
+      member('Triangle', { sides: 3 }),
     );
-    expect(thrown.meta).toEqual({
-      enumName: 'Status',
-      member: 'x',
-      reason: 'duplicate-member-value',
+    const moments = enumType(
+      'Moment',
+      { codecId: 'pg/timestamptz@1' },
+      member('Start', new Date('2024-01-01T00:00:00.000Z')),
+      member('JustAfter', new Date('2024-01-01T00:00:00.001Z')),
+    );
+    const sameText = enumType('Status', textCodec, member('active', 'x'), member('inactive', 'x'));
+
+    expect({
+      shapes: shapes.values,
+      moments: moments.names,
+      sameText: sameText.values,
+    }).toEqual({
+      shapes: [{ sides: 4 }, { sides: 3 }],
+      moments: ['Start', 'JustAfter'],
+      sameText: ['x', 'x'],
     });
   });
 });

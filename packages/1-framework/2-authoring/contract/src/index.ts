@@ -26,6 +26,7 @@ export type {
   EnumTypeHandle,
 } from './enum-type';
 export {
+  assertEnumMembersStoredUniquely,
   bindEnumType,
   ENUM_TYPE_HANDLE_BRAND,
   enumType,
