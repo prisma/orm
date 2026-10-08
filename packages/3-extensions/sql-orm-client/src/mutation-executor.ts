@@ -275,8 +275,10 @@ async function applyResolvedGraph(
     );
   }
 
+  const junctionOperations = [];
   for (const { relation, operation } of operationsOwnedBy(input, 'junction')) {
-    await preflightJunctionOwnedCreateMutation(scope, context, relation, operation);
+    const connectTargets = await findJunctionConnectTargets(scope, context, relation, operation);
+    junctionOperations.push({ relation, operation, connectTargets });
   }
 
   const parentRow = await writeParent(scalarData);
@@ -293,7 +295,7 @@ async function applyResolvedGraph(
     );
   }
 
-  for (const { relation, operation } of operationsOwnedBy(input, 'junction')) {
+  for (const { relation, operation, connectTargets } of junctionOperations) {
     await applyJunctionOwnedMutation(
       scope,
       context,
@@ -302,6 +304,7 @@ async function applyResolvedGraph(
       parentRow,
       relation,
       operation,
+      connectTargets,
     );
   }
 
@@ -950,6 +953,7 @@ async function applyJunctionOwnedMutation(
   parentRow: Record<string, unknown>,
   relation: JunctionRelationDefinition,
   operation: ResolvedOperation,
+  connectTargets: readonly Map<string, unknown>[],
 ): Promise<void> {
   const contract = context.contract;
   const parentPkValues = readLinkValues(
@@ -988,32 +992,36 @@ async function applyJunctionOwnedMutation(
     return;
   }
 
+  if (operation.kind === 'connect') {
+    for (const targetPkValues of connectTargets) {
+      await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'connect');
+    }
+    return;
+  }
+
   for (const criterion of operation.criteria) {
     const targetPkValues = await resolveJunctionTargetValues(
       scope,
       context,
       relation,
-      operation.kind,
+      'disconnect',
       criterion,
     );
-    if (operation.kind === 'connect') {
-      await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'connect');
-    } else {
-      await deleteJunctionLink(scope, context, relation, parentPkValues, targetPkValues);
-    }
+    await deleteJunctionLink(scope, context, relation, parentPkValues, targetPkValues);
   }
 }
 
-async function preflightJunctionOwnedCreateMutation(
+async function findJunctionConnectTargets(
   scope: RuntimeScope,
   context: ExecutionContext,
   relation: JunctionRelationDefinition,
   operation: ResolvedOperation,
-): Promise<void> {
+): Promise<Map<string, unknown>[]> {
   if (operation.kind !== 'connect') {
-    return;
+    return [];
   }
 
+  const targets: Map<string, unknown>[] = [];
   const seenTargetKeys = new Set<string>();
   for (const criterion of operation.criteria) {
     const targetValues = await resolveJunctionTargetValues(
@@ -1033,7 +1041,9 @@ async function preflightJunctionOwnedCreateMutation(
       );
     }
     seenTargetKeys.add(targetKey);
+    targets.push(targetValues);
   }
+  return targets;
 }
 
 function assertJunctionPayloadWritable(
