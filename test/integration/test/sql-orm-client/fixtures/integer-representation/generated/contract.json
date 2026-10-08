@@ -188,6 +188,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "int_repr_samples_meter_id_idx_d5ebf9ae",
                   "source": {
                     "columns": [
                       "meter_id"
@@ -227,7 +228,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "850c17d1c7717e962170fd5b71a67a2810709bfe81984612db7d44ea015764a9"
+    "storageHash": "274770fe015160cca9e844ba34c69c0d65ef155d7ebd091ee2fda42e4621758b"
   },
   "capabilities": {
     "postgres": {

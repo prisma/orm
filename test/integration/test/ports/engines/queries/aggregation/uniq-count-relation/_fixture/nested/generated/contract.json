@@ -512,6 +512,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "comment_postId_idx_a7a72715",
                   "source": {
                     "columns": [
                       "postId"
@@ -560,6 +561,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "commentTag_commentId_idx_b5a4f615",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -577,6 +579,7 @@
                   }
                 },
                 {
+                  "index": "commentTag_tagId_idx_86854244",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -640,6 +643,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "source": {
                     "columns": [
                       "userId"
@@ -688,6 +692,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "postTag_postId_idx_a7a72715",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -705,6 +710,7 @@
                   }
                 },
                 {
+                  "index": "postTag_tagId_idx_86854244",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -798,7 +804,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a1e77b05e453cb5b36383ab1f3ba6c73d9a77f311784c5e1ec1a2aa4dd9c8970"
+    "storageHash": "d557d360cdad01795f505dc8029c18da27fc6ddffc7355c09c7ad87ae2a2df6e"
   },
   "capabilities": {
     "postgres": {

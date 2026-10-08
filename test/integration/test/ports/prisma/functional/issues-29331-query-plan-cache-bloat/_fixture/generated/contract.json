@@ -398,6 +398,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "contactAnalytics_contactId_idx_ec98db2a",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -438,7 +439,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6b2f1ef9ff2edb58cd950bed5a9f659f02af866dd5b13c68fe63bee7dc236e3a"
+    "storageHash": "3fb456c420e1fb6d8810d17358395f81cebf183c35e45a06778904308cf8537d"
   },
   "execution": {
     "executionHash": "234c8133ca8a6e5499fa5b9cd3ed0b00671267082dd7f7071e0ad769de2ee3ee",

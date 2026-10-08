@@ -203,6 +203,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "PostOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
                   "source": {
                     "columns": [
                       "authorId_AtMap"
@@ -251,6 +252,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "PostOptionalOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
                   "onDelete": "setNull",
                   "onUpdate": "setNull",
                   "source": {
@@ -314,7 +316,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "85af5873ca43c93264591ac966bb376e61cc3229f1b86d1dd842ccc714ae3950"
+    "storageHash": "8038eb2319cc2b57106e1a8f2471e86fe6ffa8a2082364d410bd64a384098ade"
   },
   "capabilities": {
     "postgres": {

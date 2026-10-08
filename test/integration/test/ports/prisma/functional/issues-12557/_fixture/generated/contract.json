@@ -285,6 +285,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "categoryBrand_categoryId_idx_15c304f2",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -302,6 +303,7 @@
                   }
                 },
                 {
+                  "index": "categoryBrand_brandId_idx_02e95397",
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -351,7 +353,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d33fef7b53a93fd1d93cc926e0c38a320e84554f0a2fddde04f7e0ae8d89d687"
+    "storageHash": "9fb2103417adb0e07a89d123a364d7d4ac492c0db0e3873bcf94071407b466df"
   },
   "capabilities": {
     "postgres": {

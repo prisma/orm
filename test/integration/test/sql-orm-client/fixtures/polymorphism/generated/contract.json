@@ -780,6 +780,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "features_feature_assignee_person_id_idx_7fcd7a77",
                   "source": {
                     "columns": [
                       "feature_assignee_person_id"
@@ -906,6 +907,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "task_comments_task_id_idx_5d5ac774",
                   "source": {
                     "columns": [
                       "task_id"
@@ -983,6 +985,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "tasks_project_id_idx_6ad92603",
                   "source": {
                     "columns": [
                       "project_id"
@@ -999,6 +1002,7 @@
                   }
                 },
                 {
+                  "index": "tasks_reporter_id_idx_3eeed9a0",
                   "source": {
                     "columns": [
                       "reporter_id"
@@ -1064,6 +1068,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "tickets_owner_id_idx_ade9f347",
                   "source": {
                     "columns": [
                       "owner_id"
@@ -1141,6 +1146,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "users_account_id_idx_3b48271c",
                   "source": {
                     "columns": [
                       "account_id"
@@ -1180,7 +1186,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1c3c926473412354b75b8d33522386f2190c015028702a4a2b117e4a9aeef687"
+    "storageHash": "97f2ca2cd5bc0db4d314ba63915100da6856194e5845949c63047c078ca92884"
   },
   "capabilities": {
     "postgres": {

@@ -118,6 +118,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -165,7 +166,7 @@
         "id": "public"
       }
     },
-    "storageHash": "b0eb0bbcdc8a5b3e90ffdaf9d105dd8eec30270214919f40e0aef6cd9e8a9f2f"
+    "storageHash": "6ce5824f52065596133b9b3b1909837c4281d0bb350ba325bb968ccdbb8b6b16"
   },
   "capabilities": {
     "postgres": {

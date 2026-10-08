@@ -121,6 +121,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "team_member_team_ref_idx_a6fcaafa",
                   "name": "team_member_team_ref_fkey",
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
@@ -158,7 +159,7 @@
         "id": "public"
       }
     },
-    "storageHash": "8b69c0da82fc8904d442bd6167d53392c52ef51fb6df702687fc84787f12592e"
+    "storageHash": "a305d3d4491ef9bed5d273a071646cdc66697f66d179a35099fdc5b127fc2b19"
   },
   "capabilities": {
     "postgres": {

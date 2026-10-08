@@ -368,6 +368,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_authorId_idx_e47547ed",
                   "source": {
                     "columns": [
                       "authorId"
@@ -452,6 +453,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "userGroup_userId_idx_a489d58a",
                   "source": {
                     "columns": [
                       "userId"
@@ -468,6 +470,7 @@
                   }
                 },
                 {
+                  "index": "userGroup_groupId_idx_e2fb5578",
                   "source": {
                     "columns": [
                       "groupId"
@@ -516,7 +519,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6dc45cff8da3786952f2a8a7a8d014100371b6123b7bb8631c0ded65dda9d1cc"
+    "storageHash": "31d77263b9725300b47315db40c75e61fbd7fa515cafc9473923ebdf0bf0605c"
   },
   "capabilities": {
     "postgres": {

@@ -155,6 +155,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "batteryLevel_hubId_idx_4895e1fd",
                   "onDelete": "setNull",
                   "source": {
                     "columns": [
@@ -233,7 +234,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8dc8ca66cc2f578e70406fbeadbc7e684e81d8555d37aa20d73b92a5acfdbad5"
+    "storageHash": "509f0ffd85d644323378beef02608e84a3998d1de9851882dd83e134d895c0fc"
   },
   "capabilities": {
     "postgres": {

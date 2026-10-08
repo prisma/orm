@@ -219,6 +219,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "relation1_email_idx_46df9cad",
                   "source": {
                     "columns": [
                       "email"
@@ -267,6 +268,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "relation2_email_idx_46df9cad",
                   "source": {
                     "columns": [
                       "email"
@@ -340,7 +342,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "044d787b80589a93fb0015bf5366af1f8cb1013bd18500594b33609b879d43bb"
+    "storageHash": "887b11766bb5eb8f4d81a67c05516f02eb9d86d619755c8eb39b26417d78da8f"
   },
   "capabilities": {
     "postgres": {

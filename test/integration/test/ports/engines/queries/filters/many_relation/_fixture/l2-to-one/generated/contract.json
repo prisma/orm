@@ -286,6 +286,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_blog_id_idx_aa2309ad",
                   "source": {
                     "columns": [
                       "blog_id"
@@ -325,7 +326,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8e0de3891a8b7625453cf53752f07fd42f36fb435f754fe07a2c14d1ad69bb69"
+    "storageHash": "340054ac766acf9a35a7a54beccae8d0529313ab464e89a81a9d735a39a386a3"
   },
   "capabilities": {
     "postgres": {

@@ -203,6 +203,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "categoriesOnPostsManyToMany_postId_idx_a7a72715",
                   "source": {
                     "columns": [
                       "postId"
@@ -219,6 +220,7 @@
                   }
                 },
                 {
+                  "index": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2",
                   "source": {
                     "columns": [
                       "categoryId"
@@ -311,7 +313,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3bd81bafdd4ae5800dfa55a33895662739fefd8c0d71784fe528de992e201af4"
+    "storageHash": "c14f82e52f248afec59068688ae63efaa5497eac0522bc9b409b07128cb50738"
   },
   "capabilities": {
     "postgres": {

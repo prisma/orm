@@ -258,6 +258,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "main_aliceId_idx_518dca26",
                   "onDelete": "setNull",
                   "onUpdate": "cascade",
                   "source": {
@@ -299,7 +300,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1f92a5e51818cfb69d13a959894875289a9648f090d580e4d780fcdda16d62ae"
+    "storageHash": "2850a35a1679e184d81e9081d1053d36219ae8838d465eb8429e8cddc6ff9da3"
   },
   "capabilities": {
     "postgres": {

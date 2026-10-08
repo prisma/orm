@@ -851,6 +851,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "source": {
                     "columns": [
                       "userId"
@@ -906,6 +907,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_tag_postId_idx_a7a72715",
                   "source": {
                     "columns": [
                       "postId"
@@ -922,6 +924,7 @@
                   }
                 },
                 {
+                  "index": "post_tag_tagId_idx_86854244",
                   "source": {
                     "columns": [
                       "tagId"
@@ -1040,6 +1043,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "task_userId_idx_a489d58a",
                   "source": {
                     "columns": [
                       "userId"
@@ -1155,7 +1159,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ad6c8696da69df5c3a46cb752b6e0d53fd10f195b394341513d5f6e9c65e43ac",
+    "storageHash": "cd8e04ee8f169c956418763efc967187df5b7f52840930da247c923037bfd81b",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

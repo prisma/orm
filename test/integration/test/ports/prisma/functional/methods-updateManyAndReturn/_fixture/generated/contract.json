@@ -161,6 +161,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "source": {
                     "columns": [
                       "userId"
@@ -233,7 +234,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "459497443f93144baef489538b8fa816d6caa3419be085d5d7fcf579fa120b64"
+    "storageHash": "a718301afd38677d759838e5a043caaab14ef53a901e1bfcb2fd8df502cb4594"
   },
   "execution": {
     "executionHash": "d8f8d2a4e40d2ef6e2756511552840af3ca0deb53997b4b22b615cab9bc18877",

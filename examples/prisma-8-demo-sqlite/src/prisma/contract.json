@@ -372,6 +372,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "name": "post_userId_fkey",
                   "source": {
                     "columns": [
@@ -427,6 +428,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_tag_postId_idx_a7a72715",
                   "name": "post_tag_postId_fkey",
                   "source": {
                     "columns": [
@@ -444,6 +446,7 @@
                   }
                 },
                 {
+                  "index": "post_tag_tagId_idx_86854244",
                   "name": "post_tag_tagId_fkey",
                   "source": {
                     "columns": [
@@ -557,7 +560,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "8d1cd4bad86d1db4e9276393a7cad91523915ac2f435052ec6c36ec1a8f2b655",
+    "storageHash": "214cde7a5171596cc12e6202336b8fe8f9039a203b317704a32cc53fd3b1ae22",
     "types": {
       "BigIntNumber": {
         "codecId": "sqlite/bigintnumber@1",

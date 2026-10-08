@@ -173,6 +173,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "int_repr_samples_meter_id_idx_d5ebf9ae",
                   "source": {
                     "columns": [
                       "meter_id"
@@ -211,7 +212,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "28d0397503caeb837ce9b4e066368eb18074e3aa6ca3455388983c4164565eb6"
+    "storageHash": "06efaa69ff24fefda9589783c4b1a1cd94de101ac0465e5eaacce8be9139742f"
   },
   "capabilities": {
     "sql": {

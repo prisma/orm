@@ -192,6 +192,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "child_testId_idx_10032b02",
                   "source": {
                     "columns": [
                       "testId"
@@ -268,7 +269,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "65d7ca758c9b1959e07dda51e79ea2f0c9de09f07025cd032c04eed338a84e90"
+    "storageHash": "390bd78ecbca3c9c075c2196529e8104147bd3d4edbba054537c784147554078"
   },
   "capabilities": {
     "postgres": {

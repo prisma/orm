@@ -303,6 +303,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "profile_user_id_idx_6c952402",
                   "source": {
                     "columns": [
                       "user_id"
@@ -364,7 +365,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c2250c2ce876a16558359b12db12a8e702af45db32370d8c5a53e97fe054f09e"
+    "storageHash": "bf387393873a6bfe4af3f500680dfec1664bf5f5e93cf96c904628fa83123dcf"
   },
   "capabilities": {
     "postgres": {

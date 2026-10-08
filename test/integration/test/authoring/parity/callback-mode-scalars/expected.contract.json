@@ -213,6 +213,7 @@
               },
               "foreignKeys": [
                 {
+                  "index": "post_userId_idx_a489d58a",
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -312,7 +313,7 @@
         "id": "public"
       }
     },
-    "storageHash": "d40e55878f286bc375b09e3cce4624a68e3195d5a52c8ad5730ce2df93da718a",
+    "storageHash": "74a8834e0ca6ffeb47881d13c863c4b967cc7d88e1a91766db1e6ca182bba291",
     "types": {
       "Embedding": {
         "codecId": "pg/vector@1",
