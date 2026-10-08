@@ -177,7 +177,7 @@ import {
   type VariantNameForValue,
   type WithNsId,
 } from './types';
-import { isWhereDirectInput, normalizeWhereArg } from './where-interop';
+import { resolveWhereInput } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 function applyCreateDefaults(
@@ -433,22 +433,18 @@ export class CollectionBase<
         ) => WhereDirectInput)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
-    const whereArg =
-      typeof input === 'function'
-        ? input(
-            createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
-              this.ctx.context,
-              this.namespaceId,
-              this.modelName,
-              this.state.variantName,
-            ),
-          )
-        : isWhereDirectInput(input)
-          ? input
-          : shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, input);
-    const filter = normalizeWhereArg(whereArg, {
+    const filter = resolveWhereInput(input, {
       contract: this.contract,
       namespaceId: this.namespaceId,
+      accessor: () =>
+        createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
+          this.ctx.context,
+          this.namespaceId,
+          this.modelName,
+          this.state.variantName,
+        ),
+      shorthand: (filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>) =>
+        shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, filters),
     });
 
     if (!filter) {
