@@ -170,7 +170,7 @@ describe('contract definition constraint support', () => {
       {
         source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
         target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-        index: 'post_userId_idx_a489d58a',
+        index: { name: 'post_userId_idx_a489d58a' },
       },
     ]);
   });
@@ -187,7 +187,7 @@ describe('contract definition constraint support', () => {
         source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
         target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
         name: 'post_userId_fkey',
-        index: 'post_userId_idx_a489d58a',
+        index: { name: 'post_userId_idx_a489d58a' },
       },
     ]);
   });
@@ -357,7 +357,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-          index: 'post_userId_idx_a489d58a',
+          index: { name: 'post_userId_idx_a489d58a' },
         },
       ]);
       expect(post.indexes).toEqual([
@@ -418,7 +418,7 @@ describe('contract definition constraint support', () => {
       expect(post.indexes).toEqual([]);
     });
 
-    it('derives no backing index when an unnamed unique constraint has the FK columns', () => {
+    it('backs the FK by an unnamed unique constraint on its columns', () => {
       const User = buildUserModel();
       const Post = model('Post', {
         fields: {
@@ -439,6 +439,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { unique: true },
         },
       ]);
       expect(post.indexes).toEqual([]);
@@ -513,12 +514,12 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-          index: 'post_userId_idx_a489d58a',
+          index: { name: 'post_userId_idx_a489d58a' },
         },
       ]);
     });
 
-    it('derives no backing index when an unnamed primary key has the FK columns', () => {
+    it('backs the FK by an unnamed primary key on its columns', () => {
       const User = buildUserModel();
       const Profile = model('Profile', {
         fields: {
@@ -538,6 +539,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'profile', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { primaryKey: true },
         },
       ]);
       expect(profile.indexes).toEqual([]);
@@ -569,12 +571,12 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'link', columns: ['sourceId'] },
           target: { namespaceId: 'public', tableName: 'target_a', columns: ['id'] },
-          index: 'link_sourceId_idx_d92a2571',
+          index: { name: 'link_sourceId_idx_d92a2571' },
         },
         {
           source: { namespaceId: 'public', tableName: 'link', columns: ['sourceId'] },
           target: { namespaceId: 'public', tableName: 'target_b', columns: ['id'] },
-          index: 'link_sourceId_idx_d92a2571',
+          index: { name: 'link_sourceId_idx_d92a2571' },
         },
       ]);
       expect(link.indexes).toEqual([

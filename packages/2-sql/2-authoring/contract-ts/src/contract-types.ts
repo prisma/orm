@@ -13,6 +13,7 @@ import type { IndexTypeRegistration } from '@internal/sql-contract/index-types';
 import type {
   AuthoredStorageTypeInstance,
   ContractWithTypeMaps,
+  ForeignKeyIndex,
   Index,
   ReferentialAction,
   TypeMaps,
@@ -574,7 +575,7 @@ type BuiltStorageTables<Definition> = {
       readonly name?: string;
       readonly onDelete?: ReferentialAction;
       readonly onUpdate?: ReferentialAction;
-      readonly index?: string;
+      readonly index?: ForeignKeyIndex;
     }>;
   } & (ModelIdFieldNames<Definition, ModelName> extends readonly string[]
     ? {

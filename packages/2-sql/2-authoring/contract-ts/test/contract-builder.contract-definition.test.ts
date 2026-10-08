@@ -170,7 +170,7 @@ describe('shared contract definition lowering', () => {
         },
         target: { namespaceId: 'public', tableName: 'app_user', columns: ['id'] },
         name: 'blog_post_author_id_fkey',
-        index: 'blog_post_author_id_idx_f3862461',
+        index: { name: 'blog_post_author_id_idx_f3862461' },
       },
     ]);
     expect(unboundTables(contract.storage)['blog_post']?.indexes).toEqual([

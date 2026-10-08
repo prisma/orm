@@ -648,7 +648,38 @@
                                 "additionalProperties": false
                               },
                               "index": {
-                                "type": "string"
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["name"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "primaryKey": {
+                                        "const": true
+                                      }
+                                    },
+                                    "required": ["primaryKey"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "unique": {
+                                        "const": true
+                                      }
+                                    },
+                                    "required": ["unique"],
+                                    "additionalProperties": false
+                                  }
+                                ]
                               },
                               "name": {
                                 "type": "string"

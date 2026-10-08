@@ -2,7 +2,7 @@ import type { AuthoringContributions } from '@internal/framework-components/auth
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { defineIndexTypes } from '@internal/sql-contract/index-types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ForeignKeyIndex, SqlStorage } from '@internal/sql-contract/types';
 import { defineContract, type IndexConstraint } from '@internal/sql-contract-ts/contract-builder';
 import { type } from 'arktype';
 import { describe, expect, it, vi } from 'vitest';
@@ -71,7 +71,7 @@ const hashIndex = {
   options: {},
 };
 
-function foreignKeyNaming(index: string | undefined) {
+function foreignKeyNaming(index: ForeignKeyIndex | undefined) {
   return {
     source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
     target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
@@ -212,7 +212,7 @@ describe("a relation's backing index", () => {
   it('is derived when the table has no index on the foreign key columns', () => {
     expectBothBuilds({ psl: {}, ts: {} }).toEqual({
       indexes: [backingIndex],
-      foreignKeys: [foreignKeyNaming(backingIndex.name)],
+      foreignKeys: [foreignKeyNaming({ name: backingIndex.name })],
     });
   });
 
@@ -220,14 +220,20 @@ describe("a relation's backing index", () => {
     expectBothBuilds({
       psl: { model: '@@index([authorId])' },
       ts: { indexes: ['unnamed'] },
-    }).toEqual({ indexes: [backingIndex], foreignKeys: [foreignKeyNaming(backingIndex.name)] });
+    }).toEqual({
+      indexes: [backingIndex],
+      foreignKeys: [foreignKeyNaming({ name: backingIndex.name })],
+    });
   });
 
   it('is the identical named index the table declares', () => {
     expectBothBuilds({
       psl: { model: '@@index([authorId], name: "post_author")' },
       ts: { indexes: ['named'] },
-    }).toEqual({ indexes: [namedIndex], foreignKeys: [foreignKeyNaming(namedIndex.name)] });
+    }).toEqual({
+      indexes: [namedIndex],
+      foreignKeys: [foreignKeyNaming({ name: namedIndex.name })],
+    });
   });
 
   it('is derived beside a partial index on the foreign key columns', () => {
@@ -236,7 +242,7 @@ describe("a relation's backing index", () => {
       ts: { indexes: ['partial'] },
     }).toEqual({
       indexes: [partialIndex, backingIndex],
-      foreignKeys: [foreignKeyNaming(backingIndex.name)],
+      foreignKeys: [foreignKeyNaming({ name: backingIndex.name })],
     });
   });
 
@@ -246,17 +252,17 @@ describe("a relation's backing index", () => {
       ts: { indexes: ['hash'] },
     }).toEqual({
       indexes: [hashIndex, backingIndex],
-      foreignKeys: [foreignKeyNaming(backingIndex.name)],
+      foreignKeys: [foreignKeyNaming({ name: backingIndex.name })],
     });
   });
 
   it.each([
-    ['an unnamed unique constraint', '@unique', 'unique', undefined],
+    ['an unnamed unique constraint', '@unique', 'unique', { unique: true }],
     [
       'a named unique constraint',
       '@unique(map: "post_author_key")',
       'namedUnique',
-      'post_author_key',
+      { unique: true },
     ],
   ] as const)('is %s on the foreign key columns', (_label, attribute, authorId, index) => {
     const fromPsl = buildFromPsl({ psl: { authorId: ` ${attribute}` }, ts: {} });
@@ -265,8 +271,8 @@ describe("a relation's backing index", () => {
   });
 
   it.each([
-    ['an unnamed primary key', '@id', 'id', undefined],
-    ['a named primary key', '@id(map: "post_pkey")', 'namedId', 'post_pkey'],
+    ['an unnamed primary key', '@id', 'id', { primaryKey: true }],
+    ['a named primary key', '@id(map: "post_pkey")', 'namedId', { primaryKey: true }],
   ] as const)('is %s on the foreign key columns', (_label, attribute, authorId, index) => {
     const fromPsl = buildFromPsl({ psl: { authorId: ` ${attribute}` }, ts: {} });
     expect(fromPsl).toEqual({ indexes: [], foreignKeys: [foreignKeyNaming(index)] });
@@ -287,7 +293,10 @@ describe("a relation's backing index", () => {
         model: '@@index([authorId], where: "id > 0", name: "post_author_live")',
       },
       ts: { foreignKey: { index: 'post_author_live' }, indexes: ['partial'] },
-    }).toEqual({ indexes: [partialIndex], foreignKeys: [foreignKeyNaming(partialIndex.name)] });
+    }).toEqual({
+      indexes: [partialIndex],
+      foreignKeys: [foreignKeyNaming({ name: partialIndex.name })],
+    });
   });
 
   it('refuses a name the table does not declare', () => {
@@ -317,7 +326,7 @@ describe("a relation's backing index", () => {
           { name: 'post_author_by_hand', columns: ['authorId'], unique: false },
           namedIndex,
         ],
-        foreignKeys: [foreignKeyNaming('post_author_by_hand')],
+        foreignKeys: [foreignKeyNaming({ name: 'post_author_by_hand' })],
       });
       expect(emitWarning.mock.calls).toEqual([
         [
