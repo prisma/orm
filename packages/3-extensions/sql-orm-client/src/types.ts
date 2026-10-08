@@ -147,7 +147,6 @@ export function emptyGroupPagingState(): GroupPagingState {
 export interface CollectionTypeState {
   readonly hasOrderBy: boolean;
   readonly hasWhere: boolean;
-  readonly hasUniqueFilter: boolean;
   readonly variantName: string | undefined;
   /**
    * The namespace coordinate this collection resolves at — set by the
@@ -165,7 +164,6 @@ export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
 export type DefaultCollectionTypeState = {
   readonly hasOrderBy: boolean;
   readonly hasWhere: boolean;
-  readonly hasUniqueFilter: boolean;
   readonly variantName: undefined;
   readonly nsId: never;
 };
