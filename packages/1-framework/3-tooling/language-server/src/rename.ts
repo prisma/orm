@@ -7,13 +7,13 @@ import {
   type PslSymbol,
   typeReferenceNode,
 } from '@internal/psl-parser';
+import type { ResolvedFormatOptions } from '@internal/psl-parser/format';
 import {
   type AstNode,
-  type GenericBlockDeclarationAst,
-  ModelAttributeAst,
+  type ModelAttributeAst,
   ModelDeclarationAst,
   type SourceFile,
-  type SyntaxElement,
+  type SyntaxNode,
   SyntaxToken,
 } from '@internal/psl-parser/syntax';
 import {
@@ -32,6 +32,7 @@ export type ProvidePrepareRenameInput = Omit<ProvideReferencesInput, 'includeDec
 export interface ProvideRenameInput
   extends ProvidePrepareRenameInput,
     Omit<AttributeSpecSource, 'binder'> {
+  readonly formatOptions: ResolvedFormatOptions;
   readonly newName: string;
 }
 
@@ -157,65 +158,24 @@ function blockMapEdit(
   const sourceFile = sourceFileOf(symbol.node, input);
   const rbrace = symbol.node.rbrace();
   if (sourceFile === undefined || rbrace === undefined) return undefined;
-  const newline = sourceFile.text.includes('\r\n') ? '\r\n' : '\n';
-  const declarationIndent = lineIndent(symbol.node.syntax) ?? '';
-  const members = lastAndFirstMember(symbol.node);
-  const memberIndent = members === undefined ? undefined : lineIndent(members.first.syntax);
-  const line = `${memberIndent ?? `${declarationIndent}  `}@@map("${symbol.name}")${newline}`;
-  const afterField = members !== undefined && !(members.last instanceof ModelAttributeAst);
-  const closingIndent = whitespaceBefore(rbrace);
-  const closingLineStart = closingIndent ?? rbrace;
-  if (startsLine(closingLineStart)) {
-    const blank = afterField && !followsBlankLine(closingLineStart) ? newline : '';
-    const at = sourceFile.positionAt(closingLineStart.offset);
-    return {
-      uri: sourceFile.filename,
-      edit: { range: { start: at, end: at }, newText: `${blank}${line}` },
-    };
-  }
+  const { indentUnit, newline } = input.formatOptions;
+  const indent = indentUnit.repeat(enclosingBlockCount(symbol.node.syntax) + 1);
+  const before = rbrace.prevSiblingOrToken;
+  const anchor = before instanceof SyntaxToken && before.kind === 'Whitespace' ? before : rbrace;
+  const at = sourceFile.positionAt(anchor.offset);
   return {
     uri: sourceFile.filename,
     edit: {
-      range: {
-        start: sourceFile.positionAt(closingLineStart.offset),
-        end: sourceFile.positionAt(rbrace.offset),
-      },
-      newText: `${newline}${afterField ? newline : ''}${line}${declarationIndent}`,
+      range: { start: at, end: at },
+      newText: `${newline}${indent}@@map("${symbol.name}")${newline}`,
     },
   };
 }
 
-function startsLine(element: SyntaxElement): boolean {
-  const before = element.prevSiblingOrToken;
-  return before === undefined || before.kind === 'Newline';
-}
-
-function followsBlankLine(lineStart: SyntaxElement): boolean {
-  const lineBreak = lineStart.prevSiblingOrToken;
-  const before = lineBreak?.prevSiblingOrToken;
-  return (before?.kind === 'Whitespace' ? before.prevSiblingOrToken : before)?.kind === 'Newline';
-}
-
-function lineIndent(element: SyntaxElement): string | undefined {
-  const whitespace = whitespaceBefore(element);
-  return startsLine(whitespace ?? element) ? (whitespace?.text ?? '') : undefined;
-}
-
-function lastAndFirstMember(
-  node: ModelDeclarationAst | GenericBlockDeclarationAst,
-): { readonly first: AstNode; readonly last: AstNode } | undefined {
-  let first: AstNode | undefined;
-  let last: AstNode | undefined;
-  for (const member of node.members()) {
-    first ??= member;
-    last = member;
-  }
-  return first === undefined || last === undefined ? undefined : { first, last };
-}
-
-function whitespaceBefore(element: SyntaxElement): SyntaxToken | undefined {
-  const before = element.prevSiblingOrToken;
-  return before instanceof SyntaxToken && before.kind === 'Whitespace' ? before : undefined;
+function enclosingBlockCount(node: SyntaxNode): number {
+  let count = 0;
+  for (let parent = node.parent; parent?.parent !== undefined; parent = parent.parent) count++;
+  return count;
 }
 
 function sourceFileOf(node: AstNode, input: ProvideRenameInput): SourceFile | undefined {

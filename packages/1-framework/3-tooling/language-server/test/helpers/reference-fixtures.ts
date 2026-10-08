@@ -14,6 +14,7 @@ import {
   str,
   structBlock,
 } from '@internal/psl-parser';
+import { resolveFormatOptions } from '@internal/psl-parser/format';
 import { parse } from '@internal/psl-parser/syntax';
 import type { ReferencesDocument } from '../../src/references';
 import type { ProvideRenameInput } from '../../src/rename';
@@ -267,5 +268,6 @@ export function cursorInput(
     symbolTable,
     ...stack,
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+    formatOptions: resolveFormatOptions(undefined),
   };
 }

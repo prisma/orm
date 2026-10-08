@@ -2532,10 +2532,25 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
           },
           {
             range: { start: { line: 2, character: 0 }, end: { line: 2, character: 0 } },
-            newText: '  @@map("Sticker")\n',
+            newText: '\n  @@map("Sticker")\n',
           },
         ],
       },
+    });
+  });
+
+  it('writes the inserted map attribute with the indent and line break of the formatter options of the project', async () => {
+    harness = startHarness(async (path) => ({
+      ...(await resolveToSchemaWithMapAttributes(path)),
+      formatter: { indent: 'tab', newline: 'CRLF' },
+    }));
+    await harness.initialize();
+    const { source, position } = sourceWithCursor('// use prisma-8\nlabel Stic|ker {\n}\n');
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+
+    await expect(requestRename(harness, schemaUri, position, 'Badge')).resolves.toMatchObject({
+      changes: { [schemaUri]: [{ newText: 'Badge' }, { newText: '\r\n\t@@map("Sticker")\r\n' }] },
     });
   });
 

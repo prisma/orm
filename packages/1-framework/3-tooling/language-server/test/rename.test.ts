@@ -1,6 +1,6 @@
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { fieldAttribute, fieldRef, list, referencedFieldRef } from '@internal/psl-parser';
-import { format } from '@internal/psl-parser/format';
+import { type FormatOptions, format, resolveFormatOptions } from '@internal/psl-parser/format';
 import { describe, expect, it } from 'vitest';
 import {
   LSPErrorCodes,
@@ -75,8 +75,20 @@ function offsetOf(text: string, position: Range['start']): number {
   return offset;
 }
 
-function textAfterRename(files: Files, name: string, marked: string, newName: string): string {
-  const edit = provideRename({ ...cursorInput(files, name, marked), newName });
+function textAfterRename(
+  files: Files,
+  name: string,
+  marked: string,
+  newName: string,
+  formatOptions?: FormatOptions,
+): string {
+  const input = cursorInput(files, name, marked);
+  const edit = provideRename({
+    ...input,
+    formatOptions:
+      formatOptions === undefined ? input.formatOptions : resolveFormatOptions(formatOptions),
+    newName,
+  });
   let text = files[name] ?? '';
   const edits = [...(edit?.changes?.[name] ?? [])].sort(
     (a, b) => offsetOf(text, b.range.start) - offsetOf(text, a.range.start),
@@ -573,7 +585,7 @@ describe('provideRename — map attribute added', () => {
     const files = pair(['label Sticker {', '}'], refModel('', '  @@labelled(Sticker)'));
     const edits = [
       'decl.prisma: label Badge {',
-      'decl.prisma: "  @@map(\\"Sticker\\")\\n" before "}"',
+      'decl.prisma: "\\n  @@map(\\"Sticker\\")\\n" before "}"',
       'ref.prisma: @@labelled(Badge)',
     ];
 
@@ -863,7 +875,7 @@ describe('provideRename — where the map attribute goes', () => {
     );
   });
 
-  it('puts @@map after a blank line when the last member of the model is a field', () => {
+  it('inserts a line break, the indent, @@map and a line break before the closing brace of a model', () => {
     const files = { 'a.prisma': 'model Item {\n  id   Int @id\n  code Int\n}\n' };
 
     const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
@@ -872,63 +884,40 @@ describe('provideRename — where the map attribute goes', () => {
     expect(format(renamed)).toBe(renamed);
   });
 
-  it('puts @@map right after the existing @@ attributes of the model', () => {
-    const files = {
-      'a.prisma': 'model Item {\n  id   Int @id\n  code Int\n\n  @@index([code])\n}\n',
-    };
+  it('indents @@map by two units in a model inside a namespace and leaves the brace indent alone', () => {
+    const files = { 'a.prisma': 'namespace shop {\n  model Item {\n    id Int @id\n  }\n}\n' };
 
     const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
 
     expect(renamed).toBe(
-      'model Product {\n  id   Int @id\n  code Int\n\n  @@index([code])\n  @@map("Item")\n}\n',
+      'namespace shop {\n  model Product {\n    id Int @id\n\n    @@map("Item")\n  }\n}\n',
     );
     expect(format(renamed)).toBe(renamed);
   });
 
-  it('adds no second blank line when one already precedes the closing brace', () => {
-    const files = { 'a.prisma': 'model Item {\n  id Int @id\n\n}\n' };
+  it('takes the indent unit and the line break from the formatter options, not from the file', () => {
+    const files = { 'a.prisma': 'namespace shop {\n  model Item {\n    id Int @id\n  }\n}\n' };
 
-    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
-
-    expect(renamed).toBe('model Product {\n  id Int @id\n\n  @@map("Item")\n}\n');
-    expect(format(renamed)).toBe(renamed);
-  });
-
-  it('puts @@map after a comment that follows the last field, keeping the comment', () => {
-    const files = { 'a.prisma': 'model Item {\n  id Int @id\n  // note\n}\n' };
-
-    expect(textAfterRename(files, 'a.prisma', 'model It|em', 'Product')).toBe(
-      'model Product {\n  id Int @id\n  // note\n\n  @@map("Item")\n}\n',
+    expect(
+      textAfterRename(files, 'a.prisma', 'model It|em', 'Product', {
+        indent: 'tab',
+        newline: 'CRLF',
+      }),
+    ).toBe(
+      'namespace shop {\n  model Product {\n    id Int @id\n\r\n\t\t@@map("Item")\r\n  }\n}\n',
     );
   });
 
-  it('ends the inserted @@map line the way the lines of a CRLF file end', () => {
-    const files = { 'a.prisma': 'model Item {\r\n  id Int @id\r\n}\r\n' };
-
-    expect(textAfterRename(files, 'a.prisma', 'model It|em', 'Product')).toBe(
-      'model Product {\r\n  id Int @id\r\n\r\n  @@map("Item")\r\n}\r\n',
-    );
-  });
-
-  it('moves the closing brace of a one-line model to its own line after @@map', () => {
+  it('inserts text the parser accepts into a model written on one line', () => {
     const files = { 'a.prisma': 'model Item { id Int }\n' };
 
     const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
 
-    expect(renamed).toBe('model Product { id Int\n\n  @@map("Item")\n}\n');
+    expect(renamed).toBe('model Product { id Int\n  @@map("Item")\n }\n');
     expect(format(renamed)).toBe('model Product {\n  id Int\n\n  @@map("Item")\n}\n');
   });
 
-  it('gives an empty model a body that holds @@map alone', () => {
-    const files = { 'a.prisma': 'namespace shop {\n  model Item {}\n}\n' };
-
-    const renamed = textAfterRename(files, 'a.prisma', 'model It|em', 'Product');
-
-    expect(renamed).toBe('namespace shop {\n  model Product {\n    @@map("Item")\n  }\n}\n');
-    expect(format(renamed)).toBe(renamed);
-  });
-
-  it('puts @@map after a blank line when the last member of a block is an entry', () => {
+  it('inserts the same text before the closing brace of a block whose name is the storage name', () => {
     const files = { 'a.prisma': 'label Sticker {\n  colour = "red"\n}\n' };
 
     const renamed = textAfterRename(files, 'a.prisma', 'label Stic|ker', 'Badge');

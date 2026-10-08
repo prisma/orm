@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { CliStructuredError } from '@internal/errors/control';
 import { renameLegacyDirective } from '@internal/psl-parser';
-import { format } from '@internal/psl-parser/format';
+import { format, resolveFormatOptions } from '@internal/psl-parser/format';
 import {
   type CompletionItem,
   type Connection,
@@ -290,6 +290,7 @@ export class Project {
         binder: data.artifacts.binder(),
         ...data.controlStack,
         symbolTable: data.artifacts.symbolTable(),
+        formatOptions: resolveFormatOptions(data.formatter),
         newName,
       });
     } catch (error) {
