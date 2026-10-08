@@ -25,7 +25,7 @@ changes:
         - 'constraints\.index\(\s*\[[^\]]*\]\s*\)'
   - id: infer-and-print-write-the-relation-index-argument
     summary: |
-      `prisma contract infer` now writes `index: false` on a relation whose only index on its columns is partial, has a non-default type (such as `hash` or `gin`) or has options, where it used to write nothing. `prisma contract print` writes `index: "<name>"` on a relation backed by such an index, nothing on a relation backed by its default index or a key, and `index: false` only where nothing backs the foreign key. Re-running either command can change the `@relation` lines it writes; review the diff.
+      `prisma contract infer` now writes `index: false` on a relation whose only index on its columns is partial, has a non-default type (such as `hash` or `gin`) or has options, where it used to write nothing, and `index: "<name>"` on a relation whose columns lead a named key or a plain index with more columns, where it used to write `index: false`. `prisma contract print` writes `index: "<name>"` on a relation backed by such an index, nothing on a relation backed by its default index or a key, and `index: false` only where nothing backs the foreign key. Re-running either command can change the `@relation` lines it writes; review the diff.
     detection:
       glob: "**/*.prisma"
       matches:
@@ -87,4 +87,6 @@ For example, with `email String @unique`, an `@@index([email])` is left out of t
 
 ## `infer-and-print-write-the-relation-index-argument`
 
-Nothing to change in your source. If you re-run `prisma contract infer` or `prisma contract print`, expect `@relation` lines to differ from what an earlier release wrote: `index: false` beside a hash, gin, optioned or partial index, and `index: "<name>"` or no `index` argument where `contract print` used to write `index: false` on every relation. Emitting either result gives the same contract.
+Nothing to change in your source. If you re-run `prisma contract infer` or `prisma contract print`, expect `@relation` lines to differ from what an earlier release wrote: `index: false` beside a hash, gin, optioned or partial index, `index: "<name>"` for a composite index or named key whose first columns are the relation's, and `index: "<name>"` or no `index` argument where `contract print` used to write `index: false` on every relation. Emitting either result gives the same contract.
+
+A contract emitted from a Prisma 7 schema (`prisma7Schema(...)`) also states what backs each foreign key where the model's own indexes or keys serve it, such as the unique index of a one-to-one relation or the primary key of an implicit many-to-many junction. Prisma 7 created no other backing index, and the contract still adds none; only the storage hash changes, which `foreign-keys-name-their-backing-index` covers.
