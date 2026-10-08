@@ -18,6 +18,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { type Type, type } from 'arktype';
 import { contractError } from './contract-errors';
 import { composeSqlEntityKinds } from './entity-kinds';
+import { startsWithColumns } from './index-equivalence';
 import { resolveSqlToOneRelationStorage } from './relation-storage';
 
 export {
@@ -597,10 +598,6 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
   >(contractResult);
 }
 
-function sameColumns(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((column, position) => column === b[position]);
-}
-
 function foreignKeyBackingError(table: StorageTable, fk: ForeignKey): string | undefined {
   const { index } = fk;
   if (index === undefined) return undefined;
@@ -611,13 +608,13 @@ function foreignKeyBackingError(table: StorageTable, fk: ForeignKey): string | u
       : `is indexed by "${index.name}", but the table has no index with that name`;
   }
   if ('primaryKey' in index) {
-    return table.primaryKey !== undefined && sameColumns(table.primaryKey.columns, columns)
+    return table.primaryKey !== undefined && startsWithColumns(table.primaryKey.columns, columns)
       ? undefined
-      : 'is indexed by the primary key, but the table has no primary key on exactly those columns';
+      : "is indexed by the primary key, but the table's primary key does not start with those columns";
   }
-  return table.uniques.some((unique) => sameColumns(unique.columns, columns))
+  return table.uniques.some((unique) => startsWithColumns(unique.columns, columns))
     ? undefined
-    : 'is indexed by a unique constraint, but the table has no unique constraint on exactly those columns';
+    : 'is indexed by a unique constraint, but the table has no unique constraint that starts with those columns';
 }
 
 /**

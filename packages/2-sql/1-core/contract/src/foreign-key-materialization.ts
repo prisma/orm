@@ -11,6 +11,7 @@ import {
   type IndexCandidate,
   writtenName,
 } from './index-deduplication';
+import { startsWithColumns } from './index-equivalence';
 import { lowerAuthoredIndex } from './index-naming';
 import type { ForeignKeyIndex, ForeignKeyInput, ReferentialAction } from './ir/foreign-key';
 import type { ForeignKeyReferenceInput } from './ir/foreign-key-reference';
@@ -49,23 +50,12 @@ export function materializeForeignKeysAndIndexes(input: {
 }): MaterializedTableConstraints {
   const { tableName, declaredIndexes, uniques, primaryKey } = input;
   const derivedIndexes: IndexCandidate[] = [];
-  const backed = input.foreignKeys.map((foreignKey) => {
+  const intents = input.foreignKeys.map((foreignKey) => {
     const { constraint, index, ...reference } = foreignKey;
-    if (index === false) return { constraint, reference, backing: undefined };
-    if (index === true) {
-      const derived = derivedBackingIndex(tableName, reference.source.columns);
-      derivedIndexes.push(derived);
-      return { constraint, reference, backing: { kind: 'index', index: derived } as const };
-    }
-    return {
-      constraint,
-      reference,
-      backing: declaredBackingObject(tableName, reference.source.columns, index, {
-        declaredIndexes,
-        uniques,
-        primaryKey,
-      }),
-    };
+    if (index !== true) return { constraint, reference, index };
+    const derived = derivedBackingIndex(tableName, reference.source.columns);
+    derivedIndexes.push(derived);
+    return { constraint, reference, index: derived };
   });
 
   const deduplicated = deduplicateIndexes({
@@ -75,17 +65,24 @@ export function materializeForeignKeysAndIndexes(input: {
     primaryKey,
     warnings: input.warnings,
   });
+  const resolve = (backing: BackingObject) =>
+    foreignKeyIndexOf(resolveReplacement(backing, deduplicated.replacements));
 
   return {
-    foreignKeys: backed.flatMap(({ constraint, reference, backing }) => {
+    foreignKeys: intents.flatMap(({ constraint, reference, index }) => {
+      const backing =
+        index === false
+          ? undefined
+          : typeof index === 'string'
+            ? namedBackingObject(tableName, reference.source.columns, index, {
+                declaredIndexes,
+                uniques,
+                primaryKey,
+                resolve,
+              })
+            : resolve({ kind: 'index', index });
       if (!constraint) return [];
-      if (backing === undefined) return [reference];
-      return [
-        {
-          ...reference,
-          index: foreignKeyIndexOf(resolveReplacement(backing, deduplicated.replacements)),
-        },
-      ];
+      return [backing === undefined ? reference : { ...reference, index: backing }];
     }),
     indexes: deduplicated.indexes.map((candidate) => candidate.index),
   };
@@ -106,7 +103,10 @@ function derivedBackingIndex(tableName: string, columns: readonly string[]): Ind
   };
 }
 
-function declaredBackingObject(
+/**
+ * What a relation's `index: "<name>"` points at. The name is the `name` or `map` the source gave an index, unique constraint or primary key, or an index's stored name; an unnamed index's default name does not count. Identical indexes count as one, so the name is resolved after they merge. The object must start with the foreign key's columns, in order, or it would not serve the foreign key's lookups.
+ */
+function namedBackingObject(
   tableName: string,
   columns: readonly string[],
   name: string,
@@ -114,43 +114,68 @@ function declaredBackingObject(
     readonly declaredIndexes: readonly IndexCandidate[];
     readonly uniques: readonly UniqueConstraintInput[];
     readonly primaryKey: PrimaryKeyInput | undefined;
+    readonly resolve: (backing: BackingObject) => ForeignKeyIndex;
   },
-): BackingObject {
+): ForeignKeyIndex {
   const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
+  const meta = { tableName, columns, index: name };
   const indexes = table.declaredIndexes.filter(
-    (candidate) => writtenName(candidate.index) === name || nameOf(candidate.index.naming) === name,
+    (candidate) =>
+      (candidate.namedByUser && writtenName(candidate.index) === name) ||
+      nameOf(candidate.index.naming) === name,
   );
-  const [index, ...others] = indexes;
-  if (others.length > 0) {
+  const keys = [
+    ...table.uniques.filter((unique) => unique.name === name),
+    ...(table.primaryKey?.name === name ? [table.primaryKey] : []),
+  ];
+  const resolvedIndexes = [
+    ...new Map(
+      indexes.map((index) => {
+        const resolved = table.resolve({ kind: 'index', index });
+        return [JSON.stringify(resolved), { index, resolved }] as const;
+      }),
+    ).values(),
+  ];
+  const matches = resolvedIndexes.length + keys.length;
+  if (matches === 0) {
     throw contractError(
       'CONTRACT.ARGUMENT_INVALID',
-      `${subject}, but table "${tableName}" has more than one index with that name.`,
-      { meta: { tableName, columns, index: name } },
-    );
-  }
-  if (index !== undefined) return { kind: 'index', index };
-  const unique = table.uniques.find((constraint) => constraint.name === name);
-  const key = unique ?? (table.primaryKey?.name === name ? table.primaryKey : undefined);
-  if (key !== undefined && !sameColumns(key.columns, columns)) {
-    throw contractError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `${subject}, but that key is on columns (${key.columns.join(', ')}); a unique constraint or primary key backs a foreign key only on exactly its columns.`,
+      `${subject}, but table "${tableName}" has no index, unique constraint or primary key with that name.`,
       {
-        fix: 'Name an index whose columns serve the foreign key, or drop the index argument so the foreign key gets its own backing index.',
-        meta: { tableName, columns, index: name },
+        fix: `Declare an index, unique constraint or primary key named "${name}" on table "${tableName}", or drop the index argument so the foreign key gets its own backing index.`,
+        meta,
       },
     );
   }
-  if (unique !== undefined) return { kind: 'uniqueConstraint', unique };
-  if (key !== undefined) return { kind: 'primaryKey', primaryKey: key };
-  throw contractError(
-    'CONTRACT.ARGUMENT_INVALID',
-    `${subject}, but table "${tableName}" has no index, unique constraint or primary key with that name.`,
-    {
-      fix: `Declare an index, unique constraint or primary key named "${name}" on table "${tableName}", or drop the index argument so the foreign key gets its own backing index.`,
-      meta: { tableName, columns, index: name },
-    },
-  );
+  if (matches > 1) {
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `${subject}, but table "${tableName}" has more than one index, unique constraint or primary key with that name.`,
+      {
+        fix: `Give the object the foreign key should use a name no other index, unique constraint or primary key of table "${tableName}" has, and name that on the relation.`,
+        meta,
+      },
+    );
+  }
+  const [match] = resolvedIndexes;
+  const key = keys[0];
+  const objectColumns = match !== undefined ? match.index.index.columns : key?.columns;
+  if (objectColumns === undefined || !startsWithColumns(objectColumns, columns)) {
+    const reason =
+      objectColumns === undefined
+        ? "it indexes an expression, not the foreign key's columns"
+        : `its columns (${objectColumns.join(', ')}) do not start with the foreign key's columns`;
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `${subject}, but ${reason}, so it does not serve the foreign key's lookups.`,
+      {
+        fix: `Name an index, unique constraint or primary key whose first columns are (${columns.join(', ')}), or drop the index argument so the foreign key gets its own backing index.`,
+        meta,
+      },
+    );
+  }
+  if (match !== undefined) return match.resolved;
+  return key === table.primaryKey ? { primaryKey: true } : { unique: true };
 }
 
 function resolveReplacement(
@@ -164,10 +189,6 @@ function resolveReplacement(
     current = replacement;
   }
   return current;
-}
-
-function sameColumns(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((column, position) => column === b[position]);
 }
 
 function foreignKeyIndexOf(backing: BackingObject): ForeignKeyIndex {
