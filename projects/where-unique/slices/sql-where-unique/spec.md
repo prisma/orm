@@ -32,7 +32,7 @@ Two forms, as the project spec's decision 3 records. Both were needed on the rea
 | Methods | Form |
 |---|---|
 | `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount` | every overload takes `this: Self & <requirement>`, generic in `Self` |
-| `prepared.all`, `prepared.aggregate` | `prepared` is a getter, so the `PreparedCollection` type omits both members when the collection's type state carries `uniqueFilter: true` |
+| `prepared.all`, `prepared.aggregate` | `PreparedCollection` carries the collection's type state as a phantom member (`HasTypeState<State>`); its `all` and `aggregate` take `this: Self & <requirement>`, generic in `Self`. No member is removed, so `prepared` has the same member types on every collection. Fallback if this cannot keep a uniquely filtered collection assignable to the wide `Collection` type: leave `prepared` untouched. |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn` | two overloads: first `this: Self` with `Self` constrained by a conditional that is `never` for a uniquely filtered collection; second `this: Self & <requirement>` |
 
 Methods that stay callable after `whereUnique`: `where`, `variant`, `include`, `select`, `first`, `update`, `delete`, `with`, and the row-lock methods `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare`. `upsert`, `create*` and `fragment` are unchanged.
