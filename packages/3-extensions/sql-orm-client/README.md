@@ -143,6 +143,55 @@ db.Post.orderBy(orderByField(db.Post, input.orderBy, input.direction, ['title', 
 
 `direction` is the request's string, `'asc'` or `'desc'`; `undefined` means `'asc'`. `allowed` is required and names at least one field; it takes only fields whose codec has the `order` trait (`OrderableFieldNames<Contract, Model>`). It is required because request text that may order by any field can order rows by a secret one and learn its value from the order of the results. `orderByField` throws `ORM.ARGUMENT_INVALID`, before any query runs, for a `name` that is not a field of the model, is a relation, has a codec without the `order` trait or is not in `allowed`, and for any other direction, including a name or direction that is not a string, such as a missing query parameter. An `allowed` that is not a list of names, from a JavaScript caller, throws `ORM.ARGUMENT_INVALID`; an empty one refuses every name. The error quotes the name and cuts it to 64 characters; `meta` has it in full. The trait is read with the same run-time lookup the model accessor uses. Only the model's own fields can be named: on a collection narrowed by `variant`, a field that only the variant has is refused. The selector fits any collection of a model with the allowed fields, and `orderBy` records the order, so `cursor` is allowed after it.
 
+## Reading or writing one record by its key
+
+`whereUnique(criterion)` filters a collection to at most one record. The criterion is an object that gives a value for every field of the model's primary key, or for every field of one of its unique constraints:
+
+```ts
+const post = await db.Post.whereUnique({ id }).first();
+const membership = await db.Membership.whereUnique({ tenantId, userId }).first();
+
+const renamed = await db.Post.whereUnique({ id }).where({ userId }).update({ title });
+const removed = await db.User.whereUnique({ email }).delete();
+```
+
+It applies the same filter as `where` with the same object, and returns the collection it was called on, so a custom collection class keeps its methods. `first()`, `update()` and `delete()` return the record or `null`. A following `where` narrows further: `whereUnique({ id }).where({ userId })` is the record with that `id` if it also has that `userId`.
+
+The argument is checked at compile time. These are refused:
+
+- a field that is not a primary key or a unique constraint: `whereUnique({ title })`;
+- part of a compound key: `whereUnique({ tenantId })` when the key is `(tenantId, userId)`;
+- `null`, or a value whose type includes `null`, for a nullable unique column, because any number of rows can have no value there; use `where({ handle: null })` for those rows;
+- a callback. Only the object form exists.
+
+On a polymorphic model, the accepted keys are those of the model's own table. `conflictOn` in `upsert` and the criteria of a relation `connect` or `disconnect` take the same object and follow the same rules.
+
+After `whereUnique`:
+
+| Calls | |
+| --- | --- |
+| `where`, `variant`, `include`, `select`, `with`, `first`, `update`, `delete`, `prepared.first`, `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | available |
+| `create`, `createAll`, `createAndCount`, `upsert` | unchanged; they do not use the filter |
+| `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn`, `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`, `prepared.all`, `prepared.aggregate` | compile error |
+
+The refused methods still appear in editor completion; calling one is the error. The error message says that the `uniqueFilter` property has conflicting types.
+
+`whereUnique` is not available inside an `include` refinement. The refinement collection does not have the method, and a call that reaches it another way, such as through a fragment made by `collection.fragment`, throws `ORM.INCLUDE_INVALID`.
+
+A helper that takes or returns such a collection writes its type as `UniquelyFiltered<C>`, which is `C & HasWhere & HasUniqueFilter`:
+
+```ts
+function ownedBy<C extends Collection<Contract, 'Post'>>(post: UniquelyFiltered<C>, userId: string) {
+  return post.where({ userId });
+}
+```
+
+Three cases are not refused:
+
+- A method of a custom collection class, or a fragment run with `with`, can still add an order or a limit to a uniquely filtered collection, and the result of `with(fragment)` for a fragment made by `collection.fragment` no longer records the unique filter. The query still matches at most one record.
+- The row-lock methods return the plain `Collection` type for every receiver, so after `whereUnique(...).forUpdate()` the many-record methods compile again and `update` and `delete` do not. Read the locked record with `first()`.
+- A conditional that mixes a uniquely filtered collection with another one, such as `flag ? db.Post.whereUnique({ id }) : db.Post.where({ userId })`, has the many-record methods.
+
 ## Skipping rows that collide with a unique constraint
 
 `createAll` and `createAndCount` take an options object in second position that asks the database to skip rows colliding with a unique constraint instead of failing the whole statement.
