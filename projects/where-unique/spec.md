@@ -22,7 +22,7 @@ After `whereUnique`:
 | `first`, `update`, `delete` | available | available |
 | `upsert` | unchanged (it is keyed by `conflictOn`, not by the filter) | available |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn` | compile error | not on the returned type |
-| `all`, `aggregate` | compile error | not on the returned type |
+| `all`, `aggregate`, `groupBy`, and `all` / `aggregate` on `prepared` | compile error | not on the returned type (Mongo has no `groupBy` or `prepared`) |
 | `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount` | compile error | not on the returned type |
 
 What the argument rejects:
@@ -60,6 +60,10 @@ The snippets above are illustrative. Before a slice treats one as fact, it re-ve
    - **Rejected: a conditional `this` type alone** (`Self extends HasUniqueFilter ? never : unknown`). It breaks `this.orderBy(...)` and `this.all()` inside a user subclass body, because TypeScript cannot resolve a conditional over the polymorphic `this`.
    - **Accepted consequence:** a conditional that mixes a uniquely filtered collection with another one (`flag ? Post.whereUnique(...) : Post.published()`) is not rejected. Verified: `limit`, `all` and `deleteAll` compile on such a union.
    - **Compiler message.** Accepted as it is. It names the cause ("…reduced to 'never' because property 'uniqueFilter' has conflicting types") but is long.
+   - **`groupBy` and `prepared` (decided 2026-10-08).** `groupBy` is rejected like `aggregate`. `prepared` is a getter and cannot take a `this` requirement, so the `PreparedCollection` type omits `all` and `aggregate` when the collection is uniquely filtered.
+   - **Accepted consequence: row locks (decided 2026-10-08).** `forUpdate`, `forNoKeyUpdate`, `forShare` and `forKeyShare` return a plain `Collection` for every receiver, dropping the type-state facts and the user subclass. `whereUnique(...).forUpdate().all()` therefore compiles. The lock methods are left as they are; the intended call after a lock is `first()`.
+   - **Accepted consequence: model fragments.** `with(fragment)` for a fragment made by `collection.fragment` returns the fragment's own result type, so the type-state facts and the user subclass are dropped, as with row locks. `whereUnique(...).with(summary).all()` compiles. Treated the same way as row locks; `with` and `fragment` are left as they are. The callback form `with((posts) => posts.limit(1))` is rejected, because the callback receives the uniquely filtered type.
+   - **Runtime refusal inside an include refinement.** A model fragment's body is typed against the plain collection, so `include('posts', (posts) => posts.with(Post.fragment((p) => p.whereUnique(...))))` type-checks even though `whereUnique` is removed from the refinement collection's type. Until the include slice ships, `whereUnique` throws when called on a refinement collection, so the array form cannot be reached by this route either.
 
 4. **Mongo returns a smaller interface.** `MongoCollection` is an interface over a private `MongoCollectionImpl`, there are no user subclasses, and there is no type state; "requires `.where()`" is a runtime throw. A second interface over the same implementation is the cheapest way to get the single-record surface. Rejected: adding type state to Mongo, which means a new generic through every signature.
 

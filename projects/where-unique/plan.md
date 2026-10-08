@@ -47,6 +47,7 @@ The project has three slices.
      - a "single value" indication on the include, separate from the relation's cardinality (which also describes the join), read at both result-shaping sites in `collection-dispatch.ts`;
      - the added branch in `RefinedIncludeRelationValue`;
      - tracing how `combine()` branch values are typed and shaped, then applying the same rule;
+     - the model-fragment route: slice 1 makes `whereUnique` throw on a refinement collection, because `posts.with(Post.fragment((p) => p.whereUnique(...)))` type-checks there and `with` returns the fragment's result type without `HasUniqueFilter`. Lifting the refusal would give a single value at runtime under an array type, so this slice must settle that route before it removes the throw;
      - type tests and integration tests, including a many-to-many relation and a nested include;
      - the README addition.
 

@@ -17,6 +17,7 @@ whereUnique<Self>(this: Self, criterion: UniqueConstraintCriterion<TContract, Mo
 - Object form only. The criterion compiles through the same path as the object form of `where` (`shorthandToWhereExpr`, then `normalizeWhereArg`), so the filter expressions are the same.
 - The returned collection is the same class: `UniquelyFiltered<Self> = Self & HasWhere & HasUniqueFilter`.
 - It is not callable inside an `include` refinement callback: `whereUnique` joins the members that `IncludeRefinementCollection` removes. Slice `include-unique` lifts this.
+- It also throws at runtime when called on a refinement collection (`includeRefinementMode`). A model fragment's body is typed against the plain collection, so `posts.with(Post.fragment((p) => p.whereUnique(...)))` inside a refinement type-checks; the runtime refusal closes that route. The error is an `ORM.INCLUDE_INVALID`-style `ormError` naming `whereUnique`, following the existing refinement-mode check in the class.
 
 ### Type state
 
@@ -30,10 +31,13 @@ Two forms, as the project spec's decision 3 records. Both were needed on the rea
 
 | Methods | Form |
 |---|---|
-| `all`, `aggregate`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount` | every overload takes `this: Self & <requirement>`, generic in `Self` |
+| `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount` | every overload takes `this: Self & <requirement>`, generic in `Self` |
+| `prepared.all`, `prepared.aggregate` | `prepared` is a getter, so the `PreparedCollection` type omits both members when the collection's type state carries `uniqueFilter: true` |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn` | two overloads: first `this: Self` with `Self` constrained by a conditional that is `never` for a uniquely filtered collection; second `this: Self & <requirement>` |
 
 Methods that stay callable after `whereUnique`: `where`, `variant`, `include`, `select`, `first`, `update`, `delete`, `with`, and the row-lock methods `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare`. `upsert`, `create*` and `fragment` are unchanged.
+
+The row-lock methods are left exactly as they are. They return a plain `Collection` for every receiver, so after `whereUnique(...).forUpdate()` the type-state facts and the user subclass are gone, `first()` is the intended call, and `all()` compiles. The project spec records this as an accepted consequence.
 
 ### The criterion type
 
