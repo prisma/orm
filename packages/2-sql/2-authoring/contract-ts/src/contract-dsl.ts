@@ -575,7 +575,7 @@ export class EnumScalarFieldBuilder<
 type CodecTypesOfNoPacks = Record<never, never>;
 
 export type ColumnFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfNoPacks> = <
-  Descriptor extends ColumnTypeDescriptor,
+  const Descriptor extends ColumnTypeDescriptor,
 >(
   descriptor: Descriptor,
 ) => ScalarFieldBuilder<

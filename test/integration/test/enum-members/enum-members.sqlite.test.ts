@@ -110,15 +110,13 @@ describe('db.enums on SQLite, against node:sqlite', () => {
       });
       const row = await client.orm.Sample.first();
       if (row === null) expect.unreachable('the row reads back');
-      // The ORM types a SQLite TypeScript contract's row fields as unknown, whatever their codec.
-      const level = row.level as (typeof Level.values)[number];
-      const when = row.when as Date;
+      expectTypeOf(row).toEqualTypeOf<{ id: number; level: 1n | 10n; when: Date }>();
 
       expect({
-        has: [client.enums.Level.has(level), client.enums.When.has(when)],
+        has: [client.enums.Level.has(row.level), client.enums.When.has(row.when)],
         equal: [
-          client.enums.Level.members.High === level,
-          client.enums.When.members.Sunset.getTime() === when.getTime(),
+          client.enums.Level.members.High === row.level,
+          client.enums.When.members.Sunset.getTime() === row.when.getTime(),
         ],
       }).toEqual({ has: [true, true], equal: [true, true] });
     } finally {

@@ -16,7 +16,7 @@ import { sql } from '../src/prisma-no-emit/context';
 
 test('field.id.uuidv4String() produces a string-typed id field on User', () => {
   type UserStorageFields =
-    (typeof contract.domain.namespaces)['__unbound__']['models']['User']['storage']['fields'];
+    (typeof contract.domain.namespaces)['public']['models']['User']['storage']['fields'];
   expectTypeOf<UserStorageFields>().toHaveProperty('id');
   type IdField = UserStorageFields['id'];
   expectTypeOf<IdField>().toHaveProperty('column');
@@ -45,11 +45,11 @@ test('fns.eq(f.id, 1234) fails to typecheck — id is a string, not a number', (
 });
 
 test('authoring chain preserves model + field types end-to-end', () => {
-  expectTypeOf<keyof (typeof contract.domain.namespaces)['__unbound__']['models']>().toExtend<
+  expectTypeOf<keyof (typeof contract.domain.namespaces)['public']['models']>().toExtend<
     'User' | 'Post'
   >();
   type PostStorageFields =
-    (typeof contract.domain.namespaces)['__unbound__']['models']['Post']['storage']['fields'];
+    (typeof contract.domain.namespaces)['public']['models']['Post']['storage']['fields'];
   expectTypeOf<PostStorageFields>().toHaveProperty('title');
   expectTypeOf<PostStorageFields>().toHaveProperty('userId');
 });

@@ -638,8 +638,7 @@ type BuiltDomain<Definition> =
       };
 
 // Per-namespace domain entry carrying the precise per-model field/storage shapes
-// for DSL inference. Modelled as an index signature (rather than enumerating
-// namespace ids) so that any namespace coordinate resolves the full model map,
+// for DSL inference. Every namespace coordinate resolves the full model map,
 // matching how the authoring path lumps every model under the default storage
 // namespace.
 type BuiltDomainNamespace<Definition> = {
@@ -810,7 +809,11 @@ export type SqlContractResult<Definition> = ContractWithTypeMaps<
     readonly targetFamily: 'sql';
   } & {
     readonly domain: {
-      readonly namespaces: Readonly<Record<string, BuiltDomainNamespace<Definition>>>;
+      readonly namespaces: {
+        readonly [Ns in
+          | DefaultStorageNamespaceId<Definition>
+          | DefinitionNamespaces<Definition>]: BuiltDomainNamespace<Definition>;
+      };
     } & BuiltDomain<Definition>;
   } & {
     readonly extensions: keyof DefinitionExtensions<Definition> extends never
