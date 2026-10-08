@@ -161,7 +161,7 @@ describe('collection row query', () => {
     expect(decode).not.toHaveBeenCalled();
   });
 
-  it('creates Promise resources in proportion to the included cells it reads', async () => {
+  it('creates 24 Promise resources for each included row with a nested include, and no more as rows grow', async () => {
     const { collection } = createCollectionFor('User');
     const selected = collection
       .select('name')
@@ -208,7 +208,10 @@ describe('collection row query', () => {
     const one = await measure(1);
     const two = await measure(2);
     const hundred = await measure(100);
-    expect(hundred - one).toBe(99 * (two - one));
+    expect({ perPost: two - one, growth: hundred - one }).toEqual({
+      perPost: 24,
+      growth: 99 * (two - one),
+    });
   });
 
   it('precomputes known but unselected bindings and decodes fresh cells after empty and null payloads', async () => {
