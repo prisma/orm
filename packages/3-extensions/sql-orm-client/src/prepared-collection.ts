@@ -23,22 +23,12 @@ export interface PreparedCollection<
   all(
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;
-  first(): Preparable<Record<string, unknown>, Promise<Row | null>>;
   first(
-    filter: undefined,
-    configure: (meta: MetaBuilder<'read'>) => void,
-  ): Preparable<Record<string, unknown>, Promise<Row | null>>;
-  first(
-    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<Row | null>>;
-  firstOrThrow(): Preparable<Record<string, unknown>, Promise<Row>>;
   firstOrThrow(
-    filter: undefined,
-    configure: (meta: MetaBuilder<'read'>) => void,
-  ): Preparable<Record<string, unknown>, Promise<Row>>;
-  firstOrThrow(
-    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<Row>>;
 }
