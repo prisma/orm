@@ -4,288 +4,64 @@ import {
   computeStorageHash,
 } from '@internal/contract/hashing';
 import {
-  asNamespaceId,
-  type ColumnDefault,
   type Contract,
   type ContractEnum,
-  type ContractField,
   type ContractModel,
-  type ContractRelation,
-  type ContractRelationThrough,
   type ContractValueObject,
   type CrossReference,
   coreHash,
   crossRef,
   type ExecutionMutationDefault,
-  effectiveControlPolicy,
-  type JsonValue,
   type StorageHashBase,
-  type ValueSetRef,
 } from '@internal/contract/types';
-import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
-import type {
-  AuthoringContributions,
-  AuthoringEntityTypeDescriptor,
-  AuthoringEntityTypeNamespace,
-  AuthoringWarning,
-} from '@internal/framework-components/authoring';
 import {
+  type AuthoringWarning,
   flushAuthoringWarnings,
-  isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
-import {
-  type Codec,
-  type CodecLookupWithDescriptors,
-  type ColumnTypeDescriptor,
-  codecForRef,
-  type DataTypeLookup,
-  enumRefusalOf,
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
-import {
-  dataTypeParams,
-  type SqlDataType,
-  sqlDataTypeOfCodec,
-  validateSqlTypeParams,
-} from '@internal/sql-contract/data-type';
-import { tableEntityKind, valueSetEntityKind } from '@internal/sql-contract/entity-kinds';
-import {
-  type ForeignKeyAuthoringInput,
-  materializeForeignKeysAndIndexes,
-} from '@internal/sql-contract/foreign-key-materialization';
-import { type AuthoredIndexInput, lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
+import { sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { validateIndexTypes } from '@internal/sql-contract/index-type-validation';
 import { type IndexTypeRegistry, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import {
-  type AuthoredStorageTypeInstance,
-  applyFkDefaults,
-  CheckConstraint,
-  Index,
-  resolvedTypeParams,
   type SqlNamespaceInput,
   SqlStorage,
   type SqlStorageInput,
-  type StorageColumn,
   type StorageTableInput,
   type StorageTypeInstance,
   type StorageValueSetInput,
   toStorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { validateStorageSemantics } from '@internal/sql-contract/validators';
-import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
-import {
-  type CheckKind,
-  composeCheckWirePrefix,
-  computeCheckContentHash,
-  derivedCheckPrefixes,
-} from '@internal/sql-schema-ir/naming';
-import { invariant } from '@internal/utils/assertions';
-import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
-import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
-import {
-  type AuthoredColumnDefault,
-  type ContractDefinition,
-  type FieldNode,
-  isValueObjectMember,
-  type ModelNode,
-  type RelationNode,
-  type ScalarMemberNode,
-  storedAsListColumn,
-  type ValueObjectFieldNode,
-  type ValueObjectMemberNode,
-} from './contract-definition';
+import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
-import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
-
-/**
- * The codec that encodes one column's default, built with the column's own `typeParams`, because a parameterized codec checks its params when it encodes and reads a default. Only a column has params; every other encode site takes the representative instance.
- */
-function columnCodec(
-  codecId: string,
-  typeParams: Record<string, unknown> | undefined,
-  codecLookup: CodecLookupWithDescriptors,
-): Codec | undefined {
-  return codecForRef(codecLookup, {
-    codecId,
-    ...ifDefined(
-      'typeParams',
-      typeParams === undefined
-        ? undefined
-        : blindCast<
-            JsonValue,
-            'a CodecRef types typeParams as JSON because contract.json stores them; materializeCodec checks them against the codec paramsSchema before the factory sees them'
-          >(typeParams),
-    ),
-  });
-}
-
-/** Encodes a value the contract stores, and reads it back with the codec, which refuses a value its column would not hold. */
-function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
-  if (codec) {
-    const json = codec.encodeJson(value);
-    codec.decodeJson(json);
-    return json;
-  }
-  return blindCast<
-    JsonValue,
-    'the build was given no codec for this value, so it is stored as authored; the caller answers for it being JSON'
-  >(value);
-}
-
-interface ColumnDefaultSite {
-  readonly modelName: string;
-  readonly fieldName: string;
-  readonly codecId: string;
-}
-
-function defaultRefusal(
-  site: ColumnDefaultSite,
-  cause: unknown,
-  elementPosition?: number,
-): StructuredError {
-  const subject =
-    elementPosition === undefined ? 'default' : `default (element ${elementPosition})`;
-  const reason = cause instanceof Error ? cause.message : String(cause);
-  return contractError(
-    'CONTRACT.DEFAULT_INVALID',
-    `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec refuses: ${reason}`,
-    {
-      cause,
-      meta: {
-        modelName: site.modelName,
-        fieldName: site.fieldName,
-        codecId: site.codecId,
-        reason: 'codec-refused-default',
-        ...ifDefined('elementPosition', elementPosition),
-      },
-    },
-  );
-}
-
-function encodeDefaultValue(
-  value: unknown,
-  codec: Codec,
-  site: ColumnDefaultSite,
-  elementPosition?: number,
-): JsonValue {
-  try {
-    return encodeViaCodec(value, codec);
-  } catch (cause) {
-    if (cause instanceof InternalError) throw cause;
-    throw defaultRefusal(site, cause, elementPosition);
-  }
-}
-
-function codecForDefault(
-  codecLookup: CodecLookupWithDescriptors,
-  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
-  site: ColumnDefaultSite,
-): Codec {
-  const codec = buildCodecForDefault(codecLookup, resolveCodec, site);
-  if (codec === undefined) {
-    throw contractError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has a default, but no pack in the contract declares its codec "${site.codecId}", so the default cannot be checked. List the pack that owns the codec in \`extensions\`.`,
-      {
-        meta: {
-          modelName: site.modelName,
-          fieldName: site.fieldName,
-          codecId: site.codecId,
-          reason: 'codec-not-found',
-        },
-      },
-    );
-  }
-  return codec;
-}
-
-function buildCodecForDefault(
-  codecLookup: CodecLookupWithDescriptors,
-  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
-  site: ColumnDefaultSite,
-): Codec | undefined {
-  try {
-    return resolveCodec(codecLookup);
-  } catch (cause) {
-    if (!isStructuredError(cause) || cause.code !== 'RUNTIME.TYPE_PARAMS_INVALID') throw cause;
-    throw contractError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has type parameters that its codec does not accept: ${cause.message}`,
-      {
-        cause,
-        meta: {
-          modelName: site.modelName,
-          fieldName: site.fieldName,
-          codecId: site.codecId,
-          reason: 'type-params-invalid',
-        },
-      },
-    );
-  }
-}
-
-function encodeColumnDefault(
-  defaultInput: AuthoredColumnDefault,
-  codecLookup: CodecLookupWithDescriptors,
-  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
-  site: ColumnDefaultSite,
-  many = false,
-  elementNullable = false,
-): ColumnDefault {
-  if (defaultInput.kind === 'function') {
-    return { kind: 'function', expression: defaultInput.expression };
-  }
-  if ('canonical' in defaultInput && defaultInput.canonical === true) {
-    return {
-      kind: 'literal',
-      value: blindCast<
-        ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
-        'a text contract source stores the canonical form its data type produced'
-      >(defaultInput.value),
-    };
-  }
-  if (many) {
-    if (!Array.isArray(defaultInput.value)) {
-      throw contractError(
-        'CONTRACT.DEFAULT_INVALID',
-        `Field "${site.modelName}.${site.fieldName}" is a list field, so its default is an array; received ${typeof defaultInput.value}. Call .many() before .default().`,
-        {
-          meta: {
-            modelName: site.modelName,
-            fieldName: site.fieldName,
-            codecId: site.codecId,
-            reason: 'list-default-not-array',
-          },
-        },
-      );
-    }
-    const codec = codecForDefault(codecLookup, resolveCodec, site);
-    return {
-      kind: 'literal',
-      value: defaultInput.value.map((element, index) => {
-        if (element !== null) return encodeDefaultValue(element, codec, site, index + 1);
-        if (elementNullable) return null;
-        throw new InternalError(
-          'Literal default on a strict list column cannot contain null elements.',
-        );
-      }),
-    };
-  }
-  return {
-    kind: 'literal',
-    value: encodeDefaultValue(
-      defaultInput.value,
-      codecForDefault(codecLookup, resolveCodec, site),
-      site,
-    ),
-  };
-}
+import { describeModel } from './describe-model';
+import { buildDomainField } from './domain-fields';
+import { encodeEnumMembers } from './enum-members';
+import type { TypeLookups } from './lower-column';
+import { lowerTable, type TableLoweringContext } from './lower-table';
+import { mergeTables } from './merge-tables';
+import { modelLookupsOf } from './model-references';
+import {
+  assertNoManagedEntityKinds,
+  type CollectedColumnEntities,
+  collectEntityTypeDescriptorsByDiscriminator,
+  deriveEntityValueSets,
+  mergeColumnAndAttachedEntities,
+  mergeNamespaceValueSets,
+} from './pack-entities';
+import type { ModelComponents } from './storage-description';
+import {
+  resolveCheckExpressionRenderer,
+  resolveColumnTypeQualifier,
+} from './target-authoring-hooks';
 
 function assertStorageSemantics(
   contract: Contract<SqlStorage>,
@@ -305,707 +81,6 @@ function assertStorageSemantics(
     indexTypeRegistry,
     (codecId) => codecLookup.descriptorFor(codecId)?.traits,
   );
-}
-
-function assertKnownTargetModel(
-  modelsByName: ReadonlyMap<string, ModelNode>,
-  modelsByCoordinate: ReadonlyMap<string, ModelNode>,
-  sourceModelName: string,
-  targetModelName: string,
-  targetNamespaceId: string | undefined,
-  context: string,
-): ModelNode {
-  const targetModel =
-    targetNamespaceId !== undefined && targetNamespaceId.length > 0
-      ? modelsByCoordinate.get(`${targetNamespaceId}:${targetModelName}`)
-      : modelsByName.get(targetModelName);
-  if (!targetModel) {
-    const qualified =
-      targetNamespaceId !== undefined && targetNamespaceId.length > 0
-        ? `${targetNamespaceId}.${targetModelName}`
-        : targetModelName;
-    throw contractError(
-      'CONTRACT.MODEL_UNKNOWN',
-      `${context} on model "${sourceModelName}" references unknown model "${qualified}"`,
-      { meta: { sourceModel: sourceModelName, targetModel: qualified, context } },
-    );
-  }
-  return targetModel;
-}
-
-function assertTargetTableMatches(
-  sourceModelName: string,
-  targetModel: ModelNode,
-  referencedTableName: string,
-  context: string,
-): void {
-  if (targetModel.tableName !== referencedTableName) {
-    throw contractError(
-      'CONTRACT.TABLE_MISMATCH',
-      `${context} on model "${sourceModelName}" references table "${referencedTableName}" but model "${targetModel.modelName}" maps to "${targetModel.tableName}"`,
-      {
-        meta: {
-          sourceModel: sourceModelName,
-          referencedTable: referencedTableName,
-          mappedTable: targetModel.tableName,
-          context,
-        },
-      },
-    );
-  }
-}
-
-/**
- * Resolves a deferred entity-ref column descriptor (e.g. a `pg.enum(handle)`
- * column) against the field's now-known owning namespace: attaches the
- * storage `valueSet` ref the collected entity's derived value-set is stored
- * under. `typeParams.typeName` stays bare here — schema
- * qualification (e.g. `auth.aal_level`) is a target concern applied in the
- * next step, `qualifyColumnDescriptor`. A descriptor with no `entityRef` (the
- * ordinary case) passes through unchanged.
- */
-function resolveEntityRefDescriptor(
-  descriptor: ColumnTypeDescriptor,
-  namespaceId: string,
-): ColumnTypeDescriptor {
-  const entityRef = descriptor.entityRef;
-  if (entityRef === undefined) return descriptor;
-
-  return {
-    ...descriptor,
-    valueSet: {
-      plane: 'storage',
-      entityKind: 'valueSet',
-      namespaceId,
-      entityName: entityRef.entityName,
-    },
-  };
-}
-
-/**
- * A target's contract-construction-time column-type qualifier, contributed
- * through `target.authoring.qualifyColumnType`. Given a column's bare type
- * info and its owning `namespaceId`, it returns the type info the target's
- * schema semantics require (e.g. Postgres schema-qualifies a native-enum
- * column's type name to `auth.aal_level`). The dispatch keys off the codec
- * id, so every codec — including ones needing no change — is passed through
- * and the caller stays codec-blind. Targets without the hook leave every
- * column bare.
- */
-type ColumnTypeQualifier = (
-  input: {
-    readonly codecId: string;
-    readonly typeParams?: Record<string, unknown>;
-  },
-  namespaceId: string,
-) => { readonly typeParams?: Record<string, unknown> };
-
-/**
- * Structural check for a target that contributes a `qualifyColumnType` hook
- * on its authoring contributions. Duck-typed (mirroring
- * `contract-psl`'s `hasColumnFromEntityHook`) so the SQL family stays blind
- * to the target's qualification logic and no framework/family interface has
- * to name the hook.
- */
-function hasColumnTypeQualifier(
-  authoring: AuthoringContributions,
-): authoring is AuthoringContributions & { readonly qualifyColumnType: ColumnTypeQualifier } {
-  return 'qualifyColumnType' in authoring && typeof authoring.qualifyColumnType === 'function';
-}
-
-/**
- * A target's contract-construction-time check renderer, contributed through
- * `target.authoring.renderCheckExpressions`. Given one column's shape it
- * returns the checks that column needs, each as a kind, the column it
- * constrains, and an opaque predicate body (no surrounding `CHECK (…)`). The
- * target owns the SQL — quoting, escaping, predicate choice — and nothing
- * else: naming is composed here, so the family never depends on a property of
- * text it cannot read. `memberValues` is
- * supplied only for a domain enum authored through an `enumType()` handle, so
- * a target cannot accidentally write a membership check for a column whose
- * native type already enforces its member set. Targets without the hook write
- * no checks.
- */
-type CheckExpressionRenderer = (input: {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}) => ReadonlyArray<{
-  readonly kind: 'membership' | 'elementNotNull';
-  readonly columnName: string;
-  readonly expression: string;
-}>;
-
-/**
- * Structural check for a target that contributes a `renderCheckExpressions`
- * hook, duck-typed for the same reason {@link hasColumnTypeQualifier} is: the
- * SQL family stays blind to the target's predicate syntax.
- */
-function hasCheckExpressionRenderer(
-  authoring: AuthoringContributions,
-): authoring is AuthoringContributions & {
-  readonly renderCheckExpressions: CheckExpressionRenderer;
-} {
-  return (
-    'renderCheckExpressions' in authoring && typeof authoring.renderCheckExpressions === 'function'
-  );
-}
-
-function resolveCheckExpressionRenderer(
-  target: ContractDefinition['target'],
-): CheckExpressionRenderer | undefined {
-  const authoring = target.authoring;
-  if (authoring === undefined) return undefined;
-  return hasCheckExpressionRenderer(authoring) ? authoring.renderCheckExpressions : undefined;
-}
-
-/** Whether TypeScript gives the value a literal type: a primitive, or an array or plain object of them. */
-function hasLiteralType(value: unknown): boolean {
-  if (['string', 'number', 'boolean', 'bigint'].includes(typeof value)) return true;
-  if (Array.isArray(value)) return value.every(hasLiteralType);
-  if (typeof value !== 'object' || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (
-    (prototype === Object.prototype || prototype === null) &&
-    Object.values(value).every(hasLiteralType)
-  );
-}
-
-/**
- * Refuses a member whose codec reads its stored value back as a different value from the one written.
- * The contract's types name the member as written, while the runtime reads the stored value, so the
- * two must be the same value. A member with no literal type has nothing to contradict. The caller
- * has already read the stored value back once, so the codec takes it.
- */
-function assertStoredAsWritten(
-  enumName: string,
-  member: { readonly name: string; readonly value: unknown },
-  stored: JsonValue,
-  codec: Codec,
-): void {
-  if (!hasLiteralType(member.value)) return;
-  const readBack = codec.decodeJson(stored);
-  if (
-    hasLiteralType(readBack) &&
-    canonicalStringify(readBack) === canonicalStringify(member.value)
-  ) {
-    return;
-  }
-  const writeAs = hasLiteralType(readBack) ? canonicalStringify(readBack) : JSON.stringify(stored);
-  throw contractError(
-    'CONTRACT.ENUM_INVALID',
-    `enumType("${enumName}"): member "${member.name}" is written ${canonicalStringify(member.value)}, but the column stores ${JSON.stringify(stored)}. Write the member as ${writeAs}.`,
-    { meta: { enumName, member: member.name, reason: 'member-not-stored-as-written' } },
-  );
-}
-
-/** A member's value in the form the enum's codec stores it. A member the codec refuses is a `CONTRACT.ENUM_INVALID` naming the enum and the member. */
-function encodeEnumMember(
-  handle: EnumTypeHandle,
-  member: { readonly name: string; readonly value: unknown },
-  codec: Codec | undefined,
-): JsonValue {
-  try {
-    return encodeViaCodec(member.value, codec);
-  } catch (cause) {
-    if (cause instanceof InternalError) throw cause;
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw contractError(
-      'CONTRACT.ENUM_INVALID',
-      `enumType("${handle.enumName}") member "${member.name}" has a value its codec ${handle.codecId} refuses: ${reason}`,
-      {
-        fix: 'Give the member a value the codec takes, or type the enum with a codec that takes it.',
-        cause,
-        meta: {
-          enumName: handle.enumName,
-          member: member.name,
-          codecId: handle.codecId,
-          reason: 'codec-refused-member',
-        },
-      },
-    );
-  }
-}
-
-/**
- * Each member's value in the form the enum's codec stores it, read back by the codec. A codec an
- * enum cannot use, a member the codec refuses, a member written differently from how it is stored,
- * and two members that store the same value are each a `CONTRACT.ENUM_INVALID`.
- */
-function encodeEnumMembers(
-  handle: EnumTypeHandle,
-  codecLookup: CodecLookupWithDescriptors,
-): readonly { readonly name: string; readonly value: JsonValue }[] {
-  const descriptor = codecLookup.descriptorFor(handle.codecId);
-  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
-  if (enumRefusal !== undefined) {
-    throw contractError(
-      'CONTRACT.ENUM_INVALID',
-      `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
-      {
-        fix: 'Type the enum with another codec.',
-        meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
-      },
-    );
-  }
-  const codec = codecLookup.get(handle.codecId);
-  const memberByStoredValue = new Map<string, string>();
-  return handle.enumMembers.map((member) => {
-    const value = encodeEnumMember(handle, member, codec);
-    if (codec !== undefined) assertStoredAsWritten(handle.enumName, member, value, codec);
-    const key = canonicalStringify(value);
-    const earlier = memberByStoredValue.get(key);
-    if (earlier !== undefined) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): members "${earlier}" and "${member.name}" both store ${JSON.stringify(value)}. Member values must be unique as the column stores them.`,
-        {
-          meta: {
-            enumName: handle.enumName,
-            members: [earlier, member.name],
-            reason: 'duplicate-member-value',
-          },
-        },
-      );
-    }
-    memberByStoredValue.set(key, member.name);
-    return { name: member.name, value };
-  });
-}
-
-/**
- * The member values a membership check must enforce, encoded exactly as the
- * column stores them. Membership predicates support strings and finite numbers.
- */
-function checkMemberValues(
-  handle: EnumTypeHandle,
-  codecLookup: CodecLookupWithDescriptors,
-): readonly (string | number)[] {
-  const encoded = encodeEnumMembers(handle, codecLookup).map((member) => member.value);
-  const values: (string | number)[] = [];
-  for (const value of encoded) {
-    if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): CHECK constraint members must encode to strings or finite numbers.`,
-        { meta: { enumName: handle.enumName, reason: 'unsupported-member-value' } },
-      );
-    }
-    values.push(value);
-  }
-  return values;
-}
-
-/**
- * Resolves a field's authored `noCheck` kinds against its column shape:
- * the bare form (`[]`) becomes every kind the shape derives, and a named
- * kind that can never apply to the shape is an authoring error
- * (`CONTRACT.CHECK_OPTOUT_INVALID`). Returns the concrete kinds in
- * canonical ascending order — the only form the contract persists.
- */
-function resolveNoCheckKinds(input: {
-  readonly modelName: string;
-  readonly fieldName: string;
-  readonly kinds: readonly CheckKind[];
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly isDomainEnum: boolean;
-}): readonly CheckKind[] {
-  const derivable: CheckKind[] = [];
-  if (input.many && !input.elementNullable) derivable.push('elementNotNull');
-  if (input.isDomainEnum) derivable.push('membership');
-  const subject = `Field "${input.modelName}.${input.fieldName}"`;
-  const meta = { modelName: input.modelName, fieldName: input.fieldName };
-
-  if (input.kinds.length === 0) {
-    if (derivable.length === 0) {
-      throw contractError(
-        'CONTRACT.CHECK_OPTOUT_INVALID',
-        `${subject}: noCheck() waives nothing — this column's shape derives no generated checks.`,
-        { meta: { ...meta, reason: 'no-derivable-checks' } },
-      );
-    }
-    return derivable;
-  }
-
-  const seen = new Set<CheckKind>();
-  for (const kind of input.kinds) {
-    if (seen.has(kind)) {
-      throw contractError(
-        'CONTRACT.CHECK_OPTOUT_INVALID',
-        `${subject}: noCheck("${kind}") names the same kind twice.`,
-        { meta: { ...meta, kind, reason: 'duplicate-kind' } },
-      );
-    }
-    seen.add(kind);
-    if (!derivable.includes(kind)) {
-      const explanation =
-        kind === 'membership'
-          ? 'membership checks are derived only from enumType() value sets'
-          : 'element-non-null checks are derived only for lists whose elements are semantically non-null';
-      throw contractError(
-        'CONTRACT.CHECK_OPTOUT_INVALID',
-        `${subject}: noCheck("${kind}") does not apply — ${explanation}.`,
-        { meta: { ...meta, kind, reason: 'inapplicable-kind' } },
-      );
-    }
-  }
-  return [...input.kinds].sort();
-}
-
-/**
- * Names the target's rendered checks and lowers them into contract entities.
- *
- * Naming is composed family-side ({@link composeCheckWirePrefix}) rather than
- * by the target, and suffixed with the predicate's content hash. Composing
- * family-side is what makes the truncation safe — two prefixes that truncate
- * alike still differ in their hashes, and the family can see that the
- * (table, column, kind) triple they were built from is unique per table,
- * rather than having to assume something about SQL text it declares itself
- * unable to read.
- */
-function lowerRenderedChecks(
-  tableName: string,
-  candidates: ReadonlyArray<{
-    readonly kind: 'membership' | 'elementNotNull';
-    readonly columnName: string;
-    readonly expression: string;
-  }>,
-): CheckConstraint[] {
-  return candidates.map(
-    (candidate) =>
-      new CheckConstraint({
-        naming: {
-          kind: 'wire',
-          prefix: composeCheckWirePrefix(tableName, candidate.columnName, candidate.kind),
-          hash: computeCheckContentHash(candidate.expression),
-        },
-        expression: candidate.expression,
-      }),
-  );
-}
-
-function resolveColumnTypeQualifier(
-  target: ContractDefinition['target'],
-): ColumnTypeQualifier | undefined {
-  const authoring = target.authoring;
-  if (authoring === undefined) return undefined;
-  return hasColumnTypeQualifier(authoring) ? authoring.qualifyColumnType : undefined;
-}
-
-/**
- * Applies the target's `qualifyColumnType` hook to a scalar column descriptor.
- * A descriptor whose codec the target leaves unchanged passes through untouched.
- */
-function qualifyColumnDescriptor(
-  descriptor: ColumnTypeDescriptor,
-  namespaceId: string,
-  qualify: ColumnTypeQualifier | undefined,
-): ColumnTypeDescriptor {
-  if (qualify === undefined) return descriptor;
-  const qualified = qualify(
-    {
-      codecId: descriptor.codecId,
-      ...ifDefined('typeParams', descriptor.typeParams),
-    },
-    namespaceId,
-  );
-  if (qualified.typeParams === descriptor.typeParams) {
-    return descriptor;
-  }
-  return {
-    ...descriptor,
-    ...ifDefined('typeParams', qualified.typeParams),
-  };
-}
-
-type CollectedColumnEntities = Record<string, Record<string, Record<string, unknown>>>;
-
-/**
- * Records a deferred column's entity-ref into the namespace-scoped collection
- * accumulator (`namespaceId → entityKind → entityName`) — folded into the same
- * namespace assembly `deriveEntityValueSets`/`entries.<kind>` step as the
- * entities-channel attachments, so a column-collected entity gets its
- * value-set the same way an entities-channel one does.
- *
- * The same handle reused by many columns in one namespace is normal (a native
- * enum type backs any number of columns) and records the identical entity once.
- * Two *different* entity instances sharing a name+kind in one namespace is a
- * name collision — the emitted `entries.valueSet.<name>` could only reflect one
- * of them, silently mismatching the other column's type/cast. PSL hard-errors
- * on the equivalent (`PSL_DUPLICATE_DECLARATION`); the TS path rejects it too.
- */
-function collectEntityFromColumn(
-  collected: CollectedColumnEntities,
-  namespaceId: string,
-  entityRef: NonNullable<ColumnTypeDescriptor['entityRef']>,
-): void {
-  const forNs = collected[namespaceId] ?? {};
-  const forKind = forNs[entityRef.entityKind] ?? {};
-  const existing = forKind[entityRef.entityName];
-  if (existing !== undefined && existing !== entityRef.entity) {
-    throw contractError(
-      'CONTRACT.NAME_DUPLICATE',
-      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}" in namespace "${namespaceId}" — pack-entity names must be unique per namespace.`,
-      { meta: { kind: entityRef.entityKind, name: entityRef.entityName, namespaceId } },
-    );
-  }
-  forKind[entityRef.entityName] = entityRef.entity;
-  forNs[entityRef.entityKind] = forKind;
-  collected[namespaceId] = forNs;
-}
-
-/**
- * Merges a namespace's entities-channel attachments (lowered from the
- * `entities` handle list, carried on `ContractDefinition.attachedEntities`)
- * with the entities collected from that namespace's deferred entity-ref
- * columns. A column-collected entity that shadows a *different* attached
- * entity of the same kind+name (or vice-versa) is the same name-collision bug
- * `collectEntityFromColumn` guards against across columns, so it is rejected
- * the same way — by entity identity, so the same handle attached and used by
- * a column does not throw.
- */
-function mergeColumnAndAttachedEntities(
-  namespaceId: string,
-  attached: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
-  columnCollected: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
-): Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined {
-  if (attached === undefined) return columnCollected;
-  if (columnCollected === undefined) return attached;
-  const kinds = new Set([...Object.keys(attached), ...Object.keys(columnCollected)]);
-  const result: Record<string, Readonly<Record<string, unknown>>> = {};
-  for (const kind of kinds) {
-    const attachedForKind = attached[kind];
-    const columnForKind = columnCollected[kind];
-    for (const [name, entity] of Object.entries(columnForKind ?? {})) {
-      const existing = attachedForKind?.[name];
-      if (existing !== undefined && existing !== entity) {
-        throw contractError(
-          'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}" in namespace "${namespaceId}" — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
-          { meta: { kind, name, namespaceId } },
-        );
-      }
-    }
-    result[kind] = { ...attachedForKind, ...columnForKind };
-  }
-  return result;
-}
-
-function resolveModelNamespaceId(
-  model: ModelNode,
-  modelNameToNamespaceId: ReadonlyMap<string, string>,
-  defaultNamespaceId: string,
-): string {
-  if (model.namespaceId !== undefined && model.namespaceId.length > 0) {
-    return model.namespaceId;
-  }
-  return modelNameToNamespaceId.get(model.modelName) ?? defaultNamespaceId;
-}
-
-function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode): boolean {
-  const location = `Relation "${semanticModel.modelName}.${relation.fieldName}"`;
-  if (relation.nullable === undefined) {
-    throw contractError(
-      'CONTRACT.RELATION_INVALID',
-      `${location} with cardinality "${relation.cardinality}" must state whether it is nullable`,
-      {
-        meta: {
-          modelName: semanticModel.modelName,
-          relationName: relation.fieldName,
-          reason: 'to-one-nullability-missing',
-        },
-      },
-    );
-  }
-  const localColumns = relation.on.parentColumns;
-  const { contradiction } = resolveToOneRelationNullable({
-    declaredNullable: relation.nullable,
-    localFieldNullability: semanticModel.fields
-      .filter((field) => localColumns.includes(field.columnName))
-      .map((field) => field.nullable),
-    ownsReference: relation.cardinality === 'N:1',
-  });
-  if (contradiction !== undefined) {
-    throw contractError(
-      'CONTRACT.RELATION_INVALID',
-      relation.cardinality === 'N:1'
-        ? toOneNullabilityContradictionMessage(location, contradiction)
-        : `${location} is required but does not own the foreign key, so nothing in storage guarantees the related row exists`,
-      {
-        meta: {
-          modelName: semanticModel.modelName,
-          relationName: relation.fieldName,
-          reason: 'to-one-nullability-mismatch',
-        },
-      },
-    );
-  }
-  return relation.nullable;
-}
-
-function buildThroughDescriptor(
-  through: NonNullable<RelationNode['through']>,
-  tableNamespaceByName: ReadonlyMap<string, string>,
-  targetModel: ModelNode,
-  modelName: string,
-  fieldName: string,
-  defaultNamespaceId: string,
-): ContractRelationThrough {
-  if (!tableNamespaceByName.has(through.table)) {
-    throw contractError(
-      'CONTRACT.MODEL_UNKNOWN',
-      `buildSqlContractFromDefinition: junction table "${through.table}" for relation "${modelName}.${fieldName}" is not a declared model.`,
-      { meta: { sourceModel: modelName, relationName: fieldName, junctionTable: through.table } },
-    );
-  }
-  // Junction table names are unique per namespace, not globally. Prefer the
-  // junction's own declared namespace (carried on the through node); fall back to
-  // the target's default namespace. Resolving by bare table name would pick the
-  // wrong namespace when the same junction table name exists in two namespaces.
-  const namespaceId = through.namespaceId ?? defaultNamespaceId;
-
-  return {
-    table: through.table,
-    namespaceId,
-    parentColumns: through.parentColumns,
-    childColumns: through.childColumns,
-    targetColumns: targetColumnsForJunction(targetModel, fieldName),
-  };
-}
-
-function targetColumnsForJunction(targetModel: ModelNode, fieldName: string): readonly string[] {
-  const primaryKeyColumns = targetModel.id?.columns;
-  if (primaryKeyColumns && primaryKeyColumns.length > 0) {
-    return primaryKeyColumns;
-  }
-  const firstUnique = targetModel.uniques?.find((u) => u.columns.length > 0);
-  if (firstUnique) {
-    return firstUnique.columns;
-  }
-  throw contractError(
-    'CONTRACT.IDENTITY_INVALID',
-    `M:N target model "${targetModel.modelName}" (relation field "${fieldName}") has no primary id or unique key to derive junction targetColumns.`,
-    { meta: { modelName: targetModel.modelName, reason: 'no-key-for-junction-target-columns' } },
-  );
-}
-
-function validateColumnTypeParams(
-  dataType: SqlDataType,
-  typeParams: Record<string, unknown> | undefined,
-  site: { readonly modelName: string; readonly fieldName: string },
-): void {
-  try {
-    validateSqlTypeParams(dataType, dataTypeParams(dataType, typeParams));
-  } catch (cause) {
-    if (!isStructuredError(cause) || cause.code !== 'CONTRACT.TYPE_PARAMS_INVALID') throw cause;
-    throw contractError(
-      'CONTRACT.TYPE_PARAMS_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has type parameters that its data type does not accept: ${cause.message}`,
-      { cause, meta: { ...cause.meta, modelName: site.modelName, fieldName: site.fieldName } },
-    );
-  }
-}
-
-interface TypeLookups {
-  readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
-}
-
-function buildStorageColumn(
-  field: FieldNode | ValueObjectFieldNode,
-  enumRefs: EnumValueSetRefs | undefined,
-  modelName: string,
-  storageTypes: Record<string, AuthoredStorageTypeInstance>,
-  lookups: TypeLookups,
-): StorageColumn {
-  const { codecLookup } = lookups;
-  const { descriptor } = field;
-  const codecId = descriptor.codecId;
-  const isListColumn = storedAsListColumn({
-    list: field.many === true,
-    typedByValueObject: isValueObjectMember(field),
-  });
-  const noCheck = isValueObjectMember(field) ? undefined : field.noCheck;
-  const typeParams = resolvedTypeParams(descriptor, storageTypes);
-  const dataType = sqlDataTypeOfCodec(codecId, lookups);
-  validateColumnTypeParams(dataType, typeParams, { modelName, fieldName: field.fieldName });
-  const encodedDefault =
-    field.default !== undefined
-      ? encodeColumnDefault(
-          field.default,
-          codecLookup,
-          (lookup) => columnCodec(codecId, typeParams, lookup),
-          { modelName, fieldName: field.fieldName, codecId },
-          isListColumn,
-          field.elementNullable === true,
-        )
-      : undefined;
-
-  invariant(
-    enumRefs === undefined || descriptor.valueSet === undefined,
-    `Field "${modelName}.${field.fieldName}" is typed by a domain enum and also carries a storage value set from its type constructor.`,
-  );
-  const valueSet = enumRefs?.storage ?? descriptor.valueSet;
-
-  return {
-    dataType: dataType.id,
-    codecId,
-    nullable: field.nullable,
-    many: isListColumn ? { elementNullable: field.elementNullable === true } : false,
-    ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
-    ...ifDefined('typeParams', descriptor.typeParams),
-    ...ifDefined('default', encodedDefault),
-    ...ifDefined('typeRef', descriptor.typeRef),
-    ...ifDefined('valueSet', valueSet),
-  };
-}
-
-interface EnumValueSetRefs {
-  readonly domain: ValueSetRef;
-  readonly storage: ValueSetRef;
-}
-
-/**
- * The refs of a field typed by an authored enum: the domain enum and its storage value set. Authored enums are registered in the default namespace, whatever namespace the field's model is in.
- */
-function enumValueSetRefs(
-  enumHandle: EnumTypeHandle | undefined,
-  defaultNamespaceId: string,
-): EnumValueSetRefs | undefined {
-  if (enumHandle === undefined) return undefined;
-  const common = { namespaceId: defaultNamespaceId, entityName: enumHandle.enumName };
-  return {
-    domain: { plane: 'domain', entityKind: 'enum', ...common },
-    storage: { plane: 'storage', entityKind: 'valueSet', ...common },
-  };
-}
-
-function buildDomainField(
-  field: ScalarMemberNode | ValueObjectMemberNode,
-  defaultNamespaceId: string,
-  storageTypes: Record<string, AuthoredStorageTypeInstance>,
-): ContractField {
-  if (isValueObjectMember(field)) {
-    return {
-      type: { kind: 'valueObject', name: field.valueObjectName },
-      nullable: field.nullable,
-      many: field.many ? { elementNullable: field.elementNullable === true } : false,
-    };
-  }
-
-  return {
-    type: {
-      kind: 'scalar',
-      codecId: field.descriptor.codecId,
-      ...ifDefined('typeParams', resolvedTypeParams(field.descriptor, storageTypes)),
-    },
-    nullable: field.nullable,
-    many: field.many ? { elementNullable: field.elementNullable === true } : false,
-    ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
-  };
 }
 
 function collectStorageNamespaceCoordinateIds(definition: ContractDefinition): Set<string> {
@@ -1028,119 +103,6 @@ function collectStorageNamespaceCoordinateIds(definition: ContractDefinition): S
   }
   return ids;
 }
-
-/**
- * Entry kinds the framework assembler itself manages (`table` from models,
- * `valueSet` from `enums` and attached-entity value-set derivation). A
- * pack-attached entity claiming one of these would silently clobber or be
- * clobbered by the managed slot, so it is rejected outright.
- */
-const MANAGED_ENTRY_KINDS = new Set([tableEntityKind.kind, valueSetEntityKind.kind]);
-
-function assertNoManagedEntityKinds(
-  namespaceId: string,
-  entitiesForNs: Readonly<Record<string, unknown>> | undefined,
-): void {
-  if (entitiesForNs === undefined) return;
-  for (const kind of Object.keys(entitiesForNs)) {
-    if (MANAGED_ENTRY_KINDS.has(kind)) {
-      throw contractError(
-        'CONTRACT.ENTITY_KIND_INVALID',
-        `buildSqlContractFromDefinition: attached entity in namespace "${namespaceId}" declares entry kind "${kind}", which is managed by the framework (table/valueSet) and cannot be attached.`,
-        { meta: { entityKind: kind, namespaceId } },
-      );
-    }
-  }
-}
-
-/**
- * Walks the flat `entityTypes` namespace tree contributed by the target pack
- * and every extension pack, indexing descriptors by their `discriminator` —
- * the same string a pack entity's entries-map key (`entries.<kind>`) uses.
- * Mirrors `contract-psl`'s `buildEntityTypesByDiscriminator`, recomposed here
- * from the packs `ContractDefinition` already carries (`target` +
- * `extensions`) since the TS assembler has no single pre-merged
- * `AuthoringContributions` input to read the way the PSL interpreter does.
- */
-function collectEntityTypeDescriptorsByDiscriminator(
-  definition: ContractDefinition,
-): ReadonlyMap<string, AuthoringEntityTypeDescriptor> {
-  const result = new Map<string, AuthoringEntityTypeDescriptor>();
-  const walk = (namespace: AuthoringEntityTypeNamespace): void => {
-    for (const value of Object.values(namespace)) {
-      if (isAuthoringEntityTypeDescriptor(value)) {
-        result.set(value.discriminator, value);
-      } else {
-        walk(value);
-      }
-    }
-  };
-  const components = [definition.target, ...Object.values(definition.extensions ?? {})];
-  for (const component of components) {
-    const entityTypes = component.authoring?.entityTypes;
-    if (entityTypes !== undefined) {
-      walk(entityTypes);
-    }
-  }
-  return result;
-}
-
-/**
- * Derives value-sets for every pack entity declared in one namespace,
- * reusing the same `SqlValueSetDerivingEntityTypeOutput.deriveValueSet` hook
- * `contract-psl`'s `lowerExtensionBlocksForNamespace` folds into
- * `entries.valueSet` on the PSL path — so a TS-attached entity (e.g. a
- * native enum) gets its value-set the same way. Entity kinds with no
- * registered descriptor, or whose descriptor output doesn't derive a
- * value-set, contribute nothing.
- */
-function deriveEntityValueSets(
-  entitiesForNs: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
-  entityTypesByDiscriminator: ReadonlyMap<string, AuthoringEntityTypeDescriptor>,
-): Record<string, StorageValueSetInput> | undefined {
-  if (entitiesForNs === undefined) return undefined;
-  let result: Record<string, StorageValueSetInput> | undefined;
-  for (const [kind, entitiesByName] of Object.entries(entitiesForNs)) {
-    const descriptor = entityTypesByDiscriminator.get(kind);
-    if (descriptor === undefined) continue;
-    for (const [name, entity] of Object.entries(entitiesByName)) {
-      const derivedValueSet = deriveValueSetFromEntity(descriptor.output, entity);
-      if (derivedValueSet === undefined) continue;
-      result ??= {};
-      result[name] = derivedValueSet;
-    }
-  }
-  return result;
-}
-
-/**
- * Merges a namespace's `enumType()`-derived value-sets with its pack-entity-
- * derived value-sets. Both land in the same `entries.valueSet[name]` slot —
- * which drives value-set → codec typing and the domain-enum CHECK — so a
- * same-named entry in both would let one silently overwrite the other and
- * corrupt whichever column resolves against it. The same collision class the
- * `mergeColumnAndAttachedEntities` guard rejects; the PSL path already hard-errors
- * on the equivalent (`interpretPslDocumentToSqlContract`). Reject it here too.
- */
-function mergeNamespaceValueSets(
-  namespaceId: string,
-  enumValueSets: Record<string, StorageValueSetInput> | undefined,
-  packValueSets: Record<string, StorageValueSetInput> | undefined,
-): Record<string, StorageValueSetInput> {
-  if (enumValueSets !== undefined && packValueSets !== undefined) {
-    for (const name of Object.keys(packValueSets)) {
-      if (Object.hasOwn(enumValueSets, name)) {
-        throw contractError(
-          'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: value-set "${name}" in namespace "${namespaceId}" is derived from both an enum and a pack entity — names must be unique per namespace.`,
-          { meta: { kind: 'valueSet', name, namespaceId } },
-        );
-      }
-    }
-  }
-  return { ...enumValueSets, ...packValueSets };
-}
-
 function ensureUnboundNamespaceSlot(
   namespaces: SqlStorageInput['namespaces'],
   createNamespace: ContractDefinition['createNamespace'],
@@ -1159,27 +121,9 @@ function ensureUnboundNamespaceSlot(
   };
 }
 
-const DERIVABLE_CHECK_KINDS: readonly CheckKind[] = ['membership', 'elementNotNull'];
-
 /**
- * Which of `columnNames` could have produced `prefix` for some
- * {@link CheckKind} — the reverse of {@link derivedCheckPrefixes}, used only
- * to name the collision in `CONTRACT.CHECK_NAME_RESERVED`'s message. Callers
- * already know `prefix` is a member of `derivedCheckPrefixes(tableName,
- * columnNames)`, so the result is never empty.
+ * Builds the contract in two stages. First each model is converted on its own into the table it describes and its domain model. Then the tables are merged, each is lowered, and the contract is assembled.
  */
-function columnsProducingCheckPrefix(
-  tableName: string,
-  columnNames: readonly string[],
-  prefix: string,
-): readonly string[] {
-  return columnNames.filter((columnName) =>
-    DERIVABLE_CHECK_KINDS.some(
-      (kind) => composeCheckWirePrefix(tableName, columnName, kind) === prefix,
-    ),
-  );
-}
-
 export function buildSqlContractFromDefinition(
   definition: ContractDefinition,
   codecLookup: CodecLookupWithDescriptors,
@@ -1193,506 +137,51 @@ export function buildSqlContractFromDefinition(
     Object.values(definition.extensions ?? {}),
   );
   const qualifyColumnType = resolveColumnTypeQualifier(definition.target);
-  const renderCheckExpressions = resolveCheckExpressionRenderer(definition.target);
+  const storageTypes = definition.storageTypes ?? {};
   const targetFamily = 'sql';
-  const resolveNamespaceId = (m: ModelNode): string =>
-    m.namespaceId !== undefined && m.namespaceId.length > 0 ? m.namespaceId : defaultNamespaceId;
-  const modelsByName = new Map(definition.models.map((m) => [m.modelName, m]));
-  const tableNamespaceByName = new Map(
-    definition.models.map((m) => [
-      m.tableName,
-      m.namespaceId !== undefined && m.namespaceId.length > 0 ? m.namespaceId : defaultNamespaceId,
-    ]),
-  );
-  const modelsByCoordinate = new Map(
-    definition.models.map((m) => [`${resolveNamespaceId(m)}:${m.modelName}`, m]),
+
+  const modelDescriptionContext = {
+    ...modelLookupsOf(definition),
+    foreignKeyDefaults: definition.foreignKeyDefaults,
+    storageTypes,
+    qualifyColumnType,
+  };
+  const components = definition.models.map((model) =>
+    describeModel(model, modelDescriptionContext),
   );
 
-  const tablesByNamespace: Record<string, Record<string, StorageTableInput>> = {};
   // Warnings collect across the whole build (seeded with the definition
   // producer's) and flush once, threshold-batched by code.
   const authoringWarnings: AuthoringWarning[] = [...(definition.warnings ?? [])];
-  const modelNameToNamespaceId = new Map<string, string>();
-  const executionDefaults: ExecutionMutationDefault[] = [];
-  const modelsByNamespace: Record<string, Record<string, ContractModel>> = {};
   const collectedColumnEntities: CollectedColumnEntities = {};
-  const rootEntries: Array<{
-    readonly tableName: string;
-    readonly namespaceId: string;
-    readonly ref: CrossReference;
-  }> = [];
-
-  for (const semanticModel of definition.models) {
-    const tableName = semanticModel.tableName;
-    const namespaceId =
-      semanticModel.namespaceId !== undefined && semanticModel.namespaceId.length > 0
-        ? semanticModel.namespaceId
-        : defaultNamespaceId;
-    modelNameToNamespaceId.set(semanticModel.modelName, namespaceId);
-    // STI variants share the base table; the base model already owns this
-    // table name and its root, so the variant contributes neither.
-    if (!semanticModel.sharesBaseTable) {
-      rootEntries.push({
-        tableName,
-        namespaceId,
-        ref: crossRef(semanticModel.modelName, namespaceId),
-      });
-    }
-
-    // --- Build storage table ---
-
-    const columns: Record<string, StorageColumn> = {};
-    const fieldToColumn: Record<string, string> = {};
-    const domainFields: Record<string, ContractField> = {};
-    const checksForTable: CheckConstraint[] = [];
-    // Enforcement is derived only for tables Prisma 8 owns: the contract
-    // describes an external schema, it does not prescribe enforcement for it.
-    // This reads the policy the source declares; a policy applied by a contract
-    // specifier lands after the build and is handled by
-    // `stripDerivedChecksFromNonManagedTables`.
-    const derivesChecks =
-      effectiveControlPolicy(semanticModel.control, definition.defaultControlPolicy) === 'managed';
-
-    for (const field of semanticModel.fields) {
-      const executionDefaultPhases =
-        field.executionDefaults?.onCreate || field.executionDefaults?.onUpdate
-          ? field.executionDefaults
-          : undefined;
-      if (executionDefaultPhases) {
-        if (field.default !== undefined) {
-          throw contractError(
-            'CONTRACT.DEFAULT_INVALID',
-            `Field "${semanticModel.modelName}.${field.fieldName}" cannot define both default and executionDefaults.`,
-            {
-              meta: {
-                modelName: semanticModel.modelName,
-                fieldName: field.fieldName,
-                reason: 'default-and-executionDefaults',
-              },
-            },
-          );
-        }
-        if (field.nullable) {
-          throw contractError(
-            'CONTRACT.DEFAULT_INVALID',
-            `Field "${semanticModel.modelName}.${field.fieldName}" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().`,
-            {
-              meta: {
-                modelName: semanticModel.modelName,
-                fieldName: field.fieldName,
-                reason: 'nullable-with-executionDefaults',
-              },
-            },
-          );
-        }
-      }
-
-      const enumHandle = !isValueObjectMember(field) ? field.enumTypeHandle : undefined;
-
-      // A field authored through a deferred entity-ref column helper (e.g.
-      // `pg.enum(handle)`) carries `descriptor.entityRef`: the referenced
-      // entity is collected into `collectedColumnEntities` (folded into the
-      // same `entries.<kind>` + `entries.valueSet` assembly an entities-channel
-      // attachment goes through) and the descriptor is resolved
-      // against this field's now-known `namespaceId` — the builder call that
-      // produced it ran before the enclosing model associated one. The
-      // descriptor is then handed to the target's `qualifyColumnType` hook,
-      // which schema-qualifies a native-enum column's type name for its
-      // namespace. Keying off the codec id (inside the hook) catches both the
-      // TS `pg.enum(handle)` path (via `entityRef`) and the PSL `pg.enum(Ref)`
-      // path (resolved inline in the interpreter, no `entityRef`).
-      let resolvedField = field;
-      if (!isValueObjectMember(field)) {
-        let descriptor = field.descriptor;
-        const entityRef = descriptor.entityRef;
-        if (entityRef !== undefined) {
-          collectEntityFromColumn(collectedColumnEntities, namespaceId, entityRef);
-          descriptor = resolveEntityRefDescriptor(descriptor, namespaceId);
-        }
-        descriptor = qualifyColumnDescriptor(descriptor, namespaceId, qualifyColumnType);
-        if (descriptor !== field.descriptor) {
-          resolvedField = { ...field, descriptor };
-        }
-      }
-
-      if (!isValueObjectMember(resolvedField) && resolvedField.noCheck !== undefined) {
-        const { noCheck: authoredNoCheck, ...withoutNoCheck } = resolvedField;
-        // A non-`managed` table derives no checks, so an opt-out there is a
-        // tolerated no-op (never persisted): policy may also be stamped
-        // post-build by a specifier, and erroring here would make
-        // pack-stamped contracts order-dependent.
-        resolvedField = derivesChecks
-          ? {
-              ...withoutNoCheck,
-              noCheck: resolveNoCheckKinds({
-                modelName: semanticModel.modelName,
-                fieldName: field.fieldName,
-                kinds: authoredNoCheck,
-                many: resolvedField.many === true,
-                elementNullable: resolvedField.elementNullable === true,
-                isDomainEnum: enumHandle !== undefined,
-              }),
-            }
-          : withoutNoCheck;
-      }
-
-      const column = buildStorageColumn(
-        resolvedField,
-        enumValueSetRefs(enumHandle, defaultNamespaceId),
-        semanticModel.modelName,
-        definition.storageTypes ?? {},
-        lookups,
-      );
-      const columnMany = column.many ?? false;
-      columns[field.columnName] = column;
-      fieldToColumn[field.fieldName] = field.columnName;
-
-      // Member values reach the renderer only on the `enumType()` handle
-      // path: that column is a plain scalar (`text`, `int4`, …) with no
-      // native type of its own to enforce membership. A value set resolved by
-      // an entity-ref type constructor (`field.descriptor.valueSet`, e.g.
-      // `pg.enum(Ref)`) binds the column to a codec/native-type pairing that
-      // IS the storage-level enforcement — including array columns, since the
-      // target enforces membership on every element of a native-typed array.
-      if (renderCheckExpressions !== undefined && derivesChecks) {
-        const waivedKinds = !isValueObjectMember(resolvedField) ? resolvedField.noCheck : undefined;
-        checksForTable.push(
-          ...lowerRenderedChecks(
-            tableName,
-            renderCheckExpressions({
-              tableName,
-              columnName: field.columnName,
-              many: columnMany !== false,
-              elementNullable: columnMany !== false && columnMany.elementNullable,
-              memberValues:
-                enumHandle !== undefined ? checkMemberValues(enumHandle, codecLookup) : undefined,
-            }).filter((candidate) => !(waivedKinds?.includes(candidate.kind) ?? false)),
-          ),
-        );
-      }
-
-      domainFields[field.fieldName] = buildDomainField(
-        resolvedField,
-        defaultNamespaceId,
-        definition.storageTypes ?? {},
-      );
-
-      if (executionDefaultPhases) {
-        executionDefaults.push({
-          ref: { namespace: namespaceId, entry: tableName, field: field.columnName },
-          ...ifDefined('onCreate', executionDefaultPhases.onCreate),
-          ...ifDefined('onUpdate', executionDefaultPhases.onUpdate),
-        });
-      }
-    }
-
-    const authoringForeignKeys: readonly ForeignKeyAuthoringInput[] = (
-      semanticModel.foreignKeys ?? []
-    ).map((fk) => {
-      if (fk.references.spaceId !== undefined) {
-        // Cross-space FK: the target lives in a different contract space.
-        // Skip local model lookup and carry the spaceId coordinate through.
-        const targetNamespaceId = fk.references.namespaceId ?? defaultNamespaceId;
-        return {
-          source: { namespaceId: asNamespaceId(namespaceId), tableName, columns: fk.columns },
-          target: {
-            namespaceId: asNamespaceId(targetNamespaceId),
-            tableName: fk.references.table,
-            columns: fk.references.columns,
-            spaceId: fk.references.spaceId,
-          },
-          ...applyFkDefaults(
-            {
-              ...ifDefined('constraint', fk.constraint),
-              ...ifDefined('index', fk.index),
-            },
-            definition.foreignKeyDefaults,
-          ),
-          ...ifDefined('name', fk.name),
-          ...ifDefined('onDelete', fk.onDelete),
-          ...ifDefined('onUpdate', fk.onUpdate),
-        };
-      }
-
-      const targetModel = assertKnownTargetModel(
-        modelsByName,
-        modelsByCoordinate,
-        semanticModel.modelName,
-        fk.references.model,
-        fk.references.namespaceId,
-        'Foreign key',
-      );
-      assertTargetTableMatches(
-        semanticModel.modelName,
-        targetModel,
-        fk.references.table,
-        'Foreign key',
-      );
-      const targetNamespaceId =
-        fk.references.namespaceId ??
-        (targetModel.namespaceId !== undefined && targetModel.namespaceId.length > 0
-          ? targetModel.namespaceId
-          : defaultNamespaceId);
-      return {
-        source: { namespaceId: asNamespaceId(namespaceId), tableName, columns: fk.columns },
-        target: {
-          namespaceId: asNamespaceId(targetNamespaceId),
-          tableName: fk.references.table,
-          columns: fk.references.columns,
-        },
-        ...applyFkDefaults(
-          {
-            ...ifDefined('constraint', fk.constraint),
-            ...ifDefined('index', fk.index),
-          },
-          definition.foreignKeyDefaults,
-        ),
-        ...ifDefined('name', fk.name),
-        ...ifDefined('onDelete', fk.onDelete),
-        ...ifDefined('onUpdate', fk.onUpdate),
-      };
-    });
-
-    // STI variants share the base table: their columns are already
-    // materialised onto the base `ModelNode`, so the variant builds a domain
-    // model (below) but no storage table of its own — which leaves an
-    // authored check nowhere to attach. Refuse it here as a backstop; the
-    // PSL surface refuses it earlier, at interpretation, with a
-    // span-anchored diagnostic that names the base model.
-    if (semanticModel.sharesBaseTable && semanticModel.checks && semanticModel.checks.length > 0) {
-      throw contractError(
-        'CONTRACT.CHECK_ON_STI_VARIANT',
-        `Model "${semanticModel.modelName}" declares a check constraint but shares its base model's storage table (single-table inheritance) and has no table of its own to declare it on. Declare the check on the base model instead.`,
-        { meta: { tableName, modelName: semanticModel.modelName } },
-      );
-    }
-    if (!semanticModel.sharesBaseTable) {
-      const uniques = (semanticModel.uniques ?? []).map((u) => ({
-        columns: u.columns,
-        ...ifDefined('name', u.name),
-      }));
-      const declaredIndexes = (semanticModel.indexes ?? []).map((i) => ({
-        namedByUser: i.name !== undefined || i.map !== undefined,
-        index: lowerAuthoredIndex(
-          tableName,
-          blindCast<
-            AuthoredIndexInput,
-            'the definition tree already carries both unions; the spread loses the correlation, and lowerAuthoredIndex re-checks at runtime'
-          >({
-            ...ifDefined('columns', i.columns),
-            ...ifDefined('expression', i.expression),
-            where: i.where,
-            unique: i.unique,
-            map: i.map,
-            name: i.name,
-            type: i.type,
-            options: i.options,
-          }),
-          authoringWarnings,
-          indexTypeRegistry,
-        ),
-      }));
-      // Authored checks are lowered and merged into `checksForTable`
-      // unconditionally — outside the `derivesChecks` guard above. A derived
-      // check is a Prisma 8 prescription, scoped to tables it manages; an
-      // authored check is the author's own statement about a constraint they
-      // know exists, and is emitted whatever the table's control policy.
-      if (semanticModel.checks !== undefined && semanticModel.checks.length > 0) {
-        const tableColumnNames = Object.keys(columns);
-        const reservedCheckPrefixes = derivedCheckPrefixes(tableName, tableColumnNames);
-        for (const authoredCheck of semanticModel.checks) {
-          const lowered = lowerAuthoredCheck(tableName, authoredCheck, authoringWarnings);
-          if (lowered.naming.kind === 'wire' && reservedCheckPrefixes.has(lowered.naming.prefix)) {
-            const collidingColumns = columnsProducingCheckPrefix(
-              tableName,
-              tableColumnNames,
-              lowered.naming.prefix,
-            );
-            const columnList = collidingColumns.map((name) => `"${name}"`).join(', ');
-            throw contractError(
-              'CONTRACT.CHECK_NAME_RESERVED',
-              `Check "${lowered.naming.prefix}" on table "${tableName}": this name's prefix matches the shape a derived enforcement check would use for column${collidingColumns.length === 1 ? '' : 's'} ${columnList} of this table, so it can't be told apart from one. Choose a different name.`,
-              { meta: { tableName, prefix: lowered.naming.prefix, collidingColumns } },
-            );
-          }
-          checksForTable.push(new CheckConstraint(lowered));
-        }
-      }
-      const primaryKey = semanticModel.id
-        ? { columns: semanticModel.id.columns, ...ifDefined('name', semanticModel.id.name) }
-        : undefined;
-      const { foreignKeys, indexes } = materializeForeignKeysAndIndexes({
-        tableName,
-        foreignKeys: authoringForeignKeys,
-        declaredIndexes,
-        uniques,
-        primaryKey,
-        warnings: authoringWarnings,
-        indexTypes: indexTypeRegistry,
-      });
-
-      const tableInput: StorageTableInput = {
-        columns,
-        ...ifDefined('control', semanticModel.control),
-        uniques,
-        // Constructed here rather than left as input: the `table` entity
-        // kind's hydration tells an authored index from a stored one by
-        // whether it is already an Index.
-        indexes: indexes.map((i) => new Index(i)),
-        foreignKeys,
-        ...(primaryKey ? { primaryKey } : {}),
-        ...(checksForTable.length > 0 ? { checks: checksForTable } : {}),
-      };
-
-      let nsTables = tablesByNamespace[namespaceId];
-      if (nsTables === undefined) {
-        nsTables = {};
-        tablesByNamespace[namespaceId] = nsTables;
-      }
-      if (nsTables[tableName] !== undefined) {
-        throw contractError(
-          'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: duplicate table "${tableName}" in namespace "${namespaceId}".`,
-          { meta: { kind: 'table', name: tableName, namespaceId } },
-        );
-      }
-      nsTables[tableName] = tableInput;
-    }
-
-    // --- Build contract model ---
-
-    const storageFields: Record<string, { readonly column: string }> = {};
-    for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
-      storageFields[fieldName] = { column: columnName };
-    }
-
-    const columnToField = new Map(
-      Object.entries(fieldToColumn).map(([field, col]) => [col, field]),
-    );
-    const modelRelations: Record<string, ContractRelation> = {};
-    for (const relation of semanticModel.relations ?? []) {
-      // Cross-space relations have `spaceId` set — the target model lives in
-      // a different contract space, so skip local model lookup and validation.
-      if (relation.spaceId !== undefined) {
-        const targetNamespaceId = relation.namespaceId ?? defaultNamespaceId;
-        modelRelations[relation.fieldName] = {
-          to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
-          // Cross-space belongsTo relations are always N:1 (the FK-owning side).
-          cardinality: 'N:1',
-          nullable: toOneRelationNullable(semanticModel, relation),
-          on: {
-            localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
-            // For cross-space targets the lowering carries field names directly
-            // (no fieldToColumn map available for the remote model).
-            targetFields: relation.on.childColumns,
-          },
-        };
-        continue;
-      }
-
-      const targetModel = assertKnownTargetModel(
-        modelsByName,
-        modelsByCoordinate,
-        semanticModel.modelName,
-        relation.toModel,
-        relation.toNamespaceId,
-        'Relation',
-      );
-      invariant(
-        relation.toTable !== undefined,
-        `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
-      );
-      assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
-
-      const targetColumnToField = new Map(
-        targetModel.fields.map((f) => [f.columnName, f.fieldName]),
-      );
-
-      const to = crossRef(
-        relation.toModel,
-        relation.toNamespaceId !== undefined && relation.toNamespaceId.length > 0
-          ? relation.toNamespaceId
-          : resolveModelNamespaceId(targetModel, modelNameToNamespaceId, defaultNamespaceId),
-      );
-      const on = {
-        localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
-        targetFields: relation.on.childColumns.map((col) => targetColumnToField.get(col) ?? col),
-      };
-
-      if (relation.cardinality === 'N:M') {
-        if (!relation.through) {
-          throw contractError(
-            'CONTRACT.RELATION_INVALID',
-            `Relation "${semanticModel.modelName}.${relation.fieldName}" with cardinality "N:M" requires through metadata`,
-            {
-              meta: {
-                modelName: semanticModel.modelName,
-                relationName: relation.fieldName,
-                reason: 'many-to-many-missing-through',
-              },
-            },
-          );
-        }
-        modelRelations[relation.fieldName] = {
-          to,
-          cardinality: 'N:M',
-          on,
-          through: buildThroughDescriptor(
-            relation.through,
-            tableNamespaceByName,
-            targetModel,
-            semanticModel.modelName,
-            relation.fieldName,
-            defaultNamespaceId,
-          ),
-        };
-      } else if (relation.cardinality === '1:N') {
-        modelRelations[relation.fieldName] = { to, cardinality: '1:N', on };
-      } else {
-        modelRelations[relation.fieldName] = {
-          to,
-          cardinality: relation.cardinality,
-          nullable: toOneRelationNullable(semanticModel, relation),
-          on,
-        };
-      }
-    }
-
-    let namespaceModels = modelsByNamespace[namespaceId];
-    if (namespaceModels === undefined) {
-      namespaceModels = {};
-      modelsByNamespace[namespaceId] = namespaceModels;
-    }
-    namespaceModels[semanticModel.modelName] = {
-      storage: {
-        table: tableName,
-        namespaceId,
-        fields: storageFields,
-      },
-      fields: domainFields,
-      relations: modelRelations,
-    };
+  const tableLoweringContext: TableLoweringContext = {
+    lookups,
+    storageTypes,
+    defaultNamespaceId,
+    qualifyColumnType,
+    renderCheckExpressions: resolveCheckExpressionRenderer(definition.target),
+    collectedColumnEntities,
+    defaultControlPolicy: definition.defaultControlPolicy,
+    indexTypeRegistry,
+    warnings: authoringWarnings,
+  };
+  const tablesByNamespace: Record<string, Record<string, StorageTableInput>> = {};
+  for (const table of mergeTables(components.map((c) => c.storage))) {
+    const namespaceTables = tablesByNamespace[table.namespaceId] ?? {};
+    namespaceTables[table.tableName] = lowerTable(table, tableLoweringContext);
+    tablesByNamespace[table.namespaceId] = namespaceTables;
   }
 
-  // --- Assemble contract ---
-
-  // Aggregate roots are keyed by bare storage table name. When two models in
-  // different namespaces map to the same bare table name, the bare key would
-  // collide (last write wins, silently dropping a root), so those entries fall
-  // back to a namespace-qualified key. Single-namespace contracts never
-  // collide and keep their bare keys unchanged.
-  const rootTableNameCounts = new Map<string, number>();
-  for (const entry of rootEntries) {
-    rootTableNameCounts.set(entry.tableName, (rootTableNameCounts.get(entry.tableName) ?? 0) + 1);
+  const executionDefaults: ExecutionMutationDefault[] = components.flatMap(
+    (c) => c.domain.executionDefaults,
+  );
+  const modelsByNamespace: Record<string, Record<string, ContractModel>> = {};
+  for (const { domain } of components) {
+    const namespaceModels = modelsByNamespace[domain.namespaceId] ?? {};
+    namespaceModels[domain.modelName] = domain.model;
+    modelsByNamespace[domain.namespaceId] = namespaceModels;
   }
-  const roots: Record<string, CrossReference> = {};
-  for (const entry of rootEntries) {
-    const key =
-      (rootTableNameCounts.get(entry.tableName) ?? 0) > 1
-        ? `${entry.namespaceId}.${entry.tableName}`
-        : entry.tableName;
-    roots[key] = entry.ref;
-  }
+  const roots = buildRoots(components);
 
   // Normalise raw codec-triple inputs to the `kind: 'codec-instance'`
   // discriminator shape before hashing so the storageHash matches the
@@ -1899,4 +388,34 @@ export function buildSqlContractFromDefinition(
   flushAuthoringWarnings(authoringWarnings);
 
   return contract;
+}
+
+/**
+ * Aggregate roots, one per model that owns a table, keyed by bare storage table name. When two models in different namespaces map to the same bare table name, the bare key would collide, so those entries fall back to a namespace-qualified key. Single-namespace contracts never collide and keep their bare keys.
+ */
+function buildRoots(components: readonly ModelComponents[]): Record<string, CrossReference> {
+  const rootEntries = components.flatMap(({ storage, domain }) =>
+    storage.kind === 'ownTable'
+      ? [
+          {
+            tableName: storage.table.tableName,
+            namespaceId: domain.namespaceId,
+            ref: crossRef(domain.modelName, domain.namespaceId),
+          },
+        ]
+      : [],
+  );
+  const rootTableNameCounts = new Map<string, number>();
+  for (const entry of rootEntries) {
+    rootTableNameCounts.set(entry.tableName, (rootTableNameCounts.get(entry.tableName) ?? 0) + 1);
+  }
+  const roots: Record<string, CrossReference> = {};
+  for (const entry of rootEntries) {
+    const key =
+      (rootTableNameCounts.get(entry.tableName) ?? 0) > 1
+        ? `${entry.namespaceId}.${entry.tableName}`
+        : entry.tableName;
+    roots[key] = entry.ref;
+  }
+  return roots;
 }
