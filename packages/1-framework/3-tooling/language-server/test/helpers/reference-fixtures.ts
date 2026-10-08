@@ -15,7 +15,7 @@ import {
   structBlock,
 } from '@internal/psl-parser';
 import { resolveFormatOptions } from '@internal/psl-parser/format';
-import { parse } from '@internal/psl-parser/syntax';
+import { type PslSources, parse } from '@internal/psl-parser/syntax';
 import type { ReferencesDocument } from '../../src/references';
 import type { ProvideRenameInput } from '../../src/rename';
 import { testBinder } from './binder';
@@ -124,6 +124,13 @@ const authoringContributions = assembleAuthoringContributions([
           Vector: {
             kind: 'typeConstructor',
             output: { codecId: 'fixture/vector' },
+          },
+        },
+        ref: {
+          label: {
+            kind: 'typeConstructor',
+            entityRefArg: { index: 0, entityKind: 'references-label' },
+            output: { codecId: 'fixture/label' },
           },
         },
       },
@@ -241,7 +248,7 @@ function project(files: Files, stack: FixtureStack) {
       sourceFile: file.sources.sourceFileFor(file.document.syntax),
     }),
   );
-  return { documents, binder, symbolTable };
+  return { documents, binder, symbolTable, sources };
 }
 
 export function cursorInput(
@@ -249,8 +256,8 @@ export function cursorInput(
   name: string,
   marked: string,
   stack: FixtureStack = fixtureStack,
-): Omit<ProvideRenameInput, 'newName'> {
-  const { documents, binder, symbolTable } = project(files, stack);
+): Omit<ProvideRenameInput, 'newName'> & { readonly sources: PslSources } {
+  const { documents, binder, symbolTable, sources } = project(files, stack);
   const current = documents.find((document) => document.sourceFile.filename === name);
   if (current === undefined) throw new Error(`no file ${name}`);
   const needle = marked.replace('|', '');
@@ -266,6 +273,7 @@ export function cursorInput(
     documents,
     binder,
     symbolTable,
+    sources,
     ...stack,
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
     formatOptions: resolveFormatOptions(undefined),
