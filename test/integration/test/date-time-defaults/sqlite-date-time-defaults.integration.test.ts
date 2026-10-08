@@ -94,13 +94,13 @@ describe('a SQLite datetime default', () => {
     await database.query("INSERT INTO event (id, label) VALUES (1, 'default')");
     await database.query('INSERT INTO event (id, label, at, later) VALUES (2, ?, ?, ?)', [
       'application',
-      await codec.encode(new Date('2024-01-01T00:00:00Z'), {}),
-      await codec.encode(new Date('2024-06-30T12:34:56.5Z'), {}),
+      await codec.toWire(new Date('2024-01-01T00:00:00Z'), {}),
+      await codec.toWire(new Date('2024-06-30T12:34:56.5Z'), {}),
     ]);
     await database.query('INSERT INTO event (id, label, at, later) VALUES (3, ?, ?, ?)', [
       'half a second later',
-      await codec.encode(new Date('2024-01-01T00:00:00.5Z'), {}),
-      await codec.encode(new Date('2024-06-30T12:34:57Z'), {}),
+      await codec.toWire(new Date('2024-01-01T00:00:00.5Z'), {}),
+      await codec.toWire(new Date('2024-06-30T12:34:57Z'), {}),
     ]);
 
     const { rows } = await database.query(

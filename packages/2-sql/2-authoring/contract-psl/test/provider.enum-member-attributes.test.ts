@@ -1,7 +1,12 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { JsonValue } from '@internal/contract/types';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -14,12 +19,15 @@ import {
   testEnumPslBlockDescriptor,
 } from './fixtures';
 
+const pgText = dataType('pg/text', { read: (json) => json });
+
 const textCodec: Codec = {
   id: 'pg/text@1',
-  encode: async (value: unknown) => value,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value) => value as JsonValue,
-  decodeJson: (json) => json,
+  dataType: pgText,
+  toWire: async (value: unknown) => value,
+  fromWire: async (wire: unknown) => wire,
+  toDataTypeValue: (value) => dataTypeValueFor(pgText, {}, value as JsonValue),
+  fromDataTypeValue: ({ value }) => value,
 };
 
 async function loadWithEnumSupport(schemaPath: string) {

@@ -301,6 +301,7 @@ describe('written defaults a column refuses', () => {
 
   it('names both types for an element of an admitted form that the list cast does not take', () => {
     const narrowVector = dataType(pgvectorVector.id, {
+      read: (json) => json,
       listCast: {
         of: [pgInt2.id, pgInt4.id],
         cast: (elements) => elements.map(Number),
@@ -372,7 +373,7 @@ describe('the codec lookup the column was resolved from', () => {
               ...intDescriptor,
               factory: () => () => ({
                 ...intDescriptor.factory(undefined)({ name: id }),
-                decodeJson: () => {
+                fromDataTypeValue: () => {
                   throw new InternalError('a codec broke an invariant');
                 },
               }),

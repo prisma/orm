@@ -15,7 +15,9 @@ import type {
   CodecLookupWithDescriptors,
   DataType,
   DataTypeLookup,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
+import { dataTypeValueFor } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import { type } from 'arktype';
 import { sqlDataType } from '../src/sql-data-type';
@@ -94,12 +96,16 @@ function writtenName(name: string): string {
 function testDataType(id: string, name: string | undefined): DataType {
   if (name === undefined) {
     return sqlDataType(id, {
+      read: (json) => json,
       params: type({ typeName: 'string > 0' }),
       claimsKind: 'enum',
       render: ({ typeName }) => typeName,
     });
   }
-  return sqlDataType(id, { texts: [{ text: writtenName(name), written: true }] });
+  return sqlDataType(id, {
+    read: (json) => json,
+    texts: [{ text: writtenName(name), written: true }],
+  });
 }
 
 const acceptAnything: AnyCodecDescriptor['paramsSchema'] = {
@@ -110,15 +116,40 @@ const acceptAnything: AnyCodecDescriptor['paramsSchema'] = {
   },
 };
 
-function storesAsAuthored(codecId: string): Codec {
-  return blindCast<Codec, 'a test codec needs only the conversions a contract build calls'>({
+/** What a test codec does with its data type's values, in the JSON they hold. */
+export interface TestCodecConversions {
+  readonly toDataTypeValue?: (input: unknown) => JsonValue;
+  readonly fromDataTypeValue?: (value: DataTypeValue) => unknown;
+}
+
+/**
+ * A codec for `codecId` that converts values of the test data type its id names, with `conversions`, and stores a value as given where it has none. It never reaches the wire.
+ */
+export function testCodec(codecId: string, conversions: TestCodecConversions = {}): Codec {
+  const type = sharedDataType(dataTypeIdOf(codecId));
+  const toJson =
+    conversions.toDataTypeValue ??
+    ((input: unknown) => blindCast<JsonValue, 'a test codec stores what it is given'>(input));
+  return {
     id: codecId,
-    encode: async (value: unknown) => value,
-    decode: async (wire: unknown) => wire,
-    encodeJson: (value: unknown) =>
-      blindCast<JsonValue, 'a test codec stores what it is given'>(value),
-    decodeJson: (json: JsonValue) => json,
-  });
+    dataType: type,
+    toWire: async () => {
+      throw new Error(`${codecId} is a test codec and never reaches the wire`);
+    },
+    fromWire: async () => {
+      throw new Error(`${codecId} is a test codec and never reaches the wire`);
+    },
+    toDataTypeValue: (input) => dataTypeValueFor(type, {}, toJson(input)),
+    fromDataTypeValue: conversions.fromDataTypeValue ?? ((value) => value.value),
+  };
+}
+
+function storesAsAuthored(codecId: string): Codec {
+  return {
+    ...testCodec(codecId),
+    toWire: async (value: unknown) => value,
+    fromWire: async (wire: unknown) => wire,
+  };
 }
 
 /** A test's own codecs: a codec lookup, with descriptors where the test has them. */

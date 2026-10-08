@@ -90,9 +90,14 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
 
   it('reports a Decimal default that lost digits', async () => {
     const serialized = JSON.stringify(await interpretVerifiableSchema());
-    expect(serialized.split('"12345678901234567890.123456789"')).toHaveLength(2);
+    expect(serialized.split('"12345678901234567890.123456789000000000000000000000"')).toHaveLength(
+      2,
+    );
     const rounded: unknown = JSON.parse(
-      serialized.replace('"12345678901234567890.123456789"', '"12345678901234567000"'),
+      serialized.replace(
+        '"12345678901234567890.123456789000000000000000000000"',
+        '"12345678901234567000"',
+      ),
     );
 
     const result = await runSchemaVerify(getConnectionString(), rounded);

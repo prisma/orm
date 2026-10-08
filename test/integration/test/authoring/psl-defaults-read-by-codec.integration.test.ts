@@ -158,8 +158,7 @@ model Token {
     expect(authored.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
       {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
-        message:
-          'Field "Token.s": sql/varchar@1 JSON value must be a string of at most 3 characters',
+        message: 'Field "Token.s": pg/varchar JSON value must be a string of at most 3 characters',
       },
     ]);
   });
@@ -176,7 +175,7 @@ model Price {
       {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
         message:
-          'Field "Price.n": pg/numeric@1 JSON value must be a decimal string that numeric(5, 2) stores without rounding',
+          'Field "Price.n": pg/numeric JSON value must be a decimal string that numeric(5, 2) stores without rounding',
       },
     ]);
   });
@@ -218,7 +217,7 @@ model Task {
         'a text member under an integer codec',
         '  @@type("pg/int4@1")\n  Low = "low"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/int4@1": pg/int4@1 JSON value must be an integer from -2147483648 to 2147483647',
+        'enum "Priority" member "Low" was rejected by codec "pg/int4@1": pg/int4 JSON value must be an integer from -2147483648 to 2147483647',
       ],
       [
         'a bare member under an integer codec',
@@ -236,19 +235,19 @@ model Task {
         'a numeric member with a leading zero',
         '  @@type("pg/numeric@1")\n  Low = "01.5"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "1.5", as PostgreSQL writes this value',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric JSON value must be "1.5", as PostgreSQL writes this value',
       ],
       [
         'a numeric member written as negative zero',
         '  @@type("pg/numeric@1")\n  Low = "-0"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "0", as PostgreSQL writes this value',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric JSON value must be "0", as PostgreSQL writes this value',
       ],
       [
         'an int8 member with a leading zero',
         '  @@type("pg/int8@1")\n  Low = "007"',
         'PSL_EXTENSION_INVALID_VALUE',
-        `enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero`,
+        `enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero`,
       ],
       [
         'a string timestamp codec, which an enum cannot use',
@@ -284,13 +283,13 @@ model Task {
         'an inet member with /32',
         '  @@type("pg/inet@1")\n  Low = "10.0.0.1/32"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be "10.0.0.1", as PostgreSQL writes this address',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet JSON value must be "10.0.0.1", as PostgreSQL writes this address',
       ],
       [
         'an inet member that is not an address',
         '  @@type("pg/inet@1")\n  Low = "not an address"',
         'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet JSON value must be an IP address as PostgreSQL writes it',
       ],
       [
         'a fraction under an integer codec',
@@ -363,7 +362,7 @@ model Tag {
         {
           code: 'PSL_INVALID_DEFAULT_LITERAL',
           message:
-            'Field "Tag.c": sql/char@1 JSON value must be a string of at most 1 character before any trailing spaces',
+            'Field "Tag.c": pg/char JSON value must be a string of at most 1 character before any trailing spaces',
         },
       ]);
     });
@@ -373,13 +372,13 @@ model Tag {
         'a float4 default outside the float4 range',
         () => field.column(float4Column).default(1e300),
         'pg/float4@1',
-        'Field "Reading.value" has a default that its codec refuses: pg/float4@1 JSON value must be a number float4 holds, at most 3.4028234663852886e+38 in magnitude and not so small that it becomes 0, or the text NaN, Infinity or -Infinity',
+        'Field "Reading.value" has a default that its codec refuses: pg/float4 JSON value must be a number float4 holds, at most 3.4028234663852886e+38 in magnitude and not so small that it becomes 0, or the text NaN, Infinity or -Infinity',
       ],
       [
         'a bit default of two bits on a bit column with no length, which holds one',
         () => field.column({ codecId: 'pg/bit@1' } as const).default('01'),
         'pg/bit@1',
-        'Field "Reading.value" has a default that its codec refuses: pg/bit@1 JSON value must be a string of exactly 1 bit',
+        'Field "Reading.value" has a default that its codec refuses: pg/bit JSON value must be a string of exactly 1 bit',
       ],
     ])('refuses %s when the TypeScript contract is built', (_name, value, codecId, message) => {
       const build = () =>

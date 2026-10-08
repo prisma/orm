@@ -203,7 +203,7 @@ describe('integration/sqlite include canonical JSON', () => {
     });
   });
 
-  // An empty blob and an absent one both hex to `''`, and `decodeJson` accepts
+  // An empty blob and an absent one both hex to `''`, and `fromDataTypeValue` accepts
   // `''` as a valid zero-length blob — so this is the pair the NULL guard on the
   // hex projection exists to keep apart, asserted where a user would see it.
   it('keeps an empty blob apart from an absent one', async () => {

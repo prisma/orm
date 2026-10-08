@@ -1,11 +1,11 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { expandContractInputs } from '@internal/config-loader';
-import type { JsonValue } from '@internal/contract/types';
 import type {
   CodecInstanceContext,
   CodecLookupWithDescriptors,
   DataTypeLookup,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
@@ -26,6 +26,12 @@ const postgres = { binding: prisma7PostgresBinding };
  */
 const BROKEN_TEXT = dataTypeId('demo/broken-text');
 
+const brokenText = sqlDataType(BROKEN_TEXT, {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true }],
+  casts: { 'pg/text': () => null },
+});
+
 function withTextDefaultsCastToNull(
   lookup: CodecLookupWithDescriptors,
 ): CodecLookupWithDescriptors {
@@ -37,7 +43,8 @@ function withTextDefaultsCastToNull(
       factory: (params: unknown) => (ctx: CodecInstanceContext) => {
         const codec = descriptor.factory(params)(ctx);
         return Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, {
-          decodeJson: (json: JsonValue) => json,
+          dataType: brokenText,
+          fromDataTypeValue: (value: DataTypeValue) => value.value,
         });
       },
     });
@@ -46,10 +53,6 @@ function withTextDefaultsCastToNull(
 }
 
 function withBrokenTextType(lookup: DataTypeLookup): DataTypeLookup {
-  const brokenText = sqlDataType(BROKEN_TEXT, {
-    texts: [{ text: 'text', written: true }],
-    casts: { 'pg/text': () => null },
-  });
   return {
     get: (id) => (id === BROKEN_TEXT ? brokenText : lookup.get(id)),
     has: (id) => id === BROKEN_TEXT || lookup.has(id),

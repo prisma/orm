@@ -58,19 +58,34 @@ const temporalTexts = (name: string) => [
   { text: `${name}({precision})`, written: true as const },
 ];
 
-export const pgText: DataType = sqlDataType('pg/text', { texts: written('text') });
-export const pgBool: DataType = sqlDataType('pg/bool', { texts: written('bool') });
-export const pgJson: DataType = sqlDataType('pg/json', { texts: written('json') });
-export const pgInt2: DataType = sqlDataType('pg/int2', { texts: written('int2') });
+export const pgText: DataType = sqlDataType('pg/text', {
+  read: (json) => json,
+  texts: written('text'),
+});
+export const pgBool: DataType = sqlDataType('pg/bool', {
+  read: (json) => json,
+  texts: written('bool'),
+});
+export const pgJson: DataType = sqlDataType('pg/json', {
+  read: (json) => json,
+  texts: written('json'),
+});
+export const pgInt2: DataType = sqlDataType('pg/int2', {
+  read: (json) => json,
+  texts: written('int2'),
+});
 export const pgInt4: DataType = sqlDataType('pg/int4', {
+  read: (json) => json,
   texts: written('int4'),
   casts: { [pgInt2.id]: unchanged },
 });
 export const pgInt8: DataType = sqlDataType('pg/int8', {
+  read: (json) => json,
   texts: written('int8'),
   casts: { [pgInt2.id]: asText, [pgInt4.id]: asText },
 });
 export const pgNumeric: DataType = sqlDataType('pg/numeric', {
+  read: (json) => json,
   params: type({
     'precision?': 'number.integer >= 1 & number.integer <= 1000',
     'scale?': 'number.integer >= -1000 & number.integer <= 1000',
@@ -89,14 +104,17 @@ const floatCasts: Readonly<Record<string, Cast>> = {
   [pgNumeric.id]: asNumber,
 };
 export const pgFloat4: DataType = sqlDataType('pg/float4', {
+  read: (json) => json,
   texts: written('float4'),
   casts: floatCasts,
 });
 export const pgFloat8: DataType = sqlDataType('pg/float8', {
+  read: (json) => json,
   texts: written('float8'),
   casts: floatCasts,
 });
 export const pgJsonb: DataType = sqlDataType('pg/jsonb', {
+  read: (json) => json,
   texts: written('jsonb'),
   casts: { [pgJson.id]: unchanged },
 });
@@ -104,6 +122,7 @@ export const pgJsonb: DataType = sqlDataType('pg/jsonb', {
 const fromText: Readonly<Record<string, Cast>> = { [pgText.id]: unchanged };
 const length = type({ 'length?': 'number.integer >= 1 & number.integer <= 10485760' });
 export const pgChar: DataType = sqlDataType('pg/char', {
+  read: (json) => json,
   params: length,
   texts: [
     { text: 'character', written: true },
@@ -112,6 +131,7 @@ export const pgChar: DataType = sqlDataType('pg/char', {
   casts: fromText,
 });
 export const pgVarchar: DataType = sqlDataType('pg/varchar', {
+  read: (json) => json,
   params: length,
   texts: [
     { text: 'character varying', written: true },
@@ -120,31 +140,41 @@ export const pgVarchar: DataType = sqlDataType('pg/varchar', {
   casts: fromText,
 });
 export const pgBytea: DataType = sqlDataType('pg/bytea', {
+  read: (json) => json,
   texts: written('bytea'),
   casts: fromText,
 });
-export const pgDate: DataType = sqlDataType('pg/date', { texts: written('date'), casts: fromText });
+export const pgDate: DataType = sqlDataType('pg/date', {
+  read: (json) => json,
+  texts: written('date'),
+  casts: fromText,
+});
 export const pgTime: DataType = sqlDataType('pg/time', {
+  read: (json) => json,
   params: precision,
   texts: temporalTexts('time'),
   casts: fromText,
 });
 export const pgTimetz: DataType = sqlDataType('pg/timetz', {
+  read: (json) => json,
   params: precision,
   texts: temporalTexts('timetz'),
   casts: fromText,
 });
 export const pgTimestamp: DataType = sqlDataType('pg/timestamp', {
+  read: (json) => json,
   params: precision,
   texts: temporalTexts('timestamp'),
   casts: fromText,
 });
 export const pgTimestamptz: DataType = sqlDataType('pg/timestamptz', {
+  read: (json) => json,
   params: precision,
   texts: temporalTexts('timestamptz'),
   casts: fromText,
 });
 export const pgEnum: DataType = sqlDataType('pg/enum', {
+  read: (json) => json,
   params: type({ typeName: 'string > 0' }),
   claimsKind: 'enum',
   render: ({ typeName }) => `"${typeName}"`,
@@ -152,6 +182,7 @@ export const pgEnum: DataType = sqlDataType('pg/enum', {
 
 /** Bounded at 2000, not pgvector's 16000, so interpreter tests stay isolated from the real pack. */
 export const pgvectorVector: DataType = sqlDataType('pgvector/vector', {
+  read: (json) => json,
   params: type({ length: 'number.integer >= 1 & number.integer <= 2000' }),
   texts: [{ text: 'vector({length})', written: true }],
   listCast: {

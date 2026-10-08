@@ -24,14 +24,18 @@ import { supportBinder } from './support';
 
 const unchanged = (value: JsonValue) => value;
 
-const sqlExpression = dataType('sql/expression', {});
-const pgText = dataType('pg/text', {});
-const pgBool = dataType('pg/bool', {});
-const pgInt2 = dataType('pg/int2', {});
-const pgInt4 = dataType('pg/int4', { casts: { [pgInt2.id]: (value) => String(value) } });
-const pgNumeric = dataType('pg/numeric', {});
-const pgJson = dataType('pg/json', {});
+const sqlExpression = dataType('sql/expression', { read: (json) => json });
+const pgText = dataType('pg/text', { read: (json) => json });
+const pgBool = dataType('pg/bool', { read: (json) => json });
+const pgInt2 = dataType('pg/int2', { read: (json) => json });
+const pgInt4 = dataType('pg/int4', {
+  read: (json) => json,
+  casts: { [pgInt2.id]: (value) => String(value) },
+});
+const pgNumeric = dataType('pg/numeric', { read: (json) => json });
+const pgJson = dataType('pg/json', { read: (json) => json });
 const pgUuid = dataType('pg/uuid', {
+  read: (json) => json,
   casts: {
     [pgText.id]: (value) => {
       if (typeof value === 'string' && value.length === 36) return value;
@@ -193,7 +197,7 @@ describe('dataTypeValue', () => {
   });
 
   it('labels a type by its own tag before the tags of its cast sources', () => {
-    const geo = dataType('pg/geo', { casts: { [pgJson.id]: unchanged } });
+    const geo = dataType('pg/geo', { read: (json) => json, casts: { [pgJson.id]: unchanged } });
     const withGeo: DataTypeSupport = {
       entries: {
         ...entries,
@@ -387,7 +391,7 @@ describe('dataTypeValue', () => {
   });
 
   it('throws an internal error when parsing for a registered type that nothing writes', () => {
-    const pgBlob = dataType('pg/blob', {});
+    const pgBlob = dataType('pg/blob', { read: (json) => json });
     const withBlob: DataTypeSupport = { entries, lookup: createDataTypeLookup([pgBlob]) };
     const { expr, ctx } = argOf('"x"');
     expect(() => dataTypeValue(pgBlob.id, withBlob).parse(expr, ctx)).toThrow(

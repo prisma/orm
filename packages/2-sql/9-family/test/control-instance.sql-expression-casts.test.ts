@@ -69,12 +69,13 @@ function makeStack(extensionDataTypes: readonly DataType[]): ControlStack<'sql',
 
 describe('createSqlFamilyInstance and casts from sql/expression', () => {
   it('accepts a stack whose data types do not cast from sql/expression', () => {
-    const geometry = dataType('postgis/geometry', {});
+    const geometry = dataType('postgis/geometry', { read: (json) => json });
     expect(() => createSqlFamilyInstance(makeStack([geometry]))).not.toThrow();
   });
 
   it('refuses a stack in which an extension type casts from sql/expression', () => {
     const geometry = dataType('postgis/geometry', {
+      read: (json) => json,
       casts: { [SQL_EXPRESSION_DATA_TYPE_ID]: (value) => value },
     });
     const stack = makeStack([geometry]);
@@ -90,6 +91,7 @@ describe('createSqlFamilyInstance and casts from sql/expression', () => {
 
   it('refuses a stack in which an extension type has a list cast from sql/expression', () => {
     const points = dataType('postgis/points', {
+      read: (json) => json,
       listCast: { of: [SQL_EXPRESSION_DATA_TYPE_ID], cast: (elements) => elements },
     });
     expect(() => createSqlFamilyInstance(makeStack([points]))).toThrow(

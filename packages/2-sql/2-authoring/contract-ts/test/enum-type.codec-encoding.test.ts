@@ -9,7 +9,7 @@ import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
+import { testCodec, withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/build-contract';
 import type { ContractDefinition } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
@@ -29,16 +29,13 @@ const pgInt = { codecId: 'pg/int4@1' as const } as const;
 
 function stubCodec(
   id: string,
-  encodeJson: (value: unknown) => JsonValue,
-  decodeJson: (json: JsonValue) => unknown = (json) => json,
+  toJson: (value: unknown) => JsonValue,
+  fromJson: (json: JsonValue) => unknown = (json) => json,
 ): Codec {
-  return {
-    id,
-    encodeJson: encodeJson as Codec['encodeJson'],
-    decodeJson: decodeJson as Codec['decodeJson'],
-    encode: (() => Promise.reject(new Error('unused'))) as Codec['encode'],
-    decode: (() => Promise.reject(new Error('unused'))) as Codec['decode'],
-  };
+  return testCodec(id, {
+    toDataTypeValue: toJson,
+    fromDataTypeValue: (value) => fromJson(value.value),
+  });
 }
 
 function codecLookupOf(codecs: Record<string, Codec>): CodecLookupWithDescriptors {
@@ -97,7 +94,7 @@ describe('enum lowering encodes member values through the codec', () => {
     expect(memberValues(contract, 'Priority')).toEqual([1, 10]);
   });
 
-  it('routes each value through codec.encodeJson, not String()', () => {
+  it('routes each value through codec.toDataTypeValue, not String()', () => {
     const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
     const codecLookup = codecLookupOf({
       'pg/text@1': stubCodec(

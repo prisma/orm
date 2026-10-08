@@ -8,10 +8,12 @@ import { type } from 'arktype';
 import { sqlDataType } from '../src/sql-data-type';
 
 export const int4 = sqlDataType('t/int4', {
+  read: (json) => json,
   texts: [{ text: 'int4', written: true }, { text: 'integer', catalog: true }, { text: 'int' }],
 });
 
 export const float8 = sqlDataType('t/float8', {
+  read: (json) => json,
   texts: [
     { text: 'float8', written: true },
     { text: 'double precision', catalog: true },
@@ -20,6 +22,7 @@ export const float8 = sqlDataType('t/float8', {
 });
 
 export const numeric = sqlDataType('t/numeric', {
+  read: (json) => json,
   params: type({
     'precision?': 'number.integer >= 1 & number.integer <= 1000',
     'scale?': 'number.integer >= 0 & number.integer <= 1000',
@@ -37,6 +40,7 @@ export const numeric = sqlDataType('t/numeric', {
 });
 
 export const char = sqlDataType('t/char', {
+  read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1 & number.integer <= 10485760' }),
   texts: [
     { text: 'character', written: true },
@@ -48,6 +52,7 @@ export const char = sqlDataType('t/char', {
 });
 
 export const timestamp = sqlDataType('t/timestamp', {
+  read: (json) => json,
   params: type({ 'precision?': 'number.integer >= 0 & number.integer <= 6' }),
   texts: [
     { text: 'timestamp', written: true },
@@ -59,17 +64,20 @@ export const timestamp = sqlDataType('t/timestamp', {
 
 /** Like the SQLite character types: the length is written, then forgotten. */
 export const character = sqlDataType('t/character', {
+  read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1' }),
   texts: [{ text: 'character', written: true }],
   normalize: ({ length: _length, ...rest }) => rest,
 });
 
 export const vector = sqlDataType('t/vector', {
+  read: (json) => json,
   params: type({ length: 'number.integer >= 1 & number.integer <= 16000' }),
   texts: [{ text: 'vector({length})', written: true, catalog: true }],
 });
 
 export const geometry = sqlDataType('t/geometry', {
+  read: (json) => json,
   params: type({ 'srid?': 'number.integer >= 1' }),
   texts: [
     { text: 'geometry', written: true, catalog: true },
@@ -83,6 +91,7 @@ export const geometry = sqlDataType('t/geometry', {
 });
 
 export const enumType = sqlDataType('t/enum', {
+  read: (json) => json,
   params: type({ typeName: 'string > 0' }),
   claimsKind: 'enum',
   render: ({ typeName }) =>
@@ -99,7 +108,7 @@ export const enumType = sqlDataType('t/enum', {
 });
 
 /** Claims nothing and is never written. */
-export const textArray = sqlDataType('t/text-array', {});
+export const textArray = sqlDataType('t/text-array', { read: (json) => json });
 
 export const allTypes = [
   int4,

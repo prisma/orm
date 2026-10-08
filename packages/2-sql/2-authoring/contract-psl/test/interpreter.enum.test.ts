@@ -1,9 +1,11 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import {
   type Codec,
   type CodecLookupWithDescriptors,
+  dataType,
   dataTypeId,
+  dataTypeValueFor,
 } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
@@ -38,14 +40,16 @@ import {
 // The PostgreSQL codecs come from the fixture descriptors; SQLite's are minimal stubs.
 
 function stubCodec(id: string, jsonType: 'string' | 'number'): Codec {
+  const type = dataType(id.replace(/@\d+$/, ''), { read: (json) => json });
   return {
     id,
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson: (value) => value as never,
-    decodeJson(json) {
-      if (typeof json !== jsonType) throw new Error(`expected ${jsonType}, got ${typeof json}`);
-      return json;
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (value) => dataTypeValueFor(type, {}, value as JsonValue),
+    fromDataTypeValue({ value }) {
+      if (typeof value !== jsonType) throw new Error(`expected ${jsonType}, got ${typeof value}`);
+      return value;
     },
   };
 }

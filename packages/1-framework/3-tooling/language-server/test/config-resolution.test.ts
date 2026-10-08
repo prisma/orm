@@ -74,7 +74,7 @@ function stubStackWithContext(): ControlStack {
   } as unknown as ControlStack;
 }
 
-const stubInt = dataType('demo/int', {});
+const stubInt = dataType('demo/int', { read: (json) => json });
 const stubDataTypeEntries = {
   [stubInt.id]: {
     written: {

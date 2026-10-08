@@ -36,31 +36,36 @@ const toFloat: Cast = (value) => {
   return isNonFiniteText(value) ? value : Number(value);
 };
 
-const text = dataType('pg/text', {});
-const bool = dataType('pg/bool', {});
-const int2 = dataType('pg/int2', {});
-const int4 = dataType('pg/int4', { casts: { [int2.id]: unchanged } });
+const text = dataType('pg/text', { read: (json) => json });
+const bool = dataType('pg/bool', { read: (json) => json });
+const int2 = dataType('pg/int2', { read: (json) => json });
+const int4 = dataType('pg/int4', { read: (json) => json, casts: { [int2.id]: unchanged } });
 const int8 = dataType('pg/int8', {
+  read: (json) => json,
   casts: { [int2.id]: toNumeralText, [int4.id]: toNumeralText },
 });
 const numeric = dataType('pg/numeric', {
+  read: (json) => json,
   casts: { [int2.id]: toNumeralText, [int4.id]: toNumeralText, [int8.id]: unchanged },
 });
 const float8 = dataType('pg/float8', {
+  read: (json) => json,
   casts: { [int2.id]: toFloat, [int4.id]: toFloat, [int8.id]: toFloat, [numeric.id]: toFloat },
 });
-const json = dataType('pg/json', {});
-const jsonb = dataType('pg/jsonb', { casts: { [json.id]: unchanged } });
+const json = dataType('pg/json', { read: (json) => json });
+const jsonb = dataType('pg/jsonb', { read: (json) => json, casts: { [json.id]: unchanged } });
 const vector = dataType('pg/vector', {
+  read: (json) => json,
   listCast: {
     of: [int2.id, int4.id, int8.id, numeric.id],
     cast: (elements) => elements.map(Number),
   },
 });
-const blob = dataType('pg/bytea', {});
+const blob = dataType('pg/bytea', { read: (json) => json });
 const canonicalDate: Cast = (value) =>
   typeof value === 'string' ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : value;
 const date = dataType('pg/date', {
+  read: (json) => json,
   toCanonicalForm: canonicalDate,
   casts: { [text.id]: canonicalDate },
 });
@@ -288,7 +293,7 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
 });
 
 describe('mapDefault with a tag entry that names the type its body is', () => {
-  const storedText = dataType('demo/text', {});
+  const storedText = dataType('demo/text', { read: (json) => json });
   const textEntries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
     [tagEntryKey('json')]: {
       written: {

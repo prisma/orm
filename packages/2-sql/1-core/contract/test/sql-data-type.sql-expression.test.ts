@@ -10,7 +10,10 @@ import {
 } from '../src/sql-data-type';
 import { SQL_EXPRESSION_DATA_TYPE_ID, sqlExpressionDataType } from '../src/sql-expression';
 
-const text = sqlDataType('t/text', { texts: [{ text: 'text', written: true, catalog: true }] });
+const text = sqlDataType('t/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true, catalog: true }],
+});
 
 describe("the SQL family's sql/expression data type", () => {
   it('is not a SQL data type, so it has no texts', () => {

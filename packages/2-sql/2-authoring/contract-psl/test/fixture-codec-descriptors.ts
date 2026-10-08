@@ -14,6 +14,9 @@ import {
   type DataType,
   type DataTypeId,
   type DataTypeLookup,
+  type DataTypeValue,
+  dataTypeParamsOf,
+  dataTypeValueFor,
   isNonFiniteText,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
@@ -164,26 +167,31 @@ const fixtureDataTypeById: ReadonlyMap<string, DataType> = new Map(
 function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const codec = fixtureCodecs[codecId];
   if (codec === undefined) return undefined;
-  const dataType = dataTypeByCodecId[codecId] ?? pgText.id;
-  const paramsSchema = fixtureDataTypeById.get(dataType)?.params;
+  const type = fixtureDataTypeById.get(dataTypeByCodecId[codecId] ?? pgText.id) ?? pgText;
+  const paramsSchema = type.params;
   return {
     codecId,
-    dataType,
+    dataType: type.id,
     traits: codec.traits,
     paramsSchema,
     isParameterized: paramsSchema !== undefined,
     factory: (params: unknown) => () => ({
       id: codecId,
-      encode: async (value: unknown) =>
+      dataType: type,
+      toWire: async (value: unknown) =>
         blindCast<never, 'fixture codecs do not reach the wire'>(value),
-      decode: async (wire: unknown) => wire,
-      encodeJson: (value: unknown) =>
-        codec.encodeJson === undefined
-          ? blindCast<JsonValue, 'fixture codecs store what they decoded'>(value)
-          : codec.encodeJson(value),
-      decodeJson: (value: JsonValue) =>
+      fromWire: async (wire: unknown) => wire,
+      toDataTypeValue: (value: unknown) =>
+        dataTypeValueFor(
+          type,
+          dataTypeParamsOf(type, params),
+          codec.encodeJson === undefined
+            ? blindCast<JsonValue, 'fixture codecs store what they decoded'>(value)
+            : codec.encodeJson(value),
+        ),
+      fromDataTypeValue: (value: DataTypeValue) =>
         codec.decodeJson(
-          value,
+          value.value,
           blindCast<Record<string, unknown>, 'the parameter schema accepted these parameters'>(
             params ?? {},
           ),

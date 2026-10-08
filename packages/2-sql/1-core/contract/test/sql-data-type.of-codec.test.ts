@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { sqlDataTypeOfCodec } from '../src/sql-data-type';
 import { enumType, int4, numeric, vector } from './sql-data-type-fixtures';
 
-const plain = dataType('t/plain', {});
+const plain = dataType('t/plain', { read: (json) => json });
 
 describe('sqlDataTypeOfCodec', () => {
   const dataTypeLookup = createDataTypeLookup([int4, numeric, vector, enumType, plain]);

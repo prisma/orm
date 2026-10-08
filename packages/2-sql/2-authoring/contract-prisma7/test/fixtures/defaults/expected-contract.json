@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e665381cf5ccf0f80798e6578db5e7443f72fe630b01178f91fee7c108e3161b",
+    "storageHash": "50beefe92e2493c7907122dc5f93a24fb79dd6b780ed86a54194c9654bfd9634",
     "namespaces": {
       "public": {
         "id": "public",
@@ -370,7 +370,7 @@
                   },
                   "default": {
                     "kind": "literal",
-                    "value": "12.34"
+                    "value": "12.340000000000000000000000000000"
                   }
                 },
                 "booleanLiteral": {

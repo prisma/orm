@@ -6,6 +6,7 @@ import { allTypes, enumType, int4, numeric } from './sql-data-type-fixtures';
 
 const claiming = (id: string, text: string) =>
   sqlDataType(id, {
+    read: (json) => json,
     params: type({ 'p?': 'number', 'precision?': 'number', 'length?': 'number' }),
     texts: [{ text }],
   });
@@ -42,6 +43,7 @@ describe('findSqlDataTypeCollision', () => {
 
   it('finds no collision between placeholder sets of different sizes', () => {
     const scaled = sqlDataType('t/scaled', {
+      read: (json) => json,
       params: type({ 'precision?': 'number', 'scale?': 'number' }),
       texts: [{ text: 'numeric({precision},{scale})' }],
     });
@@ -51,7 +53,10 @@ describe('findSqlDataTypeCollision', () => {
   });
 
   it('ignores texts that are only written', () => {
-    const writtenOnly = sqlDataType('t/int4-written', { texts: [{ text: 'int4', written: true }] });
+    const writtenOnly = sqlDataType('t/int4-written', {
+      read: (json) => json,
+      texts: [{ text: 'int4', written: true }],
+    });
     expect(findSqlDataTypeCollision([int4, writtenOnly])).toBeUndefined();
   });
 
@@ -66,6 +71,7 @@ describe('findSqlDataTypeCollision', () => {
 
   it('finds two data types that claim one kind', () => {
     const other = sqlDataType('t/other-enum', {
+      read: (json) => json,
       params: type({ typeName: 'string > 0' }),
       claimsKind: 'enum',
       render: ({ typeName }) => typeName,
@@ -78,6 +84,8 @@ describe('findSqlDataTypeCollision', () => {
   });
 
   it('ignores data types that are not SQL data types', () => {
-    expect(findSqlDataTypeCollision([int4, dataType('t/int4-plain', {})])).toBeUndefined();
+    expect(
+      findSqlDataTypeCollision([int4, dataType('t/int4-plain', { read: (json) => json })]),
+    ).toBeUndefined();
   });
 });

@@ -115,7 +115,7 @@ describe('dbgenerated() with no expression', () => {
 });
 
 describe('Decimal and BigInt number defaults', () => {
-  it('keep the number exactly as written, as decimal text', async () => {
+  it("keep the number as decimal text, spelled with the column's scale", async () => {
     const { columns } = await loadFixtureTable('number-defaults', 'Decimals');
     expect(
       Object.fromEntries(
@@ -133,20 +133,27 @@ describe('Decimal and BigInt number defaults', () => {
         ].map((column) => [column, columns[column]?.['default']]),
       ),
     ).toEqual({
-      long: { kind: 'literal', value: '12345678901234567890.123456789' },
-      tiny: { kind: 'literal', value: '0.000000000000000001' },
-      negative: { kind: 'literal', value: '-1.5' },
-      whole: { kind: 'literal', value: '42' },
+      long: { kind: 'literal', value: '12345678901234567890.123456789000000000000000000000' },
+      tiny: { kind: 'literal', value: '0.000000000000000001000000000000' },
+      negative: { kind: 'literal', value: '-1.500000000000000000000000000000' },
+      whole: { kind: 'literal', value: '42.000000000000000000000000000000' },
       zerosBare: { kind: 'literal', value: '1.50' },
       zerosScaled: { kind: 'literal', value: '1.50' },
-      zerosDefault: { kind: 'literal', value: '1.50' },
-      list: { kind: 'literal', value: ['1.50', '-2', '0.000000000000000001'] },
+      zerosDefault: { kind: 'literal', value: '1.500000000000000000000000000000' },
+      list: {
+        kind: 'literal',
+        value: [
+          '1.500000000000000000000000000000',
+          '-2.000000000000000000000000000000',
+          '0.000000000000000001000000000000',
+        ],
+      },
       bigLong: { kind: 'literal', value: '9007199254740993' },
       bigList: { kind: 'literal', value: ['9007199254740993', '-1'] },
     });
   });
 
-  it('drop leading zeros and the sign of zero and keep trailing zeros, as Prisma 7 writes the SQL default', async () => {
+  it("drop leading zeros and the sign of zero, keep trailing zeros and pad to the column's scale, as PostgreSQL prints the value", async () => {
     const { columns } = await loadFixtureTable('number-default-spellings', 'Spellings');
     expect(
       Object.fromEntries(
@@ -155,9 +162,9 @@ describe('Decimal and BigInt number defaults', () => {
         ),
       ),
     ).toEqual({
-      leadingZeros: { kind: 'literal', value: '7' },
-      negativeZero: { kind: 'literal', value: '0' },
-      leadingZeroFraction: { kind: 'literal', value: '0.10' },
+      leadingZeros: { kind: 'literal', value: '7.000000000000000000000000000000' },
+      negativeZero: { kind: 'literal', value: '0.000000000000000000000000000000' },
+      leadingZeroFraction: { kind: 'literal', value: '0.100000000000000000000000000000' },
       bareLeadingZeros: { kind: 'literal', value: '7' },
       bareNegativeZero: { kind: 'literal', value: '0' },
       bareLeadingZeroFraction: { kind: 'literal', value: '0.10' },
@@ -280,7 +287,7 @@ describe('Json, Decimal, BigInt and Float literal defaults', () => {
       ),
     ).toEqual({
       jsonLiteral: { kind: 'literal', value: { a: 1 } },
-      decimalLiteral: { kind: 'literal', value: '12.34' },
+      decimalLiteral: { kind: 'literal', value: '12.340000000000000000000000000000' },
       bigIntLiteral: { kind: 'literal', value: '9007199254740993' },
       floatLiteral: { kind: 'literal', value: 1.5 },
       intLiteral: { kind: 'literal', value: 42 },

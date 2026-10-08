@@ -60,7 +60,9 @@ describe('dataTypeParams', () => {
 
   it('gives a type without parameters nothing', () => {
     expect(dataTypeParams(int4, { length: 5 })).toEqual({});
-    expect(dataTypeParams(dataType('t/plain', {}), { length: 5 })).toEqual({});
+    expect(dataTypeParams(dataType('t/plain', { read: (json) => json }), { length: 5 })).toEqual(
+      {},
+    );
   });
 
   it('reads absent parameters as nothing', () => {
@@ -86,6 +88,7 @@ describe('sqlBaseName', () => {
 
   it('uses the display of the text it picks', () => {
     const displayed = sqlDataType('t/displayed', {
+      read: (json) => json,
       texts: [{ text: 'geometry', written: true, display: 'Geometry' }],
     });
     expect(sqlBaseName(displayed, {})).toBe('Geometry');
@@ -150,6 +153,7 @@ describe('renderSqlTypeName', () => {
 
   it('refuses a placeholder value that is not an integer, so nothing else is written into the name', () => {
     const labelled = sqlDataType('t/labelled', {
+      read: (json) => json,
       params: type({ label: 'string' }),
       texts: [{ text: 'labelled({label})', written: true }],
     });

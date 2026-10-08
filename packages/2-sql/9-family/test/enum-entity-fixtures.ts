@@ -10,7 +10,11 @@ import type {
   CodecLookupWithDescriptors,
   DataType,
 } from '@internal/framework-components/codec';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import {
+  createDataTypeLookup,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import { InternalError } from '@internal/utils/internal-error';
 import { type } from 'arktype';
@@ -64,82 +68,78 @@ export const FOLDING_CODEC_ID = 'test/folding-text@1';
 export const ENCODE_FOLDING_CODEC_ID = 'test/encode-folding-text@1';
 export const BROKEN_CODEC_ID = 'test/broken@1';
 
-export const textCodec: Codec = {
-  id: TEXT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-export const intCodec: Codec = {
-  id: INT_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
-    return json;
-  },
-};
-
-export const jsonCodec: Codec = {
-  id: JSON_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (json === null) throw new Error('expected a non-null JSON value');
-    return json;
-  },
-};
-
-export const foldingCodec: Codec = {
-  id: FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json.toLowerCase();
-  },
-};
-
-export const encodeFoldingCodec: Codec = {
-  id: ENCODE_FOLDING_CODEC_ID,
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => String(value).toLowerCase(),
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-export const brokenCodec: Codec = {
-  ...textCodec,
-  id: BROKEN_CODEC_ID,
-  decodeJson() {
-    throw new InternalError('a codec broke an invariant');
-  },
-};
-
-export const VECTOR_CODEC_ID = 'test/vector@1';
-export const vectorCodec: Codec = { ...textCodec, id: VECTOR_CODEC_ID };
-
-export const ORPHAN_CODEC_ID = 'test/orphan@1';
-export const orphanCodec: Codec = { ...textCodec, id: ORPHAN_CODEC_ID };
-
-export const textType = sqlDataType('test/text', { texts: [{ text: 'text', written: true }] });
-export const intType = sqlDataType('test/int', { texts: [{ text: 'int', written: true }] });
-export const jsonType = sqlDataType('test/json', { texts: [{ text: 'json', written: true }] });
+export const textType = sqlDataType('test/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true }],
+});
+export const intType = sqlDataType('test/int', {
+  read: (json) => json,
+  texts: [{ text: 'int', written: true }],
+});
+export const jsonType = sqlDataType('test/json', {
+  read: (json) => json,
+  texts: [{ text: 'json', written: true }],
+});
 export const vectorType = sqlDataType('test/vector', {
+  read: (json) => json,
   params: type({ length: 'number.integer >= 1' }),
   texts: [{ text: 'vector({length})', written: true }],
 });
+const unregisteredType = dataType('test/unregistered', { read: (json) => json });
+
+function fixtureCodec(
+  id: string,
+  type: DataType,
+  fromJson: (json: JsonValue) => unknown,
+  toJson: (value: unknown) => JsonValue = (value) => value as JsonValue,
+): Codec {
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (value) => dataTypeValueFor(type, {}, toJson(value)),
+    fromDataTypeValue: (value) => fromJson(value.value),
+  };
+}
+
+const readText = (json: JsonValue): string => {
+  if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
+  return json;
+};
+
+export const textCodec: Codec = fixtureCodec(TEXT_CODEC_ID, textType, readText);
+
+export const intCodec: Codec = fixtureCodec(INT_CODEC_ID, intType, (json) => {
+  if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
+  return json;
+});
+
+export const jsonCodec: Codec = fixtureCodec(JSON_CODEC_ID, jsonType, (json) => {
+  if (json === null) throw new Error('expected a non-null JSON value');
+  return json;
+});
+
+export const foldingCodec: Codec = fixtureCodec(FOLDING_CODEC_ID, textType, (json) =>
+  readText(json).toLowerCase(),
+);
+
+export const encodeFoldingCodec: Codec = fixtureCodec(
+  ENCODE_FOLDING_CODEC_ID,
+  textType,
+  readText,
+  (value) => String(value).toLowerCase(),
+);
+
+export const brokenCodec: Codec = fixtureCodec(BROKEN_CODEC_ID, textType, () => {
+  throw new InternalError('a codec broke an invariant');
+});
+
+export const VECTOR_CODEC_ID = 'test/vector@1';
+export const vectorCodec: Codec = fixtureCodec(VECTOR_CODEC_ID, vectorType, readText);
+
+export const ORPHAN_CODEC_ID = 'test/orphan@1';
+export const orphanCodec: Codec = fixtureCodec(ORPHAN_CODEC_ID, unregisteredType, readText);
 
 export const dataTypeOfCodec: Readonly<Record<string, DataType>> = {
   [TEXT_CODEC_ID]: textType,

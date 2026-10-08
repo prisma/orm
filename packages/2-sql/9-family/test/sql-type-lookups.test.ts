@@ -3,8 +3,11 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import { describe, expect, it } from 'vitest';
 import { sqlTypeLookupsOf } from '../src/core/migrations/sql-type-lookups';
 
-const instant = dataType('demo/instant', { toCanonicalForm: (value) => value });
-const point = dataType('geo/point', {});
+const instant = dataType('demo/instant', {
+  read: (json) => json,
+  toCanonicalForm: (value) => value,
+});
+const point = dataType('geo/point', { read: (json) => json });
 
 function component(
   id: string,

@@ -68,11 +68,11 @@ describe('printSqlExpressionLiteral', () => {
 });
 
 describe('assertNothingCastsFromSqlExpression', () => {
-  const text = { type: dataType('pg/text', {}), contributedBy: 'postgres' };
+  const text = { type: dataType('pg/text', { read: (json) => json }), contributedBy: 'postgres' };
 
   it('accepts data types that do not cast from sql/expression', () => {
     const json = {
-      type: dataType('pg/jsonb', { casts: { 'pg/text': (value) => value } }),
+      type: dataType('pg/jsonb', { read: (json) => json, casts: { 'pg/text': (value) => value } }),
       contributedBy: 'postgres',
     };
     const sqlExpression = { type: sqlExpressionDataType, contributedBy: 'sql' };
@@ -82,6 +82,7 @@ describe('assertNothingCastsFromSqlExpression', () => {
   it('refuses a data type with a cast from sql/expression', () => {
     const geometry = {
       type: dataType('postgis/geometry', {
+        read: (json) => json,
         casts: { [SQL_EXPRESSION_DATA_TYPE_ID]: (value) => value },
       }),
       contributedBy: 'postgis',
@@ -99,6 +100,7 @@ describe('assertNothingCastsFromSqlExpression', () => {
   it('refuses a data type with a list cast from sql/expression', () => {
     const vector = {
       type: dataType('pgvector/vector', {
+        read: (json) => json,
         listCast: { of: [SQL_EXPRESSION_DATA_TYPE_ID], cast: (elements) => elements },
       }),
       contributedBy: 'pgvector',

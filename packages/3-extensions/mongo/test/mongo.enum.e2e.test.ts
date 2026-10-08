@@ -58,8 +58,8 @@ const codecLookup: CodecLookupWithDescriptors = {
     if (!knownCodecIds.has(id)) return undefined;
     return {
       id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
+      toWire: async (v: unknown) => v,
+      fromWire: async (w: unknown) => w,
       encodeJson: (v: unknown) => v,
       decodeJson: (j: unknown) => j,
     } as ReturnType<CodecLookup['get']>;

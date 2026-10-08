@@ -18,9 +18,18 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import { createSqlFamilyInstance } from '../src/core/control-instance';
 
-const int4 = sqlDataType('t/int4', { texts: [{ text: 'int4', written: true }] });
-const jsonb = sqlDataType('t/jsonb', { texts: [{ text: 'jsonb', written: true }] });
-const text = sqlDataType('t/text', { texts: [{ text: 'text', written: true }] });
+const int4 = sqlDataType('t/int4', {
+  read: (json) => json,
+  texts: [{ text: 'int4', written: true }],
+});
+const jsonb = sqlDataType('t/jsonb', {
+  read: (json) => json,
+  texts: [{ text: 'jsonb', written: true }],
+});
+const text = sqlDataType('t/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true }],
+});
 
 const codecDataTypes: Readonly<Record<string, AnyCodecDescriptor['dataType']>> = {
   't/int4@1': int4.id,

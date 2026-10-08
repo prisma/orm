@@ -1,6 +1,6 @@
 import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-specifier-default-control-policy';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
-import { type Codec, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import {
   CheckConstraint,
@@ -21,6 +21,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import {
+  testCodec,
   testSqlTypeLookups,
   testTypeLookups,
 } from '../../../1-core/contract/test/test-type-lookups';
@@ -522,17 +523,10 @@ describe('check emission — guards', () => {
     'refuses a number member that a text codec stores as text, with many=%s',
     (many) => {
       const Normalized = enumType('Normalized', pgText, member('One', 1), member('Two', 'two'));
-      const codec: Codec = {
-        id: 'pg/text@1',
-        encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
-        decodeJson: ((json: unknown) => String(json)) as Codec['decodeJson'],
-        encode: (() => {
-          throw new Error('unused');
-        }) as Codec['encode'],
-        decode: (() => {
-          throw new Error('unused');
-        }) as Codec['decode'],
-      };
+      const codec = testCodec('pg/text@1', {
+        toDataTypeValue: (value) => String(value),
+        fromDataTypeValue: (value) => String(value.value),
+      });
       expect(() =>
         defineContract(
           {
@@ -576,17 +570,10 @@ describe('check emission — guards', () => {
         member('Low', 1n),
         member('High', 10n),
       );
-      const codec: Codec = {
-        id: 'pg/int8@1',
-        encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
-        decodeJson: ((json: unknown) => BigInt(String(json))) as Codec['decodeJson'],
-        encode: (() => {
-          throw new Error('unused');
-        }) as Codec['encode'],
-        decode: (() => {
-          throw new Error('unused');
-        }) as Codec['decode'],
-      };
+      const codec = testCodec('pg/int8@1', {
+        toDataTypeValue: (value) => String(value),
+        fromDataTypeValue: (value) => BigInt(String(value.value)),
+      });
       hookCalls.length = 0;
       const contract = defineContract(
         {

@@ -22,19 +22,21 @@ describe('sqlDataType', () => {
   });
 
   it('refuses a parameter schema that is not an object schema, naming the data type', () => {
-    expect(() => sqlDataType('t/scalar-params', { params: type('string') as never })).toThrow(
-      InternalError,
-    );
-    expect(() => sqlDataType('t/scalar-params', { params: type('string') as never })).toThrow(
-      /t\/scalar-params/,
-    );
+    expect(() =>
+      sqlDataType('t/scalar-params', { read: (json) => json, params: type('string') as never }),
+    ).toThrow(InternalError);
+    expect(() =>
+      sqlDataType('t/scalar-params', { read: (json) => json, params: type('string') as never }),
+    ).toThrow(/t\/scalar-params/);
   });
 
   it.each([
     ['a union of objects', type({ length: 'number' }).or({ scale: 'number' })],
     ['a piped object', type({ length: 'number' }).pipe((params) => params)],
   ] as const)('refuses %s as a parameter schema, naming the data type', (_, params) => {
-    expect(() => sqlDataType('t/unreadable-params', { params: params as never })).toThrow(
+    expect(() =>
+      sqlDataType('t/unreadable-params', { read: (json) => json, params: params as never }),
+    ).toThrow(
       expect.objectContaining({
         name: 'InternalError',
         message: expect.stringMatching(/t\/unreadable-params/),
@@ -50,6 +52,7 @@ describe('sqlDataType', () => {
   it('keeps the casts, list cast and parameter schema of the framework declaration', () => {
     const params = type({ 'length?': 'number.integer >= 1' });
     const declared = sqlDataType('t/varchar', {
+      read: (json) => json,
       params,
       casts: { [int4.id]: (value) => String(value) },
       listCast: { of: [int4.id], cast: (elements) => [...elements] },
@@ -63,18 +66,28 @@ describe('sqlDataType', () => {
   it('keeps every field of the framework declaration', () => {
     const casts = { [int4.id]: (value: JsonValue) => value };
     const toCanonicalForm = (value: JsonValue) => value;
+    const read = (json: JsonValue) => (json === 'old' ? 'new' : json);
     const declared = sqlDataType('t/kept', {
+      read,
       casts,
       toCanonicalForm,
       texts: [{ text: 'kept', written: true, catalog: true }],
     });
-    expect(Object.fromEntries(Object.entries(declared).filter(([key]) => key !== 'sql'))).toEqual(
-      dataType('t/kept', { casts, toCanonicalForm }),
+    const plain = dataType('t/kept', { read, casts, toCanonicalForm });
+    const fields = (type: object) =>
+      Object.fromEntries(
+        Object.entries(type).filter(([key, value]) => key !== 'sql' && typeof value !== 'function'),
+      );
+    expect(fields(declared)).toEqual(fields(plain));
+    expect(declared.toContract(declared.fromContract('old', {}))).toBe(
+      plain.toContract(plain.fromContract('old', {})),
     );
   });
 
   it('validates its id like every data type', () => {
-    expect(() => sqlDataType('t/int4@1', {})).toThrow(/is not a data type id/);
+    expect(() => sqlDataType('t/int4@1', { read: (json) => json })).toThrow(
+      /is not a data type id/,
+    );
   });
 
   describe('a text is lower case, single-spaced, literal characters and placeholders', () => {
@@ -90,28 +103,33 @@ describe('sqlDataType', () => {
       ['an empty placeholder', 'numeric({})'],
       ['an empty text', ''],
     ])('refuses %s', (_why, text) => {
-      expect(() => sqlDataType('t/bad', { params: precisionParams, texts: [{ text }] })).toThrow(
-        InternalError,
-      );
-      expect(() => sqlDataType('t/bad', { params: precisionParams, texts: [{ text }] })).toThrow(
-        /t\/bad/,
-      );
+      expect(() =>
+        sqlDataType('t/bad', { read: (json) => json, params: precisionParams, texts: [{ text }] }),
+      ).toThrow(InternalError);
+      expect(() =>
+        sqlDataType('t/bad', { read: (json) => json, params: precisionParams, texts: [{ text }] }),
+      ).toThrow(/t\/bad/);
     });
 
     it('refuses a placeholder that names no parameter', () => {
       expect(() =>
-        sqlDataType('t/bad', { params: precisionParams, texts: [{ text: 'numeric({scale})' }] }),
+        sqlDataType('t/bad', {
+          read: (json) => json,
+          params: precisionParams,
+          texts: [{ text: 'numeric({scale})' }],
+        }),
       ).toThrow(/scale/);
     });
 
     it('refuses a placeholder on a type without parameters', () => {
-      expect(() => sqlDataType('t/bad', { texts: [{ text: 'numeric({precision})' }] })).toThrow(
-        InternalError,
-      );
+      expect(() =>
+        sqlDataType('t/bad', { read: (json) => json, texts: [{ text: 'numeric({precision})' }] }),
+      ).toThrow(InternalError);
     });
 
     it('accepts brackets, commas, spaces and placeholders in one text', () => {
       const declared = sqlDataType('t/ok', {
+        read: (json) => json,
         params: precisionParams,
         texts: [{ text: 'time({precision}) with time zone', catalog: true }],
       });
@@ -123,6 +141,7 @@ describe('sqlDataType', () => {
     it('refuses two written texts with the same placeholders', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           texts: [
             { text: 'int4', written: true },
             { text: 'integer', written: true },
@@ -134,6 +153,7 @@ describe('sqlDataType', () => {
     it('refuses two catalog texts with the same placeholders', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           params: precisionParams,
           texts: [
             { text: 'time({precision})', catalog: true },
@@ -145,13 +165,17 @@ describe('sqlDataType', () => {
 
     it('allows one text to be both written and catalog', () => {
       expect(
-        sqlDataType('t/ok', { texts: [{ text: 'text', written: true, catalog: true }] }).sql.texts,
+        sqlDataType('t/ok', {
+          read: (json) => json,
+          texts: [{ text: 'text', written: true, catalog: true }],
+        }).sql.texts,
       ).toHaveLength(1);
     });
 
     it('allows several texts that only claim to share a placeholder set', () => {
       expect(
         sqlDataType('t/ok', {
+          read: (json) => json,
           texts: [{ text: 'int4', written: true }, { text: 'int' }, { text: 'integer' }],
         }).sql.texts,
       ).toHaveLength(3);
@@ -160,6 +184,7 @@ describe('sqlDataType', () => {
     it('counts placeholder sets by name, not by position', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           params: type({ 'a?': 'number', 'b?': 'number' }),
           texts: [
             { text: 'x({a},{b})', written: true },
@@ -174,6 +199,7 @@ describe('sqlDataType', () => {
     it('refuses a display that differs in more than case', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           texts: [{ text: 'geometry', written: true, display: 'Geometry ' }],
         }),
       ).toThrow(InternalError);
@@ -182,6 +208,7 @@ describe('sqlDataType', () => {
     it('refuses a display that writes a placeholder differently', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           params: type({ 'srid?': 'number' }),
           texts: [
             {
@@ -196,6 +223,7 @@ describe('sqlDataType', () => {
 
     it('allows a display that differs in case only', () => {
       const declared = sqlDataType('t/ok', {
+        read: (json) => json,
         params: type({ srid: 'number' }),
         texts: [
           {
@@ -211,17 +239,25 @@ describe('sqlDataType', () => {
 
   describe('render and fromReported go with claimsKind, which excludes texts', () => {
     it('refuses render without claimsKind', () => {
-      expect(() => sqlDataType('t/bad', { render: () => 'x' })).toThrow(InternalError);
+      expect(() => sqlDataType('t/bad', { read: (json) => json, render: () => 'x' })).toThrow(
+        InternalError,
+      );
     });
 
     it('refuses fromReported without claimsKind', () => {
-      expect(() => sqlDataType('t/bad', { fromReported: () => ({}) })).toThrow(/t\/bad/);
+      expect(() =>
+        sqlDataType('t/bad', { read: (json) => json, fromReported: () => ({}) }),
+      ).toThrow(/t\/bad/);
     });
 
     it('refuses texts next to claimsKind', () => {
-      expect(() => sqlDataType('t/bad', { claimsKind: 'enum', texts: [{ text: 'enum' }] })).toThrow(
-        InternalError,
-      );
+      expect(() =>
+        sqlDataType('t/bad', {
+          read: (json) => json,
+          claimsKind: 'enum',
+          texts: [{ text: 'enum' }],
+        }),
+      ).toThrow(InternalError);
     });
 
     it('allows a kind claim with render and fromReported', () => {
@@ -246,6 +282,7 @@ describe('sqlDataType', () => {
     it('refuses a normal form whose parameters only a catalog text takes, naming them', () => {
       expect(() =>
         sqlDataType('t/bad', {
+          read: (json) => json,
           params: lengthParams,
           texts: [
             { text: 'bit', written: true },
@@ -258,6 +295,7 @@ describe('sqlDataType', () => {
 
     it('accepts a normal form that a written text takes', () => {
       const declared = sqlDataType('t/ok', {
+        read: (json) => json,
         params: lengthParams,
         texts: [
           { text: 'bit', written: true },
@@ -269,9 +307,10 @@ describe('sqlDataType', () => {
     });
 
     it('exempts a type that is never written', () => {
-      expect(sqlDataType('t/never-written', { texts: [{ text: 'anyarray' }] }).sql.texts).toEqual([
-        { text: 'anyarray' },
-      ]);
+      expect(
+        sqlDataType('t/never-written', { read: (json) => json, texts: [{ text: 'anyarray' }] }).sql
+          .texts,
+      ).toEqual([{ text: 'anyarray' }]);
     });
   });
 });
@@ -282,6 +321,6 @@ describe('isSqlDataType', () => {
   });
 
   it('does not claim a plain data type', () => {
-    expect(isSqlDataType(dataType('t/plain', {}))).toBe(false);
+    expect(isSqlDataType(dataType('t/plain', { read: (json) => json }))).toBe(false);
   });
 });

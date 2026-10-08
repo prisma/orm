@@ -1,4 +1,10 @@
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
+import {
+  type Codec,
+  type CodecLookup,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -23,18 +29,25 @@ import {
   testRenderCheckExpressions,
 } from './fixtures';
 
+const pgTextType = dataType('pg/text', { read: (json) => json });
+
 const textCodec: Codec = {
   id: 'pg/text@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
+  dataType: pgTextType,
+  toWire: async (v: unknown) => v,
+  fromWire: async (w: unknown) => w,
+  toDataTypeValue: (value) => dataTypeValueFor(pgTextType, {}, value as JsonValue),
+  fromDataTypeValue({ value }) {
+    if (typeof value !== 'string') throw new Error(`expected string, got ${typeof value}`);
+    return value;
   },
 };
 
-const int4Codec: Codec = { ...textCodec, id: 'pg/int4@1' };
+const int4Codec: Codec = {
+  ...textCodec,
+  id: 'pg/int4@1',
+  dataType: dataType('pg/int4', { read: (json) => json }),
+};
 
 const codecsById: Record<string, Codec> = {
   'pg/text@1': textCodec,

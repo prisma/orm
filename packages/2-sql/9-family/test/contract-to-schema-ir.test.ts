@@ -53,8 +53,12 @@ const testRenderer: DefaultRenderer = (def: ColumnDefault, _column, { baseTypeNa
   return `'${json}'`;
 };
 
-const textType = sqlDataType('test/text', { texts: [{ text: 'text', written: true }] });
+const textType = sqlDataType('test/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true }],
+});
 const characterType = sqlDataType('test/character', {
+  read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1' }),
   texts: [
     { text: 'character', written: true },
@@ -62,16 +66,20 @@ const characterType = sqlDataType('test/character', {
   ],
 });
 const vectorType = sqlDataType('test/vector', {
+  read: (json) => json,
   params: type({ length: 'number.integer >= 1' }),
   texts: [{ text: 'vector({length})', written: true }],
 });
 const bareVectorType = sqlDataType('test/bare-vector', {
+  read: (json) => json,
   texts: [{ text: 'vector', written: true }],
 });
 const timestamptzType = sqlDataType('test/timestamptz', {
+  read: (json) => json,
   texts: [{ text: 'timestamptz', written: true }],
 });
 const numericType = sqlDataType('test/numeric', {
+  read: (json) => json,
   params: type({ 'precision?': 'number.integer >= 1', 'scale?': 'number.integer' }),
   texts: [
     { text: 'numeric', written: true },
@@ -82,6 +90,7 @@ const numericType = sqlDataType('test/numeric', {
     params.precision !== undefined && params.scale === undefined ? { ...params, scale: 0 } : params,
 });
 const fixedCharacterType = sqlDataType('test/fixed-character', {
+  read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1' }),
   texts: [
     { text: 'character', written: true },
@@ -90,6 +99,7 @@ const fixedCharacterType = sqlDataType('test/fixed-character', {
   normalize: (params) => (params.length === undefined ? { ...params, length: 1 } : params),
 });
 const enumType = sqlDataType('test/enum', {
+  read: (json) => json,
   params: type({ typeName: 'string > 0' }),
   claimsKind: 'enum',
   render: ({ typeName }) => `"${typeName}"`,
