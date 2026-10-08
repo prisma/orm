@@ -215,7 +215,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "userFollow_followerId_idx_2aa6c62d",
+                  "index": {
+                    "name": "userFollow_followerId_idx_2aa6c62d"
+                  },
                   "source": {
                     "columns": [
                       "followerId"
@@ -232,7 +234,9 @@
                   }
                 },
                 {
-                  "index": "userFollow_followeeId_idx_698b9f79",
+                  "index": {
+                    "name": "userFollow_followeeId_idx_698b9f79"
+                  },
                   "source": {
                     "columns": [
                       "followeeId"
@@ -281,7 +285,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b35ed110cb384901c979c265b948c2328f939deeb387ffd542fe9b8daeb11f81"
+    "storageHash": "44eb208d9eafa0fd38325bc6aa292e11ee59b22d5c3565a4b6507819259d8a2b"
   },
   "capabilities": {
     "postgres": {

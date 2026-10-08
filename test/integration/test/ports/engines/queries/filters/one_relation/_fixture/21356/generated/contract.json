@@ -190,7 +190,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_userId_userId_2_idx_16bf178c",
+                  "index": {
+                    "name": "post_userId_userId_2_idx_16bf178c"
+                  },
                   "source": {
                     "columns": [
                       "userId",
@@ -272,7 +274,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "f588d8549597e76b8a79f8306a5ce007472f34974e90703cb079b909197290f3"
+    "storageHash": "2b121ed9821bedc74be44655e1e1c42294a72ed0440ed567bcf5642fffcc193d"
   },
   "capabilities": {
     "postgres": {

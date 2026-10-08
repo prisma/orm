@@ -203,7 +203,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "PostOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
+                  "index": {
+                    "name": "PostOneToMany_AtAtMap_authorId_AtMap_idx_7189b136"
+                  },
                   "source": {
                     "columns": [
                       "authorId_AtMap"
@@ -252,7 +254,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "PostOptionalOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
+                  "index": {
+                    "name": "PostOptionalOneToMany_AtAtMap_authorId_AtMap_idx_7189b136"
+                  },
                   "source": {
                     "columns": [
                       "authorId_AtMap"
@@ -314,7 +318,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "f059afafdde2a971cf9dae967f33251d0983fb996bcc89c0d6bce9a9a20bf804"
+    "storageHash": "77932c61ada837dac37851fe0f1692c761c307510d3d573a28e6e88e02b8694f"
   },
   "capabilities": {
     "postgres": {

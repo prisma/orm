@@ -246,7 +246,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "usersOnWorkspaces_userId_idx_a489d58a",
+                  "index": {
+                    "name": "usersOnWorkspaces_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -263,7 +265,9 @@
                   }
                 },
                 {
-                  "index": "usersOnWorkspaces_workspaceId_idx_ba65f874",
+                  "index": {
+                    "name": "usersOnWorkspaces_workspaceId_idx_ba65f874"
+                  },
                   "source": {
                     "columns": [
                       "workspaceId"
@@ -334,7 +338,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c24bfa5ec445ffd224ffa184edc073c13e9e34d147d50b6e2d32814763e8cb0a"
+    "storageHash": "72c6b91565e10c02320301fa543c7c5d6897c77434fc3b8eac2d78ac205e9bfc"
   },
   "execution": {
     "executionHash": "8f5777e09fbb878b536a6fab6bd10aa726f75b92dcb937ca5c67446baee3ae1c",

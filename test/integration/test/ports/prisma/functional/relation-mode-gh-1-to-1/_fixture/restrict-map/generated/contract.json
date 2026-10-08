@@ -230,6 +230,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -282,6 +285,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -342,7 +348,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "709669aa2fa366456b33a33c6868298e680b8dccf200bdc18720d7c7b82ca4cc"
+    "storageHash": "0f8b1b53ecac0e7fa7a9b481e6197c715a9076ebdcf763681ff2654d11d57569"
   },
   "capabilities": {
     "postgres": {

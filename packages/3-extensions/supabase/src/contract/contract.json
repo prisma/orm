@@ -5433,7 +5433,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "identities_user_id_idx",
+                  "index": {
+                    "name": "identities_user_id_idx"
+                  },
                   "name": "identities_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -5760,7 +5762,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "mfa_factors_user_id_idx",
+                  "index": {
+                    "name": "mfa_factors_user_id_idx"
+                  },
                   "name": "mfa_factors_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6693,7 +6697,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "saml_providers_sso_provider_id_idx",
+                  "index": {
+                    "name": "saml_providers_sso_provider_id_idx"
+                  },
                   "name": "saml_providers_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6808,7 +6814,9 @@
                   }
                 },
                 {
-                  "index": "saml_relay_states_sso_provider_id_idx",
+                  "index": {
+                    "name": "saml_relay_states_sso_provider_id_idx"
+                  },
                   "name": "saml_relay_states_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6978,7 +6986,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "sessions_oauth_client_id_idx",
+                  "index": {
+                    "name": "sessions_oauth_client_id_idx"
+                  },
                   "name": "sessions_oauth_client_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6997,7 +7007,9 @@
                   }
                 },
                 {
-                  "index": "sessions_user_id_idx",
+                  "index": {
+                    "name": "sessions_user_id_idx"
+                  },
                   "name": "sessions_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7093,7 +7105,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "sso_domains_sso_provider_id_idx",
+                  "index": {
+                    "name": "sso_domains_sso_provider_id_idx"
+                  },
                   "name": "sso_domains_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7554,7 +7568,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "webauthn_challenges_user_id_idx",
+                  "index": {
+                    "name": "webauthn_challenges_user_id_idx"
+                  },
                   "name": "webauthn_challenges_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7711,7 +7727,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "webauthn_credentials_user_id_idx",
+                  "index": {
+                    "name": "webauthn_credentials_user_id_idx"
+                  },
                   "name": "webauthn_credentials_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -8903,7 +8921,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2b6cad05fc9a3beb93462c22df8d5d783e84741be98bb33877647248c5dfccdb",
+    "storageHash": "db161c95d55a0bed58eea541cc32afb2282ef3a556a1a1c250de3ea221ba2ba5",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

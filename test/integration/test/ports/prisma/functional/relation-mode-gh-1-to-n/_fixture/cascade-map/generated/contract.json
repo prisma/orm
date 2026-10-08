@@ -203,7 +203,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "PostOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
+                  "index": {
+                    "name": "PostOneToMany_AtAtMap_authorId_AtMap_idx_7189b136"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -254,7 +256,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "PostOptionalOneToMany_AtAtMap_authorId_AtMap_idx_7189b136",
+                  "index": {
+                    "name": "PostOptionalOneToMany_AtAtMap_authorId_AtMap_idx_7189b136"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -318,7 +322,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "94e96c3c8596085ed05585357e081e29a8169133cd5f95102069de72fe8e450c"
+    "storageHash": "b8ea3331fc270043dd5a21db3b9a597f4c5c1c0ff4d8b503c1254d0b43871c49"
   },
   "capabilities": {
     "postgres": {

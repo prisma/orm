@@ -260,6 +260,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "otherId"
@@ -322,7 +325,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "41df4c00edd9c61ce22111807269e38fb318e6f9f9359686e06f0224d3a65192"
+    "storageHash": "94f78ef964a33b53aa76c676903ddf1888f1528931f070f95cb82a32b569c857"
   },
   "capabilities": {
     "postgres": {

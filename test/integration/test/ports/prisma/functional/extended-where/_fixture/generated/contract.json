@@ -355,7 +355,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_authorId_idx_e47547ed",
+                  "index": {
+                    "name": "post_authorId_idx_e47547ed"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -430,6 +432,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -491,6 +496,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "paymentId"
@@ -532,7 +540,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "88a1e7e429a0007d4f5872a424aade87b3aff42669f443a22f66824ddeb1296d"
+    "storageHash": "7b1527ecfab89426cd309ede31acc231bb818cf5913c50f16488a85394ee6d90"
   },
   "execution": {
     "executionHash": "1cdd7157568725abaf358df639c94171253c7e553b9ba32133162c689fa9d599",

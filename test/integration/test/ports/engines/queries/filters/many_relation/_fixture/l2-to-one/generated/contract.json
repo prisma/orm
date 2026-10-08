@@ -241,6 +241,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -286,7 +289,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_blog_id_idx_aa2309ad",
+                  "index": {
+                    "name": "post_blog_id_idx_aa2309ad"
+                  },
                   "source": {
                     "columns": [
                       "blog_id"
@@ -326,7 +331,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "340054ac766acf9a35a7a54beccae8d0529313ab464e89a81a9d735a39a386a3"
+    "storageHash": "739b1413fe429eb7631b9cf62a777a681578c0d815154f5d9310a668b6250e80"
   },
   "capabilities": {
     "postgres": {

@@ -151,7 +151,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_authorId_idx_e47547ed",
+                  "index": {
+                    "name": "post_authorId_idx_e47547ed"
+                  },
                   "source": {
                     "columns": [
                       "authorId"
@@ -213,7 +215,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "91c3b2fcdca5d4a962f34e4c3cf710ad648717240896fccd5dd82401d542a98e"
+    "storageHash": "9ddd9ab87cf03553f320e2c5e14d9ad170b7317a7d97d53478b997dfcce9e01e"
   },
   "capabilities": {
     "postgres": {

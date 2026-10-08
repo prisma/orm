@@ -219,7 +219,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "oneToMany_testId_idx_10032b02",
+                  "index": {
+                    "name": "oneToMany_testId_idx_10032b02"
+                  },
                   "source": {
                     "columns": [
                       "testId"
@@ -236,6 +238,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "toOneId"
@@ -325,7 +330,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9326401d3fd5ec9d550c5f953cabc0742e9fa773d7d1f9bde8835a5a5163618f"
+    "storageHash": "89aa03d5406ad85d582c293dedf2c55d20b1988799a002f81e4af55014bf1d48"
   },
   "capabilities": {
     "postgres": {

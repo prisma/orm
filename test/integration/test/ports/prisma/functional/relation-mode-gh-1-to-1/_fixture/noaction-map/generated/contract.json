@@ -230,6 +230,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "userId_AtMap"
@@ -280,6 +283,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "userId_AtMap"
@@ -338,7 +344,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b4ca3a76ffff8edbfda80b1cf00b27c0ce389d08360aadf77f168f8c430c8060"
+    "storageHash": "cb5c4cd39f9d773bbac8606cc7aa4a23dc2905369309b711567adfada712ecaa"
   },
   "capabilities": {
     "postgres": {

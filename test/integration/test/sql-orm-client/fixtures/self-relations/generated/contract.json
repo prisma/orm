@@ -394,7 +394,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "people_manager_id_idx_c3dee277",
+                  "index": {
+                    "name": "people_manager_id_idx_c3dee277"
+                  },
                   "source": {
                     "columns": [
                       "manager_id"
@@ -411,6 +413,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": true
+                  },
                   "source": {
                     "columns": [
                       "partner_id"
@@ -477,7 +482,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "person_connections_source_id_idx_b2d19e21",
+                  "index": {
+                    "name": "person_connections_source_id_idx_b2d19e21"
+                  },
                   "source": {
                     "columns": [
                       "source_id"
@@ -494,7 +501,9 @@
                   }
                 },
                 {
-                  "index": "person_connections_target_id_idx_7e52b3aa",
+                  "index": {
+                    "name": "person_connections_target_id_idx_7e52b3aa"
+                  },
                   "source": {
                     "columns": [
                       "target_id"
@@ -552,7 +561,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "person_follows_follower_id_idx_e343d705",
+                  "index": {
+                    "name": "person_follows_follower_id_idx_e343d705"
+                  },
                   "source": {
                     "columns": [
                       "follower_id"
@@ -569,7 +580,9 @@
                   }
                 },
                 {
-                  "index": "person_follows_followee_id_idx_c86a372f",
+                  "index": {
+                    "name": "person_follows_followee_id_idx_c86a372f"
+                  },
                   "source": {
                     "columns": [
                       "followee_id"
@@ -618,7 +631,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "40c9c805aba84d88d83e91caed0d3a64f75880e31524d4daeb71878af1739f52"
+    "storageHash": "d2d1321f3e26b8f801b1e343007dc4beb43f1a4125f826fc4e3d1b8f6169d3a2"
   },
   "capabilities": {
     "postgres": {

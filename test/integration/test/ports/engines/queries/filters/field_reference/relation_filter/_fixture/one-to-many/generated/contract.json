@@ -156,7 +156,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "child_testId_idx_10032b02",
+                  "index": {
+                    "name": "child_testId_idx_10032b02"
+                  },
                   "source": {
                     "columns": [
                       "testId"
@@ -213,7 +215,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "857de8918d4a28120a5dc188a6736f3766b4b8227c695faee889b870bdeb5090"
+    "storageHash": "99d726039c3068aee06ce5c695b980ec466fd034d5eb64ffc947e9a3e45aec27"
   },
   "capabilities": {
     "postgres": {

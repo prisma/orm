@@ -319,7 +319,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "identity_contactId_idx_ec98db2a",
+                  "index": {
+                    "name": "identity_contactId_idx_ec98db2a"
+                  },
                   "source": {
                     "columns": [
                       "contactId"
@@ -378,7 +380,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "subscription_audienceId_idx_7242acd1",
+                  "index": {
+                    "name": "subscription_audienceId_idx_7242acd1"
+                  },
                   "source": {
                     "columns": [
                       "audienceId"
@@ -395,7 +399,9 @@
                   }
                 },
                 {
-                  "index": "subscription_identityId_idx_e29a7785",
+                  "index": {
+                    "name": "subscription_identityId_idx_e29a7785"
+                  },
                   "source": {
                     "columns": [
                       "identityId"
@@ -443,7 +449,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "64beb8cd752307277d6e54265f36eee5406878b9fdf55d40ba8adf327394b3f4"
+    "storageHash": "7de45ac6c94e9c42f833ecb92a36aa1952776562c6d6ad25b146c3dd61dff155"
   },
   "capabilities": {
     "postgres": {

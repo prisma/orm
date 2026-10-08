@@ -303,7 +303,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "comment_postId_idx_a7a72715",
+                  "index": {
+                    "name": "comment_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -374,7 +376,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "postCategory_postId_idx_a7a72715",
+                  "index": {
+                    "name": "postCategory_postId_idx_a7a72715"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -392,7 +396,9 @@
                   }
                 },
                 {
-                  "index": "postCategory_categoryId_idx_15c304f2",
+                  "index": {
+                    "name": "postCategory_categoryId_idx_15c304f2"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -442,7 +448,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d0c5ab139b3dab670f70e33b8994fe62d8f3215674e828b004c9b92845bcb066"
+    "storageHash": "71a5e0c028d667ca33af317bb1556e495d2283015a1670800588d30c025d89e4"
   },
   "capabilities": {
     "postgres": {

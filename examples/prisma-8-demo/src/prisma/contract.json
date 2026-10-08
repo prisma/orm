@@ -851,7 +851,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_userId_idx_a489d58a",
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -907,7 +909,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "post_tag_postId_idx_a7a72715",
+                  "index": {
+                    "name": "post_tag_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -924,7 +928,9 @@
                   }
                 },
                 {
-                  "index": "post_tag_tagId_idx_86854244",
+                  "index": {
+                    "name": "post_tag_tagId_idx_86854244"
+                  },
                   "source": {
                     "columns": [
                       "tagId"
@@ -1043,7 +1049,9 @@
               },
               "foreignKeys": [
                 {
-                  "index": "task_userId_idx_a489d58a",
+                  "index": {
+                    "name": "task_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -1159,7 +1167,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cd8e04ee8f169c956418763efc967187df5b7f52840930da247c923037bfd81b",
+    "storageHash": "c8e3487092b1860d3580b7a836bbb2969a078438fc0183e4e7dc1e00d2b8ad77",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",
