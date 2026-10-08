@@ -1,8 +1,6 @@
-import { type SqlIndexIR, type SqlIndexIRInput, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { type SqlIndexIRInput, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { inferRelations } from '../../src/core/psl-contract-infer/relation-inference';
-
-const isDefaultIndexKind = (index: SqlIndexIR) => index.type === undefined;
 
 function liveIndex(overrides: Partial<SqlIndexIRInput>): SqlIndexIRInput {
   return {
@@ -51,7 +49,6 @@ function relationIndexBeside(post: {
       ['user', 'User'],
       ['post', 'Post'],
     ]),
-    isDefaultIndexKind,
   );
   return relationsByTable.get('post')?.[0]?.index;
 }
@@ -59,6 +56,7 @@ function relationIndexBeside(post: {
 describe('the index argument contract infer writes on a relation', () => {
   it.each([
     ['a default index', { indexes: [liveIndex({})] }],
+    ['a btree index', { indexes: [liveIndex({ type: 'btree' })] }],
     ['a unique constraint', { uniques: [{ columns: ['user_id'] }] }],
     ['the primary key', { primaryKey: { columns: ['user_id'] } }],
     ['a unique index', { indexes: [liveIndex({ unique: true })] }],

@@ -20,10 +20,7 @@ export type {
   PslPrinterOptions,
   RelationField,
 } from '../core/psl-contract-infer/printer-config';
-export type {
-  InferredRelations,
-  IsDefaultIndexKind,
-} from '../core/psl-contract-infer/relation-inference';
+export type { InferredRelations } from '../core/psl-contract-infer/relation-inference';
 export {
   buildChildRelationField,
   inferRelations,

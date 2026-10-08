@@ -20,7 +20,6 @@ import { createPostgresTypeMap } from '../psl-build/postgres-type-map';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
-import { isPostgresDefaultIndexKind } from './default-index-kind';
 import { type InferredColumnDefaults, inferredColumnDefaults } from './infer-default-codec';
 import { buildNativeEnumBlocks, PSL_SCALAR_TYPE_NAMES } from './infer-enum-blocks';
 import {
@@ -317,11 +316,7 @@ export function buildPslDocumentAst(
     ...crossSpaceFieldNamesByTable,
     ...buildFieldNamesByTable(schemaIR.tables),
   ]);
-  const { relationsByTable } = inferRelations(
-    schemaIR.tables,
-    modelNameMap,
-    isPostgresDefaultIndexKind,
-  );
+  const { relationsByTable } = inferRelations(schemaIR.tables, modelNameMap);
 
   const policyEmission = buildIntrospectedPolicyBlocks(
     rlsExtras?.policiesByTable ?? new Map(),

@@ -7,7 +7,6 @@ import type { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
 import { SqlTableIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { postgresError } from '../errors';
-import { isPostgresDefaultIndexKind } from './default-index-kind';
 import {
   type ResolvedColumnFieldName,
   resolveColumnFieldName,
@@ -167,10 +166,7 @@ export function resolveForeignKeys(
             (columnName) => table.columns[columnName]?.nullable ?? false,
           );
           const relationField: RelationField = {
-            ...buildChildRelationField(fieldName, target.modelName, fk, optional, undefined, {
-              table,
-              isDefaultIndexKind: isPostgresDefaultIndexKind,
-            }),
+            ...buildChildRelationField(fieldName, target.modelName, fk, optional, undefined, table),
             typeNamespaceId: target.namespaceId,
             typeContractSpaceId: target.spaceId,
           };
