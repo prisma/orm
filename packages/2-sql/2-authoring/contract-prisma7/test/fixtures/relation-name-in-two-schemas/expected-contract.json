@@ -324,7 +324,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "dc0466a1f5430ce7c4055410414ad51ee7470676e9f56c0df5cd12c6382ecfa2",
+    "storageHash": "716453388eb63b6d2d6906d9a54f5bdbabd38b32689538434def45662a9e719d",
     "namespaces": {
       "one": {
         "id": "one",
@@ -399,7 +399,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
                 },
                 {
                   "source": {
@@ -507,7 +510,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
                 },
                 {
                   "source": {

@@ -100,3 +100,52 @@ export function derivedBackingIndexIsRedundant<
     servingKey(derived, table) !== undefined
   );
 }
+
+type NamedKey = Keyed & { readonly name?: string | undefined };
+
+/** Whether the planner sees `index` as a plain index: its columns, uniqueness and nothing else. */
+function isPlainIndexNode(index: SqlIndexIR): boolean {
+  if (index.columns === undefined) return false;
+  const plain = new SqlIndexIR({
+    naming: { kind: 'exact', name: 'plain index' },
+    columns: index.columns,
+    where: undefined,
+    unique: index.unique,
+    type: undefined,
+    options: undefined,
+    annotations: undefined,
+    dependsOn: undefined,
+    partial: false,
+  });
+  return identicalIndexes(index, plain);
+}
+
+/**
+ * The name of an object of the table that serves lookups on `columns` although the build would keep a derived backing index beside it: a named primary key or unique constraint, or a plain index, whose first columns are `columns`. A source that derives no backing index of its own names it on the relation instead of writing `index: false`.
+ */
+export function leadingBackingObjectName<
+  TIndex,
+  TUnique extends NamedKey,
+  TPrimaryKey extends NamedKey,
+>(
+  columns: readonly string[],
+  table: KeyedTable<TIndex, TUnique, TPrimaryKey> & { readonly nameOf: (index: TIndex) => string },
+): string | undefined {
+  const { primaryKey } = table;
+  if (primaryKey?.name !== undefined && startsWithColumns(primaryKey.columns, columns)) {
+    return primaryKey.name;
+  }
+  const unique = table.uniques.find(
+    (constraint) => constraint.name !== undefined && startsWithColumns(constraint.columns, columns),
+  );
+  if (unique?.name !== undefined) return unique.name;
+  const index = table.indexes.find((candidate) => {
+    const node = table.nodeOf(candidate);
+    return (
+      node.columns !== undefined &&
+      startsWithColumns(node.columns, columns) &&
+      isPlainIndexNode(node)
+    );
+  });
+  return index === undefined ? undefined : table.nameOf(index);
+}

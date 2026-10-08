@@ -89,9 +89,9 @@ describe('the index a foreign key from a Prisma 7 schema states', () => {
     expect(await indexes('explicit-relations', 'Post')).toEqual([undefined, undefined]);
   });
 
-  it('is the index on the second junction column, and absent on the first, which only leads the primary key', async () => {
+  it('is the junction primary key for the first junction column, which leads it, and the index on the second', async () => {
     expect(await indexes('implicit-many-to-many', '_PostToTag')).toEqual([
-      undefined,
+      { primaryKey: true },
       { name: '_PostToTag_B_index' },
     ]);
   });

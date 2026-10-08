@@ -14,6 +14,7 @@ import {
 import {
   derivedBackingIndexIsRedundant,
   indexNodeOf,
+  leadingBackingObjectName,
   startsWithColumns,
 } from './index-equivalence';
 import { lowerAuthoredIndex } from './index-naming';
@@ -109,6 +110,26 @@ export function declaredIndexesServeForeignKey(
   return derivedBackingIndexIsRedundant(columns, {
     indexes: table.indexes,
     nodeOf: indexNodeOf,
+    uniques: table.uniques,
+    primaryKey: table.primaryKey,
+  });
+}
+
+/**
+ * The name to give a relation's `index` argument when the table's declared indexes and keys serve a foreign key on `columns` although the build would keep a derived backing index beside them (see {@link leadingBackingObjectName}).
+ */
+export function declaredBackingObjectName(
+  columns: readonly string[],
+  table: {
+    readonly indexes: readonly IndexInput[];
+    readonly uniques: readonly UniqueConstraintInput[];
+    readonly primaryKey: PrimaryKeyInput | undefined;
+  },
+): string | undefined {
+  return leadingBackingObjectName(columns, {
+    indexes: table.indexes,
+    nodeOf: indexNodeOf,
+    nameOf: (index) => nameOf(index.naming),
     uniques: table.uniques,
     primaryKey: table.primaryKey,
   });
