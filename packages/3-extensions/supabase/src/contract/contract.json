@@ -5558,6 +5558,12 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "session_id",
+                      "authentication_method"
+                    ]
+                  },
                   "name": "mfa_amr_claims_session_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6320,6 +6326,12 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": [
+                      "user_id",
+                      "client_id"
+                    ]
+                  },
                   "name": "oauth_consents_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6448,6 +6460,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "one_time_tokens_user_id_token_type_key"
+                  },
                   "name": "one_time_tokens_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6559,6 +6574,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "refresh_tokens_session_id_revoked_idx"
+                  },
                   "name": "refresh_tokens_session_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -8921,7 +8939,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "db161c95d55a0bed58eea541cc32afb2282ef3a556a1a1c250de3ea221ba2ba5",
+    "storageHash": "cb23216599e58b222c1fe7d880105d8f166c8490935cec5ed539dbe77847d679",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",
