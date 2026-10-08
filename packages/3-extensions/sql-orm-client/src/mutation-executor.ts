@@ -788,21 +788,7 @@ async function applyParentOwnedMutation(
   }
   if (operation.kind === 'connect') {
     for (const criterion of operation.criteria) {
-      const relatedRow = await findFirstByFilters(
-        scope,
-        contract,
-        relation.relatedNamespaceId,
-        relation.relatedModelName,
-        [criterion],
-      );
-      if (!relatedRow) {
-        throw ormError(
-          'ORM.RELATION_ROW_MISSING',
-          `connect() nested mutation for relation "${relation.relationName}" did not find a matching row`,
-          { meta: { kind: 'connect', relation: relation.relationName } },
-        );
-      }
-      relatedRows.push(relatedRow);
+      relatedRows.push(await findRelatedRow(scope, context, relation, 'connect', criterion));
     }
   }
 
@@ -880,17 +866,12 @@ async function applyChildOwnedMutation(
 
   if (operation.kind === 'connect') {
     for (const criterionWhere of operation.criteria) {
-      const setValues: Record<string, unknown> = {};
-      for (const [childColumn, parentValue] of parentValues.entries()) {
-        setValues[childColumn] = parentValue;
-      }
-
       await executeUpdateCount(
         scope,
         contract,
         relation.relatedNamespaceId,
         relation.relatedTableName,
-        setValues,
+        Object.fromEntries(parentValues),
         [criterionWhere],
       );
     }
@@ -1000,12 +981,10 @@ async function applyJunctionOwnedMutation(
   }
 
   for (const criterion of operation.criteria) {
-    const targetPkValues = await resolveJunctionTargetValues(
-      scope,
-      context,
+    const targetPkValues = readJunctionTargetValues(
+      contract,
       relation,
-      'disconnect',
-      criterion,
+      await findRelatedRow(scope, context, relation, 'disconnect', criterion),
     );
     await deleteJunctionLink(scope, context, relation, parentPkValues, targetPkValues);
   }
@@ -1024,12 +1003,10 @@ async function findJunctionConnectTargets(
   const targets: Map<string, unknown>[] = [];
   const seenTargetKeys = new Set<string>();
   for (const criterion of operation.criteria) {
-    const targetValues = await resolveJunctionTargetValues(
-      scope,
-      context,
+    const targetValues = readJunctionTargetValues(
+      context.contract,
       relation,
-      'connect',
-      criterion,
+      await findRelatedRow(scope, context, relation, 'connect', criterion),
     );
     const targetKey = JSON.stringify([...targetValues.entries()]);
     if (seenTargetKeys.has(targetKey)) {
@@ -1067,13 +1044,13 @@ function assertJunctionPayloadWritable(
   );
 }
 
-async function resolveJunctionTargetValues(
+async function findRelatedRow(
   scope: RuntimeScope,
   context: ExecutionContext,
-  relation: JunctionRelationDefinition,
+  relation: RelationDefinitionBase,
   kind: 'connect' | 'disconnect',
   criterion: AnyExpression,
-): Promise<Map<string, unknown>> {
+): Promise<Record<string, unknown>> {
   const relatedRow = await findFirstByFilters(
     scope,
     context.contract,
@@ -1088,7 +1065,7 @@ async function resolveJunctionTargetValues(
       { meta: { kind, relation: relation.relationName } },
     );
   }
-  return readJunctionTargetValues(context.contract, relation, relatedRow);
+  return relatedRow;
 }
 
 function readJunctionTargetValues(
