@@ -471,4 +471,49 @@ model Message {
       index: { name: 'Message_authorHandle_idx_fbae88d6' },
     });
   });
+
+  it('refuses the full-text index named as the foreign key index, at the relation', () => {
+    const diagnostics = diagnosticsOf(`
+model Author {
+  handle   String    @id
+  messages Message[]
+}
+
+model Message {
+  id           Int    @id
+  authorHandle String
+  author       Author @relation(fields: [authorHandle], references: [handle], index: "message_author_search")
+  @@fullTextIndex([authorHandle], name: "message_author_search")
+}
+`);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+        message: expect.stringMatching(
+          /names "message_author_search" as its index, but it is a "fullText" index, a "gin" index whose key is rendered from its options rather than its columns, so it does not serve the foreign key's lookups\. .*drop the index argument/,
+        ),
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 10 }) }),
+      }),
+    ]);
+  });
+
+  it('accepts a gin index named as the foreign key index, as the relation claims', () => {
+    const result = interpret(`
+model Author {
+  handle   String    @id
+  messages Message[]
+}
+
+model Message {
+  id           Int    @id
+  authorHandle String
+  author       Author @relation(fields: [authorHandle], references: [handle], index: "message_author_gin")
+  @@index([authorHandle], type: "gin", name: "message_author_gin")
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const table = (result.value.storage.namespaces['public'] as PostgresSchema).table['Message'];
+    expect(table?.foreignKeys[0]?.index).toEqual({ name: table?.indexes[0]?.name });
+  });
 });

@@ -28,6 +28,7 @@ import {
   model,
   nativeEnum,
   pg,
+  rel,
 } from '../../src/exports/contract-builder';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
@@ -322,6 +323,33 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
       expect.objectContaining({
         code: 'CONTRACT.INDEX_INVALID',
         message: expect.stringMatching(/views.*pg\/int4@1/),
+      }),
+    );
+  });
+
+  it('refuses a fullText index named as the foreign key index of a relation', () => {
+    const Author = model('Author', { fields: { handle: field.column(textColumn).id() } }).sql({
+      table: 'author',
+    });
+    const Message = model('Message', {
+      fields: { id: field.column(intColumn).id(), authorHandle: field.column(textColumn) },
+      relations: { author: rel.belongsTo(Author, { from: 'authorHandle', to: 'handle' }) },
+    }).sql(({ cols, constraints }) => ({
+      table: 'message',
+      indexes: [fullTextIndex(cols.authorHandle, { name: 'message_author_search' })],
+      foreignKeys: [
+        constraints.foreignKey(cols.authorHandle, Author.refs.handle, {
+          index: 'message_author_search',
+        }),
+      ],
+    }));
+
+    expect(() => defineContract({ models: { Author, Message } })).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: expect.stringContaining(
+          'but it is a "fullText" index, a "gin" index whose key is rendered from its options rather than its columns',
+        ),
       }),
     );
   });

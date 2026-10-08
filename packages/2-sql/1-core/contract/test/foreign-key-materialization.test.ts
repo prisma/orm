@@ -1,6 +1,7 @@
 import { asNamespaceId } from '@internal/contract/types';
 import type { AuthoringWarning } from '@internal/framework-components/authoring';
 import { nameOf } from '@internal/sql-schema-ir/naming';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
   defaultForeignKeyIndex,
@@ -9,6 +10,7 @@ import {
 } from '../src/foreign-key-materialization';
 import type { IndexCandidate } from '../src/index-deduplication';
 import { lowerAuthoredIndex } from '../src/index-naming';
+import { defineIndexTypes, type IndexTypeRegistry, indexTypeRegistryOf } from '../src/index-types';
 import type { ForeignKeyIndex } from '../src/ir/foreign-key';
 
 const namespaceId = asNamespaceId('public');
@@ -74,6 +76,7 @@ function materialize(input: {
   readonly declaredIndexes?: readonly IndexCandidate[];
   readonly uniques?: readonly { readonly columns: readonly string[]; readonly name?: string }[];
   readonly primaryKey?: { readonly columns: readonly string[]; readonly name?: string };
+  readonly indexTypes?: Pick<IndexTypeRegistry, 'get'>;
 }) {
   const warnings: AuthoringWarning[] = [];
   return materializeForeignKeysAndIndexes({
@@ -83,6 +86,7 @@ function materialize(input: {
     uniques: input.uniques ?? [],
     primaryKey: input.primaryKey,
     warnings,
+    indexTypes: input.indexTypes,
   });
 }
 
@@ -239,6 +243,61 @@ describe('materializeForeignKeysAndIndexes', () => {
     ).toThrow(
       `The foreign key on table "post" columns (author_id) names "post_title_lower" as its index, but it indexes an expression, not the foreign key's columns, so it does not serve the foreign key's lookups.`,
     );
+  });
+
+  describe('an index of a registered type', () => {
+    const indexTypes = indexTypeRegistryOf({
+      id: 'target',
+      indexTypes: defineIndexTypes()
+        .add('gin', { options: type('object') })
+        .add('search', { options: type('object'), accessMethod: 'gin' }),
+    });
+    const typedIndex = (indexType: string, map: string): IndexCandidate => ({
+      index: lowerAuthoredIndex('post', {
+        columns: ['author_id'],
+        where: undefined,
+        unique: undefined,
+        map,
+        name: undefined,
+        type: indexType,
+        options: undefined,
+      }),
+      namedByUser: true,
+    });
+
+    it('refuses a type the target converts, whose columns are not its key', () => {
+      expect(() =>
+        materialize({
+          foreignKeys: [
+            foreignKey(['author_id'], { constraint: true, index: 'post_author_search' }),
+          ],
+          declaredIndexes: [typedIndex('search', 'post_author_search')],
+          indexTypes,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message:
+            'The foreign key on table "post" columns (author_id) names "post_author_search" as its index, but it is a "search" index, a "gin" index whose key is rendered from its options rather than its columns, so it does not serve the foreign key\'s lookups.',
+          fix: expect.stringContaining('drop the index argument'),
+          meta: expect.objectContaining({
+            reason: 'foreign-key-index-unresolved',
+            index: 'post_author_search',
+          }),
+        }),
+      );
+    });
+
+    it('accepts an access method, which the relation claims serves the lookups', () => {
+      const gin = typedIndex('gin', 'post_author_gin');
+      expect(
+        materialize({
+          foreignKeys: [foreignKey(['author_id'], { constraint: true, index: 'post_author_gin' })],
+          declaredIndexes: [gin],
+          indexTypes,
+        }).foreignKeys,
+      ).toEqual([reference(['author_id'], { name: 'post_author_gin' })]);
+    });
   });
 
   it('accepts an index whose first columns are the foreign key columns', () => {

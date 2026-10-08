@@ -1,3 +1,4 @@
+import { asNamespaceId } from '@internal/contract/types';
 import { StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -85,14 +86,17 @@ describe('fullTextIndexDefinitionOf', () => {
 });
 
 describe('assertFullTextIndexes', () => {
-  const tableWith = (overrides: Record<string, unknown> = {}) =>
+  const tableWith = (
+    overrides: Record<string, unknown> = {},
+    foreignKeys: ConstructorParameters<typeof StorageTable>[0]['foreignKeys'] = [],
+  ) =>
     new StorageTable({
       columns: {
         id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
         title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
         body: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: true },
       },
-      foreignKeys: [],
+      foreignKeys,
       uniques: [],
       indexes: [
         {
@@ -140,6 +144,32 @@ describe('assertFullTextIndexes', () => {
         fix: expect.stringContaining('Re-emit'),
       }),
     );
+  });
+
+  describe('a foreign key', () => {
+    const foreignKeyIndexedBy = (name: string) => ({
+      source: { namespaceId: asNamespaceId('public'), tableName: 'post', columns: ['title'] },
+      target: { namespaceId: asNamespaceId('public'), tableName: 'author', columns: ['handle'] },
+      index: { name },
+    });
+
+    it('is refused when it names the full-text index as its backing index', () => {
+      expect(() =>
+        assertFullTextIndexes(tableWith({}, [foreignKeyIndexedBy('post_search')])),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.INDEX_INVALID',
+          message: 'The foreign key on columns (title) is backed by full-text index "post_search".',
+          why: expect.stringContaining("does not serve the foreign key's lookups"),
+        }),
+      );
+    });
+
+    it('is accepted when it names another index', () => {
+      expect(() =>
+        assertFullTextIndexes(tableWith({}, [foreignKeyIndexedBy('post_title_idx')])),
+      ).not.toThrow();
+    });
   });
 
   it('refuses a column that is not text when it is given the codec traits', () => {

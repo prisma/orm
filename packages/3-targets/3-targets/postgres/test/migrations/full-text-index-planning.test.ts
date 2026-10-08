@@ -370,4 +370,33 @@ describe('a GIN index over to_tsvector, authored in PSL', () => {
     expect(node.table).toBe('Message');
     expect(node.name.startsWith('message_text_search')).toBe(true);
   });
+
+  it('keeps a full-text index and a hand-written gin index that render the same SQL', async () => {
+    const nodes = await plannedCreateIndexNodes(`
+model Message {
+  id   Int    @id
+  text String
+  @@fullTextIndex([text], name: "message_text_search")
+  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_by_hand")
+}
+`);
+    expect(
+      nodes.map((node) => ({
+        prefix: node.name.slice(0, node.name.lastIndexOf('_')),
+        type: node.type,
+        elements: node.elements,
+      })),
+    ).toEqual([
+      {
+        prefix: 'message_text_by_hand',
+        type: 'gin',
+        elements: { expression: opaqueSql(`to_tsvector('english', "text")`) },
+      },
+      {
+        prefix: 'message_text_search',
+        type: 'gin',
+        elements: { expression: opaqueSql(`to_tsvector('english', "text")`) },
+      },
+    ]);
+  });
 });

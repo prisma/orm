@@ -1528,6 +1528,7 @@ export function buildSqlContractFromDefinition(
         uniques,
         primaryKey,
         warnings: authoringWarnings,
+        indexTypes: indexTypeRegistry,
       });
 
       const tableInput: StorageTableInput = {

@@ -150,11 +150,12 @@ export function fullTextIndexDefinitionOf(
 
 /**
  * Refuses a table's full-text index the contract cannot carry: invalid options, a broken rule of
- * {@link fullTextIndexProblems}, or `columns` that are not the fields of its weight groups, in order.
- * The text-columns rule is checked only when `traitsOf` is given.
+ * {@link fullTextIndexProblems}, `columns` that are not the fields of its weight groups, in order,
+ * or a foreign key that names it as its backing index. The text-columns rule is checked only when
+ * `traitsOf` is given.
  */
 export function assertFullTextIndexes(
-  table: Pick<StorageTable, 'columns' | 'indexes'>,
+  table: Pick<StorageTable, 'columns' | 'indexes' | 'foreignKeys'>,
   traitsOf?: (codecId: string) => readonly string[] | undefined,
 ): void {
   const codecs =
@@ -162,6 +163,21 @@ export function assertFullTextIndexes(
       ? undefined
       : { codecIdOf: (column: string) => table.columns[column]?.codecId, traitsOf };
   for (const index of table.indexes) assertFullTextIndex(index, codecs);
+  for (const foreignKey of table.foreignKeys) {
+    const backing = foreignKey.index;
+    if (backing === undefined || !('name' in backing)) continue;
+    const index = table.indexes.find((candidate) => candidate.name === backing.name);
+    if (index?.type !== FULL_TEXT_INDEX_TYPE) continue;
+    throw postgresError(
+      'CONTRACT.INDEX_INVALID',
+      `The foreign key on columns (${foreignKey.source.columns.join(', ')}) is backed by full-text index "${index.name}".`,
+      {
+        why: "A full-text index is a gin index over a search document rendered from its weight groups, not over its columns, so it does not serve the foreign key's lookups.",
+        fix: 'Re-emit the contract from its source, where a relation cannot name a full-text index as its index.',
+        meta: { index: index.name, columns: foreignKey.source.columns },
+      },
+    );
+  }
 }
 
 function assertFullTextIndex(
