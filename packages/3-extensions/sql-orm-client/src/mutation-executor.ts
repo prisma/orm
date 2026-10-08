@@ -859,40 +859,18 @@ async function applyParentOwnedMutation(
   }
 
   for (const relatedRow of relatedRows) {
-    copyRelatedValuesToParent(
-      contract,
-      parentNamespaceId,
-      parentModelName,
-      relation,
-      scalarData,
-      relatedRow,
-    );
-  }
-}
-
-function copyRelatedValuesToParent(
-  contract: Contract<SqlStorage>,
-  parentNamespaceId: string,
-  parentModelName: string,
-  relation: RelationDefinition,
-  scalarData: Record<string, unknown>,
-  relatedRow: Record<string, unknown>,
-): void {
-  for (let i = 0; i < relation.localColumns.length; i++) {
-    const localColumn = relation.localColumns[i];
-    const targetColumn = relation.targetColumns[i];
-    if (!localColumn || !targetColumn) {
-      continue;
-    }
-
-    const parentFieldName = toFieldName(contract, parentNamespaceId, parentModelName, localColumn);
-    const childFieldName = toFieldName(
+    const linkValues = readLinkValues(
       contract,
       relation.relatedNamespaceId,
       relation.relatedModelName,
-      targetColumn,
+      relatedRow,
+      'target',
+      relation.targetColumns,
+      relation.localColumns,
     );
-    scalarData[parentFieldName] = relatedRow[childFieldName];
+    for (const [localColumn, value] of linkValues) {
+      scalarData[toFieldName(contract, parentNamespaceId, parentModelName, localColumn)] = value;
+    }
   }
 }
 
@@ -906,12 +884,14 @@ async function applyChildOwnedMutation(
   operation: ResolvedOperation,
 ): Promise<void> {
   const contract = context.contract;
-  const parentValues = readParentColumnValues(
+  const parentValues = readLinkValues(
     contract,
     parentNamespaceId,
     parentModelName,
-    relation,
     parentRow,
+    'parent',
+    relation.localColumns,
+    relation.targetColumns,
   );
 
   if (operation.kind === 'updateAll' || operation.kind === 'deleteAll') {
@@ -1045,12 +1025,14 @@ async function applyJunctionOwnedMutation(
   operation: ResolvedOperation,
 ): Promise<void> {
   const contract = context.contract;
-  const parentPkValues = readJunctionParentValues(
+  const parentPkValues = readLinkValues(
     contract,
     parentNamespaceId,
     parentModelName,
-    relation,
     parentRow,
+    'parent',
+    relation.localColumns,
+    relation.through.parentColumns,
   );
 
   if (operation.kind === 'updateAll' || operation.kind === 'deleteAll') {
@@ -1179,67 +1161,20 @@ async function resolveJunctionTargetValues(
   return readJunctionTargetValues(context.contract, relation, relatedRow);
 }
 
-function readJunctionParentValues(
-  contract: Contract<SqlStorage>,
-  parentNamespaceId: string,
-  parentModelName: string,
-  relation: JunctionRelationDefinition,
-  parentRow: Record<string, unknown>,
-): Map<string, unknown> {
-  const values = new Map<string, unknown>();
-
-  for (let i = 0; i < relation.through.parentColumns.length; i++) {
-    const junctionColumn = relation.through.parentColumns[i];
-    const parentColumn = relation.localColumns[i];
-    if (junctionColumn === undefined || parentColumn === undefined) {
-      continue;
-    }
-
-    const parentFieldName = toFieldName(contract, parentNamespaceId, parentModelName, parentColumn);
-    const parentValue = parentRow[parentFieldName];
-    if (parentValue === undefined) {
-      throw new InternalError(
-        `Nested mutation requires parent field "${parentFieldName}" to be present in returned row`,
-      );
-    }
-
-    values.set(junctionColumn, parentValue);
-  }
-
-  return values;
-}
-
 function readJunctionTargetValues(
   contract: Contract<SqlStorage>,
   relation: JunctionRelationDefinition,
   relatedRow: Record<string, unknown>,
 ): Map<string, unknown> {
-  const values = new Map<string, unknown>();
-
-  for (let i = 0; i < relation.through.childColumns.length; i++) {
-    const junctionColumn = relation.through.childColumns[i];
-    const targetColumn = relation.through.targetColumns[i];
-    if (junctionColumn === undefined || targetColumn === undefined) {
-      continue;
-    }
-
-    const targetFieldName = toFieldName(
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedModelName,
-      targetColumn,
-    );
-    const targetValue = relatedRow[targetFieldName];
-    if (targetValue === undefined) {
-      throw new InternalError(
-        `Nested mutation requires target field "${targetFieldName}" to be present in returned row`,
-      );
-    }
-
-    values.set(junctionColumn, targetValue);
-  }
-
-  return values;
+  return readLinkValues(
+    contract,
+    relation.relatedNamespaceId,
+    relation.relatedModelName,
+    relatedRow,
+    'target',
+    relation.through.targetColumns,
+    relation.through.childColumns,
+  );
 }
 
 function assertJunctionMetadataLength(
@@ -1380,33 +1315,30 @@ async function deleteJunctionLink(
   await scope.execute(compiled);
 }
 
-function readParentColumnValues(
+function readLinkValues(
   contract: Contract<SqlStorage>,
-  parentNamespaceId: string,
-  parentModelName: string,
-  relation: RelationDefinition,
-  parentRow: Record<string, unknown>,
+  namespaceId: string,
+  modelName: string,
+  row: Record<string, unknown>,
+  rowRole: 'parent' | 'target',
+  sourceColumns: readonly string[],
+  linkColumns: readonly string[],
 ): Map<string, unknown> {
   const values = new Map<string, unknown>();
-
-  for (let i = 0; i < relation.localColumns.length; i++) {
-    const localColumn = relation.localColumns[i];
-    const targetColumn = relation.targetColumns[i];
-    if (!localColumn || !targetColumn) {
-      continue;
+  sourceColumns.forEach((sourceColumn, index) => {
+    const linkColumn = linkColumns[index];
+    if (!sourceColumn || !linkColumn) {
+      return;
     }
-
-    const parentFieldName = toFieldName(contract, parentNamespaceId, parentModelName, localColumn);
-    const parentValue = parentRow[parentFieldName];
-    if (parentValue === undefined) {
+    const fieldName = toFieldName(contract, namespaceId, modelName, sourceColumn);
+    const value = row[fieldName];
+    if (value === undefined) {
       throw new InternalError(
-        `Nested mutation requires parent field "${parentFieldName}" to be present in returned row`,
+        `Nested mutation requires ${rowRole} field "${fieldName}" to be present in returned row`,
       );
     }
-
-    values.set(targetColumn, parentValue);
-  }
-
+    values.set(linkColumn, value);
+  });
   return values;
 }
 
