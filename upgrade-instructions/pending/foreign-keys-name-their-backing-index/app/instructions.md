@@ -2,7 +2,7 @@
 changes:
   - id: foreign-keys-name-their-backing-index
     summary: |
-      Each foreign key in `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }` for an index, `{ "primaryKey": true }` or `{ "unique": true }` for a primary key or unique constraint whose first columns are its columns, absent for `index: false`. Every SQL contract with a foreign key gets a new storage hash, and so does the Supabase extension's contract space. Re-emit the contract. When `prisma migration plan` then finds nothing to change in the database, follow its advice: write a migration with no operations with `prisma migration new --from <hash>`, or run `prisma db sign` on a database you manage with `prisma db init` or `prisma db update`.
+      Each foreign key in `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }` for an index, `{ "primaryKey": true }` for the primary key, or `{ "unique": ["<column>", …] }` for a unique constraint by its columns, each one whose first columns are its columns, absent for `index: false`. Every SQL contract with a foreign key gets a new storage hash, and so does the Supabase extension's contract space. Re-emit the contract. When `prisma migration plan` then finds nothing to change in the database, follow its advice: write a migration with no operations with `prisma migration new --from <hash>`, or run `prisma db sign` on a database you manage with `prisma db init` or `prisma db update`.
     detection:
       glob: "**/contract.json"
       matches:
@@ -37,10 +37,15 @@ changes:
 A foreign key in `contract.json` now says what serves its lookups:
 
 ```jsonc
+// table "Post": a relation on authorId, beside a partial index on the same column
 "foreignKeys": [
-  { "name": "post_author_id_fkey", "source": { "columns": ["author_id"] }, "target": { … },
-    "index": { "name": "post_author_id_idx_4d0f3a1c" } },
-  { "source": { "columns": ["user_id"] }, "target": { … }, "index": { "unique": true } }
+  { "source": { "columns": ["authorId"], "namespaceId": "public", "tableName": "Post" },
+    "target": { "columns": ["id"], "namespaceId": "public", "tableName": "User" },
+    "index": { "name": "Post_authorId_idx_e47547ed" } }
+]
+// table "Profile": a relation on userId, which is @unique
+"foreignKeys": [
+  { "source": { "columns": ["userId"], … }, "target": { … }, "index": { "unique": ["userId"] } }
 ]
 ```
 
@@ -60,15 +65,16 @@ Deleting or updating a referenced row looks up the referencing rows by the forei
 
 ```prisma
 model Post {
-  id       Int  @id
-  authorId Int
-  author   User @relation(fields: [authorId], references: [id])
+  id         Int       @id
+  authorId   Int
+  archivedAt DateTime?
+  author     User      @relation(fields: [authorId], references: [id])
 
-  @@index([authorId], where: "archived_at IS NULL", name: "post_author_live")
+  @@index([authorId], where: "\"archivedAt\" IS NULL", name: "post_author_live")
 }
 ```
 
-The next `prisma migration plan` creates `post_authorId_idx_…`. If that is what you want, apply it. Otherwise choose one:
+The next `prisma migration plan` creates `Post_authorId_idx_e47547ed`. If that is what you want, apply it. Otherwise choose one:
 
 - To use your index, name it on the relation. No backing index is derived:
 

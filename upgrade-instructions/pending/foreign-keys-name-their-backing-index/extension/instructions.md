@@ -2,7 +2,7 @@
 changes:
   - id: bundled-contract-foreign-keys-name-their-backing-index
     summary: |
-      Each foreign key in a SQL `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }`, `{ "primaryKey": true }` or `{ "unique": true }`, absent for `index: false`. A bundled contract space with a foreign key gets a new storage hash. Regenerate the extension's bundled `contract.json` and `contract.d.ts` with its existing emission command.
+      Each foreign key in a SQL `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }`, `{ "primaryKey": true }` or `{ "unique": ["<column>", …] }`, absent for `index: false`. A bundled contract space with a foreign key gets a new storage hash. Regenerate the extension's bundled `contract.json` and `contract.d.ts` with its existing emission command.
     detection:
       glob: "**/contract.json"
       matches:
@@ -54,4 +54,4 @@ flushAuthoringWarnings(warnings);
 
 `namedByUser` says whether the source gave the index a `name` or `map`. An index not named by the user is left out when it duplicates another, and foreign keys that pointed at it then name the one that stays. `flushAuthoringWarnings` comes from `@internal/framework-components/authoring`.
 
-Code that called `backingIndexColumnKeys()` or `isBackedByColumnKeys()` to decide whether a foreign key needs a backing index reads the stored foreign key's `index` instead: `{ name }` names an index of the table, `{ primaryKey: true }` and `{ unique: true }` say a primary key or unique constraint whose first columns are the foreign key's columns serves it, and an absent `index` says nothing does. To ask the question of a live table, call `derivedBackingIndexIsRedundant(columns, { indexes, nodeOf, uniques, primaryKey })`, as `contract infer` does.
+Code that called `backingIndexColumnKeys()` or `isBackedByColumnKeys()` to decide whether a foreign key needs a backing index reads the stored foreign key's `index` instead: `{ name }` names an index of the table, `{ primaryKey: true }` says the primary key serves it, and `{ unique: [columns] }` names the unique constraint with those columns; the first columns of each are the foreign key's, and an absent `index` says nothing does. To ask the question of a live table, call `derivedBackingIndexIsRedundant(columns, { indexes, nodeOf, uniques, primaryKey })`, as `contract infer` does.
