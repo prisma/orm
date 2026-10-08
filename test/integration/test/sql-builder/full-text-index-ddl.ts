@@ -48,7 +48,7 @@ export async function plannedExpressionIndexes(
       annotationNamespace: 'pg',
       renderDefault: postgresRenderDefault,
       codecLookup: fixtureStack.codecLookup,
-      dataTypeLookup: fixtureStack.dataTypeLookup,
+      dataTypeLookup: fixtureStack.dataTypes.lookup,
     },
   );
   const indexes = root.namespaces['public']?.tables[table]?.indexes ?? [];

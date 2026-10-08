@@ -432,3 +432,43 @@ describe('@@fullTextIndex with map:', () => {
     expect(exactNameWarnings()).toEqual([]);
   });
 });
+
+describe('a relation whose column a full-text index covers', () => {
+  it('still gets its own backing index, which the foreign key names', () => {
+    const result = interpret(`
+model Author {
+  handle   String    @id
+  messages Message[]
+}
+
+model Message {
+  id           Int    @id
+  authorHandle String
+  author       Author @relation(fields: [authorHandle], references: [handle])
+  @@fullTextIndex([authorHandle], name: "message_author_search")
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const table = (result.value.storage.namespaces['public'] as PostgresSchema).table['Message'];
+    expect({ indexes: table?.indexes, index: table?.foreignKeys[0]?.index }).toEqual({
+      indexes: [
+        {
+          columns: ['authorHandle'],
+          name: 'message_author_search_8b1b77f7',
+          prefix: 'message_author_search',
+          type: 'fullText',
+          options: { weightGroups: [['authorHandle']], language: 'english' },
+          unique: false,
+        },
+        {
+          columns: ['authorHandle'],
+          name: 'Message_authorHandle_idx_fbae88d6',
+          prefix: 'Message_authorHandle_idx',
+          unique: false,
+        },
+      ],
+      index: { name: 'Message_authorHandle_idx_fbae88d6' },
+    });
+  });
+});

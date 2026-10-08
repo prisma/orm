@@ -9,6 +9,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -209,6 +210,8 @@ describe('a single-field index authored before full-text indexes were stored as 
       }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: previous,
+      origin: planOriginOf(previous),
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -245,6 +248,8 @@ describe('a weighted full-text index over a column whose nullability changes', (
       }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: before,
+      origin: planOriginOf(before),
+      statements: [],
       frameworkComponents: postgresTypeComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -287,6 +292,8 @@ async function plannedLabels(beforeSchema: string, afterSchema: string): Promise
     }),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: before,
+    origin: planOriginOf(before),
+    statements: [],
     frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',

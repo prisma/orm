@@ -1,6 +1,6 @@
 import { SqlIndexIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
-import { leadingBackingObjectName } from '../src/index-equivalence';
+import { identicalIndexes, leadingBackingObjectName } from '../src/index-equivalence';
 
 function liveIndex(
   name: string,
@@ -10,6 +10,7 @@ function liveIndex(
     readonly where?: string;
     readonly unique?: boolean;
     readonly type?: string;
+    readonly options?: Record<string, unknown>;
   },
 ): SqlIndexIR {
   return new SqlIndexIR({
@@ -20,7 +21,7 @@ function liveIndex(
     where: shape.where,
     unique: shape.unique ?? false,
     type: shape.type,
-    options: undefined,
+    options: shape.options,
     annotations: undefined,
     dependsOn: undefined,
     partial: shape.where !== undefined,
@@ -94,5 +95,40 @@ describe('leadingBackingObjectName', () => {
     ],
   ] as const)('names nothing for %s', (_label, table) => {
     expect(nameFor(table)).toBeUndefined();
+  });
+});
+
+describe('identicalIndexes for full-text indexes', () => {
+  const fullText = (name: string, weightGroups: readonly (readonly string[])[], language: string) =>
+    liveIndex(name, {
+      columns: weightGroups.flat(),
+      type: 'fullText',
+      options: { weightGroups, language },
+    });
+
+  it('sees two full-text indexes with the same weight groups and language as identical', () => {
+    expect(
+      identicalIndexes(
+        fullText('post_search', [['title'], ['body']], 'english'),
+        fullText('post_search_again', [['title'], ['body']], 'english'),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['grouped differently', fullText('post_search_grouped', [['title', 'body']], 'english')],
+    ['in another language', fullText('post_search_german', [['title'], ['body']], 'german')],
+    [
+      'a plain gin index over a different expression',
+      liveIndex('post_title_trgm', { expression: 'title gin_trgm_ops', type: 'gin' }),
+    ],
+    [
+      'a plain gin index on the same columns',
+      liveIndex('post_gin', { columns: ['title', 'body'], type: 'gin' }),
+    ],
+  ] as const)('tells a full-text index apart from one %s', (_label, other) => {
+    expect(identicalIndexes(fullText('post_search', [['title'], ['body']], 'english'), other)).toBe(
+      false,
+    );
   });
 });
