@@ -102,6 +102,38 @@ changes:
       glob: "**/prisma.config.{ts,mts,cts,js,mjs}"
       matches:
         - '\bprisma7Schema\s*\('
+  - id: foreign-keys-name-their-backing-index
+    summary: |
+      Each foreign key in `contract.json` now states what backs it in a new `index` field: `{ "name": "<index>" }` for an index, `{ "primaryKey": true }` for the primary key, or `{ "unique": ["<column>", …] }` for a unique constraint by its columns, each one whose first columns are its columns, absent for `index: false`. Every SQL contract with a foreign key gets a new storage hash, and so does the Supabase extension's contract space. Re-emit the contract. When `prisma migration plan` then finds nothing to change in the database, follow its advice: write a migration with no operations with `prisma migration new --from <hash>`, or run `prisma db sign` on a database you manage with `prisma db init` or `prisma db update`.
+    detection:
+      glob: "**/contract.json"
+      matches:
+        - '"foreignKeys"\s*:\s*\[\s*\{'
+  - id: partial-or-typed-index-no-longer-backs-a-foreign-key
+    summary: |
+      A relation used to get no backing index when its table had any index on the same columns, including a partial index (`where:`), an index with a non-default `type` such as `hash` or `gin`, or one with `options`. Such an index does not serve every lookup a foreign key needs, so the relation now gets its own backing index, and `prisma migration plan` creates it. An index with `type: "btree"` and no options or predicate still counts as the same index. To keep the database as it is, point the relation at your index with `index: "<name>"`, or opt out with `index: false`.
+    detection:
+      glob: "**/*.{prisma,ts,mts,cts}"
+      matches:
+        - '@@index\([^)]*\b(?:where|type|options)\s*:'
+        - 'constraints\.index\([^)]*\b(?:where|type|options)\s*:'
+  - id: unnamed-index-on-unique-columns-left-out
+    summary: |
+      An `@@index` without `name` or `map`, with no `where`, `options` or non-default `type`, whose columns are exactly those of a unique constraint, a unique index or the primary key, is now left out of the contract, because the unique one already serves its lookups. `prisma migration plan` drops it from the database. To keep it, give it a `name` or `map`; `prisma contract emit` then warns that it duplicates the unique one.
+    detection:
+      glob: "**/*.{prisma,ts,mts,cts}"
+      matches:
+        - '@@index\(\s*\[[^\]]*\]\s*\)'
+        - 'constraints\.index\(\s*\[[^\]]*\]\s*\)'
+  - id: infer-and-print-write-the-relation-index-argument
+    summary: |
+      `prisma contract infer` now writes `index: false` on a relation whose only index on its columns is partial, has a non-default type (such as `hash` or `gin`) or has options, where it used to write nothing, and `index: "<name>"` on a relation whose columns lead a named key or a plain index with more columns, where it used to write `index: false`. `prisma contract print` writes `index: "<name>"` on a relation backed by such an index, nothing on a relation backed by its default index or a key, and `index: false` only where nothing backs the foreign key. Re-running either command can change the `@relation` lines it writes; review the diff.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '@relation\([^)]*\bindex\s*:'
+  - id: mongo-index-sort-function
+    summary: Replace MongoDB PSL field sort modifiers with sort(field, direction).
   - id: non-data-drops-are-widening
     summary: |
       Dropping an index, a unique or foreign-key constraint, a check, a row-level-security policy, a default or a native enum type, and disabling row-level security, are now `widening` operations on Postgres and SQLite. They no longer count as data loss, so `prisma db update` and `prisma migration plan` do not ask about them as data loss; `db update` asks about the row-level-security changes as access changes instead. `--confirm` no longer consents to anything; see `db-update-confirm-no-longer-consents` and `migration-plan-refuses-data-loss`.
@@ -463,6 +495,81 @@ For each project whose `prisma.config.ts` uses `prisma7Schema(...)`, run `prisma
 2. **Prisma 8 owns the migrations.** Run `prisma migration plan --name constraint-names` and apply it with `prisma db migrate --advance-ref db`. The migration renames each affected constraint from the name Prisma 8 derived to the name Prisma 7 chose. On a database Prisma 7 built, the constraints already have those names, so each rename is skipped; on a database Prisma 8 built from the migrations, they are renamed.
 
 3. **Prisma 8 created the database with `prisma db init` or `prisma db update`**, as for a test or preview database. Run `prisma db update`. It reads the constraint names from the database and renames each one whose name differs from the contract's, for example `_PostToTag_pkey` to `_PostToTag_AB_pkey`.
+
+## `foreign-keys-name-their-backing-index`
+
+A foreign key in `contract.json` now says what serves its lookups:
+
+```jsonc
+// table "Post": a relation on authorId, beside a partial index on the same column
+"foreignKeys": [
+  { "source": { "columns": ["authorId"], "namespaceId": "public", "tableName": "Post" },
+    "target": { "columns": ["id"], "namespaceId": "public", "tableName": "User" },
+    "index": { "name": "Post_authorId_idx_e47547ed" } }
+]
+// table "Profile": a relation on userId, which is @unique
+"foreignKeys": [
+  { "source": { "columns": ["userId"], … }, "target": { … }, "index": { "unique": ["userId"] } }
+]
+```
+
+A relation still gets its own backing index unless it says `index: false`. When the table already declares an identical index, or a unique constraint, unique index or primary key on the same columns, the contract keeps one index and the foreign key names it, or names the key by kind. The field is absent only with `index: false`. A `contract.json` from Prisma Next 0.15, which stored `"index": true` or `false` on each foreign key, still loads; the boolean is read as absent.
+
+1. Run `prisma contract emit`. Every contract with a foreign key gets a new storage hash.
+2. Run `prisma migration plan`. If nothing else in this upgrade changes your database, it reports that the contract changed but nothing in the database did. Do what it says:
+   - If you deploy with migrations, run the `prisma migration new --from <hash>` command it prints, which writes a migration with no operations, then `prisma db migrate`.
+   - If you manage a database with `prisma db init` or `prisma db update`, run `prisma db sign` against it.
+3. If your project composes the Supabase extension, its contract space also gets a new storage hash: run `prisma db sign` against each database signed with the previous one.
+
+`prisma contract emit` now also warns when two indexes of a table that both carry a `name` or `map` are identical (`PN_INDEX_DUPLICATE`), or when a named plain index has the same columns as a unique constraint, unique index or the primary key (`PN_INDEX_REDUNDANT`). The contract keeps both indexes; remove the one you do not need. Two identical indexes both named with `name:` are refused, because the planner could not tell their wire names apart: remove one, or name one with `map:`.
+
+## `partial-or-typed-index-no-longer-backs-a-foreign-key`
+
+Deleting or updating a referenced row looks up the referencing rows by the foreign key columns. A partial index covers only the rows its predicate selects, and an index with another access method or options may not serve that lookup, so the relation now gets a plain backing index beside it. For example:
+
+```prisma
+model Post {
+  id         Int       @id
+  authorId   Int
+  archivedAt DateTime?
+  author     User      @relation(fields: [authorId], references: [id])
+
+  @@index([authorId], where: "\"archivedAt\" IS NULL", name: "post_author_live")
+}
+```
+
+The next `prisma migration plan` creates `Post_authorId_idx_e47547ed`. If that is what you want, apply it. Otherwise choose one:
+
+- To use your index, name it on the relation. No backing index is derived:
+
+  ```prisma
+  author User @relation(fields: [authorId], references: [id], index: "post_author_live")
+  ```
+
+  In a TypeScript contract, pass the same name: `rel.belongsTo(User, { from: 'authorId', to: 'id' }).sql({ fk: { index: 'post_author_live' } })` or `constraints.foreignKey(cols.authorId, User.refs.id, { index: 'post_author_live' })`.
+- To have no backing index at all, write `index: false` on the relation, or `fk: { index: false }` in TypeScript.
+
+The name is the `name` or `map` you gave the index, unique constraint or primary key, or an index's stored name from `contract.json`. The default name of an index you did not name does not count. `prisma contract emit` refuses a name that the table does not have, that an index and a key share, or whose object's first columns are not the foreign key's columns.
+
+## `unnamed-index-on-unique-columns-left-out`
+
+For example, with `email String @unique`, an `@@index([email])` is left out of the contract, and `prisma migration plan` drops the index from the database. The unique constraint keeps serving the lookups. If you want to keep the index, write `@@index([email], name: "user_email_lookup")`; `prisma contract emit` then warns with `PN_INDEX_REDUNDANT` on each emit.
+
+## `infer-and-print-write-the-relation-index-argument`
+
+Nothing to change in your source. If you re-run `prisma contract infer` or `prisma contract print`, expect `@relation` lines to differ from what an earlier release wrote: `index: false` beside a hash, gin, optioned or partial index, `index: "<name>"` for a composite index or named key whose first columns are the relation's, and `index: "<name>"` or no `index` argument where `contract print` used to write `index: false` on every relation. Emitting either result gives the same contract.
+
+A contract emitted from a Prisma 7 schema (`prisma7Schema(...)`) also states what backs each foreign key where the model's own indexes or keys serve it, such as the unique index of a one-to-one relation or the primary key of an implicit many-to-many junction. Prisma 7 created no other backing index, and the contract still adds none; only the storage hash changes, which `foreign-keys-name-their-backing-index` covers.
+
+## `mongo-index-sort-function`
+
+In MongoDB PSL schemas, replace `field(sort: Asc)` with `sort(field, Asc)` and `field(sort: Desc)` with `sort(field, Desc)` in `@@index`, `@@unique`, and `@@textIndex` field lists. The old syntax is no longer accepted.
+
+For example, change `@@index([createdAt(sort: Desc), authorId])` to `@@index([sort(createdAt, Desc), authorId])`. Keep field order, direction, and the attribute's other arguments unchanged. Use the model field name, not its mapped database name.
+
+Apply this translation to current schema files, PSL schema snapshots stored in migration directories, and documentation examples. When documentation describes the old spelling as a "per-field form", call the new spelling a "function form" instead.
+
+Plain field references and `wildcard()` / `wildcard(field)` remain unchanged. There is no null-ordering option. Do not change SQL schemas, generated contracts, or migration operations: this is a MongoDB PSL syntax change, not a database index change.
 
 ## `non-data-drops-are-widening`
 

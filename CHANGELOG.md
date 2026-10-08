@@ -87,15 +87,38 @@ The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm
 
 - **The CHECK constraint on an enum list column compares in the column's own type.** The constraint's expression and name change, so re-emit and apply a migration that replaces it. See `enum-list-check-compares-in-column-type` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30628](https://github.com/prisma/orm/pull/30628))
 
+- **Each foreign key in `contract.json` names the index that backs it.** A new `index` field on each foreign key says whether an index, the primary key or a unique constraint serves its lookups, so every SQL contract with a foreign key gets a new storage hash. Re-emit, then follow `migration plan`'s advice: write an empty migration with `prisma migration new --from <hash>`, or run `prisma db sign` on a database you manage with `db init` or `db update`. Two related changes can alter your database: a partial index, or an index with a non-default `type` or `options`, no longer counts as a relation's backing index, so `migration plan` creates one beside it; and an unnamed `@@index` on exactly the columns of a unique constraint or the primary key is left out of the contract, so `migration plan` drops it. To keep the database as it is, write `index: "<name>"` on the relation, or give the plain index a `name`. See `foreign-keys-name-their-backing-index`, `partial-or-typed-index-no-longer-backs-a-foreign-key` and `unnamed-index-on-unique-columns-left-out` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30561](https://github.com/prisma/orm/pull/30561))
+
+  ```prisma
+  author User @relation(fields: [authorId], references: [id], index: "post_author_live")
+  ```
+
+- **MongoDB PSL writes an index's sort direction as `sort(field, direction)`.** The old `field(sort: Desc)` form is no longer accepted in `@@index`, `@@unique` and `@@textIndex`. The database index does not change. See `mongo-index-sort-function` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30636](https://github.com/prisma/orm/pull/30636))
+
+  Before:
+
+  ```prisma
+  @@index([createdAt(sort: Desc), authorId])
+  ```
+
+  After:
+
+  ```prisma
+  @@index([sort(createdAt, Desc), authorId])
+  ```
+
 - **Extension authors: migration planners take statements and report what they lose.** A planner's `plan(...)` takes required `statements` and `origin`, and its success result carries `appliedStatements`, `dataLoss` and `accessWidening`. `ControlFamilyInstance` requires `storageNameOf`. `plannerSuccess` takes `appliedStatements` and the subjects lists. See the planner entries in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30638](https://github.com/prisma/orm/pull/30638), [#30648](https://github.com/prisma/orm/pull/30648))
 
 - **Extension authors: enum accessors read members through codecs.** `buildNamespacedEnums()` and `buildEnumsMapForNamespace()` take a codec lookup. A codec an enum may use must declare the `equality` trait, and can refuse enums with `enumRefusal`. `decodeJsonIntegerText` refuses leading zeros and negative zero. A target facade's `defineContract` carries an `Enums` type parameter. `CollectionState` has a required `locking` key. See the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30628](https://github.com/prisma/orm/pull/30628), [#30555](https://github.com/prisma/orm/pull/30555))
+
+- **Extension authors: foreign keys name their backing index.** Regenerate bundled SQL contracts that have a foreign key; their storage hash changes. A bundled relation with `index: false` whose model has a key or index starting with its columns names it with `index: "<name>"`. `materializeForeignKeysAndIndexes()` takes one object, and `backingIndexColumnKeys()`, `isBackedByColumnKeys()` and `BackingIndexCandidates` are removed. See the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.17/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/). ([#30561](https://github.com/prisma/orm/pull/30561))
 
 ## Features
 
 - `prisma migration plan` and `prisma db update` accept `--rename <old>:<new>`, repeatable, to rename a model or a field and keep its rows instead of dropping and creating its table or column. On MongoDB, renames are refused in this release. ([#30638](https://github.com/prisma/orm/pull/30638))
 - ORM collections lock the rows a read selects with `forUpdate()`, `forNoKeyUpdate()`, `forShare()` and `forKeyShare()`, each with optional `nowait` or `skipLocked`. Re-emit the contract to pick up the capabilities they need. ([#30555](https://github.com/prisma/orm/pull/30555))
 - Giving an existing integer column `@default(autoincrement())` now plans a sequence that starts past the column's current maximum, where it used to plan nothing. ([#30606](https://github.com/prisma/orm/pull/30606))
+- A relation can name the index, unique constraint or primary key that backs its foreign key with `index: "<name>"`, so no extra index is created. `prisma contract emit` warns when two named indexes of a table are identical (`PN_INDEX_DUPLICATE`), or when a named plain index has the same columns as a unique constraint or the primary key (`PN_INDEX_REDUNDANT`). ([#30561](https://github.com/prisma/orm/pull/30561))
 
 ## Fixes
 
