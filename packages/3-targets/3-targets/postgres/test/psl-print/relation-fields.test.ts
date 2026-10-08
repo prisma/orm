@@ -5,7 +5,11 @@ import { buildModels, fieldText, INT_COLUMN, table } from './print-support';
 describe('relations', () => {
   function postAndUser(
     foreignKey: Record<string, unknown>,
-    keys: { readonly indexes?: readonly unknown[]; readonly uniques?: readonly unknown[] } = {},
+    keys: {
+      readonly indexes?: readonly unknown[];
+      readonly uniques?: readonly unknown[];
+      readonly primaryKey?: { readonly columns: readonly string[]; readonly name?: string };
+    } = {},
   ) {
     return buildModels({
       models: {
@@ -37,7 +41,7 @@ describe('relations', () => {
         user: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }),
         post: table({
           columns: { id: INT_COLUMN, authorId: INT_COLUMN },
-          primaryKey: { columns: ['id'] },
+          primaryKey: keys.primaryKey ?? { columns: ['id'] },
           indexes: keys.indexes ?? [],
           uniques: keys.uniques ?? [],
           foreignKeys: [
@@ -107,8 +111,13 @@ describe('relations', () => {
 
   it('names a unique constraint whose first columns are the foreign key columns', () => {
     const models = postAndUser(
-      { index: { unique: true } },
-      { uniques: [{ columns: ['authorId', 'id'], name: 'post_author_key' }] },
+      { index: { unique: ['authorId', 'id'] } },
+      {
+        uniques: [
+          { columns: ['authorId'], name: 'post_author_only_key' },
+          { columns: ['authorId', 'id'], name: 'post_author_key' },
+        ],
+      },
     );
     expect(models[1]?.fields.map(fieldText)[2]).toBe(
       'author User @relation(fields: [authorId], references: [id], index: "post_author_key")',
@@ -117,13 +126,32 @@ describe('relations', () => {
 
   it('writes no index argument when a unique constraint backs the foreign key', () => {
     const models = postAndUser(
-      { index: { unique: true } },
+      { index: { unique: ['authorId'] } },
       { uniques: [{ columns: ['authorId'] }] },
     );
     expect(models[1]?.fields.map(fieldText)[2]).toBe(
       'author User @relation(fields: [authorId], references: [id])',
     );
   });
+
+  it.each([
+    ['primary key', { primaryKey: { columns: ['authorId', 'id'] } }, { primaryKey: true }],
+    [
+      'unique constraint',
+      { uniques: [{ columns: ['authorId', 'id'] }] },
+      { unique: ['authorId', 'id'] },
+    ],
+  ] as const)(
+    'refuses a foreign key backed by an unnamed %s that only starts with its columns',
+    (_label, keys, index) => {
+      expect(() => postAndUser({ index }, keys)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.PRINT_UNSUPPORTED',
+          meta: { model: 'Post', field: 'author' },
+        }),
+      );
+    },
+  );
 
   it('prints the other side as a list with no arguments', () => {
     const models = postAndUser({ onDelete: 'cascade', onUpdate: 'cascade' });

@@ -25,6 +25,7 @@ import {
   refuseRelationToOtherContractSpace,
   refuseRelationWithoutJoin,
   refuseToOneRelationWithoutForeignKey,
+  refuseUnnamedForeignKeyBacking,
   refuseUnwritableName,
 } from './refusals';
 
@@ -166,7 +167,8 @@ export function junctionParentRelation(
 /**
  * The `index` argument of an owning relation. Every index the contract carries is written as its own `@@index`, and `contract emit` derives a backing index for a relation and drops it again beside an identical index or a key on its columns. So the argument is `false` for a foreign key nothing backs, the written name of an index the derived one would not match, and absent otherwise.
  */
-function relationIndexArgument(owner: ModelWithTable, foreignKey: ForeignKey): string | undefined {
+function relationIndexArgument(entry: ModelRelation, foreignKey: ForeignKey): string | undefined {
+  const { owner } = entry;
   const backing = foreignKey.index;
   if (backing === undefined) return 'false';
   const { table } = owner;
@@ -179,8 +181,9 @@ function relationIndexArgument(owner: ModelWithTable, foreignKey: ForeignKey): s
   if (derived !== undefined && JSON.stringify(derived) === JSON.stringify(backing)) {
     return undefined;
   }
-  const name = backingObjectName(table, columns, backing);
-  return name === undefined ? undefined : `"${escapePslString(name)}"`;
+  const name = backingObjectName(table, backing);
+  if (name === undefined) refuseUnnamedForeignKeyBacking(owner.name, entry.fieldName);
+  return `"${escapePslString(name)}"`;
 }
 
 function indexInputOf(index: Index): IndexInput {
@@ -196,10 +199,9 @@ function indexInputOf(index: Index): IndexInput {
     : { ...shape, columns: index.columns ?? [] };
 }
 
-/** The name the printed source gives what backs a foreign key: the written name of an index, unless another index shares it, or the name of the key whose first columns are the foreign key's. */
+/** The name the printed source gives what backs a foreign key: the written name of an index, unless another index shares it, or the name of the primary key or of the unique constraint with the stored columns. */
 function backingObjectName(
   table: ModelWithTable['table'],
-  columns: readonly string[],
   backing: NonNullable<ForeignKey['index']>,
 ): string | undefined {
   if ('name' in backing) {
@@ -211,12 +213,8 @@ function backingObjectName(
     );
     return ambiguous ? index.name : written;
   }
-  const keys = 'primaryKey' in backing ? [table.primaryKey] : table.uniques;
-  return keys.find((key) => key?.name !== undefined && startsWith(key.columns, columns))?.name;
-}
-
-function startsWith(keyColumns: readonly string[], columns: readonly string[]): boolean {
-  return columns.every((column, position) => keyColumns[position] === column);
+  if ('primaryKey' in backing) return table.primaryKey?.name;
+  return table.uniques.find((unique) => sameColumns(unique.columns, backing.unique))?.name;
 }
 
 /** The PSL field one relation is written as. */
@@ -258,7 +256,7 @@ function buildRelationField(input: {
     if (foreignKey.name !== undefined) {
       args.push(namedArg('map', `"${escapePslString(foreignKey.name)}"`));
     }
-    const indexArgument = relationIndexArgument(entry.owner, foreignKey);
+    const indexArgument = relationIndexArgument(entry, foreignKey);
     if (indexArgument !== undefined) {
       args.push(namedArg('index', indexArgument));
     }
