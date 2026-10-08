@@ -677,10 +677,6 @@ async function deleteJunctionLink(
   parentPkValues: Map<string, unknown>,
   targetPkValues: Map<string, unknown>,
 ): Promise<void> {
-  // Merge through writeJunctionColumn like the INSERT side: a shared junction
-  // column with mismatched parent/target values surfaces the same conflict
-  // error as connect instead of emitting contradictory predicates that make
-  // the DELETE silently match nothing.
   const through = relation.through;
   const junctionRow = buildJunctionRow(relation, parentPkValues, targetPkValues);
 
