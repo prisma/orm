@@ -212,6 +212,18 @@ describe('enumType() — error cases', () => {
 describe('defineContract() — members compared as the codec stores them', () => {
   const objectCodec = { codecId: 'test/object@1' as const } as const;
   const dateCodec = { codecId: 'test/date@1' as const } as const;
+  const shoutCodec = { codecId: 'test/shout@1' as const } as const;
+  const shoutDescriptor: AnyCodecDescriptor = {
+    ...identityDescriptor('test/shout@1'),
+    factory: () => () =>
+      ({
+        id: 'test/shout@1',
+        encode: async (v: unknown) => v,
+        decode: async (v: unknown) => v,
+        encodeJson: (v: unknown) => (v as string).toUpperCase(),
+        decodeJson: (j: unknown) => j,
+      }) as unknown as Codec,
+  };
   const dateDescriptor: AnyCodecDescriptor = {
     ...identityDescriptor('test/date@1'),
     factory: () => () =>
@@ -231,6 +243,7 @@ describe('defineContract() — members compared as the codec stores them', () =>
           identityDescriptor('mongo/string@1'),
           identityDescriptor('test/object@1'),
           dateDescriptor,
+          shoutDescriptor,
         ],
       },
     },
@@ -293,7 +306,7 @@ describe('defineContract() — members compared as the codec stores them', () =>
         member('Wide', { width: 2, height: 1 }),
         member('AlsoWide', { height: 1, width: 2 }),
       ),
-      'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as the column stores them.',
+      'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as their codec stores them.',
       ['Wide', 'AlsoWide'],
     ],
     [
@@ -304,14 +317,14 @@ describe('defineContract() — members compared as the codec stores them', () =>
         member('Start', new Date('2024-01-01T00:00:00.000Z')),
         member('SameStart', new Date('2024-01-01T00:00:00.000Z')),
       ),
-      'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as the column stores them.',
+      'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as their codec stores them.',
       ['Start', 'SameStart'],
     ],
     [
-      'two equal strings',
-      enumType('Status', mongoString, member('Active', 'dup'), member('Inactive', 'dup')),
-      'enumType("Status"): members "Active" and "Inactive" both store "dup". Member values must be unique as the column stores them.',
-      ['Active', 'Inactive'],
+      'two strings stored as the same text',
+      enumType('Status', shoutCodec, member('Quiet', 'dup'), member('Loud', 'DUP')),
+      'enumType("Status"): members "Quiet" and "Loud" both store "DUP". Member values must be unique as their codec stores them.',
+      ['Quiet', 'Loud'],
     ],
   ] as const)('refuses %s', (_case, handle, message, members) => {
     expect(() => build(handle)).toThrow(

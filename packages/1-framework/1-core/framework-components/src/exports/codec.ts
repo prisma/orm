@@ -76,11 +76,6 @@ export {
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
 } from '../shared/decode-json';
-export {
-  type DuplicateStoredMember,
-  duplicateStoredMembers,
-  type StoredEnumMember,
-} from '../shared/enum-stored-members';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

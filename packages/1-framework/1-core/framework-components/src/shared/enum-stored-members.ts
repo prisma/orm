@@ -6,7 +6,7 @@ export interface StoredEnumMember {
   readonly stored: JsonValue;
 }
 
-export interface DuplicateStoredMember {
+export interface DuplicateStoredValue {
   readonly earlier: string;
   readonly later: string;
   readonly stored: JsonValue;
@@ -17,9 +17,9 @@ export interface DuplicateStoredMember {
  */
 export function duplicateStoredMembers(
   members: readonly StoredEnumMember[],
-): readonly DuplicateStoredMember[] {
+): readonly DuplicateStoredValue[] {
   const memberByStoredForm = new Map<string, string>();
-  const duplicates: DuplicateStoredMember[] = [];
+  const duplicates: DuplicateStoredValue[] = [];
   for (const { name, stored } of members) {
     const key = canonicalStringify(stored);
     const earlier = memberByStoredForm.get(key);

@@ -150,7 +150,7 @@ describe('enumType validation errors', () => {
     });
   });
 
-  it('leaves member values to the contract build, which compares them as the codec stores them', () => {
+  it('accepts members that differ by SameValueZero, leaving stored forms to the contract build', () => {
     const shapes = enumType(
       'Shape',
       { codecId: 'pg/jsonb@1' },
@@ -163,16 +163,33 @@ describe('enumType validation errors', () => {
       member('Start', new Date('2024-01-01T00:00:00.000Z')),
       member('JustAfter', new Date('2024-01-01T00:00:00.001Z')),
     );
-    const sameText = enumType('Status', textCodec, member('active', 'x'), member('inactive', 'x'));
+    const mixed = enumType('Mixed', textCodec, member('Number', 1), member('Text', '1'));
 
     expect({
       shapes: shapes.values,
       moments: moments.names,
-      sameText: sameText.values,
+      mixed: { values: mixed.values, number: mixed.nameOf(1), text: mixed.nameOf('1') },
     }).toEqual({
       shapes: [{ sides: 4 }, { sides: 3 }],
       moments: ['Start', 'JustAfter'],
-      sameText: ['x', 'x'],
+      mixed: { values: [1, '1'], number: 'Number', text: 'Text' },
     });
+  });
+
+  it('rejects two members equal by SameValueZero with CONTRACT.ENUM_INVALID', () => {
+    expect(() =>
+      enumType('Status', textCodec, member('Active', 'x'), member('Inactive', 'x')),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Status"): members "Active" and "Inactive" have the same value "x". Member values must be unique.',
+        meta: {
+          enumName: 'Status',
+          members: ['Active', 'Inactive'],
+          reason: 'duplicate-member-value',
+        },
+      }),
+    );
   });
 });

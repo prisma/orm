@@ -8,7 +8,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { PG_ENUM_CODEC_ID } from '@internal/target-postgres/codec-ids';
 
 /**
- * The accessors for one namespace's native enums. A native enum's members live in the `valueSet` entry its `native_enum` entity derives, keyed by the entity name, the same slot a domain enum's value set takes. A domain enum's value set has the domain enum's name in the same namespace, so a value set that the namespace's `domain` `enum` entries name is left out: `db.enums` holds that enum. Reads plain contract data, so a `validateContract`'d JSON contract works as well as a hydrated one. A member is a value, as in `CREATE TYPE … AS ENUM ('a', 'b')`, so each value is also its own name.
+ * The accessors for one namespace's value sets, leaving out each value set whose name is a domain enum's in the same namespace: a domain enum's value set takes its enum's name and namespace, and `db.enums` holds that enum. The rest are native enum types, because `native_enum` is the only pack entity that derives a value set today. Reads plain contract data, so a `validateContract`'d JSON contract works as well as a hydrated one. A member is a value, as in `CREATE TYPE … AS ENUM ('a', 'b')`, so each value is also its own name.
  */
 export function buildNativeEnumsMapForNamespace(
   storage: SqlStorage,

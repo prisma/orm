@@ -325,7 +325,7 @@ describe('enum lowering encodes member values through the codec', () => {
         expect.objectContaining({
           code: 'CONTRACT.ENUM_INVALID',
           message:
-            'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as the column stores them.',
+            'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as their codec stores them.',
           meta: {
             enumName: 'Shape',
             members: ['Wide', 'AlsoWide'],
@@ -349,24 +349,7 @@ describe('enum lowering encodes member values through the codec', () => {
         expect.objectContaining({
           code: 'CONTRACT.ENUM_INVALID',
           message:
-            'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as the column stores them.',
-        }),
-      );
-    });
-
-    it('refuses two equal strings', () => {
-      const Status = enumType('Status', pgText, member('Active', 'x'), member('Inactive', 'x'));
-      const textLookup = codecLookupOf({
-        'pg/text@1': stubCodec('pg/text@1', (v) => v as JsonValue),
-      });
-
-      expect(() =>
-        buildSqlContractFromDefinition(definitionWith(Status), ...withTestTypes(textLookup)),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'CONTRACT.ENUM_INVALID',
-          message:
-            'enumType("Status"): members "Active" and "Inactive" both store "x". Member values must be unique as the column stores them.',
+            'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as their codec stores them.',
         }),
       );
     });
@@ -393,7 +376,7 @@ describe('enum lowering encodes member values through the codec', () => {
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as the column stores them.',
+          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as their codec stores them.',
         meta: expect.objectContaining({
           enumName: 'Moment',
           members: ['Early', 'Late'],
