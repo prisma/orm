@@ -1,4 +1,4 @@
-import { CastExpr, ColumnRef, FunctionCallExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors, pgVectorDescriptor } from '../src/core/codecs';
 import { pgvectorCodecRegistry } from '../src/core/registry';
@@ -20,16 +20,12 @@ describe('pgvector PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('projects a JSON numeric array', () => {
+  it('projects the text PostgreSQL prints for the vector', () => {
     const ref = { codecId: pgVectorDescriptor.codecId, typeParams: { length: 3 } };
     const expression = ColumnRef.of('records', 'embedding');
 
-    // Elements widen to float8 before the array is built, so the exact value a
-    // `real` denotes survives rather than its shortest text form.
     expect(pgVectorDescriptor.projectJson(expression, ref)).toEqual(
-      FunctionCallExpr.of('array_to_json', [
-        CastExpr.as(CastExpr.as(expression, 'real[]'), 'float8[]'),
-      ]),
+      CastExpr.as(expression, 'text'),
     );
 
     const codec = pgVectorDescriptor.factory(ref.typeParams)({ name: 'embedding' });

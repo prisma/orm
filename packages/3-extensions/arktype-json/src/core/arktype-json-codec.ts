@@ -22,7 +22,7 @@ import {
   type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/runtime';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
@@ -179,8 +179,9 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
+  /** The document's JSON text, which `fromWire` parses as it parses a row; a document that is a string would otherwise reach it unquoted. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgJsonb.id;
   override readonly codecId = ARKTYPE_JSON_CODEC_ID;

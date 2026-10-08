@@ -199,6 +199,17 @@ describe('pg/text-array@1 codec', () => {
     expect(await codec.fromWire(input, callCtx)).toBe(input);
   });
 
+  it('reads the text[] text PostgreSQL prints', async () => {
+    expect(await codec.fromWire('{a,"b,c",NULL,""}', callCtx)).toEqual(['a', 'b,c', null, '']);
+  });
+
+  it('refuses array text that is not one-dimensional', async () => {
+    await expect(codec.fromWire('{{a},{b}}', callCtx)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: 'pg/text-array@1 wire value must be text[] text',
+    });
+  });
+
   it('toDataTypeValue produces a plain array copy', () => {
     const input = ['x', 'y'];
     const json = toContractJson(codec, input);

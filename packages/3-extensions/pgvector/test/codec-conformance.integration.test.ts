@@ -4,16 +4,16 @@
  *
  * The extension's descriptor is not in the target's built-in registry, so each
  * case carries it directly; everything else runs through the same harness the
- * built-in codecs use, so what is asserted here is what is asserted there —
- * parsed projection JSON equals the stored JSON of `toDataTypeValue`, and the
- * data type and `fromDataTypeValue` read it back into the application value.
+ * built-in codecs use, so what is asserted here is what is asserted there:
+ * `fromWire` reads the projected value to the application value it reads the
+ * ordinary row to.
  *
  * `CREATE EXTENSION` runs in each case's setup rather than being assumed: if the
  * bundle ever stops shipping, these fail loudly at the point of the missing
  * dependency instead of somewhere downstream.
  */
 
-import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
+import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
 import type {
   ConformanceConnection,
   PostgresCodecConformanceCase,
@@ -25,6 +25,20 @@ import { pgVectorDescriptor } from '../src/core/codecs';
 import { pgvectorVector } from '../src/core/data-types';
 
 const INSTALL_VECTOR = ['CREATE EXTENSION IF NOT EXISTS vector'] as const;
+
+/**
+ * Two vectors are equal when their elements are the same `real`s. An ordinary row and the projection
+ * both carry the shortest decimal that reads back as each `real`, so `0.1` is read where the value
+ * written was `Math.fround(0.1)`.
+ */
+function vectorsEqualAsReals(left: unknown, right: unknown): boolean {
+  return (
+    Array.isArray(left) &&
+    Array.isArray(right) &&
+    left.length === right.length &&
+    left.every((element, index) => Math.fround(element) === Math.fround(right[index]))
+  );
+}
 
 function vectorCase(
   label: string,
@@ -43,6 +57,7 @@ function vectorCase(
     value,
     typeParams: { length: options.length ?? value.length },
     setupSql,
+    valueEquality: vectorsEqualAsReals,
   };
 }
 
@@ -68,15 +83,10 @@ const cases: readonly PostgresCodecConformanceCase[] = [
     'many dimensions',
     Array.from({ length: 1536 }, (_, index) => index / 2048),
   ),
-  // `extra_float_digits` decides how many digits a float prints. At its default
-  // of 1 the projection prints the exact float64 a `real` denotes; at 0 or below
-  // it truncates. These pin the canonical form at the floor and above it.
-  //
-  // The value discriminates and a simpler one would not: 0.1 prints identically
-  // at every setting. Note it differs from `pg/float4@1`'s case for the same
-  // property — this projection widens each element to float8 before printing, so
-  // the value is the exact float64 of the float4, where a bare float4 column
-  // prints its own shortest decimal instead.
+  // `extra_float_digits` decides how many digits a float prints, in an ordinary
+  // row and in the projection alike. These check that both still read to the
+  // same `real`s at the floor and above it; 0.1 would print identically at every
+  // setting, so the value is one whose digits change.
   vectorCase('full precision at the float-digits floor', [Math.fround(1 / 3)], {
     floatDigits: 1,
   }),
@@ -129,25 +139,35 @@ const manyVectorCases: readonly PostgresCodecConformanceCase[] = [
 
 describe('pgvector codec JSON-projection conformance', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
-  let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
+  const driver = postgresRuntimeDriverDescriptor.create();
   let connection: ConformanceConnection | undefined;
 
   beforeAll(async () => {
     database = await createDevDatabase();
-    driver = await postgresControlDriverDescriptor.create(database.connectionString);
-    connection = { query: async (sql, params) => (await driver!.query(sql, params)).rows };
+    await driver.connect({ kind: 'url', url: database.connectionString });
+    connection = {
+      async query(sql, params) {
+        const rows: Record<string, unknown>[] = [];
+        for await (const row of driver.query<Record<string, unknown>>({
+          sql,
+          params: [...(params ?? [])],
+        })) {
+          rows.push(row);
+        }
+        return rows;
+      },
+    };
   }, timeouts.spinUpPpgDev);
 
   afterAll(async () => {
-    await driver?.close();
-    driver = undefined;
+    await driver.close();
     connection = undefined;
     await database?.close();
     database = undefined;
   }, timeouts.spinUpPpgDev);
 
   for (const conformanceCase of [...cases, ...manyVectorCases]) {
-    it(`pg/vector@1 (${conformanceCase.label}) agrees with toDataTypeValue and round-trips through fromDataTypeValue`, {
+    it(`pg/vector@1 (${conformanceCase.label}) reads the same through its projection as through a row`, {
       timeout: timeouts.spinUpPpgDev,
     }, async () => {
       const outcome = await runPostgresCodecProjection(connection!, conformanceCase);

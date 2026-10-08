@@ -2,24 +2,11 @@
  * Representative application values for every built-in PostgreSQL codec
  * descriptor, exercised against a real database by the conformance suite.
  *
- * `notYetCanonical` marks a case whose projection disagrees with the codec's
- * **current** `toDataTypeValue` / `fromDataTypeValue` — the projection will not execute, or
- * the parsed value differs from what `toDataTypeValue` produces, or the value does
- * not survive the round trip back. The suite asserts a marked case still fails
- * and still fails the recorded way, so a projection cannot be brought into
- * agreement without updating this file.
- *
- * A green run is therefore not a claim that every codec's JSON is canonical.
- * Both conditions are measured against the codec's own two methods, so a codec
- * whose `toDataTypeValue` is itself not canonical conforms here: its projection
- * faithfully realizes a representation that is simply not the one the codec ends
- * up with. Such a codec conforms, then transits through a failing state when its
- * canonical form lands, then conforms again.
- *
- * Which codecs are in that position is deliberately not listed here — that list
- * lives in the plan, and a copy of it in this header would go stale every time
- * one of them landed. What this file names is narrower and self-maintaining: the
- * cases that fail *today*, each carrying its own `notYetCanonical` reason.
+ * `notYetCanonical` marks a case that fails today: the projection will not
+ * execute, or `fromWire` refuses the row's or the projection's value, or reads
+ * them to different application values. The suite asserts a marked case still
+ * fails and still fails the recorded way, so a case cannot be fixed without
+ * updating this file.
  *
  * A case is only as good as the boundary it crosses. A value chosen for being
  * typical is the one least likely to expose a format defect — see the base64
@@ -368,15 +355,31 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'every component under a hostile session',
     value: interval({ months: 14, days: 3, micros: 14_706_000_000n }),
     setupSql: HOSTILE_TEMPORAL_SESSION,
+    notYetCanonical: {
+      kind: 'row-from-wire-rejects',
+      reason:
+        "fromWire reads the interval text of IntervalStyle 'postgres' and 'iso_8601', not 'sql_standard', for a row and an include alike",
+    },
   },
   {
     codecId: 'pg/interval@1',
     label: 'mixed signs under a hostile session',
     value: interval({ months: 1, days: -1 }),
     setupSql: HOSTILE_TEMPORAL_SESSION,
+    notYetCanonical: {
+      kind: 'row-from-wire-rejects',
+      reason:
+        "fromWire reads the interval text of IntervalStyle 'postgres' and 'iso_8601', not 'sql_standard', for a row and an include alike",
+    },
   },
   { codecId: 'pg/json@1', label: 'document', value: { a: 1, b: ['x'] } },
   { codecId: 'pg/jsonb@1', label: 'document', value: { a: 1, b: ['x'] } },
+  // A document that is a string is where a JSON value and the JSON text of a document differ: the
+  // projection has to carry the text, which `fromWire` parses, or `"42"` would come back as `42`.
+  { codecId: 'pg/json@1', label: 'string document that reads as a number', value: '42' },
+  { codecId: 'pg/jsonb@1', label: 'string document that reads as a number', value: '42' },
+  { codecId: 'pg/json@1', label: 'string document that is not JSON text', value: 'hello' },
+  { codecId: 'pg/jsonb@1', label: 'string document that is not JSON text', value: 'hello' },
   {
     codecId: 'pg/uuid@1',
     label: 'uuid',

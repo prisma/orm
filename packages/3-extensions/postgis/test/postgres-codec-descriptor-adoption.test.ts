@@ -1,4 +1,4 @@
-import { ColumnRef } from '@internal/sql-relational-core/ast';
+import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors, postgisGeometryDescriptor } from '../src/core/codecs';
 import { postgisCodecRegistry } from '../src/core/registry';
@@ -20,7 +20,7 @@ describe('PostGIS PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves the geometry data type and unparameterized and required-SRID projection without changing HEXEWKB JSON', () => {
+  it('projects a geometry as the HEXEWKB text PostgreSQL prints, with or without an SRID', () => {
     const expression = ColumnRef.of('places', 'location');
     const unparameterizedRef = { codecId: postgisGeometryDescriptor.codecId };
     const constrainedRef = {
@@ -29,8 +29,12 @@ describe('PostGIS PostgreSQL codec descriptor adoption', () => {
     };
 
     expect(postgisGeometryDescriptor.dataType).toBe('postgis/geometry');
-    expect(postgisGeometryDescriptor.projectJson(expression, unparameterizedRef)).toBe(expression);
-    expect(postgisGeometryDescriptor.projectJson(expression, constrainedRef)).toBe(expression);
+    expect(postgisGeometryDescriptor.projectJson(expression, unparameterizedRef)).toEqual(
+      CastExpr.as(expression, 'text'),
+    );
+    expect(postgisGeometryDescriptor.projectJson(expression, constrainedRef)).toEqual(
+      CastExpr.as(expression, 'text'),
+    );
 
     const codec = postgisGeometryDescriptor.factory(constrainedRef.typeParams)({
       name: 'location',

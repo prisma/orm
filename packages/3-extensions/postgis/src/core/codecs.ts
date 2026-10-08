@@ -32,7 +32,11 @@ import {
   column,
   type DataTypeValue,
 } from '@internal/framework-components/codec';
-import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
+import {
+  CastExpr,
+  type ExtractCodecTypes,
+  type ProjectionExpr,
+} from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
@@ -111,8 +115,9 @@ export class PostgisGeometryCodec extends CodecImpl<
 }
 
 export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryParams> {
+  /** The HEXEWKB text PostgreSQL prints for a geometry, which `fromWire` reads as it reads a row. A JSON constructor handed the geometry itself may write GeoJSON instead. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return CastExpr.as(expression, 'text');
   }
   override readonly dataType = postgisGeometry.id;
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;

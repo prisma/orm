@@ -2,39 +2,35 @@
  * Runs the codec JSON-projection conformance harness against a live PostgreSQL
  * for every built-in codec descriptor.
  *
- * An unmarked case must conform — its projection must agree with the codec's
- * `toDataTypeValue` and survive the round trip back through `fromDataTypeValue`. A marked
- * case must still fail, and fail with the kind it records, so neither the marker
- * nor its recorded kind can rot as projections change.
- *
- * Conformance is measured against the codec's **current** methods, so a green
- * run does not claim every codec's JSON is already canonical: a codec whose
- * `toDataTypeValue` is not yet canonical conforms here and is tracked by the plan.
- * See `codec-conformance/cases.ts`.
+ * An unmarked case must conform: `fromWire` reads the projected value to the
+ * application value it reads the ordinary row to, which is the value the case
+ * wrote. A marked case must still fail, and fail with the kind it records, so
+ * neither the marker nor its recorded kind can rot as projections change. See
+ * `codec-conformance/cases.ts`.
  */
 
-import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ConformanceConnection } from '../src/index';
 import { runPostgresCodecProjection } from '../src/index';
 import { postgresConformanceCases } from './codec-conformance/cases';
+import { connectRuntimeDriver } from './runtime-connection';
 
 describe('PostgreSQL codec JSON-projection conformance', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
-  let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
+  let runtime: Awaited<ReturnType<typeof connectRuntimeDriver>> | undefined;
   let connection: ConformanceConnection | undefined;
 
   beforeAll(async () => {
     database = await createDevDatabase();
-    driver = await postgresControlDriverDescriptor.create(database.connectionString);
-    connection = { query: async (sql, params) => (await driver!.query(sql, params)).rows };
+    runtime = await connectRuntimeDriver(database.connectionString);
+    connection = runtime.connection;
   }, timeouts.spinUpPpgDev);
 
   afterAll(async () => {
-    await driver?.close();
-    driver = undefined;
+    await runtime?.close();
+    runtime = undefined;
     connection = undefined;
     await database?.close();
     database = undefined;
@@ -69,8 +65,8 @@ describe('PostgreSQL codec JSON-projection conformance', { concurrent: false }, 
   for (const conformanceCase of postgresConformanceCases) {
     const expectation =
       conformanceCase.notYetCanonical === undefined
-        ? 'agrees with toDataTypeValue and round-trips through fromDataTypeValue'
-        : 'still disagrees with toDataTypeValue or fromDataTypeValue';
+        ? 'reads the same through its projection as through a row'
+        : 'still fails the way its case records';
 
     it(`${conformanceCase.codecId} (${conformanceCase.label}) ${expectation}`, {
       timeout: timeouts.spinUpPpgDev,

@@ -14,12 +14,12 @@
  * element, where a lift that stringified would be hardest to notice.
  */
 
-import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
 import { ifDefined } from '@internal/utils/defined';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ConformanceConnection, PostgresCodecConformanceCase } from '../src/index';
 import { runPostgresCodecProjection } from '../src/index';
+import { connectRuntimeDriver } from './runtime-connection';
 
 function arrayCase(
   codecId: string,
@@ -66,6 +66,7 @@ const cases: readonly PostgresCodecConformanceCase[] = [
   // --- a document element ---
   arrayCase('pg/jsonb@1', 'document elements', [{ a: 1 }, { b: ['x', 'y'] }]),
   arrayCase('pg/jsonb@1', 'document elements with nulls', [{ a: 1 }, null]),
+  arrayCase('pg/jsonb@1', 'string document elements', ['42', 'hello']),
   arrayCase('pg/jsonb@1', 'documents whose strings need escaping', [
     { 'k"y': 'v\\a"l' },
     { nested: ['x\ny'] },
@@ -80,18 +81,18 @@ const cases: readonly PostgresCodecConformanceCase[] = [
 
 describe('PostgreSQL array lift conformance', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
-  let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
+  let runtime: Awaited<ReturnType<typeof connectRuntimeDriver>> | undefined;
   let connection: ConformanceConnection | undefined;
 
   beforeAll(async () => {
     database = await createDevDatabase();
-    driver = await postgresControlDriverDescriptor.create(database.connectionString);
-    connection = { query: async (sql, params) => (await driver!.query(sql, params)).rows };
+    runtime = await connectRuntimeDriver(database.connectionString);
+    connection = runtime.connection;
   }, timeouts.spinUpPpgDev);
 
   afterAll(async () => {
-    await driver?.close();
-    driver = undefined;
+    await runtime?.close();
+    runtime = undefined;
     connection = undefined;
     await database?.close();
     database = undefined;

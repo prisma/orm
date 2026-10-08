@@ -94,8 +94,11 @@ describe('every shipped codec projects a scalar read and lifts an array read', (
     },
   );
 
-  it('rewrites a column whose wire form JSON cannot carry', () => {
-    const bytea = codecDescriptors.find((d) => d.codecId === 'pg/bytea@1');
-    expect(bytea?.projectJson(source, { codecId: 'pg/bytea@1' })).not.toBe(source);
-  });
+  it.each(['pg/bytea@1', 'pg/interval@1', 'pg/json@1', 'pg/jsonb@1', 'pg/text-array@1'])(
+    'projects a %s column as the text PostgreSQL prints, which fromWire reads as it reads a row',
+    (codecId) => {
+      const descriptor = codecDescriptors.find((d) => d.codecId === codecId);
+      expect(descriptor?.projectJson(source, { codecId })).toEqual(CastExpr.as(source, 'text'));
+    },
+  );
 });

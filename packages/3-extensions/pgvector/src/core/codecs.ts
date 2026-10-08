@@ -21,7 +21,7 @@ import {
   type DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
-import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr } from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
@@ -130,28 +130,18 @@ export class PgVectorCodec extends CodecImpl<
 }
 
 /**
- * Projects a `vector` as a JSON numeric array.
- *
- * A `vector` handed straight to a JSON constructor is rendered through its text
- * output function, so it arrives as the *string* `"[1,2,3]"` rather than as an
- * array.
- *
- * The route matters as much as the destination. A vector's elements are `real`,
- * and its text form prints the shortest decimal that round-trips *as a `real`* —
- * `0.1` for a value the application holds as `0.10000000149011612`. Reading that
- * text back as a double therefore lands on a different number, so casting the
- * text to `json` would lose precision the value still had. Widening each element
- * to `float8` first keeps the exact value the `real` denotes, which is what
- * the stored array holds.
+ * Projects a `vector` as the text PostgreSQL prints for it, the value the runtime driver returns for
+ * an ordinary row, so `fromWire` reads an included vector as it reads a row. A JSON array of the
+ * elements would not do: an element is a `real`, and the text holds the shortest decimal that
+ * reads back as that `real`, so the row reads `0.1` where the element widened to a double is
+ * `0.10000000149011612`.
  */
-const jsonArrayFromVectorElements = (expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('array_to_json', [
-    CastExpr.as(CastExpr.as(expression, 'real[]'), 'float8[]'),
-  ]);
+const vectorTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'text');
 
 export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return jsonArrayFromVectorElements(expression);
+    return vectorTextJsonProjection(expression);
   }
   override readonly dataType = pgvectorVector.id;
   override readonly codecId = VECTOR_CODEC_ID;

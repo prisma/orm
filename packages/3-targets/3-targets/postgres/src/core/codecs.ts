@@ -28,13 +28,7 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { canonicalNumeralText } from '@internal/sql-contract/data-type-support';
 import {
-  BinaryExpr,
-  CaseExpr,
   CastExpr,
-  FunctionCallExpr,
-  LiteralExpr,
-  NullCheckExpr,
-  OrExpr,
   type ProjectionExpr,
   SqlCharCodec,
   SqlFloatCodec,
@@ -141,6 +135,7 @@ import {
 } from './data-types';
 import { pgTimestamptzDateDescriptor } from './date-codecs';
 import { postgresError } from './errors';
+import { parsePostgresListText } from './list-decoder';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import {
@@ -217,93 +212,14 @@ const decimalTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =
   CastExpr.as(expression, 'text');
 
 /**
- * Projects a `bytea` as base64 text.
- *
- * Like the decimal-text cast, the encoding is part of the projected expression:
- * PostgreSQL's own JSON conversion of a `bytea` emits its `\x`-prefixed hex
- * output form, so the base64 encoding has to replace that conversion rather
- * than post-process it.
- *
- * `encode` emits RFC 2045 base64, which carries a line break every 76
- * characters — so any value over 56 bytes arrives wrapped. The breaks are
- * removed here, because the canonical form is unwrapped base64 and
- * the type's reader rejects anything else. `chr(10)` rather than a newline literal
- * keeps the rendered SQL on one line.
+ * Projects the text PostgreSQL prints for the value, which is the value the runtime driver returns
+ * for an ordinary row, so `fromWire` reads an included value as it reads a row (ADR 254, "Rows the
+ * database returns as JSON"). PostgreSQL's own JSON conversion would write another value: a `bytea`
+ * as its hex text but a `jsonb` document as the document itself, which `fromWire` cannot tell from
+ * the document's JSON text when the document is a string.
  */
-const base64JsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('translate', [
-    FunctionCallExpr.of('encode', [expression, LiteralExpr.of('base64')]),
-    FunctionCallExpr.of('chr', [LiteralExpr.of(10)]),
-    LiteralExpr.of(''),
-  ]);
-
-const datePart = (field: string, expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('date_part', [LiteralExpr.of(field), expression]);
-
-const whenNonZero = (value: ProjectionExpr, rendered: ProjectionExpr): ProjectionExpr =>
-  CaseExpr.of(
-    [{ condition: BinaryExpr.neq(value, LiteralExpr.of(0)), value: rendered }],
-    LiteralExpr.of(null),
-  );
-
-/**
- * Projects an `interval` as an ISO-8601 duration.
- *
- * An interval carries months, days and microseconds independently — `P1M` and
- * `P30D` are different intervals — so the projection reads each field with
- * `date_part` and assembles them rather than reducing the value to an epoch,
- * which would have to choose a length for a month. `IntervalStyle` decides how
- * PostgreSQL spells an interval and cannot be bound per expression, so the
- * spelling is constructed here instead of inherited.
- *
- * `concat` drops NULL arguments, so a zero component is omitted by rendering as
- * NULL; the seconds field is taken through `numeric` because a `double
- * precision` microsecond renders in scientific notation.
- *
- * That same NULL-dropping is why the whole assembly sits under an explicit NULL
- * check: for a NULL interval every field is NULL, `concat` yields `'P'`, and the
- * zero-duration fallback below would report an absent value as a zero one.
- */
-const isoDurationJsonProjection = (expression: ProjectionExpr): ProjectionExpr => {
-  const field = (name: string) => datePart(name, expression);
-  const seconds = CastExpr.as(field('second'), 'numeric');
-  const assembled = FunctionCallExpr.of('concat', [
-    LiteralExpr.of('P'),
-    whenNonZero(field('year'), FunctionCallExpr.of('concat', [field('year'), LiteralExpr.of('Y')])),
-    whenNonZero(
-      field('month'),
-      FunctionCallExpr.of('concat', [field('month'), LiteralExpr.of('M')]),
-    ),
-    whenNonZero(field('day'), FunctionCallExpr.of('concat', [field('day'), LiteralExpr.of('D')])),
-    CaseExpr.of(
-      [
-        {
-          condition: OrExpr.of([
-            BinaryExpr.neq(field('hour'), LiteralExpr.of(0)),
-            BinaryExpr.neq(field('minute'), LiteralExpr.of(0)),
-            BinaryExpr.neq(field('second'), LiteralExpr.of(0)),
-          ]),
-          value: LiteralExpr.of('T'),
-        },
-      ],
-      LiteralExpr.of(null),
-    ),
-    whenNonZero(field('hour'), FunctionCallExpr.of('concat', [field('hour'), LiteralExpr.of('H')])),
-    whenNonZero(
-      field('minute'),
-      FunctionCallExpr.of('concat', [field('minute'), LiteralExpr.of('M')]),
-    ),
-    whenNonZero(field('second'), FunctionCallExpr.of('concat', [seconds, LiteralExpr.of('S')])),
-  ]);
-
-  return CaseExpr.of(
-    [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
-    FunctionCallExpr.of('coalesce', [
-      FunctionCallExpr.of('nullif', [assembled, LiteralExpr.of('P')]),
-      LiteralExpr.of('PT0S'),
-    ]),
-  );
-};
+const printedTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'text');
 
 export const postgresSqlCharDescriptor = postgresCodec(sqlCharDescriptor, {
   dataType: pgChar,
@@ -512,18 +428,28 @@ export function postgresQualifyColumnType(
   return { typeParams: { ...input.typeParams, typeName: qualified } };
 }
 
+/** The elements of the `text[]` text PostgreSQL prints, each a string or NULL. */
+function readTextArrayWire(wire: string): readonly (string | null)[] {
+  return parsePostgresListText(wire).map((element) => {
+    if (element === null || typeof element === 'string') return element;
+    throw postgresError('RUNTIME.DECODE_FAILED', 'pg/text-array@1 wire value must be text[] text', {
+      meta: { codecId: PG_TEXT_ARRAY_CODEC_ID, received: wire },
+    });
+  });
+}
+
 /**
  * Postgres `text[]` control codec. Encode is an identity pass-through: the pg
  * wire driver serialises a JS `string[]` to a Postgres array literal under the
- * `$N::text[]` cast emitted from this codec's native type. Control-plane reads
- * that need semantic arrays parse raw array text before shared validation rather
- * than decoding this whole array value. Not a user-facing scalar — it is not
- * part of the authorable `CodecTypes` surface, only the runtime codec registry.
+ * `$N::text[]` cast emitted from this codec's native type. Decode reads the
+ * array text the driver returns, or an array a driver has already parsed. Not a
+ * user-facing scalar — it is not part of the authorable `CodecTypes` surface,
+ * only the runtime codec registry.
  */
 export class PgTextArrayCodec extends CodecImpl<
   typeof PG_TEXT_ARRAY_CODEC_ID,
   readonly ['equality'],
-  readonly (string | null)[],
+  string | readonly (string | null)[],
   readonly (string | null)[]
 > {
   async toWire(
@@ -533,10 +459,10 @@ export class PgTextArrayCodec extends CodecImpl<
     return value;
   }
   async fromWire(
-    wire: readonly (string | null)[],
+    wire: string | readonly (string | null)[],
     _ctx: CodecCallContext,
   ): Promise<readonly (string | null)[]> {
-    return wire;
+    return typeof wire === 'string' ? readTextArrayWire(wire) : wire;
   }
   fromDataTypeValue(value: DataTypeValue<readonly (string | null)[]>): readonly (string | null)[] {
     return value.value;
@@ -548,7 +474,7 @@ export class PgTextArrayCodec extends CodecImpl<
 
 export class PgTextArrayDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return printedTextJsonProjection(expression);
   }
   override readonly dataType = pgTextArray.id;
   override readonly codecId = PG_TEXT_ARRAY_CODEC_ID;
@@ -1132,7 +1058,7 @@ export class PgByteaCodec extends CodecImpl<
 
 export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return base64JsonProjection(expression);
+    return printedTextJsonProjection(expression);
   }
   override readonly dataType = pgBytea.id;
   override readonly codecId = PG_BYTEA_CODEC_ID;
@@ -1332,7 +1258,7 @@ export class PgIntervalCodec extends CodecImpl<
 
 export class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return isoDurationJsonProjection(expression);
+    return printedTextJsonProjection(expression);
   }
   override readonly dataType = pgInterval.id;
   override readonly codecId = PG_INTERVAL_CODEC_ID;
@@ -1376,7 +1302,7 @@ export class PgJsonCodec extends CodecImpl<
 
 export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return printedTextJsonProjection(expression);
   }
   override readonly dataType = pgJson.id;
   override readonly codecId = PG_JSON_CODEC_ID;
@@ -1419,7 +1345,7 @@ export class PgJsonbCodec extends CodecImpl<
 
 export class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return printedTextJsonProjection(expression);
   }
   override readonly dataType = pgJsonb.id;
   override readonly codecId = PG_JSONB_CODEC_ID;
