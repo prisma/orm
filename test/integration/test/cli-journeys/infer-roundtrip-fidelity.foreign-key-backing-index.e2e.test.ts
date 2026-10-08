@@ -64,6 +64,12 @@ withTempDir(({ createTempDir }) => {
               labels text[] NOT NULL REFERENCES label_sets(labels)
             );
             CREATE INDEX labelled_labels_gin ON labelled USING gin (labels);
+
+            CREATE TABLE comments (
+              id int4 PRIMARY KEY,
+              user_id int4 NOT NULL REFERENCES users(id)
+            );
+            CREATE INDEX comments_user_id_first ON comments (user_id, id);
           `),
         ),
     });
@@ -98,6 +104,9 @@ withTempDir(({ createTempDir }) => {
         expect(relationOf('Drafts'), 'a partial index does not').toContain('index: false');
         expect(relationOf('Notes'), 'a hash index does not').toContain('index: false');
         expect(relationOf('Labelled'), 'a gin index does not').toContain('index: false');
+        expect(relationOf('Comments'), 'an index led by its columns is named').toContain(
+          'index: "comments_user_id_first"',
+        );
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
@@ -120,10 +129,9 @@ withTempDir(({ createTempDir }) => {
         const tables = contract.storage.namespaces['public']?.entries.table ?? {};
         expect(
           Object.fromEntries(
-            ['posts', 'drafts', 'notes', 'profiles', 'settings', 'labelled'].map((table) => [
-              table,
-              tables[table]?.foreignKeys.map((foreignKey) => foreignKey.index),
-            ]),
+            ['posts', 'drafts', 'notes', 'profiles', 'settings', 'labelled', 'comments'].map(
+              (table) => [table, tables[table]?.foreignKeys.map((foreignKey) => foreignKey.index)],
+            ),
           ),
         ).toEqual({
           posts: [{ name: 'posts_user_id_live' }],
@@ -132,6 +140,7 @@ withTempDir(({ createTempDir }) => {
           profiles: [{ unique: true }],
           settings: [{ primaryKey: true }],
           labelled: [undefined],
+          comments: [{ name: 'comments_user_id_first' }],
         });
 
         await expectVerifiesCleanAfterPull(ctx, 'foreign key backing indexes');

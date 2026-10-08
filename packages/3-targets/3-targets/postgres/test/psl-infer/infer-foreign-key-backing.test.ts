@@ -6,6 +6,7 @@ import { printPslFromFlat } from './fixtures';
 function schemaWithIndexOnForeignKey(index: {
   readonly type: string | undefined;
   readonly where: string | undefined;
+  readonly columns?: readonly string[];
 }): SqlSchemaIR {
   return new SqlSchemaIR({
     tables: {
@@ -29,7 +30,7 @@ function schemaWithIndexOnForeignKey(index: {
         indexes: [
           {
             naming: parseNaming('post_user_id_live', undefined),
-            columns: ['user_id'],
+            columns: index.columns ?? ['user_id'],
             where: index.where,
             unique: false,
             partial: index.where !== undefined,
@@ -64,5 +65,19 @@ describe('contract infer and the backing index of a foreign key', () => {
     expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey(index)))).toContain(
       'index: false',
     );
+  });
+
+  it('names a live index whose first columns are the foreign key columns', () => {
+    expect(
+      relationLine(
+        printPslFromFlat(
+          schemaWithIndexOnForeignKey({
+            type: undefined,
+            where: undefined,
+            columns: ['user_id', 'id'],
+          }),
+        ),
+      ),
+    ).toContain('index: "post_user_id_live"');
   });
 });

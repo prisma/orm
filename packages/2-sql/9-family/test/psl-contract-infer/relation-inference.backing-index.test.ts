@@ -19,7 +19,7 @@ function liveIndex(overrides: Partial<SqlIndexIRInput>): SqlIndexIRInput {
 
 function relationIndexBeside(post: {
   readonly indexes?: readonly SqlIndexIRInput[];
-  readonly uniques?: readonly { readonly columns: readonly string[] }[];
+  readonly uniques?: readonly { readonly columns: readonly string[]; readonly name?: string }[];
   readonly primaryKey?: { readonly columns: readonly string[] };
 }) {
   const tables = {
@@ -62,6 +62,28 @@ describe('the index argument contract infer writes on a relation', () => {
     ['a unique index', { indexes: [liveIndex({ unique: true })] }],
   ])('is absent beside %s on the foreign key columns', (_label, post) => {
     expect(relationIndexBeside(post)).toBeUndefined();
+  });
+
+  it.each([
+    [
+      'a plain index whose first columns are the foreign key columns',
+      {
+        indexes: [
+          liveIndex({
+            naming: { kind: 'exact', name: 'post_user_created' },
+            columns: ['user_id', 'id'],
+          }),
+        ],
+      },
+      'post_user_created',
+    ],
+    [
+      'a named unique constraint whose first columns are the foreign key columns',
+      { uniques: [{ columns: ['user_id', 'id'], name: 'post_user_key' }] },
+      'post_user_key',
+    ],
+  ])('names %s', (_label, post, name) => {
+    expect(relationIndexBeside(post)).toBe(name);
   });
 
   it.each([
