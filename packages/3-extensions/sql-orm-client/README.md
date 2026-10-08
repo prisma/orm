@@ -174,14 +174,17 @@ After `whereUnique`:
 | `create`, `createAll`, `createAndCount`, `upsert` | unchanged; they do not use the filter |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn`, `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`, `prepared.all`, `prepared.aggregate` | compile error |
 
-The refused methods still appear in editor completion; calling one is the error. The error message says that the `uniqueFilter` property has conflicting types.
+The refused methods still appear in editor completion; calling one is the error. The error message names `uniqueFilter`.
 
 `whereUnique` is not available inside an `include` refinement. The refinement collection does not have the method, and a call that reaches it another way, such as through a fragment made by `collection.fragment`, throws `ORM.INCLUDE_INVALID`.
 
-A helper that takes or returns such a collection writes its type as `UniquelyFiltered<C>`, which is `C & HasWhere & HasUniqueFilter`:
+A helper that takes or returns such a collection writes its type as `UniquelyFiltered<C>`, which is `C & HasWhere & HasUniqueFilter`. Constrained as below, it accepts a custom collection class and the plain collection of the model, with or without an `include`, and its result keeps the class's methods:
 
 ```ts
-function ownedBy<C extends Collection<Contract, 'Post'>>(post: UniquelyFiltered<C>, userId: string) {
+function ownedBy<C extends Collection<Contract, 'Post', unknown, CollectionTypeState>>(
+  post: UniquelyFiltered<C>,
+  userId: string,
+) {
   return post.where({ userId });
 }
 ```

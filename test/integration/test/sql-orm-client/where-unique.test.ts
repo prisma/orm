@@ -294,7 +294,11 @@ describe('integration/whereUnique', () => {
           { id: 1, name: 'Alice' },
           { id: 2, name: 'Bob' },
         ]);
-        expect(await readUserRoles(runtime)).toHaveLength(3);
+        expect(await readUserRoles(runtime)).toEqual([
+          { user_id: 1, role_id: ROLE_ADMIN, level: 10 },
+          { user_id: 1, role_id: ROLE_EDITOR, level: 20 },
+          { user_id: 2, role_id: ROLE_ADMIN, level: 30 },
+        ]);
       });
     },
     timeouts.spinUpPpgDev,
