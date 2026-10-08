@@ -7,6 +7,7 @@ import {
 } from '../src/foreign-key-materialization';
 import type { IndexCandidate } from '../src/index-deduplication';
 import { lowerAuthoredIndex } from '../src/index-naming';
+import type { ForeignKeyIndex } from '../src/ir/foreign-key';
 
 const namespaceId = asNamespaceId('public');
 
@@ -21,7 +22,7 @@ function foreignKey(
   };
 }
 
-function reference(columns: readonly string[], index?: string) {
+function reference(columns: readonly string[], index?: ForeignKeyIndex) {
   return {
     source: { namespaceId, tableName: 'post', columns },
     target: { namespaceId, tableName: 'user', columns: ['id'] },
@@ -73,7 +74,7 @@ describe('materializeForeignKeysAndIndexes', () => {
     expect(
       materialize({ foreignKeys: [foreignKey(['author_id'], { constraint: true, index: true })] }),
     ).toEqual({
-      foreignKeys: [reference(['author_id'], 'post_author_id_idx_f3862461')],
+      foreignKeys: [reference(['author_id'], { name: 'post_author_id_idx_f3862461' })],
       indexes: [derivedAuthorIndex],
     });
   });
@@ -88,8 +89,8 @@ describe('materializeForeignKeysAndIndexes', () => {
       }),
     ).toEqual({
       foreignKeys: [
-        reference(['author_id'], 'post_author_id_idx_f3862461'),
-        reference(['author_id'], 'post_author_id_idx_f3862461'),
+        reference(['author_id'], { name: 'post_author_id_idx_f3862461' }),
+        reference(['author_id'], { name: 'post_author_id_idx_f3862461' }),
       ],
       indexes: [derivedAuthorIndex],
     });
@@ -114,21 +115,55 @@ describe('materializeForeignKeysAndIndexes', () => {
         declaredIndexes: [partialIndex],
       }),
     ).toEqual({
-      foreignKeys: [reference(['author_id'], 'post_author_live_8ae1cbe7')],
+      foreignKeys: [reference(['author_id'], { name: 'post_author_live_8ae1cbe7' })],
       indexes: [partialIndex.index],
     });
   });
 
   it.each([
-    ['unique constraint', { uniques: [{ columns: ['author_id'], name: 'post_author_key' }] }],
-    ['primary key', { primaryKey: { columns: ['author_id'], name: 'post_author_key' } }],
-  ])('points a foreign key at the %s its index argument names', (_label, table) => {
+    [
+      'unique constraint',
+      { uniques: [{ columns: ['author_id'], name: 'post_author_key' }] },
+      { unique: true },
+    ],
+    [
+      'primary key',
+      { primaryKey: { columns: ['author_id'], name: 'post_author_key' } },
+      { primaryKey: true },
+    ],
+  ] as const)('points a foreign key at the %s its index argument names', (_label, table, index) => {
     expect(
       materialize({
         foreignKeys: [foreignKey(['author_id'], { constraint: true, index: 'post_author_key' })],
         ...table,
       }),
-    ).toEqual({ foreignKeys: [reference(['author_id'], 'post_author_key')], indexes: [] });
+    ).toEqual({ foreignKeys: [reference(['author_id'], index)], indexes: [] });
+  });
+
+  it.each([
+    ['unique constraint', { uniques: [{ columns: ['author_id'] }] }, { unique: true }],
+    ['primary key', { primaryKey: { columns: ['author_id'] } }, { primaryKey: true }],
+  ] as const)('backs a foreign key by an unnamed %s on its columns', (_label, table, index) => {
+    expect(
+      materialize({
+        foreignKeys: [foreignKey(['author_id'], { constraint: true, index: true })],
+        ...table,
+      }),
+    ).toEqual({ foreignKeys: [reference(['author_id'], index)], indexes: [] });
+  });
+
+  it.each([
+    ['unique constraint', { uniques: [{ columns: ['author_id', 'id'], name: 'post_author_key' }] }],
+    ['primary key', { primaryKey: { columns: ['author_id', 'id'], name: 'post_author_key' } }],
+  ])('refuses an index argument naming a %s on other columns', (_label, table) => {
+    expect(() =>
+      materialize({
+        foreignKeys: [foreignKey(['author_id'], { constraint: true, index: 'post_author_key' })],
+        ...table,
+      }),
+    ).toThrow(
+      'The foreign key on table "post" columns (author_id) names "post_author_key" as its index, but that key is on columns (author_id, id); a unique constraint or primary key backs a foreign key only on exactly its columns.',
+    );
   });
 
   it('refuses an index argument that names nothing on the table', () => {

@@ -36,6 +36,7 @@ export {
 
 import type {
   CheckConstraint,
+  ForeignKey,
   Index,
   SqlModelStorage,
   SqlStorage,
@@ -596,6 +597,29 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
   >(contractResult);
 }
 
+function sameColumns(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((column, position) => column === b[position]);
+}
+
+function foreignKeyBackingError(table: StorageTable, fk: ForeignKey): string | undefined {
+  const { index } = fk;
+  if (index === undefined) return undefined;
+  const columns = fk.source.columns;
+  if ('name' in index) {
+    return table.indexes.some((candidate) => candidate.name === index.name)
+      ? undefined
+      : `is indexed by "${index.name}", but the table has no index with that name`;
+  }
+  if ('primaryKey' in index) {
+    return table.primaryKey !== undefined && sameColumns(table.primaryKey.columns, columns)
+      ? undefined
+      : 'is indexed by the primary key, but the table has no primary key on exactly those columns';
+  }
+  return table.uniques.some((unique) => sameColumns(unique.columns, columns))
+    ? undefined
+    : 'is indexed by a unique constraint, but the table has no unique constraint on exactly those columns';
+}
+
 /**
  * Validates semantic constraints on SqlStorage that cannot be expressed in Arktype schemas.
  *
@@ -608,7 +632,7 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
  * - nullable columns in primary key definitions
  * - `setNull` referential action on a non-nullable FK column (would fail at runtime)
  * - `setDefault` referential action on a non-nullable FK column without a DEFAULT (would fail at runtime)
- * - a foreign key whose `index` names no index, unique constraint or primary key of its table
+ * - a foreign key whose `index` is an index, primary key or unique constraint its table does not have
  */
 export function validateStorageSemantics(storage: SqlStorage): string[] {
   const errors: string[] = [];
@@ -688,15 +712,11 @@ export function validateStorageSemantics(storage: SqlStorage): string[] {
     rejectRepeatedIndexColumns(table.indexes, tableCoordinate, errors);
     rejectDuplicateWireNamedIndexContent(table.indexes, tableCoordinate, errors);
 
-    const backingNames = new Set(
-      [table.primaryKey?.name, ...table.uniques.map((unique) => unique.name)]
-        .filter((name) => name !== undefined)
-        .concat(table.indexes.map((index) => index.name)),
-    );
     for (const fk of table.foreignKeys) {
-      if (fk.index !== undefined && !backingNames.has(fk.index)) {
+      const error = foreignKeyBackingError(table, fk);
+      if (error !== undefined) {
         errors.push(
-          `${tableCoordinate}: foreign key on columns [${fk.source.columns.join(', ')}] names index "${fk.index}", but the table has no index, unique constraint or primary key with that name`,
+          `${tableCoordinate}: foreign key on columns [${fk.source.columns.join(', ')}] ${error}`,
         );
       }
     }

@@ -1,6 +1,6 @@
 import type { CodecTrait } from '@internal/framework-components/codec';
 import type { ControlDriverInstance } from '@internal/framework-components/control';
-import type { ReferentialAction } from './ir/foreign-key';
+import type { ForeignKeyIndex, ReferentialAction } from './ir/foreign-key';
 
 export interface SqlControlDriverInstance<T extends string = string>
   extends ControlDriverInstance<'sql', T> {
@@ -13,6 +13,7 @@ export interface SqlControlDriverInstance<T extends string = string>
 export { CheckConstraint, type CheckConstraintInput } from './ir/check-constraint';
 export {
   ForeignKey,
+  type ForeignKeyIndex,
   type ForeignKeyInput,
   type ReferentialAction,
 } from './ir/foreign-key';
@@ -66,7 +67,7 @@ export type ForeignKeyOptions = {
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
-  readonly index?: string;
+  readonly index?: ForeignKeyIndex;
 };
 
 export type SqlModelFieldStorage = {
