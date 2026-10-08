@@ -52,7 +52,7 @@ The runtime is not an actor. It hosts the tree, attaches each new activity under
 
 This is the test for what deserves an activity, and it makes the next decision true by construction.
 
-### 2. Every ORM terminal opens a activity
+### 2. Every ORM terminal opens an activity
 
 Including a `create()` that runs one `INSERT`, and a call that runs no query at all because the cache served it. The activity is the user's intent: "you called this method, and we turned it into these statements for you."
 
