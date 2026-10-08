@@ -333,6 +333,12 @@ function bind(options: BindingInputs): BinderResult {
     const outcome = resolveTypeReference(name, baseScope, references);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
+    bindEntityConstructorArgument(symbol, outcome.resolution, {
+      scope: baseScope,
+      sources,
+      references,
+      diagnostics,
+    });
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -379,6 +385,12 @@ function bind(options: BindingInputs): BinderResult {
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
+      bindEntityConstructorArgument(field, outcome.resolution, {
+        scope: stack.current(),
+        sources,
+        references,
+        diagnostics,
+      });
       if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
@@ -845,6 +857,22 @@ function targetFields(
   if (target === undefined) return undefined;
   if (target.kind === 'model' || target.kind === 'compositeType') return target.symbol.fields;
   return undefined;
+}
+
+function bindEntityConstructorArgument(
+  symbol: FieldSymbol | NamedTypeSymbol,
+  type: Resolution,
+  ctx: ReferenceContext,
+): void {
+  if (type.kind !== 'contributedType') return;
+  const descriptor = type.symbol.descriptor;
+  const index = descriptor.kind === 'typeConstructor' ? descriptor.entityRefArg?.index : undefined;
+  if (index === undefined) return;
+  const positional = symbol.typeConstructor?.args.filter((arg) => arg.kind === 'positional');
+  const node = positional?.[index]?.expression?.syntax;
+  const written = node === undefined ? undefined : writtenEntityReference(node);
+  if (node === undefined || written === undefined) return;
+  ctx.references.set(node, resolveEntity(written, node, ctx));
 }
 
 function resolveEntity(
