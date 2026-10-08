@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModels, fieldText, INT_COLUMN, table } from './print-support';
 
 describe('relations', () => {
-  function postAndUser(foreignKey: Record<string, unknown>) {
+  function postAndUser(foreignKey: Record<string, unknown>, indexes: readonly unknown[] = []) {
     return buildModels({
       models: {
         User: {
@@ -35,6 +35,7 @@ describe('relations', () => {
         post: table({
           columns: { id: INT_COLUMN, authorId: INT_COLUMN },
           primaryKey: { columns: ['id'] },
+          indexes,
           foreignKeys: [
             {
               source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
@@ -58,6 +59,20 @@ describe('relations', () => {
     const models = postAndUser({ name: 'post_author_fkey' });
     expect(models[1]?.fields.map(fieldText)[2]).toBe(
       'author User @relation(fields: [authorId], references: [id], map: "post_author_fkey", index: false)',
+    );
+  });
+
+  it('names the index that backs the foreign key', () => {
+    const models = postAndUser({ index: 'post_authorId_idx_e47547ed' }, [
+      {
+        name: 'post_authorId_idx_e47547ed',
+        prefix: 'post_authorId_idx',
+        columns: ['authorId'],
+        unique: false,
+      },
+    ]);
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id], index: "post_authorId_idx_e47547ed")',
     );
   });
 

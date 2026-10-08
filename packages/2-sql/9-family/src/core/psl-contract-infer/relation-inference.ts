@@ -1,8 +1,4 @@
-import {
-  backingIndexColumnKeys,
-  isBackedByColumnKeys,
-} from '@internal/sql-contract/foreign-key-materialization';
-import type { SqlForeignKeyIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import type { SqlForeignKeyIR, SqlIndexIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { InternalError } from '@internal/utils/internal-error';
 import { deriveBackRelationFieldName, deriveRelationFieldName, pluralize } from './name-transforms';
 import type { RelationField } from './printer-config';
@@ -22,9 +18,13 @@ export type InferredRelations = {
   readonly relationsByTable: ReadonlyMap<string, readonly RelationField[]>;
 };
 
+/** Whether a live index is of the target's default kind, the kind the backing index `contract emit` derives for a relation has. */
+export type IsDefaultIndexKind = (index: SqlIndexIR) => boolean;
+
 export function inferRelations(
   tables: Record<string, SqlTableIR>,
   modelNameMap: ReadonlyMap<string, string>,
+  isDefaultIndexKind: IsDefaultIndexKind,
 ): InferredRelations {
   const relationsByTable = new Map<string, RelationField[]>();
 
@@ -79,7 +79,7 @@ export function inferRelations(
         fk,
         childOptional,
         relationName,
-        table,
+        { table, isDefaultIndexKind },
       );
 
       addRelationField(relationsByTable, childTableName, childRelField);
@@ -163,15 +163,13 @@ function deriveRelationName(
  * `tables` (e.g. a cross-space reference into another contract) can reuse the
  * same normalization instead of duplicating it.
  *
- * `hostTable` is the table the FK is declared on (i.e. `table`, not the
- * referenced parent) — its own indexes/uniques/primary key are what a
- * backing index for this FK would be. When none of them exactly match the
- * FK's source columns (in order), `index: false` is stamped so the emitted
- * `@relation` opts out of the framework's default derived backing-index
- * expectation, matching what `db verify` will find live. Passing the table
- * is optional so existing single-FK callers (e.g. cross-space resolution
- * before a host table reference is threaded through) can omit it and keep
- * the framework default.
+ * `host.table` is the table the FK is declared on (not the referenced
+ * parent). `contract emit` derives a backing index for every relation and
+ * drops it again when the table has an identical index or a unique
+ * constraint, unique index or primary key on the same columns. When the live
+ * table has none of those, `index: false` is stamped so the emitted contract
+ * expects no index the database lacks. Without a host, the relation keeps
+ * the default.
  */
 export function buildChildRelationField(
   fieldName: string,
@@ -179,26 +177,12 @@ export function buildChildRelationField(
   fk: SqlForeignKeyIR,
   optional: boolean,
   relationName?: string,
-  hostTable?: SqlTableIR,
+  host?: { readonly table: SqlTableIR; readonly isDefaultIndexKind: IsDefaultIndexKind },
 ): RelationField {
   const onDelete = fk.onDelete && fk.onDelete !== DEFAULT_ON_DELETE ? fk.onDelete : undefined;
   const onUpdate = fk.onUpdate && fk.onUpdate !== DEFAULT_ON_UPDATE ? fk.onUpdate : undefined;
   const index =
-    hostTable &&
-    !isBackedByColumnKeys(
-      fk.columns,
-      // Only indexes the inferrer actually emits can back the FK in the
-      // emitted contract: partial indexes (and expression indexes, which
-      // carry no column tuple) are not emitted yet, so
-      // they must not suppress the explicit `index: false`.
-      backingIndexColumnKeys({
-        indexes: hostTable.indexes.filter((i) => i.where === undefined),
-        uniques: hostTable.uniques,
-        primaryKey: hostTable.primaryKey,
-      }),
-    )
-      ? false
-      : undefined;
+    host !== undefined && !servesDerivedBackingIndex(fk.columns, host) ? false : undefined;
 
   return {
     fieldName,
@@ -214,6 +198,27 @@ export function buildChildRelationField(
     onUpdate: onUpdate ? REFERENTIAL_ACTION_PSL[onUpdate] : undefined,
     index,
   };
+}
+
+function servesDerivedBackingIndex(
+  columns: readonly string[],
+  host: { readonly table: SqlTableIR; readonly isDefaultIndexKind: IsDefaultIndexKind },
+): boolean {
+  const { table } = host;
+  const onColumns = (candidate: readonly string[] | undefined) =>
+    candidate !== undefined &&
+    candidate.length === columns.length &&
+    candidate.every((column, position) => column === columns[position]);
+  return (
+    onColumns(table.primaryKey?.columns) ||
+    table.uniques.some((unique) => onColumns(unique.columns)) ||
+    table.indexes.some(
+      (index) =>
+        onColumns(index.columns) &&
+        index.where === undefined &&
+        (index.unique || (index.options === undefined && host.isDefaultIndexKind(index))),
+    )
+  );
 }
 
 function resolveUniqueFieldName(

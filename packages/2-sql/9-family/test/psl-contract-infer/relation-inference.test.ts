@@ -1,6 +1,8 @@
-import { SqlTableIR } from '@internal/sql-schema-ir/types';
+import { type SqlIndexIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { inferRelations } from '../../src/core/psl-contract-infer/relation-inference';
+
+const isDefaultIndexKind = (index: SqlIndexIR) => index.type === undefined;
 
 describe('inferRelations', () => {
   it('infers 1:N relation from FK', () => {
@@ -29,7 +31,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['post', 'Post'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     // Child table (post) should have relation field
     const postRelations = relationsByTable.get('post');
@@ -76,7 +78,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['profile', 'Profile'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     // Back-relation should be optional (1:1), not a list
     const userRelations = relationsByTable.get('user');
@@ -125,7 +127,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['profile', 'Profile'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const userRelations = relationsByTable.get('user');
     expect(userRelations).toHaveLength(1);
@@ -173,7 +175,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['draft', 'Draft'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const userRelations = relationsByTable.get('user');
     expect(userRelations).toHaveLength(1);
@@ -225,7 +227,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['handle', 'Handle'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const userRelations = relationsByTable.get('user');
     expect(userRelations).toHaveLength(1);
@@ -260,7 +262,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['user_detail', 'UserDetail'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const userRelations = relationsByTable.get('user');
     expect(userRelations).toHaveLength(1);
@@ -306,7 +308,7 @@ describe('inferRelations', () => {
       ['account', 'Account'],
       ['profile', 'Profile'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const accountRelations = relationsByTable.get('account');
     expect(accountRelations).toHaveLength(1);
@@ -356,7 +358,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['message', 'Message'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const messageRelations = relationsByTable.get('message');
     expect(messageRelations).toHaveLength(2);
@@ -398,7 +400,7 @@ describe('inferRelations', () => {
       ['message', 'Message'],
     ]);
 
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
     const messageRelations = relationsByTable.get('message');
 
     expect(messageRelations).toHaveLength(2);
@@ -423,7 +425,7 @@ describe('inferRelations', () => {
       }),
     };
     const modelNameMap = new Map([['category', 'Category']]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const relations = relationsByTable.get('category');
     expect(relations).toHaveLength(2); // child + back-relation
@@ -478,7 +480,7 @@ describe('inferRelations', () => {
       ['parent', 'Parent'],
       ['child', 'Child'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const childRelations = relationsByTable.get('child');
     expect(childRelations![0]).toMatchObject({
@@ -504,7 +506,7 @@ describe('inferRelations', () => {
       }),
     };
 
-    const { relationsByTable } = inferRelations(tables, new Map());
+    const { relationsByTable } = inferRelations(tables, new Map(), isDefaultIndexKind);
 
     expect(relationsByTable.get('audit')![0]).toMatchObject({
       fieldName: 'owner',
@@ -548,7 +550,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['post', 'Post'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const postRelations = relationsByTable.get('post');
     expect(postRelations![0]).toMatchObject({ fieldName: 'user', index: false });
@@ -592,7 +594,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['post', 'Post'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const postRelations = relationsByTable.get('post');
     expect(postRelations![0]?.index).toBeUndefined();
@@ -647,7 +649,7 @@ describe('inferRelations', () => {
       ['user', 'User'],
       ['post', 'Post'],
     ]);
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
 
     const postRelations = relationsByTable.get('post');
     expect(postRelations![0]).toMatchObject({ index: false });
@@ -683,7 +685,7 @@ describe('inferRelations', () => {
       ['audit', 'Audit'],
     ]);
 
-    const { relationsByTable } = inferRelations(tables, modelNameMap);
+    const { relationsByTable } = inferRelations(tables, modelNameMap, isDefaultIndexKind);
     expect(relationsByTable.get('audit')![0]).toMatchObject({
       fieldName: 'user3',
       typeName: 'User',

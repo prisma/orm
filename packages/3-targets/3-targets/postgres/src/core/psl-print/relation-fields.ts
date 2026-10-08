@@ -196,8 +196,13 @@ function buildRelationField(input: {
       args.push(namedArg('map', `"${escapePslString(foreignKey.name)}"`));
     }
     // Every index the contract carries is written as its own `@@index`, so the
-    // relation must not also ask for a backing one.
-    args.push(namedArg('index', 'false'));
+    // relation names the one that backs it rather than asking for a new one.
+    args.push(
+      namedArg(
+        'index',
+        foreignKey.index === undefined ? 'false' : `"${escapePslString(foreignKey.index)}"`,
+      ),
+    );
   }
 
   const list = relation.cardinality === '1:N' || relation.cardinality === 'N:M';
