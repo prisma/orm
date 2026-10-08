@@ -825,7 +825,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Root cause.** PR CI skips integration tests on purpose, because they are slow and costly; only the merge queue runs them. The dispatch gate ran "the touched integration files", but a behaviour change breaks every test that runs the command, touched or not.
 
-**Mitigation.** When a slice changes what a command does, the gate before queueing includes every integration and e2e test file that runs that command: find them with a grep for the command name under `test/integration` and `test/e2e`, and run those files locally (`pnpm test <file>`). Never run the full suites locally.
+**Mitigation.** When a slice changes what a command does, the gate before queueing includes every integration and e2e test file that runs that command, and runs those files locally (`pnpm test <file>`). Most journeys do not name the command: they call a helper in `test/integration/test/utils/journey-test-helpers.ts` (for example `planMigrationAndSelfEmit` runs `migration plan`). So find the helpers that run the command first, then grep `test/integration` and `test/e2e` for the command name and for each of those helpers. Never run the full suites locally.
 
 **Reference incident.** 2026-10-08, prisma/orm#30648 (refuse data loss without `--delete`): ejected from the merge queue by `migration-apply-edge-cases` and `rollback-cycle`, which planned column drops with no `--delete`.
 
