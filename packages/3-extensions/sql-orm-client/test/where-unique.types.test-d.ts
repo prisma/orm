@@ -6,6 +6,7 @@ import type {
   CollectionTypeStateOf,
   UniquelyFiltered,
 } from '../src/collection-types';
+import type { PreparedCollection } from '../src/prepared-collection';
 import type { CollectionTypeState } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
@@ -48,6 +49,10 @@ class ScopedPostCollection extends Collection<TestContract, 'Post'> {
 
   preparedTotal() {
     return this.prepared.aggregate((a) => ({ n: a.count() }));
+  }
+
+  preparedFirst() {
+    return this.prepared.first();
   }
 }
 
@@ -410,27 +415,86 @@ describe('groupBy', () => {
 
 describe('prepared', () => {
   const unique = Post.whereUnique({ id: 1 });
+  const count = (a: Parameters<Parameters<PostCollection['aggregate']>[0]>[0]) => ({
+    n: a.count(),
+  });
 
-  test('keeps first after whereUnique', () => {
+  test('all and aggregate are refused after whereUnique', () => {
+    // @ts-expect-error prepared.all needs a collection without a unique filter
+    unique.prepared.all();
+    // @ts-expect-error prepared.aggregate needs a collection without a unique filter
+    unique.prepared.aggregate(count);
+    // @ts-expect-error prepared.all needs a collection without a unique filter
+    unique.where({ title: 'x' }).prepared.all();
+    // @ts-expect-error prepared.aggregate needs a collection without a unique filter
+    unique.where({ title: 'x' }).prepared.aggregate(count);
+    // @ts-expect-error prepared.all needs a collection without a unique filter
+    unique.select('id').prepared.all();
+    // @ts-expect-error prepared.all needs a collection without a unique filter
+    plain.Post.whereUnique({ id: 1 }).prepared.all();
+    const prepared = unique.prepared;
+    // @ts-expect-error prepared.all needs a collection without a unique filter
+    prepared.all();
+  });
+
+  test('first after whereUnique has the type it has after where', () => {
     expectTypeOf(unique.prepared.first()).toEqualTypeOf(Post.where({ id: 1 }).prepared.first());
+    expectTypeOf(unique.prepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    expectTypeOf(unique.prepared.first({ title: 'x' }).consume).returns.toEqualTypeOf<
+      Promise<Row | null>
+    >();
     expectTypeOf(unique.select('id').prepared.first()).toEqualTypeOf(
       Post.where({ id: 1 }).select('id').prepared.first(),
     );
   });
 
-  test('has every member on a collection without a unique filter', () => {
-    expectTypeOf<keyof typeof Post.prepared>().toEqualTypeOf<'all' | 'aggregate' | 'first'>();
+  test('every call keeps its type on a collection without a unique filter', () => {
     const filtered = Post.where({ id: 1 });
-    expectTypeOf<keyof typeof filtered.prepared>().toEqualTypeOf<'all' | 'aggregate' | 'first'>();
-    expectTypeOf(filtered.prepared.all()).not.toBeAny();
-    expectTypeOf(filtered.prepared.aggregate((a) => ({ n: a.count() }))).not.toBeAny();
-    expectTypeOf(filtered.prepared.first()).not.toBeAny();
+    expectTypeOf(Post.prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(filtered.prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(filtered.prepared.aggregate(count).consume).returns.toEqualTypeOf<
+      Promise<{ n: number }>
+    >();
+    expectTypeOf(filtered.prepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    expectTypeOf(plain.Post.select('id').prepared.all().consume).returns.toEqualTypeOf<
+      AsyncIterableResult<{ id: number }>
+    >();
   });
 
-  test('has every member on this in a class', () => {
-    expectTypeOf(scoped.preparedRows()).not.toBeAny();
-    expectTypeOf(scoped.preparedRows()).toEqualTypeOf(plain.Post.prepared.all());
-    expectTypeOf(scoped.preparedTotal()).not.toBeAny();
+  test('every call keeps its type on this in a class', () => {
+    expectTypeOf(scoped.preparedRows().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(scoped.preparedTotal().consume).returns.toEqualTypeOf<Promise<{ n: number }>>();
+    expectTypeOf(scoped.preparedFirst().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+  });
+
+  test('every call keeps its type on a union of collections and on an Omit of a collection', () => {
+    const either = flag ? Post.published() : Post.recent();
+    expectTypeOf(either.prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(either.prepared.aggregate(count).consume).returns.toEqualTypeOf<
+      Promise<{ n: number }>
+    >();
+    expectTypeOf(either.prepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    const partial: Omit<PostCollection, 'all'> = Post;
+    expectTypeOf(partial.prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(partial.prepared.aggregate(count).consume).returns.toEqualTypeOf<
+      Promise<{ n: number }>
+    >();
+    expectTypeOf(partial.prepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+  });
+
+  test('a prepared value kept in a variable is callable later', () => {
+    const prepared = Post.prepared;
+    expectTypeOf(prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(prepared.aggregate(count).consume).returns.toEqualTypeOf<Promise<{ n: number }>>();
+    expectTypeOf(prepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    const { all } = Post.where({ id: 1 }).prepared;
+    expectTypeOf(all).not.toBeAny();
+  });
+
+  test('is assignable to the prepared type of any row and state', () => {
+    type AnyPrepared = PreparedCollection<TestContract, 'Post', unknown, CollectionTypeState>;
+    expectTypeOf(Post.prepared).toExtend<AnyPrepared>();
+    expectTypeOf(unique.prepared).toExtend<AnyPrepared>();
   });
 });
 

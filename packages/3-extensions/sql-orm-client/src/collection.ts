@@ -1532,7 +1532,10 @@ export class CollectionBase<
     CollectionRowOf<this>,
     CollectionTypeStateOf<this>
   > {
-    const prepared: PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>> = {
+    const prepared: Omit<
+      PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>>,
+      typeof TypeState
+    > = {
       aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
       all: (configure) => {
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
