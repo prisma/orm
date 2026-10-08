@@ -36,11 +36,6 @@ export interface MaterializedTableConstraints {
   readonly indexes: readonly IndexInput[];
 }
 
-type BackingObject =
-  | { readonly kind: 'index'; readonly index: IndexCandidate }
-  | { readonly kind: 'uniqueConstraint'; readonly unique: UniqueConstraintInput }
-  | { readonly kind: 'primaryKey'; readonly primaryKey: PrimaryKeyInput };
-
 /**
  * Lowers a table's authored foreign keys and indexes into the entities `contract.json` persists. A `constraint: false` foreign key contributes no `foreignKeys[]` entry. A foreign key with `index: true` gets a derived backing index; one with `index: "<name>"` uses what the table declares under that name. The table's indexes then pass through {@link deduplicateIndexes}, and each foreign key names the index, unique constraint or primary key that backs it in the result.
  */
@@ -118,7 +113,7 @@ function declaredBackingObject(
     readonly uniques: readonly UniqueConstraintInput[];
     readonly primaryKey: PrimaryKeyInput | undefined;
   },
-): BackingObject {
+): IndexReplacement {
   const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
   const indexes = table.declaredIndexes.filter(
     (candidate) => writtenName(candidate.index) === name || nameOf(candidate.index.naming) === name,
@@ -146,9 +141,9 @@ function declaredBackingObject(
 }
 
 function resolveReplacement(
-  backing: BackingObject,
+  backing: IndexReplacement,
   replacements: ReadonlyMap<IndexCandidate, IndexReplacement>,
-): BackingObject {
+): IndexReplacement {
   let current = backing;
   while (current.kind === 'index') {
     const replacement = replacements.get(current.index);
@@ -161,7 +156,7 @@ function resolveReplacement(
 /**
  * The stored name of what backs a foreign key. A unique constraint or primary key the contract leaves unnamed has no stored name, because the target names it; the foreign key then names nothing.
  */
-function nameOfBackingObject(backing: BackingObject): string | undefined {
+function nameOfBackingObject(backing: IndexReplacement): string | undefined {
   switch (backing.kind) {
     case 'index':
       return nameOf(backing.index.index.naming);
