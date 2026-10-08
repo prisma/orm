@@ -46,48 +46,61 @@ Every environment case the original decision raised is expressed by presence or 
 ## A foreign key names its backing index
 
 ```prisma
-model Post {
-  id       Int  @id
-  authorId Int
-  author   User @relation(fields: [authorId], references: [id])
+model User {
+  id    Int    @id
+  posts Post[]
+}
 
-  @@index([authorId], where: "archived_at IS NULL", name: "post_author_live")
+model Post {
+  id         Int       @id
+  authorId   Int
+  archivedAt DateTime?
+  author     User      @relation(fields: [authorId], references: [id])
+
+  @@index([authorId], where: "\"archivedAt\" IS NULL", name: "post_author_live")
 }
 ```
 
-```jsonc
+`contract emit` writes, for the `Post` table:
+
+```json
 "foreignKeys": [
-  { "source": { "columns": ["author_id"] }, "target": { "tableName": "user", "columns": ["id"] },
-    "index": { "name": "post_author_id_idx_6c952402" } }
+  {
+    "index": { "name": "Post_authorId_idx_e47547ed" },
+    "source": { "columns": ["authorId"], "namespaceId": "public", "tableName": "Post" },
+    "target": { "columns": ["id"], "namespaceId": "public", "tableName": "User" }
+  }
 ],
 "indexes": [
-  { "name": "post_author_live_e53b14dd", "columns": ["author_id"], "where": "archived_at IS NULL" },
-  { "name": "post_author_id_idx_6c952402", "columns": ["author_id"] }
+  { "columns": ["authorId"], "name": "Post_authorId_idx_e47547ed", "prefix": "Post_authorId_idx", "unique": false },
+  { "columns": ["authorId"], "name": "post_author_live_2f39f453", "prefix": "post_author_live", "unique": false, "where": "\"archivedAt\" IS NULL" }
 ]
 ```
+
+The partial index covers only live posts, so it does not stand in for the foreign key's backing index; the relation gets its own, and the foreign key names it.
 
 The stored foreign key states which object serves its lookups, so a reader of the contract never re-runs a rule to find out. Its `index` field is one of:
 
 - `{ "name": "<stored index name>" }`: an index, identified by its name as [ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md) identifies every index.
 - `{ "primaryKey": true }`: the table's primary key. A table has one, so its kind identifies it.
-- `{ "unique": true }`: the unique constraint on the foreign key's columns. A unique constraint is identified by its kind and columns, and the columns are the foreign key's own.
+- `{ "unique": ["<column>", ...] }`: a unique constraint, identified by its kind and its own columns in order. Its first columns are the foreign key's columns.
 
-The field is absent only when the relation says `index: false`: nothing backs the foreign key. A foreign key whose `index` names nothing on its table, or names an object whose first columns are not the foreign key's columns, is refused by contract validation. A contract written before the field existed (0.15 and earlier) may carry a boolean `index` on a foreign key; the loader treats it as absent.
+The field is absent when nothing backs the foreign key: the relation, or `foreignKeyDefaults`, says `index: false`, or a relation read from a Prisma 7 source has no index or key that serves it. Contract validation refuses a foreign key whose `index` names no index on its table, a primary key or unique constraint the table does not have, or an object whose first columns are not the foreign key's columns. A contract written before the field existed (0.15 and earlier) may carry a boolean `index` on a foreign key; the loader treats it as absent.
 
 ### How the build chooses it
 
-The authoring surface is unchanged. A relation always gets its own derived backing index unless it says `index: false`. It may instead name the object that serves it with `index: "<name>"`: the `name` or `map` the user wrote, or an index's stored name, of an index, unique constraint or primary key on the same table whose first columns are the foreign key's columns. A name that matches objects of two kinds is refused.
+The authoring surface is unchanged. A relation always gets its own derived backing index unless it says `index: false`. It may instead name the object that serves it with `index: "<name>"`: the `name` or `map` the user wrote, or an index's stored name, of an index, unique constraint or primary key on the same table whose first columns are the foreign key's columns. A name that matches more than one index, unique constraint or primary key of the table is refused.
 
 Then one pass removes indexes that duplicate another, for every table, whatever declared them:
 
 - **Identical indexes.** Two indexes are identical when the planner considers their content equal (`SqlIndexIR.contentEquals`: columns in order, expression, predicate, uniqueness, access method and options, with the target's default access method equal to none). The name is not compared. An index is named by the user when its source gave it `name` or `map`; a derived backing index and an unnamed `@@index` are not. Of an identical group the pass keeps the user-named index, or the first one if none is named. Two identical indexes both named with `map:` are both kept, with the warning `PN_INDEX_DUPLICATE`. Two identical indexes both named with `name:` are refused, because their wire names carry the same content hash and the planner pairs renames by that hash.
-- **Indexes a key already serves.** A plain index (columns only, no access method, options, predicate or expression) on exactly the columns of the primary key, a unique constraint, or a unique index with no predicate or expression is redundant: the unique object serves every lookup it would. The pass removes it unless the user named it, in which case both are kept, with the warning `PN_INDEX_REDUNDANT`. A partial unique index does not count, because it serves only the rows its predicate selects.
+- **Indexes a key already serves.** A plain non-unique index (columns only, no access method, options, predicate or expression) on exactly the columns of the primary key, a unique constraint, or a unique index with no predicate or expression is redundant: the unique object serves every lookup it would. The pass removes it unless the user named it, in which case both are kept, with the warning `PN_INDEX_REDUNDANT`. A partial unique index does not count, because it serves only the rows its predicate selects.
 
 A foreign key whose index the pass removes points at what replaced it. If the user later changes their index so it no longer matches, the derived backing index is no longer removed, and the next `migration plan` creates it. The pass runs inside foreign-key materialization in `@internal/sql-contract`, which the PSL interpreter and the TypeScript builder share. Its warnings go through the build's authoring warning sink, like the build's other warnings.
 
 ### Reading a database back
 
-`contract infer` reads indexes with their exact names, so they are named by the user. It asks the same predicate the pass uses whether the relation's derived backing index would be redundant next to the live table's indexes and keys. If it would be, the relation is written with no `index` argument, and emitting the result keeps the live object. Otherwise, when a live key or plain index starts with the foreign key's columns, the relation names it with `index: "<live name>"`; when nothing serves the foreign key, it writes `index: false`. A database read back and emitted plans no change. `contract print` follows the same rule: it writes `index:` only where the stored foreign key differs from what the relation would get without the argument.
+`contract infer` reads indexes with their exact names, so they are named by the user. It asks the same predicate the pass uses whether the relation's derived backing index would be redundant next to the live table's indexes and keys. If it would be, the relation is written with no `index` argument, and emitting the result keeps the live object. Otherwise, when a live key or plain index starts with the foreign key's columns, the relation names it with `index: "<live name>"`; when nothing serves the foreign key, it writes `index: false`. `contract print` refuses (`CONTRACT.PRINT_UNSUPPORTED`) a foreign key backed by a key that has no name it could write. A database read back and emitted plans no change. `contract print` follows the same rule: it writes `index:` only where the stored foreign key differs from what the relation would get without the argument.
 
 ### Without a foreign key constraint
 
