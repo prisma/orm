@@ -7,6 +7,13 @@ changes:
       glob: "**/contract.json"
       matches:
         - '"foreignKeys"\s*:\s*\[\s*\{'
+  - id: relations-name-a-leading-key-or-index
+    summary: |
+      A relation in a bundled PSL contract that says `index: false` although a primary key, unique constraint or plain index of its model starts with its foreign key's columns now names that object with `index: "<name>"`, as `contract infer` writes it. Otherwise the stored foreign key says nothing backs it.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '@relation\([^)]*\bindex\s*:\s*false'
   - id: foreign-key-materialization-takes-one-input
     summary: |
       `materializeForeignKeysAndIndexes()` from `@internal/sql-contract/foreign-key-materialization` takes one object, `{ tableName, foreignKeys, declaredIndexes, uniques, primaryKey, warnings }`, where each declared index is `{ index, namedByUser }`, and a foreign key's `index` is `true`, `false` or the name of a declared index, unique constraint or primary key. `backingIndexColumnKeys()`, `isBackedByColumnKeys()` and `BackingIndexCandidates` are removed; `derivedBackingIndexIsRedundant()` answers whether a table already serves a foreign key's lookups, by the rule the build uses.
@@ -19,6 +26,10 @@ changes:
 ## `bundled-contract-foreign-keys-name-their-backing-index`
 
 Regenerate the bundled `contract.json` and `contract.d.ts` from the extension's authoring source with its existing emission command. Only contracts with a foreign key change. A database signed with the previous contract space needs `prisma db sign`; say so in the extension's release notes.
+
+## `relations-name-a-leading-key-or-index`
+
+For each `@relation(..., index: false)` in the bundled PSL source, look at the model's `@id`/`@@id`, `@@unique`/`@unique` and `@@index` entries. If one of them has the relation's `fields` as its first fields, in order, and is not partial and has no non-default `type` or `options`, replace `index: false` with `index: "<its map or name>"`. For example, with `@@unique([sessionId, authenticationMethod], map: "mfa_amr_claims_session_id_authentication_method_pkey")`, write `session AuthSession @relation(fields: [sessionId], references: [id], index: "mfa_amr_claims_session_id_authentication_method_pkey")`. Leave `index: false` where nothing qualifies. Then regenerate the bundled contract, as `bundled-contract-foreign-keys-name-their-backing-index` says. If the source comes from `contract infer`, re-running it writes the same.
 
 ## `foreign-key-materialization-takes-one-input`
 
