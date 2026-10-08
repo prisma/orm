@@ -454,6 +454,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -499,6 +502,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -747,7 +753,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e874b70065f80e413835921897ee66db5997e1461d04a5577b863650105960e3"
+    "storageHash": "b596b070c94c65a7c369422bd7b328fa8a3c7b5c33440ff96d6951eab14f40a0"
   },
   "execution": {
     "executionHash": "0a7f0d7c621b64f307b872110f0effe4cd04d5410d04e913f6550ef107d46788",

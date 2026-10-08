@@ -700,6 +700,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -745,6 +748,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -1167,7 +1173,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c8e3487092b1860d3580b7a836bbb2969a078438fc0183e4e7dc1e00d2b8ad77",
+    "storageHash": "e6ffcff32f45de18e469df15dab64a2436682c3bfdbf62fd8b3a74d35e40014d",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",
