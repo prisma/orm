@@ -6,6 +6,7 @@ import type {
   CollectionTypeStateOf,
   UniquelyFiltered,
 } from '../src/collection-types';
+import type { CollectionTypeState } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import type { TestContract } from './helpers';
@@ -322,13 +323,6 @@ describe('whereUnique inside an include refinement', () => {
     // @ts-expect-error whereUnique is not available inside an include refinement
     plain.Post.include('author', (author) => author.whereUnique({ id: 1 }));
   });
-
-  test('a model fragment that returns a uniquely filtered collection is refused', () => {
-    const onePost = plain.Post.fragment((posts) => posts.whereUnique({ id: 1 }));
-    // @ts-expect-error a refinement cannot return a uniquely filtered collection
-    plain.User.include('posts', (posts) => posts.with(onePost));
-    expectTypeOf(plain.User.include('posts', (posts) => posts.with(summary))).not.toBeAny();
-  });
 });
 
 describe('a class whose methods call many-record methods on this', () => {
@@ -417,20 +411,6 @@ describe('groupBy', () => {
 describe('prepared', () => {
   const unique = Post.whereUnique({ id: 1 });
 
-  test('has no all and no aggregate after whereUnique', () => {
-    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
-    unique.prepared.all();
-    // @ts-expect-error prepared.aggregate is not available on a uniquely filtered collection
-    unique.prepared.aggregate((a) => ({ n: a.count() }));
-    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
-    unique.where({ title: 'x' }).prepared.all();
-    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
-    unique.select('id').prepared.all();
-    // @ts-expect-error prepared.all is not available on a uniquely filtered collection
-    plain.Post.whereUnique({ id: 1 }).prepared.all();
-    expectTypeOf<keyof typeof unique.prepared>().toEqualTypeOf<'first'>();
-  });
-
   test('keeps first after whereUnique', () => {
     expectTypeOf(unique.prepared.first()).toEqualTypeOf(Post.where({ id: 1 }).prepared.first());
     expectTypeOf(unique.select('id').prepared.first()).toEqualTypeOf(
@@ -451,5 +431,22 @@ describe('prepared', () => {
     expectTypeOf(scoped.preparedRows()).not.toBeAny();
     expectTypeOf(scoped.preparedRows()).toEqualTypeOf(plain.Post.prepared.all());
     expectTypeOf(scoped.preparedTotal()).not.toBeAny();
+  });
+});
+
+describe('a uniquely filtered collection among other collections', () => {
+  test('is assignable to the collection type of any row and state, as a filtered one is', () => {
+    type AnyPostCollection = Collection<TestContract, 'Post', unknown, CollectionTypeState>;
+    expectTypeOf(Post.where({ id: 1 })).toExtend<AnyPostCollection>();
+    expectTypeOf(Post.whereUnique({ id: 1 })).toExtend<AnyPostCollection>();
+    expectTypeOf(plain.Post.where({ id: 1 })).toExtend<AnyPostCollection>();
+    expectTypeOf(plain.Post.whereUnique({ id: 1 })).toExtend<AnyPostCollection>();
+  });
+
+  test('a conditional that mixes it with another collection keeps the many-record methods', () => {
+    const either = flag ? Post.whereUnique({ id: 1 }) : Post.published();
+    expectTypeOf(either.limit(1)).not.toBeAny();
+    expectTypeOf(either.all()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(either.deleteAll()).toEqualTypeOf<AsyncIterableResult<Row>>();
   });
 });
