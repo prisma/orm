@@ -6,6 +6,7 @@ import {
   type EnumMemberCodec,
 } from '../src/enum-accessor';
 import type { JsonValue } from '../src/types';
+import { enumMemberCodec } from './support/enum-member-codec';
 
 function countingCodec(decode: (json: JsonValue) => unknown): {
   readonly codec: EnumMemberCodec;
@@ -13,13 +14,13 @@ function countingCodec(decode: (json: JsonValue) => unknown): {
 } {
   let count = 0;
   return {
-    codec: {
-      decodeJson(json) {
+    codec: enumMemberCodec({
+      fromStored(json) {
         count += 1;
         return decode(json);
       },
-      encodeJson: (value) => (value instanceof Date ? value.toISOString() : String(value)),
-    },
+      toStored: (value) => (value instanceof Date ? value.toISOString() : String(value)),
+    }),
     decodes: () => count,
   };
 }
@@ -70,12 +71,12 @@ describe('buildEnumsMapForNamespace() decodes an enum when it is first read', ()
   });
 
   it('does not fail to build when a member cannot be decoded, only when its enum is read', () => {
-    const codec: EnumMemberCodec = {
-      decodeJson: () => {
+    const codec = enumMemberCodec({
+      fromStored: () => {
         throw new Error('cannot decode here');
       },
-      encodeJson: (value) => String(value),
-    };
+      toStored: (value) => String(value),
+    });
     const enums = buildEnumsMapForNamespace(domainOf({ Level: levelEnum }), 'public', () => codec);
     expect(() => enums['Level']?.values).toThrow('cannot decode here');
   });

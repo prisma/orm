@@ -73,11 +73,11 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe@1',
-        encode: (value: string, ctx?: SqlCodecCallContext) => {
+        toWire: (value: string, ctx?: SqlCodecCallContext) => {
           observed.push(ctx);
           return value;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -102,11 +102,11 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-column@1',
-        encode: (value: string, ctx?: SqlCodecCallContext) => {
+        toWire: (value: string, ctx?: SqlCodecCallContext) => {
           observed = ctx;
           return value;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -124,8 +124,8 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/passthrough@1',
-        encode: (value: string) => `wire:${value}`,
-        decode: (wire: string) => wire,
+        toWire: (value: string) => `wire:${value}`,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -145,11 +145,11 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/counter@1',
-        encode: (value: string) => {
+        toWire: (value: string) => {
           callCount += 1;
           return value;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -192,8 +192,8 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/blocking@1',
-        encode: (value: string) => release.promise.then((suffix) => `${value}:${suffix}`),
-        decode: (wire: string) => wire,
+        toWire: (value: string) => release.promise.then((suffix) => `${value}:${suffix}`),
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -225,10 +225,10 @@ describe('encodeParams — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        encode: () => {
+        toWire: () => {
           throw cause;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -249,11 +249,11 @@ describe('encodeParam — ctx forwarded to codec.encode', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/single-cell@1',
-        encode: (value: string, ctx?: SqlCodecCallContext) => {
+        toWire: (value: string, ctx?: SqlCodecCallContext) => {
           observedSignal = ctx?.signal;
           return value;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -273,10 +273,10 @@ describe('encodeParam — ctx forwarded to codec.encode', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/never@1',
-        encode: () => {
+        toWire: () => {
           throw new Error('must not be invoked for null/undefined');
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 

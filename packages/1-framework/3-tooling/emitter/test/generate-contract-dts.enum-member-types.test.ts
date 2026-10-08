@@ -1,5 +1,10 @@
 import type { ContractEnum, JsonValue } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
@@ -10,13 +15,16 @@ const HASHES = {
   profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
 };
 
-function stubCodec(id: string, decodeJson: (json: JsonValue) => unknown): Codec {
+const anyJsonType = dataType('test/any-json', { read: (json) => json });
+
+function stubCodec(id: string, fromStored: (json: JsonValue) => unknown): Codec {
   return {
     id,
-    encode: async (value) => value,
-    decode: async (wire) => wire,
-    encodeJson: (value) => value as JsonValue,
-    decodeJson,
+    dataType: anyJsonType,
+    toWire: async (value) => value,
+    fromWire: async (wire) => wire,
+    toDataTypeValue: (value) => dataTypeValueFor(anyJsonType, {}, value as JsonValue),
+    fromDataTypeValue: (value) => fromStored(value.value),
   };
 }
 

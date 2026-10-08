@@ -149,10 +149,10 @@ describe('empty-input answers', () => {
     const context = contextWith([{ ...headcountAny, lower }]);
     const resolve = vi.spyOn(context.aggregateDescriptors, 'resolve');
     const original = context.contractCodecs.forCodecRef.bind(context.contractCodecs);
-    const decodeJson = vi.fn(() => ({ value: 0 }));
+    const fromDataTypeValue = vi.fn(() => ({ value: 0 }));
     const codecs = vi.spyOn(context.contractCodecs, 'forCodecRef').mockImplementation((ref) => ({
       ...original(ref),
-      decodeJson,
+      fromDataTypeValue,
     }));
     const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
     const description = posts.prepared.aggregate((agg) => ({
@@ -163,7 +163,7 @@ describe('empty-input answers', () => {
     expect(resolutions).toBeGreaterThan(0);
     expect(bindings).toBeGreaterThan(0);
     expect(lower).toHaveBeenCalledOnce();
-    expect(decodeJson).not.toHaveBeenCalled();
+    expect(fromDataTypeValue).not.toHaveBeenCalled();
     const rows = (values: Record<string, unknown>[]) =>
       new AsyncIterableResult(
         (async function* () {
@@ -177,10 +177,10 @@ describe('empty-input answers', () => {
     expect(a).toEqual({ total: { value: 0 } });
     expect(b).toEqual(a);
     expect(a.total).not.toBe(b.total);
-    expect(decodeJson).toHaveBeenCalledTimes(2);
+    expect(fromDataTypeValue).toHaveBeenCalledTimes(2);
     const decoded = { value: 7 };
     expect(await description.consume(rows([{ total: decoded }]))).toEqual({ total: decoded });
-    expect(decodeJson).toHaveBeenCalledTimes(2);
+    expect(fromDataTypeValue).toHaveBeenCalledTimes(2);
     expect(resolve).toHaveBeenCalledTimes(resolutions);
     expect(codecs).toHaveBeenCalledTimes(bindings);
     expect(lower).toHaveBeenCalledOnce();

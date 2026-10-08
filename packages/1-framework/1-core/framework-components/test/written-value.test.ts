@@ -23,14 +23,18 @@ import {
 
 const unchanged = (value: JsonValue) => value;
 
-const sqlExpression = dataType('sql/expression', {});
-const text = dataType('t/text', {});
-const bool = dataType('t/bool', {});
-const small = dataType('t/small', {});
-const big = dataType('t/big', { casts: { [small.id]: (value) => `${String(value)}n` } });
-const json = dataType('t/json', {});
-const jsonb = dataType('t/jsonb', { casts: { [json.id]: unchanged } });
+const sqlExpression = dataType('sql/expression', { read: (json) => json });
+const text = dataType('t/text', { read: (json) => json });
+const bool = dataType('t/bool', { read: (json) => json });
+const small = dataType('t/small', { read: (json) => json });
+const big = dataType('t/big', {
+  read: (json) => json,
+  casts: { [small.id]: (value) => `${String(value)}n` },
+});
+const json = dataType('t/json', { read: (json) => json });
+const jsonb = dataType('t/jsonb', { read: (json) => json, casts: { [json.id]: unchanged } });
 const uuid = dataType('t/uuid', {
+  read: (json) => json,
   casts: {
     [text.id]: (value) => {
       if (typeof value === 'string' && value.length === 36) return value;
@@ -38,7 +42,10 @@ const uuid = dataType('t/uuid', {
     },
   },
 });
-const geometry = dataType('t/geometry', { casts: { [text.id]: unchanged, [json.id]: unchanged } });
+const geometry = dataType('t/geometry', {
+  read: (json) => json,
+  casts: { [text.id]: unchanged, [json.id]: unchanged },
+});
 
 const entries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
   [sqlExpression.id]: {
@@ -236,7 +243,7 @@ describe('admittedTags', () => {
   });
 
   it('lists the own tag first, then the tags of its cast sources', () => {
-    const geo = dataType('t/geo', { casts: { [json.id]: unchanged } });
+    const geo = dataType('t/geo', { read: (json) => json, casts: { [json.id]: unchanged } });
     const withGeo: DataTypeSupport = {
       entries: {
         ...entries,

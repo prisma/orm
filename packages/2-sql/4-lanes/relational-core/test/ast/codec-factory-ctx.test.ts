@@ -6,39 +6,39 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
   it('lifts a single-arg `(value)` author unchanged (back-compat)', async () => {
     const c = defineTestCodec({
       typeId: 'demo/single-arg-encode@1',
-      encode: (value: string) => value.toUpperCase(),
-      decode: (wire: string) => wire,
+      toWire: (value: string) => value.toUpperCase(),
+      fromWire: (wire: string) => wire,
     });
-    expect(await c.encode('hi', {})).toBe('HI');
+    expect(await c.toWire('hi', {})).toBe('HI');
   });
 
-  it('forwards ctx (signal + column) to a `(value, ctx)` encode author', async () => {
+  it('forwards ctx (signal + column) to a `(value, ctx)` toWire author', async () => {
     let observed: SqlCodecCallContext | undefined;
     const c = defineTestCodec({
       typeId: 'demo/ctx-encode@1',
-      encode: (value: string, ctx?: SqlCodecCallContext) => {
+      toWire: (value: string, ctx?: SqlCodecCallContext) => {
         observed = ctx;
         return value;
       },
-      decode: (wire: string) => wire,
+      fromWire: (wire: string) => wire,
     });
     const controller = new AbortController();
     const ctx: SqlCodecCallContext = {
       signal: controller.signal,
       column: { table: 'users', name: 'email' },
     };
-    await c.encode('x', ctx);
+    await c.toWire('x', ctx);
     expect(observed).toBe(ctx);
     expect(observed?.signal).toBe(controller.signal);
     expect(observed?.column).toEqual({ table: 'users', name: 'email' });
   });
 
-  it('forwards ctx (signal + column) to a `(value, ctx)` decode author', async () => {
+  it('forwards ctx (signal + column) to a `(value, ctx)` fromWire author', async () => {
     let observed: SqlCodecCallContext | undefined;
     const c = defineTestCodec({
       typeId: 'demo/ctx-decode@1',
-      encode: (value: string) => value,
-      decode: (wire: string, ctx?: SqlCodecCallContext) => {
+      toWire: (value: string) => value,
+      fromWire: (wire: string, ctx?: SqlCodecCallContext) => {
         observed = ctx;
         return wire;
       },
@@ -48,7 +48,7 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
       signal: controller.signal,
       column: { table: 'orders', name: 'total' },
     };
-    await c.decode('x', ctx);
+    await c.fromWire('x', ctx);
     expect(observed).toBe(ctx);
     expect(observed?.signal).toBe(controller.signal);
     expect(observed?.column).toEqual({ table: 'orders', name: 'total' });
@@ -58,14 +58,14 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
     let observedSignal: AbortSignal | undefined;
     const c = defineTestCodec({
       typeId: 'demo/identity@1',
-      encode: (value: string, ctx?: SqlCodecCallContext) => {
+      toWire: (value: string, ctx?: SqlCodecCallContext) => {
         observedSignal = ctx?.signal;
         return value;
       },
-      decode: (wire: string) => wire,
+      fromWire: (wire: string) => wire,
     });
     const controller = new AbortController();
-    await c.encode('x', { signal: controller.signal });
+    await c.toWire('x', { signal: controller.signal });
     expect(observedSignal).toBe(controller.signal);
   });
 
@@ -73,37 +73,37 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
     let observed: unknown = 'sentinel';
     const c = defineTestCodec({
       typeId: 'demo/empty-ctx@1',
-      encode: (value: string, ctx?: SqlCodecCallContext) => {
+      toWire: (value: string, ctx?: SqlCodecCallContext) => {
         observed = ctx;
         return value;
       },
-      decode: (wire: string) => wire,
+      fromWire: (wire: string) => wire,
     });
     const ctx: SqlCodecCallContext = {};
-    await c.encode('x', ctx);
+    await c.toWire('x', ctx);
     expect(observed).toBe(ctx);
   });
 
-  it('async ctx-bearing encode resolves with the produced value', async () => {
+  it('async ctx-bearing toWire resolves with the produced value', async () => {
     const c = defineTestCodec({
       typeId: 'demo/async-ctx@1',
-      encode: async (value: string, _ctx?: SqlCodecCallContext) => `enc:${value}`,
-      decode: (wire: string) => wire,
+      toWire: async (value: string, _ctx?: SqlCodecCallContext) => `enc:${value}`,
+      fromWire: (wire: string) => wire,
     });
-    expect(await c.encode('x', { signal: new AbortController().signal })).toBe('enc:x');
+    expect(await c.toWire('x', { signal: new AbortController().signal })).toBe('enc:x');
   });
 
-  it('a column-aware decode author observes ctx.column shape `{ table, name }`', async () => {
+  it('a column-aware fromWire author observes ctx.column shape `{ table, name }`', async () => {
     let observedColumn: SqlCodecCallContext['column'];
     const c = defineTestCodec({
       typeId: 'demo/column-aware@1',
-      encode: (value: string) => value,
-      decode: (wire: string, ctx?: SqlCodecCallContext) => {
+      toWire: (value: string) => value,
+      fromWire: (wire: string, ctx?: SqlCodecCallContext) => {
         observedColumn = ctx?.column;
         return wire;
       },
     });
-    await c.decode('x', { column: { table: 'users', name: 'email' } });
+    await c.fromWire('x', { column: { table: 'users', name: 'email' } });
     expect(observedColumn).toEqual({ table: 'users', name: 'email' });
   });
 });

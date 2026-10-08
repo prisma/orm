@@ -1,19 +1,28 @@
 /**
- * Test-only helper that constructs a SQL-family `Codec` instance from author-side encode/decode functions. Replaces the legacy public `mkCodec()` factory (deleted under TML-2357); tests that need a stub codec for behavioural assertions instantiate one through this helper rather than going through `descriptor.factory(...)`.
+ * Test-only helper that constructs a SQL-family `Codec` instance from author-side conversion functions. Replaces the legacy public `mkCodec()` factory (deleted under TML-2357); tests that need a stub codec for behavioural assertions instantiate one through this helper rather than going through `descriptor.factory(...)`.
  */
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecTrait } from '@internal/framework-components/codec';
+import {
+  type CodecTrait,
+  type DataType,
+  type DataTypeValue,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import type { Codec, SqlCodecCallContext } from '../../src/ast/codec-types';
 
-type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
+type DataTypeValueConfig<TInput> = [TInput] extends [JsonValue]
   ? {
-      encodeJson?: (value: TInput) => JsonValue;
-      decodeJson?: (json: JsonValue) => TInput;
+      toDataTypeValue?: (value: TInput) => JsonValue;
+      fromDataTypeValue?: (value: DataTypeValue) => TInput;
     }
   : {
-      encodeJson: (value: TInput) => JsonValue;
-      decodeJson: (json: JsonValue) => TInput;
+      toDataTypeValue: (value: TInput) => JsonValue;
+      fromDataTypeValue: (value: DataTypeValue) => TInput;
     };
+
+/** A data type that stores any JSON, for a test codec whose values the test does not constrain. */
+const anyJsonType: DataType = dataType('test/any-json', { read: (json) => json });
 
 export function defineTestCodec<
   Id extends string,
@@ -23,35 +32,40 @@ export function defineTestCodec<
 >(
   config: {
     typeId: Id;
-    encode: (value: TInput, ctx: SqlCodecCallContext) => TWire | Promise<TWire>;
-    decode: (wire: TWire, ctx: SqlCodecCallContext) => TInput | Promise<TInput>;
+    dataType?: DataType;
+    toWire: (value: TInput, ctx: SqlCodecCallContext) => TWire | Promise<TWire>;
+    fromWire: (wire: TWire, ctx: SqlCodecCallContext) => TInput | Promise<TInput>;
     traits?: TTraits;
-  } & JsonRoundTripConfig<TInput>,
+  } & DataTypeValueConfig<TInput>,
 ): Codec<Id, TTraits, TWire, TInput> {
-  const identity = (v: unknown) => v;
-  const userEncode = config.encode;
-  const userDecode = config.decode;
+  const type = config.dataType ?? anyJsonType;
+  const userToWire = config.toWire;
+  const userFromWire = config.fromWire;
   const widenedConfig = config as {
-    encodeJson?: (value: TInput) => JsonValue;
-    decodeJson?: (json: JsonValue) => TInput;
+    toDataTypeValue?: (value: TInput) => JsonValue;
+    fromDataTypeValue?: (value: DataTypeValue) => TInput;
   };
+  const toJson = widenedConfig.toDataTypeValue ?? ((value: TInput) => value as JsonValue);
+  const fromValue =
+    widenedConfig.fromDataTypeValue ?? ((value: DataTypeValue) => value.value as TInput);
   return {
     id: config.typeId,
-    encode: (value, ctx) => {
+    dataType: type,
+    toWire: (value, ctx) => {
       try {
-        return Promise.resolve(userEncode(value, ctx));
+        return Promise.resolve(userToWire(value, ctx));
       } catch (error) {
         return Promise.reject(error);
       }
     },
-    decode: (wire, ctx) => {
+    fromWire: (wire, ctx) => {
       try {
-        return Promise.resolve(userDecode(wire, ctx));
+        return Promise.resolve(userFromWire(wire, ctx));
       } catch (error) {
         return Promise.reject(error);
       }
     },
-    encodeJson: (widenedConfig.encodeJson ?? identity) as (value: TInput) => JsonValue,
-    decodeJson: (widenedConfig.decodeJson ?? identity) as (json: JsonValue) => TInput,
-  } as Codec<Id, TTraits, TWire, TInput>;
+    toDataTypeValue: (value) => dataTypeValueFor(type, {}, toJson(value)),
+    fromDataTypeValue: fromValue,
+  };
 }

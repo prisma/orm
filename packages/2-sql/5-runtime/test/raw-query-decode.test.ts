@@ -7,13 +7,13 @@ import { buildTestContractCodecs } from './utils';
 const contractCodecs = buildTestContractCodecs([
   defineTestCodec({
     typeId: 'test/int@1',
-    encode: (v: number) => v,
-    decode: (w: number) => w * 10,
+    toWire: (v: number) => v,
+    fromWire: (w: number) => w * 10,
   }),
   defineTestCodec({
     typeId: 'test/text@1',
-    encode: (v: string) => v,
-    decode: (w: string) => `decoded:${w}`,
+    toWire: (v: string) => v,
+    fromWire: (w: string) => `decoded:${w}`,
   }),
 ]);
 

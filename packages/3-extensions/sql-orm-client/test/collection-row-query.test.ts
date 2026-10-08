@@ -127,9 +127,9 @@ describe('collection row query', () => {
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
     const later = { title: 'second' };
-    vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+    vi.spyOn(codec, 'fromDataTypeValue').mockImplementation((value) => {
       later.title = 'changed';
-      return String(value).toUpperCase();
+      return String(value.value).toUpperCase();
     });
     const query = describeCollectionRows({
       context: collection.ctx.context,
@@ -147,7 +147,7 @@ describe('collection row query', () => {
     const { collection } = createCollectionFor('User');
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromDataTypeValue');
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
@@ -216,7 +216,7 @@ describe('collection row query', () => {
     const context = collection.ctx.context;
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromDataTypeValue');
     const columns = vi.spyOn(context.contractCodecs, 'forColumn');
     const descriptors = vi.spyOn(context.codecDescriptors, 'codecRefForColumn');
     const query = describeCollectionRows({
@@ -286,7 +286,7 @@ describe('collection row query', () => {
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
     const cause = new Error('bad cell');
-    const decode = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+    const decode = vi.spyOn(codec, 'fromDataTypeValue').mockImplementation(() => {
       throw cause;
     });
     const query = describeCollectionRows({

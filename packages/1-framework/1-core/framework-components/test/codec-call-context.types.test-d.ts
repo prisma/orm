@@ -20,13 +20,13 @@ test('CodecCallContext does not declare a `column` field (SQL-family concept)', 
 });
 
 test('Codec.encode requires a CodecCallContext as a second argument', () => {
-  type EncodeParams = Parameters<Codec<'demo/x@1', readonly [], string, string>['encode']>;
+  type EncodeParams = Parameters<Codec<'demo/x@1', readonly [], string, string>['toWire']>;
   expectTypeOf<EncodeParams[0]>().toEqualTypeOf<string>();
   expectTypeOf<EncodeParams[1]>().toEqualTypeOf<CodecCallContext>();
 });
 
 test('Codec.decode requires a CodecCallContext as a second argument', () => {
-  type DecodeParams = Parameters<Codec<'demo/x@1', readonly [], string, string>['decode']>;
+  type DecodeParams = Parameters<Codec<'demo/x@1', readonly [], string, string>['fromWire']>;
   expectTypeOf<DecodeParams[0]>().toEqualTypeOf<string>();
   expectTypeOf<DecodeParams[1]>().toEqualTypeOf<CodecCallContext>();
 });
@@ -34,12 +34,12 @@ test('Codec.decode requires a CodecCallContext as a second argument', () => {
 test('encode/decode call sites accept an explicit ctx (signal optional inside the ctx)', () => {
   type StringCodec = Codec<'demo/text@1', readonly [], string, string>;
   const encodeWithCtx = (c: StringCodec, v: string, ctx: CodecCallContext): Promise<string> =>
-    c.encode(v, ctx);
+    c.toWire(v, ctx);
   const decodeWithCtx = (c: StringCodec, w: string, ctx: CodecCallContext): Promise<string> =>
-    c.decode(w, ctx);
+    c.fromWire(w, ctx);
   // An empty ctx is legal — `signal` is the only field today and is optional inside the context shape.
-  const encodeWithEmptyCtx = (c: StringCodec, v: string): Promise<string> => c.encode(v, {});
-  const decodeWithEmptyCtx = (c: StringCodec, w: string): Promise<string> => c.decode(w, {});
+  const encodeWithEmptyCtx = (c: StringCodec, v: string): Promise<string> => c.toWire(v, {});
+  const decodeWithEmptyCtx = (c: StringCodec, w: string): Promise<string> => c.fromWire(w, {});
   void encodeWithCtx;
   void decodeWithCtx;
   void encodeWithEmptyCtx;
@@ -57,20 +57,20 @@ test('Codec carries no `runtime` or `kind` discriminator field', () => {
 test('Codec has exactly four type parameters (Id, TTraits, TWire, TInput) — no TRuntime', () => {
   // If a fifth `TRuntime` generic were added before TWire/TInput, this call shape would either fail or produce an unrelated codec type.
   type FourGenericCodec = Codec<'demo/four@1', readonly [], number, string>;
-  expectTypeOf<Parameters<FourGenericCodec['encode']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<FourGenericCodec['encode']>>().toExtend<Promise<number>>();
+  expectTypeOf<Parameters<FourGenericCodec['toWire']>[0]>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<FourGenericCodec['toWire']>>().toExtend<Promise<number>>();
 });
 
 test('encode return type is unconditionally Promise<TWire> (no conditional types)', () => {
   type CodecA = Codec<'demo/a@1', readonly [], string, string>;
   type CodecB = Codec<'demo/b@1', readonly [], number, number>;
-  expectTypeOf<ReturnType<CodecA['encode']>>().toEqualTypeOf<Promise<string>>();
-  expectTypeOf<ReturnType<CodecB['encode']>>().toEqualTypeOf<Promise<number>>();
+  expectTypeOf<ReturnType<CodecA['toWire']>>().toEqualTypeOf<Promise<string>>();
+  expectTypeOf<ReturnType<CodecB['toWire']>>().toEqualTypeOf<Promise<number>>();
 });
 
 test('decode return type is unconditionally Promise<TInput> (no conditional types)', () => {
   type CodecA = Codec<'demo/a@1', readonly [], string, string>;
   type CodecB = Codec<'demo/b@1', readonly [], number, number>;
-  expectTypeOf<ReturnType<CodecA['decode']>>().toEqualTypeOf<Promise<string>>();
-  expectTypeOf<ReturnType<CodecB['decode']>>().toEqualTypeOf<Promise<number>>();
+  expectTypeOf<ReturnType<CodecA['fromWire']>>().toEqualTypeOf<Promise<string>>();
+  expectTypeOf<ReturnType<CodecB['fromWire']>>().toEqualTypeOf<Promise<number>>();
 });

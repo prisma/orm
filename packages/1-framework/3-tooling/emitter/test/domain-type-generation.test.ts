@@ -1,6 +1,17 @@
-import type { ContractField, ContractModel, ContractValueObject } from '@internal/contract/types';
+import type {
+  ContractField,
+  ContractModel,
+  ContractValueObject,
+  JsonValue,
+} from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  type DataTypeValue,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -1048,11 +1059,14 @@ type CodecStub = Codec & {
   readonly renderOutputType?: (params: Record<string, unknown>) => string | undefined;
 };
 
+const anyJsonType = dataType('test/any-json', { read: (json) => json });
+
 function stubCodec(overrides: Partial<CodecStub> & { id: string }): CodecStub {
   return {
-    decode: (w: unknown) => w,
-    encodeJson: (v: unknown) => v,
-    decodeJson: (j: unknown) => j,
+    dataType: anyJsonType,
+    fromWire: (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => dataTypeValueFor(anyJsonType, {}, v as JsonValue),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
     ...overrides,
   } as unknown as CodecStub;
 }

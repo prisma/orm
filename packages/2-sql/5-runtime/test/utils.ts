@@ -426,8 +426,8 @@ export function createStubAdapter(): StubAdapter {
   const passthroughCodec = (typeId: string): Codec<string> =>
     defineTestCodec({
       typeId,
-      encode: (value: string | number | boolean | null) => value,
-      decode: (wire: string | number | boolean | null) => wire,
+      toWire: (value: string | number | boolean | null) => value,
+      fromWire: (wire: string | number | boolean | null) => wire,
     });
   const codecs: ReadonlyArray<Codec<string>> = [
     passthroughCodec('pg/bit@1'),
@@ -438,8 +438,8 @@ export function createStubAdapter(): StubAdapter {
     passthroughCodec('pg/int2@1'),
     defineTestCodec({
       typeId: 'pg/int4@1',
-      encode: (value: number) => value,
-      decode: (wire: number) => wire,
+      toWire: (value: number) => value,
+      fromWire: (wire: number) => wire,
     }),
     passthroughCodec('pg/int8@1'),
     passthroughCodec('pg/interval@1'),
@@ -448,29 +448,29 @@ export function createStubAdapter(): StubAdapter {
     passthroughCodec('pg/numeric@1'),
     defineTestCodec({
       typeId: 'pg/text@1',
-      encode: (value: string) => value,
-      decode: (wire: string) => wire,
+      toWire: (value: string) => value,
+      fromWire: (wire: string) => wire,
     }),
     passthroughCodec('pg/time-temporal@1'),
     defineTestCodec({
       typeId: 'pg/timestamp-temporal@1',
-      encode: (value: Date) => value,
-      decode: (wire: Date) => wire,
-      encodeJson: (value: Date) => value.toISOString(),
-      decodeJson: (json) => {
-        if (typeof json !== 'string') throw new Error('expected ISO date string');
-        return new Date(json);
+      toWire: (value: Date) => value,
+      fromWire: (wire: Date) => wire,
+      toDataTypeValue: (value: Date) => value.toISOString(),
+      fromDataTypeValue: (value) => {
+        if (typeof value.value !== 'string') throw new Error('expected ISO date string');
+        return new Date(value.value);
       },
     }),
     defineTestCodec({
       typeId: 'pg/timestamptz-temporal@1',
-      encode: (value: Date) => value,
-      decode: (wire: Date) => wire,
+      toWire: (value: Date) => value,
+      fromWire: (wire: Date) => wire,
       // Date is not assignable to JsonValue, so the JSON round-trip pair must be supplied explicitly.
-      encodeJson: (value: Date) => value.toISOString(),
-      decodeJson: (json) => {
-        if (typeof json !== 'string') throw new Error('expected ISO date string');
-        return new Date(json);
+      toDataTypeValue: (value: Date) => value.toISOString(),
+      fromDataTypeValue: (value) => {
+        if (typeof value.value !== 'string') throw new Error('expected ISO date string');
+        return new Date(value.value);
       },
     }),
     passthroughCodec('pg/timetz@1'),

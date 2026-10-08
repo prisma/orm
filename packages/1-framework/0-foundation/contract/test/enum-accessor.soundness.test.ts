@@ -1,33 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import type { ContractEnum } from '../src/domain-types';
-import { createEnumAccessor, type EnumMemberCodec } from '../src/enum-accessor';
+import { createEnumAccessor } from '../src/enum-accessor';
 import type { JsonValue } from '../src/types';
+import { enumMemberCodec, type StoredFormConversions } from './support/enum-member-codec';
 
 // Like `pg/uuid@1`, stores lower-case text and writes any text it is given in lower case.
-const lowerCaseCodec: EnumMemberCodec = {
-  decodeJson(json: JsonValue) {
+const lowerCaseCodec = enumMemberCodec({
+  fromStored(json: JsonValue) {
     if (typeof json !== 'string' || json !== json.toLowerCase()) throw new Error('not lower case');
     return json;
   },
-  encodeJson: (value: unknown) => String(value).toLowerCase(),
-};
+  toStored: (value: unknown) => String(value).toLowerCase(),
+});
 
 // Like `sqlite/datetime@1`, writes whatever `toISOString()` returns, for a Date or anything else.
-const lenientDateCodec: EnumMemberCodec = {
-  decodeJson: (json: JsonValue) => new Date(String(json)),
-  encodeJson: (value: unknown) => (value as { toISOString(): string }).toISOString(),
+const lenientDateConversions: StoredFormConversions = {
+  fromStored: (json: JsonValue) => new Date(String(json)),
+  toStored: (value: unknown) => (value as { toISOString(): string }).toISOString(),
 };
+const lenientDateCodec = enumMemberCodec(lenientDateConversions);
 
-const floatCodec: EnumMemberCodec = {
-  decodeJson: (json: JsonValue) => Number(json),
-  encodeJson: (value: unknown) =>
+const floatCodec = enumMemberCodec({
+  fromStored: (json: JsonValue) => Number(json),
+  toStored: (value: unknown) =>
     typeof value === 'number' && Number.isFinite(value) ? value : String(value),
-};
+});
 
-const bytesCodec: EnumMemberCodec = {
-  decodeJson: (json: JsonValue) => Uint8Array.from(json as number[]),
-  encodeJson: (value: unknown) => Array.from(value as Uint8Array),
-};
+const bytesCodec = enumMemberCodec({
+  fromStored: (json: JsonValue) => Uint8Array.from(json as number[]),
+  toStored: (value: unknown) => Array.from(value as Uint8Array),
+});
 
 const keyEnum: ContractEnum = {
   codecId: 'test/lower@1',
@@ -118,10 +120,13 @@ describe('createEnumAccessor() hands out a fresh object for each read of an obje
   });
 
   it('keeps a member unchanged when the codec reads it as a frozen date', () => {
-    const frozenDates = createEnumAccessor(launchEnum, {
-      ...lenientDateCodec,
-      decodeJson: (json: JsonValue) => Object.freeze(new Date(String(json))),
-    });
+    const frozenDates = createEnumAccessor(
+      launchEnum,
+      enumMemberCodec({
+        ...lenientDateConversions,
+        fromStored: (json: JsonValue) => Object.freeze(new Date(String(json))),
+      }),
+    );
     (frozenDates.members['Launch'] as Date).setTime(0);
     (frozenDates.values[0] as Date).setTime(0);
     expect({ member: frozenDates.members['Launch'], value: frozenDates.values[0] }).toEqual({

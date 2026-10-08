@@ -1,58 +1,62 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecInstanceContext } from '@internal/framework-components/codec';
+import type { Codec } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
-  sqlCharDescriptor,
-  sqlFloatDescriptor,
-  sqlIntDescriptor,
-  sqlTextDescriptor,
-  sqlVarcharDescriptor,
-} from '../src/ast/sql-codecs';
+  readStored,
+  sqlCharCodec,
+  sqlFloatCodec,
+  sqlIntCodec,
+  sqlTextCodec,
+  sqlVarcharCodec,
+  storedJson,
+} from './template-codecs';
 
-const ctx: CodecInstanceContext = { name: 'decode-json-forms' };
+type ReadingCodec = Pick<Codec, 'id' | 'dataType' | 'fromDataTypeValue'>;
 
-// Accepted forms are what PostgreSQL and SQLite write for text and integer columns in JSON (a JSON string, a JSON number), and each codec's own `encodeJson` output.
-const cases: readonly {
-  readonly codec: { readonly id: string; decodeJson(json: JsonValue): unknown };
+// Accepted forms are what PostgreSQL and SQLite write for text and integer columns in JSON (a JSON string, a JSON number), and each codec's own `toDataTypeValue` output. Which JSON a column stores is its data type's to decide, and a family template has none of its own; the template codec refuses only a value its application type cannot hold.
+const accepting: readonly {
+  readonly codec: ReadingCodec;
+  readonly accepts: readonly JsonValue[];
+}[] = [
+  { codec: sqlTextCodec(), accepts: ['hello', ''] },
+  { codec: sqlCharCodec(), accepts: ['a  ', 'a'] },
+  { codec: sqlVarcharCodec(), accepts: ['hi'] },
+  // The family codecs take any string, whatever the declared length: SQLite stores longer text, and PostgreSQL's length rule is the Postgres data type's.
+  { codec: sqlVarcharCodec({ length: 3 }), accepts: ['abc', 'abcd', 'ab  '] },
+  { codec: sqlCharCodec({ length: 3 }), accepts: ['abc', 'abcd', 'ab '] },
+];
+
+const refusing: readonly {
+  readonly codec: ReadingCodec;
   readonly accepts: readonly JsonValue[];
   readonly rejects: readonly JsonValue[];
 }[] = [
-  { codec: sqlTextDescriptor.factory()(ctx), accepts: ['hello', ''], rejects: [1, true, null, []] },
-  { codec: sqlCharDescriptor.factory({})(ctx), accepts: ['a  ', 'a'], rejects: [1, null] },
-  { codec: sqlVarcharDescriptor.factory({})(ctx), accepts: ['hi'], rejects: [1, null] },
   // A float writes NaN and the infinities as the text PostgreSQL writes for them in JSON; SQLite's float projections write the same text.
   {
-    codec: sqlFloatDescriptor.factory()(ctx),
+    codec: sqlFloatCodec(),
     accepts: [1.5, 0, -2, 'NaN', 'Infinity', '-Infinity'],
     rejects: ['1.5', 'nan', 'inf', Number.POSITIVE_INFINITY, true, null, {}],
   },
   {
-    codec: sqlIntDescriptor.factory()(ctx),
+    codec: sqlIntCodec(),
     accepts: [42, -2147483648, 9007199254740991],
     rejects: ['42', 1.5, 9007199254740992, true, null],
   },
-  // The family codecs take any string, whatever the declared length: SQLite stores longer text, and PostgreSQL's length rule is the Postgres target's.
-  {
-    codec: sqlVarcharDescriptor.factory({ length: 3 })(ctx),
-    accepts: ['abc', 'abcd', 'ab  '],
-    rejects: [1, null],
-  },
-  {
-    codec: sqlCharDescriptor.factory({ length: 3 })(ctx),
-    accepts: ['abc', 'abcd', 'ab '],
-    rejects: [1, null],
-  },
 ];
 
-describe('decodeJson reads the stored JSON form of its type and refuses any other', () => {
-  for (const { codec, accepts, rejects } of cases) {
+describe('fromDataTypeValue reads every value its application type holds', () => {
+  for (const { codec, accepts } of [...accepting, ...refusing]) {
     it(`${codec.id} accepts ${JSON.stringify(accepts)}`, () => {
-      for (const json of accepts) expect(() => codec.decodeJson(json)).not.toThrow();
+      for (const json of accepts) expect(() => readStored(codec, json)).not.toThrow();
     });
+  }
+});
 
+describe('fromDataTypeValue refuses a value its application type cannot hold', () => {
+  for (const { codec, rejects } of refusing) {
     it(`${codec.id} refuses ${JSON.stringify(rejects)}`, () => {
       for (const json of rejects) {
-        expect(() => codec.decodeJson(json)).toThrow(
+        expect(() => readStored(codec, json)).toThrow(
           expect.objectContaining({
             code: 'RUNTIME.DECODE_FAILED',
             meta: expect.objectContaining({ codecId: codec.id }),
@@ -63,13 +67,13 @@ describe('decodeJson reads the stored JSON form of its type and refuses any othe
   }
 });
 
-describe('sql/float@1 encodeJson and decodeJson agree on the non-finite values', () => {
-  const codec = sqlFloatDescriptor.factory()(ctx);
+describe('sql/float@1 toDataTypeValue and fromDataTypeValue agree on the non-finite values', () => {
+  const codec = sqlFloatCodec();
 
   it('writes NaN and the infinities as the text PostgreSQL writes, and reads them back', () => {
     const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5];
-    const stored = values.map((value) => codec.encodeJson(value));
-    expect({ stored, read: stored.map((json) => codec.decodeJson(json)) }).toEqual({
+    const stored = values.map((value) => storedJson(codec, value));
+    expect({ stored, read: stored.map((json) => readStored(codec, json)) }).toEqual({
       stored: ['NaN', 'Infinity', '-Infinity', 1.5],
       read: values,
     });

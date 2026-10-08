@@ -1,5 +1,10 @@
 import { generateContractDts } from '@internal/emitter';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
@@ -7,13 +12,15 @@ import { createEmitterTestContract as createContract } from './create-emitter-te
 const testHashes = { storageHash: 'test', profileHash: 'test' };
 
 function vectorCodecLookup(): CodecLookup {
-  const vectorCodec = {
+  const vectorType = dataType('pg/vector', { read: (json) => json });
+  const vectorCodec: Codec = {
     id: 'pg/vector@1',
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson: (v: unknown) => v as never,
-    decodeJson: (j: unknown) => j as never,
-  } as ReturnType<CodecLookup['get']>;
+    dataType: vectorType,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => dataTypeValueFor(vectorType, {}, v as number[]),
+    fromDataTypeValue: (value) => value.value,
+  };
   return {
     get: (id) => (id === 'pg/vector@1' ? vectorCodec : undefined),
     renderOutputTypeFor: (id, params) =>

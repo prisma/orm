@@ -13,10 +13,10 @@ function throwingRegistry(original: unknown) {
   return buildTestContractCodecs([
     defineTestCodec({
       typeId: 'test/passthrough@1',
-      encode: () => {
+      toWire: () => {
         throw original;
       },
-      decode: (wire: string) => wire,
+      fromWire: (wire: string) => wire,
     }),
   ]);
 }

@@ -8,6 +8,8 @@
  *   - RUNTIME.ENCODE_FAILED: element-level encode failure surfaces through the existing envelope.
  */
 
+import type { JsonValue } from '@internal/contract/types';
+import type { DataTypeValue } from '@internal/framework-components/codec';
 import {
   ColumnRef,
   type ContractCodecRegistry,
@@ -25,18 +27,21 @@ import { buildTestContractCodecs } from './utils';
 
 const CTX: SqlCodecCallContext = {};
 
+const storedAsIs = {
+  toDataTypeValue: (value: unknown) => value as JsonValue,
+  fromDataTypeValue: (value: DataTypeValue) => value.value,
+};
+
 function makeRegistry(
   codecId: string,
-  encode: (v: unknown) => unknown,
-  decode: (w: unknown) => unknown,
+  toWire: (v: unknown) => unknown,
+  fromWire: (w: unknown) => unknown,
 ): ContractCodecRegistry {
-  const identity = (v: unknown) => v as never;
   const codec = defineTestCodec({
     typeId: codecId,
-    encode: (v: unknown) => encode(v),
-    decode: (w: unknown) => decode(w),
-    encodeJson: identity,
-    decodeJson: identity,
+    toWire: (v: unknown) => toWire(v),
+    fromWire: (w: unknown) => fromWire(w),
+    ...storedAsIs,
   });
   return buildTestContractCodecs([codec]);
 }
@@ -179,8 +184,8 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const calls: unknown[] = [];
     const codec = defineTestCodec({
       typeId: 'test/upper@1',
-      encode: (v: string) => v,
-      decode: (w: string) => {
+      toWire: (v: string) => v,
+      fromWire: (w: string) => {
         calls.push(w);
         return `DEC:${w}`;
       },
@@ -199,8 +204,8 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const calls: unknown[] = [];
     const codec = defineTestCodec({
       typeId: 'test/upper@1',
-      encode: (v: string) => v,
-      decode: (w: string) => {
+      toWire: (v: string) => v,
+      fromWire: (w: string) => {
         calls.push(w);
         return `DEC:${w}`;
       },
@@ -216,15 +221,13 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
   });
 
   it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED', async () => {
-    const identity = (v: unknown) => v as never;
     const codec = defineTestCodec({
       typeId: 'test/throw@1',
-      encode: (v: unknown) => v,
-      decode: (_w: unknown) => {
+      toWire: (v: unknown) => v,
+      fromWire: (_w: unknown) => {
         throw new Error('element decode error');
       },
-      encodeJson: identity,
-      decodeJson: identity,
+      ...storedAsIs,
     });
     const registry = buildTestContractCodecs([codec]);
     const ast = SelectAst.from(TableSource.named('t')).withProjection([
@@ -243,13 +246,11 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
   });
 
   it('returns null for the whole column when the wire value is null (not an array)', async () => {
-    const identity = (v: unknown) => v as never;
     const codec = defineTestCodec({
       typeId: 'test/upper@1',
-      encode: (v: unknown) => v,
-      decode: (w: unknown) => w,
-      encodeJson: identity,
-      decodeJson: identity,
+      toWire: (v: unknown) => v,
+      fromWire: (w: unknown) => w,
+      ...storedAsIs,
     });
     const registry = buildTestContractCodecs([codec]);
     const ast = buildPlan(true);
@@ -264,8 +265,8 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
     const calls: unknown[] = [];
     const codec = defineTestCodec({
       typeId: 'test/upper@1',
-      encode: (v: string) => v,
-      decode: (w: string) => {
+      toWire: (v: string) => v,
+      fromWire: (w: string) => {
         calls.push(w);
         return `DEC:${w}`;
       },
@@ -282,8 +283,8 @@ describe('decodeRow — many CodecRef via ProjectionItem', () => {
   it('scalar path (no many flag) applies codec to the whole wire value', async () => {
     const codec = defineTestCodec({
       typeId: 'test/upper@1',
-      encode: (v: string) => v,
-      decode: (w: string) => `DEC:${w}`,
+      toWire: (v: string) => v,
+      fromWire: (w: string) => `DEC:${w}`,
     });
     const registry = buildTestContractCodecs([codec]);
     const ast = buildPlan(false);

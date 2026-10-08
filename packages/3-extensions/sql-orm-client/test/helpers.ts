@@ -112,8 +112,8 @@ const pgVectorCodecStubExtension: SqlRuntimeExtensionDescriptor<'postgres'> = ((
   const factory: (params: { length: number }) => (ctx: CodecInstanceContext) => Codec = () => () =>
     defineTestCodec({
       typeId: 'pg/vector@1',
-      encode: (value: number[]) => value,
-      decode: (wire: number[]) => wire,
+      toWire: (value: number[]) => value,
+      fromWire: (wire: number[]) => wire,
     });
 
   const vectorDescriptor: RuntimeParameterizedCodecDescriptor<{ length: number }> = {

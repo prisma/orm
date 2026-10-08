@@ -1,19 +1,19 @@
 import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
-  decodeJsonBoolean,
-  decodeJsonFloat,
-  decodeJsonInteger,
-  decodeJsonIntegerText,
-  decodeJsonMatching,
-  decodeJsonString,
-  encodeJsonFloat,
+  floatToJson,
   INT32_RANGE,
   INT64_RANGE,
   isIntegerIn,
   isNonFiniteText,
+  readJsonBoolean,
+  readJsonFloat,
+  readJsonInteger,
+  readJsonIntegerText,
+  readJsonMatching,
+  readJsonString,
   refuseJsonValue,
-} from '../src/shared/decode-json';
+} from '../src/shared/json-readers';
 
 const refusal = (codecId: string, expected: string, received: string) =>
   expect.objectContaining({
@@ -36,9 +36,9 @@ describe('refuseJsonValue', () => {
   });
 });
 
-describe('decodeJsonString', () => {
+describe('readJsonString', () => {
   it('reads a JSON string', () => {
-    expect(['text', ''].map((json) => decodeJsonString('demo/text@1', json))).toEqual(['text', '']);
+    expect(['text', ''].map((json) => readJsonString('demo/text@1', json))).toEqual(['text', '']);
   });
 
   it.each<readonly [JsonValue, string]>([
@@ -48,15 +48,15 @@ describe('decodeJsonString', () => {
     [['a'], '["a"]'],
     [{ a: 'b' }, '{"a":"b"}'],
   ])('refuses %j', (json, received) => {
-    expect(() => decodeJsonString('demo/text@1', json)).toThrow(
+    expect(() => readJsonString('demo/text@1', json)).toThrow(
       refusal('demo/text@1', 'a string', received),
     );
   });
 });
 
-describe('decodeJsonMatching', () => {
+describe('readJsonMatching', () => {
   const read = (json: JsonValue) =>
-    decodeJsonMatching('demo/bits@1', json, /^[01]*$/, 'binary digits');
+    readJsonMatching('demo/bits@1', json, /^[01]*$/, 'binary digits');
 
   it('reads a string that matches the pattern', () => {
     expect(['0101', ''].map(read)).toEqual(['0101', '']);
@@ -70,9 +70,9 @@ describe('decodeJsonMatching', () => {
   });
 });
 
-describe('decodeJsonBoolean', () => {
+describe('readJsonBoolean', () => {
   it('reads a JSON boolean', () => {
-    expect([true, false].map((json) => decodeJsonBoolean('demo/flag@1', json))).toEqual([
+    expect([true, false].map((json) => readJsonBoolean('demo/flag@1', json))).toEqual([
       true,
       false,
     ]);
@@ -83,17 +83,17 @@ describe('decodeJsonBoolean', () => {
     [0, '0'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
-    expect(() => decodeJsonBoolean('demo/flag@1', json)).toThrow(
+    expect(() => readJsonBoolean('demo/flag@1', json)).toThrow(
       refusal('demo/flag@1', 'a boolean', received),
     );
   });
 });
 
-describe('decodeJsonInteger', () => {
+describe('readJsonInteger', () => {
   const range = { min: -128, max: 127 };
 
   it('reads an integer within the range, both ends included', () => {
-    expect([-128, 0, 127].map((json) => decodeJsonInteger('demo/int@1', json, range))).toEqual([
+    expect([-128, 0, 127].map((json) => readJsonInteger('demo/int@1', json, range))).toEqual([
       -128, 0, 127,
     ]);
   });
@@ -105,19 +105,19 @@ describe('decodeJsonInteger', () => {
     ['1', '"1"'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
-    expect(() => decodeJsonInteger('demo/int@1', json, range)).toThrow(
+    expect(() => readJsonInteger('demo/int@1', json, range)).toThrow(
       refusal('demo/int@1', 'an integer from -128 to 127', received),
     );
   });
 });
 
-describe('decodeJsonIntegerText', () => {
+describe('readJsonIntegerText', () => {
   const range = { min: -128n, max: 127n };
 
   it('reads decimal integer text as a bigint, within the range when there is one', () => {
     expect({
-      ranged: ['-128', '0', '127'].map((json) => decodeJsonIntegerText('demo/big@1', json, range)),
-      unbounded: decodeJsonIntegerText('demo/big@1', '123456789012345678901234567890'),
+      ranged: ['-128', '0', '127'].map((json) => readJsonIntegerText('demo/big@1', json, range)),
+      unbounded: readJsonIntegerText('demo/big@1', '123456789012345678901234567890'),
     }).toEqual({ ranged: [-128n, 0n, 127n], unbounded: 123456789012345678901234567890n });
   });
 
@@ -128,13 +128,13 @@ describe('decodeJsonIntegerText', () => {
     ['1e3', '"1e3"'],
     [12, '12'],
   ])('refuses %j against a range', (json, received) => {
-    expect(() => decodeJsonIntegerText('demo/big@1', json, range)).toThrow(
+    expect(() => readJsonIntegerText('demo/big@1', json, range)).toThrow(
       refusal('demo/big@1', 'a decimal integer string from -128 to 127', received),
     );
   });
 
   it('refuses a non-integer without a range', () => {
-    expect(() => decodeJsonIntegerText('demo/big@1', '1.5')).toThrow(
+    expect(() => readJsonIntegerText('demo/big@1', '1.5')).toThrow(
       refusal('demo/big@1', 'a decimal integer string', '"1.5"'),
     );
   });
@@ -146,7 +146,7 @@ describe('decodeJsonIntegerText', () => {
     ['two zeros', '00', '0'],
   ])('refuses %s, naming the text the database writes', (_name, json, printed) => {
     for (const bounds of [range, undefined]) {
-      expect(() => decodeJsonIntegerText('demo/big@1', json, bounds)).toThrow(
+      expect(() => readJsonIntegerText('demo/big@1', json, bounds)).toThrow(
         refusal(
           'demo/big@1',
           `"${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
@@ -160,8 +160,8 @@ describe('decodeJsonIntegerText', () => {
 describe('the float pair', () => {
   it('writes a finite number as itself and NaN and the infinities as their text', () => {
     const values = [1.5, -0, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-    const stored = values.map(encodeJsonFloat);
-    expect({ stored, read: stored.map((json) => decodeJsonFloat('demo/float@1', json)) }).toEqual({
+    const stored = values.map(floatToJson);
+    expect({ stored, read: stored.map((json) => readJsonFloat('demo/float@1', json)) }).toEqual({
       stored: [1.5, -0, 'NaN', 'Infinity', '-Infinity'],
       read: values,
     });
@@ -176,7 +176,7 @@ describe('the float pair', () => {
     [true, 'true'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
-    expect(() => decodeJsonFloat('demo/float@1', json)).toThrow(
+    expect(() => readJsonFloat('demo/float@1', json)).toThrow(
       refusal('demo/float@1', 'a finite number or the text NaN, Infinity or -Infinity', received),
     );
   });

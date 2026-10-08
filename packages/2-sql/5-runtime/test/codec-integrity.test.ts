@@ -9,6 +9,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { SqlRuntimeExtensionDescriptor } from '../src/sql-context';
+import { anyJsonConversions } from './test-codec';
 import { createStubAdapter, createTestContext } from './utils';
 
 const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
@@ -31,10 +32,9 @@ describe('createExecutionContext — column codec integrity', () => {
   function makeCodec(): Codec {
     return {
       id: 'whatever',
-      encode: (v: unknown) => Promise.resolve(v),
-      decode: (w: unknown) => Promise.resolve(w),
-      encodeJson: (v) => v as never,
-      decodeJson: (j) => j as never,
+      toWire: (v: unknown) => Promise.resolve(v),
+      fromWire: (w: unknown) => Promise.resolve(w),
+      ...anyJsonConversions,
     };
   }
 

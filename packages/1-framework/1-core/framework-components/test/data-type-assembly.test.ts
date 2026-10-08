@@ -19,10 +19,16 @@ import {
 import { authoringEntryType, tagEntryKey } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
-const int2 = dataType('demo/int2', {});
-const int8 = dataType('demo/int8', { casts: { [int2.id]: (value) => String(value) } });
-const text = dataType('demo/text', {});
-const sized = dataType('demo/sized', { params: type({ 'length?': 'number.integer >= 1' }) });
+const int2 = dataType('demo/int2', { read: (json) => json });
+const int8 = dataType('demo/int8', {
+  read: (json) => json,
+  casts: { [int2.id]: (value) => String(value) },
+});
+const text = dataType('demo/text', { read: (json) => json });
+const sized = dataType('demo/sized', {
+  read: (json) => json,
+  params: type({ 'length?': 'number.integer >= 1' }),
+});
 
 const codecDescriptors: Readonly<
   Record<
@@ -145,7 +151,7 @@ describe('assembleDataTypes', () => {
     expect(() =>
       assembleDataTypes([
         contributor('demo', [int2]),
-        contributor('other', [dataType('demo/int2', {})]),
+        contributor('other', [dataType('demo/int2', { read: (json) => json })]),
       ]),
     ).toThrow(/"other".*"demo"|"demo".*"other"/);
   });
@@ -155,7 +161,12 @@ describe('enforceDataTypeInvariants', () => {
   it('refuses a codec whose data type nobody registered, naming the contributor and the id', () => {
     expect(() =>
       invariants({
-        codecs: [{ ...codec('demo/x@1', dataType('demo/gone', {})), contributedBy: 'x-pack' }],
+        codecs: [
+          {
+            ...codec('demo/x@1', dataType('demo/gone', { read: (json) => json })),
+            contributedBy: 'x-pack',
+          },
+        ],
       }),
     ).toThrow(/x-pack.*demo\/gone|demo\/gone.*x-pack/s);
   });
@@ -193,7 +204,10 @@ describe('enforceDataTypeInvariants', () => {
   });
 
   it('refuses a cast from a data type nobody registered', () => {
-    const casting = dataType('demo/casting', { casts: { 'demo/gone': (value) => value } });
+    const casting = dataType('demo/casting', {
+      read: (json) => json,
+      casts: { 'demo/gone': (value) => value },
+    });
     expect(() =>
       invariants({ declaredTypes: [{ type: casting, contributedBy: 'x-pack' }] }),
     ).toThrow(/demo\/gone/);
@@ -284,7 +298,12 @@ describe('enforceDataTypeInvariants', () => {
   it('raises a structured error', () => {
     try {
       invariants({
-        codecs: [{ ...codec('demo/x@1', dataType('demo/gone', {})), contributedBy: 'x' }],
+        codecs: [
+          {
+            ...codec('demo/x@1', dataType('demo/gone', { read: (json) => json })),
+            contributedBy: 'x',
+          },
+        ],
       });
       expect.unreachable();
     } catch (error) {
@@ -390,7 +409,7 @@ describe('assembleAuthoringDataTypes', () => {
 
 describe('createControlStack', () => {
   it('exposes every declared data type with its contributor, in stack order', () => {
-    const uuid = dataType('demo/uuid', {});
+    const uuid = dataType('demo/uuid', { read: (json) => json });
     const component = (kind: string, id: string, dataTypes: readonly DataType[]) => ({
       kind,
       id,

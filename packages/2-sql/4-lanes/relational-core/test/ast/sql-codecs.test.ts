@@ -19,62 +19,71 @@ import {
   sqlVarcharColumn,
   sqlVarcharDescriptor,
 } from '../../src/ast/sql-codecs';
+import {
+  readStored,
+  sqlCharCodec,
+  sqlFloatCodec,
+  sqlIntCodec,
+  sqlTextCodec,
+  sqlVarcharCodec,
+  storedJson,
+} from '../template-codecs';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
 
 describe('sql-codecs', () => {
   describe('sql/text@1', () => {
-    const codec = sqlTextDescriptor.factory()(instanceCtx);
+    const codec = sqlTextCodec();
 
     it('id proxies through the descriptor', () => {
       expect(codec.id).toBe(SQL_TEXT_CODEC_ID);
     });
 
     it('encodes and decodes string values', async () => {
-      expect(await codec.encode('hello', callCtx)).toBe('hello');
-      expect(await codec.decode('hello', callCtx)).toBe('hello');
+      expect(await codec.toWire('hello', callCtx)).toBe('hello');
+      expect(await codec.fromWire('hello', callCtx)).toBe('hello');
     });
 
     it('round-trips through JSON identity', () => {
-      expect(codec.encodeJson('hello')).toBe('hello');
-      expect(codec.decodeJson('hello')).toBe('hello');
+      expect(storedJson(codec, 'hello')).toBe('hello');
+      expect(readStored(codec, 'hello')).toBe('hello');
     });
   });
 
   describe('sql/int@1', () => {
-    const codec = sqlIntDescriptor.factory()(instanceCtx);
+    const codec = sqlIntCodec();
 
     it('id proxies through the descriptor', () => {
       expect(codec.id).toBe(SQL_INT_CODEC_ID);
     });
 
     it('encodes and decodes number values', async () => {
-      expect(await codec.encode(42, callCtx)).toBe(42);
-      expect(await codec.decode(42, callCtx)).toBe(42);
+      expect(await codec.toWire(42, callCtx)).toBe(42);
+      expect(await codec.fromWire(42, callCtx)).toBe(42);
     });
 
     it('round-trips through JSON identity', () => {
-      expect(codec.encodeJson(42)).toBe(42);
-      expect(codec.decodeJson(42)).toBe(42);
+      expect(storedJson(codec, 42)).toBe(42);
+      expect(readStored(codec, 42)).toBe(42);
     });
   });
 
   describe('sql/float@1', () => {
-    const codec = sqlFloatDescriptor.factory()(instanceCtx);
+    const codec = sqlFloatCodec();
 
     it('id proxies through the descriptor', () => {
       expect(codec.id).toBe(SQL_FLOAT_CODEC_ID);
     });
 
     it('encodes and decodes number values', async () => {
-      expect(await codec.encode(3.14, callCtx)).toBe(3.14);
-      expect(await codec.decode(3.14, callCtx)).toBe(3.14);
+      expect(await codec.toWire(3.14, callCtx)).toBe(3.14);
+      expect(await codec.fromWire(3.14, callCtx)).toBe(3.14);
     });
 
     it('round-trips through JSON identity', () => {
-      expect(codec.encodeJson(3.14)).toBe(3.14);
-      expect(codec.decodeJson(3.14)).toBe(3.14);
+      expect(storedJson(codec, 3.14)).toBe(3.14);
+      expect(readStored(codec, 3.14)).toBe(3.14);
     });
 
     // A database can hold a non-finite float and spells it as a JSON string —
@@ -84,40 +93,40 @@ describe('sql-codecs', () => {
     it('writes a non-finite value as the text PostgreSQL writes for it', () => {
       expect(
         [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
-          codec.encodeJson(value),
+          storedJson(codec, value),
         ),
       ).toEqual(['NaN', 'Infinity', '-Infinity']);
     });
 
     it('reads the strings a database uses for non-finite floats', () => {
-      expect(['NaN', 'Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+      expect(['NaN', 'Infinity'].map((json) => readStored(codec, json))).toEqual([
         Number.NaN,
         Number.POSITIVE_INFINITY,
       ]);
     });
 
     it('rejects a JSON value that is not a number', () => {
-      expect(() => codec.decodeJson(true)).toThrow(/sql\/float@1/);
-      expect(() => codec.decodeJson(null)).toThrow(/sql\/float@1/);
+      expect(() => readStored(codec, true)).toThrow(/sql\/float@1/);
+      expect(() => readStored(codec, null)).toThrow(/sql\/float@1/);
     });
   });
 
   describe('sql/char@1', () => {
-    const codec = sqlCharDescriptor.factory({ length: 8 })(instanceCtx);
+    const codec = sqlCharCodec({ length: 8 });
 
     it('id proxies through the descriptor (independent of params)', () => {
       expect(codec.id).toBe(SQL_CHAR_CODEC_ID);
     });
 
     it('encodes string values verbatim', async () => {
-      expect(await codec.encode('user_001', callCtx)).toBe('user_001');
+      expect(await codec.toWire('user_001', callCtx)).toBe('user_001');
     });
 
     it('trims trailing spaces on decode, and only spaces, the padding a character column adds', async () => {
       expect(
         await Promise.all(
           ['user_001                            ', 'user_001', 'a\t  ', 'a\n', ' a'].map((wire) =>
-            codec.decode(wire, callCtx),
+            codec.fromWire(wire, callCtx),
           ),
         ),
       ).toEqual(['user_001', 'user_001', 'a\t', 'a\n', ' a']);
@@ -126,7 +135,7 @@ describe('sql-codecs', () => {
     it('trims a value with a long interior run of spaces in time linear in its length', async () => {
       const wire = `${' '.repeat(50_000)}x${' '.repeat(49_999)}`;
       const started = performance.now();
-      const decoded = await codec.decode(wire, callCtx);
+      const decoded = await codec.fromWire(wire, callCtx);
       expect({ decoded, withinBound: performance.now() - started < timeouts.default }).toEqual({
         decoded: `${' '.repeat(50_000)}x`,
         withinBound: true,
@@ -134,8 +143,8 @@ describe('sql-codecs', () => {
     });
 
     it('round-trips through JSON identity, keeping trailing spaces, as a default is written', () => {
-      expect(codec.encodeJson('user_001')).toBe('user_001');
-      expect(['user_001', 'a  ', 'a\t'].map((json) => codec.decodeJson(json))).toEqual([
+      expect(storedJson(codec, 'user_001')).toBe('user_001');
+      expect(['user_001', 'a  ', 'a\t'].map((json) => readStored(codec, json))).toEqual([
         'user_001',
         'a  ',
         'a\t',
@@ -152,20 +161,20 @@ describe('sql-codecs', () => {
   });
 
   describe('sql/varchar@1', () => {
-    const codec = sqlVarcharDescriptor.factory({ length: 255 })(instanceCtx);
+    const codec = sqlVarcharCodec({ length: 255 });
 
     it('id proxies through the descriptor', () => {
       expect(codec.id).toBe(SQL_VARCHAR_CODEC_ID);
     });
 
     it('encodes and decodes string values verbatim', async () => {
-      expect(await codec.encode('hello', callCtx)).toBe('hello');
-      expect(await codec.decode('hello', callCtx)).toBe('hello');
+      expect(await codec.toWire('hello', callCtx)).toBe('hello');
+      expect(await codec.fromWire('hello', callCtx)).toBe('hello');
     });
 
     it('round-trips through JSON identity', () => {
-      expect(codec.encodeJson('hello')).toBe('hello');
-      expect(codec.decodeJson('hello')).toBe('hello');
+      expect(storedJson(codec, 'hello')).toBe('hello');
+      expect(readStored(codec, 'hello')).toBe('hello');
     });
 
     it('renderOutputType returns Varchar<length>', () => {
@@ -213,6 +222,17 @@ describe('sql-codecs', () => {
     it('sqlVarcharColumn carries the explicit length param', () => {
       const spec = sqlVarcharColumn({ length: 64 });
       expect(spec.typeParams).toEqual({ length: 64 });
+    });
+  });
+
+  describe('templates', () => {
+    it('build no codec, because only a target that adapts them names their data type', () => {
+      expect(() => sqlTextDescriptor.factory()(instanceCtx)).toThrow(
+        /sql\/text@1 is a SQL family template/,
+      );
+      expect(() => sqlCharDescriptor.factory({ length: 8 })(instanceCtx)).toThrow(
+        /sql\/char@1 is a SQL family template/,
+      );
     });
   });
 

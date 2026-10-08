@@ -134,27 +134,27 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async-a@1',
-        encode: (value: string) => {
+        toWire: (value: string) => {
           callOrder.push('encode-a-start');
           return dA.promise.then((wire) => `${value}:${wire}`);
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
       defineTestCodec({
         typeId: 'test/async-b@1',
-        encode: (value: string) => {
+        toWire: (value: string) => {
           callOrder.push('encode-b-start');
           return dB.promise.then((wire) => `${value}:${wire}`);
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
       defineTestCodec({
         typeId: 'test/sync@1',
-        encode: (value: number) => {
+        toWire: (value: number) => {
           callOrder.push('encode-sync');
           return value + 1;
         },
-        decode: (wire: number) => wire,
+        fromWire: (wire: number) => wire,
       }),
     ];
 
@@ -177,12 +177,12 @@ describe('encodeParams — async, concurrent dispatch', () => {
     expect([...result]).toEqual(['alpha:A-WIRE', 'bravo:B-WIRE', 42]);
   });
 
-  it('always awaits codec.encode (no Promise leaks into the driver)', async () => {
+  it('always awaits codec.toWire (no Promise leaks into the driver)', async () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async@1',
-        encode: async (value: string) => `wire:${value}`,
-        decode: async (wire: string) => wire,
+        toWire: async (value: string) => `wire:${value}`,
+        fromWire: async (wire: string) => wire,
       }),
     ];
 
@@ -201,10 +201,10 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        encode: () => {
+        toWire: () => {
           throw cause;
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -229,10 +229,10 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        encode: () => {
+        toWire: () => {
           throw new Error('boom');
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -250,10 +250,10 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/sync@1',
-        encode: () => {
+        toWire: () => {
           throw new Error('codec must not be invoked for null/undefined');
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -282,10 +282,10 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        encode: () => {
+        toWire: () => {
           throw new Error('raw plans must skip codec encoding');
         },
-        decode: (wire: string) => wire,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -298,8 +298,8 @@ describe('encodeParams — async, concurrent dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/passthrough@1',
-        encode: (value: string) => `wire:${value}`,
-        decode: (wire: string) => wire,
+        toWire: (value: string) => `wire:${value}`,
+        fromWire: (wire: string) => wire,
       }),
     ];
 
@@ -326,24 +326,24 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/slow-a@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           callOrder.push('decode-a-start');
           return dA.promise.then((suffix) => `${w}:${suffix}`);
         },
       }),
       defineTestCodec({
         typeId: 'test/slow-b@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           callOrder.push('decode-b-start');
           return dB.promise.then((suffix) => `${w}:${suffix}`);
         },
       }),
       defineTestCodec({
         typeId: 'test/sync@1',
-        encode: (v: number) => v,
-        decode: (w: number) => {
+        toWire: (v: number) => v,
+        fromWire: (w: number) => {
           callOrder.push('decode-sync');
           return w * 2;
         },
@@ -378,8 +378,8 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/async@1',
-        encode: (v: string) => v,
-        decode: async (w: string) => `decoded:${w}`,
+        toWire: (v: string) => v,
+        fromWire: async (w: string) => `decoded:${w}`,
       }),
     ];
 
@@ -401,8 +401,8 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec<'pg/inline-validating-json@1', readonly [], string, JsonValue>({
         typeId: 'pg/inline-validating-json@1',
-        encode: (v: JsonValue) => JSON.stringify(v),
-        decode: async (w: string) => {
+        toWire: (v: JsonValue) => JSON.stringify(v),
+        fromWire: async (w: string) => {
           const parsed = JSON.parse(w) as Record<string, unknown>;
           if (!('name' in parsed)) {
             throw runtimeError(
@@ -450,8 +450,8 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw cause;
         },
       }),
@@ -490,8 +490,8 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('raw plans must skip codec decoding');
         },
       }),
@@ -528,8 +528,8 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/should-not-run@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('codec must not be invoked for null wire values');
         },
       }),
@@ -549,13 +549,13 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
   it('decodeField is single-armed: same path for sync and async codec authors', async () => {
     const buildCodec = (
       id: string,
-      encode: (value: string) => string,
-      decode: (wire: string) => string | Promise<string>,
+      toWire: (value: string) => string,
+      fromWire: (wire: string) => string | Promise<string>,
     ): Codec<string> =>
       defineTestCodec<string, readonly [], string, string>({
         typeId: id,
-        encode,
-        decode,
+        toWire,
+        fromWire,
       });
 
     const registry = [
@@ -592,7 +592,7 @@ describe('decodeRow — async, concurrent per-cell dispatch', () => {
 describe('seeded-secret-codec — realistic crypto path against the runtime', () => {
   const seed = 'codec-async-test-seed';
 
-  it('encodeParams encrypts plaintext via async codec.encode (no Promise leaks)', {
+  it('encodeParams encrypts plaintext via async codec.toWire (no Promise leaks)', {
     timeout: timeouts.databaseOperation,
   }, async () => {
     const registry = [createAsyncSecretCodec({ typeId: 'pg/secret@1', seed })];

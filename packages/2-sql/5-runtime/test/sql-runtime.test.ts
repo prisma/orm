@@ -75,8 +75,8 @@ function createStubCodecs(
   return [
     defineTestCodec({
       typeId: 'pg/int4@1',
-      encode: (v: number) => v,
-      decode: (w: number) => w,
+      toWire: (v: number) => v,
+      fromWire: (w: number) => w,
     }),
     ...extraCodecs,
   ];
@@ -794,10 +794,10 @@ describe('SqlRuntime', () => {
   it('wraps async parameter encoding failures before the driver runs', async () => {
     const failingCodec = defineTestCodec({
       typeId: 'test/failing-secret@1',
-      encode: async (_value: string) => {
+      toWire: async (_value: string) => {
         throw new Error('encrypt failed');
       },
-      decode: (wire: string) => wire,
+      fromWire: (wire: string) => wire,
     });
     const { stackInstance, context, driver } = createTestSetup({
       extraCodecs: [failingCodec],

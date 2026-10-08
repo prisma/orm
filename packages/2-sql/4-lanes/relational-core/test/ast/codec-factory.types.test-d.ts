@@ -1,69 +1,69 @@
 import { expectTypeOf, test } from 'vitest';
 import { defineTestCodec } from './test-codec';
 
-test('factory accepts sync encode and decode and produces Promise-returning methods', () => {
+test('factory accepts sync toWire and fromWire and produces Promise-returning methods', () => {
   const c = defineTestCodec({
     typeId: 'demo/sync@1',
-    encode: (value: string) => value,
-    decode: (wire: string) => wire,
+    toWire: (value: string) => value,
+    fromWire: (wire: string) => wire,
   });
 
-  expectTypeOf(c.encode).toBeFunction();
-  expectTypeOf(c.decode).toBeFunction();
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf(c.toWire).toBeFunction();
+  expectTypeOf(c.fromWire).toBeFunction();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.fromWire>>().toExtend<Promise<string>>();
 });
 
-test('factory accepts async encode and decode', () => {
+test('factory accepts async toWire and fromWire', () => {
   const c = defineTestCodec({
     typeId: 'demo/async@1',
-    encode: async (value: string) => value,
-    decode: async (wire: string) => wire,
+    toWire: async (value: string) => value,
+    fromWire: async (wire: string) => wire,
   });
 
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.fromWire>>().toExtend<Promise<string>>();
 });
 
-test('factory accepts mixed sync encode + async decode', () => {
+test('factory accepts mixed sync toWire + async fromWire', () => {
   const c = defineTestCodec({
     typeId: 'demo/mixed-a@1',
-    encode: (value: string) => value,
-    decode: async (wire: string) => wire,
+    toWire: (value: string) => value,
+    fromWire: async (wire: string) => wire,
   });
 
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.fromWire>>().toExtend<Promise<string>>();
 });
 
-test('factory accepts mixed async encode + sync decode', () => {
+test('factory accepts mixed async toWire + sync fromWire', () => {
   const c = defineTestCodec({
     typeId: 'demo/mixed-b@1',
-    encode: async (value: string) => value,
-    decode: (wire: string) => wire,
+    toWire: async (value: string) => value,
+    fromWire: (wire: string) => wire,
   });
 
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.fromWire>>().toExtend<Promise<string>>();
 });
 
-test('factory rejects an omitted encode — the property is required', () => {
-  // @ts-expect-error encode is required at the defineTestCodec() factory call site; the factory installs no identity fallback.
+test('factory rejects an omitted toWire — the property is required', () => {
+  // @ts-expect-error toWire is required at the defineTestCodec() factory call site; the factory installs no identity fallback.
   defineTestCodec({
     typeId: 'demo/no-encode@1',
-    decode: (wire: string) => wire,
+    fromWire: (wire: string) => wire,
   });
 });
 
-test('factory passes encodeJson and decodeJson through as synchronous', () => {
+test('factory passes toDataTypeValue and fromDataTypeValue through as synchronous', () => {
   const c = defineTestCodec({
     typeId: 'demo/json@1',
-    encode: (value: string) => value,
-    decode: (wire: string) => wire,
-    encodeJson: (value: string) => value,
-    decodeJson: (json) => json as string,
+    toWire: (value: string) => value,
+    fromWire: (wire: string) => wire,
+    toDataTypeValue: (value: string) => value,
+    fromDataTypeValue: (value) => value.value as string,
   });
 
-  expectTypeOf<ReturnType<typeof c.encodeJson>>().not.toExtend<Promise<unknown>>();
-  expectTypeOf<ReturnType<typeof c.decodeJson>>().not.toExtend<Promise<unknown>>();
+  expectTypeOf<ReturnType<typeof c.toDataTypeValue>>().not.toExtend<Promise<unknown>>();
+  expectTypeOf<ReturnType<typeof c.fromDataTypeValue>>().not.toExtend<Promise<unknown>>();
 });

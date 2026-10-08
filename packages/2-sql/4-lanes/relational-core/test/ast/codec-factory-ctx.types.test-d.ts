@@ -21,63 +21,63 @@ test('SqlCodecCallContext extends framework CodecCallContext (signal) and adds c
   void fw;
 });
 
-test('SQL Codec.encode/decode narrow ctx to SqlCodecCallContext (non-optional at the interface)', () => {
+test('SQL Codec.toWire/fromWire narrow ctx to SqlCodecCallContext (non-optional at the interface)', () => {
   type SqlCodec = Codec<'demo/x@1', readonly [], string, string>;
-  type EncodeParams = Parameters<SqlCodec['encode']>;
-  type DecodeParams = Parameters<SqlCodec['decode']>;
+  type EncodeParams = Parameters<SqlCodec['toWire']>;
+  type DecodeParams = Parameters<SqlCodec['fromWire']>;
   expectTypeOf<EncodeParams[1]>().toEqualTypeOf<SqlCodecCallContext>();
   expectTypeOf<DecodeParams[1]>().toEqualTypeOf<SqlCodecCallContext>();
 });
 
-test('factory accepts a `(value, ctx: SqlCodecCallContext)` encode author', () => {
+test('factory accepts a `(value, ctx: SqlCodecCallContext)` toWire author', () => {
   const c = defineTestCodec({
     typeId: 'demo/ctx-encode@1',
-    encode: (value: string, _ctx?: SqlCodecCallContext) => value,
-    decode: (wire: string) => wire,
+    toWire: (value: string, _ctx?: SqlCodecCallContext) => value,
+    fromWire: (wire: string) => wire,
   });
-  expectTypeOf(c.encode).toBeFunction();
-  expectTypeOf<Parameters<typeof c.encode>[1]>().toEqualTypeOf<SqlCodecCallContext>();
+  expectTypeOf(c.toWire).toBeFunction();
+  expectTypeOf<Parameters<typeof c.toWire>[1]>().toEqualTypeOf<SqlCodecCallContext>();
 });
 
-test('factory accepts a `(value, ctx: SqlCodecCallContext)` decode author', () => {
+test('factory accepts a `(value, ctx: SqlCodecCallContext)` fromWire author', () => {
   const c = defineTestCodec({
     typeId: 'demo/ctx-decode@1',
-    encode: (value: string) => value,
-    decode: (wire: string, _ctx?: SqlCodecCallContext) => wire,
+    toWire: (value: string) => value,
+    fromWire: (wire: string, _ctx?: SqlCodecCallContext) => wire,
   });
-  expectTypeOf(c.decode).toBeFunction();
-  expectTypeOf<Parameters<typeof c.decode>[1]>().toEqualTypeOf<SqlCodecCallContext>();
+  expectTypeOf(c.fromWire).toBeFunction();
+  expectTypeOf<Parameters<typeof c.fromWire>[1]>().toEqualTypeOf<SqlCodecCallContext>();
 });
 
-test('factory accepts a single-arg `(value)` encode author and exposes a Promise method', () => {
+test('factory accepts a single-arg `(value)` toWire author and exposes a Promise method', () => {
   const c = defineTestCodec({
     typeId: 'demo/single-encode@1',
-    encode: (value: string) => value,
-    decode: (wire: string) => wire,
+    toWire: (value: string) => value,
+    fromWire: (wire: string) => wire,
   });
-  expectTypeOf<ReturnType<typeof c.encode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
 });
 
-test('factory lifts an async ctx-bearing encode into a Promise method', () => {
+test('factory lifts an async ctx-bearing toWire into a Promise method', () => {
   const c = defineTestCodec({
     typeId: 'demo/async-ctx-encode@1',
-    encode: async (value: string, _ctx?: SqlCodecCallContext) => value,
-    decode: (wire: string) => wire,
+    toWire: async (value: string, _ctx?: SqlCodecCallContext) => value,
+    fromWire: (wire: string) => wire,
   });
-  expectTypeOf<ReturnType<typeof c.encode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.toWire>>().toExtend<Promise<string>>();
 });
 
-test('Codec.encode and Codec.decode require a ctx argument', () => {
+test('Codec.toWire and Codec.fromWire require a ctx argument', () => {
   const c = defineTestCodec({
     typeId: 'demo/require-ctx@1',
-    encode: (value: string) => value,
-    decode: (wire: string) => wire,
+    toWire: (value: string) => value,
+    fromWire: (wire: string) => wire,
   });
   // @ts-expect-error — ctx is non-optional on the Codec interface
-  c.encode('x');
+  c.toWire('x');
   // @ts-expect-error — ctx is non-optional on the Codec interface
-  c.decode('x');
+  c.fromWire('x');
   // Legal: explicit ctx (signal is the only field today and is optional inside the ctx).
-  void c.encode('x', {});
-  void c.decode('x', {});
+  void c.toWire('x', {});
+  void c.fromWire('x', {});
 });

@@ -53,8 +53,8 @@ function createStubAdapter() {
   const codecs: ReadonlyArray<Codec<string>> = [
     defineTestCodec({
       typeId: 'pg/int4@1',
-      encode: (v: number) => v,
-      decode: (w: number) => w,
+      toWire: (v: number) => v,
+      fromWire: (w: number) => w,
     }),
   ];
 

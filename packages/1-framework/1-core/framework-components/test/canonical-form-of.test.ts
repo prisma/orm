@@ -6,8 +6,8 @@ import { createDataTypeLookup, dataType, dataTypeId } from '../src/shared/data-t
 const upperCase = (value: JsonValue): JsonValue => String(value).toUpperCase();
 const trimmed = (value: JsonValue): JsonValue => String(value).trim();
 
-const text = dataType('demo/text', {});
-const code = dataType('demo/code', { toCanonicalForm: trimmed });
+const text = dataType('demo/text', { read: (json) => json });
+const code = dataType('demo/code', { read: (json) => json, toCanonicalForm: trimmed });
 const dataTypes = createDataTypeLookup([text, code]);
 
 describe('canonicalFormOf', () => {

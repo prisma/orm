@@ -33,38 +33,51 @@ describe('dataTypeId', () => {
 
 describe('dataType', () => {
   it('declares a type that casts from nothing', () => {
-    const type = dataType('pg/int2', {});
-    expect(type).toEqual({ id: 'pg/int2', casts: {} });
+    const type = dataType('pg/int2', { read: (json) => json });
+    expect(type).toEqual({
+      id: 'pg/int2',
+      casts: {},
+      fromContract: expect.any(Function),
+      toContract: expect.any(Function),
+      withParams: expect.any(Function),
+    });
   });
 
   it('validates its id', () => {
-    expect(() => dataType('pg/int2@1', {})).toThrow();
+    expect(() => dataType('pg/int2@1', { read: (json) => json })).toThrow();
   });
 
   it('keeps each cast under the id of the type it casts from', () => {
-    const int2 = dataType('pg/int2', {});
-    const int8 = dataType('pg/int8', { casts: { [int2.id]: (value) => String(value) } });
+    const int2 = dataType('pg/int2', { read: (json) => json });
+    const int8 = dataType('pg/int8', {
+      read: (json) => json,
+      casts: { [int2.id]: (value) => String(value) },
+    });
     expect(int8.casts[int2.id]?.(42)).toBe('42');
   });
 
   it('keeps the function that gives a value its canonical form', () => {
     const date = dataType('pg/date', {
+      read: (json) => json,
       toCanonicalForm: (value) => (value === '2024-1-1' ? '2024-01-01' : value),
     });
     expect(date.toCanonicalForm?.('2024-1-1')).toBe('2024-01-01');
   });
 
   it('declares no canonical-form function when none is given', () => {
-    expect(dataType('pg/int2', {}).toCanonicalForm).toBeUndefined();
+    expect(dataType('pg/int2', { read: (json) => json }).toCanonicalForm).toBeUndefined();
   });
 
   it('validates the id of every type it casts from', () => {
-    expect(() => dataType('pg/int8', { casts: { 'pg/int2@1': (value) => value } })).toThrow();
+    expect(() =>
+      dataType('pg/int8', { read: (json) => json, casts: { 'pg/int2@1': (value) => value } }),
+    ).toThrow();
   });
 
   it('keeps a list cast and the types its elements may be', () => {
-    const int2 = dataType('pg/int2', {});
+    const int2 = dataType('pg/int2', { read: (json) => json });
     const vector = dataType('pgvector/vector', {
+      read: (json) => json,
       listCast: { of: [int2.id], cast: (elements) => [...elements] },
     });
     expect(vector.listCast?.of).toEqual(['pg/int2']);
@@ -74,6 +87,7 @@ describe('dataType', () => {
   it('validates the id of every type a list cast takes elements of', () => {
     expect(() =>
       dataType('pgvector/vector', {
+        read: (json) => json,
         listCast: { of: [dataTypeId('pg/int2'), 'nonsense'], cast: (elements) => [...elements] },
       }),
     ).toThrow();
@@ -81,17 +95,20 @@ describe('dataType', () => {
 
   it('carries the parameter schema it is declared with', () => {
     const params = type({ 'length?': 'number.integer > 0' });
-    expect(dataType('pg/varchar', { params }).params).toBe(params);
+    expect(dataType('pg/varchar', { read: (json) => json, params }).params).toBe(params);
   });
 
   it('has no parameter schema unless one is declared', () => {
-    expect(dataType('pg/text', {})).not.toHaveProperty('params');
+    expect(dataType('pg/text', { read: (json) => json })).not.toHaveProperty('params');
   });
 });
 
 describe('createDataTypeLookup', () => {
-  const int2 = dataType('pg/int2', {});
-  const int8 = dataType('pg/int8', { casts: { [int2.id]: (value) => String(value) } });
+  const int2 = dataType('pg/int2', { read: (json) => json });
+  const int8 = dataType('pg/int8', {
+    read: (json) => json,
+    casts: { [int2.id]: (value) => String(value) },
+  });
   const lookup = createDataTypeLookup([int2, int8]);
 
   it('finds a type by id', () => {
@@ -110,18 +127,23 @@ describe('createDataTypeLookup', () => {
 
 describe('requiredParamKeys', () => {
   it('lists the parameters a data type requires', () => {
-    const vector = dataType('t/vector', { params: type({ length: 'number', 'scale?': 'number' }) });
+    const vector = dataType('t/vector', {
+      read: (json) => json,
+      params: type({ length: 'number', 'scale?': 'number' }),
+    });
     expect(requiredParamKeys(vector)).toEqual(['length']);
   });
 
   it('is empty for a data type whose parameters are optional', () => {
     expect(
-      requiredParamKeys(dataType('t/char', { params: type({ 'length?': 'number' }) })),
+      requiredParamKeys(
+        dataType('t/char', { read: (json) => json, params: type({ 'length?': 'number' }) }),
+      ),
     ).toEqual([]);
   });
 
   it('is empty for a data type without parameters', () => {
-    expect(requiredParamKeys(dataType('t/text', {}))).toEqual([]);
+    expect(requiredParamKeys(dataType('t/text', { read: (json) => json }))).toEqual([]);
   });
 });
 

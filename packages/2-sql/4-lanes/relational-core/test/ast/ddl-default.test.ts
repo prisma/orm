@@ -1,16 +1,32 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import {
+  type AnyCodecDescriptor,
+  dataType,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { encodeListLiteralDefault, encodeLiteralDefault } from '../../src/ast/ddl-default';
-import { sqlTextDescriptor } from '../../src/ast/sql-codecs';
 import { defineTestCodec } from './test-codec';
 
 const document = defineTestCodec({
   typeId: 'test/document@1',
-  encode: (value: JsonValue) => JSON.stringify(value),
-  decode: (wire: string): JsonValue => JSON.parse(wire),
+  toWire: (value: JsonValue) => JSON.stringify(value),
+  fromWire: (wire: string): JsonValue => JSON.parse(wire),
 });
+
+const text = defineTestCodec({
+  typeId: 'test/text@1',
+  dataType: dataType('test/text', { read: (json) => readJsonString('test/text', json) }),
+  toWire: (value: string) => value,
+  fromWire: (wire: string) => wire,
+});
+
+const textDescriptor = {
+  codecId: 'test/text@1',
+  paramsSchema: undefined,
+  factory: () => () => text,
+} as unknown as AnyCodecDescriptor;
 
 const documentDescriptor = {
   codecId: 'test/document@1',
@@ -24,14 +40,14 @@ const brokenDescriptor = {
   factory: () => () => ({
     ...document,
     id: 'test/broken@1',
-    decodeJson: () => {
+    fromDataTypeValue: () => {
       throw new InternalError('a codec broke an invariant');
     },
   }),
 } as unknown as AnyCodecDescriptor;
 
 const descriptors: readonly AnyCodecDescriptor[] = [
-  sqlTextDescriptor as unknown as AnyCodecDescriptor,
+  textDescriptor,
   documentDescriptor,
   brokenDescriptor,
 ];
@@ -46,8 +62,8 @@ describe('encodeLiteralDefault', () => {
   it('reads a stored default with the codec and encodes it, and encodes a Date as it is', async () => {
     const date = new Date('2024-01-02T03:04:05.000Z');
     expect([
-      await encodeLiteralDefault(lookup, { codecId: 'sql/text@1' }, 'hello', where),
-      await encodeLiteralDefault(lookup, { codecId: 'sql/text@1' }, date, where),
+      await encodeLiteralDefault(lookup, { codecId: 'test/text@1' }, 'hello', where),
+      await encodeLiteralDefault(lookup, { codecId: 'test/text@1' }, date, where),
       await encodeLiteralDefault(lookup, { codecId: 'test/document@1' }, { a: 1 }, where),
     ]).toEqual([
       { kind: 'wire', wire: 'hello' },
@@ -58,7 +74,7 @@ describe('encodeLiteralDefault', () => {
 
   it('reads a null default as SQL NULL when the codec refuses null, and as the value null when it reads it', async () => {
     expect([
-      await encodeLiteralDefault(lookup, { codecId: 'sql/text@1' }, null, where),
+      await encodeLiteralDefault(lookup, { codecId: 'test/text@1' }, null, where),
       await encodeLiteralDefault(lookup, { codecId: 'test/document@1' }, null, where),
     ]).toEqual([{ kind: 'sql-null' }, { kind: 'wire', wire: 'null' }]);
   });
@@ -70,17 +86,19 @@ describe('encodeLiteralDefault', () => {
   });
 
   it('refuses a value the codec refuses as a contract error naming the column', async () => {
-    await expect(encodeLiteralDefault(lookup, { codecId: 'sql/text@1' }, 1, where)).rejects.toThrow(
+    await expect(
+      encodeLiteralDefault(lookup, { codecId: 'test/text@1' }, 1, where),
+    ).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
-          'Column "posts"."title" has a default its codec sql/text@1 refuses: sql/text@1 JSON value must be a string',
+          'Column "posts"."title" has a default its codec test/text@1 refuses: test/text JSON value must be a string',
         why: "A contract.json that an earlier version emitted, or a migration.ts it planned, can hold a default that this version's codec refuses, and so can either file after a hand edit.",
         fix: 'If contract.json holds the default, emit the contract again with this version, and correct the default in the contract source if emit refuses it. If a migration.ts sets it, correct it in that file.',
         meta: {
           table: 'posts',
           column: 'title',
-          codecId: 'sql/text@1',
+          codecId: 'test/text@1',
           value: 1,
           reason: 'codec-refused-default',
         },
@@ -97,7 +115,7 @@ describe('encodeLiteralDefault', () => {
 });
 
 describe('encodeListLiteralDefault', () => {
-  const tags = { codecId: 'sql/text@1', many: true } as const;
+  const tags = { codecId: 'test/text@1', many: true } as const;
 
   it('reads and encodes each element with the codec, a null element as SQL NULL, and an empty list as no elements', async () => {
     expect([
@@ -135,11 +153,11 @@ describe('encodeListLiteralDefault', () => {
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
-          'Column "posts"."title" has a default (element 2) its codec sql/text@1 refuses: sql/text@1 JSON value must be a string',
+          'Column "posts"."title" has a default (element 2) its codec test/text@1 refuses: test/text JSON value must be a string',
         meta: {
           table: 'posts',
           column: 'title',
-          codecId: 'sql/text@1',
+          codecId: 'test/text@1',
           value: 1,
           elementPosition: 2,
           reason: 'codec-refused-default',

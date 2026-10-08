@@ -14,6 +14,13 @@ import {
   sqlTextDescriptor,
   sqlVarcharDescriptor,
 } from '../../src/ast/sql-codecs';
+import {
+  sqlCharCodec,
+  sqlFloatCodec,
+  sqlIntCodec,
+  sqlTextCodec,
+  sqlVarcharCodec,
+} from '../template-codecs';
 
 const descriptorsByScalar = {
   char: sqlCharDescriptor,
@@ -22,6 +29,14 @@ const descriptorsByScalar = {
   float: sqlFloatDescriptor,
   text: sqlTextDescriptor,
 } as const satisfies Record<string, AnyCodecDescriptorTemplate>;
+
+const codecsByScalar = {
+  char: sqlCharCodec,
+  varchar: sqlVarcharCodec,
+  int: sqlIntCodec,
+  float: sqlFloatCodec,
+  text: sqlTextCodec,
+} as const;
 
 describe('sql-codec-helpers', () => {
   it('exports expected codec IDs', () => {
@@ -82,17 +97,19 @@ describe('sql-codec-helpers', () => {
   it.each(codecRoundTripCases)(
     'encodes and decodes $scalar values',
     async ({ scalar, input, expectedEncoded, expectedDecoded }) => {
-      const descriptor = descriptorsByScalar[scalar] as AnyCodecDescriptorTemplate;
-      const codec = descriptor.factory(undefined as never)({ name: 'test' });
-      expect(await codec.encode(input, {})).toBe(expectedEncoded);
-      expect(await codec.decode(input, {})).toBe(expectedDecoded);
+      const codec = codecsByScalar[scalar]() as {
+        toWire(value: string | number, ctx: object): Promise<unknown>;
+        fromWire(wire: string | number, ctx: object): Promise<unknown>;
+      };
+      expect(await codec.toWire(input, {})).toBe(expectedEncoded);
+      expect(await codec.fromWire(input, {})).toBe(expectedDecoded);
     },
   );
 
   it('trims trailing spaces when decoding char values', async () => {
-    const codec = sqlCharDescriptor.factory({})({ name: 'test' });
-    expect(await codec.decode('user_001                            ', {})).toBe('user_001');
-    expect(await codec.decode('user_001', {})).toBe('user_001');
+    const codec = sqlCharCodec();
+    expect(await codec.fromWire('user_001                            ', {})).toBe('user_001');
+    expect(await codec.fromWire('user_001', {})).toBe('user_001');
   });
 
   describe('renderOutputType', () => {

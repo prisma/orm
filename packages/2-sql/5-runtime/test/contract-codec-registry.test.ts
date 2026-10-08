@@ -23,8 +23,8 @@ import { createStubAdapter, createTestContext } from './utils';
 function makeVectorCodec(meta?: Record<string, unknown>): Codec {
   const baseCodec = defineTestCodec({
     typeId: 'pg/vector@1',
-    encode: (v: number[]) => v,
-    decode: (w: number[]) => w,
+    toWire: (v: number[]) => v,
+    fromWire: (w: number[]) => w,
   });
   if (!meta) return baseCodec;
   // The narrow `Codec` shape is conversion-only (TML-2357); the `meta` sentinel here is test-side bookkeeping that downstream assertions read off the exact instance handed back by the factory.
@@ -73,8 +73,8 @@ function createNonParameterizedExtensionDescriptor(): SqlRuntimeExtensionDescrip
   // Custom codec id avoids colliding with the default test target descriptor's pre-registered codecs (`pg/text@1`, etc.).
   const scalarCodec = defineTestCodec({
     typeId: 'test/scalar@1',
-    encode: (v: string) => v,
-    decode: (w: string) => w,
+    toWire: (v: string) => v,
+    fromWire: (w: string) => w,
   });
 
   const scalarDescriptor: CodecDescriptor = {

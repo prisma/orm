@@ -7,13 +7,15 @@ import {
   createEnumAccessor,
 } from '../src/enum-accessor';
 import type { JsonValue } from '../src/types';
+import { enumMemberCodec } from './support/enum-member-codec';
 
 type ContractWithDomain<TDomain> = Contract & { readonly domain: TDomain };
 
-const storedForms = () => ({
-  decodeJson: (json: JsonValue) => json,
-  encodeJson: (value: unknown) => value as JsonValue,
-});
+const storedForms = () =>
+  enumMemberCodec({
+    fromStored: (json: JsonValue) => json,
+    toStored: (value: unknown) => value as JsonValue,
+  });
 
 const roleEnum = {
   codecId: 'pg/text@1',

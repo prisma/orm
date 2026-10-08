@@ -29,8 +29,8 @@ export const testContract = createTestContract({ targetFamily: 'sql', target: 'p
 
 const failingDecodeCodec = defineTestCodec({
   typeId: 'test/failing-decode@1',
-  encode: (value: number) => value,
-  decode: (): number => {
+  toWire: (value: number) => value,
+  fromWire: (): number => {
     throw new Error('decode failed');
   },
 });

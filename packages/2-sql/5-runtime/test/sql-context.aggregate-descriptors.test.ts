@@ -51,8 +51,8 @@ const numericCodecDescriptor: AnyCodecDescriptor = {
   factory: () => () =>
     defineTestCodec({
       typeId: 'test/int@1',
-      encode: (v: number) => v,
-      decode: (w: number) => w,
+      toWire: (v: number) => v,
+      fromWire: (w: number) => w,
     }),
 };
 
@@ -62,8 +62,8 @@ const bigintCodecDescriptor: AnyCodecDescriptor = {
   factory: () => () =>
     defineTestCodec({
       typeId: 'test/bigint@1',
-      encode: (v: number) => v,
-      decode: (w: number) => w,
+      toWire: (v: number) => v,
+      fromWire: (w: number) => w,
     }),
 };
 

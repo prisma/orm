@@ -2,7 +2,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import type { Codec } from '../src/shared/codec';
 import { emptyCodecLookup } from '../src/shared/codec-types';
-import { createDataTypeLookup } from '../src/shared/data-type';
+import { createDataTypeLookup, dataType, dataTypeValueFor } from '../src/shared/data-type';
 import { readEnumBlockMembers } from '../src/shared/enum-block-members';
 import type {
   AuthoringEntityContext,
@@ -29,25 +29,33 @@ function enumBlock(
   };
 }
 
-/** Reads any text unchanged and stores it in lower case, so two members can differ as read and store the same value. */
-const lowerCasingCodec: Codec = {
-  id: 'test/lower-casing@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => String(value).toLowerCase(),
-  decodeJson(json) {
+const textType = dataType('test/text', {
+  read(json) {
     if (typeof json !== 'string') throw new Error(`expected text, got ${typeof json}`);
     return json;
   },
+});
+
+/** Reads any text unchanged and stores it in lower case, so two members can differ as read and store the same value. */
+const lowerCasingCodec: Codec = {
+  id: 'test/lower-casing@1',
+  dataType: textType,
+  toWire: async (v: unknown) => v,
+  fromWire: async (w: unknown) => w,
+  toDataTypeValue: (value) => dataTypeValueFor(textType, {}, String(value).toLowerCase()),
+  fromDataTypeValue: (value) => value.value,
 };
+
+const anyJsonType = dataType('test/any-json', { read: (json) => json });
 
 /** Reads any JSON value unchanged, as a JSON column's codec does. */
 const anyJsonCodec: Codec = {
   id: 'test/any-json@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as JsonValue,
-  decodeJson: (json) => json,
+  dataType: anyJsonType,
+  toWire: async (v: unknown) => v,
+  fromWire: async (w: unknown) => w,
+  toDataTypeValue: (value) => dataTypeValueFor(anyJsonType, {}, value as JsonValue),
+  fromDataTypeValue: (value) => value.value,
 };
 
 function read(values: Record<string, JsonValue | undefined>, codec: Codec = lowerCasingCodec) {
@@ -108,7 +116,7 @@ describe('readEnumBlockMembers', () => {
     const failure = new TypeError('codec bug');
     const codec: Codec = {
       ...lowerCasingCodec,
-      encodeJson: () => {
+      toDataTypeValue: () => {
         throw failure;
       },
     };

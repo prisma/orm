@@ -350,8 +350,8 @@ describe('runBeforeCompileChain', () => {
       const decoderRegistry = [
         defineTestCodec({
           typeId: 'pg/int4@1',
-          encode: (v: number) => v,
-          decode: (w: number) => w + 100,
+          toWire: (v: number) => v,
+          fromWire: (w: number) => w + 100,
         }),
       ];
 
@@ -408,8 +408,8 @@ describe('runBeforeCompileChain', () => {
       const decoderRegistry = [
         defineTestCodec({
           typeId: 'pg/int4@1',
-          encode: (v: number) => v,
-          decode: (w: number) => w + 100,
+          toWire: (v: number) => v,
+          fromWire: (w: number) => w + 100,
         }),
       ];
 

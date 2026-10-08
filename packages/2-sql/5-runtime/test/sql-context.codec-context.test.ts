@@ -9,6 +9,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { SqlRuntimeExtensionDescriptor } from '../src/sql-context';
+import { anyJsonConversions } from './test-codec';
 import { createStubAdapter, createTestContext } from './utils';
 
 const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
@@ -44,10 +45,9 @@ describe('buildContractCodecRegistry — per-column codec instance context', () 
         captures.push(ctx);
         const codec: Codec = {
           id: 'test/captures-ctx@1',
-          encode: (v: unknown) => Promise.resolve(v),
-          decode: (w: unknown) => Promise.resolve(w),
-          encodeJson: (v) => v as never,
-          decodeJson: (j) => j as never,
+          toWire: (v: unknown) => Promise.resolve(v),
+          fromWire: (w: unknown) => Promise.resolve(w),
+          ...anyJsonConversions,
         };
         instances.push({ ctx, codec });
         return codec;
@@ -154,10 +154,9 @@ describe('buildContractCodecRegistry — forCodecRef content-keyed cache', () =>
         factoryCalls += 1;
         const codec: Codec = {
           id: 'pgvector/vector@1',
-          encode: (v: unknown) => Promise.resolve(v),
-          decode: (w: unknown) => Promise.resolve(w),
-          encodeJson: (v) => v as never,
-          decodeJson: (j) => j as never,
+          toWire: (v: unknown) => Promise.resolve(v),
+          fromWire: (w: unknown) => Promise.resolve(w),
+          ...anyJsonConversions,
         };
         return Object.assign({}, codec, {
           meta: { length: params.length, ctxName: ctx.name },
@@ -403,10 +402,9 @@ describe('buildContractCodecRegistry — forColumn delegates to forCodecRef', ()
       factory: ((_params: undefined) => (ctx: SqlCodecInstanceContext) => {
         const codec: Codec = {
           id: 'test/shared@1',
-          encode: (v: unknown) => Promise.resolve(v),
-          decode: (w: unknown) => Promise.resolve(w),
-          encodeJson: (v) => v as never,
-          decodeJson: (j) => j as never,
+          toWire: (v: unknown) => Promise.resolve(v),
+          fromWire: (w: unknown) => Promise.resolve(w),
+          ...anyJsonConversions,
         };
         instances.push({ ctx, codec });
         return codec;
