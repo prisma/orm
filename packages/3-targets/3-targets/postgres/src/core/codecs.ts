@@ -432,9 +432,11 @@ export function postgresQualifyColumnType(
 function readTextArrayWire(wire: string): readonly (string | null)[] {
   return parsePostgresListText(wire).map((element) => {
     if (element === null || typeof element === 'string') return element;
-    throw postgresError('RUNTIME.DECODE_FAILED', 'pg/text-array@1 wire value must be text[] text', {
-      meta: { codecId: PG_TEXT_ARRAY_CODEC_ID, received: wire },
-    });
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      `pg/text-array@1 reads a one-dimensional text[], and ${wire} has more dimensions`,
+      { meta: { codecId: PG_TEXT_ARRAY_CODEC_ID, received: wire } },
+    );
   });
 }
 

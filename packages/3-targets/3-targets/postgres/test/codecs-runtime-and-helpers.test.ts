@@ -206,7 +206,7 @@ describe('pg/text-array@1 codec', () => {
   it('refuses array text that is not one-dimensional', async () => {
     await expect(codec.fromWire('{{a},{b}}', callCtx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'pg/text-array@1 wire value must be text[] text',
+      message: 'pg/text-array@1 reads a one-dimensional text[], and {{a},{b}} has more dimensions',
     });
   });
 
