@@ -1,4 +1,4 @@
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef, type MongoValue } from '@internal/mongo-value';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
@@ -8,6 +8,8 @@ import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from '
 import { describe, expect, it, vi } from 'vitest';
 import { resolveValue } from '../src/resolve-value';
 
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+
 interface RuntimeErrorShape extends Error {
   code?: string;
   details?: Record<string, unknown>;
@@ -16,9 +18,10 @@ interface RuntimeErrorShape extends Error {
 
 const uppercaseCodec = mongoCodec({
   typeId: 'test/uppercase@1',
-  decode: (wire: string) => wire.toLowerCase(),
-  encode: (value: string) => value.toUpperCase(),
-  decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
+  fromWire: (wire: string) => wire.toLowerCase(),
+  toWire: (value: string) => value.toUpperCase(),
+  dataType: textType,
+  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
 });
 
 function testRegistry() {
@@ -113,14 +116,15 @@ describe('resolveValue', () => {
   });
 
   it('preserves $in array shape and encodes each operator-owned ref exactly once', async () => {
-    const encode = vi.fn((value: string) => `wire:${value}`);
+    const toWire = vi.fn((value: string) => `wire:${value}`);
     const registry = newMongoCodecRegistry();
     registry.register(
       mongoCodec({
         typeId: 'test/in-operand@1',
-        decode: (wire: string) => wire,
-        decodeJson: (json) => decodeJsonString('test/in-operand@1', json),
-        encode,
+        fromWire: (wire: string) => wire,
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+        toWire,
       }),
     );
     const input = {
@@ -136,9 +140,9 @@ describe('resolveValue', () => {
     expect(await resolveValue(input, registry, noCtx)).toEqual({
       tags: { $in: ['wire:admin', null, 'wire:editor'] },
     });
-    expect(encode).toHaveBeenCalledTimes(2);
-    expect(encode).toHaveBeenNthCalledWith(1, 'admin', noCtx);
-    expect(encode).toHaveBeenNthCalledWith(2, 'editor', noCtx);
+    expect(toWire).toHaveBeenCalledTimes(2);
+    expect(toWire).toHaveBeenNthCalledWith(1, 'admin', noCtx);
+    expect(toWire).toHaveBeenNthCalledWith(2, 'editor', noCtx);
   });
 
   it('preserves null, primitive, and Date values', async () => {
@@ -162,21 +166,23 @@ describe('resolveValue', () => {
 
       const asyncACodec = mongoCodec({
         typeId: 'test/async-a@1',
-        decode: (wire: string) => wire,
-        encode: (value: string) => {
+        fromWire: (wire: string) => wire,
+        toWire: (value: string) => {
           callOrder.push('encode-a-start');
           return dA.promise.then((suffix) => `${value}:${suffix}`);
         },
-        decodeJson: (json) => decodeJsonString('test/async-a@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const asyncBCodec = mongoCodec({
         typeId: 'test/async-b@1',
-        decode: (wire: string) => wire,
-        encode: (value: string) => {
+        fromWire: (wire: string) => wire,
+        toWire: (value: string) => {
           callOrder.push('encode-b-start');
           return dB.promise.then((suffix) => `${value}:${suffix}`);
         },
-        decodeJson: (json) => decodeJsonString('test/async-b@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
 
       const registry = newMongoCodecRegistry();
@@ -209,13 +215,14 @@ describe('resolveValue', () => {
 
       const codec = mongoCodec({
         typeId: 'test/seq@1',
-        decode: (w: string) => w,
-        encode: async (value: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (value: string) => {
           callOrder.push(`start:${value}`);
           if (value === 'one') return d1.promise;
           return d2.promise;
         },
-        decodeJson: (json) => decodeJsonString('test/seq@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
 
       const registry = newMongoCodecRegistry();
@@ -247,14 +254,15 @@ describe('resolveValue', () => {
   });
 
   describe('error envelope (RUNTIME.ENCODE_FAILED)', () => {
-    it('wraps codec.encode failures in RUNTIME.ENCODE_FAILED with cause and codec id', async () => {
+    it('wraps codec.toWire failures in RUNTIME.ENCODE_FAILED with cause and codec id', async () => {
       const failingCodec = mongoCodec({
         typeId: 'test/failing@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (_v: string) => {
           throw new Error('kms-key-resolution-failed');
         },
-        decodeJson: (json) => decodeJsonString('test/failing@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -275,11 +283,12 @@ describe('resolveValue', () => {
     it('uses MongoParamRef.name as the envelope label when available', async () => {
       const failingCodec = mongoCodec({
         typeId: 'test/failing@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (_v: string) => {
           throw new Error('boom');
         },
-        decodeJson: (json) => decodeJsonString('test/failing@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -299,11 +308,12 @@ describe('resolveValue', () => {
     it('falls back to codec id as the envelope label when MongoParamRef has no name', async () => {
       const failingCodec = mongoCodec({
         typeId: 'test/failing@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (_v: string) => {
           throw new Error('boom');
         },
-        decodeJson: (json) => decodeJsonString('test/failing@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -364,11 +374,12 @@ describe('resolveValue', () => {
       const envelope = structuredError('EXT.CODEC_BROKEN', 'codec-owned envelope');
       const innerCodec = mongoCodec({
         typeId: 'test/structured@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (_v: string) => {
           throw envelope;
         },
-        decodeJson: (json) => decodeJsonString('test/structured@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);
@@ -385,11 +396,12 @@ describe('resolveValue', () => {
       registry.register(
         mongoCodec({
           typeId: 'test/internal-error@1',
-          decode: (w: string) => w,
-          encode: (_v: string) => {
+          fromWire: (w: string) => w,
+          toWire: (_v: string) => {
             throw original;
           },
-          decodeJson: (json) => decodeJsonString('test/internal-error@1', json),
+          dataType: textType,
+          fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
         }),
       );
 
@@ -400,11 +412,12 @@ describe('resolveValue', () => {
     it('wraps a plain codec failure in RUNTIME.ENCODE_FAILED', async () => {
       const innerCodec = mongoCodec({
         typeId: 'test/plain-failure@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
+        fromWire: (w: string) => w,
+        toWire: async (_v: string) => {
           throw new Error('plain failure');
         },
-        decodeJson: (json) => decodeJsonString('test/plain-failure@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);

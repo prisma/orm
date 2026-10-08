@@ -1,5 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
@@ -10,6 +10,8 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 const STANDARD_CODEC_IDS = [
   'mongo/objectId@1',
@@ -73,9 +75,10 @@ describe('createMongoExecutionContext', () => {
   it('folds extension-pack codec contributions into the same registry', () => {
     const customCodec = mongoCodec({
       typeId: 'test/custom@1',
-      decode: (wire: string) => `decoded:${wire}`,
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('test/custom@1', json),
+      fromWire: (wire: string) => `decoded:${wire}`,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',
@@ -103,9 +106,10 @@ describe('createMongoExecutionContext', () => {
   it('throws RUNTIME.DUPLICATE_CODEC when two contributors declare the same codec id', () => {
     const conflictingCodec = mongoCodec({
       typeId: 'mongo/string@1',
-      decode: (wire: string) => wire,
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('mongo/string@1', json),
+      fromWire: (wire: string) => wire,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const conflictingPack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',

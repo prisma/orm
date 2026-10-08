@@ -21,7 +21,7 @@ const mongoTargetPack = {
   targetId: 'mongo',
   version: '0.0.1',
   defaultNamespaceId: '__unbound__',
-  dataTypes: [dataType('mongo/string', {})],
+  dataTypes: [dataType('mongo/string', { read: (json) => json })],
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
 const duplicateString = {
@@ -30,7 +30,7 @@ const duplicateString = {
   familyId: 'mongo',
   targetId: 'mongo',
   version: '0.0.1',
-  dataTypes: [dataType('mongo/string', {})],
+  dataTypes: [dataType('mongo/string', { read: (json) => json })],
 } as const satisfies ExtensionPackRef<'mongo', 'mongo'>;
 
 describe('mongo defineContract data types', () => {

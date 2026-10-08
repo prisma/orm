@@ -1,10 +1,12 @@
-import type { ContractField } from '@internal/contract/types';
+import type { ContractField, JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecLookup,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
   type DataTypeLookup,
+  type DataTypeValue,
+  dataTypeValueFor,
 } from '@internal/framework-components/codec';
 import { type MongoTypeLookups, mongoDataType } from '@internal/mongo-contract/data-type';
 
@@ -31,19 +33,21 @@ function dataTypeIdOf(codecId: string): string {
 
 export const mongoDataTypeLookup: DataTypeLookup = createDataTypeLookup(
   Object.entries(bsonTypesByCodecId).map(([codecId, bsonTypes]) =>
-    mongoDataType(dataTypeIdOf(codecId), { bsonTypes }),
+    mongoDataType(dataTypeIdOf(codecId), { read: (json) => json, bsonTypes }),
   ),
 );
 
 export const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    if (!(id in bsonTypesByCodecId)) return undefined;
+    const dataType = mongoDataTypeLookup.get(dataTypeIdOf(id));
+    if (dataType === undefined) return undefined;
     return {
       id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
+      dataType,
+      toWire: async (v: unknown) => v,
+      fromWire: async (w: unknown) => w,
+      toDataTypeValue: (v: unknown) => dataTypeValueFor(dataType, {}, v as JsonValue),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
     } as ReturnType<CodecLookup['get']>;
   },
   descriptorFor(id: string) {

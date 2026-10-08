@@ -1,4 +1,10 @@
 import type { ContractEnum } from '@internal/contract/types';
+import {
+  type DataTypeValue,
+  dataType,
+  dataTypeValueFor,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { buildMongoEnums } from '../src/mongo-enums';
 import type { MongoCodecLookup } from '../src/mongo-execution-stack';
@@ -13,15 +19,18 @@ const level: ContractEnum = {
 
 const domain = { namespaces: { __unbound__: { enum: { Level: level } } } };
 
+const levelType = dataType('test/level', { read: (json) => readJsonString('test/level', json) });
+
 const levelCodecs: MongoCodecLookup = {
   get: (id) =>
     id === 'test/level@1'
       ? {
           id,
-          encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
-          encodeJson: (value: unknown) => String(value),
-          decodeJson: (json: unknown) => BigInt(String(json)),
+          dataType: levelType,
+          toWire: async (value: unknown) => value,
+          fromWire: async (wire: unknown) => wire,
+          toDataTypeValue: (value: unknown) => dataTypeValueFor(levelType, {}, String(value)),
+          fromDataTypeValue: (value: DataTypeValue) => BigInt(String(value.value)),
         }
       : undefined,
   has: (id) => id === 'test/level@1',

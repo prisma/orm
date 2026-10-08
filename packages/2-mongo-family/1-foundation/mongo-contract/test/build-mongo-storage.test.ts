@@ -1,6 +1,11 @@
 import { computeStorageHash } from '@internal/contract/hashing';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import {
+  dataType,
+  dataTypeValueFor,
+  emptyCodecLookup,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { buildMongoStorage, encodeMongoValueSets } from '../src/build-mongo-storage';
@@ -8,8 +13,11 @@ import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hook
 import { MongoIndex } from '../src/ir/mongo-index';
 import { MongoStorage } from '../src/ir/mongo-storage';
 
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+
 const upperCaseCodec = {
-  encodeJson: (value: unknown) => String(value).toUpperCase(),
+  dataType: textType,
+  toDataTypeValue: (value: unknown) => dataTypeValueFor(textType, {}, String(value).toUpperCase()),
 } as unknown as Codec;
 
 const lookupWith = (codecs: Record<string, Codec>): CodecLookup => ({

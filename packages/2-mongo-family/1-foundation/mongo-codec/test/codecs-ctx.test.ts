@@ -1,50 +1,60 @@
-import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
+import {
+  type CodecCallContext,
+  type DataTypeValue,
+  dataType,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { mongoCodec } from '../src/codecs';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 describe('mongoCodec() factory — CodecCallContext arity', () => {
   it('lifts a single-arg `(value)` author unchanged (back-compat)', async () => {
     const c = mongoCodec({
       typeId: 'demo/single-arg-encode@1',
-      encode: (value: string) => value.toUpperCase(),
-      decode: (wire: string) => wire,
-      decodeJson: (json) => decodeJsonString('demo/single-arg-encode@1', json),
+      toWire: (value: string) => value.toUpperCase(),
+      fromWire: (wire: string) => wire,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
-    expect(await c.encode('hi', {})).toBe('HI');
+    expect(await c.toWire('hi', {})).toBe('HI');
   });
 
-  it('forwards ctx (signal-only) to a `(value, ctx)` encode author', async () => {
+  it('forwards ctx (signal-only) to a `(value, ctx)` toWire author', async () => {
     let observed: CodecCallContext | undefined;
     const c = mongoCodec({
       typeId: 'demo/ctx-encode@1',
-      encode: (value: string, ctx?: CodecCallContext) => {
+      toWire: (value: string, ctx?: CodecCallContext) => {
         observed = ctx;
         return value;
       },
-      decode: (wire: string) => wire,
-      decodeJson: (json) => decodeJsonString('demo/ctx-encode@1', json),
+      fromWire: (wire: string) => wire,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
-    await c.encode('x', ctx);
+    await c.toWire('x', ctx);
     expect(observed).toBe(ctx);
     expect(observed?.signal).toBe(controller.signal);
   });
 
-  it('forwards ctx (signal-only) to a `(value, ctx)` decode author', async () => {
+  it('forwards ctx (signal-only) to a `(value, ctx)` fromWire author', async () => {
     let observed: CodecCallContext | undefined;
     const c = mongoCodec({
       typeId: 'demo/ctx-decode@1',
-      encode: (value: string) => value,
-      decode: (wire: string, ctx?: CodecCallContext) => {
+      toWire: (value: string) => value,
+      fromWire: (wire: string, ctx?: CodecCallContext) => {
         observed = ctx;
         return wire;
       },
-      decodeJson: (json) => decodeJsonString('demo/ctx-decode@1', json),
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
-    await c.decode('x', ctx);
+    await c.fromWire('x', ctx);
     expect(observed).toBe(ctx);
     expect(observed?.signal).toBe(controller.signal);
   });
@@ -53,15 +63,16 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
     let observedSignal: AbortSignal | undefined;
     const c = mongoCodec({
       typeId: 'demo/identity@1',
-      encode: (value: string, ctx?: CodecCallContext) => {
+      toWire: (value: string, ctx?: CodecCallContext) => {
         observedSignal = ctx?.signal;
         return value;
       },
-      decode: (wire: string) => wire,
-      decodeJson: (json) => decodeJsonString('demo/identity@1', json),
+      fromWire: (wire: string) => wire,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const controller = new AbortController();
-    await c.encode('x', { signal: controller.signal });
+    await c.toWire('x', { signal: controller.signal });
     expect(observedSignal).toBe(controller.signal);
   });
 
@@ -69,25 +80,27 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
     let observed: unknown = 'sentinel';
     const c = mongoCodec({
       typeId: 'demo/empty-ctx@1',
-      encode: (value: string, ctx?: CodecCallContext) => {
+      toWire: (value: string, ctx?: CodecCallContext) => {
         observed = ctx;
         return value;
       },
-      decode: (wire: string) => wire,
-      decodeJson: (json) => decodeJsonString('demo/empty-ctx@1', json),
+      fromWire: (wire: string) => wire,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
     const ctx: CodecCallContext = {};
-    await c.encode('x', ctx);
+    await c.toWire('x', ctx);
     expect(observed).toBe(ctx);
   });
 
   it('async ctx-bearing encode resolves with the produced value', async () => {
     const c = mongoCodec({
       typeId: 'demo/async-ctx@1',
-      encode: async (value: string, _ctx?: CodecCallContext) => `enc:${value}`,
-      decode: (wire: string) => wire,
-      decodeJson: (json) => decodeJsonString('demo/async-ctx@1', json),
+      toWire: async (value: string, _ctx?: CodecCallContext) => `enc:${value}`,
+      fromWire: (wire: string) => wire,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
-    expect(await c.encode('x', { signal: new AbortController().signal })).toBe('enc:x');
+    expect(await c.toWire('x', { signal: new AbortController().signal })).toBe('enc:x');
   });
 });

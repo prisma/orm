@@ -9,7 +9,10 @@ import {
   type Codec,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
+  dataType,
+  dataTypeValueFor,
   emptyCodecLookup,
+  readJsonString,
 } from '@internal/framework-components/codec';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { join } from 'pathe';
@@ -31,12 +34,17 @@ const mongoScalarAuthoringTypes = {
   },
 } as const;
 
+const stringType = dataType('mongo/string', {
+  read: (json) => readJsonString('mongo/string', json),
+});
+
 const stringCodec: Codec = {
   id: 'mongo/string@1',
-  encode: async (value: unknown) => value,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value) => value as JsonValue,
-  decodeJson: (json) => json,
+  dataType: stringType,
+  toWire: async (value: unknown) => value,
+  fromWire: async (wire: unknown) => wire,
+  toDataTypeValue: (value) => dataTypeValueFor(stringType, {}, value as JsonValue),
+  fromDataTypeValue: (value) => value.value,
 };
 
 function codecLookupOf(codec: Codec): CodecLookupWithDescriptors {

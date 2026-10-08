@@ -18,6 +18,7 @@ import {
   mongoStandardCodecs,
 } from '../src/core/codecs';
 import { mongoDataTypes } from '../src/core/data-types';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const decodeFailed = expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' });
 const encodeFailed = expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' });
@@ -28,46 +29,46 @@ function wrongWire<T>(value: unknown): T {
 
 describe('mongoInt64Codec', () => {
   it('encodes a bigint to a Long carrying the same value', async () => {
-    const wire = await mongoInt64Codec.encode(2n ** 60n, {});
+    const wire = await mongoInt64Codec.toWire(2n ** 60n, {});
     expect(wire).toEqual(Long.fromBigInt(2n ** 60n));
   });
 
   it('decodes a Long past the safe integer range to the exact bigint', async () => {
-    expect(await mongoInt64Codec.decode(Long.fromBigInt(-(2n ** 62n) - 7n), {})).toBe(
+    expect(await mongoInt64Codec.fromWire(Long.fromBigInt(-(2n ** 62n) - 7n), {})).toBe(
       -(2n ** 62n) - 7n,
     );
   });
 
   it('decodes the number the driver promotes a small Long to', async () => {
-    expect(await mongoInt64Codec.decode(42, {})).toBe(42n);
+    expect(await mongoInt64Codec.fromWire(42, {})).toBe(42n);
   });
 
   it('decodes a bigint wire value unchanged', async () => {
-    expect(await mongoInt64Codec.decode(9007199254740993n, {})).toBe(9007199254740993n);
+    expect(await mongoInt64Codec.fromWire(9007199254740993n, {})).toBe(9007199254740993n);
   });
 
   it('round-trips through the wire form', async () => {
     const value = 9_223_372_036_854_775_807n;
-    expect(await mongoInt64Codec.decode(await mongoInt64Codec.encode(value, {}), {})).toBe(value);
+    expect(await mongoInt64Codec.fromWire(await mongoInt64Codec.toWire(value, {}), {})).toBe(value);
   });
 
   it('refuses a wire value of the wrong type', async () => {
-    await expect(mongoInt64Codec.decode(wrongWire<Long>('42'), {})).rejects.toThrow(decodeFailed);
+    await expect(mongoInt64Codec.fromWire(wrongWire<Long>('42'), {})).rejects.toThrow(decodeFailed);
   });
 
   it('refuses a non-integral or unsafe number on the wire', async () => {
-    await expect(mongoInt64Codec.decode(1.5, {})).rejects.toThrow(decodeFailed);
-    await expect(mongoInt64Codec.decode(2 ** 60, {})).rejects.toThrow(decodeFailed);
+    await expect(mongoInt64Codec.fromWire(1.5, {})).rejects.toThrow(decodeFailed);
+    await expect(mongoInt64Codec.fromWire(2 ** 60, {})).rejects.toThrow(decodeFailed);
   });
 
   it('says a fractional double on the wire is no whole number, and points at the repair', async () => {
-    await expect(mongoInt64Codec.decode(2.5, {})).rejects.toThrow(
+    await expect(mongoInt64Codec.fromWire(2.5, {})).rejects.toThrow(
       'mongo/int64@1 wire value is the fractional double 2.5, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-written-as-long has the queries for a plain field, a list and a list of composite values.',
     );
   });
 
   it('refuses an application value that is not a bigint', async () => {
-    await expect(mongoInt64Codec.encode(wrongWire<bigint>(42), {})).rejects.toThrow(encodeFailed);
+    await expect(mongoInt64Codec.toWire(wrongWire<bigint>(42), {})).rejects.toThrow(encodeFailed);
   });
 
   const int64Max = 2n ** 63n - 1n;
@@ -75,48 +76,54 @@ describe('mongoInt64Codec', () => {
 
   it('encodes both ends of the signed 64-bit range exactly', async () => {
     for (const value of [int64Max, int64Min]) {
-      expect(await mongoInt64Codec.decode(await mongoInt64Codec.encode(value, {}), {})).toBe(value);
+      expect(await mongoInt64Codec.fromWire(await mongoInt64Codec.toWire(value, {}), {})).toBe(
+        value,
+      );
     }
   });
 
   it('refuses a bigint outside the signed 64-bit range instead of wrapping it', async () => {
-    await expect(mongoInt64Codec.encode(int64Max + 1n, {})).rejects.toThrow(encodeFailed);
-    await expect(mongoInt64Codec.encode(int64Min - 1n, {})).rejects.toThrow(encodeFailed);
+    await expect(mongoInt64Codec.toWire(int64Max + 1n, {})).rejects.toThrow(encodeFailed);
+    await expect(mongoInt64Codec.toWire(int64Min - 1n, {})).rejects.toThrow(encodeFailed);
   });
 
   it('writes both ends of the signed 64-bit range as JSON and reads them back', () => {
     for (const value of [int64Max, int64Min]) {
-      expect(mongoInt64Codec.decodeJson(mongoInt64Codec.encodeJson(value))).toBe(value);
+      expect(fromContractJson(mongoInt64Codec, toContractJson(mongoInt64Codec, value))).toBe(value);
     }
   });
 
   it('refuses a bigint outside the signed 64-bit range on the way into JSON', () => {
-    expect(() => mongoInt64Codec.encodeJson(int64Max + 1n)).toThrow(encodeFailed);
-    expect(() => mongoInt64Codec.encodeJson(int64Min - 1n)).toThrow(encodeFailed);
+    expect(() => toContractJson(mongoInt64Codec, int64Max + 1n)).toThrow(encodeFailed);
+    expect(() => toContractJson(mongoInt64Codec, int64Min - 1n)).toThrow(encodeFailed);
   });
 
   it('refuses JSON decimal text outside the signed 64-bit range', () => {
-    expect(() => mongoInt64Codec.decodeJson((int64Max + 1n).toString())).toThrow(decodeFailed);
-    expect(() => mongoInt64Codec.decodeJson((int64Min - 1n).toString())).toThrow(decodeFailed);
-    expect(() => mongoInt64Codec.decodeJson('99999999999999999999')).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoInt64Codec, (int64Max + 1n).toString())).toThrow(
+      decodeFailed,
+    );
+    expect(() => fromContractJson(mongoInt64Codec, (int64Min - 1n).toString())).toThrow(
+      decodeFailed,
+    );
+    expect(() => fromContractJson(mongoInt64Codec, '99999999999999999999')).toThrow(decodeFailed);
   });
 
   it('writes decimal text as its JSON form and reads it back', () => {
-    expect(mongoInt64Codec.encodeJson(-123n)).toBe('-123');
-    expect(mongoInt64Codec.decodeJson('-123')).toBe(-123n);
+    expect(toContractJson(mongoInt64Codec, -123n)).toBe('-123');
+    expect(fromContractJson(mongoInt64Codec, '-123')).toBe(-123n);
   });
 
   it('accepts a safe-integer number on the way into JSON', () => {
-    expect(mongoInt64Codec.encodeJson(wrongWire<bigint>(7))).toBe('7');
+    expect(toContractJson(mongoInt64Codec, wrongWire<bigint>(7))).toBe('7');
   });
 
   it('refuses an unsafe number on the way into JSON', () => {
-    expect(() => mongoInt64Codec.encodeJson(wrongWire<bigint>(2 ** 60))).toThrow(encodeFailed);
+    expect(() => toContractJson(mongoInt64Codec, wrongWire<bigint>(2 ** 60))).toThrow(encodeFailed);
   });
 
   it('refuses JSON that is not decimal integer text', () => {
-    expect(() => mongoInt64Codec.decodeJson(12)).toThrow(decodeFailed);
-    expect(() => mongoInt64Codec.decodeJson('1.5')).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoInt64Codec, 12)).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoInt64Codec, '1.5')).toThrow(decodeFailed);
   });
 
   it('renders a decimal-text default as a bigint literal', () => {
@@ -128,7 +135,7 @@ describe('mongoInt64Codec', () => {
 
 describe('mongoDecimal128Codec', () => {
   it('encodes decimal text to a Decimal128', async () => {
-    const wire = await mongoDecimal128Codec.encode('123.4500', {});
+    const wire = await mongoDecimal128Codec.toWire('123.4500', {});
     expect(wire).toBeInstanceOf(Decimal128);
     expect(wire.toString()).toBe('123.4500');
   });
@@ -144,14 +151,14 @@ describe('mongoDecimal128Codec', () => {
     ['NaN', 'NaN'],
     ['-Infinity', '-Infinity'],
   ])('decodes %s as the canonical text %s', async (stored, canonical) => {
-    expect(await mongoDecimal128Codec.decode(Decimal128.fromString(stored), {})).toBe(canonical);
+    expect(await mongoDecimal128Codec.fromWire(Decimal128.fromString(stored), {})).toBe(canonical);
   });
 
   it('keeps the canonical text stable across a wire round trip', async () => {
     for (const stored of ['1E+3', '1.5E-2', '1.23E+40', '123.4500']) {
-      const text = await mongoDecimal128Codec.decode(Decimal128.fromString(stored), {});
-      const again = await mongoDecimal128Codec.decode(
-        await mongoDecimal128Codec.encode(text, {}),
+      const text = await mongoDecimal128Codec.fromWire(Decimal128.fromString(stored), {});
+      const again = await mongoDecimal128Codec.fromWire(
+        await mongoDecimal128Codec.toWire(text, {}),
         {},
       );
       expect(again).toBe(text);
@@ -159,26 +166,28 @@ describe('mongoDecimal128Codec', () => {
   });
 
   it('refuses a wire value of the wrong type', async () => {
-    await expect(mongoDecimal128Codec.decode(wrongWire<Decimal128>(1.5), {})).rejects.toThrow(
+    await expect(mongoDecimal128Codec.fromWire(wrongWire<Decimal128>(1.5), {})).rejects.toThrow(
       decodeFailed,
     );
   });
 
   it('refuses an application value that is not canonical decimal text', async () => {
-    await expect(mongoDecimal128Codec.encode('1e3', {})).rejects.toThrow(encodeFailed);
-    await expect(mongoDecimal128Codec.encode('abc', {})).rejects.toThrow(encodeFailed);
+    await expect(mongoDecimal128Codec.toWire('1e3', {})).rejects.toThrow(encodeFailed);
+    await expect(mongoDecimal128Codec.toWire('abc', {})).rejects.toThrow(encodeFailed);
   });
 
   it('refuses decimal text Decimal128 cannot hold exactly', async () => {
     await expect(
-      mongoDecimal128Codec.encode('12345678901234567890123456789012345', {}),
+      mongoDecimal128Codec.toWire('12345678901234567890123456789012345', {}),
     ).rejects.toThrow(encodeFailed);
   });
 
   it('uses the canonical text as its JSON form', () => {
-    expect(mongoDecimal128Codec.encodeJson('-0.015')).toBe('-0.015');
-    expect(mongoDecimal128Codec.decodeJson('-0.015')).toBe('-0.015');
-    expect(mongoDecimal128Codec.encodeJson(mongoDecimal128Codec.decodeJson('1.50'))).toBe('1.50');
+    expect(toContractJson(mongoDecimal128Codec, '-0.015')).toBe('-0.015');
+    expect(fromContractJson(mongoDecimal128Codec, '-0.015')).toBe('-0.015');
+    expect(
+      toContractJson(mongoDecimal128Codec, fromContractJson(mongoDecimal128Codec, '1.50')),
+    ).toBe('1.50');
   });
 
   it.each([
@@ -187,12 +196,12 @@ describe('mongoDecimal128Codec', () => {
     ['an exponent too large to expand', '1E+1000000000'],
     ['more digits than a Decimal128 holds', '12345678901234567890123456789012345'],
   ])('refuses JSON in %s, as encode does', (_label, json) => {
-    expect(() => mongoDecimal128Codec.decodeJson(json)).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoDecimal128Codec, json)).toThrow(decodeFailed);
   });
 
   it('refuses JSON that is not decimal text', () => {
-    expect(() => mongoDecimal128Codec.decodeJson(1.5)).toThrow(decodeFailed);
-    expect(() => mongoDecimal128Codec.encodeJson('1e3')).toThrow(encodeFailed);
+    expect(() => fromContractJson(mongoDecimal128Codec, 1.5)).toThrow(decodeFailed);
+    expect(() => toContractJson(mongoDecimal128Codec, '1e3')).toThrow(encodeFailed);
   });
 });
 
@@ -200,11 +209,11 @@ describe('mongoBinaryCodec', () => {
   const bytes = new Uint8Array([0, 1, 2, 250, 255]);
 
   it('encodes bytes to a Binary', async () => {
-    expect(await mongoBinaryCodec.encode(bytes, {})).toStrictEqual(new Binary(bytes));
+    expect(await mongoBinaryCodec.toWire(bytes, {})).toStrictEqual(new Binary(bytes));
   });
 
   it('decodes a Binary to a plain Uint8Array of the same bytes', async () => {
-    const decoded = await mongoBinaryCodec.decode(new Binary(bytes), {});
+    const decoded = await mongoBinaryCodec.fromWire(new Binary(bytes), {});
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(Buffer.isBuffer(decoded)).toBe(false);
     expect([...decoded]).toEqual([...bytes]);
@@ -216,32 +225,32 @@ describe('mongoBinaryCodec', () => {
     ['promoteValues: false', { promoteValues: false }],
   ])('decodes what the driver reads with %s to a plain Uint8Array', async (_name, options) => {
     const stored = BSON.deserialize(BSON.serialize({ value: new Binary(bytes) }), options);
-    const decoded = await mongoBinaryCodec.decode(stored['value'], {});
+    const decoded = await mongoBinaryCodec.fromWire(stored['value'], {});
     expect(Buffer.isBuffer(decoded)).toBe(false);
     expect(decoded).toEqual(bytes);
   });
 
   it('decodes a Uint8Array to a copy of its bytes', async () => {
     const wire = new Uint8Array(bytes);
-    const decoded = await mongoBinaryCodec.decode(wire, {});
+    const decoded = await mongoBinaryCodec.fromWire(wire, {});
     expect(decoded).toEqual(bytes);
     expect(decoded).not.toBe(wire);
   });
 
   it('refuses a wire value of the wrong type', async () => {
-    await expect(mongoBinaryCodec.decode(wrongWire<Binary>('AAEC'), {})).rejects.toThrow(
+    await expect(mongoBinaryCodec.fromWire(wrongWire<Binary>('AAEC'), {})).rejects.toThrow(
       decodeFailed,
     );
   });
 
   it('uses unwrapped base64 as its JSON form', () => {
-    expect(mongoBinaryCodec.encodeJson(bytes)).toBe('AAEC+v8=');
-    expect([...mongoBinaryCodec.decodeJson('AAEC+v8=')]).toEqual([...bytes]);
+    expect(toContractJson(mongoBinaryCodec, bytes)).toBe('AAEC+v8=');
+    expect([...fromContractJson(mongoBinaryCodec, 'AAEC+v8=')]).toEqual([...bytes]);
   });
 
   it('refuses JSON that is not base64 text', () => {
-    expect(() => mongoBinaryCodec.decodeJson('not base64!')).toThrow(decodeFailed);
-    expect(() => mongoBinaryCodec.decodeJson(12)).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoBinaryCodec, 'not base64!')).toThrow(decodeFailed);
+    expect(() => fromContractJson(mongoBinaryCodec, 12)).toThrow(decodeFailed);
   });
 });
 
@@ -249,13 +258,13 @@ describe('mongoJsonCodec', () => {
   const document: JsonValue = { a: [1, 'two', null, { b: true }], c: { d: 1.5 } };
 
   it('passes a JSON value through the wire unchanged', async () => {
-    expect(await mongoJsonCodec.encode(document, {})).toEqual(document);
-    expect(await mongoJsonCodec.decode(document, {})).toEqual(document);
+    expect(await mongoJsonCodec.toWire(document, {})).toEqual(document);
+    expect(await mongoJsonCodec.fromWire(document, {})).toEqual(document);
   });
 
   it('uses the value itself as its JSON form', () => {
-    expect(mongoJsonCodec.encodeJson(document)).toEqual(document);
-    expect(mongoJsonCodec.decodeJson(document)).toEqual(document);
+    expect(toContractJson(mongoJsonCodec, document)).toEqual(document);
+    expect(fromContractJson(mongoJsonCodec, document)).toEqual(document);
   });
 });
 

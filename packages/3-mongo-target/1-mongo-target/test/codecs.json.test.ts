@@ -59,7 +59,7 @@ describe('mongoJsonCodec encode', () => {
       empty: {},
       nullPrototype,
     });
-    expect(await mongoJsonCodec.encode(value, {})).toBe(value);
+    expect(await mongoJsonCodec.toWire(value, {})).toBe(value);
   });
 
   it.each([
@@ -86,14 +86,14 @@ describe('mongoJsonCodec encode', () => {
     ['Point', new Point(1, 2)],
   ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
     await expect(
-      mongoJsonCodec.encode(notJson({ outer: { items: [0, { value }] } }), {}),
+      mongoJsonCodec.toWire(notJson({ outer: { items: [0, { value }] } }), {}),
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
   it('refuses a circular reference, naming the path where it repeats', async () => {
     const outer: { inner: { list: unknown[] } } = { inner: { list: [] } };
     outer.inner.list.push(outer);
-    await expect(mongoJsonCodec.encode(notJson(outer), {})).rejects.toThrow(
+    await expect(mongoJsonCodec.toWire(notJson(outer), {})).rejects.toThrow(
       encodeRefusal('circular reference', 'inner.list.0'),
     );
   });
@@ -101,19 +101,19 @@ describe('mongoJsonCodec encode', () => {
   it('accepts the same object at two places', async () => {
     const shared = { a: 1 };
     const value = notJson({ left: shared, right: [shared] });
-    expect(await mongoJsonCodec.encode(value, {})).toBe(value);
+    expect(await mongoJsonCodec.toWire(value, {})).toBe(value);
   });
 
   it('refuses a hole in a sparse array', async () => {
     const sparse: unknown[] = [1];
     sparse[2] = 3;
-    await expect(mongoJsonCodec.encode(notJson({ list: sparse }), {})).rejects.toThrow(
+    await expect(mongoJsonCodec.toWire(notJson({ list: sparse }), {})).rejects.toThrow(
       encodeRefusal('sparse array hole', 'list.1'),
     );
   });
 
   it('says "the root" when the value itself is not JSON', async () => {
-    await expect(mongoJsonCodec.encode(notJson(new Date(0)), {})).rejects.toThrow(
+    await expect(mongoJsonCodec.toWire(notJson(new Date(0)), {})).rejects.toThrow(
       encodeRefusal('Date', 'the root'),
     );
   });
@@ -151,7 +151,7 @@ describe('mongoJsonCodec encode refusals say how to store the value', () => {
     ['Int32', new Int32(1), 'Pass a plain number.'],
     ['Map', new Map(), 'Convert it to a plain object or array.'],
   ])('%s', async (received, value, fix) => {
-    await expect(mongoJsonCodec.encode(notJson({ at: value }), {})).rejects.toMatchObject({
+    await expect(mongoJsonCodec.toWire(notJson({ at: value }), {})).rejects.toMatchObject({
       message: `mongo/json@1 value must be a JSON value; received ${received} at at. ${fix}`,
     });
   });
@@ -160,7 +160,7 @@ describe('mongoJsonCodec encode refusals say how to store the value', () => {
 describe('mongoJsonCodec decode', () => {
   it('returns a JSON wire value as the same JSON value', async () => {
     const document = { a: [1, 'two', null, true, { c: 1.5 }], $d: { 'e.f': [] } };
-    expect(await mongoJsonCodec.decode(wire(document), {})).toBe(document);
+    expect(await mongoJsonCodec.fromWire(wire(document), {})).toBe(document);
   });
 
   it.each([
@@ -180,7 +180,7 @@ describe('mongoJsonCodec decode', () => {
     ['maxKey', new MaxKey()],
   ])('refuses a BSON %s nested in an object and an array, naming the path', async (type, value) => {
     await expect(
-      mongoJsonCodec.decode(wire({ outer: { items: [0, { value }] } }), {}),
+      mongoJsonCodec.fromWire(wire({ outer: { items: [0, { value }] } }), {}),
     ).rejects.toThrow(decodeRefusal(type, 'outer.items.1.value'));
   });
 
@@ -189,7 +189,7 @@ describe('mongoJsonCodec decode', () => {
     ['Infinity', Number.POSITIVE_INFINITY],
     ['-Infinity', new Double(Number.NEGATIVE_INFINITY)],
   ])('names a stored %s rather than calling every double non-JSON', async (received, value) => {
-    await expect(mongoJsonCodec.decode(wire({ n: [value] }), {})).rejects.toMatchObject({
+    await expect(mongoJsonCodec.fromWire(wire({ n: [value] }), {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message: `mongo/json@1 wire value contains ${received} at n.0; a JSON number cannot be NaN or Infinity`,
       meta: { received, valuePath: 'n.0' },
@@ -197,7 +197,7 @@ describe('mongoJsonCodec decode', () => {
   });
 
   it('refuses an object the driver does not produce instead of dropping its contents', async () => {
-    await expect(mongoJsonCodec.decode(wire({ m: new Map([['k', 1]]) }), {})).rejects.toThrow(
+    await expect(mongoJsonCodec.fromWire(wire({ m: new Map([['k', 1]]) }), {})).rejects.toThrow(
       decodeRefusal('Map', 'm'),
     );
   });
@@ -214,15 +214,15 @@ describe('mongoJsonCodec decode', () => {
       };
       const stored = throughBson(document);
       expect((stored as Record<string, unknown>)['link']).toBeInstanceOf(DBRef);
-      expect(await mongoJsonCodec.decode(stored, {})).toEqual(document);
+      expect(await mongoJsonCodec.fromWire(stored, {})).toEqual(document);
     });
 
     it('decodes each member with its own path', async () => {
       await expect(
-        mongoJsonCodec.decode(throughBson({ link: { $ref: 'posts', $id: new ObjectId() } }), {}),
+        mongoJsonCodec.fromWire(throughBson({ link: { $ref: 'posts', $id: new ObjectId() } }), {}),
       ).rejects.toThrow(decodeRefusal('objectId', 'link.$id'));
       await expect(
-        mongoJsonCodec.decode(
+        mongoJsonCodec.fromWire(
           throughBson({ link: { $ref: 'posts', $id: 1, extra: { at: new Date(0) } } }),
           {},
         ),
@@ -239,46 +239,46 @@ describe('mongoJsonCodec decode', () => {
     'reads a stored subdocument whose _bsontype key says %s as that document',
     async (_, subdocument) => {
       const document = JSON.parse(JSON.stringify({ a: subdocument }));
-      expect(await mongoJsonCodec.decode(wire(document), {})).toEqual({ a: subdocument });
+      expect(await mongoJsonCodec.fromWire(wire(document), {})).toEqual({ a: subdocument });
     },
   );
 
   it('says "the root" when the wire value itself is not JSON', async () => {
-    await expect(mongoJsonCodec.decode(wire(new Date(0)), {})).rejects.toThrow(
+    await expect(mongoJsonCodec.fromWire(wire(new Date(0)), {})).rejects.toThrow(
       decodeRefusal('date', 'the root'),
     );
   });
 
   it('decodes a long at 2^53 - 1 as a number and refuses one at 2^53', async () => {
     const largestSafe = 2n ** 53n - 1n;
-    expect(await mongoJsonCodec.decode(wire({ n: Long.fromBigInt(largestSafe) }), {})).toEqual({
+    expect(await mongoJsonCodec.fromWire(wire({ n: Long.fromBigInt(largestSafe) }), {})).toEqual({
       n: Number(largestSafe),
     });
-    expect(await mongoJsonCodec.decode(wire({ n: largestSafe }), {})).toEqual({
+    expect(await mongoJsonCodec.fromWire(wire({ n: largestSafe }), {})).toEqual({
       n: Number(largestSafe),
     });
     await expect(
-      mongoJsonCodec.decode(wire({ n: Long.fromBigInt(largestSafe + 1n) }), {}),
+      mongoJsonCodec.fromWire(wire({ n: Long.fromBigInt(largestSafe + 1n) }), {}),
     ).rejects.toThrow(decodeRefusal('long', 'n'));
   });
 
   it('unwraps Int32 and Double wrappers to numbers', async () => {
     expect(
-      await mongoJsonCodec.decode(wire({ i: new Int32(7), d: [new Double(1.5)] }), {}),
+      await mongoJsonCodec.fromWire(wire({ i: new Int32(7), d: [new Double(1.5)] }), {}),
     ).toEqual({ i: 7, d: [1.5] });
   });
 
   it('copies only the objects and arrays around a value it converts', async () => {
     const untouched = { b: [1] };
     const document = { untouched, changed: { n: new Int32(7) } };
-    const decoded = (await mongoJsonCodec.decode(wire(document), {})) as Record<string, unknown>;
+    const decoded = (await mongoJsonCodec.fromWire(wire(document), {})) as Record<string, unknown>;
     expect(decoded).toEqual({ untouched: { b: [1] }, changed: { n: 7 } });
     expect(decoded['untouched']).toBe(untouched);
   });
 
   it('keeps a "__proto__" key as an own property', async () => {
     const document = JSON.parse('{"__proto__": {"polluted": true}}');
-    const decoded = await mongoJsonCodec.decode(wire(document), {});
+    const decoded = await mongoJsonCodec.fromWire(wire(document), {});
     expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);
     expect(Object.hasOwn(decoded as object, '__proto__')).toBe(true);
   });
@@ -286,10 +286,10 @@ describe('mongoJsonCodec decode', () => {
 
 describe('mongoJsonCodec refusal details', () => {
   it('name the codec, the refused kind and the path inside the value', async () => {
-    await expect(mongoJsonCodec.encode(notJson({ a: [undefined] }), {})).rejects.toMatchObject({
+    await expect(mongoJsonCodec.toWire(notJson({ a: [undefined] }), {})).rejects.toMatchObject({
       meta: { codecId: 'mongo/json@1', received: 'undefined', valuePath: 'a.0' },
     });
-    await expect(mongoJsonCodec.decode(wire({ a: [new Date(0)] }), {})).rejects.toMatchObject({
+    await expect(mongoJsonCodec.fromWire(wire({ a: [new Date(0)] }), {})).rejects.toMatchObject({
       meta: { codecId: 'mongo/json@1', received: 'date', valuePath: 'a.0' },
     });
   });

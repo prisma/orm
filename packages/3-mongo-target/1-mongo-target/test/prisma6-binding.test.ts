@@ -104,7 +104,7 @@ describe('prisma6MongoBinding', () => {
       const codecId = codecFor(typeName, nativeType);
       const codec = codecId === undefined ? undefined : buildStandardCodecRegistry().get(codecId);
 
-      expect(typeof (await codec?.decode(wire, {}))).toBe(type);
+      expect(typeof (await codec?.fromWire(wire, {}))).toBe(type);
     },
   );
 

@@ -4,8 +4,11 @@ import mongoControlDriver from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import {
+  type Codec,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
+  type DataTypeValue,
+  dataTypeValueFor,
 } from '@internal/framework-components/codec';
 import { planOriginOf } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -34,6 +37,20 @@ import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 
 const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => dataTypeValueFor(type, {}, v as JsonValue),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
+
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
@@ -49,15 +66,7 @@ const bsonTypesByCodecId: Record<string, string> = {
 
 const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const bsonType = bsonTypesByCodecId[id];
-    if (!bsonType) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
-      encodeJson: (v: unknown) => v as JsonValue,
-      decodeJson: (v: JsonValue) => v,
-    };
+    return bsonTypesByCodecId[id] ? identityCodec(id) : undefined;
   },
   descriptorFor: (id: string) => (bsonTypesByCodecId[id] ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,

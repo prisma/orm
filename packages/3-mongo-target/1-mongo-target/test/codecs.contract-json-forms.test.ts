@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { type Codec, readContractValue } from '@internal/framework-components/codec';
 import { Double, Timestamp } from 'bson';
 import { describe, expect, it } from 'vitest';
 import {
@@ -17,17 +18,20 @@ import {
   mongoVectorCodec,
 } from '../src/core/codecs';
 
-interface DecodeJsonCase {
-  readonly codec: {
-    readonly id: string;
-    decodeJson(json: JsonValue): unknown;
-  };
-  /** Each stored JSON form the codec's `encodeJson` writes, with the value it reads back. */
+interface StoredFormCase {
+  readonly codec: Pick<Codec, 'id' | 'dataType' | 'fromDataTypeValue'>;
+  /** Each stored JSON form the codec writes, with the value it reads back. */
   readonly reads: readonly (readonly [JsonValue, unknown])[];
+  /** JSON the codec's data type does not store. */
   readonly rejects: readonly JsonValue[];
+  /** JSON the data type stores that the codec's application value cannot hold. */
+  readonly codecRejects?: readonly JsonValue[];
 }
 
-const cases: readonly DecodeJsonCase[] = [
+const read = (codec: StoredFormCase['codec'], json: JsonValue) =>
+  readContractValue(codec, json, undefined);
+
+const cases: readonly StoredFormCase[] = [
   {
     codec: mongoObjectIdCodec,
     reads: [
@@ -120,7 +124,8 @@ const cases: readonly DecodeJsonCase[] = [
       ['9007199254740991', 9007199254740991],
       ['-42', -42],
     ],
-    rejects: [42, '1.5', '9007199254740992', '-9007199254740992', null],
+    rejects: [42, '1.5', null],
+    codecRejects: ['9007199254740992', '-9007199254740992'],
   },
   {
     codec: mongoDecimal128Codec,
@@ -157,24 +162,35 @@ const cases: readonly DecodeJsonCase[] = [
   },
 ];
 
-describe('decodeJson reads the stored JSON form of its type and refuses any other', () => {
-  for (const { codec, reads, rejects } of cases) {
+describe('a codec reads the stored JSON form of its type, which refuses any other', () => {
+  for (const { codec, reads, rejects, codecRejects = [] } of cases) {
     it(`${codec.id} reads ${JSON.stringify(reads.map(([json]) => json))}`, () => {
-      expect(reads.map(([json]) => codec.decodeJson(json))).toEqual(
-        reads.map(([, value]) => value),
-      );
+      expect(reads.map(([json]) => read(codec, json))).toEqual(reads.map(([, value]) => value));
     });
 
-    it(`${codec.id} refuses ${JSON.stringify(rejects)}`, () => {
+    it(`${codec.dataType.id} refuses ${JSON.stringify(rejects)}`, () => {
       for (const json of rejects) {
-        expect(() => codec.decodeJson(json)).toThrow(
+        expect(() => read(codec, json)).toThrow(
           expect.objectContaining({
             code: 'RUNTIME.DECODE_FAILED',
-            meta: expect.objectContaining({ codecId: codec.id }),
+            meta: expect.objectContaining({ dataType: codec.dataType.id }),
           }),
         );
       }
     });
+
+    if (codecRejects.length > 0) {
+      it(`${codec.id} refuses ${JSON.stringify(codecRejects)}`, () => {
+        for (const json of codecRejects) {
+          expect(() => read(codec, json)).toThrow(
+            expect.objectContaining({
+              code: 'RUNTIME.DECODE_FAILED',
+              meta: expect.objectContaining({ codecId: codec.id }),
+            }),
+          );
+        }
+      });
+    }
   }
 });
 
@@ -187,18 +203,20 @@ describe.each([mongoInt64Codec, mongoInt64NumberCodec])(
       ['a negative number with a leading zero', '-007', '-7'],
       ['two zeros', '00', '0'],
     ])('refuses %s, naming the text to write', (_name, json, printed) => {
-      expect(() => codec.decodeJson(json)).toThrow(
-        `${codec.id} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+      expect(() => read(codec, json)).toThrow(
+        `${codec.dataType.id} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
       );
     });
   },
 );
 
-describe('encodeJson writes only a form decodeJson reads', () => {
+describe('toDataTypeValue writes only a form the codec reads', () => {
   it('mongo/double@1 writes NaN and the infinities as text and reads them back', () => {
     const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5];
-    const stored = values.map((value) => mongoDoubleCodec.encodeJson(value));
-    expect({ stored, read: stored.map((json) => mongoDoubleCodec.decodeJson(json)) }).toEqual({
+    const stored = values.map((value) =>
+      mongoDoubleCodec.dataType.toContract(mongoDoubleCodec.toDataTypeValue(value)),
+    );
+    expect({ stored, read: stored.map((json) => read(mongoDoubleCodec, json)) }).toEqual({
       stored: ['NaN', 'Infinity', '-Infinity', 1.5],
       read: values,
     });
@@ -214,10 +232,10 @@ describe('encodeJson writes only a form decodeJson reads', () => {
   });
 
   it.each([
-    ['mongo/objectId@1', () => mongoObjectIdCodec.encodeJson('not an object id')],
-    ['mongo/int32@1', () => mongoInt32Codec.encodeJson(1.5)],
-    ['mongo/int32@1', () => mongoInt32Codec.encodeJson(2 ** 31)],
-    ['mongo/date@1', () => mongoDateCodec.encodeJson(new Date(Number.NaN))],
+    ['mongo/objectId@1', () => mongoObjectIdCodec.toDataTypeValue('not an object id')],
+    ['mongo/int32@1', () => mongoInt32Codec.toDataTypeValue(1.5)],
+    ['mongo/int32@1', () => mongoInt32Codec.toDataTypeValue(2 ** 31)],
+    ['mongo/date@1', () => mongoDateCodec.toDataTypeValue(new Date(Number.NaN))],
   ])('%s refuses a value its type does not hold', (codecId, write) => {
     expect(write).toThrow(
       expect.objectContaining({

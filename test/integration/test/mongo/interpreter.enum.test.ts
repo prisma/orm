@@ -1,4 +1,5 @@
 import mongoAdapter from '@internal/adapter-mongo/control';
+import type { JsonValue } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import {
   mongoFamilyEntityTypes,
@@ -6,9 +7,11 @@ import {
 } from '@internal/family-mongo/pack';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import {
-  type CodecLookup,
+  type Codec,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
+  type DataTypeValue,
+  dataTypeValueFor,
 } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -29,6 +32,20 @@ import { describe, expect, it } from 'vitest';
 
 const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => dataTypeValueFor(type, {}, v as JsonValue),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
+
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
   field: {},
@@ -46,18 +63,7 @@ const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.va
 
 const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    if (!mongoCodecIds.has(id)) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => {
-        if (id === 'mongo/string@1' && typeof j !== 'string')
-          throw new Error(`expected string, got ${typeof j}`);
-        return j;
-      },
-    } as ReturnType<CodecLookup['get']>;
+    return mongoCodecIds.has(id) ? identityCodec(id) : undefined;
   },
   descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
@@ -370,7 +376,7 @@ enum Priority {
       {
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message:
-          'enum "Priority" member "Low" was rejected by codec "mongo/int32@1": mongo/int32@1 JSON value must be an integer from -2147483648 to 2147483647',
+          'enum "Priority" member "Low" was rejected by codec "mongo/int32@1": mongo/int32 JSON value must be an integer from -2147483648 to 2147483647',
       },
     ]);
   });
@@ -402,7 +408,7 @@ enum Priority {
       {
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message:
-          'enum "Priority" member "Low" was rejected by codec "mongo/string@1": mongo/string@1 JSON value must be a string',
+          'enum "Priority" member "Low" was rejected by codec "mongo/string@1": mongo/string JSON value must be a string',
       },
     ]);
   });

@@ -1,4 +1,9 @@
-import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
+import {
+  type CodecCallContext,
+  type DataTypeValue,
+  dataType,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   MongoAddFieldsStage,
@@ -50,6 +55,8 @@ import {
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { lowerAggExpr, lowerFilter, lowerPipeline, lowerStage } from '../src/lowering';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 // Default fixtures: tests that don't exercise codecs use an empty registry and an empty ctx. Tests that need codec encoding shadow `registry` locally.
 const registry = newMongoCodecRegistry();
@@ -152,9 +159,10 @@ describe('lowerFilter', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/uppercase@1',
-        decode: (wire: string) => wire,
-        encode: (value: string) => value.toUpperCase(),
-        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
+        fromWire: (wire: string) => wire,
+        toWire: (value: string) => value.toUpperCase(),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -169,9 +177,10 @@ describe('lowerFilter', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/uppercase@1',
-        decode: (wire: string) => wire,
-        encode: (value: string) => value.toUpperCase(),
-        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
+        fromWire: (wire: string) => wire,
+        toWire: (value: string) => value.toUpperCase(),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -195,9 +204,10 @@ describe('lowerFilter', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/uppercase@1',
-        decode: (wire: string) => wire,
-        encode: (value: string) => value.toUpperCase(),
-        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
+        fromWire: (wire: string) => wire,
+        toWire: (value: string) => value.toUpperCase(),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
