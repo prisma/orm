@@ -54,7 +54,7 @@ A stored `ForeignKey` says what serves its lookups on its own table in an option
 type ForeignKeyIndex =
   | { readonly name: string }          // an index of the table, by its stored name
   | { readonly primaryKey: true }      // the primary key, whose first columns are the foreign key's
-  | { readonly unique: true };         // a unique constraint, whose first columns are the foreign key's
+  | { readonly unique: readonly string[] }; // a unique constraint, by its columns, whose first columns are the foreign key's
 ```
 
 The field is absent when the relation says `index: false`. `materializeForeignKeysAndIndexes` sets it while building a contract, after a pass that removes indexes identical to another (`index-deduplication.ts`, using the planner's equality from `index-equivalence.ts`). Contract validation refuses an `index` its table does not have. See [ADR 161](../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
