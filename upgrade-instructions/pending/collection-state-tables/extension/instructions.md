@@ -67,7 +67,7 @@ const tables = createCollectionTables(contract, 'public', 'User');
 const state = { ...emptyState(tables), limit: 10 };
 ```
 
-`createCollectionTables(contract, namespaceId, modelName)` takes the model the state is for. For a polymorphic model pass the base model name; the variant tables are bound with it.
+`createCollectionTables(contract, namespaceId, modelName)` takes the model the state is for. For a polymorphic model pass the base model name; its variant tables are aliased in the same scope.
 
 Every object typed `CollectionState` needs the property, not only top-level states:
 

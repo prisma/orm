@@ -40,22 +40,11 @@ function shortenToBytes(value: string, maxBytes: number): string {
   return shortened;
 }
 
-const takenAliases = new WeakMap<TableScope, ReadonlySet<string>>();
-
-function aliasesOf(scope: TableScope): ReadonlySet<string> {
-  const aliases = takenAliases.get(scope);
-  if (aliases === undefined) {
-    throw new InternalError('a table scope must be made by createTableScope()');
-  }
-  return aliases;
-}
-
 class TableScopeImpl implements TableScope {
   readonly #aliases: Set<string>;
 
   constructor(aliases: Iterable<string> = []) {
     this.#aliases = new Set(aliases);
-    takenAliases.set(this, this.#aliases);
   }
 
   alias(preferred: string): string {
@@ -86,7 +75,16 @@ class TableScopeImpl implements TableScope {
   }
 
   merge(others: readonly TableScope[]): TableScope {
-    return new TableScopeImpl([this.#aliases, ...others.map(aliasesOf)].flatMap((set) => [...set]));
+    const merged = new Set(this.#aliases);
+    for (const other of others) {
+      if (!(other instanceof TableScopeImpl)) {
+        throw new InternalError('a table scope must be made by createTableScope()');
+      }
+      for (const alias of other.#aliases) {
+        merged.add(alias);
+      }
+    }
+    return new TableScopeImpl(merged);
   }
 }
 

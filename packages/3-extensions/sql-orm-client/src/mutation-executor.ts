@@ -664,7 +664,7 @@ async function applyChildOwnedMutation(
 
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
-      const related = bindRelatedTable(relation);
+      const related = createRelatedTables(relation);
       const criterionWhere = shorthandToWhereExpr(
         context,
         relation.relatedNamespaceId,
@@ -698,7 +698,7 @@ async function applyChildOwnedMutation(
   }
 
   if (!mutation.criteria || mutation.criteria.length === 0) {
-    const related = bindRelatedTable(relation);
+    const related = createRelatedTables(relation);
     await executeUpdateCount(scope, contract, related, setValues, [
       buildChildJoinWhere(contract, related.root, parentValues),
     ]);
@@ -706,7 +706,7 @@ async function applyChildOwnedMutation(
   }
 
   for (const criterion of mutation.criteria) {
-    const related = bindRelatedTable(relation);
+    const related = createRelatedTables(relation);
     const criterionWhere = shorthandToWhereExpr(
       context,
       relation.relatedNamespaceId,
@@ -1137,7 +1137,7 @@ function readParentColumnValues(
   return values;
 }
 
-function bindRelatedTable(relation: RelationDefinition): CollectionTables {
+function createRelatedTables(relation: RelationDefinition): CollectionTables {
   return createStatementTables({
     namespaceId: relation.relatedNamespaceId,
     tableName: relation.relatedTableName,
