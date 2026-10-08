@@ -37,7 +37,13 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', projectDir: '/project', client: stubClient },
+      {
+        config,
+        cwd: '/project',
+        projectDir: '/project',
+        client: stubClient,
+        answerQuestions: async () => [],
+      },
       Date.now(),
     );
 
@@ -59,7 +65,13 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', projectDir: '/project', client: stubClient },
+      {
+        config,
+        cwd: '/project',
+        projectDir: '/project',
+        client: stubClient,
+        answerQuestions: async () => [],
+      },
       Date.now(),
     );
 

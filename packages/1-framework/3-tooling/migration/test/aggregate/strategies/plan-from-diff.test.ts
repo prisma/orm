@@ -55,7 +55,13 @@ describe('planFromDiff', () => {
       plan: ({ schema, ownership }) => {
         observedSchema = schema;
         observedOwnership = ownership;
-        return { kind: 'success', plan: makeStubPlan('placeholder') };
+        return {
+          kind: 'success',
+          plan: makeStubPlan('placeholder'),
+          appliedStatements: [],
+          dataLoss: [],
+          accessWidening: [],
+        };
       },
       emptyMigration: () => {
         throw new Error('not used');
@@ -99,6 +105,8 @@ describe('planFromDiff', () => {
       migrations: stubMigrations,
       frameworkComponents: [],
       operationPolicy: POLICY,
+      fromContract: null,
+      statements: [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -128,6 +136,55 @@ describe('planFromDiff', () => {
     // … and the same ownership oracle object. The planner asks it who owns
     // each extra; this strategy holds no ownership logic of its own.
     expect(observedOwnership).toBe(ownership);
+  });
+
+  it('hands the planner the origin contract and statements, and asks it for a plan with no origin', async () => {
+    const appSpace = makeSpace('app', {});
+    const fromContract = appSpace.contract();
+    let received:
+      | { fromContract: unknown; origin: unknown; statements: readonly unknown[] }
+      | undefined;
+    const stubPlanner: MigrationPlanner<'sql', 'postgres'> = {
+      plan: (options) => {
+        received = {
+          fromContract: options.fromContract,
+          origin: options.origin,
+          statements: options.statements,
+        };
+        return {
+          kind: 'success',
+          plan: { ...makeStubPlan('placeholder'), origin: options.origin },
+          appliedStatements: [],
+          dataLoss: [],
+          accessWidening: [],
+        };
+      },
+      emptyMigration: () => {
+        throw new Error('not used');
+      },
+    };
+    const outcome = await planFromDiff({
+      aggregateTargetId: 'postgres',
+      currentMarker: null,
+      space: appSpace,
+      ownership: STUB_OWNERSHIP,
+      schemaIntrospection: { tables: {} },
+      adapter: STUB_ADAPTER,
+      migrations: {
+        createPlanner: () => stubPlanner,
+        createRunner: () => {
+          throw new Error('runner not used');
+        },
+        contractToSchema: () => ({ tables: {} }),
+      },
+      frameworkComponents: [],
+      operationPolicy: POLICY,
+      fromContract,
+      statements: [],
+    });
+
+    expect(received).toEqual({ fromContract, origin: null, statements: [] });
+    expect(outcome.kind === 'ok' && outcome.result.plan.origin).toBeNull();
   });
 
   it('forwards planner failures verbatim', async () => {
@@ -162,10 +219,52 @@ describe('planFromDiff', () => {
       migrations: stubMigrations,
       frameworkComponents: [],
       operationPolicy: POLICY,
+      fromContract: null,
+      statements: [],
     });
 
     expect(outcome.kind).toBe('failure');
     if (outcome.kind !== 'failure') return;
     expect(outcome.conflicts).toEqual([{ kind: 'typeMismatch', summary: 'incompatible' }]);
+  });
+
+  it('passes through what each operation loses and whose access it widens', async () => {
+    const subject = { kind: 'storage', name: 'audit_log' } as const;
+    const stubPlanner: MigrationPlanner<'sql', 'postgres'> = {
+      plan: () => ({
+        kind: 'success',
+        plan: makeStubPlan('placeholder'),
+        appliedStatements: [],
+        dataLoss: [{ operationIndex: 0, subject }],
+        accessWidening: [{ operationIndex: 0, subject, widens: true }],
+      }),
+      emptyMigration: () => {
+        throw new Error('not used');
+      },
+    };
+    const outcome = await planFromDiff({
+      aggregateTargetId: 'postgres',
+      currentMarker: null,
+      space: makeSpace('app', {}),
+      ownership: STUB_OWNERSHIP,
+      schemaIntrospection: { tables: {} },
+      adapter: STUB_ADAPTER,
+      migrations: {
+        createPlanner: () => stubPlanner,
+        createRunner: () => {
+          throw new Error('runner not used');
+        },
+        contractToSchema: () => ({ tables: {} }),
+      },
+      frameworkComponents: [],
+      operationPolicy: POLICY,
+      fromContract: null,
+      statements: [],
+    });
+
+    expect(outcome.kind === 'ok' && outcome.result).toMatchObject({
+      dataLoss: [{ operationIndex: 0, subject }],
+      accessWidening: [{ operationIndex: 0, subject }],
+    });
   });
 });

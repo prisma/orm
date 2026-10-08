@@ -175,7 +175,7 @@ export function testSqlTypeLookups(
     return {
       codecId,
       dataType: dataTypeOfCodec(codecId).id,
-      traits: [],
+      traits: ['equality'],
       paramsSchema: acceptAnything,
       isParameterized: true,
       factory: () => () =>

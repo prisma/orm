@@ -125,14 +125,14 @@ describe('renameIndex lowers a PostgresAlterIndexRename node', () => {
 });
 
 describe('dropIndex lowers a PostgresDropIndex node', () => {
-  it('carries schema and name; the op is destructive', async () => {
+  it('carries schema and name; the op is widening, since an index holds no stored data', async () => {
     const { lowerer, received } = recordingLowerer();
     const op = await dropIndex('public', 'user', 'user_email_idx', lowerer);
     const node = received.find((n) => n instanceof PostgresDropIndex) as PostgresDropIndex;
     expect(node).toBeDefined();
     expect(node.schema).toBe('public');
     expect(node.name).toBe('user_email_idx');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
     expect(op.id).toBe('dropIndex.user.user_email_idx');
   });
 });

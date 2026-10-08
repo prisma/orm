@@ -274,6 +274,25 @@ describe('reserved operation names', () => {
     );
   });
 
+  it('a contributed operation named fragment is rejected at composition', () => {
+    const context = contextWith([{ ...shadowingBuilderMethod, operation: 'fragment' }]);
+
+    expect(() => orm({ runtime: createMockRuntime(), context })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.AGGREGATE_OPERATION_RESERVED',
+        meta: { operation: 'fragment' },
+      }),
+    );
+  });
+
+  it('a contributed operation named scope is accepted and installed as a reducer', () => {
+    const context = contextWith([{ ...headcountAny, operation: 'scope' }]);
+
+    const client = orm({ runtime: createMockRuntime(), context });
+
+    expect(typeof Reflect.get(client.public.Post, 'scope')).toBe('function');
+  });
+
   it('a contributed operation shadowing an instance member is rejected at composition', () => {
     const context = contextWith([shadowingInstanceMember]);
 

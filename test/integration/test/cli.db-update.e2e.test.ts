@@ -7,7 +7,6 @@ import { fixtureAppDir, runOnEngine, withTempDir } from './utils/cli-test-helper
 import { replaceInFileOrThrow } from './utils/contract-fixture-editing';
 import { runDbInit } from './utils/db-init-test-helpers';
 import {
-  consentTokenFor,
   type DbUpdateTestSetup,
   runDbUpdate,
   runDbUpdateAllowFailure,
@@ -346,9 +345,9 @@ withTempDir(({ createTempDir }) => {
       timeouts.spinUpPpgDev,
     );
 
-    // Scenario 7a: Destructive changes require explicit consent
+    // Scenario 7a: Destructive changes need a statement that answers them
     it(
-      'fails with DESTRUCTIVE_CHANGES when destructive ops are not confirmed',
+      'refuses a drop no statement answers, naming the storage it would lose',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const { testSetup, configPath } = await setupDbUpdateFixture(
@@ -372,8 +371,9 @@ withTempDir(({ createTempDir }) => {
 
           expect(run.exitCode).toBe(2);
           expect(stripAnsi(run.stderr)).toMatch(/CONSENT_REQUIRED/);
+          expect(stripAnsi(run.stderr)).toContain('--delete public.project.legacy_notes');
 
-          // Verify the confirmation requirement actually blocked the update —
+          // Verify the refusal actually blocked the update —
           // the drift column must still exist
           await withClient(connectionString, async (client) => {
             const result = await client.query(
@@ -410,8 +410,8 @@ withTempDir(({ createTempDir }) => {
           const run = await runDbUpdateAllowFailure(testSetup, [
             '--config',
             configPath,
-            '--confirm',
-            consentTokenFor(connectionString),
+            '--delete',
+            'public.project.legacy_notes',
           ]);
 
           expect(run.exitCode).not.toBe(0);

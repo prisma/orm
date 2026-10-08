@@ -2,7 +2,6 @@ import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { CliStructuredError } from '../src/control';
 import {
-  errorDestructiveChanges,
   errorHashMismatch,
   errorMarkerMissing,
   errorMarkerReadFailed,
@@ -105,23 +104,6 @@ describe('Runtime Errors', () => {
     const cause = new Error('underlying failure');
     const error = errorRunnerFailed('Runner failed', { cause });
     expect(error.cause).toBe(cause);
-  });
-
-  it('errorDestructiveChanges creates correct error', () => {
-    const error = errorDestructiveChanges('Destructive changes detected');
-    expect(error.code).toBe('MIGRATION.DESTRUCTIVE_CHANGES');
-    expect(error.message).toBe('Destructive changes detected');
-  });
-
-  it('errorDestructiveChanges with all options', () => {
-    const error = errorDestructiveChanges('Destructive changes detected', {
-      why: 'Custom why',
-      fix: 'Custom fix',
-      meta: { key: 'value' },
-    });
-    expect(error.why).toBe('Custom why');
-    expect(error.fix).toBe('Custom fix');
-    expect(error.meta).toEqual({ key: 'value' });
   });
 
   it('errorRuntime carries the caller-provided code', () => {

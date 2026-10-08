@@ -2,7 +2,7 @@
   {
     "id": "collection.products.setValidation",
     "label": "Set validation on products",
-    "operationClass": "destructive",
+    "operationClass": "widening",
     "precheck": [],
     "execute": [
       {

@@ -1,14 +1,19 @@
-import type { Contract } from '@internal/contract/types';
+import { asNamespaceId, type Contract, type ContractWithDomain } from '@internal/contract/types';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import type {
-  MigrationOperationClass,
-  MigrationOperationPolicy,
-  MigrationPlanner,
-  MigrationPlannerConflict,
-  MigrationPlannerResult,
-  MigrationPlanWithAuthoringSurface,
-  MigrationScaffoldContext,
+import {
+  describeMigrationStatement,
+  type MigrationOperationPolicy,
+  type MigrationOperationSubject,
+  type MigrationPlanner,
+  type MigrationPlannerConflict,
+  type MigrationPlannerResult,
+  type MigrationPlanWithAuthoringSurface,
+  type MigrationScaffoldContext,
+  type MigrationSubject,
+  type ModelCoordinate,
+  type PlanOrigin,
+  type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import type {
@@ -63,101 +68,8 @@ function validatorsEqual(
   );
 }
 
-function classifyValidatorUpdate(
-  origin: MongoSchemaValidator,
-  dest: MongoSchemaValidator,
-): 'widening' | 'destructive' {
-  // Moving to a stricter action or level narrows the accepted value space.
-  if (origin.validationAction !== dest.validationAction && dest.validationAction === 'error') {
-    return 'destructive';
-  }
-  if (origin.validationLevel !== dest.validationLevel && dest.validationLevel === 'strict') {
-    return 'destructive';
-  }
-
-  if (canonicalize(origin.jsonSchema) === canonicalize(dest.jsonSchema)) {
-    return 'widening';
-  }
-
-  // Check whether the schema change only adds non-required properties (widening).
-  return isWideningSchemaChange(origin.jsonSchema, dest.jsonSchema) ? 'widening' : 'destructive';
-}
-
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-/**
- * Returns true when `dest` is a structural superset of `origin` for the common
- * additive case: adding non-required properties to a top-level object schema.
- * Anything uncertain falls through to the safe `destructive` default.
- */
-function isWideningSchemaChange(
-  origin: Record<string, unknown>,
-  dest: Record<string, unknown>,
-): boolean {
-  // Only handle top-level object schemas.
-  if (origin['bsonType'] !== 'object' || dest['bsonType'] !== 'object') {
-    return false;
-  }
-
-  // Any change to keys besides 'required' and 'properties' is uncertain → destructive.
-  const allKeys = new Set([...Object.keys(origin), ...Object.keys(dest)]);
-  for (const key of allKeys) {
-    if (key === 'required' || key === 'properties') continue;
-    if (canonicalize(origin[key]) !== canonicalize(dest[key])) return false;
-  }
-
-  // dest.required must be a subset of origin.required — no new required fields.
-  const originRequired = new Set<unknown>(
-    Array.isArray(origin['required']) ? origin['required'] : [],
-  );
-  const destRequired = Array.isArray(dest['required']) ? dest['required'] : [];
-  for (const field of destRequired) {
-    if (!originRequired.has(field)) return false;
-  }
-
-  // All properties that existed in origin must still exist unchanged.
-  // New properties in dest (absent from origin) are allowed — widening.
-  const originProps = isPlainObject(origin['properties']) ? origin['properties'] : {};
-  const destProps = isPlainObject(dest['properties']) ? dest['properties'] : {};
-  for (const field of Object.keys(originProps)) {
-    if (!Object.hasOwn(destProps, field)) return false; // Property removed → destructive.
-    if (!admitsEverything(destProps[field], originProps[field])) return false; // Property narrowed → destructive.
-  }
-
-  return true;
-}
-
-function bsonTypeList(value: unknown): readonly unknown[] | undefined {
-  if (value === undefined) return undefined;
-  return Array.isArray(value) ? value : [value];
-}
-
-/**
- * Whether every value `origin` admits, `dest` admits too, for the property schemas Prisma derives: `{}` admits every value, a `bsonType` list may gain types, and an array's `items` may admit more. Any other difference is treated as narrowing.
- */
-function admitsEverything(dest: unknown, origin: unknown): boolean {
-  if (canonicalize(dest) === canonicalize(origin)) return true;
-  if (!isPlainObject(dest) || !isPlainObject(origin)) return false;
-  if (Object.keys(dest).length === 0) return true;
-  for (const key of new Set([...Object.keys(origin), ...Object.keys(dest)])) {
-    if (key === 'bsonType') {
-      const destTypes = bsonTypeList(dest['bsonType']);
-      const originTypes = bsonTypeList(origin['bsonType']);
-      if (destTypes === undefined) continue;
-      if (originTypes === undefined || !originTypes.every((type) => destTypes.includes(type))) {
-        return false;
-      }
-      continue;
-    }
-    if (key === 'items') {
-      if (!admitsEverything(dest['items'] ?? {}, origin['items'] ?? {})) return false;
-      continue;
-    }
-    if (canonicalize(origin[key]) !== canonicalize(dest[key])) return false;
-  }
-  return true;
 }
 
 function propertiesOf(schema: Record<string, unknown>): Record<string, unknown> {
@@ -210,6 +122,110 @@ function collectionHasOptions(coll: MongoSchemaCollection): boolean {
 export type PlanCallsResult =
   | { readonly kind: 'success'; readonly calls: OpFactoryCall[] }
   | { readonly kind: 'failure'; readonly conflicts: MigrationPlannerConflict[] };
+
+/** The collection a model stores its documents in; a model without `@@map` names it verbatim. */
+function collectionOf(contract: ContractWithDomain | null, coordinate: ModelCoordinate): string {
+  const collection =
+    contract?.domain.namespaces[coordinate.namespaceId]?.models[coordinate.model]?.storage[
+      'collection'
+    ];
+  return typeof collection === 'string' ? collection : coordinate.model;
+}
+
+/**
+ * The model of `fromContract` that stores its documents in `collection`, if any: the root model
+ * when variants share the collection with it.
+ */
+function modelStoredIn(
+  fromContract: ContractWithDomain,
+  collection: string,
+): ModelCoordinate | undefined {
+  const storing = Object.entries(fromContract.domain.namespaces).flatMap(
+    ([namespaceId, namespace]) =>
+      Object.entries(namespace.models).flatMap(([model, definition]) => {
+        const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
+        return collectionOf(fromContract, coordinate) === collection
+          ? [{ coordinate, isRoot: definition.base === undefined }]
+          : [];
+      }),
+  );
+  return (storing.find(({ isRoot }) => isRoot) ?? storing[0])?.coordinate;
+}
+
+/** Each collection drop of the plan, with the model whose documents it loses. */
+function collectionDrops(
+  calls: readonly OpFactoryCall[],
+  fromContract: ContractWithDomain | null,
+): readonly MigrationOperationSubject[] {
+  return calls.flatMap((call, operationIndex) => {
+    if (!(call instanceof DropCollectionCall)) return [];
+    const model = fromContract === null ? undefined : modelStoredIn(fromContract, call.collection);
+    const subject: MigrationSubject =
+      model === undefined
+        ? { kind: 'storage', name: call.collection }
+        : { kind: 'model', ...model };
+    return [{ operationIndex, subject }];
+  });
+}
+
+const NOT_IN_THIS_RELEASE = 'MongoDB cannot carry out rename statements in this release.';
+
+function shellString(name: string): string {
+  return JSON.stringify(name);
+}
+
+/**
+ * How to keep the documents of a subject a plan would drop, since the planner carries out no
+ * rename: rename the collection by hand before a plan that drops it is applied. Right for both
+ * `db update`, which then finds nothing to drop, and `migration plan`, whose written migration
+ * still drops it.
+ */
+export function keepDataByHand(
+  subject: MigrationSubject,
+  fromContract: ContractWithDomain,
+): string {
+  const collection =
+    subject.kind === 'storage' ? subject.name : collectionOf(fromContract, subject);
+  return `If it was renamed, keep its documents instead: rename collection "${collection}" by hand on each database before a plan that drops it is applied there, for example with db.getCollection(${shellString(collection)}).renameCollection("<new collection>") in mongosh. db update then drops nothing; a migration written by migration plan still drops "${collection}", so remove that operation from its migration.ts, or do not apply it where the collection was renamed.`;
+}
+
+/**
+ * What a plan made without the statement does to the data, and how to keep it. Right for both
+ * `db update` and `migration plan`, since the planner does not know which command it serves.
+ * Mongo contracts key a model's fields by their stored names, so the statement's field names are
+ * the names a `$rename` needs.
+ */
+function keepTheData(
+  statement: ResolvedMigrationStatement,
+  fromContract: ContractWithDomain | null,
+  contract: ContractWithDomain,
+): string {
+  const from = collectionOf(fromContract, statement.from);
+  if (statement.entity === 'field') {
+    const { field } = statement.from;
+    const newField = statement.to.field;
+    const collection = `db.getCollection(${shellString(from)})`;
+    return `${NOT_IN_THIS_RELEASE} Without the statement, the documents in collection "${from}" keep their values under "${field}", and nothing moves them to "${newField}". To move them, run these in mongosh on each database before a plan made without the statement is applied there, using the field names as they are stored. First turn off the collection's validator, which still requires "${field}": db.runCommand({ collMod: ${shellString(from)}, validationLevel: "off" }). Then drop each unique index that includes "${field}", or the move fails once two documents have lost it, for example ${collection}.dropIndex(${shellString(`${field}_1`)}). Then move the values: ${collection}.updateMany({}, { $rename: { ${shellString(field)}: ${shellString(newField)} } }). Applying the plan then creates the indexes on "${newField}" and turns the validator back on.`;
+  }
+  const to = collectionOf(contract, statement.to);
+  if (from === to) {
+    return `${NOT_IN_THIS_RELEASE} Both models store their documents in collection "${from}", so a plan made without the statement keeps them.`;
+  }
+  return `${NOT_IN_THIS_RELEASE} Without the statement, a plan drops collection "${from}" with its documents and creates collection "${to}". To keep the documents, rename the collection by hand on each database before a plan made without the statement is applied there, for example with db.getCollection(${shellString(from)}).renameCollection(${shellString(to)}) in mongosh. A migration written by migration plan without the statement still drops "${from}" wherever it is applied, so check its operations first.`;
+}
+
+function statementNotApplied(
+  statement: ResolvedMigrationStatement,
+  fromContract: ContractWithDomain | null,
+  contract: ContractWithDomain,
+): MigrationPlannerConflict {
+  return {
+    kind: 'statementRefused',
+    summary: `MongoDB does not apply rename statements in this release, so nothing was planned: ${describeMigrationStatement(statement, fromContract ?? contract, contract)}`,
+    why: keepTheData(statement, fromContract, contract),
+    refusedStatement: statement,
+  };
+}
 
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
@@ -356,12 +372,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     readonly contract: unknown;
     readonly schema: unknown;
     readonly policy: MigrationOperationPolicy;
-    /**
-     * The "from" contract (state the planner assumes the database starts at),
-     * or `null` for reconciliation flows. Used to populate `describe().from`
-     * on the produced plan as `fromContract?.storage.storageHash ?? null`.
-     */
+    /** The contract the planner reads as the starting state, or `null` when it has none. */
     readonly fromContract: Contract | null;
+    /** The origin the produced plan asserts: its `describe().from` and `origin`. */
+    readonly origin: PlanOrigin | null;
+    /** The `--rename` statements, resolved; MongoDB refuses any statement in this release. */
+    readonly statements: readonly ResolvedMigrationStatement[];
     readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>;
     /**
      * POSIX-relative path from the migration package dir to
@@ -374,6 +390,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       MongoContract,
       'framework planner passes the Mongo contract selected for the mongo target'
     >(options.contract);
+    const [statement] = options.statements;
+    if (statement !== undefined) {
+      return {
+        kind: 'failure',
+        conflicts: [statementNotApplied(statement, options.fromContract, contract)],
+      };
+    }
     const result = this.planCalls(options);
     if (result.kind === 'failure') return result;
     return {
@@ -381,11 +404,14 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       plan: new PlannerProducedMongoMigration(
         result.calls,
         {
-          from: options.fromContract?.storage.storageHash ?? null,
+          from: options.origin?.storageHash ?? null,
           to: contract.storage.storageHash,
         },
         options.snapshotsImportPath,
       ),
+      appliedStatements: [],
+      dataLoss: collectionDrops(result.calls, options.fromContract),
+      accessWidening: [],
     };
   }
 
@@ -418,9 +444,6 @@ function planValidatorDiffCall(
   if (validatorsEqual(originValidator, destValidator)) return undefined;
 
   if (destValidator) {
-    const operationClass: MigrationOperationClass = originValidator
-      ? classifyValidatorUpdate(originValidator, destValidator)
-      : 'destructive';
     return new CollModCall(
       collName,
       {
@@ -433,7 +456,7 @@ function planValidatorDiffCall(
         label: originValidator
           ? validatorUpdateLabel(collName, originValidator, destValidator)
           : `Add validator on ${collName}`,
-        operationClass,
+        operationClass: 'widening',
       },
     );
   }
@@ -471,7 +494,7 @@ function planMutableOptionsDiffCall(
     {
       id: `options.${collName}.update`,
       label: `Update mutable options on ${collName}`,
-      operationClass: desiredCSPPI.enabled ? 'widening' : 'destructive',
+      operationClass: 'widening',
     },
   );
 }

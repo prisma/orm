@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
+import type {
+  ControlExtensionDescriptor,
+  MigrationPlanOperation,
+} from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
@@ -361,7 +364,11 @@ export async function buildReadAggregate(
   },
 ): Promise<
   Result<
-    { readonly aggregate: ContractSpaceAggregate; readonly contractHash: string },
+    {
+      readonly aggregate: ContractSpaceAggregate;
+      readonly contractHash: string;
+      readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+    },
     CliStructuredError
   >
 > {
@@ -406,7 +413,11 @@ export async function buildReadAggregate(
     if (!loaded.ok) {
       return loaded;
     }
-    return ok({ aggregate: loaded.value, contractHash });
+    return ok({
+      aggregate: loaded.value,
+      contractHash,
+      storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+    });
   } catch (error) {
     return notOk(
       errorFromCaught(error, (message) => `Failed to read migrations directory: ${message}`),

@@ -7,4 +7,5 @@ export {
   errorMigrationTargetMismatch,
   errorUnfilledPlaceholder,
   placeholder,
+  unfilledPlaceholderOperation,
 } from '../migration';

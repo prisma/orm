@@ -124,6 +124,9 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
   };
   const applySuccess = {
     mode: 'apply' as const,
+    appliedStatements: [],
+    dataLoss: [],
+    accessWidening: [],
     plan: { operations: [fixtureOperation] },
     destination: contract,
     execution: { operationsPlanned: 1, operationsExecuted: 1 },

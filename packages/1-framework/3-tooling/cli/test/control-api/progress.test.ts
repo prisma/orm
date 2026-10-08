@@ -31,6 +31,7 @@ describe('executeDbInit progress emission', () => {
       createPlanner: () => ({
         plan: async () => ({
           kind: 'success' as const,
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'test-hash' },
@@ -114,6 +115,7 @@ describe('executeDbInit progress emission', () => {
       createPlanner: () => ({
         plan: async () => ({
           kind: 'success' as const,
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'test-hash' },
@@ -185,6 +187,7 @@ describe('executeDbInit progress emission', () => {
       createPlanner: () => ({
         plan: async () => ({
           kind: 'success' as const,
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'test-hash' },

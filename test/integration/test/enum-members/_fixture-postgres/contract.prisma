@@ -1,0 +1,100 @@
+// use prisma-8
+
+enum TextLevel {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+enum Int4Level {
+  @@type("pg/int4@1")
+  Low  = 1
+  High = 10
+}
+
+enum Int8Level {
+  @@type("pg/int8@1")
+  Low  = "1"
+  High = "10"
+}
+
+enum UuidLevel {
+  @@type("pg/uuid@1")
+  First  = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+  Second = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+}
+
+enum StampLevel {
+  @@type("pg/timestamptz-temporal@1")
+  Launch = "2024-01-01T00:00:00Z"
+  Sunset = "2025-06-30T12:00:00Z"
+}
+
+enum DayLevel {
+  @@type("pg/date-temporal@1")
+  Launch = "2024-01-01"
+  Sunset = "2025-06-30"
+}
+
+enum Float8Level {
+  @@type("pg/float8@1")
+  Half  = 1.5
+  Whole = 2.25
+}
+
+enum FloatSpecial {
+  @@type("pg/float8@1")
+  Nan      = "NaN"
+  Infinite = "Infinity"
+  Negative = "-Infinity"
+}
+
+enum FloatMixed {
+  @@type("pg/float8@1")
+  Half = 1.5
+  Nan  = "NaN"
+}
+
+enum Host {
+  @@type("pg/inet@1")
+  Loopback = "127.0.0.1"
+  Private  = "10.0.0.0/8"
+  Local6   = "::1"
+}
+
+enum Ratio {
+  @@type("pg/numeric@1")
+  Half  = "0.5"
+  Whole = "1.50"
+}
+
+model Network {
+  id     Int     @id
+  hosts  Host[]
+  ratios Ratio[]
+  ratio  Ratio
+
+  @@map("networks")
+}
+
+model Reading {
+  id     Int         @id
+  text   TextLevel
+  int4   Int4Level
+  int8   Int8Level
+  uuid   UuidLevel
+  stamp  StampLevel
+  day    DayLevel
+  float8 Float8Level
+  special FloatSpecial
+
+  @@map("readings")
+}
+
+model Gauge {
+  id     Int          @id
+  level  FloatMixed
+  levels FloatMixed[]
+
+  @@map("gauges")
+}

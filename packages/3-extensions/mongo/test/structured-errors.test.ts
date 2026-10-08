@@ -4,6 +4,7 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
+import type * as MongoRuntime from '@internal/mongo-runtime';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,7 +24,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@internal/adapter-mongo/runtime', () => ({ default: { id: 'adapter' } }));
 vi.mock('@internal/target-mongo/runtime', () => ({ default: { id: 'target' } }));
-vi.mock('@internal/mongo-runtime', () => ({
+vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
+  buildMongoEnums: (await importOriginal<typeof MongoRuntime>()).buildMongoEnums,
   createMongoExecutionStack: mocks.createMongoExecutionStack,
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,

@@ -54,10 +54,10 @@ describe('disableRowLevelSecurity op', () => {
     expect(op.postcheck[0]?.params).toEqual(['p3']);
   });
 
-  it('operationClass is destructive — disabling RLS opens row access', async () => {
+  it('operationClass is widening — disabling RLS opens row access but loses no data', async () => {
     const { lowerer } = recordingCheckLowerer();
     const op = await disableRowLevelSecurity('public', 'profiles', lowerer);
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('op id and label name the table and the disable action', async () => {
@@ -157,9 +157,9 @@ describe('DisableRowLevelSecurityCall', () => {
     expect(call.factoryName).toBe('disableRowLevelSecurity');
   });
 
-  it('operationClass is destructive', () => {
+  it('operationClass is widening', () => {
     const call = new DisableRowLevelSecurityCall('public', 'profiles');
-    expect(call.operationClass).toBe('destructive');
+    expect(call.operationClass).toBe('widening');
   });
 });
 

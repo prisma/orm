@@ -7,6 +7,7 @@ import {
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
 } from '@internal/framework-components/codec';
+import { planOriginOf } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import {
@@ -128,6 +129,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

@@ -1,7 +1,14 @@
 import type { Contract } from '@internal/contract/types';
-import type {
-  MigrationOperationClass,
-  SqlMigrationPlanOperation,
+import {
+  type ColumnRenameRequest,
+  type MigrationOperationClass,
+  resolveColumnRenameAgainst,
+  resolveTableRenameAgainst,
+  type SqlMigrationPlanOperation,
+  sqlTypeLookupsOf,
+  type TableRenameRequest,
+  unmatchedColumnRename,
+  unmatchedTableRename,
 } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { Migration as SqlMigration } from '@internal/family-sql/migration';
@@ -10,9 +17,11 @@ import type { ControlStack } from '@internal/framework-components/control';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { errorSqliteMigrationStackMissing } from '../errors';
 import { SqliteContractView } from '../sqlite-contract-view';
+import { sqliteContractToSchema } from './diff-database-schema';
 import {
   AddColumnCall,
   CreateIndexCall,
@@ -21,11 +30,15 @@ import {
   DropIndexCall,
   DropTableCall,
   RecreateTableCall,
+  type RenameColumnCall,
+  type RenameTableCall,
 } from './op-factory-call';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import type { RecreatePostcheck } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
-import { sqliteTableRenameCalls } from './table-rename-calls';
+import { sqliteSchemaTables } from './schema-tables';
+import { sqliteColumnRenameCall, sqliteTableRenameCall } from './table-rename-calls';
+import { createWorkingSchema } from './working-schema';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
 
@@ -68,6 +81,9 @@ export abstract class SqliteMigration<
   #endView = new MigrationContractViews<SqliteContractView<End>>(this, 'SqliteMigration', (json) =>
     SqliteContractView.fromJson<End>(json),
   );
+  /** The rename calls this read of `operations` has made so far, in order. */
+  #renames: (RenameTableCall | RenameColumnCall)[] = [];
+
   #startView = new MigrationContractViews<SqliteContractView<Start>>(
     this,
     'SqliteMigration',
@@ -139,19 +155,100 @@ export abstract class SqliteMigration<
   }
 
   /**
-   * Emit the operations that rename a table: the table rename, then a drop and a create under the new name of each index whose name was derived from the old table name, read from this migration's start and end contracts. Spread the result into `operations`: `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+   * Emit the operations that rename a table: the table rename, then a drop and a create under the
+   * new name of each index whose name was derived from the old table name. The old name is resolved
+   * against the schema as this migration's earlier `renameTable` calls leave it, and the new name
+   * against the end contract. Spread the result into `operations`:
+   * `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`. Throws
+   * `MIGRATION.TABLE_RENAME_UNMATCHED` when the table does not exist at that point of the migration
+   * or the end contract lacks the new name.
    */
   protected renameTable(options: {
     readonly table: string;
     readonly to: string;
   }): readonly Promise<Op>[] {
     const adapter = this.controlAdapterFor('renameTable');
-    return sqliteTableRenameCalls({
-      startContract: this.startContract,
-      endContract: this.endContract,
-      rename: { namespaceId: undefined, from: options.table, to: options.to },
+    const rename: TableRenameRequest = {
+      namespaceId: undefined,
+      from: options.table,
+      to: options.to,
+    };
+    const startContract = this.startContract;
+    if (startContract === null) {
+      throw unmatchedTableRename(rename, 'the migration has no start contract');
+    }
+    const current = this.schemaAfterRenames(startContract);
+    const endContract = this.endContract;
+    const resolved = resolveTableRenameAgainst(sqliteSchemaTables(current), endContract, rename);
+    if (!resolved.ok) {
+      throw resolved.failure;
+    }
+    const call = sqliteTableRenameCall({
+      previous: current,
+      contract: endContract,
+      rename: resolved.value,
       frameworkComponents: this.frameworkComponents(),
-    }).map(async (call) => call.toOp(adapter));
+    });
+    this.#renames.push(call);
+    return call.toOps(adapter);
+  }
+
+  /**
+   * Emit the operations that rename a column: the column rename, then a drop and a create under
+   * the new name of each index on the column whose name was derived from the old column name. The
+   * column is resolved against the schema as this migration's earlier rename calls leave it, so a
+   * column of a table an earlier `renameTable` renamed is named on the table's new name. Spread the
+   * result into `operations`: `...this.renameColumn({ table: 'User', column: 'name', to:
+   * 'fullName' })`. Throws `MIGRATION.COLUMN_RENAME_UNMATCHED` when the table or column does not
+   * exist at that point of the migration, the table already has the new column, or the end
+   * contract lacks it.
+   */
+  protected renameColumn(options: {
+    readonly table: string;
+    readonly column: string;
+    readonly to: string;
+  }): readonly Promise<Op>[] {
+    const adapter = this.controlAdapterFor('renameColumn');
+    const rename: ColumnRenameRequest = {
+      namespaceId: undefined,
+      table: options.table,
+      from: options.column,
+      to: options.to,
+    };
+    const startContract = this.startContract;
+    if (startContract === null) {
+      throw unmatchedColumnRename(rename, 'the migration has no start contract');
+    }
+    const current = this.schemaAfterRenames(startContract);
+    const resolved = resolveColumnRenameAgainst(
+      sqliteSchemaTables(current),
+      this.endContract,
+      rename,
+    );
+    if (!resolved.ok) {
+      throw resolved.failure;
+    }
+    const call = sqliteColumnRenameCall({
+      previous: current,
+      contract: this.endContract,
+      rename: resolved.value,
+      frameworkComponents: this.frameworkComponents(),
+    });
+    this.#renames.push(call);
+    return call.toOps(adapter);
+  }
+
+  /** The start contract's schema with this read's rename calls applied in order. */
+  private schemaAfterRenames(startContract: Contract<SqlStorage>): SqlSchemaIR {
+    const working = createWorkingSchema(
+      sqliteContractToSchema(startContract, sqlTypeLookupsOf(this.frameworkComponents())),
+    );
+    for (const call of this.#renames) working.apply(call);
+    return working.current;
+  }
+
+  protected override beginOperationsRead(): void {
+    this.#renames = [];
   }
 
   protected addColumn(options: {

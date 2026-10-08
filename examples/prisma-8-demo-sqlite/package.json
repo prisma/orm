@@ -20,7 +20,7 @@
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.3",
+    "@prisma/cli-engine": "0.7.0",
     "@repo/tsconfig": "workspace:8.0.0-rc.16",
     "@types/node": "catalog:",
     "tsx": "catalog:",

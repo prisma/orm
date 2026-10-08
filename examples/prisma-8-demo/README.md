@@ -125,7 +125,7 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientUpsertUser(data, runtime)` — `upsert()` for create-or-update by primary key
 - `ormClientFindUserByIdCached(id, runtime, options?)` — opt-in cached `first({ id })` lookup via `cacheAnnotation({ bypass? })` from `@internal/middleware-cache`
 - `ormClientGetUsersCached(limit, runtime, options?)` — opt-in cached `User.all()` listing, with optional explicit cache-key override
-- `ormClientGetRecentPosts(since, orderBy, direction, limit, runtime)` — **query fragments as scopes**: `createdSince` (`db.orm.scope`, a scope for any model with a `createdAt` field), `orderByField` (a field to order by, named in the request and checked at run time) and `postSummary` (`db.orm.public.Post.scope`, the shared `select` and `include` of a post), from `src/orm-client/scopes.ts`
+- `ormClientGetRecentPosts(since, orderBy, direction, limit, runtime)` — **query fragments**: `createdSince` (`db.orm.fragment`, a scope for any model with a `createdAt` field), `orderByField` (a field to order by, named in the request and checked at run time) and `postSummary` (`db.orm.public.Post.fragment`, the shared `select` and `include` of a post), from `src/orm-client/fragments.ts`
 - `ormClientGetRecentUsers(since, limit, runtime)` — the same `createdSince` on users and on their included posts, which `postSummary` shapes inside the include refinement
 - `ormClientSearchPostsByTitle(query, limit, runtime)` — **full-text search**: `p.title.fullTextMatches(websearchToTsquery(query))` filtered and `p.title.fullTextRank(websearchToTsquery(query)).desc()` ordered, over the GIN index `@@fullTextIndex([title])` declares
 
@@ -433,7 +433,7 @@ Run `pnpm dev` for the Vite app that visualizes the contract. It renders directl
 - `src/prisma/db.ts` - One-liner Postgres client + query roots (emit workflow)
 - `src/prisma-no-emit/context.ts` - Env-free execution stack/context + query roots (no-emit workflow)
 - `src/prisma-no-emit/runtime.ts` - Runtime factory (no-emit workflow)
-- `src/orm-client/client.ts` - ORM client + custom collection scopes
+- `src/orm-client/client.ts` - ORM client, registering the custom collection classes in `collections.ts`
 - `src/orm-client/*.ts` - End-to-end ORM client query examples
 - `src/extensions/engagement-stats.ts` - Local extension contributing the `stddev` aggregate operation
 - `src/main.ts` - App entrypoint with arktype config validation (emit workflow)

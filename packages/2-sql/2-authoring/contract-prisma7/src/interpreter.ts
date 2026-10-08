@@ -58,6 +58,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
+import {
+  checkStatedConstraintNameLength,
+  prisma7PrimaryKeyName,
+  statedConstraintName,
+} from './constraint-names';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
 import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -128,6 +133,8 @@ interface ModelBuild {
   readonly ignoredRelationFields: RelationField[];
   readonly rejectedFields: Set<string>;
   idFields: readonly string[];
+  /** The `map` name of the model's `@id` or `@@id`. */
+  idMap: string | undefined;
   readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
 }
@@ -305,7 +312,7 @@ export function interpretPrisma7Documents(
         sourceId,
         sources,
         defaultNamespaceId,
-        binding.indexTypes,
+        binding,
         diagnostics,
       );
       if (declaration === undefined) {
@@ -342,6 +349,7 @@ export function interpretPrisma7Documents(
       ignoredRelationFields: [],
       rejectedFields: new Set(),
       idFields: declaration.id?.fields ?? [],
+      idMap: declaration.id?.map,
       uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
@@ -450,12 +458,18 @@ export function interpretPrisma7Documents(
     });
     const foreignKeys = lowered.foreignKeys.get(modelName);
     const relations = lowered.relations.get(modelName);
+    const primaryKeyName = statedConstraintName(
+      prisma7PrimaryKeyName(model.tableName, build.idMap, binding.identifierMaxBytes),
+      binding.defaultConstraintNames.primaryKey(model.tableName),
+    );
     modelNodes.push({
       modelName,
       tableName: model.tableName,
       namespaceId: model.namespaceId,
       fields: [...build.columns.values()],
-      ...(id !== undefined && id.length > 0 ? { id: { columns: id } } : {}),
+      ...(id !== undefined && id.length > 0
+        ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
+        : {}),
       ...(indexes.length > 0 ? { indexes } : {}),
       ...(foreignKeys !== undefined ? { foreignKeys } : {}),
       ...(relations !== undefined ? { relations } : {}),
@@ -596,9 +610,10 @@ function readModelDeclaration(
   sourceId: string,
   sources: PslSources,
   defaultNamespaceId: string,
-  indexTypes: Prisma7TargetBinding['indexTypes'],
+  binding: Pick<Prisma7TargetBinding, 'indexTypes' | 'identifierMaxBytes'>,
   diagnostics: ContractSourceDiagnostic[],
 ): ModelDeclaration | undefined {
+  const { indexTypes } = binding;
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
@@ -606,6 +621,15 @@ function readModelDeclaration(
   const uniqueIndexes: IndexAttribute[] = [];
   const indexes: IndexAttribute[] = [];
   for (const attribute of symbol.attributes) {
+    if (['id', 'unique', 'index'].includes(attribute.name)) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: `Model "${symbol.name}"`,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     switch (attribute.name) {
       case 'map':
         tableName =
@@ -946,16 +970,32 @@ function readField(args: ReadFieldArgs): void {
   let defaultAttribute: ResolvedAttribute | undefined;
   let updatedAt: ResolvedAttribute | undefined;
   for (const attribute of field.attributes) {
+    if (
+      isRelationField ? attribute.name === 'relation' : ['id', 'unique'].includes(attribute.name)
+    ) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: label,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     if (attribute.name === 'map' && !isRelationField) {
       columnName = requireStringArgument(attribute, label, sourceId, diagnostics) ?? columnName;
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
     } else if (attribute.name === 'id' && !isRelationField) {
-      if (
-        parseIndexAttribute(attribute, label, sourceId, binding.indexTypes, diagnostics) !==
-        undefined
-      ) {
+      const parsed = parseIndexAttribute(
+        attribute,
+        label,
+        sourceId,
+        binding.indexTypes,
+        diagnostics,
+      );
+      if (parsed !== undefined) {
         build.idFields = [field.name];
+        build.idMap = parsed.map;
       }
     } else if (attribute.name === 'unique' && !isRelationField) {
       const parsed = parseIndexAttribute(

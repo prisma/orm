@@ -1,4 +1,5 @@
 import { ormConfigSection } from '@internal/config-loader';
+import { migrationSubjectJson } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -22,7 +23,9 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import { retryCommandFor } from '../../control-api/operations/ref-resolution';
-import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
+import { shellQuoted, statementFlag } from '../../control-api/statements/statement-flag';
+import type { StatementText } from '../../control-api/statements/statement-text';
+import type { AskedSubject, CreateControlClient, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
@@ -32,12 +35,9 @@ import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { baseDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
+import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
-import {
-  destructiveConsentQuestion,
-  errorConsentOperationsMissing,
-  errorConsentTokenUnresolved,
-} from './consent';
+import { ormStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { prepareMigrationRun } from './prepare';
 
@@ -47,6 +47,10 @@ function updatePresentations(inputs: {
   readonly database: string | undefined;
   readonly to: string | undefined;
   readonly dryRun: boolean;
+  /** Whether the run named its database with `--db`, which the suggested apply repeats as a placeholder. */
+  readonly dbGiven: boolean;
+  readonly advanceRef: string | undefined;
+  readonly statements: readonly StatementText[];
 }): Presentations {
   const { document, database, dryRun } = inputs;
   return {
@@ -65,8 +69,47 @@ function updatePresentations(inputs: {
       ...migrationResultBlocks(document),
     ],
     json: () => document,
-    next: () => migrationResultNextActions(document, '{bin} db update'),
+    next: () =>
+      migrationResultNextActions(
+        document,
+        [
+          '{bin} db update',
+          ...(inputs.to === undefined ? [] : [`--to ${shellQuoted(inputs.to)}`]),
+          ...(inputs.dbGiven ? ['--db <url>'] : []),
+          ...(inputs.advanceRef === undefined
+            ? []
+            : [`--advance-ref ${shellQuoted(inputs.advanceRef)}`]),
+          ...inputs.statements.map(statementFlag),
+        ].join(' '),
+      ),
   };
+}
+
+/**
+ * The entries a dry run lists, each marked answered when a flag it was given answers its question:
+ * a `--delete` answers every loss of its subject, and an `--allow` one operation, in order.
+ */
+function subjectEntriesJson(
+  entries: readonly AskedSubject[],
+  verb: 'delete' | 'allow',
+  given: readonly StatementText[],
+) {
+  const flagsLeft = new Map<string, number>();
+  for (const statement of given) {
+    if (statement.verb === verb) {
+      flagsLeft.set(statement.text, (flagsLeft.get(statement.text) ?? 0) + 1);
+    }
+  }
+  return entries.map((entry) => {
+    const left = flagsLeft.get(entry.text) ?? 0;
+    if (left > 0 && verb === 'allow') flagsLeft.set(entry.text, left - 1);
+    return {
+      operationIndex: entry.operationIndex,
+      subject: migrationSubjectJson(entry.subject),
+      text: entry.text,
+      answered: left > 0,
+    };
+  });
 }
 
 function updateDocument(inputs: {
@@ -75,6 +118,8 @@ function updateDocument(inputs: {
   readonly advancedRef: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef: { readonly name: string; readonly hash: string } | null;
   readonly startedAt: number;
+  /** The statements the run was given, which a dry run's questions are marked answered by. */
+  readonly statements: readonly StatementText[];
 }): MigrationCommandResult {
   const { value } = inputs;
   return {
@@ -110,12 +155,28 @@ function updateDocument(inputs: {
           },
         }),
     ...ifDefined('perSpace', value.perSpace),
+    appliedStatements: value.appliedStatements,
+    ...(value.mode === 'plan'
+      ? {
+          dataLoss: subjectEntriesJson(value.dataLoss, 'delete', inputs.statements),
+          accessWidening: subjectEntriesJson(value.accessWidening, 'allow', inputs.statements),
+        }
+      : {}),
     ...ifDefined('warnings', value.warnings),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
     summary: value.summary,
     timings: { total: Date.now() - inputs.startedAt },
   };
+}
+
+/** The delete and allow values the engine still holds for the questions, read without taking them. */
+function unansweredConsents(statements: {
+  readonly values: () => readonly { readonly verb: string; readonly text: string }[];
+}): readonly StatementText[] {
+  return statements
+    .values()
+    .flatMap(({ verb, text }) => (verb === 'delete' || verb === 'allow' ? [{ verb, text }] : []));
 }
 
 export function createDbUpdateCommand(createClient: CreateControlClient) {
@@ -125,14 +186,16 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       description:
         'Compares the database to the emitted contract and applies the changes that\n' +
         'close the gap, whether or not the database was bootstrapped with `db init`.\n' +
-        'An operation that would destroy data is applied only with your consent: the\n' +
-        'command asks you to type the database name. A run with nobody to ask — a CI\n' +
-        'job, or `--no-interactive` — takes it from `--confirm <database>` instead.\n' +
-        'Use --dry-run to see the operations without applying them.',
+        'Before it applies an operation that would lose data, it asks what the\n' +
+        'operation means: --rename keeps the data under a new name, --delete lets it\n' +
+        'go. Before it widens who can read or write rows, it asks for --allow. Where\n' +
+        'nobody can answer, it refuses and lists every question. Use --dry-run to see\n' +
+        'the operations and the questions without applying anything.',
       examples: [
         'db update',
         'db update --dry-run',
-        'db update --no-interactive --confirm appdb',
+        'db update --delete Legacy',
+        'db update --rename Profile:User --allow User',
         'db update --to production',
       ],
     },
@@ -150,9 +213,21 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         }),
       },
     },
+    statements: ormStatementVerbs,
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
       const startedAt = Date.now();
+      const renames = ctx.statements
+        .take('rename')
+        .map(({ text }) => ({ verb: 'rename' as const, text }));
+      // A dry run asks nothing, so it takes the delete and allow values and the control API
+      // checks each against the subjects an apply would ask about.
+      const previewConsents = args.flags.dryRun
+        ? [
+            ...ctx.statements.take('delete').map(({ text }) => ({ verb: 'delete' as const, text })),
+            ...ctx.statements.take('allow').map(({ text }) => ({ verb: 'allow' as const, text })),
+          ]
+        : [];
       let destination: ResolveContractRefToSnapshotSuccess | undefined;
       if (args.flags.to !== undefined) {
         const resolved = await resolveContractRefToSnapshot({
@@ -174,12 +249,14 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db update',
         createClient,
-        retryCommand: retryCommandFor({
-          commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
-          to: args.flags.to,
-          advanceRef: args.flags.advanceRef,
-          canRunOffline: false,
-        }),
+        retryCommand: () =>
+          retryCommandFor({
+            commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
+            to: args.flags.to,
+            advanceRef: args.flags.advanceRef,
+            statements: [...renames, ...previewConsents, ...unansweredConsents(ctx.statements)],
+            canRunOffline: false,
+          }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);
@@ -212,55 +289,23 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
-        const update = (consent?: { readonly planHash: string }): Promise<DbUpdateResult> =>
-          client.dbUpdate({
-            contract: contractJson,
-            mode,
-            migrationsDir,
-            ...(consent === undefined ? {} : { consent }),
-            onProgress: controlProgressReporter(ctx.report),
-          });
-
-        // A successful run shows the planner's warnings in its blocks. A refused
-        // or failed one has no result to carry them, and an errored envelope
-        // renders no meta, so they are reported as events to reach both channels.
-        // The refusal's warnings matter most of all: they are what the user is
-        // told just before consenting.
-        const reported = new Set<string>();
+        // A refused or failed run has no result to carry the planner's warnings,
+        // and an errored envelope renders no meta, so they are reported as events
+        // to reach both channels.
         const reportPlannerWarnings = (warnings: readonly { readonly summary: string }[]): void => {
           for (const warning of warnings) {
-            if (!reported.has(warning.summary)) {
-              reported.add(warning.summary);
-              ctx.report({ kind: 'message', severity: 'warn', text: warning.summary });
-            }
+            ctx.report({ kind: 'message', severity: 'warn', text: warning.summary });
           }
         };
 
-        let result = await update();
-        // The destructive verdict is the planner's, so it arrives only after the
-        // connection is open. Consent is asked for on that same connection and
-        // the apply is re-run carrying the refused plan's hash — the control API
-        // refuses if the plan it is about to apply is no longer that plan. Only
-        // an apply can ask: a dry run has nothing to authorise.
-        if (mode === 'apply' && !result.ok && result.failure.code === 'DESTRUCTIVE_CHANGES') {
-          reportPlannerWarnings(result.failure.warnings ?? []);
-          const refusal = result.failure.destructiveChanges;
-          if (refusal === undefined || refusal.destructiveOperations.length === 0) {
-            return notOk(normalizeError(errorConsentOperationsMissing()));
-          }
-          const token = refusal.databaseName ?? '';
-          if (token.trim().length === 0) {
-            return notOk(normalizeError(errorConsentTokenUnresolved(ctx.config.target.targetId)));
-          }
-          const granted = await ctx.prompt.consent(
-            destructiveConsentQuestion(refusal.destructiveOperations, token),
-            { token },
-          );
-          if (!granted) {
-            return notOk(normalizeError(mapDbUpdateFailure(result.failure)));
-          }
-          result = await update({ planHash: refusal.planHash });
-        }
+        const result = await client.dbUpdate({
+          contract: contractJson,
+          mode,
+          migrationsDir,
+          statements: [...renames, ...previewConsents],
+          answerQuestions: promptPlanQuestions(ctx.prompt),
+          onProgress: controlProgressReporter(ctx.report),
+        });
         if (!result.ok) {
           reportPlannerWarnings(result.failure.warnings ?? []);
           return notOk(normalizeError(mapDbUpdateFailure(result.failure)));
@@ -291,9 +336,10 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           advancedRef: advanced.value.advancedRef,
           plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
+          statements: previewConsents,
         });
       } catch (error) {
-        // A refused, mistyped or cancelled consent is the engine's own error, and
+        // A refused, mistyped or cancelled answer is the engine's own error, and
         // the engine settles it: cancellation exits 3, everything else 2. Catching
         // it here would restate it as this command's failure and lose that.
         if (error instanceof EngineStructuredError) {
@@ -338,6 +384,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             database: prepared.value.database,
             to: args.flags.to,
             dryRun: args.flags.dryRun,
+            dbGiven: args.flags.db !== undefined,
+            advanceRef: args.flags.advanceRef,
+            statements: [...renames, ...previewConsents],
           }),
         ),
       );

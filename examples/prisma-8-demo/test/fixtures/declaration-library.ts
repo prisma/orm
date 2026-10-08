@@ -26,21 +26,23 @@ declare const context: ExecutionContext<Contract>;
 
 const client = orm({ runtime, context });
 
-export const titleSummary = client.public.Post.scope((posts) =>
+export const titleSummary = client.public.Post.fragment((posts) =>
   posts.select('id', 'title').include('user'),
 );
 
-export const firstPage = client.scope({ title: field.text() }, (rows) => rows.limit(10).offset(0));
+export const firstPage = client.fragment({ title: field.text() }, (rows) =>
+  rows.limit(10).offset(0),
+);
 
 export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.with(unexpired(now));
 
 export const labelled = (labels: readonly string[]) =>
-  client.scope({ labels: field.text().many() }, (rows) =>
+  client.fragment({ labels: field.text().many() }, (rows) =>
     rows.where((row) => row.labels.eq(labels)),
   );
 
 export const unexpired = (now: Temporal.Instant) =>
-  client.scope({ expiresAt: field.temporal.timestamptz() }, (rows) =>
+  client.fragment({ expiresAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
 

@@ -181,6 +181,8 @@ function planForContract(
     schema: origin,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

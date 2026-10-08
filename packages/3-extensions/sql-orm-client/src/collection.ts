@@ -86,20 +86,27 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  Fragment,
   HasNoVariant,
   HasOrderBy,
   HasRow,
   HasTypeState,
   HasWhere,
   Including,
-  ModelScopeReceiver,
+  ModelFragmentReceiver,
   Ordered,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
-  Scope,
   TypeState,
 } from './collection-types';
 import { shorthandToWhereExpr } from './filters';
+import {
+  assertFragmentBody,
+  assertModelFragmentReceiver,
+  type FragmentFacts,
+  type FragmentFactsType,
+  type WithFacts,
+} from './fragments';
 import { GroupedCollection } from './grouped-collection';
 import {
   createIncludeCombine,
@@ -135,13 +142,6 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import {
-  assertModelScopeReceiver,
-  assertScopeBody,
-  type ScopeFacts,
-  type ScopeFactsType,
-  type WithFacts,
-} from './scopes';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -294,18 +294,18 @@ interface MtiCreateContext {
   pkColumns: readonly string[];
 }
 
-/** What `scope` reads from the collection it is called on: its contract and its model. */
-interface ScopeSource {
+/** What `fragment` reads from the collection it is called on: its contract and its model. */
+interface FragmentSource {
   readonly modelName: string;
   readonly namespaceId: string;
   readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
 }
 
-type ContractOf<C extends ScopeSource> = C['ctx']['context']['contract'];
+type ContractOf<C extends FragmentSource> = C['ctx']['context']['contract'];
 
-type ModelNameOf<C extends ScopeSource> = C['modelName'];
+type ModelNameOf<C extends FragmentSource> = C['modelName'];
 
-type ModelScopeBody<
+type ModelFragmentBody<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
@@ -485,11 +485,11 @@ export class CollectionBase<
   }
 
   /**
-   * Call `fn` with this collection and return its result. A pure filter is `where(rowFragment)`; `with` runs a scope for what `where` cannot express, such as a shared `select` and `include`, an order or a limit. For a scope made by the client's `scope` method, the result is this collection's own type plus the filter and order the scope's body established.
+   * Call `fn`, a query fragment, with this collection and return its result. `fn` may be a scope, which only imposes conditions and declares the fields it needs, or a fragment for what `where` cannot express, such as a shared `select` and `include`, an order or a limit. A condition on one row that needs no declared fields is `where(rowFragment)`. For a fragment made by the client's `fragment` method, the result is this collection's own type plus the filter and order the fragment's body established.
    */
-  with<Self, Facts extends ScopeFacts>(
+  with<Self, Facts extends FragmentFacts>(
     this: Self,
-    scope: ((collection: NoInfer<Self>) => unknown) & { readonly [ScopeFactsType]: Facts },
+    fragment: ((collection: NoInfer<Self>) => unknown) & { readonly [FragmentFactsType]: Facts },
   ): WithFacts<Self, Facts>;
   with<Self, Out>(this: Self, fn: (collection: Self) => Out): Out;
   with(fn: (collection: unknown) => unknown): unknown {
@@ -497,24 +497,24 @@ export class CollectionBase<
   }
 
   /**
-   * Define a scope for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The scope accepts any collection of the model that `select` and `variant` have not narrowed.
+   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed.
    *
    * ```ts
-   * const summary = db.Post.scope((posts) => posts.select('id', 'title').include('user'));
+   * const summary = db.Post.fragment((posts) => posts.select('id', 'title').include('user'));
    * db.User.include('posts', (posts) => posts.with(summary));
    * ```
    */
-  scope<Self extends ScopeSource, NsId extends string, Result>(
+  fragment<Self extends FragmentSource, NsId extends string, Result>(
     this: Self & HasTypeState<{ readonly nsId: NsId }>,
-    body: (collection: ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
-  ): Scope<ModelScopeReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
-    assertScopeBody(body);
+    body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
+  ): Fragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+    assertFragmentBody(body);
     const source = { modelName: this.modelName, namespaceId: this.namespaceId };
     return (collection) => {
-      assertModelScopeReceiver(source, collection);
+      assertModelFragmentReceiver(source, collection);
       return body(
         blindCast<
-          ModelScopeBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
+          ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>,
           'a collection of this model that select and variant have not narrowed has the methods of its plain collection'
         >(collection),
       );

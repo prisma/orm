@@ -29,6 +29,16 @@ describe('PostgresSchema', () => {
     expect(schema.qualifyTable('users')).toBe('"auth"."users"');
   });
 
+  it('doubles a double quote inside the schema and table names', () => {
+    const schema = new PostgresSchema({ id: 'a"uth', entries: { table: {} } });
+    expect(schema.qualifier()).toBe('"a""uth"');
+    expect(schema.qualifyTable('us"ers; drop table x; --')).toBe(
+      '"a""uth"."us""ers; drop table x; --"',
+    );
+    expect(schema.regclassLiteral(`it's`)).toBe(`'"a""uth"."it''s"'`);
+    expect(PostgresSchema.unbound.qualifyTable('us"ers')).toBe('"us""ers"');
+  });
+
   it('quotes the schema name even when it would otherwise collide with a Postgres keyword', () => {
     const schema = new PostgresSchema({ id: 'public', entries: { table: {} } });
     expect(schema.qualifier()).toBe('"public"');

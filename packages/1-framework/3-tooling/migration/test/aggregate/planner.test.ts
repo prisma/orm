@@ -6,6 +6,7 @@ import type {
   MigrationPlanner,
   MigrationPlannerResult,
   MigrationPlanWithAuthoringSurface,
+  ResolvedMigrationStatement,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import { createSqlContract } from '@repo/test-utils';
@@ -95,7 +96,13 @@ describe('planMigration', () => {
       app: makeSpace({ spaceId: 'app' }),
     });
     const stubPlan = makeSyntheticPlan('placeholder-target-id-from-stub');
-    const planner = makeStubPlanner({ kind: 'success', plan: stubPlan });
+    const planner = makeStubPlanner({
+      kind: 'success',
+      plan: stubPlan,
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
+    });
 
     const result = await planMigration({
       aggregate,
@@ -108,6 +115,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(true);
@@ -116,6 +125,148 @@ describe('planMigration', () => {
     expect(success.perSpace.get('app')?.strategy).toBe('plan-from-diff');
     // Aggregate planner overrides the family planner's targetId.
     expect(success.perSpace.get('app')?.plan.targetId).toBe('postgres');
+  });
+
+  it('hands the app space its origin contract and statements, and returns the statements the planner applied', async () => {
+    const aggregate = makeAggregate({ app: makeSpace({ spaceId: 'app' }) });
+    const origin = aggregate.app.contract();
+    const statement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: 'app', model: 'Profile' },
+      to: { namespaceId: 'app', model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    const applied = { statement, operationIndexes: [0] };
+    let received:
+      | { fromContract: unknown; statements: readonly ResolvedMigrationStatement[] }
+      | undefined;
+    const planner: MigrationPlanner<'sql', 'postgres'> = {
+      plan: (options) => {
+        received = { fromContract: options.fromContract, statements: options.statements };
+        return {
+          kind: 'success',
+          plan: makeSyntheticPlan('postgres'),
+          appliedStatements: [applied],
+          dataLoss: [],
+          accessWidening: [],
+        };
+      },
+      emptyMigration: () => {
+        throw new Error('not used');
+      },
+    };
+
+    const result = await planMigration({
+      aggregate,
+      currentDBState: { markersBySpaceId: new Map(), schemaIntrospection: { tables: {} } },
+      adapter: STUB_ADAPTER,
+      migrations: makeStubMigrations(planner),
+      frameworkComponents: [],
+      callerPolicy: { ignoreGraphFor: new Set(['app']) },
+      operationPolicy: POLICY,
+      appSpace: { fromContract: origin, statements: [statement] },
+      storageNameOf: (operation) => operation.id,
+    });
+
+    expect(received).toEqual({ fromContract: origin, statements: [statement] });
+    expect(result.assertOk().perSpace.get('app')?.appliedStatements).toEqual([applied]);
+  });
+
+  it('rejects with policyConflict when the app space has statements but is not planned from the diff', async () => {
+    const aggregate = makeAggregate({ app: makeSpace({ spaceId: 'app' }) });
+    const statement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: 'app', model: 'Profile' },
+      to: { namespaceId: 'app', model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    let planned = false;
+    const planner: MigrationPlanner<'sql', 'postgres'> = {
+      plan: () => {
+        planned = true;
+        return {
+          kind: 'success',
+          plan: makeSyntheticPlan('postgres'),
+          appliedStatements: [],
+          dataLoss: [],
+          accessWidening: [],
+        };
+      },
+      emptyMigration: () => {
+        throw new Error('not used');
+      },
+    };
+
+    const result = await planMigration({
+      aggregate,
+      currentDBState: { markersBySpaceId: new Map(), schemaIntrospection: { tables: {} } },
+      adapter: STUB_ADAPTER,
+      migrations: makeStubMigrations(planner),
+      frameworkComponents: [],
+      callerPolicy: { ignoreGraphFor: new Set() },
+      operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [statement] },
+      storageNameOf: (operation) => operation.id,
+    });
+
+    expect(result.assertNotOk()).toEqual({
+      kind: 'policyConflict',
+      spaceId: 'app',
+      detail: expect.stringContaining('1 statement'),
+    });
+    expect(planned).toBe(false);
+  });
+
+  it('gives the origin contract and statements to the app space only, and none to an extension space planned from the diff', async () => {
+    const aggregate = makeAggregate({
+      app: makeSpace({ spaceId: 'app' }),
+      extensions: [makeSpace({ spaceId: 'cipherstash' })],
+    });
+    const origin = aggregate.app.contract();
+    const statement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: 'app', model: 'Profile' },
+      to: { namespaceId: 'app', model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    const received: { spaceId: string; fromContract: unknown; statements: unknown }[] = [];
+    const planner: MigrationPlanner<'sql', 'postgres'> = {
+      plan: (options) => {
+        received.push({
+          spaceId: options.spaceId,
+          fromContract: options.fromContract,
+          statements: options.statements,
+        });
+        return {
+          kind: 'success',
+          plan: makeSyntheticPlan('postgres'),
+          appliedStatements: [],
+          dataLoss: [],
+          accessWidening: [],
+        };
+      },
+      emptyMigration: () => {
+        throw new Error('not used');
+      },
+    };
+
+    const result = await planMigration({
+      aggregate,
+      currentDBState: { markersBySpaceId: new Map(), schemaIntrospection: { tables: {} } },
+      adapter: STUB_ADAPTER,
+      migrations: makeStubMigrations(planner),
+      frameworkComponents: [],
+      callerPolicy: { ignoreGraphFor: new Set(['app', 'cipherstash']) },
+      operationPolicy: POLICY,
+      appSpace: { fromContract: origin, statements: [statement] },
+      storageNameOf: (operation) => operation.id,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(received).toEqual([
+      { spaceId: 'cipherstash', fromContract: null, statements: [] },
+      { spaceId: 'app', fromContract: origin, statements: [statement] },
+    ]);
   });
 
   it('resolves the recorded path for an extension space with a non-empty graph reaching its head ref', async () => {
@@ -132,7 +283,13 @@ describe('planMigration', () => {
     });
 
     const stubPlan = makeSyntheticPlan('postgres');
-    const planner = makeStubPlanner({ kind: 'success', plan: stubPlan });
+    const planner = makeStubPlanner({
+      kind: 'success',
+      plan: stubPlan,
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
+    });
 
     const result = await planMigration({
       aggregate,
@@ -145,6 +302,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(true);
@@ -173,7 +332,13 @@ describe('planMigration', () => {
     // both take the empty-graph path — the strongest proof the family
     // planner is never reached for it.
     const planFn = vi.fn(
-      (): MigrationPlannerResult => ({ kind: 'success', plan: makeSyntheticPlan('postgres') }),
+      (): MigrationPlannerResult => ({
+        kind: 'success',
+        plan: makeSyntheticPlan('postgres'),
+        appliedStatements: [],
+        dataLoss: [],
+        accessWidening: [],
+      }),
     );
     const planner: MigrationPlanner<'sql', 'postgres'> = {
       plan: planFn,
@@ -193,6 +358,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set() },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(true);
@@ -230,6 +397,9 @@ describe('planMigration', () => {
     const planner = makeStubPlanner({
       kind: 'success',
       plan: makeSyntheticPlan('postgres'),
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
     });
 
     const result = await planMigration({
@@ -245,6 +415,8 @@ describe('planMigration', () => {
       // that's a policy conflict.
       callerPolicy: { ignoreGraphFor: new Set(['app', 'cipherstash']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(false);
@@ -268,6 +440,9 @@ describe('planMigration', () => {
     const planner = makeStubPlanner({
       kind: 'success',
       plan: makeSyntheticPlan('postgres'),
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
     });
 
     const result = await planMigration({
@@ -283,6 +458,8 @@ describe('planMigration', () => {
       // empty graph can't satisfy its non-empty invariants.
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(false);
@@ -322,6 +499,9 @@ describe('planMigration', () => {
     const planner = makeStubPlanner({
       kind: 'success',
       plan: makeSyntheticPlan('postgres'),
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
     });
 
     const result = await planMigration({
@@ -335,6 +515,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(false);
@@ -374,6 +556,9 @@ describe('planMigration', () => {
     const planner = makeStubPlanner({
       kind: 'success',
       plan: makeSyntheticPlan('postgres'),
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
     });
 
     const result = await planMigration({
@@ -387,6 +572,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(true);
@@ -417,6 +604,8 @@ describe('planMigration', () => {
       frameworkComponents: [],
       callerPolicy: { ignoreGraphFor: new Set(['app']) },
       operationPolicy: POLICY,
+      appSpace: { fromContract: null, statements: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(result.ok).toBe(false);

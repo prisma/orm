@@ -167,12 +167,14 @@ export function testRenderCheckExpressions(input: {
     const members = input.memberValues
       .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
       .join(', ');
-    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
+    const elements = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `"${v}"`))
+      .join(',');
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}, NULL) <@ '{${elements}}'`
         : `${column} IN (${members})`,
     });
   }

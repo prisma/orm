@@ -388,7 +388,7 @@ export type CodecField<
   > &
   CodecOperations<TContract, CodecId>;
 
-/** The model accessor's type for a list field whose elements have the codec `CodecId`, as a scope for any model declares it with `.many()`, or with `.many({ elementsNullable: true })` when `ElementNullable` is `true`. */
+/** The model accessor's type for a list field whose elements have the codec `CodecId`, as a fragment for any model declares it with `.many()`, or with `.many({ elementsNullable: true })` when `ElementNullable` is `true`. */
 export type CodecListField<
   TContract extends Contract<SqlStorage>,
   CodecId extends keyof ExtractCodecTypes<TContract> & string,

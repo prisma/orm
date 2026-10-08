@@ -185,6 +185,11 @@ describe('db update --to bundle resolution', () => {
     { flags: [], command: 'db update', after: '' },
     { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
     { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
+    {
+      flags: ['--rename', 'Profile:User', '--rename', 'User.name:User.fullName'],
+      command: 'db update',
+      after: ' --rename Profile:User --rename User.name:User.fullName',
+    },
   ])(
     'keeps --to and $flags in the retry command when no connection is configured',
     async ({ flags, command, after }) => {
@@ -260,6 +265,9 @@ describe('db update --to bundle resolution', () => {
           preview: undefined,
         },
         destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessWidening: [],
         summary: 'Plan ready',
       }),
     );
@@ -282,6 +290,9 @@ describe('db update --to bundle resolution', () => {
         destination: { storageHash: HASH_B },
         operations: [{ id: 'table.users', label: 'Create users', operationClass: 'additive' }],
       },
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
       advancedRef: null,
       plannedAdvanceRef: { name: 'db', hash: HASH_B },
       summary: 'Plan ready',

@@ -185,6 +185,8 @@ describe('RLS walking skeleton — PSL author → plan → apply → filter → 
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

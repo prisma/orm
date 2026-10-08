@@ -151,6 +151,7 @@ class PostgresCodecDescriptorAdapter<
     value: JsonValue,
     side: 'output' | 'input',
   ) => string | undefined;
+  declare readonly enumRefusal?: string;
   override readonly factory: (
     params: DescriptorParams<D>,
   ) => (ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>;
@@ -186,6 +187,10 @@ class PostgresCodecDescriptorAdapter<
     const renderValueLiteral = descriptor.renderValueLiteral;
     if (renderValueLiteral !== undefined) {
       this.renderValueLiteral = (value, side) => renderValueLiteral.call(descriptor, value, side);
+    }
+
+    if (descriptor.enumRefusal !== undefined) {
+      this.enumRefusal = descriptor.enumRefusal;
     }
   }
 

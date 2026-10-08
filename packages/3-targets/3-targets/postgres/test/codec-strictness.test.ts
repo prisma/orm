@@ -1,9 +1,11 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
   pgFloat4Descriptor,
   pgFloat8Descriptor,
   pgFloatDescriptor,
+  pgInetDescriptor,
   pgInt8Descriptor,
   pgInt8NumberDescriptor,
   pgNumericDescriptor,
@@ -77,6 +79,36 @@ describe('pg/int8number@1 digit text', () => {
   });
 });
 
+describe.each([
+  ['pg/int8@1', () => pgInt8Descriptor.factory()(ctx), (value: bigint) => value],
+  [
+    'pg/int8number@1',
+    () => pgInt8NumberDescriptor.factory()(ctx),
+    (value: bigint) => Number(value),
+  ],
+  ['pg/unboundedint@1', () => pgUnboundedIntDescriptor.factory()(ctx), (value: bigint) => value],
+])('%s digit text as PostgreSQL prints it', (codecId, build, applicationValue) => {
+  const codec: { encodeJson(value: never): JsonValue; decodeJson(json: JsonValue): unknown } =
+    build();
+
+  it.each([
+    ['a leading zero', '007', '7'],
+    ['a negative zero', '-0', '0'],
+    ['a negative number with a leading zero', '-007', '-7'],
+    ['two zeros', '00', '0'],
+  ])('refuses %s, naming the text PostgreSQL prints for the value', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `${codecId} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+    );
+  });
+
+  it('writes digit text without leading zeros or a minus sign on zero', () => {
+    expect(
+      [0n, 7n, -7n].map((value) => codec.encodeJson(applicationValue(value) as never)),
+    ).toEqual(['0', '7', '-7']);
+  });
+});
+
 describe('pg/numeric@1 decodeJson', () => {
   const codec = pgNumericDescriptor.factory({})(ctx);
 
@@ -85,11 +117,42 @@ describe('pg/numeric@1 decodeJson', () => {
   });
 
   it.each([
+    ['a leading zero', '01.5', '1.5'],
+    ['a negative zero', '-0', '0'],
+    ['a negative zero with a fraction', '-0.00', '0.00'],
+  ])('refuses %s, naming the text PostgreSQL prints for the value', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `pg/numeric@1 JSON value must be "${printed}", as PostgreSQL writes this value`,
+    );
+  });
+
+  it.each([
     ['a whole JSON number', 42],
     ['a fractional JSON number', 1.5],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
       'pg/numeric@1 JSON value must be a decimal string',
+    );
+  });
+});
+
+describe('pg/inet@1 decodeJson', () => {
+  const codec = pgInetDescriptor.factory()(ctx);
+
+  it.each([
+    ['an IPv4 host with /32', '10.0.0.1/32', '10.0.0.1'],
+    ['an IPv6 host with /128', '::1/128', '::1'],
+    ['upper-case hex', '::FFFF:10.0.0.1', '::ffff:10.0.0.1'],
+    ['zeros Postgres compresses', '2001:db8:0:0:0:0:0:1', '2001:db8::1'],
+  ])('refuses %s, naming the text PostgreSQL prints for the address', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `pg/inet@1 JSON value must be "${printed}", as PostgreSQL writes this address`,
+    );
+  });
+
+  it('refuses text that is not an address', () => {
+    expect(() => codec.decodeJson('not an address')).toThrow(
+      'pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
     );
   });
 });

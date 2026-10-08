@@ -372,6 +372,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     }
 
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,
@@ -583,6 +588,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     // a no-op — proves the aggregate path's marker / hash check still
     // short-circuits when n=1.
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,
@@ -660,6 +670,11 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     }
 
     const updateResult = await executeDbUpdate({
+      answerQuestions: async (questions) =>
+        questions.map((question) => ({
+          verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+          text: question.subject,
+        })),
       driver: testDb!.driver,
       adapter: controlAdapter,
       familyInstance,

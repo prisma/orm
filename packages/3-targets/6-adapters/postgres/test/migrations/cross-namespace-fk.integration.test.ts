@@ -117,6 +117,8 @@ describe('AC1 — cross-namespace FK end-to-end (PGlite)', { concurrent: false }
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

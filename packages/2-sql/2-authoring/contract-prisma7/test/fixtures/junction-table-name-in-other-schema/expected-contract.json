@@ -209,7 +209,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "43b7d1fed048fe4082c29843e8c66532fef1d3d18a1ddcaa504aabdc41207e1b",
+    "storageHash": "89b5b03961e437a54203155d90dbafdcf8b4482e572fc07d1ba9d2660ba2f924",
     "namespaces": {
       "one": {
         "id": "one",
@@ -286,7 +286,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_PostToTag_AB_pkey"
               }
             }
           }

@@ -270,6 +270,12 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly Enum: readonly [
+            { readonly name: 'A'; readonly value: 'A' },
+            { readonly name: 'B'; readonly value: 'B' },
+          ];
+        };
       };
     };
   };

@@ -38,6 +38,7 @@ import type {
 import type { MongoControlExtensionDescriptor } from './control-types';
 import { MongoContractSerializer } from './ir/mongo-contract-serializer';
 import { mongoOperationsToPreview } from './operation-preview';
+import { mongoStorageNameOf } from './operation-storage-name';
 import { mongoSchemaToView } from './schema-to-view';
 import { verifyMongoSchema } from './schema-verify/verify-mongo-schema';
 
@@ -382,6 +383,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
       return mongoOperationsToPreview(operations);
+    },
+
+    storageNameOf(operation: MigrationPlanOperation): string {
+      return mongoStorageNameOf(operation);
     },
   };
 }

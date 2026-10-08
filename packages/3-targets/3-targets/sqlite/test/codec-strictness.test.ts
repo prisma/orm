@@ -110,6 +110,26 @@ describe.each([
   });
 });
 
+describe.each([
+  ['sqlite/bigint@1', () => sqliteBigintDescriptor.factory()(ctx)],
+  ['sqlite/bigintnumber@1', () => sqliteBigintNumberDescriptor.factory()(ctx)],
+  ['sqlite/integer@1', () => sqliteIntegerDescriptor.factory()(ctx)],
+  ['sql/int@1', () => sqliteSqlIntDescriptor.factory()(ctx)],
+] as const)('%s digit text without leading zeros or a minus sign on zero', (codecId, build) => {
+  const codec: { decodeJson(json: string): unknown } = build();
+
+  it.each([
+    ['a leading zero', '007', '7'],
+    ['a negative zero', '-0', '0'],
+    ['a negative number with a leading zero', '-007', '-7'],
+    ['two zeros', '00', '0'],
+  ])('refuses %s, naming the text to write', (_name, json, printed) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      `${codecId} JSON value must be "${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+    );
+  });
+});
+
 describe('sqlite/json@1 JSON text', () => {
   const codec = sqliteJsonDescriptor.factory()(ctx);
 

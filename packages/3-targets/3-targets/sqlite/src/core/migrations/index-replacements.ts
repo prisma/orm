@@ -2,9 +2,16 @@ import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { SqlIndexIR } from '@internal/sql-schema-ir/types';
+import { isArrayEqual } from '@internal/utils/array-equal';
 import { sqliteIdentifiersCollide } from './identifier-case';
 import { issueNode } from './issue-planner';
-import { CreateIndexCall, DropIndexCall, type SqliteOpFactoryCall } from './op-factory-call';
+import {
+  CreateIndexCall,
+  DropIndexCall,
+  type IndexReplacement,
+  indexReplacementCalls,
+  type SqliteOpFactoryCall,
+} from './op-factory-call';
 
 export interface IndexFinding {
   readonly issue: SchemaDiffIssue;
@@ -45,6 +52,22 @@ export function renamedTableIndex(renamedTables: ReadonlySet<string>): IndexRepl
 }
 
 /**
+ * An index on the renamed column whose wire name derives from the column name: after the rename
+ * the old and the new index cover the same columns on the same table and differ in name.
+ */
+export function renamedColumnIndex(table: string, column: string): IndexReplacementMatch {
+  return (old, replacement) =>
+    old.tableName === table &&
+    replacement.tableName === table &&
+    old.index.name !== replacement.index.name &&
+    old.index.expression === undefined &&
+    old.index.where === undefined &&
+    (old.index.columns ?? []).includes(column) &&
+    old.index.unique === replacement.index.unique &&
+    isArrayEqual(old.index.columns ?? [], replacement.index.columns ?? []);
+}
+
+/**
  * An index on the same table whose new name SQLite takes for the old one, as after a table renamed by hand. Its content is not compared: the old index must be dropped before the new one can be created whatever either defines, and the new one is created from its own definition.
  */
 export const indexNameCaseChange: IndexReplacementMatch = (old, replacement) =>
@@ -59,6 +82,7 @@ export function pairIndexReplacements(
   issues: readonly SchemaDiffIssue[],
   matches: IndexReplacementMatch,
 ): {
+  readonly replacements: readonly IndexReplacement[];
   readonly calls: readonly SqliteOpFactoryCall[];
   readonly consumed: ReadonlySet<SchemaDiffIssue>;
 } {
@@ -69,18 +93,17 @@ export function pairIndexReplacements(
     missing.splice(missing.indexOf(replacement), 1);
     return [{ old, replacement }];
   });
+  const replacements = pairs.map(({ old, replacement }) => ({
+    drop: new DropIndexCall(old.tableName, old.index.name),
+    create: new CreateIndexCall(
+      replacement.tableName,
+      replacement.index.name,
+      replacement.index.columns ?? [],
+    ),
+  }));
   return {
-    calls: [
-      ...pairs.map(({ old }) => new DropIndexCall(old.tableName, old.index.name)),
-      ...pairs.map(
-        ({ replacement }) =>
-          new CreateIndexCall(
-            replacement.tableName,
-            replacement.index.name,
-            replacement.index.columns ?? [],
-          ),
-      ),
-    ],
+    replacements,
+    calls: indexReplacementCalls(replacements),
     consumed: new Set(pairs.flatMap(({ old, replacement }) => [old.issue, replacement.issue])),
   };
 }

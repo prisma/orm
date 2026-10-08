@@ -14,6 +14,7 @@ import { ormClientFindSimilarPosts } from '../src/orm-client/find-similar-posts'
 import { ormClientFindUserByEmail } from '../src/orm-client/find-user-by-email';
 import { ormClientFindUserById } from '../src/orm-client/find-user-by-id';
 import { ormClientFindUserByIdCached } from '../src/orm-client/find-user-by-id-cached';
+import { ownedBy } from '../src/orm-client/fragments';
 import { ormClientGetAdminUsers } from '../src/orm-client/get-admin-users';
 import { ormClientGetDashboardUsers } from '../src/orm-client/get-dashboard-users';
 import { ormClientGetFeatureRoadmap } from '../src/orm-client/get-feature-roadmap';
@@ -30,7 +31,6 @@ import { ormClientGetUsers } from '../src/orm-client/get-users';
 import { ormClientGetUsersBackwardCursor } from '../src/orm-client/get-users-backward-cursor';
 import { ormClientGetUsersByIdCursor } from '../src/orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from '../src/orm-client/get-users-cached';
-import { ownedBy } from '../src/orm-client/scopes';
 import { ormClientSearchPostsByEmbedding } from '../src/orm-client/search-posts-by-embedding';
 import { ormClientSearchPostsByTitle } from '../src/orm-client/search-posts-by-title';
 import { ormClientUpdateUserEmail } from '../src/orm-client/update-user-email';

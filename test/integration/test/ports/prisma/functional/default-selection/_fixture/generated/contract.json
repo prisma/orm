@@ -188,8 +188,8 @@
             "model": {
               "checks": [
                 {
-                  "expression": "array_remove(\"enumList\"::text[], NULL) <@ ARRAY['A', 'B']::text[]",
-                  "name": "model_enumList_check_1c166cb8",
+                  "expression": "array_remove(\"enumList\", NULL) <@ '{\"A\",\"B\"}'",
+                  "name": "model_enumList_check_2dfa0729",
                   "prefix": "model_enumList_check"
                 },
                 {
@@ -322,7 +322,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "daa9cc8631ac3c2b2d3b36d4c7cc32533553758e569402526433ef27c9023005"
+    "storageHash": "41df4c00edd9c61ce22111807269e38fb318e6f9f9359686e06f0224d3a65192"
   },
   "capabilities": {
     "postgres": {

@@ -63,6 +63,7 @@ import {
 } from './diff/schema-verify';
 import { sqlFamilyError } from './errors';
 import { SqlContractSerializer } from './ir/sql-contract-serializer';
+import { storageNameOfOperation } from './migrations/operation-storage-name';
 import type { SqlSchemaDiffFn } from './migrations/schema-differ';
 import type {
   SqlControlAdapterDescriptor,
@@ -325,6 +326,8 @@ export interface SqlControlFamilyInstance
   bootstrapControlTableQueries(): readonly DdlNode[];
 
   toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview;
+
+  storageNameOf(operation: MigrationPlanOperation): string;
 }
 
 export type SqlFamilyInstance = SqlControlFamilyInstance;
@@ -964,6 +967,10 @@ export function createSqlFamilyInstance<TTargetId extends string>(
 
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
       return sqlOperationsToPreview(operations);
+    },
+
+    storageNameOf(operation: MigrationPlanOperation): string {
+      return storageNameOfOperation(operation);
     },
 
     toSchemaView(schema: SqlSchemaIRNode): CoreSchemaView {

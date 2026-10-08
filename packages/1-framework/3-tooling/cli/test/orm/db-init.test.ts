@@ -167,6 +167,7 @@ describe('db init', () => {
       plannedAdvanceRef: null,
       summary: 'Database initialized',
     });
+    expect(run.presented?.data).not.toHaveProperty('appliedStatements');
   });
 
   it('reports the control API`s spans as step events rather than printing them', async () => {
@@ -447,7 +448,7 @@ describe('db init', () => {
           {
             kind: 'run-command',
             label:
-              'Apply the change with db update, which lists the destructive operations and asks you to confirm them',
+              'Apply the change with db update, which asks what each operation that would lose data means',
             command: 'prisma-test db update',
           },
         ],

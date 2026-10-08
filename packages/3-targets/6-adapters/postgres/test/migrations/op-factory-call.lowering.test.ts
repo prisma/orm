@@ -5,8 +5,8 @@ import { type as arktype } from 'arktype';
  * - `renderOps` lowers each variant via its pure factory and pins the
  *   id/operationClass/target.details shape exposed to runners.
  * - `RawSqlCall` is returned verbatim by `renderOps`.
- * - `DataTransformCall` always throws MIGRATION.UNFILLED_PLACEHOLDER from `renderOps` because
- *   the planner can only emit unfilled stubs.
+ * - `DataTransformCall` lowers to an operation that rejects with MIGRATION.UNFILLED_PLACEHOLDER,
+ *   because the planner can only emit unfilled stubs; the other operations still lower.
  * - `TypeScriptRenderablePostgresMigration` routes `operations` through
  *   `renderOps` and `renderTypeScript()` through `renderCallsToTypeScript`.
  * - `AddNotNullColumnWithTempDefaultCall` pins the exact `ADD COLUMN` SQL
@@ -154,7 +154,7 @@ describe('renderOps', () => {
       },
       {
         id: 'alterNullability.setNotNull.user.email',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('column', 'email', 'user'),
       },
       {
@@ -169,7 +169,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropDefault.user.updated_at',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('column', 'updated_at', 'user'),
       },
       {
@@ -189,7 +189,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropConstraint.user.user_email_key',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('unique', 'user_email_key', 'user'),
       },
       {
@@ -199,7 +199,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropIndex.user.stale_idx',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('index', 'stale_idx', 'user'),
       },
       { id: 'custom.op.1', operationClass: 'additive', details: undefined },
@@ -241,10 +241,14 @@ describe('renderOps', () => {
     expect(rendered).toBe(op);
   });
 
-  it('throws MIGRATION.UNFILLED_PLACEHOLDER on DataTransformCall (always an unfilled stub at plan time)', () => {
-    const call = new DataTransformCall('Backfill', 'check', 'run');
+  it('lowers a DataTransformCall to an operation that rejects with MIGRATION.UNFILLED_PLACEHOLDER, beside the others', async () => {
+    const [dropped, stub] = renderOps(
+      [new DropTableCall('public', 'stale'), new DataTransformCall('Backfill', 'check', 'run')],
+      testAdapter,
+    );
 
-    expect(() => renderOps([call])).toThrow(/Unfilled migration placeholder/);
+    expect(await dropped).toMatchObject({ id: 'dropTable.stale' });
+    await expect(stub).rejects.toThrow(/Unfilled migration placeholder/);
   });
 });
 
@@ -346,8 +350,82 @@ describe('SetDefaultCall', () => {
     });
   });
 
-  it.each(['serial', 'int4'])(
-    'refuses an autoincrement() default on a %s column, which SET DEFAULT cannot write',
+  it('gives an existing integer column a sequence default that starts past its largest value', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({
+      id: 'setDefault.Post.serial',
+      label: 'Set default on "Post"."serial"',
+      operationClass: 'additive',
+      execute: [
+        {
+          description: 'widen any existing sequence "Post_serial_seq" to integer',
+          sql: 'ALTER SEQUENCE IF EXISTS "public"."Post_serial_seq" AS integer',
+        },
+        {
+          description: 'create sequence "Post_serial_seq"',
+          sql: 'CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS integer',
+        },
+        {
+          description: 'set default on "serial"',
+          sql: `ALTER TABLE "public"."Post" ALTER COLUMN "serial" SET DEFAULT nextval('"public"."Post_serial_seq"'::regclass)`,
+        },
+        {
+          description: 'attach sequence "Post_serial_seq" to "serial"',
+          sql: 'ALTER SEQUENCE "public"."Post_serial_seq" OWNED BY "public"."Post"."serial"',
+        },
+        {
+          description: 'start sequence "Post_serial_seq" past the largest "serial"',
+          sql: `SELECT setval('"public"."Post_serial_seq"'::regclass, GREATEST(COALESCE(MAX("serial"), 0), 0) + 1, false) FROM "public"."Post"`,
+        },
+      ],
+    });
+    expect(op.precheck.map((check) => check.description)).toEqual([
+      'ensure column "serial" exists',
+      'ensure no relation other than the sequence column "serial" owns is named "public"."Post_serial_seq" (rename that relation, or write this migration with migration new)',
+    ]);
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+    ]);
+  });
+
+  it.each([
+    { type: 'int2', sequenceType: 'smallint' },
+    { type: 'int8', sequenceType: 'bigint' },
+    { type: 'bigint', sequenceType: 'bigint' },
+  ])('creates the sequence as $sequenceType for a $type column', async ({ type, sequenceType }) => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', type, { default: fn('autoincrement()') }),
+    ).toOp(testAdapter);
+
+    expect(op.execute.slice(0, 2).map((step) => step.sql)).toEqual([
+      `ALTER SEQUENCE IF EXISTS "public"."Post_serial_seq" AS ${sequenceType}`,
+      `CREATE SEQUENCE IF NOT EXISTS "public"."Post_serial_seq" AS ${sequenceType}`,
+    ]);
+  });
+
+  it('checks for the attached sequence when an autoincrement default replaces another default', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+      'widening',
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({ operationClass: 'widening' });
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+    ]);
+  });
+
+  it.each(['serial', 'text', 'int4[]'])(
+    'refuses an autoincrement() default on a %s column, which is not an integer column',
     async (type) => {
       await expect(
         new SetDefaultCall(
@@ -357,7 +435,7 @@ describe('SetDefaultCall', () => {
         ).toOp(testAdapter),
       ).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
-        message: `setDefault cannot give the existing column "id" of table "user" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
+        message: `setDefault can give the column "id" of table "user" an autoincrement() default only when its type is smallint, integer or bigint (int2, int4 or int8); its type is "${type}".`,
         meta: { table: 'user', column: 'id', reason: 'set-default-autoincrement' },
       });
     },

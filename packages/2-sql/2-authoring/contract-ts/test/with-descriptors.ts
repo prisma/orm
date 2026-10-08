@@ -16,6 +16,7 @@ export function withDescriptors(lookup: CodecLookup): CodecLookupWithDescriptors
         ? undefined
         : ({
             codecId: id,
+            traits: ['equality'],
             paramsSchema: undefined,
             factory: () => () => codec,
           } as unknown as AnyCodecDescriptor);

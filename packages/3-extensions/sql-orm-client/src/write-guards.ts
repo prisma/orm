@@ -33,7 +33,8 @@ function listed(items: readonly string[], conjunction: 'and' | 'or'): string {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} ${conjunction} ${last}` : last;
 }
 
-const HIDDEN_BY_A_SCOPE = 'A scope passed to with can add one without showing it at the call site.';
+const HIDDEN_BY_A_FRAGMENT =
+  'A fragment passed to with can add one without showing it at the call site.';
 
 /** Throws `ORM.ARGUMENT_INVALID` when the collection has a limit, an offset, a cursor or a distinct selection, which `method`, a write of every matching row, would ignore. */
 export function assertBulkWriteIgnoresNothing(
@@ -56,7 +57,7 @@ export function assertBulkWriteIgnoresNothing(
     'ORM.ARGUMENT_INVALID',
     `Cannot ${method} ${modelName}: the collection has ${listed(nouns, 'and')}`,
     {
-      why: `${method} changes every row that matches the filter. The statement it runs cannot apply ${listed(nouns, 'or')}, so it would change more rows than the chain asks for. ${HIDDEN_BY_A_SCOPE}`,
+      why: `${method} changes every row that matches the filter. The statement it runs cannot apply ${listed(nouns, 'or')}, so it would change more rows than the chain asks for. ${HIDDEN_BY_A_FRAGMENT}`,
       fix: `Remove ${listed(calls, 'and')} before ${method}, or read the rows first and change them by their ids.`,
       meta: { model: modelName, method, limit, offset, cursor, distinct, distinctOn },
     },
@@ -84,7 +85,7 @@ export function assertRelationUpdateIgnoresNothing(
     'ORM.ARGUMENT_INVALID',
     `Cannot update ${modelName} with a relation mutation: the collection has ${listed(nouns, 'and')}`,
     {
-      why: `An update that changes a relation finds its row by the filter alone. It would ignore ${listed(nouns, 'and')}, and could change another row than first() returns. ${HIDDEN_BY_A_SCOPE}`,
+      why: `An update that changes a relation finds its row by the filter alone. It would ignore ${listed(nouns, 'and')}, and could change another row than first() returns. ${HIDDEN_BY_A_FRAGMENT}`,
       fix: `Remove ${listed(calls, 'and')} before update, or filter to the one row, such as by its id.`,
       meta: {
         model: modelName,

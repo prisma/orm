@@ -87,6 +87,8 @@ async function applyContract(connectionString: string, contract: Contract<SqlSto
       schema: await familyInstance.introspect({ driver }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -222,6 +222,11 @@ model Document {
 
           await withPgvectorControlClient(connectionString, async (client) => {
             const update = await client.dbUpdate({
+              answerQuestions: async (questions) =>
+                questions.map((question) => ({
+                  verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+                  text: question.subject,
+                })),
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,

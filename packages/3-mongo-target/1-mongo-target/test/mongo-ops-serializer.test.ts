@@ -67,7 +67,7 @@ function makeDropIndexOp(): MongoMigrationPlanOperation {
   return {
     id: 'index.users.drop(email:1)',
     label: 'Drop index on users (email ascending)',
-    operationClass: 'destructive',
+    operationClass: 'widening',
     precheck: [
       {
         description: 'index exists on users',
@@ -129,7 +129,7 @@ describe('serializeMongoOps / deserializeMongoOps', () => {
     expect(deserialized).toHaveLength(1);
     const op = asDdlOp(deserialized[0]!);
     expect(op.id).toBe('index.users.drop(email:1)');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
 
     const cmd = op.execute[0]!.command as DropIndexCommand;
     expect(cmd.kind).toBe('dropIndex');
@@ -638,7 +638,7 @@ describe('serializeMongoOps / deserializeMongoOps', () => {
     const op: MongoMigrationPlanOperation = {
       id: 'validator.users.update',
       label: 'Update validator on users',
-      operationClass: 'destructive',
+      operationClass: 'widening',
       precheck: [],
       execute: [
         {

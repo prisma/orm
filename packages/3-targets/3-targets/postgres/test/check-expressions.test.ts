@@ -21,7 +21,7 @@ describe('postgresRenderCheckExpressions', () => {
     ]);
   });
 
-  it('compares numeric arrays with both operands cast to numeric[]', () => {
+  it('compares numeric array members in the column type', () => {
     expect(
       postgresRenderCheckExpressions({
         ...base,
@@ -32,7 +32,7 @@ describe('postgresRenderCheckExpressions', () => {
       {
         kind: 'membership',
         columnName: 'role',
-        expression: 'array_remove("role"::numeric[], NULL) <@ ARRAY[1, 2.5, -3]::numeric[]',
+        expression: `array_remove("role", NULL) <@ '{1,2.5,-3}'`,
       },
       {
         kind: 'elementNotNull',
@@ -65,7 +65,7 @@ describe('postgresRenderCheckExpressions', () => {
       {
         kind: 'membership',
         columnName: 'roles',
-        expression: `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
+        expression: `array_remove("roles", NULL) <@ '{"user","admin"}'`,
       },
       {
         kind: 'elementNotNull',
@@ -103,7 +103,24 @@ describe('postgresRenderCheckExpressions', () => {
       {
         kind: 'membership',
         columnName: 'roles',
-        expression: `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
+        expression: `array_remove("roles", NULL) <@ '{"user","admin"}'`,
+      },
+    ]);
+  });
+
+  it('escapes array-literal and SQL quoting in list members', () => {
+    expect(
+      postgresRenderCheckExpressions({
+        ...base,
+        columnName: 'roles',
+        many: { elementNullable: true },
+        memberValues: ['say "hi"', 'back\\slash', "o'brien", '', 'NULL'],
+      }),
+    ).toEqual([
+      {
+        kind: 'membership',
+        columnName: 'roles',
+        expression: `array_remove("roles", NULL) <@ '{"say \\"hi\\"","back\\\\slash","o''brien","","NULL"}'`,
       },
     ]);
   });

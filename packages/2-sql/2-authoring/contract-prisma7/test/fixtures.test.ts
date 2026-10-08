@@ -45,6 +45,7 @@ describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
     expect(cases).toEqual([
       'block-dotted-value',
+      'constraint-names',
       'datetime-defaults',
       'dbgenerated-without-expression',
       'dbgenerated-without-expression-optional',

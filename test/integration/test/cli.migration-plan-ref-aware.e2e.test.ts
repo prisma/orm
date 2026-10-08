@@ -197,7 +197,13 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             const { dbRefHash } = await seedDevToShipTrap(ctx);
 
-            const plan = await runMigrationPlan(ctx, ['--name', 'add-phone', '--json']);
+            const plan = await runMigrationPlan(ctx, [
+              '--name',
+              'add-phone',
+              '--delete',
+              'User.name',
+              '--json',
+            ]);
             expect(plan.exitCode).toBe(0);
             const planJson = parseJsonOutput<PlanJsonResult>(plan);
             expect(planJson.baselineDir).toBeDefined();
@@ -246,7 +252,15 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             await seedDevToShipTrap(ctx);
             expect(
-              (await runAutoBaselinePlanAndEmit(ctx, ['--name', 'trap-close', '--json'])).exitCode,
+              (
+                await runAutoBaselinePlanAndEmit(ctx, [
+                  '--name',
+                  'trap-close',
+                  '--delete',
+                  'User.name',
+                  '--json',
+                ])
+              ).exitCode,
             ).toBe(0);
             expect((await runMigrate(ctx)).exitCode).toBe(0);
 
@@ -254,7 +268,7 @@ withTempDir(({ createTempDir }) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
             const dbRefHash = readDbRefHash(ctx);
-            const plan = await runMigrationPlan(ctx, ['--json']);
+            const plan = await runMigrationPlan(ctx, ['--delete', 'User.name', '--json']);
             expect(plan.exitCode).toBe(0);
             const planJson = parseJsonOutput<PlanJsonResult>(plan);
             expect(planJson.baselineDir).toBeUndefined();
@@ -412,7 +426,7 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'keeps baseline on disk when delta planner fails after baseline succeeded',
+      'writes nothing when the delta planner refuses after the baseline was planned',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
@@ -425,9 +439,7 @@ withTempDir(({ createTempDir }) => {
             const plan = await runMigrationPlan(ctx, ['--name', 'blocked-delta', '--json']);
             expect(plan.exitCode).toBe(2);
 
-            const dirs = listAppMigrationBundleDirs(ctx);
-            expect(dirs).toHaveLength(1);
-            expect(readManifest(ctx, dirs[0]!).from).toBeNull();
+            expect(listAppMigrationBundleDirs(ctx)).toHaveLength(0);
           });
         });
       },
@@ -490,7 +502,13 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             await seedDevToShipTrap(ctx);
 
-            const implicit = await runMigrationPlan(ctx, ['--name', 'implicit', '--json']);
+            const implicit = await runMigrationPlan(ctx, [
+              '--name',
+              'implicit',
+              '--delete',
+              'User.name',
+              '--json',
+            ]);
             expect(implicit.exitCode).toBe(0);
             const implicitJson = parseJsonOutput<PlanJsonResult>(implicit);
 
@@ -501,6 +519,8 @@ withTempDir(({ createTempDir }) => {
               'db',
               '--name',
               'explicit',
+              '--delete',
+              'User.name',
               '--json',
             ]);
             expect(explicit.exitCode).toBe(0);

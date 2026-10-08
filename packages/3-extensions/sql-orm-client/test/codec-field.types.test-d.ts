@@ -5,8 +5,8 @@ import { Collection } from '../src/collection';
 import { and } from '../src/filters';
 import type { CodecField, ModelAccessor } from '../src/types';
 import { createChainingOrm } from './collection-chaining-fixture';
+import { createFragmentsOrm, type SoftDeleteContract } from './fragments-fixture';
 import type { TestContract } from './helpers';
-import { createScopesOrm, type SoftDeleteContract } from './scopes-fixture';
 
 type Contract = SoftDeleteContract;
 type TimestampCodec = 'pg/timestamptz-temporal@1';
@@ -16,7 +16,7 @@ type Title = CodecField<Contract, 'pg/text@1'>;
 const notDeleted = (row: { deletedAt: DeletedAt }) => row.deletedAt.isNull();
 const newestDeletedFirst = (row: { deletedAt: DeletedAt }) => row.deletedAt.desc();
 
-const { db } = createScopesOrm();
+const { db } = createFragmentsOrm();
 
 type PostAccessor = ModelAccessor<Contract, 'Post', 'public'>;
 type CommentAccessor = ModelAccessor<Contract, 'Comment', 'public'>;

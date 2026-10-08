@@ -350,6 +350,8 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       schema,
       policy,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -635,7 +637,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const live = schema.namespaces['public']?.tables['Item']?.checks ?? [];
     expect([...live.map((c) => c.expression)].sort()).toEqual([
       '(array_position(roles, NULL::text) IS NULL)',
-      `(array_remove(roles, NULL::text) <@ ARRAY['user'::text, 'admin'::text])`,
+      `(array_remove(roles, NULL::text) <@ '{user,admin}'::text[])`,
     ]);
 
     expect((await verify(contract)).ok).toBe(true);
@@ -938,11 +940,11 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   // Slice 3 (`@noCheck`): an opted-out contract simply does not declare the
   // check. The first two scenarios are hand-built contracts and pin the
   // planner/DDL lifecycle for a check-less contract — deleting a declared
-  // check plans one destructive drop, declaring it again plans one additive
+  // check plans one widening drop, declaring it again plans one additive
   // add. The third drives the real authoring surface (defineContract +
   // .noCheck()) end to end. The full builder-to-infer chain is covered by
   // the infer e2e journeys and the print-psl emission unit tests.
-  it('adding an opt-out later drops the live element check in one destructive plan', {
+  it('adding an opt-out later drops the live element check in one widening plan', {
     timeout: testTimeout,
   }, async () => {
     const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
@@ -979,7 +981,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
 
     const dropOps = ops.filter((op) => op.id.startsWith('dropCheckConstraint.'));
     expect(dropOps.map((op) => op.id)).toEqual([`dropCheckConstraint.Item.${tagsChecks[0]?.name}`]);
-    expect(dropOps[0]?.operationClass).toBe('destructive');
+    expect(dropOps[0]?.operationClass).toBe('widening');
     expect(ops).toHaveLength(1);
 
     expect(await liveCheckNames()).toEqual([]);

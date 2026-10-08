@@ -5,15 +5,10 @@ import {
   sqlDataTypeOfCodec,
 } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
-import { pgInt2, pgInt4, pgInt8, pgJson, pgJsonb } from '../data-types';
+import { pgJson, pgJsonb } from '../data-types';
 import { postgresDateTimeDdlText } from '../date-time-ddl-text';
 import { escapeLiteral } from '../sql-utils';
-
-const SERIAL_TYPES: ReadonlyMap<string, string> = new Map([
-  [pgInt4.id, 'SERIAL'],
-  [pgInt8.id, 'BIGSERIAL'],
-  [pgInt2.id, 'SMALLSERIAL'],
-]);
+import { autoincrementWidthOfDataType } from './autoincrement-widths';
 
 const JSON_DATA_TYPES: ReadonlySet<string> = new Set([pgJson.id, pgJsonb.id]);
 
@@ -35,20 +30,17 @@ export function buildColumnTypeSql(
   const resolved = referenced ?? column;
   const dataType = sqlDataTypeOfCodec(resolved.codecId, types);
 
-  if (allowPseudoTypes) {
-    const columnDefault = column.default;
-    const serial = SERIAL_TYPES.get(dataType.id);
-    if (
-      serial !== undefined &&
-      columnDefault?.kind === 'function' &&
-      columnDefault.expression === 'autoincrement()'
-    ) {
-      return serial;
-    }
+  if (allowPseudoTypes && isAutoincrement(column.default)) {
+    const width = autoincrementWidthOfDataType(dataType.id);
+    if (width !== undefined) return width.serialType;
   }
 
   const typeSql = renderSqlTypeName(dataType, dataTypeParams(dataType, resolved.typeParams));
   return column.many ? `${typeSql}[]` : typeSql;
+}
+
+function isAutoincrement(columnDefault: StorageColumn['default']): boolean {
+  return columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()';
 }
 
 /**

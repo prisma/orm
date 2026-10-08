@@ -138,6 +138,23 @@ describe('decodeJsonIntegerText', () => {
       refusal('demo/big@1', 'a decimal integer string', '"1.5"'),
     );
   });
+
+  it.each([
+    ['a leading zero', '007', '7'],
+    ['a negative zero', '-0', '0'],
+    ['a negative number with a leading zero', '-007', '-7'],
+    ['two zeros', '00', '0'],
+  ])('refuses %s, naming the text the database writes', (_name, json, printed) => {
+    for (const bounds of [range, undefined]) {
+      expect(() => decodeJsonIntegerText('demo/big@1', json, bounds)).toThrow(
+        refusal(
+          'demo/big@1',
+          `"${printed}", the integer's decimal text without leading zeros or a minus sign on zero`,
+          `"${json}"`,
+        ),
+      );
+    }
+  });
 });
 
 describe('the float pair', () => {

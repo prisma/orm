@@ -1,6 +1,7 @@
 import type { OperationPreview } from '@internal/framework-components/control';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
+import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 import {
   type MigrationCommandResult,
@@ -8,6 +9,7 @@ import {
   renderPreviewStatement,
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { appliedStatementBlocks } from '../statement-blocks';
 
 interface PlannedOperation {
   readonly label: string;
@@ -152,12 +154,41 @@ function applySummaryText(result: MigrationCommandResult): string {
   return `Applied ${executed} operation(s)${across}`;
 }
 
+/**
+ * The questions an apply would ask, as a dry run lists them: each operation that would lose data,
+ * answered by `--delete` or `--rename`, and each that would widen access, answered by `--allow`.
+ */
+function questionBlocks(result: MigrationCommandResult): readonly Block[] {
+  const entries = [
+    ...(result.dataLoss ?? []).map((entry) => ({ entry, verb: 'delete' as const })),
+    ...(result.accessWidening ?? []).map((entry) => ({ entry, verb: 'allow' as const })),
+  ];
+  if (entries.length === 0) {
+    return [];
+  }
+  return [
+    {
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: entries.map(({ entry, verb }) => ({
+            label: `${result.plan.operations[entry.operationIndex]?.label ?? 'an operation'}: ${statementFlag({ verb, text: entry.text })}${entry.answered ? ' (answered)' : ''}`,
+          })),
+        },
+      ],
+    },
+  ];
+}
+
 function planBlocks(result: MigrationCommandResult): readonly Block[] {
   const planned = result.plannedAdvanceRef;
   return [
     { kind: 'summary', status: 'ok', text: planSummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements ?? []),
+    ...questionBlocks(result),
     {
       kind: 'fields',
       rows: [
@@ -222,6 +253,7 @@ function applyBlocks(result: MigrationCommandResult): readonly Block[] {
     { kind: 'summary', status: 'ok', text: applySummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...fallbackMarkerBlocks(result),
     ...(advanced === null || advanced === undefined
       ? []

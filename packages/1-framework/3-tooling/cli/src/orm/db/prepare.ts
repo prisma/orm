@@ -74,8 +74,11 @@ export async function prepareMigrationRun(inputs: {
   readonly db: string | undefined;
   readonly commandName: string;
   readonly createClient: CreateControlClient;
-  /** The command the missing-connection error suggests; defaults to `{bin} <commandName> --db <url>`. */
-  readonly retryCommand?: string;
+  /**
+   * The command the missing-connection error suggests; defaults to `{bin} <commandName> --db <url>`.
+   * A function is called only when the error is raised.
+   */
+  readonly retryCommand?: string | (() => string);
 }): Promise<Result<PreparedMigrationRun, CliStructuredError>> {
   const { config, cwd, commandName } = inputs;
   const contractPath = contractPathFor(config);
@@ -103,7 +106,10 @@ export async function prepareMigrationRun(inputs: {
           why: `Database connection is required for ${commandName} (set db.connection in prisma.config.ts, or pass --db <url>)`,
           commandName,
           missingFlags: ['--db'],
-          ...ifDefined('retryCommand', inputs.retryCommand),
+          ...ifDefined(
+            'retryCommand',
+            typeof inputs.retryCommand === 'function' ? inputs.retryCommand() : inputs.retryCommand,
+          ),
         }),
       ),
     );

@@ -718,6 +718,9 @@ describe('ControlClient progress emission', () => {
         createPlanner: () => ({
           plan: () => ({
             kind: 'success',
+            appliedStatements: [],
+            dataLoss: [],
+            accessWidening: [],
             plan: {
               targetId: 'postgres',
               destination: { storageHash: 'dest' },
@@ -784,6 +787,7 @@ describe('ControlClient progress emission', () => {
         mode: 'apply',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
         acceptDataLoss: true,
         onProgress: (event) => events.push(event),
       });
@@ -846,6 +850,7 @@ describe('ControlClient progress emission', () => {
         mode: 'plan',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
       });
 
       expect(result.ok).toBe(true);
@@ -872,6 +877,7 @@ describe('ControlClient progress emission', () => {
         mode: 'plan',
         connection: 'postgres://test',
         migrationsDir: '/tmp/__test-client-migrations',
+        answerQuestions: async () => [],
       });
 
       await client.close();

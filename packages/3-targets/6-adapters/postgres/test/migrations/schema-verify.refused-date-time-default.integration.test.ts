@@ -133,6 +133,8 @@ describe('a contract default the canonical form of its data type refuses', {
         schema,
         policy: { allowedOperationClasses: ['additive', 'widening'] },
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
