@@ -50,11 +50,20 @@ describe('what backs a stored foreign key', () => {
       { name: 'post_author_idx' },
     ],
     ['the primary key on its columns', { pk: { columns: ['author_id'] } }, { primaryKey: true }],
-    ['a unique constraint on its columns', { uniques: [unique('author_id')] }, { unique: true }],
+    [
+      'an index that starts with its columns, by name',
+      { indexes: [index('post_author_editor_idx', ['author_id', 'editor_id'])] },
+      { name: 'post_author_editor_idx' },
+    ],
+    [
+      'a unique constraint on its columns',
+      { uniques: [unique('author_id')] },
+      { unique: ['author_id'] },
+    ],
     [
       'a unique constraint that starts with its columns',
       { uniques: [unique('author_id', 'editor_id')] },
-      { unique: true },
+      { unique: ['author_id', 'editor_id'] },
     ],
   ] as const)('may be %s', (_label, constraints, foreignKeyIndex) => {
     expect(validateStorageSemantics(postStorage(constraints, foreignKeyIndex))).toEqual([]);
@@ -74,10 +83,22 @@ describe('what backs a stored foreign key', () => {
       `${coordinate} is indexed by the primary key, but the table's primary key does not start with those columns`,
     ],
     [
-      'a unique constraint on other columns',
-      { uniques: [unique('editor_id'), unique('editor_id', 'author_id')] },
-      { unique: true },
-      `${coordinate} is indexed by a unique constraint, but the table has no unique constraint that starts with those columns`,
+      'an index on other columns',
+      { indexes: [index('post_editor_idx', ['editor_id', 'author_id'])] },
+      { name: 'post_editor_idx' },
+      `${coordinate} is indexed by "post_editor_idx", but that index does not start with those columns`,
+    ],
+    [
+      'a unique constraint the table does not have',
+      { uniques: [unique('author_id')] },
+      { unique: ['author_id', 'editor_id'] },
+      `${coordinate} is indexed by the unique constraint on [author_id, editor_id], but the table has no unique constraint on those columns`,
+    ],
+    [
+      'a unique constraint that does not start with its columns',
+      { uniques: [unique('editor_id', 'author_id')] },
+      { unique: ['editor_id', 'author_id'] },
+      `${coordinate} is indexed by the unique constraint on [editor_id, author_id], which does not start with those columns`,
     ],
   ] as const)('may not be %s', (_label, constraints, foreignKeyIndex, error) => {
     expect(validateStorageSemantics(postStorage(constraints, foreignKeyIndex))).toEqual([error]);
@@ -99,20 +120,21 @@ describe('the index field of a stored foreign key', () => {
     });
   });
 
-  it.each([{ name: 'post_author_id_idx_f3862461' }, { primaryKey: true }, { unique: true }])(
-    'accepts %j',
-    (foreignKeyIndex) => {
-      expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).not.toBeInstanceOf(
-        type.errors,
-      );
-    },
-  );
+  it.each([
+    { name: 'post_author_id_idx_f3862461' },
+    { primaryKey: true },
+    { unique: ['author_id'] },
+  ])('accepts %j', (foreignKeyIndex) => {
+    expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).not.toBeInstanceOf(type.errors);
+  });
 
   it.each([
     { name: true },
     { primaryKey: false },
     { unique: 'post_author_key' },
-    { name: 'post_author_id_idx_f3862461', unique: true },
+    { name: 'post_author_id_idx_f3862461', unique: ['author_id'] },
+    { unique: true },
+    { unique: 'author_id' },
     {},
   ])('refuses %j', (foreignKeyIndex) => {
     expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).toBeInstanceOf(type.errors);

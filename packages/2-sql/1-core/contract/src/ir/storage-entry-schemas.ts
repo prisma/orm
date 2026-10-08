@@ -128,7 +128,7 @@ export const ForeignKeyIndexSchema = type
   .type(
     type({ '+': 'reject', name: 'string' })
       .or({ '+': 'reject', primaryKey: 'true' })
-      .or({ '+': 'reject', unique: 'true' }),
+      .or({ '+': 'reject', unique: type.string.array().readonly() }),
   );
 
 export const ForeignKeySchema = type.declare<ForeignKeyInput>().type({

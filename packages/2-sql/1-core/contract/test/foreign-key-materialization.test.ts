@@ -141,7 +141,7 @@ describe('materializeForeignKeysAndIndexes', () => {
     [
       'unique constraint',
       { uniques: [{ columns: ['author_id'], name: 'post_author_key' }] },
-      { unique: true },
+      { unique: ['author_id'] },
     ],
     [
       'primary key',
@@ -158,7 +158,7 @@ describe('materializeForeignKeysAndIndexes', () => {
   });
 
   it.each([
-    ['unique constraint', { uniques: [{ columns: ['author_id'] }] }, { unique: true }],
+    ['unique constraint', { uniques: [{ columns: ['author_id'] }] }, { unique: ['author_id'] }],
     ['primary key', { primaryKey: { columns: ['author_id'] } }, { primaryKey: true }],
   ] as const)('backs a foreign key by an unnamed %s on its columns', (_label, table, index) => {
     expect(
@@ -173,7 +173,7 @@ describe('materializeForeignKeysAndIndexes', () => {
     [
       'unique constraint',
       { uniques: [{ columns: ['author_id', 'id'], name: 'post_author_key' }] },
-      { unique: true },
+      { unique: ['author_id', 'id'] },
     ],
     [
       'primary key',
@@ -312,7 +312,7 @@ describe('materializeForeignKeysAndIndexes', () => {
         declaredIndexes: [unnamed],
         uniques: [{ columns: ['author_id'] }],
       }),
-    ).toEqual({ foreignKeys: [reference(['author_id'], { unique: true })], indexes: [] });
+    ).toEqual({ foreignKeys: [reference(['author_id'], { unique: ['author_id'] })], indexes: [] });
   });
 
   it('refuses an index argument that names nothing on the table', () => {
@@ -361,7 +361,7 @@ describe('defaultForeignKeyIndex', () => {
     [
       'a unique constraint on its columns',
       { uniques: [{ columns: ['author_id'] }] },
-      { unique: true },
+      { unique: ['author_id'] },
     ],
     [
       'the primary key on its columns',

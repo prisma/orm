@@ -673,7 +673,10 @@
                                     "type": "object",
                                     "properties": {
                                       "unique": {
-                                        "const": true
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     },
                                     "required": ["unique"],

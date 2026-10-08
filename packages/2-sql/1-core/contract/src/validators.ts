@@ -18,7 +18,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { type Type, type } from 'arktype';
 import { contractError } from './contract-errors';
 import { composeSqlEntityKinds } from './entity-kinds';
-import { startsWithColumns } from './index-equivalence';
+import { sameColumns, startsWithColumns } from './index-equivalence';
 import { resolveSqlToOneRelationStorage } from './relation-storage';
 
 export {
@@ -603,18 +603,26 @@ function foreignKeyBackingError(table: StorageTable, fk: ForeignKey): string | u
   if (index === undefined) return undefined;
   const columns = fk.source.columns;
   if ('name' in index) {
-    return table.indexes.some((candidate) => candidate.name === index.name)
+    const named = table.indexes.find((candidate) => candidate.name === index.name);
+    if (named === undefined) {
+      return `is indexed by "${index.name}", but the table has no index with that name`;
+    }
+    return named.columns !== undefined && startsWithColumns(named.columns, columns)
       ? undefined
-      : `is indexed by "${index.name}", but the table has no index with that name`;
+      : `is indexed by "${index.name}", but that index does not start with those columns`;
   }
   if ('primaryKey' in index) {
     return table.primaryKey !== undefined && startsWithColumns(table.primaryKey.columns, columns)
       ? undefined
       : "is indexed by the primary key, but the table's primary key does not start with those columns";
   }
-  return table.uniques.some((unique) => startsWithColumns(unique.columns, columns))
+  const described = `the unique constraint on [${index.unique.join(', ')}]`;
+  if (!table.uniques.some((unique) => sameColumns(unique.columns, index.unique))) {
+    return `is indexed by ${described}, but the table has no unique constraint on those columns`;
+  }
+  return startsWithColumns(index.unique, columns)
     ? undefined
-    : 'is indexed by a unique constraint, but the table has no unique constraint that starts with those columns';
+    : `is indexed by ${described}, which does not start with those columns`;
 }
 
 /**

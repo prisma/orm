@@ -248,7 +248,7 @@ function namedBackingObject(
     );
   }
   if (match !== undefined) return match.resolved;
-  return key === table.primaryKey ? { primaryKey: true } : { unique: true };
+  return key === table.primaryKey ? { primaryKey: true } : { unique: objectColumns };
 }
 
 function resolveReplacement(
@@ -269,7 +269,7 @@ function foreignKeyIndexOf(backing: BackingObject): ForeignKeyIndex {
     case 'index':
       return { name: nameOf(backing.index.index.naming) };
     case 'uniqueConstraint':
-      return { unique: true };
+      return { unique: backing.unique.columns };
     case 'primaryKey':
       return { primaryKey: true };
   }

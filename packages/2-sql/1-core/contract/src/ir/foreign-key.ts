@@ -5,12 +5,12 @@ import { SqlNode } from './sql-node';
 export type ReferentialAction = 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
 
 /**
- * What serves a foreign key's lookups on its own table: an index, by its stored name, or, by kind, the primary key or a unique constraint whose first columns are the foreign key's columns.
+ * What serves a foreign key's lookups on its own table, each in the way the contract identifies it: an index by its stored name, the primary key by kind, a unique constraint by its columns. The first columns of each are the foreign key's columns.
  */
 export type ForeignKeyIndex =
   | { readonly name: string }
   | { readonly primaryKey: true }
-  | { readonly unique: true };
+  | { readonly unique: readonly string[] };
 
 export interface ForeignKeyInput {
   readonly source: ForeignKeyReference | ForeignKeyReferenceInput;
