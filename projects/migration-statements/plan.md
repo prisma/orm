@@ -1,10 +1,16 @@
 # Project plan — Migration statements
 
-**Spec:** [`spec.md`](./spec.md) · **Linear:** [Destructive changes need stated intent](https://linear.app/prisma-company/project/destructive-changes-need-stated-intent-7626c0107cd9), plan issue [TML-3474](https://linear.app/prisma-company/issue/TML-3474) · **Shaping PR:** prisma/orm#30604 · **Working branch:** `tml-3474-migration-statements`
+**Spec:** [`spec.md`](./spec.md) · **Linear:** [Destructive changes need stated intent](https://linear.app/prisma-company/project/destructive-changes-need-stated-intent-7626c0107cd9), plan issue [TML-3474](https://linear.app/prisma-company/issue/TML-3474)
 
 ## Summary
 
-Four slices. The first three stack: the statement surface with renames, then the refusal and consent model, then the scaffolded verbs and the remaining nouns. The fourth, Mongo, builds on the second and runs in parallel with the third. Each slice is one PR, stacked on the working branch until the shaping PR merges and then retargeted to `main`.
+Six slices. Slices 1 and 2 are merged. The rest, re-planned on 2026-10-08 when slices 3 and 4 proved too large for one review each:
+
+- **3a** (SQL `--convert` and `--backfill`) and **4a** (MongoDB renames and deletes) run in parallel.
+- **3b** (the remaining SQL nouns) follows 3a. **4b** (MongoDB `--convert`, `--backfill` and value object renames) follows 3b and 4a, and reuses their design.
+- The storage-name syntax survey runs beside the slices and goes to Will for a decision. It does not block close-out.
+
+Each slice is one PR against `main`.
 
 ## Slices
 
@@ -30,25 +36,49 @@ Four slices. The first three stack: the statement surface with renames, then the
 
 **Hands to.** The refusal shape every later verb hooks its statements into; the per-operation consent model; `--confirm` no longer consents to data loss.
 
-### Slice 3 — Convert and backfill scaffold the placeholder migration, and the remaining nouns
+### Slice 3a — `--convert` and `--backfill` on Postgres and SQLite
 
 **Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/convert-backfill/`
 
-**Outcome.** `--convert` scaffolds the type change with the placeholder in the slot that carries the conversion, and `--backfill` the backfill transform; both refused on `db update`; the scaffolding stops being automatic. `--rename` on enum values, namespaces and value object fields, a model move across namespaces (`alter table set schema` on Postgres, deferred from slice 1 on 2026-10-06 because no operation existed for it), and `--convert` on a variant, plan the row updates, the JSON rewrites and the schema rename. `--delete` on an enum value nulls where nullable, else refuses.
+**Outcome.** `migration plan --convert User.age` writes the type change with a `placeholder()` where the conversion goes, and `--backfill User.email` writes the backfill transform. A lossy type change is answered with `convert` or `delete`. Neither verb is accepted by `db update`. The planner no longer scaffolds without being asked; without `--backfill`, a required field on a populated table gets the temporary-default recipe on both SQL targets, which SQLite lacks today. The Postgres runner's advice when `SET NOT NULL` meets NULLs names the NULLs (TML-3517).
 
 **Builds on.** Slice 2.
 
+**Hands to.** The convert and backfill verbs, their questions and their scaffold rule, for 3b (variants) and 4b (MongoDB).
+
+### Slice 3b — The remaining nouns on Postgres and SQLite
+
+**Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/remaining-nouns/`
+
+**Outcome.** `--rename` on enum values, namespaces and value object fields (building the framework's value object statement surface: statement entity, subject kind, grammar, resolver), a model move across namespaces (`alter table set schema` on Postgres), and `--convert` on a variant whose discriminator value changed, each planning the row updates, JSON rewrites or schema rename. `--delete` on an enum value nulls it where nullable, else refuses. `--delete <namespace>` answers every question for the models in it.
+
+**Builds on.** Slice 3a.
+
 **Hands to.** Project close-out for the SQL targets.
 
-### Slice 4 — The same statements on MongoDB
+### Slice 4a — Renames and deletes on MongoDB
 
-**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo/`
+**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo-renames/`
 
-**Outcome.** The Mongo planner takes the same resolved statements: collection rename, document rewrites for field and value object field renames, drops and unsets for deletes, a data transform scaffold for convert, under the slice 2 refusal and consent model. No family vocabulary enters the framework.
+**Outcome.** The MongoDB planner carries out `--rename` for models (collection rename) and fields (document rewrite), with the validator and indexes kept consistent, through both commands. Removing a field becomes data loss, answered by `--delete` with an `$unset`. Document rewrites run under `db update`. The temporary capability member `renameStatements: { refused: true; keepDataByHand }`, its three CLI reads and its doc mention are deleted. Statements name MongoDB fields the same way they name SQL fields.
 
-**Builds on.** Slice 2. Slice 2 left a temporary member for it: `TargetMigrationsCapability.refusesRenameStatements`, set by MongoDB so a data-loss question offers no `rename` there. Slice 4 deletes the member, its one CLI read and its doc mention when the Mongo planner carries out renames.
+**Builds on.** Slice 2.
 
-**Hands to.** Project close-out for Mongo.
+**Hands to.** A MongoDB planner that takes resolved statements, for 4b.
+
+### Slice 4b — `--convert`, `--backfill` and value object renames on MongoDB
+
+**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo-convert-backfill/`
+
+**Outcome.** The same two verbs as 3a on MongoDB, scaffolding a data transform with a placeholder. Value object field renames rewrite subdocuments, including lists, dictionaries and unions, using the statement surface from 3b. A validator change that makes a field required on a populated collection is no longer silent: it is answered with `--backfill`, or the command says that existing documents need the field.
+
+**Builds on.** Slices 3a, 3b and 4a.
+
+**Hands to.** Project close-out for MongoDB.
+
+### Alongside — A syntax for naming storage objects
+
+Will asked (2026-10-07) for a critical discussion and a survey of how established tools name tables and other storage objects on the command line, before any syntax is chosen for the `@@map`-only rename gap (`deferred.md`). The write-up goes to Will for a decision. Building the chosen syntax is not in this project unless Will adds it.
 
 ## Stretch goal — interactive statements when a human runs the command
 
@@ -66,8 +96,9 @@ What the slices do now so this drops in later (see the spec's cross-cutting requ
 
 ## Sequencing
 
-- **Stack:** slice 1 → slice 2 → slice 3.
-- **Parallel:** slice 4 runs beside slice 3 once slice 2 has merged.
+- **Merged:** slice 1 → slice 2.
+- **Parallel now:** 3a and 4a.
+- **Then:** 3b after 3a; 4b after 3b and 4a.
 
 ## Dependencies
 

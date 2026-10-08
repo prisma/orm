@@ -121,7 +121,7 @@ In addition to the team DoD floor in [`drive/calibration/dod.md`](../../drive/ca
 - The same change through `db update` with the same statements on both targets produces the same database state and no consent prompt. Running the same `db update` again with the same statements fails on the first statement.
 - The same change with `--delete` omitted makes both commands refuse, and the refusal text contains the exact statement that then succeeds.
 - A type change through `migration plan --convert` writes a migration whose only placeholder is in the Postgres `using` slot; filling it and re-running the file produces an applicable migration that converts the rows. The same change without a statement is refused by both commands, and `--delete` on the field plans the direct alter.
-- A new required field on a non-empty table through `migration plan --backfill` writes the scaffolded backfill transform; without the statement both commands plan the temporary-default recipe.
+- A new required field on an existing table through `migration plan --backfill` writes the scaffolded backfill transform; without the statement both commands plan the temporary-default recipe.
 - On Mongo, the rename journey above with a collection and a document field, through both commands, and a value object field rename that rewrites subdocuments.
 - A `db update` against a database whose marker hash has no local snapshot fails every rename and convert statement with one error naming the hash, and succeeds with `--delete` alone.
 - `--confirm` is gone from both commands, the CLI README describes the statements and the consent model, and the upgrade fragments for the refusal and the consent change are validated by execution.
