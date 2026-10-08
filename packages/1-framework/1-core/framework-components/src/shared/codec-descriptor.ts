@@ -43,7 +43,7 @@ export interface CodecDescriptorTemplate<P = void> {
    * (e.g. `'low'`, `1`), or `undefined` if this codec's output isn't literal-expressible (e.g. a
    * Date-output codec).
    *
-   * `value` is the `encodeJson` form stored in the value set. `side` selects which type to print:
+   * `value` is the stored JSON of a value in the value set, as the codec's data type stores it. `side` selects which type to print:
    * `output` = the read/SELECT type; `input` = the create/update type. Most codecs render the same
    * literal for both, but a codec whose read and write types differ can render per side. Called once
    * per permitted value; the caller joins the results with `|`.

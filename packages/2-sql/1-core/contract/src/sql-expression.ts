@@ -2,7 +2,7 @@ import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import { printTaggedLiteral } from '@internal/framework-components/authoring';
 import type { DataType, DataTypeId } from '@internal/framework-components/codec';
-import { dataType, dataTypeId } from '@internal/framework-components/codec';
+import { dataType, dataTypeId, readJsonString } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/components';
 import { InternalError } from '@internal/utils/internal-error';
 
@@ -10,7 +10,9 @@ export const SQL_EXPRESSION_DATA_TYPE_ID: DataTypeId = dataTypeId('sql/expressio
 export const SQL_EXPRESSION_TAG = 'sql';
 
 /** The data type of a SQL expression in the target database's language. It declares no casts. The SQL family registers it. ADR 254. */
-export const sqlExpressionDataType: DataType = dataType(SQL_EXPRESSION_DATA_TYPE_ID, {});
+export const sqlExpressionDataType: DataType = dataType(SQL_EXPRESSION_DATA_TYPE_ID, {
+  read: (json) => readJsonString(SQL_EXPRESSION_DATA_TYPE_ID, json),
+});
 
 /** PSL support for `sql/expression`. The SQL family registers it under `SQL_EXPRESSION_DATA_TYPE_ID`. */
 export const sqlExpressionAuthoringEntry: DataTypeAuthoringEntry = {

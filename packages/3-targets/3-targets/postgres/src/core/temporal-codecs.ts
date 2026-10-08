@@ -1,4 +1,3 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecImpl,
@@ -6,7 +5,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonString,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -46,17 +45,17 @@ export class PgDateTemporalCodec extends CodecImpl<
   string,
   Temporal.PlainDate
 > {
-  async encode(value: Temporal.PlainDate, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Temporal.PlainDate, _ctx: CodecCallContext): Promise<string> {
     return pgDateTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDate> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDate> {
     return pgDateTemporalDecode(wire);
   }
-  encodeJson(value: Temporal.PlainDate): JsonValue {
-    return pgDateCanonical(pgDateTemporalEncode(value));
+  fromDataTypeValue(value: DataTypeValue<string>): Temporal.PlainDate {
+    return pgDateTemporalDecode(value.value);
   }
-  decodeJson(json: JsonValue): Temporal.PlainDate {
-    return pgDateTemporalDecode(decodeJsonString(PG_DATE_TEMPORAL_CODEC_ID, json));
+  toDataTypeValue(input: Temporal.PlainDate): DataTypeValue {
+    return this.dataTypeValueOf(pgDateCanonical(pgDateTemporalEncode(input)));
   }
 }
 
@@ -69,7 +68,7 @@ export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgDateTemporalCodec {
-    return () => new PgDateTemporalCodec(this);
+    return () => new PgDateTemporalCodec(this, pgDate);
   }
 }
 
@@ -87,17 +86,17 @@ export class PgTimestampTemporalCodec extends CodecImpl<
   string,
   Temporal.PlainDateTime
 > {
-  async encode(value: Temporal.PlainDateTime, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Temporal.PlainDateTime, _ctx: CodecCallContext): Promise<string> {
     return pgTimestampTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDateTime> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDateTime> {
     return pgTimestampTemporalDecode(wire);
   }
-  encodeJson(value: Temporal.PlainDateTime): JsonValue {
-    return pgTimestampCanonical(pgTimestampTemporalEncode(value));
+  fromDataTypeValue(value: DataTypeValue<string>): Temporal.PlainDateTime {
+    return pgTimestampTemporalDecode(value.value);
   }
-  decodeJson(json: JsonValue): Temporal.PlainDateTime {
-    return pgTimestampTemporalDecode(decodeJsonString(PG_TIMESTAMP_TEMPORAL_CODEC_ID, json));
+  toDataTypeValue(input: Temporal.PlainDateTime): DataTypeValue {
+    return this.dataTypeValueOf(pgTimestampCanonical(pgTimestampTemporalEncode(input)));
   }
 }
 
@@ -110,9 +109,9 @@ export class PgTimestampTemporalDescriptor extends PostgresCodecDescriptor<Preci
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(
-    _params: PrecisionParams,
+    params: PrecisionParams,
   ): (ctx: CodecInstanceContext) => PgTimestampTemporalCodec {
-    return () => new PgTimestampTemporalCodec(this);
+    return () => new PgTimestampTemporalCodec(this, pgTimestamp, params ?? {});
   }
 }
 
@@ -134,17 +133,17 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
   string,
   Temporal.Instant
 > {
-  async encode(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
     return pgTimestamptzTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
     return pgTimestamptzTemporalDecode(wire);
   }
-  encodeJson(value: Temporal.Instant): JsonValue {
-    return pgTimestamptzCanonical(pgTimestamptzTemporalEncode(value));
+  fromDataTypeValue(value: DataTypeValue<string>): Temporal.Instant {
+    return pgTimestamptzTemporalDecode(value.value);
   }
-  decodeJson(json: JsonValue): Temporal.Instant {
-    return pgTimestamptzTemporalDecode(decodeJsonString(PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, json));
+  toDataTypeValue(input: Temporal.Instant): DataTypeValue {
+    return this.dataTypeValueOf(pgTimestamptzCanonical(pgTimestamptzTemporalEncode(input)));
   }
 }
 
@@ -157,9 +156,9 @@ export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<Pre
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(
-    _params: PrecisionParams,
+    params: PrecisionParams,
   ): (ctx: CodecInstanceContext) => PgTimestamptzTemporalCodec {
-    return () => new PgTimestamptzTemporalCodec(this);
+    return () => new PgTimestamptzTemporalCodec(this, pgTimestamptz, params ?? {});
   }
 }
 
@@ -181,17 +180,17 @@ export class PgTimeTemporalCodec extends CodecImpl<
   string,
   Temporal.PlainTime
 > {
-  async encode(value: Temporal.PlainTime, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Temporal.PlainTime, _ctx: CodecCallContext): Promise<string> {
     return pgTimeTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainTime> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainTime> {
     return pgTimeTemporalDecode(wire);
   }
-  encodeJson(value: Temporal.PlainTime): JsonValue {
-    return pgTimeCanonical(pgTimeTemporalEncode(value));
+  fromDataTypeValue(value: DataTypeValue<string>): Temporal.PlainTime {
+    return pgTimeTemporalDecode(value.value);
   }
-  decodeJson(json: JsonValue): Temporal.PlainTime {
-    return pgTimeTemporalDecode(decodeJsonString(PG_TIME_TEMPORAL_CODEC_ID, json));
+  toDataTypeValue(input: Temporal.PlainTime): DataTypeValue {
+    return this.dataTypeValueOf(pgTimeCanonical(pgTimeTemporalEncode(input)));
   }
 }
 
@@ -203,8 +202,8 @@ export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionP
   override readonly codecId = PG_TIME_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
-  override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeTemporalCodec {
-    return () => new PgTimeTemporalCodec(this);
+  override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeTemporalCodec {
+    return () => new PgTimeTemporalCodec(this, pgTime, params ?? {});
   }
 }
 

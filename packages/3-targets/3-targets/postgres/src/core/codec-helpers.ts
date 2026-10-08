@@ -10,8 +10,8 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
-  decodeJsonIntegerText,
-  decodeJsonMatching,
+  readJsonIntegerText,
+  readJsonMatching,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-contract/data-type';
@@ -95,7 +95,7 @@ export function renderPrecision(
 
 /**
  * A `numeric` value as its canonical decimal text. A number is written out without an exponent,
- * because `numeric` text has no exponent syntax and `encodeJson` refuses one.
+ * because `numeric` text has no exponent syntax and `toDataTypeValue` refuses one.
  */
 export const pgNumericDecode = (wire: string | number): string => {
   if (typeof wire === 'number') return numeralText(wire);
@@ -138,7 +138,7 @@ export const pgBigintEncode = (codecId: string, value: bigint): string => {
  * not the value meant — which this refuses rather than minting an exact-looking
  * total from it. A non-integral number is refused on the same terms.
  */
-export const pgBigintEncodeJson = (codecId: string, value: bigint | number): string => {
+export const pgBigintDigits = (codecId: string, value: bigint | number): string => {
   if (typeof value !== 'number') return pgBigintEncode(codecId, value);
   if (!Number.isSafeInteger(value)) {
     throw postgresError(
@@ -189,7 +189,7 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
 /**
  * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
  * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
- * as `encodeJsonFloat` does in JSON.
+ * as `floatToJson` does in JSON.
  */
 export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
@@ -218,8 +218,6 @@ export const pgInt8NumberEncode = (value: number): string => {
   return String(pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value));
 };
 
-export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEncode(value);
-
 /**
  * Reads an `int8` wire value as a `number`, throwing outside ±(2^53 − 1) and on
  * non-integral input. Decimal text goes through `BigInt` before the range check
@@ -238,8 +236,9 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
-export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
-  Number(decodeJsonIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
+/** A `number` holds an integer exactly only within the safe integer range, so digit text past it is refused. */
+export const pgInt8NumberFromDigits = (digits: JsonValue): number =>
+  Number(readJsonIntegerText('pg/int8number@1', digits, SAFE_INTEGER_BIGINT_RANGE));
 
 /**
  * Renders a decimal-text default as a `bigint` literal, for the codecs whose
@@ -463,10 +462,9 @@ export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(
 /** Renders the application value as its canonical ISO-8601 duration. */
 export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(value);
 
-export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoDuration(value);
-
-export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
-  intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
+/** Reads the ISO-8601 duration `pg/interval` stores. */
+export const readPgIntervalJson = (owner: string, json: JsonValue): JsonValue =>
+  readJsonMatching(owner, json, ISO_DURATION, 'an ISO-8601 duration');
 
 const intervalTextFields = (text: string): PgInterval => {
   if (ISO_DURATION.test(text)) return intervalFieldsOf(text);
@@ -500,13 +498,14 @@ export const pgIntervalDecode = (wire: string | Record<string, unknown>): PgInte
 
 const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
-export const pgByteaEncodeJson = (value: Uint8Array): JsonValue =>
-  Buffer.from(value).toString('base64');
+export const pgByteaToBase64 = (value: Uint8Array): string => Buffer.from(value).toString('base64');
 
-export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
-  new Uint8Array(
-    Buffer.from(decodeJsonMatching('pg/bytea@1', json, BASE64_TEXT, 'a base64 string'), 'base64'),
-  );
+/** Reads the base64 `pg/bytea` stores. */
+export const readPgByteaJson = (owner: string, json: JsonValue): JsonValue =>
+  readJsonMatching(owner, json, BASE64_TEXT, 'a base64 string');
+
+export const pgByteaFromBase64 = (base64: string): Uint8Array =>
+  new Uint8Array(Buffer.from(base64, 'base64'));
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 

@@ -9,25 +9,21 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecDescriptor, CodecDescriptorTemplate } from './codec-descriptor';
+import { InternalError } from '@internal/utils/internal-error';
+import type { CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecCallContext, CodecTrait } from './codec-types';
+import {
+  type DataType,
+  type DataTypeParams,
+  type DataTypeValue,
+  dataTypeParamsOf,
+  dataTypeValueFor,
+} from './data-type';
 
 /**
- * A codec is the contract between an application value and its driver-wire and JSON representations.
+ * A codec converts a value of one data type to the value an application holds, and that application value to and from what the database driver exchanges (ADR 254).
  *
- * The author's mental model is two JS-side types — `TInput` (the application JS type) and `TWire` (the database driver wire format) — plus a target-defined `JsonValue`. The codec translates `TInput` to `TWire` on writes and back on ordinary reads, and to/from the target's JSON representation for contract artifacts and database-produced JSON values.
- *
- * Three representations participate:
- * - **Input** (`TInput`): the JS type at the application boundary.
- * - **Wire** (`TWire`): the format exchanged with the database driver.
- * - **JSON** (`JsonValue`): the target-defined JSON-safe form used in contract artifacts. It uses the exact scalar shape the target produces inside JSON values, which can differ from the ordinary wire format.
- *
- * The runtime instance carries only its `id` (the descriptor's `codecId`, set by the factory) and the four conversion methods. Static metadata (`traits`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId` — the read-surface single source of truth. Consumers that need them resolve through `descriptorFor(codecId)`.
- *
- * Codec methods split into two groups:
- *
- * - **Query-time** methods (`encode`, `decode`) run per row/parameter at the IO boundary; they are required and Promise-returning. The per-family codec factory accepts sync or async author functions and lifts sync ones to Promise-shaped methods automatically.
- * - **JSON** methods (`encodeJson`, `decodeJson`) run when the contract is serialized or loaded. Runtimes may also use `decodeJson` for values embedded in database-produced JSON results. They stay synchronous so contract validation and client construction are synchronous.
+ * `TInput` is the application value and `TWire` the wire value. The runtime instance carries its `id` (the descriptor's `codecId`), the {@link DataType} it converts values of, and four methods. Static metadata (`traits`) and the build-time `renderOutputType` renderer live on the {@link CodecDescriptor} keyed by `codecId`; consumers that need them resolve through `descriptorFor(codecId)`.
  *
  * Target-family codec interfaces extend this base; family-specific concerns (e.g. the SQL `column?` per-call context) layer on through the `CodecCallContext` extension pattern.
  */
@@ -41,22 +37,47 @@ export interface Codec<
   readonly id: Id;
   /** Phantom carrier for the `TTraits` generic; type-only, undefined at runtime. Runtime traits live on {@link CodecDescriptor.traits}. Implemented as a string-key phantom (`__codecTraits`) rather than `unique symbol` so bundlers that split `.d.ts` chunks do not strand symbol identity on chunk-private paths (the same `TS2742` family that the public re-export of `CodecTypes` works around). */
   readonly __codecTraits?: TTraits;
-  /** Converts a JS value to the wire format expected by the database driver. Always Promise-returning at the boundary. The {@link CodecCallContext} is supplied by the runtime on every call (allocated once per runtime operation, including `query()`, `PreparedStatement.query()`, and `execute()`); family layers may narrow the ctx to extend it (e.g. SQL adds `column`). Author-side single-arg `(value) => …` functions remain legal via TypeScript's bivariance for trailing parameters. */
-  encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-  /** Converts a wire value from the database driver into the JS application type. Always Promise-returning at the boundary. The {@link CodecCallContext} is supplied by the runtime on every call (allocated once per runtime operation, including `query()`, `PreparedStatement.query()`, and `execute()`); family layers may narrow the ctx to extend it (e.g. SQL adds `column`). Author-side single-arg `(wire) => …` functions remain legal via TypeScript's bivariance for trailing parameters. */
-  decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
-  /** Converts a JS value to the target-defined JSON representation used for contract serialization. This must match the scalar shape produced by the target inside JSON values. Synchronous; called during contract emission. */
-  encodeJson(value: TInput): JsonValue;
+  /** The data type whose values this codec converts. */
+  readonly dataType: DataType;
   /**
-   * Reads a value in a stored JSON form of the codec's type and returns the application value. A stored form is what `encodeJson` writes and what the database writes for the type in JSON; the value comes from a contract's literal default, a member of a JSON document default, an enum member, or JSON the database returns. For any other JSON value — another kind, or one the type with the codec's type parameters does not hold — it throws: the built-in codecs raise `RUNTIME.DECODE_FAILED` through `refuseJsonValue`, with `meta.codecId` and `meta.received`. Callers use it as the check that a value is valid, so a `decodeJson` that returns every value turns that check off. SQL NULL never reaches it. Synchronous.
+   * Returns the application value for a value of the codec's data type. It refuses only a value the application value cannot hold exactly, such as digit text past 2^53 for a `number`, because the data type has already refused every value it does not hold; it is synchronous.
    */
-  decodeJson(json: JsonValue): TInput;
+  fromDataTypeValue(value: DataTypeValue): TInput;
+  /**
+   * Returns the value of the codec's data type that an application value is, under the codec's parameters. It builds the value through the data type, so it cannot return a value its type does not hold; it is synchronous.
+   */
+  toDataTypeValue(input: TInput): DataTypeValue;
+  /**
+   * Reads a value the database driver returns into the application value. It is asynchronous and receives the per-call {@link CodecCallContext}, which family layers may narrow (SQL adds `column`).
+   */
+  fromWire(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+  /**
+   * Writes an application value as the value the database driver takes. It is asynchronous and receives the per-call {@link CodecCallContext}, which family layers may narrow.
+   */
+  toWire(input: TInput, ctx: CodecCallContext): Promise<TWire>;
+}
+
+/**
+ * The application value `codec` gives for `json`, a value a contract stores for a column with the column's `typeParams`: the codec's data type reads it with the parameters it declares, and the codec converts the value.
+ */
+export function readContractValue(
+  codec: Pick<Codec, 'dataType' | 'fromDataTypeValue'>,
+  json: JsonValue,
+  typeParams: unknown,
+): unknown {
+  return codec.fromDataTypeValue(
+    codec.dataType.fromContract(json, dataTypeParamsOf(codec.dataType, typeParams)),
+  );
+}
+
+function namedDataType(descriptor: object): unknown {
+  return Reflect.get(descriptor, 'dataType');
 }
 
 /**
  * Abstract base class for concrete codec implementations.
  *
- * Codec authors extend this class with their typed `Id`, `TTraits`, `TWire`, `TInput` and override all four abstract conversion methods: `encode`, `decode`, `encodeJson`, and `decodeJson`. The runtime instance carries only its `id` (proxied through the descriptor so alias subclasses inherit the descriptor's id automatically) and the conversion methods — static metadata lives on the {@link CodecDescriptor}.
+ * A codec is built with its descriptor, the data type it converts values of and the column's parameters of that type. `fromDataTypeValue` and `toDataTypeValue` convert between a value of the type and the application value, and `toDataTypeValue` finishes with {@link CodecImpl.dataTypeValueOf}, which constructs the value through the type. `fromWire` and `toWire` read and write what the driver exchanges, asynchronously.
  */
 export abstract class CodecImpl<
   Id extends string = string,
@@ -66,18 +87,33 @@ export abstract class CodecImpl<
 > implements Codec<Id, TTraits, TWire, TInput>
 {
   /**
-   * Variance-erased descriptor reference. Concrete codec subclasses receive the typed descriptor in their own constructors and forward it via `super(descriptor)`; the variance erasure lives at this base because the abstract surface can't carry the concrete `TParams`.
+   * The descriptor is variance-erased: concrete codec subclasses receive the typed descriptor in their own constructors and forward it via `super(descriptor, dataType, params)`; the variance erasure lives at this base because the abstract surface can't carry the concrete `TParams`.
    */
-  // biome-ignore lint/suspicious/noExplicitAny: variance-erased descriptor reference; subclasses retain typed access via their own state
-  constructor(public readonly descriptor: CodecDescriptorTemplate<any>) {}
+  constructor(
+    // biome-ignore lint/suspicious/noExplicitAny: variance-erased descriptor reference; subclasses retain typed access via their own state
+    public readonly descriptor: CodecDescriptorTemplate<any>,
+    public readonly dataType: DataType,
+    protected readonly dataTypeParams: DataTypeParams = {},
+  ) {
+    const named = namedDataType(descriptor);
+    if (named !== undefined && named !== dataType.id) {
+      throw new InternalError(
+        `Codec ${descriptor.codecId} is built with the data type ${dataType.id}, but its descriptor names ${String(named)}.`,
+      );
+    }
+  }
 
   get id(): Id {
     return this.descriptor.codecId as Id;
   }
 
-  abstract encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-  abstract decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
-  abstract encodeJson(value: TInput): JsonValue;
-  /** See {@link Codec.decodeJson}. */
-  abstract decodeJson(json: JsonValue): TInput;
+  /** The value of the codec's data type that `json` stores, under the codec's parameters. */
+  protected dataTypeValueOf<J extends JsonValue>(json: J): DataTypeValue<J> {
+    return dataTypeValueFor(this.dataType, this.dataTypeParams, json);
+  }
+
+  abstract fromDataTypeValue(value: DataTypeValue): TInput;
+  abstract toDataTypeValue(input: TInput): DataTypeValue;
+  abstract fromWire(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+  abstract toWire(input: TInput, ctx: CodecCallContext): Promise<TWire>;
 }

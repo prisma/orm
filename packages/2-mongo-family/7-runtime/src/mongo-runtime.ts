@@ -94,7 +94,7 @@ export interface MongoRuntime {
    *   per-level `Promise.all` race.
    *
    * Mongo's read path decodes rows via `resultShape` (per ADR 209). The
-   * same `CodecCallContext` is forwarded into each `codec.decode(wire, ctx)`
+   * same `CodecCallContext` is forwarded into each `codec.fromWire(wire, ctx)`
    * call, so async decoders that respect the signal get cancellation; the
    * runtime itself does not currently emit a `phase: 'decode'` envelope.
    */

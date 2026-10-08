@@ -1,4 +1,3 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecImpl,
@@ -6,6 +5,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -28,13 +28,6 @@ import {
   pgTimestamptz,
   pgTimestamptzCanonical,
 } from './data-types';
-import {
-  decodeJsonDateTimeText,
-  pgDateStoredText,
-  pgTimeStoredText,
-  pgTimestampStoredText,
-  pgTimestamptzStoredText,
-} from './date-time-stored-text';
 import { utcTimestampText, utcTimestamptzText } from './temporal-codec-helpers';
 
 export class PgDateStringCodec extends CodecImpl<
@@ -43,17 +36,17 @@ export class PgDateStringCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return pgDateCanonical(value);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonDateTimeText(PG_DATE_STRING_CODEC_ID, json, pgDateStoredText);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(pgDateCanonical(input));
   }
 }
 
@@ -66,7 +59,7 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgDateStringCodec {
-    return () => new PgDateStringCodec(this);
+    return () => new PgDateStringCodec(this, pgDate);
   }
 }
 
@@ -85,19 +78,19 @@ export class PgTimestampStringCodec extends CodecImpl<
   string
 > {
   // `CodecTypes` reads the application type from the last signature, so `string` stays last.
-  encode(value: Date, ctx: CodecCallContext): Promise<string>;
-  encode(value: string, ctx: CodecCallContext): Promise<string>;
-  async encode(value: string | Date, _ctx: CodecCallContext): Promise<string> {
+  toWire(value: Date, ctx: CodecCallContext): Promise<string>;
+  toWire(value: string, ctx: CodecCallContext): Promise<string>;
+  async toWire(value: string | Date, _ctx: CodecCallContext): Promise<string> {
     return value instanceof Date ? utcTimestampText(value, this.id) : value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return pgTimestampCanonical(value);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonDateTimeText(PG_TIMESTAMP_STRING_CODEC_ID, json, pgTimestampStoredText);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(pgTimestampCanonical(input));
   }
 }
 
@@ -127,10 +120,8 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
   override renderOutputType(params: PrecisionParams): string | undefined {
     return renderPrecision('TimestampString', params);
   }
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestampStringCodec {
-    return () => new PgTimestampStringCodec(this);
+  override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestampStringCodec {
+    return () => new PgTimestampStringCodec(this, pgTimestamp, params ?? {});
   }
 }
 
@@ -149,19 +140,19 @@ export class PgTimestamptzStringCodec extends CodecImpl<
   string
 > {
   // `CodecTypes` reads the application type from the last signature, so `string` stays last.
-  encode(value: Date, ctx: CodecCallContext): Promise<string>;
-  encode(value: string, ctx: CodecCallContext): Promise<string>;
-  async encode(value: string | Date, _ctx: CodecCallContext): Promise<string> {
+  toWire(value: Date, ctx: CodecCallContext): Promise<string>;
+  toWire(value: string, ctx: CodecCallContext): Promise<string>;
+  async toWire(value: string | Date, _ctx: CodecCallContext): Promise<string> {
     return value instanceof Date ? utcTimestamptzText(value, this.id) : value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return pgTimestamptzCanonical(value);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonDateTimeText(PG_TIMESTAMPTZ_STRING_CODEC_ID, json, pgTimestamptzStoredText);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(pgTimestamptzCanonical(input));
   }
 }
 
@@ -183,9 +174,9 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
     return renderPrecision('TimestamptzString', params);
   }
   override factory(
-    _params: PrecisionParams,
+    params: PrecisionParams,
   ): (ctx: CodecInstanceContext) => PgTimestamptzStringCodec {
-    return () => new PgTimestamptzStringCodec(this);
+    return () => new PgTimestamptzStringCodec(this, pgTimestamptz, params ?? {});
   }
 }
 
@@ -207,17 +198,17 @@ export class PgTimeStringCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return pgTimeCanonical(value);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonDateTimeText(PG_TIME_STRING_CODEC_ID, json, pgTimeStoredText);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(pgTimeCanonical(input));
   }
 }
 
@@ -232,8 +223,8 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
   override renderOutputType(params: PrecisionParams): string | undefined {
     return renderPrecision('TimeString', params);
   }
-  override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeStringCodec {
-    return () => new PgTimeStringCodec(this);
+  override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeStringCodec {
+    return () => new PgTimeStringCodec(this, pgTime, params ?? {});
   }
 }
 

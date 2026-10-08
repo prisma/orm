@@ -40,6 +40,7 @@ import {
   codecForRef,
   type DataTypeLookup,
   enumRefusalOf,
+  readContractValue,
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -129,12 +130,12 @@ function columnCodec(
   });
 }
 
-/** Encodes a value the contract stores, and reads it back with the codec, which refuses a value its column would not hold. */
+/** The JSON the contract stores for a value: the codec gives the value of its data type under the column's parameters, which the type refuses when they exclude it, and the codec reads it back, refusing a value its application value cannot hold. */
 function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
-    const json = codec.encodeJson(value);
-    codec.decodeJson(json);
-    return json;
+    const stored = codec.toDataTypeValue(value);
+    codec.fromDataTypeValue(stored);
+    return codec.dataType.toContract(stored);
   }
   return blindCast<
     JsonValue,
@@ -513,7 +514,7 @@ function assertStoredAsWritten(
   codec: Codec,
 ): void {
   if (!hasLiteralType(member.value)) return;
-  const readBack = codec.decodeJson(stored);
+  const readBack = readContractValue(codec, stored, undefined);
   if (
     hasLiteralType(readBack) &&
     canonicalStringify(readBack) === canonicalStringify(member.value)

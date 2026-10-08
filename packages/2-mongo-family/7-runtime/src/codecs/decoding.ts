@@ -115,7 +115,7 @@ export async function decodeMongoRow(
     tasks.push(
       (async () => {
         try {
-          assign(await codec.decode(wire, ctx));
+          assign(await codec.fromWire(wire, ctx));
         } catch (error) {
           wrapDecodeFailure(error, { collection, path, documentId }, codecId, wire);
         }

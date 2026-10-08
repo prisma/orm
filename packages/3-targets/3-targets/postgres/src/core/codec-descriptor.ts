@@ -123,10 +123,11 @@ export interface PostgresCodecOptions<
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   readonly jsonArrayProjection?: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   /**
-   * Builds the codec in place of the adapted one, where PostgreSQL stores fewer values than the family codec reads: a subclass of the family codec whose `decodeJson` adds PostgreSQL's own rule.
+   * Builds the codec: the family codec, or a subclass with PostgreSQL's own wire rules, constructed with `dataType` and the column's parameters, because a family template names no data type and so builds no codec of its own.
    */
-  readonly factory?: (
+  readonly factory: (
     descriptor: PostgresCodecDescriptor<P>,
+    dataType: DataType,
     params: P,
   ) => (ctx: CodecInstanceContext) => C;
 }
@@ -168,11 +169,7 @@ class PostgresCodecDescriptorAdapter<
       StandardSchemaV1<DescriptorParams<D>> | undefined,
       'the data type the codec represents declares the parameters the codec takes'
     >(options.dataType.params);
-    const factory = options.factory;
-    this.factory =
-      factory === undefined
-        ? (params) => descriptor.factory(params)
-        : (params) => factory(this, params);
+    this.factory = (params) => options.factory(this, options.dataType, params);
 
     const renderOutputType = descriptor.renderOutputType;
     if (renderOutputType !== undefined) {

@@ -14,6 +14,7 @@
  */
 
 import type { Contract, JsonValue } from '@internal/contract/types';
+import { readContractValue } from '@internal/framework-components/codec';
 import {
   AsyncIterableResult,
   isRuntimeError,
@@ -295,9 +296,7 @@ function createPreparedIncludedRowDecoder(
       decode(value: unknown) {
         if (value === null || value === undefined) return value;
         const resolved = binding();
-        return resolved
-          ? decodeIncludedColumnValue(resolved.ref, resolved.codecId, resolved.codec, value)
-          : value;
+        return resolved ? decodeIncludedColumnValue(resolved, value) : value;
       },
     };
   });
@@ -650,6 +649,7 @@ interface IncludedColumnBinding {
   readonly ref: IncludedColumnRef;
   readonly codec: Codec;
   readonly codecId: string;
+  readonly typeParams: unknown;
 }
 
 type IncludedColumnBindings = WeakMap<IncludeExpr, Map<string, IncludedColumnBinding | null>>;
@@ -666,9 +666,7 @@ function decodeIncludedStorageRow(
     }
 
     const binding = bindingFor(key);
-    decoded[key] = binding
-      ? decodeIncludedColumnValue(binding.ref, binding.codecId, binding.codec, value)
-      : value;
+    decoded[key] = binding ? decodeIncludedColumnValue(binding, value) : value;
   }
   return decoded;
 }
@@ -688,7 +686,12 @@ function resolveIncludedColumnBinding(
     ref.table,
     ref.column,
   );
-  return { ref, codec, codecId: codecRef?.codecId ?? ref.storageColumn.codecId };
+  return {
+    ref,
+    codec,
+    codecId: codecRef?.codecId ?? ref.storageColumn.codecId,
+    typeParams: codecRef?.typeParams,
+  };
 }
 
 function resolveIncludedColumnRef(
@@ -736,12 +739,8 @@ function resolveIncludedColumnRef(
   return undefined;
 }
 
-function decodeIncludedColumnValue(
-  ref: IncludedColumnRef,
-  codecId: string,
-  codec: Codec,
-  value: unknown,
-): unknown {
+function decodeIncludedColumnValue(binding: IncludedColumnBinding, value: unknown): unknown {
+  const { ref, codecId } = binding;
   if (ref.storageColumn.many !== false) {
     if (!Array.isArray(value)) {
       wrapIncludedDecodeFailure(
@@ -759,24 +758,30 @@ function decodeIncludedColumnValue(
         decoded.push(null);
         continue;
       }
-      decoded.push(decodeIncludedJsonValue(ref, codecId, codec, element));
+      decoded.push(decodeIncludedJsonValue(binding, element));
     }
     return decoded;
   }
 
-  return decodeIncludedJsonValue(ref, codecId, codec, value);
+  return decodeIncludedJsonValue(binding, value);
 }
 
 /** `ref` names the value for a decode failure; an aggregate names its relation where a column would name itself. */
 function decodeIncludedJsonValue(
-  ref: DecodedValueRef,
-  codecId: string,
-  codec: Codec,
+  binding: {
+    readonly ref: DecodedValueRef;
+    readonly codecId: string;
+    readonly codec: Codec;
+    readonly typeParams: unknown;
+  },
   value: unknown,
 ): unknown {
+  const { ref, codecId, codec, typeParams } = binding;
   try {
-    return codec.decodeJson(
+    return readContractValue(
+      codec,
       blindCast<JsonValue, 'SQL JSON aggregate values are JSON values'>(value),
+      typeParams,
     );
   } catch (error) {
     if (isRuntimeError(error)) throw error;
@@ -955,9 +960,12 @@ function consumeScalarInclude(
   if (value === null || value === undefined) return emptyAggregateResult(resolved, codec);
 
   return decodeIncludedJsonValue(
-    { table: include.relatedTableName, column: include.relationName },
-    resolved.codec.codecId,
-    codec,
+    {
+      ref: { table: include.relatedTableName, column: include.relationName },
+      codecId: resolved.codec.codecId,
+      codec,
+      typeParams: resolved.codec.typeParams,
+    },
     value,
   );
 }

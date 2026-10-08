@@ -1,12 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecDescriptor, CodecTrait, DataType } from '@internal/framework-components/codec';
-import {
-  decodeJsonBoolean,
-  decodeJsonFloat,
-  decodeJsonString,
-  encodeJsonFloat,
-  renderTsLiteral,
+import type {
+  CodecDescriptor,
+  CodecTrait,
+  DataTypeParams,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
+import { floatToJson, readJsonFloat, renderTsLiteral } from '@internal/framework-components/codec';
 import {
   type MongoCodec,
   type MongoCodecRegistry,
@@ -17,44 +16,33 @@ import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
-import {
-  decodeBsonJson,
-  decodeBsonValue,
-  encodeBsonJson,
-  encodeBsonValue,
-} from './bson-codec-helpers';
+import { bsonToJson, decodeBsonValue, encodeBsonValue, readBsonJson } from './bson-codec-helpers';
 import {
   binaryDecode,
-  binaryDecodeJson,
   binaryEncode,
-  binaryEncodeJson,
+  binaryFromBase64,
+  binaryToBase64,
   booleanEncode,
-  dateDecodeJson,
   dateEncode,
-  dateEncodeJson,
+  dateToJson,
   decimal128Decode,
-  decimal128DecodeJson,
   decimal128Encode,
-  decimal128EncodeJson,
+  decimal128ToJson,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
   doubleEncode,
-  int32DecodeJson,
   int32Encode,
-  int32EncodeJson,
+  int32ToJson,
   int64Decode,
-  int64DecodeJson,
   int64Encode,
-  int64EncodeJson,
   int64NumberDecode,
-  int64NumberDecodeJson,
   int64NumberEncode,
-  int64NumberEncodeJson,
-  objectIdDecodeJson,
+  int64NumberFromDigits,
+  int64NumberToJson,
+  int64ToJson,
   objectIdEncode,
-  objectIdEncodeJson,
+  objectIdToJson,
   stringEncode,
-  vectorDecodeJson,
   vectorEncode,
 } from './bson-scalar-helpers';
 import {
@@ -91,66 +79,80 @@ import { mongoTargetError } from './mongo-target-errors';
 
 export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
-  decode: (wire: ObjectId) => wire.toHexString(),
-  encode: (value: string) => objectIdEncode(MONGO_OBJECTID_CODEC_ID, value),
-  encodeJson: (value: string) => objectIdEncodeJson(MONGO_OBJECTID_CODEC_ID, value),
-  decodeJson: (json) => objectIdDecodeJson(MONGO_OBJECTID_CODEC_ID, json),
+  dataType: mongoObjectId,
+  fromWire: (wire: ObjectId) => wire.toHexString(),
+  toWire: (value: string) => objectIdEncode(MONGO_OBJECTID_CODEC_ID, value),
+  toDataTypeValue: (value: string) => objectIdToJson(MONGO_OBJECTID_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
 });
 
 export const mongoStringCodec = mongoCodec({
   typeId: MONGO_STRING_CODEC_ID,
-  decode: (wire: string) => wire,
-  encode: (value: string) => stringEncode(MONGO_STRING_CODEC_ID, value),
-  decodeJson: (json) => decodeJsonString(MONGO_STRING_CODEC_ID, json),
+  dataType: mongoString,
+  fromWire: (wire: string) => wire,
+  toWire: (value: string) => stringEncode(MONGO_STRING_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
 });
 
 export const mongoDoubleCodec = mongoCodec({
   typeId: MONGO_DOUBLE_CODEC_ID,
-  decode: (wire: number | Double) => Number(wire),
-  encode: (value: number): number | Double => doubleEncode(MONGO_DOUBLE_CODEC_ID, value),
-  encodeJson: encodeJsonFloat,
-  decodeJson: (json) => decodeJsonFloat(MONGO_DOUBLE_CODEC_ID, json),
+  dataType: mongoDouble,
+  fromWire: (wire: number | Double) => Number(wire),
+  toWire: (value: number): number | Double => doubleEncode(MONGO_DOUBLE_CODEC_ID, value),
+  toDataTypeValue: floatToJson,
+  fromDataTypeValue: (value) => readJsonFloat(MONGO_DOUBLE_CODEC_ID, value.value),
 });
 
 export const mongoInt32Codec = mongoCodec({
   typeId: MONGO_INT32_CODEC_ID,
-  decode: (wire: number) => wire,
-  encode: (value: number) => int32Encode(MONGO_INT32_CODEC_ID, value),
-  encodeJson: (value: number) => int32EncodeJson(MONGO_INT32_CODEC_ID, value),
-  decodeJson: (json) => int32DecodeJson(MONGO_INT32_CODEC_ID, json),
+  dataType: mongoInt32,
+  fromWire: (wire: number) => wire,
+  toWire: (value: number) => int32Encode(MONGO_INT32_CODEC_ID, value),
+  toDataTypeValue: (value: number) => int32ToJson(MONGO_INT32_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<number>) => value.value,
 });
 
 export const mongoBooleanCodec = mongoCodec({
   typeId: MONGO_BOOLEAN_CODEC_ID,
-  decode: (wire: boolean) => wire,
-  encode: (value: boolean) => booleanEncode(MONGO_BOOLEAN_CODEC_ID, value),
-  decodeJson: (json) => decodeJsonBoolean(MONGO_BOOLEAN_CODEC_ID, json),
+  dataType: mongoBool,
+  fromWire: (wire: boolean) => wire,
+  toWire: (value: boolean) => booleanEncode(MONGO_BOOLEAN_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<boolean>) => value.value,
 });
 
 export const mongoDateCodec = mongoCodec({
   typeId: MONGO_DATE_CODEC_ID,
-  decode: (wire: Date) => wire,
-  encode: (value: Date) => dateEncode(MONGO_DATE_CODEC_ID, value),
-  encodeJson: (value: Date) => dateEncodeJson(MONGO_DATE_CODEC_ID, value),
-  decodeJson: (json) => dateDecodeJson(MONGO_DATE_CODEC_ID, json),
+  dataType: mongoDate,
+  fromWire: (wire: Date) => wire,
+  toWire: (value: Date) => dateEncode(MONGO_DATE_CODEC_ID, value),
+  toDataTypeValue: (value: Date) => dateToJson(MONGO_DATE_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => new Date(value.value),
 });
 
-export const mongoVectorCodec = mongoCodec({
-  typeId: MONGO_VECTOR_CODEC_ID,
-  decode: (wire: readonly number[]) => wire,
-  encode: (value: readonly number[]) => vectorEncode(MONGO_VECTOR_CODEC_ID, value),
-  decodeJson: (json) => vectorDecodeJson(MONGO_VECTOR_CODEC_ID, json),
-});
+/** The vector codec for a column of `mongo/vector` with `params`. The dimension reaches only the TypeScript type `Vector<n>`. */
+function vectorCodec(params?: DataTypeParams) {
+  return mongoCodec({
+    typeId: MONGO_VECTOR_CODEC_ID,
+    dataType: mongoVector,
+    ...ifDefined('params', params),
+    fromWire: (wire: readonly number[]) => wire,
+    toWire: (value: readonly number[]) => vectorEncode(MONGO_VECTOR_CODEC_ID, value),
+    fromDataTypeValue: (value: DataTypeValue<readonly number[]>) => value.value,
+  });
+}
+
+export const mongoVectorCodec = vectorCodec();
 
 /**
- * A BSON `long`. The application value is a `bigint`, because a `number` cannot hold the full 64-bit range; its JSON form is decimal text.
+ * A BSON `long`. The application value is a `bigint`, because a `number` cannot hold the full 64-bit range; its stored form is decimal text.
  */
 export const mongoInt64Codec = mongoCodec({
   typeId: MONGO_INT64_CODEC_ID,
-  decode: (wire: Long | number | bigint) => int64Decode(MONGO_INT64_CODEC_ID, wire),
-  encode: (value: bigint): Long | number | bigint => int64Encode(MONGO_INT64_CODEC_ID, value),
-  encodeJson: (value: bigint) => int64EncodeJson(MONGO_INT64_CODEC_ID, value),
-  decodeJson: (json) => int64DecodeJson(MONGO_INT64_CODEC_ID, json),
+  dataType: mongoInt64,
+  fromWire: (wire: Long | number | bigint) => int64Decode(MONGO_INT64_CODEC_ID, wire),
+  toWire: (value: bigint): Long | number | bigint => int64Encode(MONGO_INT64_CODEC_ID, value),
+  toDataTypeValue: (value: bigint) => int64ToJson(MONGO_INT64_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => BigInt(value.value),
 });
 
 /**
@@ -158,33 +160,36 @@ export const mongoInt64Codec = mongoCodec({
  */
 export const mongoInt64NumberCodec = mongoCodec({
   typeId: MONGO_INT64_NUMBER_CODEC_ID,
-  decode: (wire: Long | number | bigint) => int64NumberDecode(MONGO_INT64_NUMBER_CODEC_ID, wire),
-  encode: (value: number): Long | number | bigint =>
+  dataType: mongoInt64,
+  fromWire: (wire: Long | number | bigint) => int64NumberDecode(MONGO_INT64_NUMBER_CODEC_ID, wire),
+  toWire: (value: number): Long | number | bigint =>
     int64NumberEncode(MONGO_INT64_NUMBER_CODEC_ID, value),
-  encodeJson: (value: number) => int64NumberEncodeJson(MONGO_INT64_NUMBER_CODEC_ID, value),
-  decodeJson: (json) => int64NumberDecodeJson(MONGO_INT64_NUMBER_CODEC_ID, json),
+  toDataTypeValue: (value: number) => int64NumberToJson(MONGO_INT64_NUMBER_CODEC_ID, value),
+  fromDataTypeValue: (value) => int64NumberFromDigits(MONGO_INT64_NUMBER_CODEC_ID, value.value),
 });
 
 /**
- * A BSON `decimal`. The application value and its JSON form are the same decimal text, written without an exponent.
+ * A BSON `decimal`. The application value and its stored form are the same decimal text, written without an exponent.
  */
 export const mongoDecimal128Codec = mongoCodec({
   typeId: MONGO_DECIMAL128_CODEC_ID,
-  decode: (wire: Decimal128) => decimal128Decode(MONGO_DECIMAL128_CODEC_ID, wire),
-  encode: (value: string) => decimal128Encode(MONGO_DECIMAL128_CODEC_ID, value),
-  encodeJson: (value: string) => decimal128EncodeJson(MONGO_DECIMAL128_CODEC_ID, value),
-  decodeJson: (json) => decimal128DecodeJson(MONGO_DECIMAL128_CODEC_ID, json),
+  dataType: mongoDecimal128,
+  fromWire: (wire: Decimal128) => decimal128Decode(MONGO_DECIMAL128_CODEC_ID, wire),
+  toWire: (value: string) => decimal128Encode(MONGO_DECIMAL128_CODEC_ID, value),
+  toDataTypeValue: (value: string) => decimal128ToJson(MONGO_DECIMAL128_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
 });
 
 /**
- * BSON `binData`. The application value is a `Uint8Array`; its JSON form is unwrapped base64.
+ * BSON `binData`. The application value is a `Uint8Array`; its stored form is unwrapped base64.
  */
 export const mongoBinaryCodec = mongoCodec({
   typeId: MONGO_BINARY_CODEC_ID,
-  decode: (wire: Binary | Uint8Array) => binaryDecode(MONGO_BINARY_CODEC_ID, wire),
-  encode: (value: Uint8Array) => binaryEncode(MONGO_BINARY_CODEC_ID, value),
-  encodeJson: binaryEncodeJson,
-  decodeJson: (json) => binaryDecodeJson(MONGO_BINARY_CODEC_ID, json),
+  dataType: mongoBinary,
+  fromWire: (wire: Binary | Uint8Array) => binaryDecode(MONGO_BINARY_CODEC_ID, wire),
+  toWire: (value: Uint8Array) => binaryEncode(MONGO_BINARY_CODEC_ID, value),
+  toDataTypeValue: binaryToBase64,
+  fromDataTypeValue: (value: DataTypeValue<string>) => binaryFromBase64(value.value),
 });
 
 /**
@@ -192,12 +197,13 @@ export const mongoBinaryCodec = mongoCodec({
  */
 export const mongoJsonCodec = mongoCodec({
   typeId: MONGO_JSON_CODEC_ID,
-  decode: (wire: JsonValue) => decodeJsonValue(wire),
-  encode: (value: JsonValue) => encodeJsonValue(value),
+  dataType: mongoJson,
+  fromWire: (wire: JsonValue) => decodeJsonValue(wire),
+  toWire: (value: JsonValue) => encodeJsonValue(value),
 });
 
 /**
- * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Encode takes a `BsonInputValue` and decode returns a `BsonValue`. Its JSON form is canonical MongoDB Extended JSON v2, written with each number and `Uint8Array` as the BSON type the driver stores, so a round trip keeps the BSON bytes but may return wrapper classes such as `Int32` and `Double`.
+ * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Encode takes a `BsonInputValue` and decode returns a `BsonValue`. Its stored form is canonical MongoDB Extended JSON v2, written with each number and `Uint8Array` as the BSON type the driver stores, so a round trip keeps the BSON bytes but may return wrapper classes such as `Int32` and `Double`.
  */
 export const mongoBsonCodec = mongoCodec<
   typeof MONGO_BSON_CODEC_ID,
@@ -207,10 +213,11 @@ export const mongoBsonCodec = mongoCodec<
   BsonValue
 >({
   typeId: MONGO_BSON_CODEC_ID,
-  decode: (wire: BsonInputValue) => decodeBsonValue(wire),
-  encode: (value: BsonInputValue) => encodeBsonValue(value),
-  encodeJson: encodeBsonJson,
-  decodeJson: decodeBsonJson,
+  dataType: mongoBson,
+  fromWire: (wire: BsonInputValue) => decodeBsonValue(wire),
+  toWire: (value: BsonInputValue) => encodeBsonValue(value),
+  toDataTypeValue: bsonToJson,
+  fromDataTypeValue: (value) => readBsonJson(MONGO_BSON_CODEC_ID, value.value),
 });
 
 /**
@@ -237,14 +244,14 @@ export const mongoStandardCodecs = [
 /**
  * Build a {@link CodecDescriptor} for a Mongo wire-type codec.
  *
- * Wraps an existing {@link MongoCodec} instance into a descriptor whose factory hands out the same shared codec. Mongo's full migration to descriptor-first authoring is tracked under TML-2324; for now the descriptor view is composed from the existing `mongoCodec()` outputs.
+ * Wraps an existing {@link MongoCodec} instance into a descriptor whose factory hands out the same shared codec, or, for a codec whose data type has parameters, one built for the column's parameters. Mongo's full migration to descriptor-first authoring is tracked under TML-2324; for now the descriptor view is composed from the existing `mongoCodec()` outputs.
  */
 function descriptorFor<Id extends string>(
   codec: MongoCodec<Id, readonly CodecTrait[]>,
   metadata: {
-    /** The data type the codec represents; its parameter schema is the codec's. */
-    readonly dataType: DataType;
     readonly traits: readonly CodecTrait[];
+    /** Builds the codec for a column's parameters, for a codec whose data type has parameters. */
+    readonly withParams?: (params: DataTypeParams) => MongoCodec<Id, readonly CodecTrait[]>;
     readonly renderOutputType?: (typeParams: Record<string, unknown>) => string | undefined;
     readonly renderValueLiteral?: CodecDescriptor['renderValueLiteral'];
   },
@@ -255,17 +262,23 @@ function descriptorFor<Id extends string>(
   >(metadata.renderOutputType);
   return {
     codecId: codec.id,
-    dataType: metadata.dataType.id,
+    dataType: codec.dataType.id,
     traits: metadata.traits,
     paramsSchema: blindCast<
       CodecDescriptor['paramsSchema'],
       "the codec takes exactly its data type's parameters, and the descriptor list erases each codec's own parameter type"
-    >(metadata.dataType.params),
-    isParameterized: metadata.dataType.params !== undefined,
+    >(codec.dataType.params),
+    isParameterized: codec.dataType.params !== undefined,
     factory: blindCast<
       CodecDescriptor['factory'],
-      'every call hands out the one shared codec, which ignores params'
-    >(() => () => codec),
+      'a codec whose type has no parameters is shared by every column'
+    >((params: DataTypeParams | undefined) => {
+      const built =
+        metadata.withParams === undefined || params === undefined
+          ? codec
+          : metadata.withParams(params);
+      return () => built;
+    }),
     ...ifDefined('renderOutputType', renderOutputType),
     ...ifDefined('renderValueLiteral', metadata.renderValueLiteral),
   };
@@ -290,66 +303,54 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
 };
 
 /**
- * Mongo wire-type codec descriptors. Static metadata for `traits` and `renderOutputType` lives here (the descriptor shape) — `MongoCodec` itself is narrow and only carries the four conversion methods (TML-2357).
+ * Mongo wire-type codec descriptors. Static metadata for `traits` and `renderOutputType` lives here (the descriptor shape) — `MongoCodec` itself carries its data type and the four conversion methods (TML-2357).
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   descriptorFor(mongoObjectIdCodec, {
-    dataType: mongoObjectId,
     traits: ['equality'],
   }),
   descriptorFor(mongoStringCodec, {
-    dataType: mongoString,
     traits: ['equality', 'order', 'textual'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDoubleCodec, {
-    dataType: mongoDouble,
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: (value) => (typeof value === 'number' ? String(value) : undefined),
   }),
   descriptorFor(mongoInt32Codec, {
-    dataType: mongoInt32,
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoBooleanCodec, {
-    dataType: mongoBool,
     traits: ['equality', 'boolean'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDateCodec, {
-    dataType: mongoDate,
     traits: ['equality', 'order'],
   }),
   descriptorFor(mongoVectorCodec, {
-    dataType: mongoVector,
     traits: ['equality'],
     renderOutputType: renderVectorOutputType,
+    withParams: vectorCodec,
   }),
   descriptorFor(mongoInt64Codec, {
-    dataType: mongoInt64,
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: decimalTextBigintLiteral,
   }),
   descriptorFor(mongoInt64NumberCodec, {
-    dataType: mongoInt64,
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: decimalTextNumberLiteral,
   }),
   descriptorFor(mongoDecimal128Codec, {
-    dataType: mongoDecimal128,
     traits: ['equality', 'order', 'numeric'],
   }),
   descriptorFor(mongoBinaryCodec, {
-    dataType: mongoBinary,
     traits: ['equality'],
   }),
   descriptorFor(mongoJsonCodec, {
-    dataType: mongoJson,
     traits: [],
   }),
   descriptorFor(mongoBsonCodec, {
-    dataType: mongoBson,
     traits: [],
   }),
 ];

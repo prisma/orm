@@ -11,12 +11,15 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type DataType,
+  type DataTypeReader,
   isNonFiniteText,
+  refuseJsonValue,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import { pgInt2, pgInt4, pgInt8, pgNumeric } from '@internal/target-postgres/data-types';
 import { structuredError } from '@internal/utils/structured-error';
+import { counted } from '@internal/utils/text';
 import { type as arktype } from 'arktype';
 import { VECTOR_MAX_DIM } from './constants';
 
@@ -70,8 +73,23 @@ export const pgvectorVectorParams = arktype({
   length: `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
 });
 
+/** A `vector(n)` value is an array of exactly `n` finite numbers. */
+const readVector: DataTypeReader = (json, params) => {
+  const length = typeof params['length'] === 'number' ? params['length'] : undefined;
+  const expected =
+    length === undefined
+      ? 'an array of finite numbers'
+      : `an array of ${counted(length, 'finite number')}`;
+  if (!Array.isArray(json) || (length !== undefined && json.length !== length)) {
+    return refuseJsonValue('pgvector/vector', expected, json);
+  }
+  if (!json.every(isFiniteNumber)) return refuseJsonValue('pgvector/vector', expected, json);
+  return json;
+};
+
 export const pgvectorVector = sqlDataType('pgvector/vector', {
   params: pgvectorVectorParams,
+  read: readVector,
   texts: [{ text: 'vector({length})', written: true, catalog: true }],
   listCast: {
     of: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],

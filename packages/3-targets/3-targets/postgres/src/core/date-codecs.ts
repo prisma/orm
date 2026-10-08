@@ -1,4 +1,3 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecImpl,
@@ -6,10 +5,11 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonString,
+  type DataTypeValue,
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { isStructuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import type { PrecisionParams } from './codec-helpers';
@@ -101,6 +101,31 @@ function parseDate(text: string): Date | undefined {
   return isRepresentable(value) ? value : undefined;
 }
 
+/** The canonical instant a stored timestamp with time zone names, or `undefined` for `infinity` and an instant outside the range a `Date` holds. */
+function canonicalInstant(text: string): string | undefined {
+  if (text === 'infinity' || text === '-infinity') return undefined;
+  try {
+    return pgTimestamptzCanonical(text);
+  } catch (error) {
+    if (isStructuredError(error) && error.code === 'CONTRACT.CAST_REFUSED') return undefined;
+    throw error;
+  }
+}
+
+/** The `Date` a stored timestamp with time zone names. A `Date` holds neither `infinity` nor an instant before 4714-11-24 BC or after +275760-09-13, so those are refused. */
+function dateOfStoredText(codecId: string, text: string): Date {
+  const canonical = canonicalInstant(text);
+  const date = canonical === undefined ? undefined : new Date(canonical);
+  if (date === undefined || !isRepresentable(date)) {
+    return refuseJsonValue(
+      codecId,
+      'a timestamp with time zone a Date holds: not infinity, and from 4714-11-24 BC to +275760-09-13',
+      text,
+    );
+  }
+  return date;
+}
+
 function encodeDate(value: Date): string {
   return utcTimestamptzText(validateDate(value), PG_TIMESTAMPTZ_DATE_CODEC_ID);
 }
@@ -111,24 +136,17 @@ export class PgTimestamptzDateCodec extends CodecImpl<
   string,
   Date
 > {
-  async encode(value: Date, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Date, _ctx: CodecCallContext): Promise<string> {
     return encodeDate(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Date> {
     return decodeDate(wire);
   }
-  encodeJson(value: Date): JsonValue {
-    return pgTimestamptzCanonical(validateDate(value).toISOString());
+  fromDataTypeValue(value: DataTypeValue<string>): Date {
+    return dateOfStoredText(this.id, value.value);
   }
-  decodeJson(json: JsonValue): Date {
-    return (
-      parseDate(decodeJsonString(PG_TIMESTAMPTZ_DATE_CODEC_ID, json)) ??
-      refuseJsonValue(
-        PG_TIMESTAMPTZ_DATE_CODEC_ID,
-        'a timestamp with time zone as PostgreSQL writes it',
-        json,
-      )
-    );
+  toDataTypeValue(input: Date): DataTypeValue {
+    return this.dataTypeValueOf(pgTimestamptzCanonical(validateDate(input).toISOString()));
   }
 }
 
@@ -143,10 +161,8 @@ export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<Precisi
   override renderOutputType(_params: PrecisionParams): string {
     return 'Date';
   }
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestamptzDateCodec {
-    return () => new PgTimestamptzDateCodec(this);
+  override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestamptzDateCodec {
+    return () => new PgTimestamptzDateCodec(this, pgTimestamptz, params ?? {});
   }
 }
 

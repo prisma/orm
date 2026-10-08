@@ -3,14 +3,13 @@
  *
  * Mirrors the patterns in `postgres/codecs-class.ts` and `sqlite/codecs-class.ts` for the single `pg/vector@1` codec. Three artifacts:
  *
- * 1. `PgVectorCodec` extends {@link CodecImpl} with the runtime encode/decode/encodeJson/decodeJson conversions inline. Conversions are simple enough (PostgreSQL `[1,2,3]` text format) that no shared helper module is warranted; the class body is the source of truth.
+ * 1. `PgVectorCodec` extends {@link CodecImpl} with the wire and value conversions inline. Conversions are simple enough (PostgreSQL `[1,2,3]` text format) that no shared helper module is warranted; the class body is the source of truth.
  * 2. `PgVectorDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, the `pgvector/vector` data type and its params schema, explicit target behavior, and the emit-path `renderOutputType` producing `Vector<${length}>`. The data type declares the type's name and the bounds of `length`.
  * 3. `pgVectorColumn(length)` per-codec column helper invoking `descriptor.factory({ length })` directly.
  *
- * `length` threads into the runtime codec via the constructor so encode/decode/encodeJson/decodeJson enforce the declared dimension at every ingress path. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
+ * `length` threads into the runtime codec via the constructor so the wire methods enforce the declared dimension, and `pgvector/vector` checks it for every stored value. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecCallContext,
@@ -19,7 +18,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  refuseJsonValue,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -27,7 +26,6 @@ import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
-import { counted } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { VECTOR_CODEC_ID } from './constants';
 import { pgvectorVector, pgvectorVectorParams } from './data-types';
@@ -76,7 +74,7 @@ export class PgVectorCodec extends CodecImpl<
   readonly length: number;
 
   constructor(descriptor: AnyCodecDescriptor, length: number) {
-    super(descriptor);
+    super(descriptor, pgvectorVector, { length });
     this.length = length;
   }
 
@@ -105,12 +103,12 @@ export class PgVectorCodec extends CodecImpl<
     }
   }
 
-  async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: number[], _ctx: CodecCallContext): Promise<string> {
     this.assertVector(value, 'RUNTIME.ENCODE_FAILED');
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<number[]> {
     if (typeof wire !== 'string') {
       throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector wire value must be a string', {
         meta: { codecId: VECTOR_CODEC_ID },
@@ -121,27 +119,13 @@ export class PgVectorCodec extends CodecImpl<
     return value;
   }
 
-  encodeJson(value: number[]): JsonValue {
-    this.assertVector(value, 'RUNTIME.ENCODE_FAILED');
-    return [...value];
+  fromDataTypeValue(value: DataTypeValue<readonly number[]>): number[] {
+    return [...value.value];
   }
 
-  decodeJson(json: JsonValue): number[] {
-    if (!Array.isArray(json) || json.length !== this.length) return this.refuseJson(json);
-    const numbers: number[] = [];
-    for (const element of json) {
-      if (typeof element !== 'number' || !Number.isFinite(element)) return this.refuseJson(json);
-      numbers.push(element);
-    }
-    return numbers;
-  }
-
-  private refuseJson(json: JsonValue): never {
-    return refuseJsonValue(
-      VECTOR_CODEC_ID,
-      `an array of ${counted(this.length, 'finite number')}`,
-      json,
-    );
+  toDataTypeValue(input: number[]): DataTypeValue {
+    this.assertVector(input, 'RUNTIME.ENCODE_FAILED');
+    return this.dataTypeValueOf([...input]);
   }
 }
 
@@ -158,7 +142,7 @@ export class PgVectorCodec extends CodecImpl<
  * text back as a double therefore lands on a different number, so casting the
  * text to `json` would lose precision the value still had. Widening each element
  * to `float8` first keeps the exact value the `real` denotes, which is what
- * `encodeJson` returns.
+ * the stored array holds.
  */
 const jsonArrayFromVectorElements = (expression: ProjectionExpr): ProjectionExpr =>
   FunctionCallExpr.of('array_to_json', [

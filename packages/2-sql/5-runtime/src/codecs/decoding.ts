@@ -280,7 +280,7 @@ async function decodeField(
     }
 
     try {
-      return await codec.decode(elem, cellCtx);
+      return await codec.fromWire(elem, cellCtx);
     } catch (error) {
       if (isStructuredError(error)) throw error;
       wrapDecodeFailure(error, alias, ref, codec, elem);
@@ -297,7 +297,7 @@ async function decodeField(
   }
 
   try {
-    return await codec.decode(wireValue, cellCtx);
+    return await codec.fromWire(wireValue, cellCtx);
   } catch (error) {
     // Any structured envelope (dotted `code` per `isStructuredError`) is
     // stable by construction — let it pass through unchanged. This covers

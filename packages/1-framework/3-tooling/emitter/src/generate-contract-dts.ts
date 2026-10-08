@@ -4,7 +4,7 @@ import type {
   ContractModelBase,
   ContractValueObject,
 } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import { type CodecLookup, readContractValue } from '@internal/framework-components/codec';
 import {
   type EmissionSpi,
   type GenerateContractTypesOptions,
@@ -53,7 +53,8 @@ function generateEnumMemberTypesBlock(
   const entries = Object.entries(enums).map(([name, entry]) => {
     const codec = codecLookup?.get(entry.codecId);
     const memberTupleItems = entry.members.map((m) => {
-      const literal = codec === undefined ? undefined : literalType(codec.decodeJson(m.value));
+      const literal =
+        codec === undefined ? undefined : literalType(readContractValue(codec, m.value, undefined));
       const valueType = literal ?? `CodecTypes[${serializeValue(entry.codecId)}]["output"]`;
       return `{ readonly name: ${serializeValue(m.name)}; readonly value: ${valueType} }`;
     });

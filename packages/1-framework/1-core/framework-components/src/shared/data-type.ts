@@ -1,9 +1,9 @@
 /**
- * Data types and casts.
+ * Data types, their values and casts.
  *
  * A data type is a stored type made first-class. It is owned by the pack that registers it, it
- * names the one canonical form the contract stores for its values, and it declares the casts that
- * say which other types' values it takes and how. A codec is one representation of a data type.
+ * owns its values and the one form the contract stores for each, and it declares the casts that
+ * say which other types' values it takes and how. A codec converts a value of one data type.
  *
  * Casts are declared by the type that receives, never by the source, so there is at most one cast
  * for any pair and the owner of a type is the only one who decides what it takes.
@@ -14,7 +14,9 @@
 import type { JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import type { Type } from 'arktype';
+import { canonicalizeJson } from '../utils/canonicalize-json';
 import { runtimeError } from './runtime-error';
 
 /**
@@ -46,6 +48,41 @@ export interface ListCast {
  */
 export type ToCanonicalForm = (value: JsonValue) => JsonValue;
 
+/** A data type's parameters: an empty object for a type without any. */
+export type DataTypeParams = Readonly<Record<string, unknown>>;
+
+class DataTypeValueRecord<J extends JsonValue> {
+  readonly #constructedByItsType = true;
+
+  constructor(
+    readonly type: DataTypeId,
+    readonly params: DataTypeParams,
+    readonly value: J,
+  ) {
+    Object.freeze(this);
+  }
+
+  static isConstructed(value: unknown): boolean {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      #constructedByItsType in value &&
+      value.#constructedByItsType
+    );
+  }
+}
+
+/**
+ * A value of a data type: the type's id, the parameters it holds the value under, and `value`, the JSON form `contract.json` stores. Only a data type constructs one, through {@link DataType.fromContract} and {@link DataType.withParams}. ADR 254.
+ */
+export type DataTypeValue<J extends JsonValue = JsonValue> = DataTypeValueRecord<J>;
+
+/** Reads JSON the type stores, under the type's parameters, and returns it; it refuses any other JSON, and a value the parameters exclude, with `refuseJsonValue`. */
+export type DataTypeReader = (json: JsonValue, params: DataTypeParams) => JsonValue;
+
+/** The spelling a type's parameters give a value the reader accepted, for a type whose parameters change how a value is written. */
+export type DataTypeSpelling = (json: JsonValue, params: DataTypeParams) => JsonValue;
+
 export interface DataType {
   readonly id: DataTypeId;
   /** An arktype object schema of the type's parameters. A type without one has no parameters. */
@@ -58,6 +95,12 @@ export interface DataType {
    * through `canonicalFormOf`, which takes a codec's own form in its place.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
+  /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, and a value the parameters exclude. */
+  fromContract(json: JsonValue, params: DataTypeParams): DataTypeValue;
+  /** The JSON `contract.json` stores for `value`. */
+  toContract(value: DataTypeValue): JsonValue;
+  /** `value` under `params`: it refuses a value they exclude and writes the spelling they give it. */
+  withParams(value: DataTypeValue, params: DataTypeParams): DataTypeValue;
 }
 
 export interface DataTypeSpec {
@@ -65,6 +108,8 @@ export interface DataTypeSpec {
   readonly casts?: Readonly<Record<string, Cast>>;
   readonly listCast?: { readonly of: readonly string[]; readonly cast: ListCast['cast'] };
   readonly toCanonicalForm?: ToCanonicalForm;
+  readonly read: DataTypeReader;
+  readonly spell?: DataTypeSpelling;
 }
 
 /** The assembled types of one stack, by id. */
@@ -90,20 +135,69 @@ export function dataTypeId(id: string): DataTypeId {
 
 /** Declare a data type. Every id it names, its own and each cast's source, is validated here. */
 export function dataType(id: string, spec: DataTypeSpec): DataType {
+  const typeId = dataTypeId(id);
   const casts: Record<string, Cast> = {};
   for (const [source, cast] of Object.entries(spec.casts ?? {})) {
     casts[dataTypeId(source)] = cast;
   }
   const listCast = spec.listCast;
+  const { read, spell } = spec;
+  const ownValue = (value: DataTypeValue): DataTypeValue => {
+    if (value.type !== typeId || !DataTypeValueRecord.isConstructed(value)) {
+      throw new InternalError(`A value of ${value.type} was handed to the data type ${typeId}.`);
+    }
+    return value;
+  };
+  const construct = (json: JsonValue, params: DataTypeParams): DataTypeValue =>
+    new DataTypeValueRecord(typeId, Object.freeze({ ...params }), json);
   return {
-    id: dataTypeId(id),
+    id: typeId,
     ...ifDefined('params', spec.params),
     casts,
     ...(listCast === undefined
       ? {}
       : { listCast: { of: listCast.of.map(dataTypeId), cast: listCast.cast } }),
     ...(spec.toCanonicalForm === undefined ? {} : { toCanonicalForm: spec.toCanonicalForm }),
+    fromContract: (json, params) => construct(read(json, params), params),
+    toContract: (value) => ownValue(value).value,
+    withParams: (value, params) => {
+      const json = read(ownValue(value).value, params);
+      return construct(spell === undefined ? json : spell(json, params), params);
+    },
   };
+}
+
+/**
+ * The value of `type` that `json` gives under `params`, in the spelling the parameters give it. A codec builds every value it hands over through this, so it cannot hand over one its type does not hold.
+ */
+export function dataTypeValueFor<J extends JsonValue>(
+  type: DataType,
+  params: DataTypeParams,
+  json: J,
+): DataTypeValue<J> {
+  return blindCast<
+    DataTypeValue<J>,
+    "a type's reader and spelling return JSON of the kind they read"
+  >(type.withParams(type.fromContract(json, params), params));
+}
+
+/** The parameters in `typeParams` that `type` declares; keys a codec keeps for itself are dropped. */
+export function dataTypeParamsOf(type: DataType, typeParams: unknown): DataTypeParams {
+  if (typeof typeParams !== 'object' || typeParams === null) return {};
+  const kept: Record<string, unknown> = {};
+  for (const key of objectSchemaKeys(type.params) ?? []) {
+    if (Object.hasOwn(typeParams, key)) kept[key] = Reflect.get(typeParams, key);
+  }
+  return kept;
+}
+
+/** Whether two values are one: the same type, equal parameters, and JSON equal as canonical JSON. */
+export function dataTypeValuesEqual(a: DataTypeValue, b: DataTypeValue): boolean {
+  return (
+    a.type === b.type &&
+    canonicalizeJson(a.params) === canonicalizeJson(b.params) &&
+    canonicalizeJson(a.value) === canonicalizeJson(b.value)
+  );
 }
 
 type SchemaProp = { readonly key: PropertyKey; readonly kind?: unknown };

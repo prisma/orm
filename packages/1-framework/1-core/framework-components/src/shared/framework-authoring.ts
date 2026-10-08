@@ -277,7 +277,7 @@ export interface AuthoringEntityContext {
   /** Push channel for non-fatal authoring-time warnings emitted by the factory. */
   readonly warnings?: AuthoringWarningSink;
   /**
-   * Reads a number literal written in the contract source, such as an enum member's value, from its source text the way a column default is read: the literal gives a value of a data type, the codec's data type takes it directly or through a cast, and the codec checks it. Returns the value's stored form, or why it is refused, worded for `subject`. Without it, or when it returns `undefined` for a codec the stack registers no descriptor for, the codec's `decodeJson` reads the number.
+   * Reads a number literal written in the contract source, such as an enum member's value, from its source text the way a column default is read: the literal gives a value of a data type, the codec's data type takes it directly or through a cast, and the codec checks it. Returns the value's stored form, or why it is refused, worded for `subject`. Without it, or when it returns `undefined` for a codec the stack registers no descriptor for, the codec's data type and then the codec read the number.
    */
   readonly readWrittenNumber?: (input: {
     readonly text: string;

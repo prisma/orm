@@ -144,7 +144,7 @@ export const mongoFamilyEnumEntityDescriptor = {
 
       let unlistedMember = false;
       for (const member of members) {
-        const stored = codec.encodeJson(member.value);
+        const stored = codec.dataType.toContract(codec.toDataTypeValue(member.value));
         if (storedJsonTypeOf(stored) === storedJsonType) continue;
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',

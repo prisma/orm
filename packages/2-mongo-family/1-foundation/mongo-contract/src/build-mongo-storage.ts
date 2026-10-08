@@ -19,7 +19,7 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
   if (!codec) {
     throw errorEnumCodecNotInPackStack({ codecId });
   }
-  return codec.encodeJson(value);
+  return codec.dataType.toContract(codec.toDataTypeValue(value));
 }
 
 /**

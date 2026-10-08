@@ -10,20 +10,21 @@
  * A projection conforms when both of these hold:
  *
  * 1. the parsed value, in the canonical form of the codec's data type when the
- *    type declares one (ADR 254), deep-equals `codec.encodeJson(value)` — the
- *    codec's current `encodeJson` is the yardstick and the projection is its SQL
- *    realization; and
- * 2. `codec.decodeJson` turns the parsed value back into the application value
- *    the case started from.
+ *    type declares one (ADR 254), deep-equals the stored JSON of
+ *    `codec.toDataTypeValue(value)` — the codec's current `toDataTypeValue` is
+ *    the yardstick and the projection is its SQL realization; and
+ * 2. the codec's data type reads the parsed value and `codec.fromDataTypeValue`
+ *    turns it back into the application value the case started from.
  *
  * Both conditions are measured against the codec's methods as they stand.
- * Conformance is therefore agreement with today's `encodeJson` / `decodeJson`,
- * not a claim that either is already in its final form: a codec that still owes
- * a change to its own JSON representation conforms here until that change
- * lands.
+ * Conformance is therefore agreement with today's `toDataTypeValue` /
+ * `fromDataTypeValue`, not a claim that either is already in its final form.
+ *
+ * For every case the harness also checks that `toDataTypeValue(fromDataTypeValue(v))`
+ * equals `v`, where `v` is the value `toDataTypeValue` gives for the case.
  *
  * The second condition is what makes the harness an oracle rather than a
- * tautology: a codec whose `encodeJson` loses information the same way the
+ * tautology: a codec whose `toDataTypeValue` loses information the same way the
  * database's native JSON conversion does satisfies condition 1 while still
  * failing to carry the value.
  *
@@ -49,6 +50,8 @@ import type { CodecRef } from '@internal/framework-components/codec';
 import {
   canonicalFormOf,
   createDataTypeLookup,
+  dataTypeValuesEqual,
+  readContractValue,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
@@ -75,21 +78,23 @@ export interface ConformanceConnection {
 }
 
 /**
- * How a projection can disagree with its codec's current `encodeJson` /
- * `decodeJson`. The kinds are materially different — a projection whose SQL
+ * How a projection can disagree with its codec's current `toDataTypeValue` /
+ * `fromDataTypeValue`. The kinds are materially different — a projection whose SQL
  * will not execute and one that merely rounds a digit are not the same defect —
  * so a case that records one kind is not satisfied by another.
  */
 export type ProjectionFailureKind =
   /** The projection SQL did not execute. */
   | 'execution'
-  /** `encodeJson` refused the application value. */
-  | 'encode-json-rejects'
-  /** The parsed value disagrees with `encodeJson`. */
+  /** `toDataTypeValue` refused the application value. */
+  | 'to-data-type-value-rejects'
+  /** `toDataTypeValue(fromDataTypeValue(v))` is not `v`. */
+  | 'value-round-trip'
+  /** The parsed value disagrees with `toDataTypeValue`. */
   | 'mismatch'
-  /** `decodeJson` refused the projected value. */
-  | 'decode-json-rejects'
-  /** The parsed value agrees with `encodeJson` but does not carry the application value back. */
+  /** The data type or `fromDataTypeValue` refused the projected value. */
+  | 'from-data-type-value-rejects'
+  /** The parsed value agrees with `toDataTypeValue` but does not carry the application value back. */
   | 'lossy-round-trip';
 
 export interface ProjectionFailure {
@@ -115,7 +120,7 @@ export interface SqliteCodecConformanceCase {
   readonly descriptor?: AnySqliteCodecDescriptor;
   /** Identifies the value under test within its codec's cases. */
   readonly label: string;
-  /** Application-level value handed to `codec.encode` and `codec.encodeJson`. */
+  /** Application-level value handed to `codec.toWire` and `codec.toDataTypeValue`. */
   readonly value: unknown;
   /** SQLite column type the value is stored in. */
   readonly storageType: string;
@@ -131,14 +136,14 @@ export interface SqliteCodecConformanceCase {
    * in the column, which is a different thing from the column being empty. A
    * mode is the only shape that expresses the column state for every codec.
    *
-   * The runtime never calls `decodeJson` for a null (`collection-dispatch`
+   * The runtime never reads a null as a value of the column's type (`collection-dispatch`
    * short-circuits it), so neither does the harness; what a null case measures
    * is that the projection carries absence through as absence.
    */
   readonly nullValue?: true;
   /**
    * How this case's projection currently disagrees with the codec's
-   * `encodeJson` / `decodeJson`, when it does. The suite asserts that a marked
+   * `toDataTypeValue` / `fromDataTypeValue`, when it does. The suite asserts that a marked
    * case still fails *and still fails this way*, so neither the marker nor its
    * recorded kind can rot as projections change.
    */
@@ -152,11 +157,11 @@ export interface CodecProjectionOutcome {
   readonly rawJson: string | undefined;
   /** The projected value parsed out of that document. */
   readonly projected: JsonValue | undefined;
-  /** What `codec.encodeJson` specifies the projected value must equal. */
+  /** The stored JSON of `codec.toDataTypeValue(value)`, which the projected value must equal. */
   readonly expected: JsonValue | undefined;
   /**
-   * How the projection disagreed with the codec's current `encodeJson` /
-   * `decodeJson`, or `undefined` when it agreed and the value round-tripped.
+   * How the projection disagreed with the codec's current `toDataTypeValue` /
+   * `fromDataTypeValue`, or `undefined` when it agreed and the value round-tripped.
    */
   readonly failure: ProjectionFailure | undefined;
 }
@@ -260,7 +265,7 @@ export async function runSqliteCodecProjection(
   if (conformanceCase.nullValue === true) {
     await connection.query(`INSERT INTO "${STORAGE_TABLE}" ("${VALUE_COLUMN}") VALUES (NULL)`);
   } else {
-    const wire = await codec.encode(conformanceCase.value, {});
+    const wire = await codec.toWire(conformanceCase.value, {});
     await connection.query(`INSERT INTO "${STORAGE_TABLE}" ("${VALUE_COLUMN}") VALUES (?)`, [wire]);
   }
 
@@ -307,8 +312,10 @@ export async function runSqliteCodecProjection(
   }
 
   let expected: JsonValue;
+  let value: ReturnType<typeof codec.toDataTypeValue>;
   try {
-    expected = codec.encodeJson(conformanceCase.value);
+    value = codec.toDataTypeValue(conformanceCase.value);
+    expected = codec.dataType.toContract(value);
   } catch (error) {
     return {
       sql,
@@ -316,13 +323,24 @@ export async function runSqliteCodecProjection(
       projected,
       expected: undefined,
       failure: {
-        kind: 'encode-json-rejects',
-        detail: `encodeJson rejects the value: ${describeError(error)}`,
+        kind: 'to-data-type-value-rejects',
+        detail: `toDataTypeValue rejects the value: ${describeError(error)}`,
       },
     };
   }
 
   const base = { sql, rawJson, projected, expected } as const;
+
+  const again = codec.toDataTypeValue(codec.fromDataTypeValue(value));
+  if (!dataTypeValuesEqual(again, value)) {
+    return {
+      ...base,
+      failure: {
+        kind: 'value-round-trip',
+        detail: `toDataTypeValue(fromDataTypeValue(v)) is not v: ${JSON.stringify(value.value)} came back as ${JSON.stringify(again.value)}`,
+      },
+    };
+  }
 
   let canonical: JsonValue;
   try {
@@ -342,20 +360,20 @@ export async function runSqliteCodecProjection(
       ...base,
       failure: {
         kind: 'mismatch',
-        detail: `projected ${JSON.stringify(projected)} but encodeJson specifies ${JSON.stringify(expected)}`,
+        detail: `projected ${JSON.stringify(projected)} but toDataTypeValue specifies ${JSON.stringify(expected)}`,
       },
     };
   }
 
   let roundTripped: unknown;
   try {
-    roundTripped = codec.decodeJson(projected);
+    roundTripped = readContractValue(codec, projected, conformanceCase.typeParams);
   } catch (error) {
     return {
       ...base,
       failure: {
-        kind: 'decode-json-rejects',
-        detail: `decodeJson rejects the projected value: ${describeError(error)}`,
+        kind: 'from-data-type-value-rejects',
+        detail: `the data type or fromDataTypeValue rejects the projected value: ${describeError(error)}`,
       },
     };
   }
@@ -365,7 +383,7 @@ export async function runSqliteCodecProjection(
       ...base,
       failure: {
         kind: 'lossy-round-trip',
-        detail: `the projection loses information: decodeJson returned ${String(roundTripped)} for an application value of ${String(conformanceCase.value)}`,
+        detail: `the projection loses information: fromDataTypeValue returned ${String(roundTripped)} for an application value of ${String(conformanceCase.value)}`,
       },
     };
   }

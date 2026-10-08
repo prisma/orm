@@ -7,7 +7,7 @@
  */
 
 export type { Codec } from '../shared/codec';
-export { CodecImpl } from '../shared/codec';
+export { CodecImpl, readContractValue } from '../shared/codec';
 export type {
   AnyCodecDescriptor,
   AnyCodecDescriptorTemplate,
@@ -45,7 +45,11 @@ export type {
   DataType,
   DataTypeId,
   DataTypeLookup,
+  DataTypeParams,
+  DataTypeReader,
   DataTypeSpec,
+  DataTypeSpelling,
+  DataTypeValue,
   ListCast,
   ToCanonicalForm,
 } from '../shared/data-type';
@@ -55,27 +59,30 @@ export {
   DATA_TYPE_ID_PATTERN,
   dataType,
   dataTypeId,
+  dataTypeParamsOf,
+  dataTypeValueFor,
+  dataTypeValuesEqual,
   objectSchemaKeys,
   requiredParamKeys,
   requiredSchemaKeys,
 } from '../shared/data-type';
-export type { BigIntRange, IntegerRange } from '../shared/decode-json';
+export type { BigIntRange, IntegerRange } from '../shared/json-readers';
 export {
-  decodeJsonBoolean,
-  decodeJsonFloat,
-  decodeJsonInteger,
-  decodeJsonIntegerText,
-  decodeJsonMatching,
-  decodeJsonString,
-  encodeJsonFloat,
+  floatToJson,
   INT32_RANGE,
   INT64_RANGE,
   isIntegerIn,
   isNonFiniteText,
+  readJsonBoolean,
+  readJsonFloat,
+  readJsonInteger,
+  readJsonIntegerText,
+  readJsonMatching,
+  readJsonString,
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
-} from '../shared/decode-json';
+} from '../shared/json-readers';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

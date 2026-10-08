@@ -6,11 +6,15 @@ import type { ContractEnum } from './domain-types';
 import type { JsonValue } from './types';
 
 /**
- * The two conversions of an enum's codec that its accessor uses: `decodeJson` reads a member's stored form as the value the application reads from the database, and `encodeJson` writes a value in its stored form, which is how values are compared.
+ * What an enum's accessor uses of its codec: the codec's data type reads a member's stored form as a value, which `fromDataTypeValue` turns into the value the application reads from the database; `toDataTypeValue` and the type's `toContract` write a value in its stored form, which is how values are compared.
  */
 export interface EnumMemberCodec {
-  decodeJson(json: JsonValue): unknown;
-  encodeJson(value: unknown): JsonValue;
+  readonly dataType: {
+    fromContract(json: JsonValue, params: Readonly<Record<string, unknown>>): unknown;
+    toContract(value: unknown): JsonValue;
+  };
+  fromDataTypeValue(value: unknown): unknown;
+  toDataTypeValue(value: unknown): unknown;
 }
 
 /** The codec an enum's `codecId` names. */
@@ -55,10 +59,14 @@ export function createEnumAccessor(
 ): EnumAccessor {
   const read = (stored: JsonValue): unknown => {
     const copy = structuredClone(stored);
-    return codec === undefined ? copy : codec.decodeJson(copy);
+    return codec === undefined
+      ? copy
+      : codec.fromDataTypeValue(codec.dataType.fromContract(copy, {}));
   };
   const storedFormKey = (value: object): string =>
-    canonicalStringify(codec === undefined ? value : codec.encodeJson(value));
+    canonicalStringify(
+      codec === undefined ? value : codec.dataType.toContract(codec.toDataTypeValue(value)),
+    );
 
   const entries = contractEnum.members.map((member) => {
     const value = read(member.value);

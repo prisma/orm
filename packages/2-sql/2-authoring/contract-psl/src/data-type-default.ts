@@ -1,8 +1,9 @@
 /**
  * Reading a `@default(...)` value: a written value is read by the authoring entry for the syntax it
  * is written in, which gives it a data type; the column's type takes it directly or through a cast;
- * the column's codec, built with the column's type parameters, reads it with `decodeJson`, which
- * refuses a value the column would not store; and it is stored in the canonical form of the
+ * the column's type gives it the column's parameters with `withParams`, which refuses a value they
+ * exclude and writes the spelling they give it; the column's codec, built with the column's type
+ * parameters, checks it with `fromDataTypeValue`; and it is stored in the canonical form of the
  * column's values, which `canonicalFormOf` gives.
  *
  * No per-type code and no per-codec branch live here. ADR 254.
@@ -36,6 +37,8 @@ import type {
 import {
   canonicalFormOf,
   codecForRef,
+  dataTypeParamsOf,
+  dataTypeValueFor,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
@@ -44,7 +47,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 
-/** A written value the column's codec refuses. */
+/** A written value the column's type, under the column's parameters, or the column's codec refuses. */
 export const PSL_INVALID_DEFAULT_LITERAL: ContributedPslDiagnosticCode =
   'PSL_INVALID_DEFAULT_LITERAL';
 
@@ -60,9 +63,9 @@ export interface DefaultColumn {
   readonly typeParams?: Record<string, unknown> | undefined;
 }
 
-/** A value in its stored JSON form that the column's codec refuses. */
+/** A value in its stored JSON form that the column's type, under the column's parameters, or the column's codec refuses. */
 type CodecRefusal = {
-  readonly kind: 'refused-by-codec';
+  readonly kind: 'refused-by-column';
   readonly codecId: string;
   readonly message: string;
   readonly elementIndex: number | undefined;
@@ -191,7 +194,7 @@ function inCanonicalForm(
 }
 
 /**
- * The column's codec descriptor, and `read`, which reads a value in its stored JSON form with the column's codec, built with the column's type parameters, and gives it the canonical form of the column's values.
+ * The column's codec descriptor, and `read`, which makes a value in its stored JSON form a value of the column's type under the column's parameters, checks it with the column's codec, built with those parameters, and gives it the canonical form of the column's values.
  */
 function storedValueReader(input: {
   readonly column: DefaultColumn;
@@ -214,15 +217,19 @@ function storedValueReader(input: {
   }
   const suggestedTypes = [descriptor.dataType];
   const toCanonicalForm = canonicalFormOf(descriptor, input.dataTypeLookup);
+  const params = dataTypeParamsOf(codec.dataType, input.column.typeParams);
   const read = (written: JsonValue, elementIndex: number | undefined): StoredReadResult => {
+    let stored: JsonValue;
     try {
-      codec.decodeJson(written);
+      const value = dataTypeValueFor(codec.dataType, params, written);
+      codec.fromDataTypeValue(value);
+      stored = codec.dataType.toContract(value);
     } catch (error) {
       if (isInternalError(error)) throw error;
       return {
         ok: false,
         refusal: {
-          kind: 'refused-by-codec',
+          kind: 'refused-by-column',
           codecId: input.column.codecId,
           message: messageOf(error),
           elementIndex,
@@ -230,13 +237,13 @@ function storedValueReader(input: {
         suggestedTypes,
       };
     }
-    return inCanonicalForm(toCanonicalForm, written, elementIndex, suggestedTypes);
+    return inCanonicalForm(toCanonicalForm, stored, elementIndex, suggestedTypes);
   };
   return { descriptor, read };
 }
 
 /**
- * Reads a value already in its stored JSON form, such as one member of a JSON document default, with the column's codec, and gives it the canonical form of the column's values. Worded as {@link lowerDataTypeDefault} words the same refusals.
+ * Reads a value already in its stored JSON form, such as one member of a JSON document default, as a value of the column's type checked by the column's codec, and gives it the canonical form of the column's values. Worded as {@link lowerDataTypeDefault} words the same refusals.
  */
 export function readStoredValue(input: {
   readonly value: JsonValue;
@@ -473,7 +480,7 @@ function codecRefusalDiagnostic(refusal: CodecRefusal, subject: string): Default
 }
 
 function storedRefusalDiagnostic(refusal: StoredRefusal, subject: string): DefaultDiagnostic {
-  if (refusal.kind === 'refused-by-codec') return codecRefusalDiagnostic(refusal, subject);
+  if (refusal.kind === 'refused-by-column') return codecRefusalDiagnostic(refusal, subject);
   return {
     ok: false,
     code: 'PSL_INVALID_LITERAL',
@@ -502,7 +509,7 @@ function refusalDiagnostic(
         message: `${where}: this column holds a list, so its default is a list literal, as in [1, 2]`,
         place: { kind: 'attribute' },
       };
-    case 'refused-by-codec':
+    case 'refused-by-column':
       return codecRefusalDiagnostic(refusal, subject);
     case 'no-list-cast':
       return {

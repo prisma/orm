@@ -22,7 +22,6 @@
  * (e.g. SRID cross-checks) without rewriting the constructor.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecCallContext,
@@ -31,7 +30,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonMatching,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
@@ -44,8 +43,6 @@ import { postgisGeometry, postgisGeometryParams } from './data-types';
 import { postgisError } from './errors';
 import { decodeEWKBHex, encodeEWKBHex, encodeEWKT } from './ewkb';
 import type { Geometry } from './geojson';
-
-const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
 
 type GeometryParams = { readonly srid?: number };
 
@@ -85,16 +82,16 @@ export class PostgisGeometryCodec extends CodecImpl<
   string,
   Geometry
 > {
-  constructor(descriptor: AnyCodecDescriptor) {
-    super(descriptor);
+  constructor(descriptor: AnyCodecDescriptor, params: GeometryParams) {
+    super(descriptor, postgisGeometry, params);
   }
 
-  async encode(value: Geometry, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Geometry, _ctx: CodecCallContext): Promise<string> {
     assertGeometry(value);
     return encodeEWKT(value);
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Geometry> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Geometry> {
     if (typeof wire !== 'string') {
       throw postgisError('RUNTIME.DECODE_FAILED', 'Geometry wire value must be a string', {
         meta: { codecId: POSTGIS_GEOMETRY_CODEC_ID },
@@ -103,15 +100,13 @@ export class PostgisGeometryCodec extends CodecImpl<
     return decodeEWKBHex(wire);
   }
 
-  encodeJson(value: Geometry): JsonValue {
-    assertGeometry(value);
-    return encodeEWKBHex(value);
+  fromDataTypeValue(value: DataTypeValue<string>): Geometry {
+    return decodeEWKBHex(value.value);
   }
 
-  decodeJson(json: JsonValue): Geometry {
-    return decodeEWKBHex(
-      decodeJsonMatching(POSTGIS_GEOMETRY_CODEC_ID, json, HEX_TEXT, 'a HEXEWKB string'),
-    );
+  toDataTypeValue(input: Geometry): DataTypeValue {
+    assertGeometry(input);
+    return this.dataTypeValueOf(encodeEWKBHex(input));
   }
 }
 
@@ -135,8 +130,8 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
    * the wire format already carries SRID inside the EWKT/EWKB payload,
    * so codec behavior is parameter-independent.
    */
-  override factory(_params: GeometryParams): (ctx: CodecInstanceContext) => PostgisGeometryCodec {
-    return () => new PostgisGeometryCodec(this);
+  override factory(params: GeometryParams): (ctx: CodecInstanceContext) => PostgisGeometryCodec {
+    return () => new PostgisGeometryCodec(this, params ?? {});
   }
 }
 

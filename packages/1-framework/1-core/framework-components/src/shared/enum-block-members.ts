@@ -1,7 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { isInternalError } from '@internal/utils/internal-error';
-import type { Codec } from './codec';
+import { type Codec, readContractValue } from './codec';
 import type { AuthoringEntityContext } from './framework-authoring';
 import type { ParsedPslExtensionBlock } from './psl-extension-block';
 
@@ -11,7 +11,7 @@ export interface EnumBlockMember {
 }
 
 /**
- * Reads the members of an `enum` block through its codec. A member written as a number literal is read from its source text as a column default is read, when the family gives a reader for it (`ctx.readWrittenNumber`), so no digit is lost; when that reader refuses the number, the codec's `decodeJson` reads it, and only if the codec refuses it too is the reader's reason reported. Every other member goes to the codec's `decodeJson`, and a bare member is read from its own name.
+ * Reads the members of an `enum` block through its codec. A member written as a number literal is read from its source text as a column default is read, when the family gives a reader for it (`ctx.readWrittenNumber`), so no digit is lost; when that reader refuses the number, the codec's data type and then the codec read it, and only if they refuse it too is the reader's reason reported. Every other member is read the same way, as a value of the codec's data type converted by `fromDataTypeValue`, and a bare member is read from its own name.
  * Pushes a diagnostic and returns `undefined` when the codec refuses a member, when two members
  * store the same value, or when the block has no members. Shared by every family's enum factory.
  */
@@ -44,7 +44,7 @@ export function readEnumBlockMembers(
         : memberValue;
     let read: unknown;
     try {
-      read = codec.decodeJson(written);
+      read = readContractValue(codec, written, undefined);
     } catch (err) {
       if (isInternalError(err)) throw err;
       diagnostics?.push(
@@ -68,7 +68,7 @@ export function readEnumBlockMembers(
       continue;
     }
 
-    const stored = codec.encodeJson(read);
+    const stored = codec.dataType.toContract(codec.toDataTypeValue(read));
     const storedKey = canonicalStringify(stored);
     const earlier = memberByStoredValue.get(storedKey);
     if (earlier !== undefined) {

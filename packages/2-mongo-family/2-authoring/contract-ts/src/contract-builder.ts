@@ -83,10 +83,10 @@ import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
 
 /**
- * Encode an authored enum value to its codec-encoded JSON form, mirroring SQL's `build-contract`.
+ * Encode an authored enum value to the JSON its codec's data type stores, mirroring SQL's `build-contract`.
  *
  * The codec is resolved by id from the lookup built from the contract's target pack, so a
- * non-identity `encodeJson` (permitted by the `mongoCodec` factory) is respected. A codecId the
+ * codec whose application value differs from the stored JSON is respected. A codecId the
  * lookup cannot resolve is a hard error: the enum uses a codec that is not part of the contract's
  * pack stack.
  */
@@ -95,7 +95,7 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
   if (!codec) {
     throw errorEnumCodecNotInPackStack({ codecId });
   }
-  return codec.encodeJson(value);
+  return codec.dataType.toContract(codec.toDataTypeValue(value));
 }
 
 function assertEnumCanUseCodec(
@@ -2559,7 +2559,7 @@ function buildContractFromDefinition<
   });
 
   // Resolve the target's codecs by id from the pack the contract binds, then encode each enum's
-  // member values through `codec.encodeJson` — the same real codecs the runtime/control stacks use.
+  // member values through `codec.toDataTypeValue` — the same real codecs the runtime/control stacks use.
   const codecLookup = extractCodecLookup([definition.target]);
 
   // The value set stores each enum's codec-encoded member values (mirroring SQL's build-contract).

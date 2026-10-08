@@ -1,8 +1,7 @@
 /**
- * The stored text of the date and time types whose codecs carry PostgreSQL's own text: the
- * canonical form a codec's `encodeJson` writes (ADR 254), and what PostgreSQL writes for the type
- * as text and as JSON under the ISO DateStyle. A codec's `decodeJson` reads these and refuses any
- * other text.
+ * The stored text of the date and time types: the canonical form a value of the type takes (ADR
+ * 254), and what PostgreSQL writes for the type as text and as JSON under the ISO DateStyle. Each
+ * type's reader reads these and refuses any other text.
  *
  * PostgreSQL holds values the canonical form does not: a date up to the year 5874897, and
  * `24:00:00` as a time of day. So the check is of the form and of a real date and time of day, and
@@ -11,10 +10,9 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { decodeJsonMatching, refuseJsonValue } from '@internal/framework-components/codec';
+import { readJsonMatching, refuseJsonValue } from '@internal/framework-components/codec';
 import { canonicalDateTime, type DateTimeShape } from '@internal/sql-contract/data-type-support';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { pgDate, pgTime, pgTimestamp, pgTimestamptz, pgTimetz } from './data-types';
 
 const YEAR = String.raw`(?:[+-]\d{6}|\d{4,7})`;
 const DATE = String.raw`${YEAR}-\d{2}-\d{2}`;
@@ -37,7 +35,7 @@ const END_OF_DAY = /^24:00:00(?:\.0+)?(?![.\d])/;
 /** PostgreSQL's largest UTC offset, which it writes for no type past 15:59:59. */
 const MAX_OFFSET_HOURS = 15;
 
-interface StoredDateTimeText {
+export interface StoredDateTimeText {
   readonly dataType: string;
   readonly shape: DateTimeShape;
   readonly pattern: RegExp;
@@ -62,35 +60,35 @@ function storedText(options: {
 }
 
 export const pgDateStoredText = storedText({
-  dataType: pgDate.id,
+  dataType: 'pg/date',
   shape: 'date',
   description: 'a date',
   infinity: true,
   endOfDay: false,
 });
 export const pgTimeStoredText = storedText({
-  dataType: pgTime.id,
+  dataType: 'pg/time',
   shape: 'time',
   description: 'a time of day',
   infinity: false,
   endOfDay: true,
 });
 export const pgTimetzStoredText = storedText({
-  dataType: pgTimetz.id,
+  dataType: 'pg/timetz',
   shape: 'timeWithOffset',
   description: 'a time of day with a UTC offset',
   infinity: false,
   endOfDay: true,
 });
 export const pgTimestampStoredText = storedText({
-  dataType: pgTimestamp.id,
+  dataType: 'pg/timestamp',
   shape: 'dateTime',
   description: 'a date and time of day',
   infinity: true,
   endOfDay: false,
 });
 export const pgTimestamptzStoredText = storedText({
-  dataType: pgTimestamptz.id,
+  dataType: 'pg/timestamptz',
   shape: 'instant',
   description: 'a date and time of day with a UTC offset',
   infinity: true,
@@ -128,12 +126,10 @@ function holdsValue(stored: StoredDateTimeText, text: string): boolean {
   }
 }
 
-/** Reads a stored date or time text, refusing text in another form or naming no real date and time. */
-export function decodeJsonDateTimeText(
-  codecId: string,
-  json: JsonValue,
-  stored: StoredDateTimeText,
-): string {
-  const text = decodeJsonMatching(codecId, json, stored.pattern, stored.description);
-  return holdsValue(stored, text) ? text : refuseJsonValue(codecId, stored.description, json);
+/** Reads the stored text of a date or time type, refusing text in another form or naming no real date and time. */
+export function readJsonDateTimeText(json: JsonValue, stored: StoredDateTimeText): string {
+  const text = readJsonMatching(stored.dataType, json, stored.pattern, stored.description);
+  return holdsValue(stored, text)
+    ? text
+    : refuseJsonValue(stored.dataType, stored.description, json);
 }

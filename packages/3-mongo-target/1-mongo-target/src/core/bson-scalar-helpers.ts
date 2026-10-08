@@ -1,11 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
-  decodeJsonInteger,
-  decodeJsonIntegerText,
-  decodeJsonMatching,
   INT32_RANGE,
   INT64_RANGE,
   isIntegerIn,
+  readJsonInteger,
+  readJsonIntegerText,
+  readJsonMatching,
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
@@ -161,18 +161,18 @@ export function int32Encode(codecId: string, value: number): number {
   return value;
 }
 
-export function objectIdEncodeJson(codecId: string, value: string): string {
+export function objectIdToJson(codecId: string, value: string): string {
   if (typeof value !== 'string' || !OBJECT_ID_TEXT.test(value)) {
     encodeFailed(codecId, 'value must be 24 hexadecimal digits', value);
   }
   return value;
 }
 
-export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
-  return decodeJsonMatching(codecId, json, OBJECT_ID_TEXT, '24 hexadecimal digits');
+export function readObjectIdJson(owner: string, json: JsonValue): string {
+  return readJsonMatching(owner, json, OBJECT_ID_TEXT, '24 hexadecimal digits');
 }
 
-export function int32EncodeJson(codecId: string, value: number): number {
+export function int32ToJson(codecId: string, value: number): number {
   if (!isIntegerIn(value, INT32_RANGE)) {
     encodeFailed(
       codecId,
@@ -183,11 +183,11 @@ export function int32EncodeJson(codecId: string, value: number): number {
   return value;
 }
 
-export function int32DecodeJson(codecId: string, json: JsonValue): number {
-  return decodeJsonInteger(codecId, json, INT32_RANGE);
+export function readInt32Json(owner: string, json: JsonValue): number {
+  return readJsonInteger(owner, json, INT32_RANGE);
 }
 
-export function dateEncodeJson(codecId: string, value: Date): string {
+export function dateToJson(codecId: string, value: Date): string {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     encodeFailed(codecId, 'value must be a valid Date', value);
   }
@@ -197,20 +197,19 @@ export function dateEncodeJson(codecId: string, value: Date): string {
 /**
  * The JSON form is the text `Date.toISOString()` writes, so a string that does not read back to that same text is refused.
  */
-export function dateDecodeJson(codecId: string, json: JsonValue): Date {
+export function readDateJson(owner: string, json: JsonValue): JsonValue {
   const date = typeof json === 'string' ? new Date(json) : undefined;
   if (date === undefined || Number.isNaN(date.getTime()) || date.toISOString() !== json) {
-    return refuseJsonValue(codecId, 'a date and time in UTC as Date.toISOString writes it', json);
+    return refuseJsonValue(owner, 'a date and time in UTC as Date.toISOString writes it', json);
   }
-  return date;
+  return json;
 }
 
-export function vectorDecodeJson(codecId: string, json: JsonValue): number[] {
-  if (!Array.isArray(json)) return refuseJsonValue(codecId, 'an array of numbers', json);
+export function readVectorJson(owner: string, json: JsonValue): number[] {
+  if (!Array.isArray(json)) return refuseJsonValue(owner, 'an array of numbers', json);
   const numbers: number[] = [];
   for (const element of json) {
-    if (typeof element !== 'number')
-      return refuseJsonValue(codecId, 'an array of numbers', element);
+    if (typeof element !== 'number') return refuseJsonValue(owner, 'an array of numbers', element);
     numbers.push(element);
   }
   return numbers;
@@ -260,14 +259,15 @@ export function int64Decode(codecId: string, wire: Long | number | bigint): bigi
 /**
  * A schema-written default arrives as a `number`; one that is a safe integer names its value exactly, so it is accepted like `pg/int8@1` accepts it.
  */
-export function int64EncodeJson(codecId: string, value: bigint | number): string {
+export function int64ToJson(codecId: string, value: bigint | number): string {
   if (typeof value === 'bigint') return requireInt64(codecId, value).toString();
   if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value).toString();
   return encodeFailed(codecId, 'value must be a bigint or a safe integer', value);
 }
 
-export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
-  return decodeJsonIntegerText(codecId, json, INT64_RANGE);
+export function readInt64Json(owner: string, json: JsonValue): JsonValue {
+  readJsonIntegerText(owner, json, INT64_RANGE);
+  return json;
 }
 
 const SAFE_INTEGERS = `from ${SAFE_INTEGER_RANGE.min} to ${SAFE_INTEGER_RANGE.max}`;
@@ -311,12 +311,13 @@ export function int64NumberDecode(codecId: string, wire: Long | number | bigint)
   );
 }
 
-export function int64NumberEncodeJson(codecId: string, value: number): string {
+export function int64NumberToJson(codecId: string, value: number): string {
   return int64NumberEncode(codecId, value).toString();
 }
 
-export function int64NumberDecodeJson(codecId: string, json: JsonValue): number {
-  return Number(decodeJsonIntegerText(codecId, json, SAFE_INTEGER_BIGINT_RANGE));
+/** A `number` holds an integer exactly only within the safe integer range, so digit text past it is refused. */
+export function int64NumberFromDigits(codecId: string, digits: JsonValue): number {
+  return Number(readJsonIntegerText(codecId, digits, SAFE_INTEGER_BIGINT_RANGE));
 }
 
 export function decimalTextNumberLiteral(value: JsonValue): string | undefined {
@@ -387,21 +388,21 @@ export function decimal128Decode(codecId: string, wire: Decimal128): string {
   return text;
 }
 
-export function decimal128EncodeJson(codecId: string, value: string): string {
+export function decimal128ToJson(codecId: string, value: string): string {
   return requireCanonicalDecimalText(codecId, value);
 }
 
 /**
- * The JSON form is what `encodeJson` writes, so it follows the encode rule: canonical decimal text (no exponent), or `NaN`, `Infinity` or `-Infinity`, that a Decimal128 holds exactly.
+ * The stored form is what the codec writes, so it follows the encode rule: canonical decimal text (no exponent), or `NaN`, `Infinity` or `-Infinity`, that a Decimal128 holds exactly.
  */
-export function decimal128DecodeJson(codecId: string, json: JsonValue): string {
+export function readDecimal128Json(owner: string, json: JsonValue): string {
   const expected =
     'decimal text without an exponent that a Decimal128 holds exactly, or NaN, Infinity or -Infinity';
-  const text = decodeJsonMatching(codecId, json, CANONICAL_DECIMAL_TEXT, expected);
+  const text = readJsonMatching(owner, json, CANONICAL_DECIMAL_TEXT, expected);
   try {
     Decimal128.fromString(text);
   } catch {
-    return refuseJsonValue(codecId, expected, json);
+    return refuseJsonValue(owner, expected, json);
   }
   return text;
 }
@@ -422,12 +423,14 @@ export function binaryDecode(codecId: string, wire: Binary | Uint8Array): Uint8A
   return new Uint8Array(wire.value());
 }
 
-export function binaryEncodeJson(value: Uint8Array): string {
+export function binaryToBase64(value: Uint8Array): string {
   return Buffer.from(value).toString('base64');
 }
 
-export function binaryDecodeJson(codecId: string, json: JsonValue): Uint8Array {
-  return new Uint8Array(
-    Buffer.from(decodeJsonMatching(codecId, json, BASE64_TEXT, 'base64 text'), 'base64'),
-  );
+export function readBinaryJson(owner: string, json: JsonValue): string {
+  return readJsonMatching(owner, json, BASE64_TEXT, 'base64 text');
+}
+
+export function binaryFromBase64(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, 'base64'));
 }

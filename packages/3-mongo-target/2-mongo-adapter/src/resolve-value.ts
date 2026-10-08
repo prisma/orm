@@ -42,7 +42,7 @@ function isWireScalar(value: object): boolean {
  * so is an `InternalError`.
  *
  * `ctx: CodecCallContext` is forwarded verbatim to every
- * `codec.encode(value, ctx)` call. The same `ctx` reference is also passed
+ * `codec.toWire(value, ctx)` call. The same `ctx` reference is also passed
  * to nested `resolveValue` invocations so codec authors observe **signal
  * identity** across the entire recursive walk for one `runtime.query()`.
  *
@@ -70,14 +70,14 @@ export async function resolveValue(
   if (value instanceof MongoParamRef) {
     if (value.codecId) {
       const codec = codecs.get(value.codecId);
-      if (codec?.encode) {
+      if (codec?.toWire) {
         try {
           // Race even leaf scalar encodes against the signal so a leaf
           // `MongoParamRef` (e.g. a simple field filter, or any leaf reached
           // from `MongoAdapterImpl.#resolveDocument()` outside an enclosing
           // `Promise.all`) surfaces `RUNTIME.ABORTED` promptly instead of
           // blocking on a slow codec body.
-          const encoded = codec.encode(value.value, ctx);
+          const encoded = codec.toWire(value.value, ctx);
           return await raceAgainstAbort(encoded, signal, 'encode');
         } catch (error) {
           wrapEncodeFailure(error, value, codec.id);

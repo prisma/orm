@@ -1,29 +1,25 @@
 /**
  * The six SQL base codecs (TML-2357).
  *
- * Each codec ships as three artifacts:
+ * Each codec ships as two artifacts:
  *
- * 1. A `SqlXCodec` class extending {@link CodecImpl} that wraps the module-level encode/decode constants exported from `sql-codec-helpers.ts` (the single source of truth for runtime behaviour). 2. A `SqlXDescriptor` class extending {@link CodecDescriptorTemplateImpl} declaring the codec id, traits, target types, params schema, and (where applicable) the emit-path `renderOutputType`; the data type is left to the target that adapts the template. 3. A per-codec column helper (`sqlXColumn`)
- * that calls `descriptor.factory(...)` directly and packages the result into a {@link ColumnSpec} via the framework {@link column} packager. The helper is tied to its descriptor with `satisfies ColumnHelperFor`.
+ * 1. A `SqlXCodec` class extending {@link CodecImpl} that wraps the module-level wire conversions exported from `sql-codec-helpers.ts` (the single source of truth for runtime behaviour). 2. A `SqlXDescriptor` class extending {@link CodecDescriptorTemplateImpl} declaring the codec id, traits, params schema, and (where applicable) the emit-path `renderOutputType`; the data type is left to the target that adapts the template, which builds the codec with that type.
  *
  * After TML-2357 this file is the canonical source of SQL base codec metadata and runtime behaviour — the legacy `mkCodec` / `defineCodec` carriers retired with the deletion sweep.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecDescriptorTemplateImpl,
   CodecImpl,
   type CodecInstanceContext,
-  type ColumnHelperFor,
-  type ColumnHelperForStrict,
-  column,
-  decodeJsonFloat,
-  decodeJsonInteger,
-  decodeJsonString,
-  encodeJsonFloat,
+  type DataTypeValue,
+  floatToJson,
+  readJsonFloat,
+  readJsonInteger,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
+import { InternalError } from '@internal/utils/internal-error';
 import {
   SQL_CHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
@@ -46,23 +42,30 @@ import {
 
 type LengthParams = { readonly length?: number };
 
+/** A family codec has no data type of its own, so only a target that adapts it, naming its data type, builds its codec. */
+function unadapted(codecId: string): never {
+  throw new InternalError(
+    `${codecId} is a SQL family template. A target adapts it with its own data type and builds its codecs; the template builds none.`,
+  );
+}
+
 export class SqlTextCodec extends CodecImpl<
   typeof SQL_TEXT_CODEC_ID,
   readonly ['equality', 'order', 'textual'],
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlTextEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return sqlTextDecode(wire);
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonString(this.id, json);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 }
 
@@ -71,17 +74,11 @@ export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlTextCodec {
-    return () => new SqlTextCodec(this);
+    return unadapted(this.codecId);
   }
 }
 
 export const sqlTextDescriptor = new SqlTextDescriptor();
-
-export const sqlTextColumn = () =>
-  column(sqlTextDescriptor.factory(), sqlTextDescriptor.codecId, undefined);
-
-sqlTextColumn satisfies ColumnHelperFor<SqlTextDescriptor>;
-sqlTextColumn satisfies ColumnHelperForStrict<SqlTextDescriptor>;
 
 export class SqlIntCodec extends CodecImpl<
   typeof SQL_INT_CODEC_ID,
@@ -89,17 +86,18 @@ export class SqlIntCodec extends CodecImpl<
   number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return sqlIntEncode(value);
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
     return sqlIntDecode(wire);
   }
-  encodeJson(value: number): JsonValue {
-    return value;
+  /** A `number` holds an integer exactly only within the safe integer range. */
+  fromDataTypeValue(value: DataTypeValue): number {
+    return readJsonInteger(this.id, value.value, SAFE_INTEGER_RANGE);
   }
-  decodeJson(json: JsonValue): number {
-    return decodeJsonInteger(this.id, json, SAFE_INTEGER_RANGE);
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 }
 
@@ -108,17 +106,11 @@ export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlIntCodec {
-    return () => new SqlIntCodec(this);
+    return unadapted(this.codecId);
   }
 }
 
 export const sqlIntDescriptor = new SqlIntDescriptor();
-
-export const sqlIntColumn = () =>
-  column(sqlIntDescriptor.factory(), sqlIntDescriptor.codecId, undefined);
-
-sqlIntColumn satisfies ColumnHelperFor<SqlIntDescriptor>;
-sqlIntColumn satisfies ColumnHelperForStrict<SqlIntDescriptor>;
 
 export class SqlFloatCodec extends CodecImpl<
   typeof SQL_FLOAT_CODEC_ID,
@@ -126,17 +118,17 @@ export class SqlFloatCodec extends CodecImpl<
   number,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return sqlFloatEncode(value);
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
     return sqlFloatDecode(wire);
   }
-  encodeJson(value: number): JsonValue {
-    return encodeJsonFloat(value);
+  fromDataTypeValue(value: DataTypeValue): number {
+    return readJsonFloat(this.id, value.value);
   }
-  decodeJson(json: JsonValue): number {
-    return decodeJsonFloat(this.id, json);
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(floatToJson(input));
   }
 }
 
@@ -145,17 +137,11 @@ export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlFloatCodec {
-    return () => new SqlFloatCodec(this);
+    return unadapted(this.codecId);
   }
 }
 
 export const sqlFloatDescriptor = new SqlFloatDescriptor();
-
-export const sqlFloatColumn = () =>
-  column(sqlFloatDescriptor.factory(), sqlFloatDescriptor.codecId, undefined);
-
-sqlFloatColumn satisfies ColumnHelperFor<SqlFloatDescriptor>;
-sqlFloatColumn satisfies ColumnHelperForStrict<SqlFloatDescriptor>;
 
 export class SqlCharCodec extends CodecImpl<
   typeof SQL_CHAR_CODEC_ID,
@@ -163,17 +149,17 @@ export class SqlCharCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlCharEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return sqlCharDecode(wire);
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonString(this.id, json);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 }
 
@@ -185,17 +171,11 @@ export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams>
     return sqlCharRenderOutputType(params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
-    return () => new SqlCharCodec(this);
+    return unadapted(this.codecId);
   }
 }
 
 export const sqlCharDescriptor = new SqlCharDescriptor();
-
-export const sqlCharColumn = (params: LengthParams = {}) =>
-  column(sqlCharDescriptor.factory(params), sqlCharDescriptor.codecId, params);
-
-sqlCharColumn satisfies ColumnHelperFor<SqlCharDescriptor>;
-sqlCharColumn satisfies ColumnHelperForStrict<SqlCharDescriptor>;
 
 export class SqlVarcharCodec extends CodecImpl<
   typeof SQL_VARCHAR_CODEC_ID,
@@ -203,17 +183,17 @@ export class SqlVarcharCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlVarcharEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return sqlVarcharDecode(wire);
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonString(this.id, json);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 }
 
@@ -225,14 +205,8 @@ export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthPara
     return sqlVarcharRenderOutputType(params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
-    return () => new SqlVarcharCodec(this);
+    return unadapted(this.codecId);
   }
 }
 
 export const sqlVarcharDescriptor = new SqlVarcharDescriptor();
-
-export const sqlVarcharColumn = (params: LengthParams = {}) =>
-  column(sqlVarcharDescriptor.factory(params), sqlVarcharDescriptor.codecId, params);
-
-sqlVarcharColumn satisfies ColumnHelperFor<SqlVarcharDescriptor>;
-sqlVarcharColumn satisfies ColumnHelperForStrict<SqlVarcharDescriptor>;

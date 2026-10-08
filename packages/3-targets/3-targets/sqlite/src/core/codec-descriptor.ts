@@ -79,10 +79,11 @@ export interface SqliteCodecOptions<
   readonly dataType: DataType;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   /**
-   * Builds the codec in place of the adapted one, where SQLite stores fewer values than the family codec reads: a subclass of the family codec that adds SQLite's own rule.
+   * Builds the codec: the family codec, or a subclass with SQLite's own rules, constructed with `dataType` and the column's parameters, because a family template names no data type and so builds no codec of its own.
    */
-  readonly factory?: (
+  readonly factory: (
     descriptor: SqliteCodecDescriptor<P>,
+    dataType: DataType,
     params: P,
   ) => (ctx: CodecInstanceContext) => C;
   /**
@@ -115,7 +116,7 @@ class SqliteCodecDescriptorAdapter<
   ) => string | undefined;
 
   constructor(
-    private readonly descriptor: D,
+    descriptor: D,
     private readonly options: SqliteCodecOptions<DescriptorParams<D>>,
   ) {
     super();
@@ -146,9 +147,7 @@ class SqliteCodecDescriptorAdapter<
   override readonly factory = (
     params: DescriptorParams<D>,
   ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
-    this.options.factory === undefined
-      ? this.descriptor.factory(params)
-      : this.options.factory(this, params);
+    this.options.factory(this, this.options.dataType, params);
 
   protected override jsonProjection(
     expression: ProjectionExpr,

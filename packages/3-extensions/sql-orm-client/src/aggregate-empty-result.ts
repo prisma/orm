@@ -1,3 +1,4 @@
+import { readContractValue } from '@internal/framework-components/codec';
 import type { AggregateResultNullability } from '@internal/framework-components/components';
 import type { Codec } from '@internal/sql-relational-core/ast';
 
@@ -10,10 +11,14 @@ import type { Codec } from '@internal/sql-relational-core/ast';
  * result set with no row: an absent aggregate alias, or an include whose
  * envelope never arrived. The answer reads off the operation's declared row:
  * NULL where the row is nullable, else the value the row declares, decoded
- * through the codec it declared beside it — so the application sees the same
- * value shape a real row would produce, in whichever form that codec's
- * canonical JSON takes.
+ * as a value of the declared codec's data type, converted by that codec — so the
+ * application sees the same value shape a real row would produce.
  */
-export function emptyAggregateResult(result: AggregateResultNullability, codec: Codec): unknown {
-  return result.nullable ? null : codec.decodeJson(result.emptyResultJson);
+export function emptyAggregateResult(
+  result: AggregateResultNullability & { readonly codec: { readonly typeParams?: unknown } },
+  codec: Codec,
+): unknown {
+  return result.nullable
+    ? null
+    : readContractValue(codec, result.emptyResultJson, result.codec.typeParams);
 }
