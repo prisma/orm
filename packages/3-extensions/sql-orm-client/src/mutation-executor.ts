@@ -255,12 +255,13 @@ async function runInTransaction<T>(
   }
 }
 
-async function createResolvedGraph(
+async function applyResolvedGraph(
   scope: RuntimeScope,
   context: ExecutionContext,
   namespaceId: string,
   modelName: string,
   input: ResolvedMutationInput,
+  writeParent: (scalarData: Record<string, unknown>) => Promise<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> {
   const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(input.relationMutations);
 
@@ -286,7 +287,7 @@ async function createResolvedGraph(
     }
   }
 
-  const parentRow = await insertSingleRow(scope, context, namespaceId, modelName, scalarData);
+  const parentRow = await writeParent(scalarData);
 
   for (const { relation, operations } of childOwned) {
     for (const operation of operations) {
@@ -319,6 +320,18 @@ async function createResolvedGraph(
   return parentRow;
 }
 
+function createResolvedGraph(
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  input: ResolvedMutationInput,
+): Promise<Record<string, unknown>> {
+  return applyResolvedGraph(scope, context, namespaceId, modelName, input, (scalarData) =>
+    insertSingleRow(scope, context, namespaceId, modelName, scalarData),
+  );
+}
+
 async function updateFirstGraph(
   scope: RuntimeScope,
   context: ExecutionContext,
@@ -327,115 +340,78 @@ async function updateFirstGraph(
   filters: readonly AnyExpression[],
   input: MutationUpdateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown> | null> {
-  const contract = context.contract;
   const resolved = resolveMutationInput(context, namespaceId, modelName, input, 'update');
 
-  const existingRow = await findFirstByFilters(scope, contract, namespaceId, modelName, filters);
+  const existingRow = await findFirstByFilters(
+    scope,
+    context.contract,
+    namespaceId,
+    modelName,
+    filters,
+  );
   if (!existingRow) {
     return null;
   }
 
-  const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(
-    resolved.relationMutations,
+  return applyResolvedGraph(scope, context, namespaceId, modelName, resolved, (scalarData) =>
+    updateSingleRow(scope, context, namespaceId, modelName, existingRow, scalarData),
   );
+}
 
-  const scalarData = { ...resolved.scalarData };
-
-  for (const { relation, operations } of parentOwned) {
-    for (const operation of operations) {
-      await applyParentOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        scalarData,
-        relation,
-        operation,
-      );
-    }
-  }
-
-  for (const { relation, operations } of junctionOwned) {
-    for (const operation of operations) {
-      await preflightJunctionOwnedCreateMutation(scope, context, relation, operation);
-    }
-  }
-
-  let parentRow = existingRow;
-
+async function updateSingleRow(
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  existingRow: Record<string, unknown>,
+  scalarData: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const contract = context.contract;
   const mappedUpdateData = mapModelDataToStorageRow(contract, namespaceId, modelName, scalarData);
-  if (Object.keys(mappedUpdateData).length > 0) {
-    const tableName = resolveModelTableName(contract, namespaceId, modelName);
-    const appliedUpdateDefaults = context.applyMutationDefaults({
-      op: 'update',
-      entry: tableName,
-      namespace: namespaceId,
-      values: mappedUpdateData,
-    });
-    for (const def of appliedUpdateDefaults) {
-      mappedUpdateData[def.field] = def.value;
-    }
-    const identityFilter = buildRowIdentityFilterFromRow(
-      contract,
-      namespaceId,
-      modelName,
-      existingRow,
-    );
-    const identityWhere = shorthandToWhereExpr(
-      context,
-      namespaceId,
-      modelName,
-      castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(identityFilter),
-    );
-    if (!identityWhere) {
-      throw new InternalError(`Failed to build row identity filter for model "${modelName}"`);
-    }
-
-    const compiled = compileUpdateReturning(
-      contract,
-      namespaceId,
-      tableName,
-      mappedUpdateData,
-      [identityWhere],
-      undefined,
-    );
-    const updatedRowsRaw = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
-
-    const updatedRaw = updatedRowsRaw[0];
-    if (updatedRaw) {
-      parentRow = mapStorageRowToModelFields(contract, namespaceId, modelName, updatedRaw);
-    }
+  if (Object.keys(mappedUpdateData).length === 0) {
+    return existingRow;
   }
 
-  for (const { relation, operations } of childOwned) {
-    for (const operation of operations) {
-      await applyChildOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        parentRow,
-        relation,
-        operation,
-      );
-    }
+  const tableName = resolveModelTableName(contract, namespaceId, modelName);
+  const appliedUpdateDefaults = context.applyMutationDefaults({
+    op: 'update',
+    entry: tableName,
+    namespace: namespaceId,
+    values: mappedUpdateData,
+  });
+  for (const def of appliedUpdateDefaults) {
+    mappedUpdateData[def.field] = def.value;
+  }
+  const identityFilter = buildRowIdentityFilterFromRow(
+    contract,
+    namespaceId,
+    modelName,
+    existingRow,
+  );
+  const identityWhere = shorthandToWhereExpr(
+    context,
+    namespaceId,
+    modelName,
+    castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(identityFilter),
+  );
+  if (!identityWhere) {
+    throw new InternalError(`Failed to build row identity filter for model "${modelName}"`);
   }
 
-  for (const { relation, operations } of junctionOwned) {
-    for (const operation of operations) {
-      await applyJunctionOwnedMutation(
-        scope,
-        context,
-        namespaceId,
-        modelName,
-        parentRow,
-        relation,
-        operation,
-      );
-    }
-  }
+  const compiled = compileUpdateReturning(
+    contract,
+    namespaceId,
+    tableName,
+    mappedUpdateData,
+    [identityWhere],
+    undefined,
+  );
+  const updatedRowsRaw = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
-  return parentRow;
+  const updatedRaw = updatedRowsRaw[0];
+  return updatedRaw
+    ? mapStorageRowToModelFields(contract, namespaceId, modelName, updatedRaw)
+    : existingRow;
 }
 
 function parseMutationInput(
