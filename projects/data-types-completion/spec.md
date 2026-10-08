@@ -1,6 +1,6 @@
 # Project spec: data types own column types
 
-**Linear:** project [Data types own column types](https://linear.app/prisma-company/project/data-types-own-column-types-2e1b16116e13); planning ticket TML-3385; slices in order TML-3386, TML-3388, the value-ownership slice (ticket filed after Will's review), TML-3387, TML-3389. **Design:** [`design.md`](design.md); for values, [ADR 254](../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md) as amended on 2026-10-07. **Plan:** [`plan.md`](plan.md). **Evidence:** [`research.md`](research.md) and [`inventory/`](inventory/). **Decision record:** [`design-notes.md`](design-notes.md).
+**Linear:** project [Data types own column types](https://linear.app/prisma-company/project/data-types-own-column-types-2e1b16116e13); planning ticket TML-3385; slices in order TML-3386, TML-3388, TML-3531 (a data type owns its values), TML-3387, TML-3389. **Design:** [`design.md`](design.md); for values, [ADR 254](../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md) as amended on 2026-10-07. **Plan:** [`plan.md`](plan.md). **Evidence:** [`research.md`](research.md) and [`inventory/`](inventory/). **Decision record:** [`design-notes.md`](design-notes.md).
 
 ## Purpose
 
@@ -50,7 +50,7 @@ embedding pgvector.Vector(1536)
 - **Replaces** ADR 171's `expandNativeType` hooks.
 - **Depended on** TML-3253, which was closed as a duplicate, and TML-3367 (the `dataTypeValue` argument building block, from the SQL expression literals project), which merged in #30539. Neither holds back a slice now.
 - **Is depended on by** TML-3055, whose type constructors need data types to own names and parameters.
-- **Closes** TML-3283 with the answer "no: a data type never parses or prints SQL value literals; the codec reads and writes values". Slice 3 also closes TML-3394, TML-3396, TML-3404 and TML-3405, and replaces TML-3406 (design notes, 2026-10-07).
+- **Closes** TML-3283 with the answer "no: a data type never parses or prints SQL value literals; the codec reads and writes values". Slice 3 also closes TML-3394, TML-3396, TML-3404, TML-3405 and TML-3479, and replaces TML-3406 (design notes, 2026-10-07).
 
 ## Cross-cutting requirements
 
@@ -90,7 +90,7 @@ ADR 171 is marked superseded by ADR 254 in slice 1. ADR 254 is amended in slice 
 
 ## Project definition of done
 
-- TML-3386, TML-3388, the slice 3 ticket, TML-3387 and TML-3389 merged.
+- TML-3386, TML-3388, TML-3531, TML-3387 and TML-3389 merged.
 - The grep checks in `plan.md` return only their allowed lines on `main`.
 - Manual QA, recorded: a project created with the last release before slice 2, with pgvector and an applied migration, upgrades by running the script and `db sign`, after which `db verify`, `migrate` and `migration status` succeed; the same on a database with PostGIS; a SQLite project with datetime and JSON defaults upgrades through slice 3's instruction and `db sign`; the Prisma 7 side-by-side flow (`prisma7 migrate dev`, then `db sign`) after slices 3 and 4.
 - ADR 254 status is Accepted and its text matches the code.

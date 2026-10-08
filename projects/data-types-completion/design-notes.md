@@ -357,6 +357,12 @@ The orchestrator decided the rest, recorded in ADR 254, for Will's review:
 19. **The language server offers only the tags a value position can take**, so a date column offers its date tag and not seven others.
 20. **The Postgres target gets one pair of functions for PostgreSQL's year text** (` BC`, years past 9999), used by the codecs' wire methods and the tags. This is TML-3396, folded in, because DDL through `toWire` needs it.
 
+Added on 2026-10-08, after #30628 (TML-3382, enum values as stored) merged an amendment to ADR 254 while this design was in review. The amendment's rule, that a stored value reads back as the value a query returns, is the codec test kits' round trip here. Its parts are folded into ADR 254's "Values" and "Codecs" sections, and the orchestrator decided:
+
+21. **The step that creates a value writes its one spelling, and `fromContract` refuses any other.** #30628 put normalisation (lower-case `pg/uuid`, integer digit text, `pg/inet` as PostgreSQL prints it) in `toCanonicalForm`; it moves into the casts from text, the number classifier and the type's construction from a codec's value.
+22. **A written value takes the column's parameters through `withParams(value, params)` on the type.** It refuses a value the parameters exclude and writes the spelling they give it: `1.5` on `numeric(10,2)` is stored `"1.50"`, as PostgreSQL prints it, and `1.234` is refused rather than rounded. This closes TML-3479, which could not pad to the scale because the conversion did not receive the column's parameters.
+23. **Enum eligibility stays as #30628 built it** (the `equality` trait, `enumRefusal`, `enumRefusalOf`); `db.enums` holds each member as `fromDataTypeValue` gives it.
+
 Tickets this closes or changes:
 
 - TML-3404 (the SQLite planner writes a datetime default by one fixed codec id) is closed by decision 13.
@@ -364,3 +370,4 @@ Tickets this closes or changes:
 - TML-3406 (move the "re-emit the contract" refusal out of schema IR) is replaced by decision 14; the code it would move is deleted. It is In Progress in Linear, so whoever holds it is told before slice 3 starts.
 - TML-3394 (the Prisma 7 reader stores a `DateTime` default as an SQL expression) is closed: the reader uses the date tags' `parse`.
 - TML-3396 (PostgreSQL's year text in six places) is closed by decision 20.
+- TML-3479 (a numeric default on a column with a scale is not stored as PostgreSQL prints it) is closed by decision 22.
