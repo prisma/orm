@@ -176,6 +176,19 @@ describe('enumType validation errors', () => {
     });
   });
 
+  it('names a NaN value as NaN when two members have it', () => {
+    expect(() =>
+      enumType(
+        'Ratio',
+        { codecId: 'pg/float8@1' },
+        member('Unknown', Number.NaN),
+        member('Missing', Number.NaN),
+      ),
+    ).toThrow(
+      'enumType("Ratio"): members "Unknown" and "Missing" have the same value NaN. Member values must be unique.',
+    );
+  });
+
   it('rejects two members equal by SameValueZero with CONTRACT.ENUM_INVALID', () => {
     expect(() =>
       enumType('Status', textCodec, member('Active', 'x'), member('Inactive', 'x')),

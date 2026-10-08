@@ -127,6 +127,7 @@ export type CodecInput<
 
 function describeValue(value: unknown): string {
   if (typeof value === 'bigint') return `${value}n`;
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
   try {
     return JSON.stringify(value) ?? String(value);
   } catch {
