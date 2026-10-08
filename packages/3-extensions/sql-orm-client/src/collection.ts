@@ -61,6 +61,7 @@ import {
 import {
   consumeFirstRow,
   describeCollectionFirst,
+  describeCollectionFirstOrThrow,
   describeCollectionRows,
   dispatchCollectionRows,
 } from './collection-dispatch';
@@ -1447,12 +1448,13 @@ export class CollectionBase<
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
         return describeCollectionRows<Row>(selected.#descriptionOptions());
       },
-      first: (
-        filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
-        configure?: (meta: MetaBuilder<'read'>) => void,
-      ) => {
-        const selected = this.#forFirst(filter, configure);
+      first: (filter, configure) => {
+        const selected = this.#forFirst(filter, configure, 'first');
         return describeCollectionFirst<Row>(selected.#descriptionOptions());
+      },
+      firstOrThrow: (filter, configure) => {
+        const selected = this.#forFirst(filter, configure, 'firstOrThrow');
+        return describeCollectionFirstOrThrow<Row>(selected.#descriptionOptions());
       },
     };
     return blindCast<
@@ -1474,6 +1476,7 @@ export class CollectionBase<
   #forFirst(
     filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']> | undefined,
     configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
+    terminalName: 'first' | 'firstOrThrow',
   ) {
     const scoped =
       filter === undefined
@@ -1481,7 +1484,7 @@ export class CollectionBase<
         : typeof filter === 'function'
           ? this.where(filter)
           : this.where(filter);
-    return scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
+    return scoped.limit(1).#withAnnotationsFromMeta(configure, terminalName);
   }
 
   /**
@@ -1508,31 +1511,36 @@ export class CollectionBase<
    * );
    * ```
    */
-  async first<Self extends this>(this: Self): Promise<CollectionRowOf<Self> | null>;
   async first<Self extends this>(
     this: Self,
-    filter: undefined,
-    configure: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<CollectionRowOf<Self> | null>;
-  async first<Self extends this>(
-    this: Self,
-    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<CollectionRowOf<Self> | null>;
-  async first(): Promise<CollectionRowOf<this> | null>;
   async first(
-    filter: undefined,
-    configure: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<CollectionRowOf<this> | null>;
-  async first(
-    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<CollectionRowOf<this> | null>;
   async first(
     filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<unknown> {
-    return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());
+    return consumeFirstRow(this.#forFirst(filter, configure, 'first').#dispatch());
+  }
+
+  async firstOrThrow<Self extends this>(
+    this: Self,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Promise<CollectionRowOf<Self>>;
+  async firstOrThrow(
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Promise<CollectionRowOf<this>>;
+  async firstOrThrow(
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Promise<unknown> {
+    return this.#forFirst(filter, configure, 'firstOrThrow').#dispatch().firstOrThrow();
   }
 
   /**

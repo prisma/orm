@@ -100,7 +100,7 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` declares that index for you — pass it the field and, if you use one, the same language:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
@@ -116,6 +116,28 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
   indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
 }));
 ```
+
+**Searching several columns with weights.** One index can cover several columns. Each top-level item of the list is a weight group, strongest first; fields in a nested list share a weight:
+
+```prisma
+@@fullTextIndex([[title, subtitle], body], name: "post_search")
+```
+
+**Searching an index from the SQL builder.** A table's `indexes` holds each of its indexes under the name the contract gave it, `name:` or `map:`. Pass the full-text index to `fns.fullTextMatches` and `fns.fullTextRank` in place of a column: the operation searches the document the index was built over, with the index's weight groups and language, so the query always matches the index and a title match ranks above a body match. The index states its language, so passing `language` with one is a type error. An index of another type is a type error too.
+
+```typescript
+const q = websearchToTsquery(query);
+const post = db.sql.public.post;
+const posts = post
+  .select('id', 'title')
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((_f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' })
+  .build();
+```
+
+An index read from an aliased table searches that alias's columns, so `post.as('p').indexes.post_search` works in a self-join.
+
+To search several columns that no index covers, build the document with `fullTextDocument` from `@prisma/orm-postgres/target/full-text`, which takes the weight groups of columns, and pass the language in the options: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. Postgres uses an index only for a query over the same document, so a document with another grouping, order or language than an index runs without it, and raises no error. `fullTextHeadline` stays per column. One column, `fns.fullTextMatches(f.title, q)` or `row.title.fullTextMatches(q)`, searches that column and uses a single-field index with the same language.
 
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 

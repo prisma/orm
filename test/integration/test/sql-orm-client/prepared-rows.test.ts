@@ -34,6 +34,7 @@ interface Environment {
   runtime: Runtime;
   all(): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;
   first(): Preparable<Record<string, unknown>, Promise<Row | null>>;
+  firstOrThrow(): Preparable<Record<string, unknown>, Promise<Row>>;
   insert(transaction: RuntimeTransaction): Promise<void>;
   bindingCount(): number;
   loweringCount(): number;
@@ -86,6 +87,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
     runtime,
     all: () => selected.where({ id: 1 }).prepared.all(),
     first: () => selected.prepared.first({ id: 2 }),
+    firstOrThrow: () => selected.prepared.firstOrThrow({ id: 2 }),
     async insert(transaction) {
       const scoped = new Collection({ runtime: transaction, context }, 'User', {
         namespaceId: 'public',
@@ -167,10 +169,14 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   expectTypeOf(selected.prepared.first().consume).returns.toEqualTypeOf<
     ReturnType<typeof selected.first>
   >();
+  expectTypeOf(selected.prepared.firstOrThrow().consume).returns.toEqualTypeOf<
+    ReturnType<typeof selected.firstOrThrow>
+  >();
   return {
     runtime,
     all: () => selected.where({ id: 1 }).prepared.all(),
     first: () => selected.prepared.first({ id: 2 }),
+    firstOrThrow: () => selected.prepared.firstOrThrow({ id: 2 }),
     async insert(transaction) {
       await new Collection({ runtime: transaction, context }, 'User', { namespaceId }).create({
         id: 2,
@@ -234,8 +240,18 @@ for (const [name, setup] of [
           const firstDescription = authoring.first();
           const firstSql = await authoring.runtime.prepare({}, () => firstDescription.plan);
           const first = createPreparedRowQuery(firstDescription, firstSql);
+          const firstOrThrowDescription = authoring.firstOrThrow();
+          const firstOrThrow = createPreparedRowQuery(
+            firstOrThrowDescription,
+            await authoring.runtime.prepare({}, () => firstOrThrowDescription.plan),
+          );
+          const noRows = {
+            code: 'RUNTIME.NO_ROWS',
+            message: 'Expected at least one row, but none were returned',
+          };
           const firstBindings = authoring.bindingCount();
           expect(await first.query(authoring.runtime, {})).toBeNull();
+          await expect(firstOrThrow.query(authoring.runtime, {})).rejects.toMatchObject(noRows);
           const connection = await target.runtime.connection();
           try {
             const transaction = await connection.transaction();
@@ -246,14 +262,19 @@ for (const [name, setup] of [
                 posts: [],
               });
               expect(await first.query(authoring.runtime, {})).toBeNull();
+              expect(await firstOrThrow.query(transaction, {})).toEqual({
+                name: 'Transaction',
+                posts: [],
+              });
             } finally {
               await transaction.rollback();
             }
             expect(await first.query(connection, {})).toBeNull();
+            await expect(firstOrThrow.query(connection, {})).rejects.toMatchObject(noRows);
           } finally {
             await connection.release();
           }
-          expect(authoring.loweringCount()).toBe(2);
+          expect(authoring.loweringCount()).toBe(3);
           expect(authoring.bindingCount()).toBe(firstBindings);
         } finally {
           await target?.close();

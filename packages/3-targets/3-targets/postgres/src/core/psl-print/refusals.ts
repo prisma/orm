@@ -649,6 +649,18 @@ export function refuseToOneRelationWithoutForeignKey(modelName: string, fieldNam
 }
 
 /**
+ * A foreign key backed by a primary key or unique constraint that only starts with its columns is written as the relation's `index: "<name>"`, which needs the key's name; the contract states none.
+ */
+export function refuseUnnamedForeignKeyBacking(modelName: string, fieldName: string): never {
+  throw unsupported(
+    `relation "${modelName}.${fieldName}" is backed by a key with no name, which its @relation cannot name.`,
+    "The key's first columns are the foreign key's, but it has more columns, so a relation that names nothing would get its own backing index instead.",
+    'Give the key a name, or keep authoring this contract in its current source.',
+    { model: modelName, field: fieldName },
+  );
+}
+
+/**
  * A foreign key no relation travels has no PSL form: the PSL source derives every foreign key from
  * a `@relation`, so this one would be lost.
  */

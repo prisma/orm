@@ -2,6 +2,7 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import { expectTypeOf, test } from 'vitest';
 import type { CodecTypes } from '../src/exports/codec-types';
 import {
+  fullTextDocument,
   phrasetoTsquery,
   plaintoTsquery,
   toTsquery,
@@ -93,4 +94,46 @@ test('ilike and the search operations take a textual column and refuse a native 
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextMatches'>>();
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
+});
+
+test('fullTextMatches and fullTextRank search a full-text index, a column or a fullTextDocument', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type Bool = Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
+  type Float = Expression<{ codecId: 'pg/float4@1'; nullable: false }>;
+  const matches = null as unknown as Ops['fullTextMatches']['impl'];
+  const rank = null as unknown as Ops['fullTextRank']['impl'];
+  const headline = null as unknown as Ops['fullTextHeadline']['impl'];
+  const query = websearchToTsquery('zebra');
+  const title = null as unknown as TextColumn;
+  const subtitle = null as unknown as Expression<{ codecId: 'pg/text@1'; nullable: true }>;
+  const body = null as unknown as Expression<{ codecId: 'sql/varchar@1'; nullable: false }>;
+  const status = null as unknown as Expression<{ codecId: 'pg/enum@1'; nullable: false }>;
+  const searchIndex = {
+    columns: { title, subtitle, body },
+    type: 'fullText',
+    options: { weightGroups: [['title', 'subtitle'], ['body']], language: 'english' },
+  } as const;
+  const ginIndex = { columns: { title }, type: 'gin', options: undefined } as const;
+
+  expectTypeOf(matches(searchIndex, query)).toEqualTypeOf<Bool>();
+  expectTypeOf(rank(searchIndex, query, { normalization: 32 })).toEqualTypeOf<Float>();
+  // @ts-expect-error a full-text index states its language
+  matches(searchIndex, query, { language: 'german' });
+  // @ts-expect-error for the rank too
+  rank(searchIndex, query, { language: 'german' });
+  // @ts-expect-error a gin index is not a full-text index
+  matches(ginIndex, query);
+
+  expectTypeOf(matches(title, query, { language: 'german' })).toEqualTypeOf<Bool>();
+  expectTypeOf(
+    rank(fullTextDocument([[title, subtitle], [body]]), query, { language: 'german' }),
+  ).toEqualTypeOf<Float>();
+  // @ts-expect-error weight groups are a fullTextDocument, not a bare array
+  matches([[title, subtitle], [body]], query);
+  // @ts-expect-error a fullTextDocument covers textual columns only
+  fullTextDocument([[title, status]]);
+  // @ts-expect-error nor bare strings
+  fullTextDocument([['title']]);
+  // @ts-expect-error fullTextHeadline highlights one column, not a document
+  headline(fullTextDocument([[title]]), query);
 });

@@ -57,7 +57,7 @@ Legend:
 | String `contains` first-class helper | 🟡 | 🟡 | — | |
 | String `startsWith` first-class helper | 🟡 | 🟡 | — | |
 | String `endsWith` first-class helper | 🟡 | 🟡 | — | |
-| `findUniqueOrThrow` / `findFirstOrThrow` terminal | ❌ | ❌ | — | |
+| `firstOrThrow()` (`findUniqueOrThrow` / `findFirstOrThrow`) | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/first.test.ts` (`firstOrThrow() returns the first matching row and rejects when no row matches`) |
 | Per-query / global `omit` | ❌ | ❌ | — | |
 | `createMany({ skipDuplicates })` — `createAll`/`createAndCount` with `{ onConflict: 'skip' }` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create-on-conflict.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll with onConflict skip`) |
 | `updateMany({ limit })` | ❌ | ❌ | — | |

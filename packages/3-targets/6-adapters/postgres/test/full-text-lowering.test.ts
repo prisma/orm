@@ -96,4 +96,36 @@ describe('full-text lowering', () => {
       params: [{ kind: 'literal', value: 'zebra grazing' }],
     });
   });
+
+  it('renders the weighted document of a full-text index over each column once, coalescing every column', () => {
+    const body = {
+      returnType: { codecId: 'pg/text@1', nullable: true },
+      buildAst: () => ColumnRef.of('post', 'body'),
+    };
+    const searchIndex = {
+      columns: { title, body },
+      type: 'fullText',
+      options: { weightGroups: [['title'], ['body']], language: 'german' },
+    };
+    const operations = postgresTargetDescriptor.queryOperations();
+    const rank = operations['fullTextRank']!.impl(
+      ...([searchIndex, websearchToTsquery('zebra')] as never[]),
+    ) as Expression<ScopeField>;
+    const plan = rawSql`SELECT ${rank} AS rank FROM "post"`
+      .returnsRow({ rank: 'pg/float4@1' })
+      .build();
+
+    expect(
+      renderLoweredSql(
+        plan.ast,
+        contract,
+        postgresCodecDescriptorRegistry,
+        postgresDataTypeLookup,
+        postgresAdapterCapabilities,
+      ),
+    ).toEqual({
+      sql: `SELECT ts_rank((setweight(to_tsvector('german', coalesce("post"."title", '')), 'A') || setweight(to_tsvector('german', coalesce("post"."body", '')), 'B')), websearch_to_tsquery('english', $1)) AS rank FROM "post"`,
+      params: [{ kind: 'literal', value: 'zebra' }],
+    });
+  });
 });

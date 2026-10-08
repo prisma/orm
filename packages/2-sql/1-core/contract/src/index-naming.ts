@@ -9,6 +9,7 @@ import {
   defaultIndexName,
 } from '@internal/sql-schema-ir/naming';
 import { contractError } from './contract-errors';
+import { type IndexTypeRegistry, rendersIndexBody } from './index-types';
 import type { IndexInput } from './ir/sql-index';
 
 /**
@@ -138,6 +139,7 @@ export function lowerAuthoredIndex(
   tableName: string,
   authored: AuthoredIndexInput,
   warnings?: AuthoringWarningSink,
+  indexTypes?: Pick<IndexTypeRegistry, 'get'>,
 ): IndexInput {
   if ((authored.columns === undefined) === (authored.expression === undefined)) {
     throw contractError(
@@ -171,7 +173,12 @@ export function lowerAuthoredIndex(
   const unique = authored.unique ?? false;
 
   if (authored.map !== undefined) {
-    if (authored.expression !== undefined || authored.where !== undefined) {
+    const typeEntry = authored.type === undefined ? undefined : indexTypes?.get(authored.type);
+    const hasSqlBody =
+      authored.expression !== undefined ||
+      authored.where !== undefined ||
+      (typeEntry !== undefined && rendersIndexBody(typeEntry));
+    if (hasSqlBody) {
       const warning: AuthoringWarning = exactNameBodyWarning('index', authored.map);
       if (warnings !== undefined) {
         warnings.push(warning);

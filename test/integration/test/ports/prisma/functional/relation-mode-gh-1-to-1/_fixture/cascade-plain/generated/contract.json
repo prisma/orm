@@ -230,6 +230,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -282,6 +287,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -342,7 +352,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d666f4af8c1dd335923398a98edb4bbf33b08e3ee57b0b664e4361d6edafbd56"
+    "storageHash": "afd0eabe52dd2764d67b43f64c8e5d73d63e15c7db9d18c52323094f6d1a7d39"
   },
   "capabilities": {
     "postgres": {

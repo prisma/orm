@@ -198,7 +198,7 @@ model Base { id String }`,
     });
   });
 
-  it('exposes model-specific index field alternatives from the actual factory', () => {
+  it('exposes stable index field alternatives from the actual factory', () => {
     const { model } = contexts();
     const fields = listMetadata(positionalType(mongoAttributeSpecs.model.index(model)));
     const element = oneOfMetadata(fields.of);
@@ -214,14 +214,19 @@ model Base { id String }`,
       optional: true,
     });
     expect(element.alternatives.slice(2).map((alt) => funcCallMetadata(alt).name)).toEqual([
-      'id',
-      'name',
+      'sort',
     ]);
 
-    const nameField = funcCallMetadata(element.alternatives[3]);
-    const sort = nameField.signature.named?.['sort'];
-    if (sort === undefined) throw new Error('field sort argument is present');
-    expect(nameField.signature.documentation).toBe(
+    const sortFunction = funcCallMetadata(element.alternatives[2]);
+    expect(sortFunction.signature.positional?.[0]).toMatchObject({
+      key: 'field',
+      type: { kind: 'fieldRef' },
+    });
+    const sort = sortFunction.signature.positional?.[1];
+    if (sort === undefined) throw new Error('sort direction argument is present');
+    expect(sort.key).toBe('direction');
+    expect(sortFunction.signature.named).toBeUndefined();
+    expect(sortFunction.signature.documentation).toBe(
       'Selects an index field with an explicit sort direction.',
     );
     expect(sort.documentation).toBe('The index order for this field: `Asc` or `Desc`.');

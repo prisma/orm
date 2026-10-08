@@ -273,7 +273,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "c2d56f51158b35648820a62067f303c012b06d112a9ff0e21a73e3f75c9d10a2",
+    "storageHash": "1f7f58a527c462ac7e6f36cbe50954c2e47a9c12f9474d91fa96e6daaee90eee",
     "namespaces": {
       "public": {
         "id": "public",
@@ -402,7 +402,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "Profile_userId_key"
+                  }
                 }
               ],
               "primaryKey": {
@@ -445,7 +448,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "setNull",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "Settings_userId_key"
+                  }
                 }
               ],
               "primaryKey": {

@@ -10,6 +10,7 @@ export type {
   UnboundTables,
 } from '../types/db';
 export type { GroupedQuery } from '../types/grouped-query';
+export type { IndexReference, IndexReferences } from '../types/index-reference';
 export type { DeleteQuery, InsertQuery, UpdateQuery } from '../types/mutation-query';
 export type { ContractRawTag, RawLane, RawTagFor } from '../types/raw-query';
 export type { SelectQuery } from '../types/select-query';

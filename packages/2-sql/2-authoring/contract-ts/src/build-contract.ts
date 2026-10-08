@@ -58,11 +58,7 @@ import {
 } from '@internal/sql-contract/foreign-key-materialization';
 import { type AuthoredIndexInput, lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
 import { validateIndexTypes } from '@internal/sql-contract/index-type-validation';
-import {
-  createIndexTypeRegistry,
-  type IndexTypeMap,
-  type IndexTypeRegistration,
-} from '@internal/sql-contract/index-types';
+import { type IndexTypeRegistry, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import {
   type AuthoredStorageTypeInstance,
   applyFkDefaults,
@@ -292,8 +288,9 @@ function encodeColumnDefault(
 }
 
 function assertStorageSemantics(
-  definition: ContractDefinition,
   contract: Contract<SqlStorage>,
+  indexTypeRegistry: IndexTypeRegistry,
+  codecLookup: CodecLookupWithDescriptors,
 ): void {
   const semanticErrors = validateStorageSemantics(contract.storage);
   if (semanticErrors.length > 0) {
@@ -303,35 +300,11 @@ function assertStorageSemantics(
       { meta: { errors: semanticErrors } },
     );
   }
-
-  const indexTypeRegistry = createIndexTypeRegistry();
-  const packsToRegister: ReadonlyArray<{ readonly id?: string; readonly indexTypes?: unknown }> = [
-    definition.target,
-    ...Object.values(definition.extensions ?? {}),
-  ];
-  for (const pack of packsToRegister) {
-    const registration = pack.indexTypes;
-    if (registration === undefined) continue;
-    if (
-      typeof registration !== 'object' ||
-      registration === null ||
-      !('entries' in registration) ||
-      !Array.isArray(registration.entries)
-    ) {
-      throw contractError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Pack "${pack.id ?? '<unknown>'}" declares "indexTypes" but its value is not an IndexTypeRegistration (expected an object with an "entries" array; got ${typeof registration}).`,
-        { meta: { packId: pack.id, contribution: 'indexTypes', reason: 'invalid-shape' } },
-      );
-    }
-    for (const entry of blindCast<
-      IndexTypeRegistration<IndexTypeMap>,
-      'checked above to be an object with an entries array; each entry is validated when registered'
-    >(registration).entries) {
-      indexTypeRegistry.register(entry);
-    }
-  }
-  validateIndexTypes(contract, indexTypeRegistry);
+  validateIndexTypes(
+    contract,
+    indexTypeRegistry,
+    (codecId) => codecLookup.descriptorFor(codecId)?.traits,
+  );
 }
 
 function assertKnownTargetModel(
@@ -1215,6 +1188,10 @@ export function buildSqlContractFromDefinition(
   const lookups: TypeLookups = { codecLookup, dataTypeLookup };
   const target = definition.target.targetId;
   const defaultNamespaceId = definition.target.defaultNamespaceId;
+  const indexTypeRegistry = indexTypeRegistryOf(
+    definition.target,
+    Object.values(definition.extensions ?? {}),
+  );
   const qualifyColumnType = resolveColumnTypeQualifier(definition.target);
   const renderCheckExpressions = resolveCheckExpressionRenderer(definition.target);
   const targetFamily = 'sql';
@@ -1494,8 +1471,9 @@ export function buildSqlContractFromDefinition(
         columns: u.columns,
         ...ifDefined('name', u.name),
       }));
-      const declaredIndexes = (semanticModel.indexes ?? []).map((i) =>
-        lowerAuthoredIndex(
+      const declaredIndexes = (semanticModel.indexes ?? []).map((i) => ({
+        namedByUser: i.name !== undefined || i.map !== undefined,
+        index: lowerAuthoredIndex(
           tableName,
           blindCast<
             AuthoredIndexInput,
@@ -1511,8 +1489,9 @@ export function buildSqlContractFromDefinition(
             options: i.options,
           }),
           authoringWarnings,
+          indexTypeRegistry,
         ),
-      );
+      }));
       // Authored checks are lowered and merged into `checksForTable`
       // unconditionally — outside the `derivesChecks` guard above. A derived
       // check is a Prisma 8 prescription, scoped to tables it manages; an
@@ -1542,22 +1521,15 @@ export function buildSqlContractFromDefinition(
       const primaryKey = semanticModel.id
         ? { columns: semanticModel.id.columns, ...ifDefined('name', semanticModel.id.name) }
         : undefined;
-      // FK1: lower each FK's `constraint`/`index` authoring intent into
-      // discrete persisted entities here — the one place a table's full
-      // constraint context (its own declared indexes/uniques/primary key)
-      // is available. A `constraint: false` FK contributes no
-      // `foreignKeys[]` entry; an `index: true` FK not already backed by a
-      // declared index/unique/primary-key contributes a named `indexes[]`
-      // entry. This authoring pipeline is shared by both the TS DSL and the
-      // PSL interpreter (which calls `buildSqlContractFromDefinition`
-      // directly), so both authoring surfaces materialize identically.
-      const { foreignKeys, indexes } = materializeForeignKeysAndIndexes(
+      const { foreignKeys, indexes } = materializeForeignKeysAndIndexes({
         tableName,
-        authoringForeignKeys,
+        foreignKeys: authoringForeignKeys,
         declaredIndexes,
         uniques,
         primaryKey,
-      );
+        warnings: authoringWarnings,
+        indexTypes: indexTypeRegistry,
+      });
 
       const tableInput: StorageTableInput = {
         columns,
@@ -1923,7 +1895,7 @@ export function buildSqlContractFromDefinition(
     meta: {},
   };
 
-  assertStorageSemantics(definition, contract);
+  assertStorageSemantics(contract, indexTypeRegistry, codecLookup);
   flushAuthoringWarnings(authoringWarnings);
 
   return contract;

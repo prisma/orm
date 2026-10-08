@@ -247,9 +247,11 @@ constraints.index({ expression: 'eql_v3.eq_term(email)', name: 'users_email_eq' 
 - **Fields form** — `constraints.index(cols | [cols...], options?)`. Options: `unique?`, `where?` (partial-index predicate, WHERE body without the keyword), `name?` xor `map?`, and — when the target pack registers index types — `type?` paired with its `options?` (e.g. `type: 'hash', options: {}`). The pack-typed arm requires the `options` key at compile time; PSL accepts `type:` without `options:` (absent validates as `{}`) — both lower to the same IR.
 - **Expression form** — `constraints.index({ expression, ...options })`. The expression is the whole CREATE INDEX element list as one opaque string; `name` or `map` is required (no default name can be derived from an expression). Same remaining options as the fields form.
 
-  The expression may instead be `{ fields, render }`, which defers rendering until lowering knows the storage column names: `fields` are `ColumnRef`s resolved exactly as the fields form resolves them — a `.column()` override first, then the contract's column naming convention — and `render` receives the resolved names in order and returns the element list. Use this whenever the expression names a column, because neither the override nor the naming convention is knowable while the model is being authored; a string written by hand silently stops matching the column it names when either changes. The rendered string is what reaches the IR, so nothing downstream sees a new shape. The Postgres facade's `fullTextIndex(cols.text, { name })` is built this way.
+  The expression may instead be `{ fields, render }`, which defers rendering until lowering knows the storage column names: `fields` are `ColumnRef`s resolved exactly as the fields form resolves them — a `.column()` override first, then the contract's column naming convention — and `render` receives the resolved names in order and returns the element list. Use this whenever the expression names a column, because neither the override nor the naming convention is knowable while the model is being authored; a string written by hand silently stops matching the column it names when either changes. The rendered string is what reaches the IR, so nothing downstream sees a new shape.
 
-`name:` declares a **wire-named** index: the physical name is `<name>_<8-hex content hash>`, and renames plan as `ALTER INDEX … RENAME`. `map:` adopts an **exact** physical name verbatim (no hash) — intended for objects captured by `contract infer`. Combining `map:` with a SQL body (`expression`/`where`) emits the `PN_EXACT_NAME_BODY_COMPARISON` warning at build time: drift detection byte-compares the authored text against Postgres's reprinted form, which is only reliable for infer-captured text. Prefer `name:` for hand-authored bodies.
+  `options` may likewise be a function of the storage columns the index covers, for options that name columns: lowering resolves the index's `fields` (or the `fields` of a deferred expression) the same way and calls the function with them, in order, and the options it returns are what reaches the IR. The Postgres facade's `fullTextIndex([[cols.title, cols.subtitle], cols.body], { name })` is built this way: it stores the weight groups as storage column names in the options of an index of the Postgres type `fullText`.
+
+`name:` declares a **wire-named** index: the physical name is `<name>_<8-hex content hash>`, and renames plan as `ALTER INDEX … RENAME`. `map:` adopts an **exact** physical name verbatim (no hash) — intended for objects captured by `contract infer`. Combining `map:` with a SQL body (`expression`/`where`, or an index type whose body the target renders from its options, such as Postgres's `fullText`) emits the `PN_EXACT_NAME_BODY_COMPARISON` warning at build time: drift detection byte-compares the authored text against Postgres's reprinted form, which is only reliable for infer-captured text. Prefer `name:` for hand-authored bodies.
 
 ### Helper Notes
 
@@ -276,7 +278,13 @@ const contract = defineContract({
 });
 ```
 
-Per-FK overrides still live next to the FK authoring site, either via `constraints.foreignKey(...)` inside model `.sql(...)` or via `rel.belongsTo(...).sql({ fk: ... })`. See [ADR 161](../../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
+Per-FK overrides still live next to the FK authoring site, either via `constraints.foreignKey(...)` inside model `.sql(...)` or via `rel.belongsTo(...).sql({ fk: ... })`. A relation gets its own backing index unless its foreign key says `index: false`. `index: '<name>'` uses an index, unique constraint or primary key the table declares instead: the name is the `name` or `map` it was given, or an index's stored name, and its first columns must be the foreign key's columns in order.
+
+```typescript
+constraints.foreignKey(cols.authorId, User.refs.id, { index: 'post_author_live' })
+```
+
+The emitted foreign key states what backs it in `index`: `{ name }` for an index, `{ primaryKey: true }` for the primary key, `{ unique: [columns] }` for a unique constraint by its columns, or nothing for `index: false`. The build drops an index identical to another (the planner's equality, so `type: 'btree'` equals no type), keeping the one with a `name` or `map`, and drops an unnamed plain index on the columns of a key; it warns with `PN_INDEX_DUPLICATE` or `PN_INDEX_REDUNDANT` about named indexes it keeps. See [ADR 161](../../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
 
 ### Validating Contracts
 

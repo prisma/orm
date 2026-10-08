@@ -42,8 +42,10 @@ export type {
   ColumnRef,
   DeferredIndexColumn,
   DeferredIndexExpression,
+  DeferredIndexOptions,
   IndexConstraint,
   IndexExpressionInput,
+  IndexOptionsInput,
   TargetFieldRef,
 } from '../contract-dsl';
 export { buildContractDefinition } from '../contract-lowering';

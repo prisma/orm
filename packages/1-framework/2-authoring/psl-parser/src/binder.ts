@@ -106,7 +106,7 @@ export interface ParameterSymbol {
 export interface FunctionSymbol {
   readonly kind: 'function';
   readonly name: string;
-  readonly signature: FuncCallSig;
+  readonly signature: FuncCallSig<never>;
 }
 
 export interface ConstantSymbol {

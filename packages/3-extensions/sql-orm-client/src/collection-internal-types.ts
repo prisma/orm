@@ -51,6 +51,7 @@ export type IncludedRelationsForRow<
 export type IncludeRefinementTerminals =
   | 'all'
   | 'first'
+  | 'firstOrThrow'
   | 'aggregate'
   | 'groupBy'
   | 'create'

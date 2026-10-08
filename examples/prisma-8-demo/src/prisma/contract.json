@@ -700,6 +700,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -745,6 +748,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -851,6 +857,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -869,10 +878,20 @@
               ],
               "indexes": [
                 {
-                  "expression": "to_tsvector('english', \"title\")",
-                  "name": "post_title_search_724b05e5",
+                  "columns": [
+                    "title"
+                  ],
+                  "name": "post_title_search_e0dd1131",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "title"
+                      ]
+                    ]
+                  },
                   "prefix": "post_title_search",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false
                 },
                 {
@@ -906,6 +925,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_tag_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -922,6 +944,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "post_tag_tagId_idx_86854244"
+                  },
                   "source": {
                     "columns": [
                       "tagId"
@@ -1040,6 +1065,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "task_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -1155,7 +1183,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ad6c8696da69df5c3a46cb752b6e0d53fd10f195b394341513d5f6e9c65e43ac",
+    "storageHash": "1f8be6858951202dbb1dfad2a36b45f3d04c630d2577dd70ac02f55bcb8ca5ea",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

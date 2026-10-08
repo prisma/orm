@@ -74,6 +74,21 @@ const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }
 `,
   },
   {
+    name: 'full-text indexes: one field, weight groups, a language, a predicate and an exact name',
+    schema: `model Post {
+  id       Int     @id
+  title    String
+  subtitle String? @map("sub_title")
+  body     String?
+
+  @@fullTextIndex([title], name: "post_title_search")
+  @@fullTextIndex([[title, subtitle], body], name: "post_search")
+  @@fullTextIndex([body, title], language: "german", where: "id > 10", name: "post_search_de")
+  @@fullTextIndex([[body]], map: "legacy_body_search")
+}
+`,
+  },
+  {
     name: 'a domain enum with membership checks on a scalar and a list column',
     schema: `enum Priority {
   @@type("pg/text@1")

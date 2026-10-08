@@ -30,6 +30,8 @@ import {
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
+import { assertFullTextIndexes } from './full-text-index-definition';
+import { postgresCodecTraitsOf } from './postgres-codec-traits';
 import { PostgresSchema } from './postgres-schema';
 
 const POSTGRES_AUTHORING_CTX: AuthoringEntityContext = {
@@ -146,7 +148,7 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
     }
     const valueSetSlot = entries['valueSet'];
     const hasValueSets = valueSetSlot !== undefined && Object.keys(valueSetSlot).length > 0;
-    return new PostgresSchema({
+    const schema = new PostgresSchema({
       id,
       entries: {
         ...entries,
@@ -154,6 +156,10 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
         ...(hasValueSets ? { valueSet: valueSetSlot } : {}),
       },
     });
+    for (const table of Object.values(schema.table)) {
+      assertFullTextIndexes(table, postgresCodecTraitsOf);
+    }
+    return schema;
   }
 
   override serializeContract(contract: Contract<SqlStorage>): JsonObject {

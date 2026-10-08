@@ -18,21 +18,21 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.16",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.16",
+    "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.17",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.17",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "pg": "catalog:"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.7.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.16",
-    "@repo/tsconfig": "workspace:8.0.0-rc.16",
+    "@repo/test-utils": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.16"
+  "version": "8.0.0-rc.17"
 }

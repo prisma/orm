@@ -587,7 +587,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 
 **Second incident.** prisma/orm#30439 (2026-09-28, Mongo `Json` and `Bson` codecs). The in-loop reviewer closed the slice SATISFIED by reading. A `drive-code-review` pass after PR-open, with execution allowed, ran the built codecs and found: both decoders threw a raw `TypeError` on a stored plain subdocument carrying a `_bsontype` key; `Bson` encode let through look-alike objects and values from another `bson` major that the driver then rejected without naming the field; the `Bson` JSON form turned bytes into `$numberInt` documents. The first fix round then introduced an `instanceof Code` check that never matched a `Code` the driver had read, because the target loads `bson`'s ESM build and `mongodb` loads the CommonJS build; only a test built from a CommonJS load of `bson` exposed it. Three fix rounds, 33 commits, before the PR could be queued.
 
-### F39. A branch-only CI failure gets "fixed" by rescheduling CI instead of by finding the cause
+### F42. A branch-only CI failure gets "fixed" by rescheduling CI instead of by finding the cause
 
 **Symptom.** A test fails on a branch and not on `main`, in a package the branch does not touch. The orchestrator forms a hypothesis from the failure's shape (ports, timing, a shared daemon), changes the CI workflow to run suites in series, and the same test fails again with the change in place. The real cause turns out to be a race inside the test and a test that never exercised the behaviour it was named for, exposed by a timing shift on the branch; the subsystem already supported the isolation the orchestrator was trying to schedule around.
 

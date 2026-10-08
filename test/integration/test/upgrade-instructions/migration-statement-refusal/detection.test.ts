@@ -3,15 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
-const FRAGMENT_PATH =
-  'upgrade-instructions/pending/migration-statement-refusal/app/instructions.md';
+const GUIDE_PATH =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.16-to-8.0.0-rc.17/instructions.md';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fragment = readFileSync(join(here, '../../../../..', FRAGMENT_PATH), 'utf-8');
+const guide = readFileSync(join(here, '../../../../..', GUIDE_PATH), 'utf-8');
 
 function detectionOf(id: string): readonly RegExp[] {
-  const entry = fragment.split(/\n {2}- id: /).find((block) => block.startsWith(`${id}\n`));
-  if (entry === undefined) throw new Error(`The fragment has no change ${id}`);
+  const entry = guide.split(/\n {2}- id: /).find((block) => block.startsWith(`${id}\n`));
+  if (entry === undefined) throw new Error(`The guide has no change ${id}`);
   return [...entry.matchAll(/^ {8}- '(.*)'$/gm)].map(
     ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
   );

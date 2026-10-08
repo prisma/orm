@@ -158,6 +158,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "characterInfo_characterId_idx_2423fe9d"
+                  },
                   "source": {
                     "columns": [
                       "characterId"
@@ -204,7 +207,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7664f48579174587be341512e84437039d202bbf73745c47f87b1e07c9b85041"
+    "storageHash": "0bdc4b6a653d4c763b3a670857f32dc603fe44883ea252a8dc35cbb055f85585"
   },
   "capabilities": {
     "postgres": {

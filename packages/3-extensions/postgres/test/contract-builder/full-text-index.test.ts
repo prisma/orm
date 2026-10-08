@@ -1,8 +1,5 @@
 /**
- * `fullTextIndex(cols.x, { name })` is the TypeScript twin of
- * `@@fullTextIndex([x], name: …)`. Both render the expression the full-text
- * operations lower to, from the resolved storage column, so the two surfaces
- * produce the same index for the same model.
+ * `fullTextIndex(...)` is the TypeScript twin of `@@fullTextIndex(...)`. Both store a `fullText` index whose options hold the weight groups, as storage column names, and the language, so the two surfaces produce the same index for the same model.
  */
 
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
@@ -16,17 +13,14 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import type { ColumnRef, IndexConstraint } from '@internal/sql-contract-ts/contract-builder';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
-import {
-  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
-  renderFullTextIndexExpression,
-} from '@internal/target-postgres/sql-utils';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   defineContract,
   field,
@@ -34,6 +28,7 @@ import {
   model,
   nativeEnum,
   pg,
+  rel,
 } from '../../src/exports/contract-builder';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
@@ -44,16 +39,9 @@ const postgresCodecLookup = createPostgresBuiltinCodecLookup();
  * namespace values have different static types, so this reads the one shape
  * both share.
  */
-function indexesOfPublicMessage(
-  namespace: unknown,
-): readonly { expression?: string; where?: string }[] {
+function indexesOfPublicMessage(namespace: unknown): readonly Record<string, unknown>[] {
   const table = blindCast<
-    {
-      readonly table?: Record<
-        string,
-        { readonly indexes?: readonly { expression?: string; where?: string }[] }
-      >;
-    },
+    { readonly table?: Record<string, { readonly indexes?: readonly Record<string, unknown>[] }> },
     'both the PSL and the TS build produce a Postgres namespace; only its indexes are read here'
   >(namespace).table;
   return table?.['message']?.indexes ?? [];
@@ -64,10 +52,13 @@ const textColumn = { codecId: 'pg/text@1' } as const;
 
 const PSL = `
 model Message {
-  id   Int    @id
-  text String @map("body_text")
+  id       Int     @id
+  title    String
+  subtitle String?
+  text     String? @map("body_text")
 
   @@fullTextIndex([text], name: "message_text_search")
+  @@fullTextIndex([[title, subtitle], text], name: "message_search")
   @@map("message")
 }
 `;
@@ -125,17 +116,22 @@ function pslIndexes() {
   return indexesOfPublicMessage(result.value.storage.namespaces['public']);
 }
 
-function tsIndexes() {
+const messageFields = {
+  id: field.column(intColumn).id(),
+  title: field.column(textColumn),
+  subtitle: field.column(textColumn).optional(),
+  text: field.column(textColumn).column('body_text').optional(),
+  views: field.column(intColumn),
+};
+
+type MessageColumns = { readonly [K in keyof typeof messageFields]: ColumnRef<K> };
+
+function indexesOf(indexes: (cols: MessageColumns) => readonly IndexConstraint[]) {
   const contract = defineContract({
     models: {
-      Message: model('Message', {
-        fields: {
-          id: field.column(intColumn).id(),
-          text: field.column(textColumn).column('body_text'),
-        },
-      }).sql(({ cols }) => ({
+      Message: model('Message', { fields: messageFields }).sql(({ cols }) => ({
         table: 'message',
-        indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+        indexes: indexes(cols),
       })),
     },
   });
@@ -143,56 +139,117 @@ function tsIndexes() {
 }
 
 describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
-  it('renders the storage column name, not the field name', () => {
-    expect(tsIndexes()[0]).toMatchObject({
-      expression: `to_tsvector('english', "body_text")`,
-      type: 'gin',
+  it('stores one field as a fullText index whose options name its storage column', () => {
+    const [index] = indexesOf((cols) => [
+      fullTextIndex(cols.text, { name: 'message_text_search' }),
+    ]);
+
+    expect(index).toMatchObject({
+      columns: ['body_text'],
+      type: 'fullText',
       prefix: 'message_text_search',
+      options: { weightGroups: [['body_text']], language: 'english' },
+    });
+    expect(index?.['expression']).toBeUndefined();
+  });
+
+  it('keeps the fields of a nested list in one weight group', () => {
+    const [index] = indexesOf((cols) => [
+      fullTextIndex([[cols.title, cols.subtitle], cols.text], { name: 'message_search' }),
+    ]);
+
+    expect(index).toMatchObject({
+      columns: ['title', 'subtitle', 'body_text'],
+      options: { weightGroups: [['title', 'subtitle'], ['body_text']], language: 'english' },
     });
   });
 
-  it('produces the index the PSL attribute produces for the same model', () => {
-    expect(tsIndexes()).toEqual(pslIndexes());
+  it('makes each item of a flat list its own weight group', () => {
+    const [index] = indexesOf((cols) => [
+      fullTextIndex([cols.title, cols.text], { name: 'message_search' }),
+    ]);
+
+    expect(index).toMatchObject({ options: { weightGroups: [['title'], ['body_text']] } });
   });
 
-  it('defaults to the language the target declares, not a copy of it', () => {
-    expect(tsIndexes()[0]?.expression).toBe(
-      renderFullTextIndexExpression(DEFAULT_FULL_TEXT_SEARCH_LANGUAGE, 'body_text'),
-    );
+  it('produces the indexes the PSL attribute produces for the same model', () => {
+    expect(
+      indexesOf((cols) => [
+        fullTextIndex([cols.text], { name: 'message_text_search' }),
+        fullTextIndex([[cols.title, cols.subtitle], cols.text], { name: 'message_search' }),
+      ]),
+    ).toEqual(pslIndexes());
+  });
+
+  it('records a non-default language', () => {
+    const [index] = indexesOf((cols) => [
+      fullTextIndex(cols.title, { language: 'german', name: 'message_de' }),
+    ]);
+
+    expect(index).toMatchObject({ options: { weightGroups: [['title']], language: 'german' } });
   });
 
   it('passes a where predicate through to a partial index', () => {
-    const contract = defineContract({
-      models: {
-        Message: model('Message', {
-          fields: { id: field.column(intColumn).id(), text: field.column(textColumn) },
-        }).sql(({ cols }) => ({
-          table: 'message',
-          indexes: [
-            fullTextIndex(cols.text, { where: 'id > 0', name: 'message_text_search_live' }),
-          ],
-        })),
-      },
+    const [index] = indexesOf((cols) => [
+      fullTextIndex(cols.title, { where: 'id > 0', name: 'message_title_search_live' }),
+    ]);
+
+    expect(index).toMatchObject({ where: 'id > 0', columns: ['title'] });
+  });
+
+  it('takes map: as the exact database name', () => {
+    const [index] = indexesOf((cols) => [fullTextIndex(cols.title, { map: 'legacy_search' })]);
+
+    expect(index).toMatchObject({ name: 'legacy_search', columns: ['title'] });
+    expect(index?.['prefix']).toBeUndefined();
+  });
+
+  describe('with map:', () => {
+    const exactNameWarnings = () =>
+      vi
+        .mocked(process.emitWarning)
+        .mock.calls.filter(
+          ([, options]) =>
+            (options as { code?: string } | undefined)?.code === 'PN_EXACT_NAME_BODY_COMPARISON',
+        );
+
+    beforeEach(() => {
+      vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
-    expect(indexesOfPublicMessage(contract.storage.namespaces['public'])[0]).toMatchObject({
-      where: 'id > 0',
+    it('warns that db verify compares the search document text exactly, as @@fullTextIndex does', () => {
+      indexesOf((cols) => [fullTextIndex(cols.title, { map: 'legacy_search' })]);
+
+      expect(exactNameWarnings()).toEqual([
+        [expect.stringContaining('index "legacy_search"'), expect.anything()],
+      ]);
+    });
+
+    it('warns once when the index also has a where predicate', () => {
+      indexesOf((cols) => [fullTextIndex(cols.title, { where: 'id > 0', map: 'legacy_live' })]);
+
+      expect(exactNameWarnings()).toHaveLength(1);
+    });
+
+    it('does not warn for a wire-named index', () => {
+      indexesOf((cols) => [fullTextIndex(cols.title, { name: 'message_title_search' })]);
+
+      expect(exactNameWarnings()).toEqual([]);
     });
   });
 
-  it('refuses a column that is not stored through a textual codec', () => {
+  it('refuses a column that is not stored through a textual codec, naming the field and its codec', () => {
     expect(() =>
-      defineContract({
-        models: {
-          Message: model('Message', {
-            fields: { id: field.column(intColumn).id(), views: field.column(intColumn) },
-          }).sql(({ cols }) => ({
-            table: 'message',
-            indexes: [fullTextIndex(cols.views, { name: 'message_views_search' })],
-          })),
-        },
+      indexesOf((cols) => [fullTextIndex([cols.title, cols.views], { name: 'message_search' })]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.INDEX_INVALID',
+        message: expect.stringMatching(/views.*pg\/int4@1/),
       }),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.INDEX_INVALID' }));
+    );
   });
 
   it('refuses a native enum column, which Postgres has no to_tsvector for', () => {
@@ -217,34 +274,126 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
     );
   });
 
-  it('names the field and its codec when it refuses one', () => {
+  it('refuses a fullText index whose columns are not the fields of its weight groups', () => {
     expect(() =>
-      defineContract({
-        models: {
-          Message: model('Message', {
-            fields: { id: field.column(intColumn).id(), views: field.column(intColumn) },
-          }).sql(({ cols }) => ({
-            table: 'message',
-            indexes: [fullTextIndex(cols.views, { name: 'message_views_search' })],
-          })),
+      indexesOf(() => [
+        {
+          kind: 'index',
+          fields: ['title'],
+          type: 'fullText',
+          options: { weightGroups: [['body_text']], language: 'english' },
+          name: 'message_search',
         },
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.INDEX_INVALID',
+        message: expect.stringContaining('[title]'),
       }),
-    ).toThrow(/views.*pg\/int4@1/);
+    );
   });
 
-  it('renders a non-default language', () => {
-    const contract = defineContract({
-      models: {
-        Message: model('Message', {
-          fields: { id: field.column(intColumn).id(), text: field.column(textColumn) },
-        }).sql(({ cols }) => ({
-          table: 'message',
-          indexes: [fullTextIndex(cols.text, { language: 'german', name: 'message_de' })],
-        })),
-      },
+  it('refuses a unique fullText index written through the general index API', () => {
+    expect(() =>
+      indexesOf(() => [
+        {
+          kind: 'index',
+          fields: ['title'],
+          type: 'fullText',
+          options: { weightGroups: [['title']], language: 'english' },
+          unique: true,
+          name: 'message_search',
+        },
+      ]),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.INDEX_INVALID' }));
+  });
+
+  it('refuses a fullText index over a column that is not text, written through the general index API', () => {
+    expect(() =>
+      indexesOf(() => [
+        {
+          kind: 'index',
+          fields: ['title', 'views'],
+          type: 'fullText',
+          options: { weightGroups: [['title'], ['views']], language: 'english' },
+          name: 'message_search',
+        },
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.INDEX_INVALID',
+        message: expect.stringMatching(/views.*pg\/int4@1/),
+      }),
+    );
+  });
+
+  it('refuses a fullText index named as the foreign key index of a relation', () => {
+    const Author = model('Author', { fields: { handle: field.column(textColumn).id() } }).sql({
+      table: 'author',
     });
-    expect(indexesOfPublicMessage(contract.storage.namespaces['public'])[0]).toMatchObject({
-      expression: `to_tsvector('german', "text")`,
-    });
+    const Message = model('Message', {
+      fields: { id: field.column(intColumn).id(), authorHandle: field.column(textColumn) },
+      relations: { author: rel.belongsTo(Author, { from: 'authorHandle', to: 'handle' }) },
+    }).sql(({ cols, constraints }) => ({
+      table: 'message',
+      indexes: [fullTextIndex(cols.authorHandle, { name: 'message_author_search' })],
+      foreignKeys: [
+        constraints.foreignKey(cols.authorHandle, Author.refs.handle, {
+          index: 'message_author_search',
+        }),
+      ],
+    }));
+
+    expect(() => defineContract({ models: { Author, Message } })).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: expect.stringContaining(
+          'but it is a "fullText" index, a "gin" index whose key is rendered from its options rather than its columns',
+        ),
+      }),
+    );
+  });
+
+  it('refuses a field the model does not declare', () => {
+    const missing: ColumnRef<'missing'> = { kind: 'columnRef', fieldName: 'missing' };
+
+    expect(() =>
+      indexesOf((cols) => [fullTextIndex([cols.title, missing], { name: 'message_search' })]),
+    ).toThrow(/missing/);
+  });
+
+  it.each([
+    [
+      'more than four weight groups',
+      (cols: MessageColumns) =>
+        fullTextIndex([cols.id, cols.title, cols.subtitle, cols.text, cols.views], { name: 'x' }),
+      'at most 4 weight groups',
+    ],
+    [
+      'an empty weight group',
+      (cols: MessageColumns) => fullTextIndex([cols.title, []], { name: 'x' }),
+      'empty weight group',
+    ],
+    ['no field at all', () => fullTextIndex([], { name: 'x' }), 'at least one field'],
+    [
+      'a field named twice',
+      (cols: MessageColumns) => fullTextIndex([[cols.title, cols.text], cols.title], { name: 'x' }),
+      '"title" more than once',
+    ],
+  ])('refuses %s when it is called', (_label, build, message) => {
+    expect(() => build(messageColumnRefs)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.INDEX_INVALID',
+        message: expect.stringContaining(message),
+      }),
+    );
   });
 });
+
+const messageColumnRefs: MessageColumns = {
+  id: { kind: 'columnRef', fieldName: 'id' },
+  title: { kind: 'columnRef', fieldName: 'title' },
+  subtitle: { kind: 'columnRef', fieldName: 'subtitle' },
+  text: { kind: 'columnRef', fieldName: 'text' },
+  views: { kind: 'columnRef', fieldName: 'views' },
+};

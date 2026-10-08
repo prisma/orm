@@ -1,7 +1,14 @@
 import type { ContractReferenceRelation, ContractRelation } from '@internal/contract/types';
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
-import type { ForeignKey, ReferentialAction } from '@internal/sql-contract/types';
+import { defaultForeignKeyIndex } from '@internal/sql-contract/foreign-key-materialization';
+import type {
+  ForeignKey,
+  Index,
+  IndexInput,
+  ReferentialAction,
+} from '@internal/sql-contract/types';
+import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
@@ -18,6 +25,7 @@ import {
   refuseRelationToOtherContractSpace,
   refuseRelationWithoutJoin,
   refuseToOneRelationWithoutForeignKey,
+  refuseUnnamedForeignKeyBacking,
   refuseUnwritableName,
 } from './refusals';
 
@@ -156,6 +164,59 @@ export function junctionParentRelation(
   return undefined;
 }
 
+/**
+ * The `index` argument of an owning relation. Every index the contract carries is written as its own `@@index`, and `contract emit` derives a backing index for a relation and drops it again beside an identical index or a key on its columns. So the argument is `false` for a foreign key nothing backs, the written name of an index the derived one would not match, and absent otherwise.
+ */
+function relationIndexArgument(entry: ModelRelation, foreignKey: ForeignKey): string | undefined {
+  const { owner } = entry;
+  const backing = foreignKey.index;
+  if (backing === undefined) return 'false';
+  const { table } = owner;
+  const columns = foreignKey.source.columns;
+  const derived = defaultForeignKeyIndex(owner.tableName, columns, {
+    indexes: table.indexes.map(indexInputOf),
+    uniques: table.uniques,
+    primaryKey: table.primaryKey,
+  });
+  if (derived !== undefined && JSON.stringify(derived) === JSON.stringify(backing)) {
+    return undefined;
+  }
+  const name = backingObjectName(table, backing);
+  if (name === undefined) refuseUnnamedForeignKeyBacking(owner.name, entry.fieldName);
+  return `"${escapePslString(name)}"`;
+}
+
+function indexInputOf(index: Index): IndexInput {
+  const shape = {
+    naming: parseNaming(index.name, index.prefix),
+    where: index.where,
+    unique: index.unique,
+    type: index.type,
+    options: index.options,
+  };
+  return index.expression !== undefined
+    ? { ...shape, expression: index.expression }
+    : { ...shape, columns: index.columns ?? [] };
+}
+
+/** The name the printed source gives what backs a foreign key: the written name of an index, unless another index shares it, or the name of the primary key or of the unique constraint with the stored columns. */
+function backingObjectName(
+  table: ModelWithTable['table'],
+  backing: NonNullable<ForeignKey['index']>,
+): string | undefined {
+  if ('name' in backing) {
+    const index = table.indexes.find((candidate) => candidate.name === backing.name);
+    if (index === undefined) return backing.name;
+    const written = index.prefix ?? index.name;
+    const ambiguous = table.indexes.some(
+      (other) => other !== index && (other.prefix ?? other.name) === written,
+    );
+    return ambiguous ? index.name : written;
+  }
+  if ('primaryKey' in backing) return table.primaryKey?.name;
+  return table.uniques.find((unique) => sameColumns(unique.columns, backing.unique))?.name;
+}
+
 /** The PSL field one relation is written as. */
 function buildRelationField(input: {
   readonly entry: ModelRelation;
@@ -195,9 +256,10 @@ function buildRelationField(input: {
     if (foreignKey.name !== undefined) {
       args.push(namedArg('map', `"${escapePslString(foreignKey.name)}"`));
     }
-    // Every index the contract carries is written as its own `@@index`, so the
-    // relation must not also ask for a backing one.
-    args.push(namedArg('index', 'false'));
+    const indexArgument = relationIndexArgument(entry, foreignKey);
+    if (indexArgument !== undefined) {
+      args.push(namedArg('index', indexArgument));
+    }
   }
 
   const list = relation.cardinality === '1:N' || relation.cardinality === 'N:M';

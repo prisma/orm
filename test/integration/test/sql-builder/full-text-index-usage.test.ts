@@ -16,17 +16,12 @@
  * `enable_seqscan = off` makes this a question of whether the index is usable
  * at all rather than one about cost estimates on a small table.
  */
-import {
-  createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
-} from '@internal/adapter-postgres/control';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
-import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { type PlannedIndex, plannedExpressionIndexes } from './full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from './setup';
 
 const QUERY = 'zebra';
@@ -52,41 +47,11 @@ function nodeTypes(node: unknown): readonly string[] {
 describe('full-text index usage', { timeout: timeouts.databaseOperation }, () => {
   const { db, runtime, client, contract, context, lower } = setupIntegrationTest();
 
-  const controlAdapter = new PostgresControlAdapter(
-    createPostgresBuiltinCodecLookup(),
-    createPostgresBuiltinDataTypeLookup(),
-  );
-
-  /** The index nodes the fixture's `fullTextIndex(...)` helpers emitted. */
-  function fixtureIndexes() {
-    const namespace = blindCast<
-      { readonly table: Record<string, { readonly indexes: readonly Record<string, unknown>[] }> },
-      'the fixture contract is a Postgres schema; only its comment indexes are read here'
-    >(contract().storage.namespaces['public']);
-    return namespace.table['comments']!.indexes;
-  }
-
-  function createIndexCallFor(index: Record<string, unknown>): CreateIndexCall {
-    const where = index['where'];
-    return new CreateIndexCall(
-      'public',
-      'comments',
-      String(index['name']),
-      { expression: String(index['expression']) },
-      { type: String(index['type']), ...(where === undefined ? {} : { where: String(where) }) },
-    );
-  }
-
-  async function createIndexFromContract(index: Record<string, unknown>) {
-    const op = await createIndexCallFor(index).toOp(controlAdapter);
-    for (const step of op.execute) {
-      await client().query(step.sql);
-    }
-  }
+  let planned: readonly PlannedIndex[] = [];
 
   /** The physical name the fixture's index carries, wire hash included. */
   function indexNamed(prefix: string): string {
-    return String(fixtureIndex(prefix)['name']);
+    return fixtureIndex(prefix).name;
   }
 
   /** `lowerSqlPlan` already unwrapped the renderer's slots to bare bound values. */
@@ -100,7 +65,8 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
   }
 
   beforeAll(async () => {
-    for (const index of fixtureIndexes()) await createIndexFromContract(index);
+    planned = await plannedExpressionIndexes(contract(), 'comments');
+    for (const index of planned) await client().query(index.createSql);
 
     // A control index over the same column in another configuration: buildable,
     // and not the expression our english query renders.
@@ -120,28 +86,22 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     await client().query('SET enable_seqscan = off');
   }, timeouts.spinUpPpgDev);
 
-  /** The index node the fixture's `fullTextIndex(...)` emitted under this prefix. */
-  function fixtureIndex(prefix: string): Record<string, unknown> {
-    const index = fixtureIndexes().find((candidate) => candidate['prefix'] === prefix);
+  /** The index the fixture's `fullTextIndex(...)` declared under this prefix, as the planner creates it. */
+  function fixtureIndex(prefix: string): PlannedIndex {
+    const index = planned.find((candidate) => candidate.prefix === prefix);
     if (index === undefined) throw new Error(`fixture index ${prefix} is missing`);
     return index;
   }
 
-  async function renderCreateIndex(prefix: string): Promise<string> {
-    const op = await createIndexCallFor(fixtureIndex(prefix)).toOp(controlAdapter);
-    const [step] = op.execute;
-    return step?.sql ?? '';
-  }
-
   it('creates the index from the DDL our own op factory and adapter render', async () => {
-    expect(await renderCreateIndex('comments_body_search')).toBe(
-      `CREATE INDEX "comments_body_search_7b2cde4d" ON "public"."comments" USING "gin" (to_tsvector('english', "body"))`,
+    expect(fixtureIndex('comments_body_search').createSql).toBe(
+      `CREATE INDEX "${indexNamed('comments_body_search')}" ON "public"."comments" USING "gin" (to_tsvector('english', "body"))`,
     );
   });
 
   it('renders the WHERE clause for a partial index the attribute emitted', async () => {
-    expect(await renderCreateIndex('comments_body_live')).toBe(
-      `CREATE INDEX "comments_body_live_a3f98ae2" ON "public"."comments" USING "gin" (to_tsvector('english', "body")) WHERE (post_id = 1)`,
+    expect(fixtureIndex('comments_body_live').createSql).toBe(
+      `CREATE INDEX "${indexNamed('comments_body_live')}" ON "public"."comments" USING "gin" (to_tsvector('english', "body")) WHERE (post_id = 1)`,
     );
   });
 

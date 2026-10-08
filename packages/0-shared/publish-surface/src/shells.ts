@@ -644,6 +644,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'diff-database-schema',
           'errors',
           'full-text',
+          'full-text-index-authoring',
           'issue-planner',
           'marker-lock',
           'migration',

@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-postgres",
-  "version": "8.0.0-rc.16",
+  "version": "8.0.0-rc.17",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,10 +16,10 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.16",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.16",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.16",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.16",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.17",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.17",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.17",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.17",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "arktype": "catalog:",
@@ -28,9 +28,9 @@
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/postgres": "workspace:8.0.0-rc.16",
-    "@repo/tsconfig": "workspace:8.0.0-rc.16",
-    "@repo/tsdown": "workspace:8.0.0-rc.16",
+    "@internal/postgres": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -150,6 +150,7 @@
     "./target/diff-database-schema": "./dist/target__diff-database-schema.mjs",
     "./target/errors": "./dist/target__errors.mjs",
     "./target/full-text": "./dist/target__full-text.mjs",
+    "./target/full-text-index-authoring": "./dist/target__full-text-index-authoring.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
     "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",

@@ -75,8 +75,6 @@ function buildContract(names: Names): Contract<SqlStorage> {
                       tableName: 'author',
                       columns: ['id'],
                     },
-                    constraint: true,
-                    index: false,
                     ...(names.foreignKey === undefined ? {} : { name: names.foreignKey }),
                   },
                 ],

@@ -230,6 +230,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -282,6 +287,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -342,7 +352,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "abee9eb6167d7b46b77a9031b3092b30bae7a994195817062c202c90e7784feb"
+    "storageHash": "8ad82bfe8cb55fa0c78612efe7d8b03937ccb1d32ea8f21365731072cf343f96"
   },
   "capabilities": {
     "postgres": {

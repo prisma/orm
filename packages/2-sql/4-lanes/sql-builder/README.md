@@ -83,6 +83,22 @@ await tx.sql.public.contact.select('id').forKeyShare().all();
 
 `nowait` and `skipLocked` exclude each other. `build()` refuses a lock together with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection. A locked select cannot be used as a subquery. `groupBy()` returns a query without the locking methods.
 
+### A table's indexes
+
+A table proxy's `indexes` holds each of its indexes under the name the contract source gave it: the `name:` prefix, or the `map:` name. Each is an `IndexReference`: its columns as expressions over the table's alias, its `type` and its `options`, typed from the contract. A query operation that searches what an index covers takes it in place of the columns, such as Postgres's `fullTextMatches`:
+
+```typescript
+const post = db.public.post.as('p');
+await post
+  .select('id')
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, websearchToTsquery(query)))
+  .all();
+```
+
+An unnamed index, including a foreign key's derived backing index, appears under its default prefix, such as `post_authorId_idx`. A name that more than one index of the table shares is not a key of the type, and reading it throws `ORM.ARGUMENT_INVALID`.
+
+An index's columns are bound to the alias of the proxy it was read from, so read it from a table the query selects from or joins: `build()` throws `ORM.ARGUMENT_INVALID` for a column of any other alias.
+
 ## Architecture
 
 - **Domain:** SQL

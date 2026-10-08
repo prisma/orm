@@ -120,8 +120,23 @@ describe('normalizeIndexOptionValue', () => {
     });
   });
 
-  it('String()-coerces everything else', () => {
+  it('String()-coerces every other scalar', () => {
     expect([70, '70', null].map(normalizeIndexOptionValue)).toEqual(['70', '70', 'null']);
+  });
+
+  it('writes a structured value as JSON, so nesting is kept', () => {
+    expect([[['a', 'b']], [['a'], ['b']], { x: 1 }].map(normalizeIndexOptionValue)).toEqual([
+      '[["a","b"]]',
+      '[["a"],["b"]]',
+      '{"x":1}',
+    ]);
+  });
+
+  it('writes object keys in sorted order at every depth, so key order does not change the value', () => {
+    expect(normalizeIndexOptionValue({ b: 2, a: { d: [{ f: 1, e: 2 }], c: 3 } })).toBe(
+      normalizeIndexOptionValue({ a: { c: 3, d: [{ e: 2, f: 1 }] }, b: 2 }),
+    );
+    expect(normalizeIndexOptionValue({ b: 2, a: 1 })).toBe('{"a":1,"b":2}');
   });
 });
 
@@ -354,6 +369,12 @@ describe('computeIndexContentHash', () => {
     expect(computeIndexContentHash(base)).toMatch(/^[0-9a-f]{8}$/);
   });
 
+  it('hashes an object option value the same whatever its key order', () => {
+    expect(computeIndexContentHash({ ...base, type: 'gin', options: { o: { b: 1, a: 2 } } })).toBe(
+      computeIndexContentHash({ ...base, type: 'gin', options: { o: { a: 2, b: 1 } } }),
+    );
+  });
+
   describe('tuple encoding stability', () => {
     it('matches the expected SHA-256 first-8-hex for a known input', () => {
       const hash = computeIndexContentHash({
@@ -385,6 +406,12 @@ describe('computeIndexContentHash', () => {
   });
 
   describe('options coercion and ordering', () => {
+    it('tells apart option values that differ only in how arrays nest', () => {
+      const oneGroup = computeIndexContentHash({ ...base, options: { fields: [['a', 'b']] } });
+      const twoGroups = computeIndexContentHash({ ...base, options: { fields: [['a'], ['b']] } });
+      expect(oneGroup).not.toBe(twoGroups);
+    });
+
     it('String()-coerces values: a typed 70 hashes equal to an introspected "70"', () => {
       const typed = computeIndexContentHash({ ...base, options: { fillfactor: 70 } });
       const stringly = computeIndexContentHash({ ...base, options: { fillfactor: '70' } });

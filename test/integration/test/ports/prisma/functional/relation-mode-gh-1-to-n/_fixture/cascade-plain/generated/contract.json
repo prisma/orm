@@ -203,6 +203,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postOneToMany_authorId_idx_e47547ed"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -253,6 +256,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postOptionalOneToMany_authorId_idx_e47547ed"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -316,7 +322,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2812204a6cd2cc0019d0e755e1e94f9c7457b3852d336974157a4ad1ea3fcea4"
+    "storageHash": "2a9354b88a9140c0a4eb608e7f5c9d1756574450a23f7179ef4570aff0b8a756"
   },
   "capabilities": {
     "postgres": {

@@ -43,6 +43,11 @@ import type {
 } from '@internal/psl-parser/syntax';
 import { dottedPathsIn, StringLiteralExprAst } from '@internal/psl-parser/syntax';
 import { sqlDataTypeOfCodec, unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
+import {
+  declaredBackingObjectName,
+  declaredIndexesServeForeignKey,
+} from '@internal/sql-contract/foreign-key-materialization';
+import { type AuthoredIndexInput, lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
@@ -462,22 +467,26 @@ export function interpretPrisma7Documents(
       prisma7PrimaryKeyName(model.tableName, build.idMap, binding.identifierMaxBytes),
       binding.defaultConstraintNames.primaryKey(model.tableName),
     );
-    modelNodes.push({
-      modelName,
-      tableName: model.tableName,
-      namespaceId: model.namespaceId,
-      fields: [...build.columns.values()],
-      ...(id !== undefined && id.length > 0
-        ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
-        : {}),
-      ...(indexes.length > 0 ? { indexes } : {}),
-      ...(foreignKeys !== undefined ? { foreignKeys } : {}),
-      ...(relations !== undefined ? { relations } : {}),
-    });
+    modelNodes.push(
+      stateServedBackingIndexes({
+        modelName,
+        tableName: model.tableName,
+        namespaceId: model.namespaceId,
+        fields: [...build.columns.values()],
+        ...(id !== undefined && id.length > 0
+          ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
+          : {}),
+        ...(indexes.length > 0 ? { indexes } : {}),
+        ...(foreignKeys !== undefined ? { foreignKeys } : {}),
+        ...(relations !== undefined ? { relations } : {}),
+      }),
+    );
   }
   for (const [key, junction] of lowered.junctions) {
     const relations = lowered.relations.get(key);
-    modelNodes.push(relations === undefined ? junction : { ...junction, relations });
+    modelNodes.push(
+      stateServedBackingIndexes(relations === undefined ? junction : { ...junction, relations }),
+    );
   }
 
   if (diagnostics.length > 0) {
@@ -511,6 +520,37 @@ export function interpretPrisma7Documents(
       input.dataTypes.lookup,
     ),
   );
+}
+
+/**
+ * Prisma 7 never derives a backing index for a foreign key, so its relations say `index: false`. Where the model's own indexes or keys already serve a foreign key, the relation takes the default instead, so the build drops the derived index again, or names the named key or plain index whose first columns are the foreign key's. Either way the stored foreign key states what backs it, and no index is added.
+ */
+function stateServedBackingIndexes(node: ModelNode): ModelNode {
+  if (node.foreignKeys === undefined) return node;
+  const table = {
+    indexes: (node.indexes ?? []).map((index) =>
+      lowerAuthoredIndex(
+        node.tableName,
+        blindCast<AuthoredIndexInput, 'a Prisma 7 index node carries the authored index union'>(
+          index,
+        ),
+        [],
+      ),
+    ),
+    uniques: node.uniques ?? [],
+    primaryKey: node.id,
+  };
+  return {
+    ...node,
+    foreignKeys: node.foreignKeys.map((foreignKey) => {
+      if (foreignKey.index !== false) return foreignKey;
+      if (declaredIndexesServeForeignKey(foreignKey.columns, table)) {
+        return { ...foreignKey, index: true };
+      }
+      const name = declaredBackingObjectName(foreignKey.columns, table);
+      return name === undefined ? foreignKey : { ...foreignKey, index: name };
+    }),
+  };
 }
 
 function checkDatasource(

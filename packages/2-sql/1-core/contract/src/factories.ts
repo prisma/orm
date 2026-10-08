@@ -83,6 +83,7 @@ export function fk(
     ...(opts?.name !== undefined && { name: opts.name }),
     ...(opts?.onDelete !== undefined && { onDelete: opts.onDelete }),
     ...(opts?.onUpdate !== undefined && { onUpdate: opts.onUpdate }),
+    ...(opts?.index !== undefined && { index: opts.index }),
   });
 }
 

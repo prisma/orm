@@ -301,7 +301,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "772fd3c323de4abfe207848b2f82489ed298f5557edde59ea97cad82c74de7db",
+    "storageHash": "cc608892bfbdccc4dc59d35461165c1e6ba647a6375ec368bc31bab9ec5e9d58",
     "namespaces": {
       "public": {
         "id": "public",
@@ -483,7 +483,10 @@
                   },
                   "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnoth_A_fkey",
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
                 },
                 {
                   "source": {
@@ -498,7 +501,10 @@
                   },
                   "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnoth_B_fkey",
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnot_B_index"
+                  }
                 }
               ],
               "primaryKey": {

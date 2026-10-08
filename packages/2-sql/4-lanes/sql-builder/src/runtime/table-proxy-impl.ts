@@ -1,6 +1,8 @@
 import type { StorageTable } from '@internal/sql-contract/types';
-import type { AnyFromSource, TableSource } from '@internal/sql-relational-core/ast';
+import { type AnyFromSource, ColumnRef, type TableSource } from '@internal/sql-relational-core/ast';
+import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
+import { structuredError } from '@internal/utils/structured-error';
 import type {
   AggregateFunctions,
   Expression,
@@ -27,12 +29,14 @@ import type {
   Subquery,
 } from '../scope';
 import type { NamespaceTable, TableProxyContract } from '../types/db';
+import type { IndexReference } from '../types/index-reference';
 import type { JoinedTables } from '../types/joined-tables';
 import type { DeleteQuery, InsertQuery, UpdateQuery } from '../types/mutation-query';
 import type { SelectQuery } from '../types/select-query';
 import type { LateralBuilder } from '../types/shared';
 import type { TableProxy } from '../types/table-proxy';
 import { BuilderBase, type BuilderContext, emptyState, tableToScope } from './builder-base';
+import { ExpressionImpl } from './expression-impl';
 import { JoinedTablesImpl } from './joined-tables-impl';
 import {
   buildParamValues,
@@ -63,10 +67,12 @@ export class TableProxyImpl<
   >[typeof JoinOuterScope];
 
   readonly #tableName: string;
+  readonly #alias: string;
   readonly #table: StorageTable;
   readonly #namespaceId: string;
   readonly #fromSource: TableSource;
   readonly #scope: Scope;
+  #indexes: TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] | undefined;
 
   constructor(
     tableName: string,
@@ -77,6 +83,7 @@ export class TableProxyImpl<
   ) {
     super(ctx);
     this.#tableName = tableName;
+    this.#alias = alias;
     this.#table = table;
     this.#namespaceId = namespaceId;
     this.#scope = tableToScope(alias, table, {
@@ -103,6 +110,62 @@ export class TableProxyImpl<
       TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['columns'],
       "the storage table states each column's codec and nullability at runtime; the declared type is the contract's own statement about the same columns, which a runtime value cannot carry"
     >(Object.freeze(refs));
+  }
+
+  /**
+   * The table's indexes, keyed by the name the contract source gave each. An index's columns are this table's columns under its alias, so `post.as('p').indexes.post_search` reads `p`'s columns. A name more than one index shares is refused when it is read.
+   */
+  get indexes(): TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] {
+    this.#indexes ??= this.#indexReferences();
+    return this.#indexes;
+  }
+
+  #indexReferences(): TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] {
+    const fields = this.#scope.namespaces[this.#alias];
+    assertDefined(fields, 'a table proxy scopes its own alias');
+    const byName = new Map<string, IndexReference[]>();
+    for (const index of this.#table.indexes) {
+      const authoredName = index.prefix ?? index.name;
+      const columns = Object.fromEntries(
+        (index.columns ?? []).map((column) => {
+          const field = fields[column];
+          assertDefined(field, `index "${index.name}" covers a column of its table`);
+          return [column, new ExpressionImpl(ColumnRef.of(this.#alias, column), field)];
+        }),
+      );
+      const reference = Object.freeze({
+        columns: Object.freeze(columns),
+        type: index.type,
+        options: index.options,
+      });
+      byName.set(authoredName, [...(byName.get(authoredName) ?? []), reference]);
+    }
+    const references = {};
+    for (const [authoredName, [reference, ...others]] of byName) {
+      Object.defineProperty(references, authoredName, {
+        enumerable: true,
+        get: () => {
+          if (others.length > 0) throw this.#ambiguousIndexName(authoredName);
+          return reference;
+        },
+      });
+    }
+    return blindCast<
+      TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'],
+      "the storage table states each index's name, columns, type and options at runtime; the declared type is the contract's own statement about the same indexes"
+    >(Object.freeze(references));
+  }
+
+  #ambiguousIndexName(authoredName: string) {
+    return structuredError(
+      'ORM.ARGUMENT_INVALID',
+      `Table "${this.#tableName}" has more than one index named "${authoredName}".`,
+      {
+        why: 'An index is read by the name its contract source gave it, and these indexes share that name.',
+        fix: `Give each of these indexes of table "${this.#tableName}" its own name in the contract source.`,
+        meta: { namespaceId: this.#namespaceId, tableName: this.#tableName, index: authoredName },
+      },
+    );
   }
 
   lateralJoin = this._gate(

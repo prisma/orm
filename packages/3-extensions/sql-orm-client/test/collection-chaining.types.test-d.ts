@@ -54,6 +54,7 @@ describe('class methods keep the class', () => {
     const posts = Post.include('author').published();
     expectTypeOf(posts).toExtend<PostCollection>();
     expectTypeOf(await posts.first()).toEqualTypeOf<AuthorRow | null>();
+    expectTypeOf(await posts.firstOrThrow()).toEqualTypeOf<AuthorRow>();
     expectTypeOf(await posts.all()).toEqualTypeOf<AuthorRow[]>();
     expectTypeOf<keyof AuthorRow>().toEqualTypeOf<keyof PostRow | 'author'>();
   });
@@ -74,6 +75,17 @@ describe('class methods keep the class', () => {
     const posts = Post.published().recent().limit(10).published();
     expectTypeOf(posts.recent().published()).toEqualTypeOf(posts);
   });
+
+  test('firstOrThrow returns the row of first without null for a registered class', async () => {
+    const posts = Post.published().recent();
+    expectTypeOf(await posts.firstOrThrow()).toEqualTypeOf<PostRow>();
+    expectTypeOf(await posts.firstOrThrow((p) => p.id.eq(1))).toEqualTypeOf<
+      NonNullable<Awaited<ReturnType<typeof posts.first>>>
+    >();
+    expectTypeOf(await posts.firstOrThrow(undefined, () => {})).toEqualTypeOf<PostRow>();
+    // @ts-expect-error firstOrThrow rejects unknown fields
+    posts.firstOrThrow({ missing: 1 });
+  });
 });
 
 describe('include', () => {
@@ -81,6 +93,7 @@ describe('include', () => {
     const posts = Post.include('author').published().include('comments');
     expectTypeOf(posts).toExtend<Filtered<PostCollection>>();
     expectTypeOf(await posts.first()).toEqualTypeOf<AuthorCommentsRow | null>();
+    expectTypeOf(await posts.firstOrThrow({ id: 1 })).toEqualTypeOf<AuthorCommentsRow>();
     expectTypeOf<keyof AuthorCommentsRow>().toEqualTypeOf<keyof PostRow | 'author' | 'comments'>();
   });
 
@@ -108,6 +121,7 @@ describe('include', () => {
 
   test('the plain collection rows are unchanged', async () => {
     expectTypeOf(await plain.Post.first()).toEqualTypeOf<PostRow | null>();
+    expectTypeOf(await plain.Post.firstOrThrow()).toEqualTypeOf<PostRow>();
   });
 });
 
@@ -118,6 +132,10 @@ describe('select and variant leave the class', () => {
       id: number;
       author: AuthorRow['author'];
     } | null>();
+    expectTypeOf(await posts.firstOrThrow()).toEqualTypeOf<{
+      id: number;
+      author: AuthorRow['author'];
+    }>();
   });
 
   test('select keeps the facts', () => {

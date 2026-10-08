@@ -735,6 +735,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -780,6 +783,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "features_feature_assignee_person_id_idx_7fcd7a77"
+                  },
                   "source": {
                     "columns": [
                       "feature_assignee_person_id"
@@ -796,6 +802,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -906,6 +915,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "task_comments_task_id_idx_5d5ac774"
+                  },
                   "source": {
                     "columns": [
                       "task_id"
@@ -983,6 +995,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tasks_project_id_idx_6ad92603"
+                  },
                   "source": {
                     "columns": [
                       "project_id"
@@ -999,6 +1014,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "tasks_reporter_id_idx_3eeed9a0"
+                  },
                   "source": {
                     "columns": [
                       "reporter_id"
@@ -1064,6 +1082,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tickets_owner_id_idx_ade9f347"
+                  },
                   "source": {
                     "columns": [
                       "owner_id"
@@ -1141,6 +1162,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "users_account_id_idx_3b48271c"
+                  },
                   "source": {
                     "columns": [
                       "account_id"
@@ -1180,7 +1204,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1c3c926473412354b75b8d33522386f2190c015028702a4a2b117e4a9aeef687"
+    "storageHash": "2ccba7c309ee13e4714b958e47eb88ca06415dac60cd475a51940499c3331f8a"
   },
   "capabilities": {
     "postgres": {

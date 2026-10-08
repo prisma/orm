@@ -126,6 +126,21 @@ describe('ORM ergonomics integration', {
       expect(found!.email).toBe('alice@test.com');
     });
 
+    it('firstOrThrow returns the matching document and rejects when none matches', async () => {
+      const orm = mongoOrm({ contract, executor: runtime, enums });
+      await orm.users.create(defaultUserData);
+      await orm.users.create({ ...defaultUserData, name: 'Bob', email: 'bob@test.com' });
+      const found = await orm.users.where({ name: 'Bob' }).firstOrThrow();
+      expect({ name: found.name, email: found.email }).toEqual({
+        name: 'Bob',
+        email: 'bob@test.com',
+      });
+      await expect(orm.users.where({ name: 'Carol' }).firstOrThrow()).rejects.toMatchObject({
+        code: 'RUNTIME.NO_ROWS',
+        message: 'Expected at least one row, but none were returned',
+      });
+    });
+
     it('filters by multiple fields using object where', async () => {
       const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);

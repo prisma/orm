@@ -42,22 +42,22 @@ import type {
   SqlStorage,
   StorageTable,
   SqlModelStorage,
-  ForeignKeysConfig,
+  ForeignKeyIndex,
 } from '@internal/sql-contract/types';
 ```
 
-### Foreign Keys Configuration
+### What backs a foreign key
 
-`SqlContract` includes an optional `foreignKeys` field of type `ForeignKeysConfig` that controls whether the planner emits foreign key constraints and their backing indexes:
+A stored `ForeignKey` says what serves its lookups on its own table in an optional `index` field, a `ForeignKeyIndex`:
 
 ```typescript
-type ForeignKeysConfig = {
-  readonly constraints: boolean;  // Emit FOREIGN KEY constraints
-  readonly indexes: boolean;      // Emit FK-backing indexes
-};
+type ForeignKeyIndex =
+  | { readonly name: string }          // an index of the table, by its stored name
+  | { readonly primaryKey: true }      // the primary key, whose first columns are the foreign key's
+  | { readonly unique: readonly string[] }; // a unique constraint, by its columns, whose first columns are the foreign key's
 ```
 
-When omitted, defaults to `{ constraints: true, indexes: true }`. See [ADR 161](../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md) for design rationale.
+The field is absent when the relation says `index: false`. `materializeForeignKeysAndIndexes` sets it while building a contract, after a pass that removes indexes identical to another (`index-deduplication.ts`, using the planner's equality from `index-equivalence.ts`). It refuses a relation's `index: "<name>"` that names an index of a type whose body is rendered from its options, such as Postgres's `fullText`, because such an index's columns are not its key. Contract validation refuses an `index` its table does not have. See [ADR 161](../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
 
 ### Referential Actions
 

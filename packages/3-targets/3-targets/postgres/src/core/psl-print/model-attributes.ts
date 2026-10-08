@@ -10,9 +10,11 @@ import {
 } from '@internal/sql-schema-ir/naming';
 import { postgresRenderCheckExpressions } from '../check-expressions';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
+import { fullTextIndexDefinitionOf } from '../full-text-index-definition';
 import {
   type AttributeNaming,
   buildCheckAttribute,
+  buildFullTextIndexAttribute,
   buildIndexAttribute,
   buildModelConstraintAttribute,
 } from '../psl-build/index-attributes';
@@ -180,7 +182,13 @@ export function buildModelAttributes(input: {
   }
   for (const index of entry.table.indexes) {
     if (!owns(index.columns)) continue;
-    refuseUnwritableIndexOptions(entry, index);
+    const naming = attributeNaming({
+      kind: 'index',
+      entry,
+      name: index.name,
+      prefix: index.prefix,
+      contentHash: () => computeIndexContentHash(index),
+    });
     refuseSqlTextThatDoesNotReadBack({
       kind: 'index',
       namespaceId: entry.namespaceId,
@@ -188,19 +196,13 @@ export function buildModelAttributes(input: {
       name: index.name,
       texts: [index.expression, index.where],
     });
-    attributes.push(
-      buildIndexAttribute(
-        index,
-        index.columns?.map(fieldNameOf),
-        attributeNaming({
-          kind: 'index',
-          entry,
-          name: index.name,
-          prefix: index.prefix,
-          contentHash: () => computeIndexContentHash(index),
-        }),
-      ),
-    );
+    const fullText = fullTextIndexDefinitionOf(index);
+    if (fullText !== undefined) {
+      attributes.push(buildFullTextIndexAttribute(index, fullText, fieldNameOf, naming));
+      continue;
+    }
+    refuseUnwritableIndexOptions(entry, index);
+    attributes.push(buildIndexAttribute(index, index.columns?.map(fieldNameOf), naming));
   }
   if (entry.table.control !== undefined && variant?.singleTable !== true) {
     attributes.push(buildAttribute('model', 'control', [positionalArg(entry.table.control)]));

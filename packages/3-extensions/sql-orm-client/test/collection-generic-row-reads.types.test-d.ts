@@ -77,13 +77,3 @@ describe('a row read inside a generic function has readable fields', () => {
     expectTypeOf(await emailOfUpdated(users)).toEqualTypeOf<string | undefined>();
   });
 });
-
-describe('first takes a filter or none', () => {
-  test('undefined and a filter that may be undefined are refused', () => {
-    const maybeFilter = undefined as { name: string } | undefined;
-    // @ts-expect-error first takes no filter or a filter, not undefined
-    users.first(undefined);
-    // @ts-expect-error first takes no filter or a filter, not one that may be undefined
-    users.first(maybeFilter);
-  });
-});

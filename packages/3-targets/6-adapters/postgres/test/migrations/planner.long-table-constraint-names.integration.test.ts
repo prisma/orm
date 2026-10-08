@@ -77,8 +77,6 @@ function buildContract(keep: Keep): Contract<SqlStorage> {
                           tableName: 'owner',
                           columns: ['id'],
                         },
-                        constraint: true,
-                        index: false,
                       },
                     ]
                   : [],

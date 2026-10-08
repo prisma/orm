@@ -9,7 +9,7 @@ import { SqlQueryError } from '@internal/sql-errors';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import {
   DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
-  renderFullTextIndexExpression,
+  renderFullTextIndexDocument,
 } from '@internal/target-postgres/sql-utils';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,7 +19,10 @@ type Query = (sql: string) => Promise<ReadonlyArray<Record<string, unknown>>>;
 
 const TABLE = 'textual_conformance';
 const COLUMN = 'value';
-const TO_TSVECTOR = renderFullTextIndexExpression(DEFAULT_FULL_TEXT_SEARCH_LANGUAGE, COLUMN);
+const TO_TSVECTOR = renderFullTextIndexDocument({
+  weightGroups: [[COLUMN]],
+  language: DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+});
 
 const TEXT_POSITIONS = [
   { position: 'ilike', sql: `SELECT "${COLUMN}" ILIKE '%a%' FROM "${TABLE}"` },
