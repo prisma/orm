@@ -723,7 +723,6 @@ function resolveOperation(
   const junction = relation.ownership === 'junction';
   const parentOwned = relation.ownership === 'parent';
   if (relation.ownership === 'junction') {
-    assertJunctionMetadataShape(relation);
     assertJunctionPayloadWritable(relation, mutation.kind);
   }
 
@@ -1188,15 +1187,12 @@ function readJunctionParentValues(
   parentRow: Record<string, unknown>,
 ): Map<string, unknown> {
   const values = new Map<string, unknown>();
-  assertJunctionParentMetadataLength(relation);
 
   for (let i = 0; i < relation.through.parentColumns.length; i++) {
     const junctionColumn = relation.through.parentColumns[i];
     const parentColumn = relation.localColumns[i];
     if (junctionColumn === undefined || parentColumn === undefined) {
-      throw new InternalError(
-        `Relation "${relation.relationName}" has incomplete junction metadata for parent columns`,
-      );
+      continue;
     }
 
     const parentFieldName = toFieldName(contract, parentNamespaceId, parentModelName, parentColumn);
@@ -1219,15 +1215,12 @@ function readJunctionTargetValues(
   relatedRow: Record<string, unknown>,
 ): Map<string, unknown> {
   const values = new Map<string, unknown>();
-  assertJunctionTargetMetadataLength(relation);
 
   for (let i = 0; i < relation.through.childColumns.length; i++) {
     const junctionColumn = relation.through.childColumns[i];
     const targetColumn = relation.through.targetColumns[i];
     if (junctionColumn === undefined || targetColumn === undefined) {
-      throw new InternalError(
-        `Relation "${relation.relationName}" has incomplete junction metadata for target columns`,
-      );
+      continue;
     }
 
     const targetFieldName = toFieldName(
@@ -1283,11 +1276,6 @@ export function assertJunctionTargetMetadataLength(relation: JunctionRelationDef
     'targetColumns',
     relation.through.targetColumns,
   );
-}
-
-function assertJunctionMetadataShape(relation: JunctionRelationDefinition): void {
-  assertJunctionParentMetadataLength(relation);
-  assertJunctionTargetMetadataLength(relation);
 }
 
 function writeJunctionColumn(
@@ -1437,9 +1425,7 @@ function buildJunctionMembershipWhere(
   through.childColumns.forEach((junctionColumn, index) => {
     const targetColumn = through.targetColumns[index];
     if (targetColumn === undefined) {
-      throw new InternalError(
-        `Relation "${relation.relationName}" has incomplete junction metadata for target columns`,
-      );
+      return;
     }
     conditions.push(
       BinaryExpr.eq(
@@ -1595,7 +1581,10 @@ function getRelationDefinitions(
         ),
       };
       if (relation.through) {
-        return { ...definition, ownership: 'junction', through: relation.through };
+        const junction = { ...definition, through: relation.through };
+        assertJunctionParentMetadataLength(junction);
+        assertJunctionTargetMetadataLength(junction);
+        return { ...junction, ownership: 'junction' };
       }
       return {
         ...definition,
