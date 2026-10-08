@@ -1,0 +1,24 @@
+# Slice 3, dispatch b: database JSON is read with `fromWire`
+
+Dispatch b of `projects/data-types-completion/slices/3/plan.md`. Read the slice plan, ADR 254 "Codecs" and the "Rows the database returns as JSON" item of "Reading and writing a stored value", and decision 11 in `design-notes.md`. The map of every JSON projection and what it produces today is `wip/s3/inventory-codec.md` sections 5 and 6. Dispatch a is merged into the branch: values are `DataTypeValue`s and codecs have `fromDataTypeValue`, `toDataTypeValue`, `fromWire` and `toWire`.
+
+Today an `include` or an aggregate comes back from the database as JSON, and the ORM reads each column inside it with `fromDataTypeValue`, as if the database had written a stored value. It has not: a Postgres timestamp arrives in the session time zone, SQLite JSON arrives as the text the row holds. So the data types' readers still accept the database's spellings. This dispatch reads database JSON with `fromWire`, the method that reads every ordinary row, and then narrows the readers.
+
+## Build
+
+1. **The ORM reads database JSON with `fromWire`.** Include rows, scalar includes and aggregates (`sql-orm-client/src/collection-dispatch.ts`, `aggregate-empty-result.ts`, and the callers in `collection.ts`) call the column's codec's `fromWire` with the same call context an ordinary row gets, and await it. The functions on that path become asynchronous; keep the per-row work as it is otherwise.
+2. **Each JSON projection produces what `fromWire` reads.** For every codec in the Postgres and SQLite targets and in pgvector, postgis and arktype-json, the value its JSON projection puts into the JSON is one its `fromWire` reads, giving the same application value as an ordinary row of the same column. On Postgres the projection is `CAST(x AS text)` wherever the ordinary row's wire value is the text PostgreSQL prints; this moves `bytea` from base64 to PostgreSQL's hex text and the interval from the ISO duration assembled in SQL to PostgreSQL's interval text. The projection is the column itself where the JSON value is already what `fromWire` reads, such as `jsonb`, a number or a boolean. Where JSON cannot carry the row's wire value, such as SQLite's `blob`, `fromWire` also reads the projection's value; list each codec where you widened `fromWire` and why.
+3. **Empty aggregate results are wire values.** `emptyResultJson` on aggregate descriptors becomes a wire value read with `fromWire`; rename the field to say so and update every aggregate descriptor.
+4. **Test kits.** Both codec test kits assert, for every case and against a real database, that `fromWire` of the projected value equals `fromWire` of the ordinary row value (or the case's `valueEquality`), for a single column and, in the Postgres kit, inside an array. Remove their use of `canonicalFormOf` on projected values. The pgvector and arktype-json conformance files keep running through the Postgres kit.
+5. **Narrow the readers.** Database JSON no longer reaches a data type's reader, so each date and time type's reader, Postgres and SQLite, accepts only the stored form ADR 254's "Values" table and "Date and time types" section give, and refuses the database's spellings. Do the same for any other type whose reader dispatch a widened for database JSON (dispatch a's report lists them in `projects/data-types-completion/slices/3/build-review.md`). Add a test per narrowed type that the database's spelling is refused by `fromContract`.
+6. **PostGIS.** `pg/geometry@1`'s projection is the identity today while its old JSON reader expected HEXEWKB; on PostGIS 3, `to_json` of a geometry may give GeoJSON. Make the projection produce what `fromWire` reads (`CAST(x AS text)` gives HEXEWKB) and prove it with a test against a PostGIS database if one can run here (PGlite's `postgis` extension, if the repository has it). If none can run, say so in your report, keep the change, and add a line to `projects/data-types-completion/deferred.md` naming the missing test.
+
+## Must not change
+
+Committed `contract.json` and `contract.d.ts`, migrations and snapshots, the golden planner recordings (re-record and check `git status`), and what any query returns to the application. `pnpm fixtures:check:agent` passes.
+
+## Done when
+
+Tests were red first, then green. Root `typecheck:agent`; the touched packages' tests; both codec test kits' unit and integration files; pgvector's and arktype-json's conformance files; `test/integration/test/sql-orm-client/` files whose names mention include, relation or aggregate (list the files you ran); `lint:agent`; `lint:deps`. Do not edit `docs/`; the orchestrator rewrites the codec guide's section on JSON projections.
+
+Report in under 400 words: commits; the projection of each codec that changed; each codec whose `fromWire` you widened; the readers you narrowed; the PostGIS result.
