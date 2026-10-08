@@ -728,13 +728,13 @@ describe('MongoCollection terminal methods', () => {
       { _id: '1', name: 'Alice', email: 'a@b.c' },
       { _id: '2', name: 'Bob', email: 'b@b.c' },
     ]);
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     expect(await col.firstOrThrow()).toEqual({ _id: '1', name: 'Alice', email: 'a@b.c' });
   });
 
   it('firstOrThrow() rejects with RUNTIME.NO_ROWS when no results', async () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     await expect(col.firstOrThrow()).rejects.toMatchObject({
       code: 'RUNTIME.NO_ROWS',
       message: 'Expected at least one row, but none were returned',
@@ -745,9 +745,11 @@ describe('MongoCollection terminal methods', () => {
   it('firstOrThrow() issues the plan of first()', async () => {
     const row = { _id: '1', title: 'Crash', type: 'bug', assigneeId: '2' };
     const executor = createMockExecutor([row], [row], [row], [row]);
-    const users = createMongoCollection(contract, 'User', executor).where({ name: 'Alice' });
-    const bugs = createMongoCollection(contract, 'Task', executor)
-      .variant('Bug')
+    const users = createMongoCollection(contract, 'User', executor, noEnums).where({
+      name: 'Alice',
+    });
+    const bugs = createMongoCollection(contract, 'Task', executor, noEnums)
+      .variant('bug')
       .include('assignee')
       .limit(99);
     await users.first();

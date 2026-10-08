@@ -127,7 +127,7 @@ describe('ORM ergonomics integration', {
     });
 
     it('firstOrThrow returns the matching document and rejects when none matches', async () => {
-      const orm = mongoOrm({ contract, executor: runtime });
+      const orm = mongoOrm({ contract, executor: runtime, enums });
       await orm.users.create(defaultUserData);
       await orm.users.create({ ...defaultUserData, name: 'Bob', email: 'bob@test.com' });
       const found = await orm.users.where({ name: 'Bob' }).firstOrThrow();
