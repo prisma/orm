@@ -1205,7 +1205,7 @@ At query-render time a table references a namespace that is not present, or not 
 
 ### RUNTIME.NO_ROWS
 
-`firstOrThrow()` was called and no row was returned: on a query result, on a SQL or Mongo ORM collection, or when running a query prepared from a SQL ORM collection's `.prepared.firstOrThrow()`. Use `first()` if an empty result is acceptable.
+`firstOrThrow()` was called on a query result that returned no rows. Use `first()` if an empty result is acceptable.
 
 ### RUNTIME.PARAM_REF_CODEC_REQUIRED
 
