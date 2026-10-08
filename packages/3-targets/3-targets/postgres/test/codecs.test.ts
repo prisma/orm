@@ -313,9 +313,9 @@ describe('adapter-postgres codecs', () => {
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
     });
 
-    it('rejects non-hex bytea text', async () => {
-      await expect(byteaCodec.fromWire('not-bytea-hex', {})).rejects.toThrow(
-        'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
+    it('rejects text that is neither bytea hex nor bytea escape text', async () => {
+      await expect(byteaCodec.fromWire('\\xzz', {})).rejects.toThrow(
+        "pg/bytea@1 wire value must be a Uint8Array or bytea text, as PostgreSQL prints it under bytea_output 'hex' or 'escape'",
       );
     });
 
@@ -392,9 +392,9 @@ describe('adapter-postgres codecs', () => {
       );
     });
 
-    it('rejects a text wire value that is neither an ISO-8601 duration nor interval text', async () => {
+    it('rejects a text wire value that is no IntervalStyle text', async () => {
       await expect(codec.fromWire('one day', {})).rejects.toThrow(
-        'pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got one day',
+        'pg/interval@1 value must be interval text PostgreSQL prints under an IntervalStyle, got one day',
       );
     });
 
