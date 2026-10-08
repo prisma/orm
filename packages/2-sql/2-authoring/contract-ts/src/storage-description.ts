@@ -46,7 +46,7 @@ export interface TableDescription {
  * The storage a model implies. A model with a table of its own describes that table; a single-table variant names the columns it needs on the table its base model owns.
  */
 export type ModelStorage =
-  | { readonly kind: 'ownTable'; readonly table: TableDescription }
+  | { readonly kind: 'ownTable'; readonly modelName: string; readonly table: TableDescription }
   | {
       readonly kind: 'baseTable';
       readonly modelName: string;
@@ -66,4 +66,9 @@ export interface ModelDomain {
 export interface ModelComponents {
   readonly storage: ModelStorage;
   readonly domain: ModelDomain;
+}
+
+/** The key of a table among all tables of a contract: its namespace and its name. */
+export function tableKey(namespaceId: string, tableName: string): string {
+  return JSON.stringify([namespaceId, tableName]);
 }

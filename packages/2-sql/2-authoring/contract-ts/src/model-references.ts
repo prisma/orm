@@ -1,10 +1,25 @@
 import type { ContractDefinition, ModelNode } from './contract-definition';
 import { contractError } from './contract-errors';
 
+/** The declaration a reference starts from: a model, or a table node. Named in the errors that resolving the reference raises. */
+export type ReferenceOwner =
+  | { readonly kind: 'model'; readonly modelName: string }
+  | { readonly kind: 'table'; readonly tableName: string };
+
+export function referenceOwnerSubject(owner: ReferenceOwner): string {
+  return owner.kind === 'model' ? `model "${owner.modelName}"` : `table "${owner.tableName}"`;
+}
+
+export function referenceOwnerMeta(owner: ReferenceOwner): Record<string, string> {
+  return owner.kind === 'model'
+    ? { sourceModel: owner.modelName }
+    : { sourceTable: owner.tableName };
+}
+
 export function assertKnownTargetModel(
   modelsByName: ReadonlyMap<string, ModelNode>,
   modelsByCoordinate: ReadonlyMap<string, ModelNode>,
-  sourceModelName: string,
+  owner: ReferenceOwner,
   targetModelName: string,
   targetNamespaceId: string | undefined,
   context: string,
@@ -20,15 +35,15 @@ export function assertKnownTargetModel(
         : targetModelName;
     throw contractError(
       'CONTRACT.MODEL_UNKNOWN',
-      `${context} on model "${sourceModelName}" references unknown model "${qualified}"`,
-      { meta: { sourceModel: sourceModelName, targetModel: qualified, context } },
+      `${context} on ${referenceOwnerSubject(owner)} references unknown model "${qualified}"`,
+      { meta: { ...referenceOwnerMeta(owner), targetModel: qualified, context } },
     );
   }
   return targetModel;
 }
 
 export function assertTargetTableMatches(
-  sourceModelName: string,
+  owner: ReferenceOwner,
   targetModel: ModelNode,
   referencedTableName: string,
   context: string,
@@ -36,10 +51,10 @@ export function assertTargetTableMatches(
   if (targetModel.tableName !== referencedTableName) {
     throw contractError(
       'CONTRACT.TABLE_MISMATCH',
-      `${context} on model "${sourceModelName}" references table "${referencedTableName}" but model "${targetModel.modelName}" maps to "${targetModel.tableName}"`,
+      `${context} on ${referenceOwnerSubject(owner)} references table "${referencedTableName}" but model "${targetModel.modelName}" maps to "${targetModel.tableName}"`,
       {
         meta: {
-          sourceModel: sourceModelName,
+          ...referenceOwnerMeta(owner),
           referencedTable: referencedTableName,
           mappedTable: targetModel.tableName,
           context,

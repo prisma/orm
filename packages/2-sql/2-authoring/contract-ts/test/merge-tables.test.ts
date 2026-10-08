@@ -34,7 +34,7 @@ function table(
 }
 
 function ownTable(description: TableDescription): ModelStorage {
-  return { kind: 'ownTable', table: description };
+  return { kind: 'ownTable', modelName: 'Model', table: description };
 }
 
 function baseTable(
@@ -51,7 +51,7 @@ describe('mergeTables', () => {
     const auditTask = table('task', [column('Task', 'id')], 'audit');
     const user = table('user', [column('User', 'id')]);
 
-    expect(mergeTables([ownTable(task), ownTable(user), ownTable(auditTask)])).toEqual([
+    expect(mergeTables([ownTable(task), ownTable(user), ownTable(auditTask)], [])).toEqual([
       task,
       user,
       auditTask,
@@ -60,10 +60,13 @@ describe('mergeTables', () => {
 
   it('refuses two tables with the same name in one namespace', () => {
     expect(() =>
-      mergeTables([
-        ownTable(table('task', [column('Task', 'id')])),
-        ownTable(table('task', [column('Job', 'id')])),
-      ]),
+      mergeTables(
+        [
+          ownTable(table('task', [column('Task', 'id')])),
+          ownTable(table('task', [column('Job', 'id')])),
+        ],
+        [],
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_DUPLICATE',
@@ -76,7 +79,10 @@ describe('mergeTables', () => {
     const task = table('task', [column('Task', 'id'), column('Task', 'severity')]);
 
     expect(
-      mergeTables([ownTable(task), baseTable('Bug', 'task', [column('Bug', 'severity', false)])]),
+      mergeTables(
+        [ownTable(task), baseTable('Bug', 'task', [column('Bug', 'severity', false)])],
+        [],
+      ),
     ).toEqual([task]);
   });
 
@@ -84,16 +90,19 @@ describe('mergeTables', () => {
     const user = table('user', [column('User', 'id')]);
 
     expect(
-      mergeTables([ownTable(user), baseTable('Bug', 'task', [column('Bug', 'severity')])]),
+      mergeTables([ownTable(user), baseTable('Bug', 'task', [column('Bug', 'severity')])], []),
     ).toEqual([user]);
   });
 
   it('refuses a variant column the base table does not have', () => {
     expect(() =>
-      mergeTables([
-        ownTable(table('task', [column('Task', 'id')])),
-        baseTable('Bug', 'task', [column('Bug', 'severity')]),
-      ]),
+      mergeTables(
+        [
+          ownTable(table('task', [column('Task', 'id')])),
+          baseTable('Bug', 'task', [column('Bug', 'severity')]),
+        ],
+        [],
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.COLUMN_ON_STI_VARIANT',

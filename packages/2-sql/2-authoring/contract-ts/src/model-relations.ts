@@ -130,10 +130,11 @@ export function lowerRelations(
       continue;
     }
 
+    const owner = { kind: 'model', modelName: semanticModel.modelName } as const;
     const targetModel = assertKnownTargetModel(
       lookups.modelsByName,
       lookups.modelsByCoordinate,
-      semanticModel.modelName,
+      owner,
       relation.toModel,
       relation.toNamespaceId,
       'Relation',
@@ -142,7 +143,7 @@ export function lowerRelations(
       relation.toTable !== undefined,
       `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
     );
-    assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
+    assertTargetTableMatches(owner, targetModel, relation.toTable, 'Relation');
 
     const targetColumnToField = new Map(targetModel.fields.map((f) => [f.columnName, f.fieldName]));
 

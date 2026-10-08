@@ -43,12 +43,13 @@ import { ifDefined } from '@internal/utils/defined';
 import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
 import { describeModel } from './describe-model';
+import { describeTableNode, tableNodeNamespaceId } from './describe-table';
 import { buildDomainField } from './domain-fields';
 import { encodeEnumMembers } from './enum-members';
 import type { TypeLookups } from './lower-column';
 import { lowerTable, type TableLoweringContext } from './lower-table';
 import { mergeTables } from './merge-tables';
-import { modelLookupsOf } from './model-references';
+import { modelLookupsOf, modelNamespaceId } from './model-references';
 import {
   assertNoManagedEntityKinds,
   type CollectedColumnEntities,
@@ -57,7 +58,7 @@ import {
   mergeColumnAndAttachedEntities,
   mergeNamespaceValueSets,
 } from './pack-entities';
-import type { ModelComponents } from './storage-description';
+import { type ModelComponents, tableKey } from './storage-description';
 import {
   resolveCheckExpressionRenderer,
   resolveColumnTypeQualifier,
@@ -96,6 +97,11 @@ function collectStorageNamespaceCoordinateIds(definition: ContractDefinition): S
       ids.add(model.namespaceId);
     }
   }
+  for (const table of definition.tables ?? []) {
+    if (table.namespaceId !== undefined && table.namespaceId.length > 0) {
+      ids.add(table.namespaceId);
+    }
+  }
   for (const id of Object.keys(definition.attachedEntities ?? {})) {
     if (id.length > 0) {
       ids.add(id);
@@ -122,8 +128,20 @@ function ensureUnboundNamespaceSlot(
   };
 }
 
+function declaredTableKeys(definition: ContractDefinition): ReadonlySet<string> {
+  const defaultNamespaceId = definition.target.defaultNamespaceId;
+  return new Set([
+    ...definition.models.map((model) =>
+      tableKey(modelNamespaceId(model, defaultNamespaceId), model.tableName),
+    ),
+    ...(definition.tables ?? []).map((table) =>
+      tableKey(tableNodeNamespaceId(table, defaultNamespaceId), table.tableName),
+    ),
+  ]);
+}
+
 /**
- * Builds the contract in two stages. First each model is converted on its own into the table it describes and its domain model. Then the tables are merged, each is lowered, and the contract is assembled.
+ * Builds the contract in two stages. First each model is converted on its own into the table it describes and its domain model, and each table node into the table it describes. Then the tables are merged, each is lowered, and the contract is assembled.
  */
 export function buildSqlContractFromDefinition(
   definition: ContractDefinition,
@@ -143,12 +161,16 @@ export function buildSqlContractFromDefinition(
 
   const modelDescriptionContext = {
     ...modelLookupsOf(definition),
+    declaredTables: declaredTableKeys(definition),
     foreignKeyDefaults: definition.foreignKeyDefaults,
     storageTypes,
     qualifyColumnType,
   };
   const components = definition.models.map((model) =>
     describeModel(model, modelDescriptionContext),
+  );
+  const tableNodes = (definition.tables ?? []).map((table) =>
+    describeTableNode(table, modelDescriptionContext),
   );
 
   // Warnings collect across the whole build (seeded with the definition
@@ -167,7 +189,10 @@ export function buildSqlContractFromDefinition(
     warnings: authoringWarnings,
   };
   const tablesByNamespace: Record<string, Record<string, StorageTableInput>> = {};
-  for (const table of mergeTables(components.map((c) => c.storage))) {
+  for (const table of mergeTables(
+    components.map((c) => c.storage),
+    tableNodes,
+  )) {
     const namespaceTables = tablesByNamespace[table.namespaceId] ?? {};
     namespaceTables[table.tableName] = lowerTable(table, tableLoweringContext);
     tablesByNamespace[table.namespaceId] = namespaceTables;

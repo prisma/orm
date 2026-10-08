@@ -6,10 +6,10 @@ import {
   type FieldNode,
   isValueObjectMember,
   type ModelNode,
-  storedAsListColumn,
   type ValueObjectFieldNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
+import { describeColumn } from './describe-table';
 import { buildDomainField } from './domain-fields';
 import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
@@ -63,7 +63,11 @@ export function describeModel(model: ModelNode, context: ModelDescriptionContext
   const foreignKeys = (model.foreignKeys ?? []).map((fk) =>
     resolveForeignKey(
       fk,
-      { namespaceId, tableName: model.tableName, ownerName: model.modelName },
+      {
+        namespaceId,
+        tableName: model.tableName,
+        owner: { kind: 'model', modelName: model.modelName },
+      },
       context,
     ),
   );
@@ -99,7 +103,7 @@ function describeModelStorage(
   foreignKeys: readonly ForeignKeyAuthoringInput[],
 ): ModelStorage {
   const { tableName } = model;
-  const columns = model.fields.map((field) => describeColumn(model.modelName, field));
+  const columns = model.fields.map((field) => describeFieldColumn(model.modelName, field));
   if (model.sharesBaseTable) {
     if (model.checks && model.checks.length > 0) {
       throw contractError(
@@ -112,6 +116,7 @@ function describeModelStorage(
   }
   return {
     kind: 'ownTable',
+    modelName: model.modelName,
     table: {
       namespaceId,
       tableName,
@@ -126,20 +131,21 @@ function describeModelStorage(
   };
 }
 
-function describeColumn(modelName: string, field: ModelField): ColumnDescription {
-  const typedByValueObject = isValueObjectMember(field);
-  return {
-    columnName: field.columnName,
-    descriptor: field.descriptor,
-    nullable: field.nullable,
-    many: storedAsListColumn({ list: field.many === true, typedByValueObject })
-      ? { elementNullable: field.elementNullable === true }
-      : false,
-    default: field.default,
-    noCheck: typedByValueObject ? undefined : field.noCheck,
-    domainEnum: typedByValueObject ? undefined : field.enumTypeHandle,
-    site: { kind: 'field', modelName, fieldName: field.fieldName },
-  };
+function describeFieldColumn(modelName: string, field: ModelField): ColumnDescription {
+  const site = { kind: 'field', modelName, fieldName: field.fieldName } as const;
+  if (isValueObjectMember(field)) {
+    return describeColumn(
+      {
+        columnName: field.columnName,
+        descriptor: field.descriptor,
+        nullable: field.nullable,
+        ...ifDefined('default', field.default),
+      },
+      site,
+      undefined,
+    );
+  }
+  return describeColumn(field, site, field.enumTypeHandle);
 }
 
 /** The phases a generated default fills the field on, refused alongside a default or on an optional field. */

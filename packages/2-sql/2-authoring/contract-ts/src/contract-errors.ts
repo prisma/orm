@@ -34,7 +34,9 @@ type ContractSubcode =
   | 'MODULE_EXPORT_MISSING'
   | 'ENTITY_KIND_UNKNOWN'
   | 'ENTITY_KIND_INVALID'
-  | 'TABLE_MISMATCH';
+  | 'TABLE_MISMATCH'
+  | 'TABLE_OWNED_BY_MODEL'
+  | 'TABLE_UNKNOWN';
 
 export function contractError(
   code: ContractCode,

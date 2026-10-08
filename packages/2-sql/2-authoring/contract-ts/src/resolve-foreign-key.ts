@@ -4,25 +4,32 @@ import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-ke
 import { applyFkDefaults } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import type { ForeignKeyNode } from './contract-definition';
+import { contractError } from './contract-errors';
 import {
   assertKnownTargetModel,
   assertTargetTableMatches,
   type ModelLookups,
   modelNamespaceId,
+  type ReferenceOwner,
+  referenceOwnerMeta,
+  referenceOwnerSubject,
 } from './model-references';
+import { tableKey } from './storage-description';
 
-/** The table a foreign key starts from, and the name its errors give the declaration that owns it. */
+/** The table a foreign key starts from, and the declaration that owns it. */
 export interface ForeignKeySourceTable {
   readonly namespaceId: string;
   readonly tableName: string;
-  readonly ownerName: string;
+  readonly owner: ReferenceOwner;
 }
 
 export interface ForeignKeyResolutionContext extends ModelLookups {
   readonly foreignKeyDefaults: ForeignKeyDefaultsState | undefined;
+  /** Every table a model or a table node declares, by {@link tableKey}. */
+  readonly declaredTables: ReadonlySet<string>;
 }
 
-/** Resolves a foreign key's target. A cross-space key keeps its foreign space; a local key must name a model of this definition and that model's table. */
+/** Resolves a foreign key's target. A cross-space key keeps its foreign space; a local key names either a model of this definition and that model's table, or a table a model or table node declares. */
 export function resolveForeignKey(
   fk: ForeignKeyNode,
   sourceTable: ForeignKeySourceTable,
@@ -58,15 +65,42 @@ export function resolveForeignKey(
     };
   }
 
+  const { references } = fk;
+  if (references.model === undefined) {
+    const namespaceId = references.namespaceId ?? context.defaultNamespaceId;
+    if (!context.declaredTables.has(tableKey(namespaceId, references.table))) {
+      throw contractError(
+        'CONTRACT.TABLE_UNKNOWN',
+        `Foreign key on ${referenceOwnerSubject(sourceTable.owner)} references table "${references.table}" in namespace "${namespaceId}", which no model or table node declares`,
+        {
+          meta: {
+            ...referenceOwnerMeta(sourceTable.owner),
+            referencedTable: references.table,
+            namespaceId,
+          },
+        },
+      );
+    }
+    return {
+      source,
+      target: {
+        namespaceId: asNamespaceId(namespaceId),
+        tableName: references.table,
+        columns: references.columns,
+      },
+      ...options,
+    };
+  }
+
   const targetModel = assertKnownTargetModel(
     context.modelsByName,
     context.modelsByCoordinate,
-    sourceTable.ownerName,
-    fk.references.model,
+    sourceTable.owner,
+    references.model,
     fk.references.namespaceId,
     'Foreign key',
   );
-  assertTargetTableMatches(sourceTable.ownerName, targetModel, fk.references.table, 'Foreign key');
+  assertTargetTableMatches(sourceTable.owner, targetModel, fk.references.table, 'Foreign key');
   return {
     source,
     target: {
