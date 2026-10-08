@@ -99,6 +99,8 @@ export interface DataType {
   readonly toCanonicalForm?: ToCanonicalForm;
   /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, a value the parameters exclude, and JSON in a spelling other than the one the parameters give. */
   fromContract(json: JsonValue, params: DataTypeParams): DataTypeValue;
+  /** The value a codec hands over as `json`: read under `params`, which refuse a value they exclude, and written in the spelling they give. A codec reaches it through `dataTypeValueFor`. */
+  fromCodec(json: JsonValue, params: DataTypeParams): DataTypeValue;
   /** The JSON `contract.json` stores for `value`. */
   toContract(value: DataTypeValue): JsonValue;
   /** `value` under `params`: it refuses a value they exclude and writes the spelling they give it. */
@@ -132,14 +134,6 @@ export function dataTypeId(id: string): DataTypeId {
   return blindCast<DataTypeId, 'the pattern above is the whole of what a data type id is'>(id);
 }
 
-/**
- * How each declared type constructs a value from JSON it reads and spells under the parameters, keyed by the type's `fromContract`, which a declaration that spreads another (`sqlDataType`, `mongoDataType`) keeps.
- */
-const valueConstructors = new WeakMap<
-  DataType['fromContract'],
-  (json: JsonValue, params: DataTypeParams) => DataTypeValue
->();
-
 /** Declare a data type. Every id it names, its own and each cast's source, is validated here. */
 export function dataType(id: string, spec: DataTypeSpec): DataType {
   const typeId = dataTypeId(id);
@@ -172,9 +166,6 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
     }
     return construct(json, params);
   };
-  valueConstructors.set(fromContract, (json, params) =>
-    construct(spelledUnder(json, params), params),
-  );
   return {
     id: typeId,
     ...ifDefined('params', spec.params),
@@ -184,6 +175,7 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
       : { listCast: { of: listCast.of.map(dataTypeId), cast: listCast.cast } }),
     ...(spec.toCanonicalForm === undefined ? {} : { toCanonicalForm: spec.toCanonicalForm }),
     fromContract,
+    fromCodec: (json, params) => construct(spelledUnder(json, params), params),
     toContract: (value) => ownValue(value).value,
     withParams: (value, params) => construct(spelledUnder(ownValue(value).value, params), params),
   };
@@ -197,14 +189,10 @@ export function dataTypeValueFor<J extends JsonValue>(
   params: DataTypeParams,
   json: J,
 ): DataTypeValue<J> {
-  const construct = valueConstructors.get(type.fromContract);
-  if (construct === undefined) {
-    throw new InternalError(`The data type ${type.id} was not declared with dataType().`);
-  }
   return blindCast<
     DataTypeValue<J>,
     "a type's reader and spelling return JSON of the kind they read"
-  >(construct(json, params));
+  >(type.fromCodec(json, params));
 }
 
 /** The parameters in `typeParams` that `type` declares; keys a codec keeps for itself are dropped. */

@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dataType, dataTypeValueFor, dataTypeValuesEqual } from '../src/shared/data-type';
 import { readJsonMatching, refuseJsonValue } from '../src/shared/json-readers';
 
@@ -124,6 +124,12 @@ describe('dataTypeValueFor', () => {
   it('constructs through a type declared by spreading another declaration', () => {
     const spread = { ...decimal };
     expect(dataTypeValueFor(spread, { scale: 2 }, '1.5').value).toBe('1.50');
+  });
+
+  it('constructs through the type itself, which a second copy of this module can call', () => {
+    const fromCodec = vi.fn(decimal.fromCodec);
+    dataTypeValueFor({ ...decimal, fromCodec }, { scale: 2 }, '7');
+    expect(fromCodec).toHaveBeenCalledWith('7', { scale: 2 });
   });
 });
 
