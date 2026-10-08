@@ -76,6 +76,8 @@ type IndexReferenceStub = {
 type DocumentsTable = {
   readonly indexes: Readonly<Record<string, IndexReferenceStub>>;
   as(alias: string): DocumentsTable;
+  select(alias: string, expression: () => unknown): { build(): unknown };
+  delete(): { where(predicate: () => unknown): { build(): unknown } };
 };
 
 function documents(): DocumentsTable {
@@ -143,5 +145,35 @@ describe('a table proxy’s indexes', () => {
         meta: { namespaceId: 'public', tableName: 'documents', index: 'documents_twice' },
       }),
     );
+  });
+
+  it('gives the same references on every read', () => {
+    const table = documents();
+
+    expect(table.indexes).toBe(table.indexes);
+  });
+
+  describe('a column of an index read from a table the query does not read', () => {
+    const outside = () => documents().as('d').indexes['documents_search']?.columns['title'];
+    const refusal = expect.objectContaining({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'The query reads column "title" of "d", which is not one of its sources ("documents").',
+      meta: { alias: 'd', column: 'title', sources: ['documents'] },
+    });
+
+    it('is refused when a select is built', () => {
+      expect(() => documents().select('title', outside).build()).toThrow(refusal);
+    });
+
+    it('is refused when a delete is built', () => {
+      expect(() => documents().delete().where(outside).build()).toThrow(refusal);
+    });
+
+    it('is accepted from the table the query reads', () => {
+      const own = () => documents().indexes['documents_search']?.columns['title'];
+
+      expect(() => documents().select('title', own).build()).not.toThrow();
+    });
   });
 });

@@ -195,6 +195,11 @@ test('fullTextMatches and fullTextRank search a full-text index from the table, 
       fns.fullTextRank(documents.indexes.documents_search, fns.websearchToTsquery('zebra')),
     )
     .where((_f, fns) =>
+      fns.fullTextMatches(documents.indexes.documents_search, fns.websearchToTsquery('zebra')),
+    );
+  aliased
+    .select('id')
+    .where((_f, fns) =>
       fns.fullTextMatches(aliased.indexes.documents_search, fns.websearchToTsquery('zebra')),
     );
   documents.select('id').where((_f, fns) =>

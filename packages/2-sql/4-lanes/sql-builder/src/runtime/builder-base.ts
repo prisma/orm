@@ -47,6 +47,7 @@ import type {
   ScopeField,
   ScopeTable,
 } from '../scope';
+import { assertColumnsInScope } from './column-scope';
 import { projectionAstOf } from './expression-impl';
 import { createFieldProxy } from './field-proxy';
 import { createAggregateFunctions, createFunctions } from './functions';
@@ -227,6 +228,7 @@ export function buildQueryPlan<Row = unknown>(
   ctx: BuilderContext,
   annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>,
 ): SqlQueryPlan<Row> {
+  assertColumnsInScope(ast);
   const paramValues = collectOrderedParamRefs(ast).map((r) =>
     r.kind === 'param-ref' ? r.value : undefined,
   );

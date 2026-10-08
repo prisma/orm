@@ -95,7 +95,9 @@ await post
   .all();
 ```
 
-Reading a name that more than one index of the table shares throws `ORM.ARGUMENT_INVALID`.
+An unnamed index, including a foreign key's derived backing index, appears under its default prefix, such as `post_authorId_idx`. A name that more than one index of the table shares is not a key of the type, and reading it throws `ORM.ARGUMENT_INVALID`.
+
+An index's columns are bound to the alias of the proxy it was read from, so read it from a table the query selects from or joins: `build()` throws `ORM.ARGUMENT_INVALID` for a column of any other alias.
 
 ## Architecture
 

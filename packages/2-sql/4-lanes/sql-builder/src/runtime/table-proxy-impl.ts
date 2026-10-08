@@ -72,6 +72,7 @@ export class TableProxyImpl<
   readonly #namespaceId: string;
   readonly #fromSource: TableSource;
   readonly #scope: Scope;
+  #indexes: TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] | undefined;
 
   constructor(
     tableName: string,
@@ -115,6 +116,11 @@ export class TableProxyImpl<
    * The table's indexes, keyed by the name the contract source gave each. An index's columns are this table's columns under its alias, so `post.as('p').indexes.post_search` reads `p`'s columns. A name more than one index shares is refused when it is read.
    */
   get indexes(): TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] {
+    this.#indexes ??= this.#indexReferences();
+    return this.#indexes;
+  }
+
+  #indexReferences(): TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] {
     const fields = this.#scope.namespaces[this.#alias];
     assertDefined(fields, 'a table proxy scopes its own alias');
     const byName = new Map<string, IndexReference[]>();

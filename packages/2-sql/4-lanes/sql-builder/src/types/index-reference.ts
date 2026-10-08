@@ -47,8 +47,17 @@ type IndexOptionsOf<I> = I extends {
   ? Options
   : undefined;
 
+/** The indexes of `I` whose authored name is `Key`. */
+type IndexesNamed<I, Key> = I extends unknown
+  ? AuthoredIndexName<I> extends Key
+    ? I
+    : never
+  : never;
+
+type IsUnion<T, Whole = T> = T extends unknown ? ([Whole] extends [T] ? false : true) : never;
+
 /**
- * A table's indexes, keyed by the name the contract source gave each: the `name:` prefix, or the `map:` name.
+ * A table's indexes, keyed by the name the contract source gave each: the `name:` prefix, or the `map:` name. An unnamed index, such as a derived foreign-key backing index, appears under its default prefix. A name that more than one index shares is left out, as reading it is refused at runtime.
  */
 export type IndexReferences<
   C extends TableProxyContract,
@@ -58,10 +67,12 @@ export type IndexReferences<
   Fields = StorageTableToScopeTable<NamespaceTable<C, NsId, Name>>,
 > = Table extends { readonly indexes: readonly (infer I)[] }
   ? {
-      readonly [Index in I as AuthoredIndexName<Index>]: IndexReference<
-        IndexColumnExpressions<Fields, Index>,
-        IndexTypeOf<Index>,
-        IndexOptionsOf<Index>
+      readonly [Key in AuthoredIndexName<I> as true extends IsUnion<IndexesNamed<I, Key>>
+        ? never
+        : Key]: IndexReference<
+        IndexColumnExpressions<Fields, IndexesNamed<I, Key>>,
+        IndexTypeOf<IndexesNamed<I, Key>>,
+        IndexOptionsOf<IndexesNamed<I, Key>>
       >;
     }
   : never;
