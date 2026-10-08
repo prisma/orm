@@ -97,7 +97,7 @@ Most entries are access methods: the `type` literal is what follows `USING`, and
 
 Because such a type's body is rendered rather than written by the author, an exact-named (`map:`) index of the type raises the same `PN_EXACT_NAME_BODY_COMPARISON` warning as an expression index, from either authoring surface: `db verify` compares the rendered text with what Postgres prints back.
 
-The rules of `fullText` itself (one to four weight groups, none empty, each column once, text columns only, not unique) are stated once, in `fullTextIndexProblems` beside the entry's declaration, and every check calls it: the options validator, `@@fullTextIndex`, `fullTextIndex`, the query operations' weight groups, and the target's check of a loaded contract, which also requires `columns` to equal the weight groups read flat.
+The rules of `fullText` itself (one to four weight groups, none empty, each column once, text columns only, not unique) are stated once, in `fullTextIndexProblems` beside the entry's declaration, and every check calls it: the options validator, `@@fullTextIndex`, `fullTextIndex`, the `fullTextDocument` helper that builds a query document by hand, and the target's check of a loaded contract, which also requires `columns` to equal the weight groups read flat.
 
 Entries are produced by a small fluent builder. The builder is the only way an entry comes into existence; there is no other constructor:
 
