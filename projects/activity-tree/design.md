@@ -76,6 +76,8 @@ This is the model of Spring's `TransactionSynchronization.afterCompletion(status
 
 Activity kinds are labels, useful to a tracer. No middleware branches on them. The cache reacts to `activitySettled` on any activity that carries its annotation and never checks what kind of activity it is.
 
+With no enclosing transaction, an activity settles right after it ends: `committed` when it completed, `unknown` when it failed, since a statement that errors on the response path may already have applied. Inside a transaction it settles when the outermost enclosing transaction ends, with that transaction's outcome. Rails `after_commit` and Django `on_commit` follow the same rule: immediate outside a transaction, held until the outermost commit inside one. An activity's own end cannot stand in for its commit: inside a transaction it ends before the `COMMIT`, and acting then lets a concurrent read store rows the transaction is about to replace.
+
 ADR 260's outcome table is the rule for a transaction activity, applied to every activity beneath it:
 
 | What happened | Outcome |

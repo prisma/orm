@@ -64,6 +64,10 @@ The SQL ORM starts an activity of kind `orm-call` for every terminal, including 
 
 A hook reaches its activity from the middleware context, not from the plan. A child learns its parent because its opener passed the handle; nothing is propagated through ambient context.
 
+### When an activity settles
+
+An activity with no enclosing transaction settles right after it ends: `committed` when it completed, `unknown` when it failed, because a statement that errors on the response path may already have applied. An activity inside a transaction settles when the outermost enclosing transaction ends, with that transaction's outcome. This is the rule Rails `after_commit` and Django `on_commit` follow: a hook registered outside any transaction runs immediately, one registered inside is held until the outermost transaction commits. An activity's own end cannot stand in for its commit, because inside a transaction it ends before the `COMMIT`, and acting then lets a concurrent read store rows the transaction is about to replace.
+
 ### How a transaction activity settles, and what its subtree learns
 
 Every activity beneath a transaction settles with the transaction's outcome:
