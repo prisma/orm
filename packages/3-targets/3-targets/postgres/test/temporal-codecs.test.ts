@@ -12,6 +12,7 @@ import {
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
 } from '../src/core/temporal-codecs';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
@@ -25,10 +26,10 @@ describe('Temporal-backed temporal codecs', () => {
   describe('reads parse PostgreSQL text through Temporal', () => {
     it('decodes the ordinary spellings the server emits under ISO DateStyle', async () => {
       expect([
-        (await dateCodec.decode('2026-01-02', callCtx)).toString(),
-        (await timestampCodec.decode('2026-01-02 03:04:05.123456', callCtx)).toString(),
-        (await timestamptzCodec.decode('2026-01-02 03:04:05.123456+00', callCtx)).toString(),
-        (await timeCodec.decode('03:04:05.123456', callCtx)).toString(),
+        (await dateCodec.fromWire('2026-01-02', callCtx)).toString(),
+        (await timestampCodec.fromWire('2026-01-02 03:04:05.123456', callCtx)).toString(),
+        (await timestamptzCodec.fromWire('2026-01-02 03:04:05.123456+00', callCtx)).toString(),
+        (await timeCodec.fromWire('03:04:05.123456', callCtx)).toString(),
       ]).toEqual([
         '2026-01-02',
         '2026-01-02T03:04:05.123456',
@@ -46,7 +47,7 @@ describe('Temporal-backed temporal codecs', () => {
       ];
 
       const instants = await Promise.all(
-        renderings.map(async (text) => (await timestamptzCodec.decode(text, callCtx)).toString()),
+        renderings.map(async (text) => (await timestamptzCodec.fromWire(text, callCtx)).toString()),
       );
 
       expect(instants).toEqual(Array(4).fill('2026-01-02T03:04:05.123456Z'));
@@ -54,23 +55,23 @@ describe('Temporal-backed temporal codecs', () => {
 
     it('adapts BC dates from the era spelling to the proleptic one', async () => {
       expect([
-        (await dateCodec.decode('0044-03-15 BC', callCtx)).toString(),
-        (await timestampCodec.decode('0044-03-15 12:00:00 BC', callCtx)).toString(),
-        (await timestamptzCodec.decode('0044-03-15 12:00:00+00 BC', callCtx)).toString(),
+        (await dateCodec.fromWire('0044-03-15 BC', callCtx)).toString(),
+        (await timestampCodec.fromWire('0044-03-15 12:00:00 BC', callCtx)).toString(),
+        (await timestamptzCodec.fromWire('0044-03-15 12:00:00+00 BC', callCtx)).toString(),
       ]).toEqual(['-000043-03-15', '-000043-03-15T12:00:00', '-000043-03-15T12:00:00Z']);
     });
 
     it('adapts a BC timestamptz whose historical zone offset carries seconds', async () => {
-      const decoded = await timestamptzCodec.decode('0044-03-15 21:18:59+09:18:59 BC', callCtx);
+      const decoded = await timestamptzCodec.fromWire('0044-03-15 21:18:59+09:18:59 BC', callCtx);
 
       expect(decoded.toString()).toBe('-000043-03-15T12:00:00Z');
     });
 
     it('adapts expanded years to the signed six-digit spelling', async () => {
       expect([
-        (await dateCodec.decode('12026-01-02', callCtx)).toString(),
-        (await timestampCodec.decode('12026-01-02 03:04:05', callCtx)).toString(),
-        (await timestamptzCodec.decode('12026-01-02 03:04:05+00', callCtx)).toString(),
+        (await dateCodec.fromWire('12026-01-02', callCtx)).toString(),
+        (await timestampCodec.fromWire('12026-01-02 03:04:05', callCtx)).toString(),
+        (await timestamptzCodec.fromWire('12026-01-02 03:04:05+00', callCtx)).toString(),
       ]).toEqual(['+012026-01-02', '+012026-01-02T03:04:05', '+012026-01-02T03:04:05Z']);
     });
   });
@@ -78,11 +79,11 @@ describe('Temporal-backed temporal codecs', () => {
   describe('writes serialise through toString at full precision', () => {
     it('sends every digit it has and lets PostgreSQL do the rounding', async () => {
       expect([
-        await timestamptzCodec.encode(
+        await timestamptzCodec.toWire(
           Temporal.Instant.from('2026-01-02T03:04:05.123456789Z'),
           callCtx,
         ),
-        await timestampCodec.encode(
+        await timestampCodec.toWire(
           Temporal.PlainDateTime.from('2026-01-02T03:04:05.999999999'),
           callCtx,
         ),
@@ -91,8 +92,8 @@ describe('Temporal-backed temporal codecs', () => {
 
     it('encodes the ordinary values without reformatting them', async () => {
       expect([
-        await dateCodec.encode(Temporal.PlainDate.from('2026-01-02'), callCtx),
-        await timeCodec.encode(Temporal.PlainTime.from('03:04:05.123456'), callCtx),
+        await dateCodec.toWire(Temporal.PlainDate.from('2026-01-02'), callCtx),
+        await timeCodec.toWire(Temporal.PlainTime.from('03:04:05.123456'), callCtx),
       ]).toEqual(['2026-01-02', '03:04:05.123456']);
     });
   });
@@ -103,31 +104,31 @@ describe('Temporal-backed temporal codecs', () => {
         id: 'pg/date-temporal@1',
         text: '2026-01-02',
         projected: '2026-01-02',
-        render: () => dateCodec.encodeJson(Temporal.PlainDate.from('2026-01-02')),
-        read: (json: JsonValue) => dateCodec.decodeJson(json).toString(),
+        render: () => toContractJson(dateCodec, Temporal.PlainDate.from('2026-01-02')),
+        read: (json: JsonValue) => fromContractJson(dateCodec, json).toString(),
       },
       {
         id: 'pg/timestamp-temporal@1',
         text: '2026-01-02T03:04:05.123456',
         projected: '2026-01-02 03:04:05.123456',
         render: () =>
-          timestampCodec.encodeJson(Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456')),
-        read: (json: JsonValue) => timestampCodec.decodeJson(json).toString(),
+          toContractJson(timestampCodec, Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456')),
+        read: (json: JsonValue) => fromContractJson(timestampCodec, json).toString(),
       },
       {
         id: 'pg/timestamptz-temporal@1',
         text: '2026-01-02T03:04:05.123456Z',
         projected: '2026-01-02 03:04:05.123456+00',
         render: () =>
-          timestamptzCodec.encodeJson(Temporal.Instant.from('2026-01-02T03:04:05.123456Z')),
-        read: (json: JsonValue) => timestamptzCodec.decodeJson(json).toString(),
+          toContractJson(timestamptzCodec, Temporal.Instant.from('2026-01-02T03:04:05.123456Z')),
+        read: (json: JsonValue) => fromContractJson(timestamptzCodec, json).toString(),
       },
       {
         id: 'pg/time-temporal@1',
         text: '03:04:05.123456',
         projected: '03:04:05.123456',
-        render: () => timeCodec.encodeJson(Temporal.PlainTime.from('03:04:05.123456')),
-        read: (json: JsonValue) => timeCodec.decodeJson(json).toString(),
+        render: () => toContractJson(timeCodec, Temporal.PlainTime.from('03:04:05.123456')),
+        read: (json: JsonValue) => fromContractJson(timeCodec, json).toString(),
       },
     ] as const;
 
@@ -146,7 +147,7 @@ describe('Temporal-backed temporal codecs', () => {
 
   describe('values Temporal cannot represent are reported, not silently coerced', () => {
     const unrepresentable: ReadonlyArray<
-      readonly [string, { decode: (w: string, c: object) => Promise<unknown> }, string, string]
+      readonly [string, { fromWire: (w: string, c: object) => Promise<unknown> }, string, string]
     > = [
       ['date infinity', dateCodec, 'infinity', 'DateString'],
       ['date -infinity', dateCodec, '-infinity', 'DateString'],
@@ -179,11 +180,11 @@ describe('Temporal-backed temporal codecs', () => {
     it.each(unrepresentable)(
       'rejects %s and names the string type that reads it losslessly',
       async (_label, codec, wire, stringType) => {
-        await expect(codec.decode(wire, callCtx)).rejects.toMatchObject({
+        await expect(codec.fromWire(wire, callCtx)).rejects.toMatchObject({
           code: 'RUNTIME.DECODE_FAILED',
           meta: { value: wire, stringType },
         });
-        await expect(codec.decode(wire, callCtx)).rejects.toThrow(stringType);
+        await expect(codec.fromWire(wire, callCtx)).rejects.toThrow(stringType);
       },
     );
 
@@ -196,14 +197,14 @@ describe('Temporal-backed temporal codecs', () => {
     ] as const)(
       'explains that %s %s is a timeline sentinel rather than unparseable text',
       async (_kind, codec, wire) => {
-        await expect(codec.decode(wire, callCtx)).rejects.toThrow(
+        await expect(codec.fromWire(wire, callCtx)).rejects.toThrow(
           `PostgreSQL's ${wire} is a sentinel with no position on the timeline`,
         );
       },
     );
 
     it('accepts the value one day inside the range boundary it rejects one day outside', async () => {
-      const inside = await dateCodec.decode('275760-09-13', callCtx);
+      const inside = await dateCodec.fromWire('275760-09-13', callCtx);
 
       expect(inside.toString()).toBe('+275760-09-13');
     });
@@ -213,7 +214,7 @@ describe('Temporal-backed temporal codecs', () => {
     it('rejects a non-ISO calendar on write rather than discarding it', async () => {
       const hebrew = Temporal.PlainDate.from('2026-01-02').withCalendar('hebrew');
 
-      await expect(dateCodec.encode(hebrew, callCtx)).rejects.toMatchObject({
+      await expect(dateCodec.toWire(hebrew, callCtx)).rejects.toMatchObject({
         code: 'RUNTIME.ENCODE_FAILED',
         meta: { codecId: PG_DATE_TEMPORAL_CODEC_ID, calendarId: 'hebrew' },
       });
@@ -224,11 +225,11 @@ describe('Temporal-backed temporal codecs', () => {
         .withCalendar('hebrew')
         .withCalendar('iso8601');
 
-      expect(await dateCodec.encode(iso, callCtx)).toBe('2026-01-02');
+      expect(await dateCodec.toWire(iso, callCtx)).toBe('2026-01-02');
     });
 
     it('constructs ISO-calendar values on read', async () => {
-      const decoded = await dateCodec.decode('2026-01-02', callCtx);
+      const decoded = await dateCodec.fromWire('2026-01-02', callCtx);
 
       expect(decoded.calendarId).toBe('iso8601');
     });
@@ -266,20 +267,20 @@ describe('encode refuses a value that is not the codec’s own Temporal type', (
     ['pg/timestamptz-temporal@1', timestamptzCodec, 'Temporal.Instant'],
     ['pg/time-temporal@1', timeCodec, 'Temporal.PlainTime'],
   ])('%s rejects a Date rather than serializing it', async (codecId, codec, expectedType) => {
-    await expect(codec.encode(new Date() as never, callCtx)).rejects.toThrow(
+    await expect(codec.toWire(new Date() as never, callCtx)).rejects.toThrow(
       new RegExp(`Codec '${codecId}' encodes a ${expectedType}, but received a Date`),
     );
   });
 
   it('rejects the wrong Temporal type as readily as a non-Temporal one', async () => {
-    await expect(timestamptzCodec.encode(Temporal.PlainDate.from('2026-01-02') as never, {})) //
+    await expect(timestamptzCodec.toWire(Temporal.PlainDate.from('2026-01-02') as never, {})) //
       .rejects.toThrow(
         "Codec 'pg/timestamptz-temporal@1' encodes a Temporal.Instant, but received a Temporal.PlainDate",
       );
   });
 
   it('carries the code, the codec and the *String escape hatch as structured fields', async () => {
-    await expect(timestampCodec.encode(new Date() as never, callCtx)).rejects.toMatchObject({
+    await expect(timestampCodec.toWire(new Date() as never, callCtx)).rejects.toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
       fix: expect.stringContaining('TimestampString(p)'),
       meta: { codecId: 'pg/timestamp-temporal@1', received: 'a Date' },

@@ -3,6 +3,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { pgByteaDescriptor } from '../src/core/codecs';
 import { pgBytea, pgText } from '../src/core/data-types';
+import { toContractJson } from './contract-json';
 
 const HELLO = 'aGVsbG8=';
 
@@ -23,7 +24,7 @@ describe('the canonical form of pg/bytea', () => {
     const codec = pgByteaDescriptor.factory()({ name: 'bytea-canonical-form' });
     const bytes = new Uint8Array([0, 1, 254, 255, 104, 105]);
     const hex = `\\x${Buffer.from(bytes).toString('hex')}`;
-    expect(pgBytea.toCanonicalForm?.(hex)).toBe(codec.encodeJson(bytes));
+    expect(pgBytea.toCanonicalForm?.(hex)).toBe(toContractJson(codec, bytes));
   });
 
   it.each([

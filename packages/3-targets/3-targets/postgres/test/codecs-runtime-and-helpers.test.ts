@@ -56,6 +56,7 @@ import {
 } from '../src/core/codecs';
 import { DEFAULT_NAMESPACE_ID } from '../src/core/namespace-ids';
 import { PostgresNativeEnum } from '../src/core/postgres-native-enum';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
@@ -68,13 +69,13 @@ describe('pg/enum@1 codec runtime', () => {
   });
 
   it('encodes and decodes member values verbatim', async () => {
-    expect(await codec.encode('aal1', callCtx)).toBe('aal1');
-    expect(await codec.decode('aal1', callCtx)).toBe('aal1');
+    expect(await codec.toWire('aal1', callCtx)).toBe('aal1');
+    expect(await codec.fromWire('aal1', callCtx)).toBe('aal1');
   });
 
   it('round-trips a member value through JSON identity', () => {
-    expect(codec.encodeJson('aal2')).toBe('aal2');
-    expect(codec.decodeJson('aal2')).toBe('aal2');
+    expect(toContractJson(codec, 'aal2')).toBe('aal2');
+    expect(fromContractJson(codec, 'aal2')).toBe('aal2');
   });
 });
 
@@ -154,29 +155,29 @@ describe('pg/bytea@1 codec runtime (direct instantiation)', () => {
 
   it('round-trips a Uint8Array payload verbatim', async () => {
     const input = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-    expect(await codec.encode(input, callCtx)).toBe(input);
-    expect(await codec.decode(input, callCtx)).toBe(input);
+    expect(await codec.toWire(input, callCtx)).toBe(input);
+    expect(await codec.fromWire(input, callCtx)).toBe(input);
   });
 
   it('normalizes a Buffer wire value to a plain Uint8Array view', async () => {
     const buffer = Buffer.from([0x09, 0x08, 0x07]);
-    const decoded = await codec.decode(buffer, callCtx);
+    const decoded = await codec.fromWire(buffer, callCtx);
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(decoded.constructor).toBe(Uint8Array);
     expect(Array.from(decoded)).toEqual([0x09, 0x08, 0x07]);
   });
 
   it('decodes raw bytea hex text', async () => {
-    const decoded = await codec.decode('\\x010203', callCtx);
+    const decoded = await codec.fromWire('\\x010203', callCtx);
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
   });
 
-  it('round-trips a payload through encodeJson / decodeJson', () => {
+  it('round-trips a payload through toDataTypeValue / fromDataTypeValue', () => {
     const input = new Uint8Array([0xca, 0xfe]);
-    const json = codec.encodeJson(input);
+    const json = toContractJson(codec, input);
     expect(json).toBe('yv4=');
-    expect(Array.from(codec.decodeJson(json))).toEqual([0xca, 0xfe]);
+    expect(Array.from(fromContractJson(codec, json))).toEqual([0xca, 0xfe]);
   });
 });
 
@@ -194,13 +195,13 @@ describe('pg/text-array@1 codec', () => {
 
   it('round-trips a string array verbatim', async () => {
     const input = ['a', 'b', 'c'];
-    expect(await codec.encode(input, callCtx)).toBe(input);
-    expect(await codec.decode(input, callCtx)).toBe(input);
+    expect(await codec.toWire(input, callCtx)).toBe(input);
+    expect(await codec.fromWire(input, callCtx)).toBe(input);
   });
 
-  it('encodeJson produces a plain array copy', () => {
+  it('toDataTypeValue produces a plain array copy', () => {
     const input = ['x', 'y'];
-    const json = codec.encodeJson(input);
+    const json = toContractJson(codec, input);
     expect(json).toEqual(['x', 'y']);
     expect(json).not.toBe(input);
   });
@@ -209,11 +210,11 @@ describe('pg/text-array@1 codec', () => {
     ['an array holding a number or a boolean', ['a', 1, true]],
     ['a string', 'not-an-array'],
     ['null', null],
-  ])('decodeJson refuses %s', (_name, json) => {
-    expect(() => codec.decodeJson(json)).toThrow(
+  ])('its data type refuses %s', (_name, json) => {
+    expect(() => fromContractJson(codec, json)).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.DECODE_FAILED',
-        meta: expect.objectContaining({ codecId: 'pg/text-array@1' }),
+        meta: expect.objectContaining({ dataType: 'pg/text-array' }),
       }),
     );
   });

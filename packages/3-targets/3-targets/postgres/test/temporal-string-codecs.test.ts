@@ -12,6 +12,7 @@ import {
   pgTimestampStringDescriptor,
   pgTimestamptzStringDescriptor,
 } from '../src/core/temporal-string-codecs';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
@@ -101,15 +102,15 @@ describe('representation-explicit temporal string codecs', () => {
 
       it.each(UNREPRESENTABLE_VALUES)('forwards %s unchanged on the wire', async (value) => {
         expect({
-          encoded: await codec.encode(value, callCtx),
-          decoded: await codec.decode(value, callCtx),
+          encoded: await codec.toWire(value, callCtx),
+          decoded: await codec.fromWire(value, callCtx),
         }).toEqual({ encoded: value, decoded: value });
       });
 
       it.each(OTHER_DATE_STYLES)(
         'refuses to read %s from JSON, which only a session in another DateStyle writes',
         (value) => {
-          expect(() => codec.decodeJson(value)).toThrow(
+          expect(() => fromContractJson(codec, value)).toThrow(
             expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }),
           );
         },
@@ -118,12 +119,12 @@ describe('representation-explicit temporal string codecs', () => {
       it.each(standardJson.map(([value, json]) => ({ value, json })))(
         'writes $value to JSON in canonical form $json',
         ({ value, json }) => {
-          expect(codec.encodeJson(value)).toBe(json);
+          expect(toContractJson(codec, value)).toBe(json);
         },
       );
 
       it.each(refusedJson)('refuses to write %s to JSON, as its data type does', (value) => {
-        expect(() => codec.encodeJson(value)).toThrow(
+        expect(() => toContractJson(codec, value)).toThrow(
           expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
         );
       });
@@ -184,9 +185,9 @@ describe('representation-explicit temporal string codecs', () => {
         const decoded: string[] = [];
         for (const { descriptor } of CODECS) {
           const codec = descriptor.factory({})(instanceCtx);
-          const encoded = await codec.encode('infinity', callCtx);
+          const encoded = await codec.toWire('infinity', callCtx);
           seenDuring.push(Reflect.get(globalThis, 'Temporal'));
-          decoded.push(await codec.decode(encoded, callCtx));
+          decoded.push(await codec.fromWire(encoded, callCtx));
         }
         return decoded;
       });
@@ -220,8 +221,8 @@ describe('a Date written to a text timestamp codec', () => {
   ])('writes %s as its UTC text', async (iso, timestampText, timestamptzText) => {
     const value = new Date(iso);
     expect({
-      timestamp: await timestamp.encode(value, callCtx),
-      timestamptz: await timestamptz.encode(value, callCtx),
+      timestamp: await timestamp.toWire(value, callCtx),
+      timestamptz: await timestamptz.toWire(value, callCtx),
     }).toEqual({ timestamp: timestampText, timestamptz: timestamptzText });
   });
 
@@ -229,8 +230,8 @@ describe('a Date written to a text timestamp codec', () => {
     ['an invalid Date', new Date(Number.NaN)],
     ['a Date before 4714-11-24 BC', new Date('-004713-11-23T23:59:59.999Z')],
   ])('refuses %s, naming the codec', async (_name, value) => {
-    await expect(timestamp.encode(value, callCtx)).rejects.toThrow(PG_TIMESTAMP_STRING_CODEC_ID);
-    await expect(timestamptz.encode(value, callCtx)).rejects.toThrow(
+    await expect(timestamp.toWire(value, callCtx)).rejects.toThrow(PG_TIMESTAMP_STRING_CODEC_ID);
+    await expect(timestamptz.toWire(value, callCtx)).rejects.toThrow(
       PG_TIMESTAMPTZ_STRING_CODEC_ID,
     );
   });

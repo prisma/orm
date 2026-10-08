@@ -4,7 +4,7 @@
  * The codec is required-parameterized — a ref carries the arktype schema as
  * `{ expression, jsonIr }` — so each case builds its params from the same
  * `arktypeJsonColumn` helper an author would use. The schema governs validation
- * only: `encodeJson` is a structural round-trip through `JSON.stringify`, so the
+ * only: `toDataTypeValue` is a structural round-trip through `JSON.stringify`, so the
  * canonical form is the document itself and does not vary with the schema.
  *
  * The extension's descriptor is not in the target's built-in registry, so each
@@ -81,7 +81,7 @@ describe('arktype-json codec JSON-projection conformance', { concurrent: false }
   }, timeouts.spinUpPpgDev);
 
   for (const conformanceCase of cases) {
-    it(`arktype/json@1 (${conformanceCase.label}) agrees with encodeJson and round-trips through decodeJson`, {
+    it(`arktype/json@1 (${conformanceCase.label}) agrees with toDataTypeValue and round-trips through fromDataTypeValue`, {
       timeout: timeouts.spinUpPpgDev,
     }, async () => {
       const outcome = await runPostgresCodecProjection(connection!, conformanceCase);

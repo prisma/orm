@@ -1,18 +1,20 @@
-import type { JsonValue } from '@internal/contract/types';
+import type { DataType, DataTypeValue } from '@internal/framework-components/codec';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { pgGeometryColumn, postgisGeometryDescriptor } from '../src/core/codecs';
 import type { Geometry } from '../src/core/geojson';
+import { fromContractJson, toContractJson } from './contract-json';
 
 // The postgis codec authors `encode`/`decode` synchronously; codecs
 // route through `Promise`-returning methods at the boundary. The tests
 // below cast through the Promise-returning shape and `await` every
 // call so unit-level coverage stays aligned with the codec contract.
 type AsyncGeometryCodec = {
-  readonly encode: (value: Geometry) => Promise<string>;
-  readonly decode: (wire: string) => Promise<Geometry>;
-  readonly encodeJson: (value: Geometry) => JsonValue;
-  readonly decodeJson: (json: JsonValue) => Geometry;
+  readonly toWire: (value: Geometry) => Promise<string>;
+  readonly fromWire: (wire: string) => Promise<Geometry>;
+  readonly dataType: DataType;
+  readonly toDataTypeValue: (value: Geometry) => DataTypeValue;
+  readonly fromDataTypeValue: (value: DataTypeValue) => Geometry;
 };
 
 function asAsyncCodec(srid = 4326): AsyncGeometryCodec {
@@ -34,12 +36,12 @@ describe('postgis codecs', () => {
   describe('encode (Geometry → EWKT)', () => {
     it('encodes a Point without SRID', async () => {
       const c = asAsyncCodec();
-      expect(await c.encode({ type: 'Point', coordinates: [1, 2] })).toBe('POINT(1 2)');
+      expect(await c.toWire({ type: 'Point', coordinates: [1, 2] })).toBe('POINT(1 2)');
     });
 
     it('encodes a Point with SRID prefix', async () => {
       const c = asAsyncCodec();
-      expect(await c.encode({ type: 'Point', coordinates: [-122.4194, 37.7749], srid: 4326 })).toBe(
+      expect(await c.toWire({ type: 'Point', coordinates: [-122.4194, 37.7749], srid: 4326 })).toBe(
         'SRID=4326;POINT(-122.4194 37.7749)',
       );
     });
@@ -47,7 +49,7 @@ describe('postgis codecs', () => {
     it('encodes a LineString', async () => {
       const c = asAsyncCodec();
       expect(
-        await c.encode({
+        await c.toWire({
           type: 'LineString',
           coordinates: [
             [0, 0],
@@ -62,7 +64,7 @@ describe('postgis codecs', () => {
     it('encodes a Polygon with one ring', async () => {
       const c = asAsyncCodec();
       expect(
-        await c.encode({
+        await c.toWire({
           type: 'Polygon',
           coordinates: [
             [
@@ -81,7 +83,7 @@ describe('postgis codecs', () => {
     it('encodes a MultiPoint', async () => {
       const c = asAsyncCodec();
       expect(
-        await c.encode({
+        await c.toWire({
           type: 'MultiPoint',
           coordinates: [
             [1, 2],
@@ -93,7 +95,7 @@ describe('postgis codecs', () => {
 
     it('rejects non-object input', async () => {
       const c = asAsyncCodec();
-      await expect(c.encode(null as unknown as Geometry)).rejects.toThrow(
+      await expect(c.toWire(null as unknown as Geometry)).rejects.toThrow(
         'Geometry value must be a GeoJSON-shaped object',
       );
     });
@@ -101,21 +103,21 @@ describe('postgis codecs', () => {
     it('rejects an unsupported geometry type', async () => {
       const c = asAsyncCodec();
       await expect(
-        c.encode({ type: 'Sphere', coordinates: [0, 0, 0] } as unknown as Geometry),
+        c.toWire({ type: 'Sphere', coordinates: [0, 0, 0] } as unknown as Geometry),
       ).rejects.toThrow(/unsupported type/);
     });
 
     it('rejects when coordinates is not an array', async () => {
       const c = asAsyncCodec();
       await expect(
-        c.encode({ type: 'Point', coordinates: 'oops' } as unknown as Geometry),
+        c.toWire({ type: 'Point', coordinates: 'oops' } as unknown as Geometry),
       ).rejects.toThrow('Geometry value: "coordinates" must be an array');
     });
 
     it('rejects non-finite coordinate values', async () => {
       const c = asAsyncCodec();
       await expect(
-        c.encode({ type: 'Point', coordinates: [Number.NaN, 0] } as Geometry),
+        c.toWire({ type: 'Point', coordinates: [Number.NaN, 0] } as Geometry),
       ).rejects.toThrow('coordinates must be finite numbers');
     });
   });
@@ -124,13 +126,13 @@ describe('postgis codecs', () => {
     it('decodes a Point without SRID (LE)', async () => {
       const c = asAsyncCodec();
       const hex = '0101000000000000000000F03F0000000000000040';
-      expect(await c.decode(hex)).toEqual({ type: 'Point', coordinates: [1, 2] });
+      expect(await c.fromWire(hex)).toEqual({ type: 'Point', coordinates: [1, 2] });
     });
 
     it('decodes a Point with SRID 4326 (LE)', async () => {
       const c = asAsyncCodec();
       const hex = '0101000020E6100000000000000000F03F0000000000000040';
-      expect(await c.decode(hex)).toEqual({
+      expect(await c.fromWire(hex)).toEqual({
         type: 'Point',
         coordinates: [1, 2],
         srid: 4326,
@@ -139,41 +141,43 @@ describe('postgis codecs', () => {
 
     it('rejects non-string wire input', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode(123 as unknown as string)).rejects.toThrow(
+      await expect(c.fromWire(123 as unknown as string)).rejects.toThrow(
         'Geometry wire value must be a string',
       );
     });
 
     it('rejects an odd-length hex string', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode('0')).rejects.toThrow('odd-length hex string');
+      await expect(c.fromWire('0')).rejects.toThrow('odd-length hex string');
     });
 
     it('rejects malformed hex bytes', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode('ZZ')).rejects.toThrow('invalid hex byte');
+      await expect(c.fromWire('ZZ')).rejects.toThrow('invalid hex byte');
     });
   });
 
-  describe('encodeJson / decodeJson', () => {
+  describe('contract JSON', () => {
     it('round-trips the Postgres JSON HEXEWKB representation', () => {
       const c = asAsyncCodec();
       const value: Geometry = { type: 'Point', coordinates: [1, 2], srid: 4326 };
-      const encoded = c.encodeJson(value);
+      const encoded = toContractJson(c, value);
       expect(encoded).toBe('0101000020E6100000000000000000F03F0000000000000040');
-      expect(c.decodeJson(encoded)).toEqual(value);
+      expect(fromContractJson(c, encoded, { srid: 4326 })).toEqual(value);
     });
 
-    it('encodeJson rejects non-Geometry input', () => {
+    it('toDataTypeValue rejects non-Geometry input', () => {
       const c = asAsyncCodec();
-      expect(() => c.encodeJson(null as unknown as Geometry)).toThrow(
+      expect(() => toContractJson(c, null as unknown as Geometry)).toThrow(
         'Geometry value must be a GeoJSON-shaped object',
       );
     });
 
-    it('decodeJson rejects malformed HEXEWKB', () => {
+    it('the geometry type refuses malformed HEXEWKB', () => {
       const c = asAsyncCodec();
-      expect(() => c.decodeJson('zz')).toThrow('pg/geometry@1 JSON value must be a HEXEWKB string');
+      expect(() => fromContractJson(c, 'zz', { srid: 4326 })).toThrow(
+        'postgis/geometry JSON value must be a HEXEWKB string',
+      );
     });
   });
 

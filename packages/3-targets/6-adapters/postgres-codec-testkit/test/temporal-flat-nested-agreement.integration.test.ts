@@ -1,4 +1,5 @@
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
+import { readContractValue } from '@internal/framework-components/codec';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -126,8 +127,8 @@ describe('temporal flat and nested reads agree', () => {
         .descriptorFor(DATE_CASE.codecId)!
         .factory(PRECISION)({ name: VALUE_COLUMN });
       expect({
-        flat: await codec.decode(flat, {}),
-        nested: codec.decodeJson(nested),
+        flat: await codec.fromWire(flat, {}),
+        nested: readContractValue(codec, nested, PRECISION),
       }).toEqual({
         flat: new Date('2026-01-02T03:04:05.123Z'),
         nested: new Date('2026-01-02T03:04:05.123Z'),

@@ -180,9 +180,9 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const overValues = await aggregate('count', 'pg/int8@1');
 
         expect({
-          count: await overRows.codec.decode(overRows.wire, {}),
-          countBigInt: await overRowsLossless.codec.decode(overRowsLossless.wire, {}),
-          countOverValues: await overValues.codec.decode(overValues.wire, {}),
+          count: await overRows.codec.fromWire(overRows.wire, {}),
+          countBigInt: await overRowsLossless.codec.fromWire(overRowsLossless.wire, {}),
+          countOverValues: await overValues.codec.fromWire(overValues.wire, {}),
         }).toEqual({ count: 2, countBigInt: 2n, countOverValues: 2 });
       });
     },
@@ -197,7 +197,7 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const { wire, codec } = await aggregate('sum', 'pg/int8@1');
 
         expect(wire).toBe(MAX_SAFE.toString());
-        expect(await codec.decode(wire, {})).toBe(9007199254740991);
+        expect(await codec.fromWire(wire, {})).toBe(9007199254740991);
       });
 
       // One row more, and the total is 2^53: representable as a double, outside
@@ -206,7 +206,7 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const { wire, codec } = await aggregate('sum', 'pg/int8@1');
 
         expect(wire).toBe((MAX_SAFE + 1n).toString());
-        await expect(codec.decode(wire, {})).rejects.toMatchObject({
+        await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
           code: 'RUNTIME.DECODE_FAILED',
           message:
             'pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992',
@@ -225,7 +225,7 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
 
         expect(codecId).toBe('pg/unboundedint@1');
         expect(wire).toBe('18446744073709551614');
-        expect(await codec.decode(wire, {})).toBe(18446744073709551614n);
+        expect(await codec.fromWire(wire, {})).toBe(18446744073709551614n);
 
         // The cast this row does not take: PostgreSQL computes the total as a
         // `numeric`, and reading it back as an `int8` fails where the
@@ -246,8 +246,8 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const lossless = await aggregate('sumBigInt', 'pg/int4@1');
 
         expect({
-          sum: await bare.codec.decode(bare.wire, {}),
-          sumBigInt: await lossless.codec.decode(lossless.wire, {}),
+          sum: await bare.codec.fromWire(bare.wire, {}),
+          sumBigInt: await lossless.codec.fromWire(lossless.wire, {}),
           losslessCodec: lossless.codecId,
         }).toEqual({ sum: 4294967294, sumBigInt: 4294967294n, losslessCodec: 'pg/int8@1' });
       });
@@ -269,8 +269,8 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
           const lossless = await aggregate('sumBigInt', 'pg/unboundedint@1');
 
           expect({
-            sum: await bare.codec.decode(bare.wire, {}),
-            sumBigInt: await lossless.codec.decode(lossless.wire, {}),
+            sum: await bare.codec.fromWire(bare.wire, {}),
+            sumBigInt: await lossless.codec.fromWire(lossless.wire, {}),
             losslessCodec: lossless.codecId,
           }).toEqual({
             sum: 18446744073709551614n,
@@ -293,8 +293,8 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const bare = await aggregate('avg', 'pg/int8@1');
         const exact = await aggregate('avgDecimal', 'pg/int8@1');
 
-        const mean = await bare.codec.decode(bare.wire, {});
-        const exactMean = await exact.codec.decode(exact.wire, {});
+        const mean = await bare.codec.fromWire(bare.wire, {});
+        const exactMean = await exact.codec.fromWire(exact.wire, {});
 
         expect({ mean, exactMean }).toEqual({
           mean: 10.333333333333334,
@@ -314,9 +314,9 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const exact = await aggregate('avgDecimal', 'pg/unboundedint@1');
 
         expect({
-          mean: await bare.codec.decode(bare.wire, {}),
+          mean: await bare.codec.fromWire(bare.wire, {}),
           meanCodec: bare.codecId,
-          exactMean: await exact.codec.decode(exact.wire, {}),
+          exactMean: await exact.codec.fromWire(exact.wire, {}),
           exactCodec: exact.codecId,
         }).toEqual({
           mean: 10.333333333333334,
@@ -354,7 +354,7 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         );
 
         expect({
-          resultCast: await codec.decode(wire, {}),
+          resultCast: await codec.fromWire(wire, {}),
           inputCast: row?.['input_cast'],
         }).toEqual({ resultCast: 4503599627370497, inputCast: 4503599627370496 });
       });

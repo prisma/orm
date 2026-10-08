@@ -6,6 +6,7 @@ import {
   profileHash,
 } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import { readContractValue } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
@@ -219,7 +220,9 @@ function assertCodecReadsLiteral(defaultCase: ListDefaultCase): void {
   if (defaultCase.default.kind !== 'literal' || !Array.isArray(defaultCase.default.value)) return;
   const codec = codecs.get(defaultCase.type.codecId);
   if (codec === undefined) throw new Error(`no codec ${defaultCase.type.codecId}`);
-  for (const element of defaultCase.default.value) codec.decodeJson(element);
+  for (const element of defaultCase.default.value) {
+    readContractValue(codec, element, defaultCase.type.typeParams);
+  }
 }
 
 function buildContract(withDefaults: boolean): Contract<SqlStorage> {

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
 import { postgresDataTypes } from '../src/core/data-types';
 import { pgTimestamptzTemporalDescriptor } from '../src/core/temporal-codecs';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const dataTypes = createDataTypeLookup(postgresDataTypes);
 
@@ -54,16 +55,15 @@ const holdsInfinity: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The codecs that refuse to read a value with a digit below one microsecond: one whose value cannot
- * carry it, and those whose value is PostgreSQL's own text, which PostgreSQL never writes with one.
+ * The application value with a digit below one microsecond, for each codec whose application value
+ * carries one: a Temporal value. Every type refuses to read such text, so these codecs are the only
+ * way such a value reaches a write.
  */
-const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set([
-  'pg/timestamptz-date@1',
-  'pg/timestamp-string@1',
-  'pg/timestamptz-string@1',
-  'pg/time-string@1',
-  'pg/timetz@1',
-]);
+const temporalBelowMicroseconds: Readonly<Record<string, () => unknown>> = {
+  'pg/timestamptz-temporal@1': () => Temporal.Instant.from('2024-01-01T00:00:00.123456789Z'),
+  'pg/timestamp-temporal@1': () => Temporal.PlainDateTime.from('2024-01-01T00:00:00.1234567'),
+  'pg/time-temporal@1': () => Temporal.PlainTime.from('12:00:00.1234567'),
+};
 
 /** Text with a digit below one microsecond, which no type holds. */
 const belowMicroseconds: Readonly<Record<string, string>> = {
@@ -75,7 +75,7 @@ const belowMicroseconds: Readonly<Record<string, string>> = {
 
 function decoded(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
   try {
-    return { value: codec.decodeJson(json) };
+    return { value: fromContractJson(codec, json) };
   } catch {
     return undefined;
   }
@@ -90,31 +90,32 @@ describe('every codec of a type with a canonical form writes it', () => {
 
   describe.each(codecsWithCanonicalForm)('$codecId', ({ codecId, codec, dataType }) => {
     it.each(everyCodecHolds[dataType] ?? [])('writes %s back as it read it', (canonical) => {
-      expect(codec.encodeJson(codec.decodeJson(canonical))).toBe(canonical);
+      expect(toContractJson(codec, fromContractJson(codec, canonical))).toBe(canonical);
     });
 
     it.each(someCodecsHold[dataType] ?? [])(
       'writes %s back as it read it if it holds it, and otherwise refuses to read it',
       (canonical) => {
         const read = decoded(codec, canonical);
-        expect(read === undefined ? 'refused' : codec.encodeJson(read.value)).toBe(
+        expect(read === undefined ? 'refused' : toContractJson(codec, read.value)).toBe(
           holdsInfinity.has(codecId) ? canonical : 'refused',
         );
       },
     );
 
     const tooPrecise = belowMicroseconds[dataType];
-    it.runIf(tooPrecise !== undefined && refusesToReadBelowMicroseconds.has(codecId))(
+    it.runIf(tooPrecise !== undefined)(
       'refuses to read a value with a digit below one microsecond',
       () => {
         expect(decoded(codec, tooPrecise ?? '')).toBeUndefined();
       },
     );
 
-    it.runIf(tooPrecise !== undefined && !refusesToReadBelowMicroseconds.has(codecId))(
+    const temporalValue = temporalBelowMicroseconds[codecId];
+    it.runIf(temporalValue !== undefined)(
       'refuses to write a value with a digit below one microsecond, rather than rounding it',
       () => {
-        expect(() => codec.encodeJson(codec.decodeJson(tooPrecise ?? ''))).toThrow(
+        expect(() => toContractJson(codec, temporalValue?.())).toThrow(
           expect.objectContaining({
             code: 'CONTRACT.CAST_REFUSED',
             message: expect.stringContaining(`${dataType} holds microseconds`),
@@ -126,7 +127,9 @@ describe('every codec of a type with a canonical form writes it', () => {
 
   it('refuses a Temporal.Instant with nanoseconds', () => {
     const codec = pgTimestamptzTemporalDescriptor.factory({})({ name: '<test>' });
-    expect(() => codec.encodeJson(Temporal.Instant.from('2024-01-01T00:00:00.123456789Z'))).toThrow(
+    expect(() =>
+      toContractJson(codec, Temporal.Instant.from('2024-01-01T00:00:00.123456789Z')),
+    ).toThrow(
       expect.objectContaining({
         message:
           '"2024-01-01T00:00:00.123456789Z" has 9 digits after the decimal point, but pg/timestamptz holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
@@ -144,17 +147,17 @@ describe('a codec still reads the text a contract held before the canonical form
 
   it('pg/timestamptz-temporal@1 reads a millisecond instant', () => {
     expect(
-      String(codecOf('pg/timestamptz-temporal@1').decodeJson('2024-01-01T00:00:00.000Z')),
+      String(fromContractJson(codecOf('pg/timestamptz-temporal@1'), '2024-01-01T00:00:00.000Z')),
     ).toBe('2024-01-01T00:00:00Z');
   });
 
   it('pg/timestamp-string@1 reads a timestamp written with a space', () => {
-    expect(codecOf('pg/timestamp-string@1').decodeJson('2024-01-01 00:00:00')).toBe(
+    expect(fromContractJson(codecOf('pg/timestamp-string@1'), '2024-01-01 00:00:00')).toBe(
       '2024-01-01 00:00:00',
     );
   });
 
   it('pg/timetz@1 reads an offset written in hours', () => {
-    expect(codecOf('pg/timetz@1').decodeJson('12:34:56+02')).toBe('12:34:56+02');
+    expect(fromContractJson(codecOf('pg/timetz@1'), '12:34:56+02')).toBe('12:34:56+02');
   });
 });

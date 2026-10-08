@@ -119,9 +119,9 @@ describe('a vector default a migration sets on an existing column', () => {
     );
   });
 
-  it('is refused by the codec when its length is not the length the column declares', async () => {
+  it('is refused by the vector type when its length is not the length the column declares', async () => {
     await expect(setDefaultStatement([1, 2])).rejects.toThrow(
-      'Column "doc"."embedding" has a default its codec pg/vector@1 refuses: pg/vector@1 JSON value must be an array of 3 finite numbers',
+      'Column "doc"."embedding" has a default its codec pg/vector@1 refuses: pgvector/vector JSON value must be an array of 3 finite numbers',
     );
   });
 });

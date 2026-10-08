@@ -5,8 +5,8 @@
  * The extension's descriptor is not in the target's built-in registry, so each
  * case carries it directly; everything else runs through the same harness the
  * built-in codecs use, so what is asserted here is what is asserted there —
- * parsed projection JSON equals `encodeJson`, and `decodeJson` returns the
- * application value.
+ * parsed projection JSON equals the stored JSON of `toDataTypeValue`, and the
+ * data type and `fromDataTypeValue` read it back into the application value.
  *
  * `CREATE EXTENSION` runs in each case's setup rather than being assumed: if the
  * bundle ever stops shipping, these fail loudly at the point of the missing
@@ -147,7 +147,7 @@ describe('pgvector codec JSON-projection conformance', { concurrent: false }, ()
   }, timeouts.spinUpPpgDev);
 
   for (const conformanceCase of [...cases, ...manyVectorCases]) {
-    it(`pg/vector@1 (${conformanceCase.label}) agrees with encodeJson and round-trips through decodeJson`, {
+    it(`pg/vector@1 (${conformanceCase.label}) agrees with toDataTypeValue and round-trips through fromDataTypeValue`, {
       timeout: timeouts.spinUpPpgDev,
     }, async () => {
       const outcome = await runPostgresCodecProjection(connection!, conformanceCase);

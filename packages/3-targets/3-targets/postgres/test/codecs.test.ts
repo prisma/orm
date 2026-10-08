@@ -1,15 +1,10 @@
 import type {
   AnyCodecDescriptorTemplate,
   CodecInstanceContext,
+  DataType,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
-import {
-  sqlCharDescriptor,
-  sqlFloatDescriptor,
-  sqlIntDescriptor,
-  sqlTextDescriptor,
-  sqlVarcharDescriptor,
-} from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
   pgBitDescriptor,
@@ -34,17 +29,23 @@ import {
   pgUuidDescriptor,
   pgVarbitDescriptor,
   pgVarcharDescriptor,
+  postgresSqlCharDescriptor,
+  postgresSqlFloatDescriptor,
+  postgresSqlIntDescriptor,
+  postgresSqlTextDescriptor,
+  postgresSqlVarcharDescriptor,
 } from '../src/core/codecs';
 import { postgresCodecRegistry } from '../src/core/registry';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const SYNTH_CTX: CodecInstanceContext = { name: 'test' };
 
 const descriptorByScalar = {
-  char: sqlCharDescriptor,
-  varchar: sqlVarcharDescriptor,
-  int: sqlIntDescriptor,
-  float: sqlFloatDescriptor,
-  'sql-text': sqlTextDescriptor,
+  char: postgresSqlCharDescriptor,
+  varchar: postgresSqlVarcharDescriptor,
+  int: postgresSqlIntDescriptor,
+  float: postgresSqlFloatDescriptor,
+  'sql-text': postgresSqlTextDescriptor,
   text: pgTextDescriptor,
   character: pgCharDescriptor,
   'character varying': pgVarcharDescriptor,
@@ -79,43 +80,43 @@ function codecForScalar(scalar: ScalarName): Codec {
 describe('adapter-postgres codecs', () => {
   describe('json codec', () => {
     const jsonCodec = codecForScalar('json') as {
-      encode: (value: unknown, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string | unknown, ctx: SqlCodecCallContext) => Promise<unknown>;
+      toWire: (value: unknown, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string | unknown, ctx: SqlCodecCallContext) => Promise<unknown>;
     };
 
     it('encodes object to JSON string', async () => {
-      expect(await jsonCodec.encode({ key: 'value', nested: { ok: true } }, {})).toBe(
+      expect(await jsonCodec.toWire({ key: 'value', nested: { ok: true } }, {})).toBe(
         '{"key":"value","nested":{"ok":true}}',
       );
     });
 
     it('decodes JSON string to object', async () => {
-      expect(await jsonCodec.decode('{"key":"value"}', {})).toEqual({ key: 'value' });
+      expect(await jsonCodec.fromWire('{"key":"value"}', {})).toEqual({ key: 'value' });
     });
 
     it('passes through already-decoded values', async () => {
-      expect(await jsonCodec.decode({ key: 'value' }, {})).toEqual({ key: 'value' });
+      expect(await jsonCodec.fromWire({ key: 'value' }, {})).toEqual({ key: 'value' });
     });
   });
 
   describe('jsonb codec', () => {
     const jsonbCodec = codecForScalar('jsonb') as {
-      encode: (value: unknown, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string | unknown, ctx: SqlCodecCallContext) => Promise<unknown>;
+      toWire: (value: unknown, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string | unknown, ctx: SqlCodecCallContext) => Promise<unknown>;
     };
 
     it('encodes arrays and null values', async () => {
-      expect(await jsonbCodec.encode([1, null, { active: false }], {})).toBe(
+      expect(await jsonbCodec.toWire([1, null, { active: false }], {})).toBe(
         '[1,null,{"active":false}]',
       );
     });
 
     it('decodes JSON string to array', async () => {
-      expect(await jsonbCodec.decode('[1,true,{"x":1}]', {})).toEqual([1, true, { x: 1 }]);
+      expect(await jsonbCodec.fromWire('[1,true,{"x":1}]', {})).toEqual([1, true, { x: 1 }]);
     });
 
     it('passes through already-decoded values', async () => {
-      expect(await jsonbCodec.decode({ key: 'value' }, {})).toEqual({ key: 'value' });
+      expect(await jsonbCodec.fromWire({ key: 'value' }, {})).toEqual({ key: 'value' });
     });
   });
 
@@ -127,11 +128,11 @@ describe('adapter-postgres codecs', () => {
       { scalar: 'inet', value: '192.168.1.1' },
     ] as const)('keeps $scalar values unchanged', async ({ scalar, value }) => {
       const codec = codecForScalar(scalar) as {
-        encode: (input: string, ctx: SqlCodecCallContext) => Promise<string>;
-        decode: (input: string, ctx: SqlCodecCallContext) => Promise<string>;
+        toWire: (input: string, ctx: SqlCodecCallContext) => Promise<string>;
+        fromWire: (input: string, ctx: SqlCodecCallContext) => Promise<string>;
       };
-      expect(await codec.encode(value, {})).toBe(value);
-      expect(await codec.decode(value, {})).toBe(value);
+      expect(await codec.toWire(value, {})).toBe(value);
+      expect(await codec.fromWire(value, {})).toBe(value);
     });
 
     it.each([
@@ -141,11 +142,11 @@ describe('adapter-postgres codecs', () => {
       { scalar: 'float8', value: Math.E },
     ] as const)('keeps $scalar values unchanged', async ({ scalar, value }) => {
       const codec = codecForScalar(scalar) as {
-        encode: (input: number, ctx: SqlCodecCallContext) => Promise<number>;
-        decode: (input: number, ctx: SqlCodecCallContext) => Promise<number>;
+        toWire: (input: number, ctx: SqlCodecCallContext) => Promise<number>;
+        fromWire: (input: number, ctx: SqlCodecCallContext) => Promise<number>;
       };
-      expect(await codec.encode(value, {})).toBe(value);
-      expect(await codec.decode(value, {})).toBe(value);
+      expect(await codec.toWire(value, {})).toBe(value);
+      expect(await codec.fromWire(value, {})).toBe(value);
     });
 
     it.each([
@@ -160,144 +161,145 @@ describe('adapter-postgres codecs', () => {
     ])('%s reads the decimal text of a list element as a number', async (codecId) => {
       const descriptor = postgresCodecRegistry.descriptorFor(codecId);
       const codec = descriptor?.factory(undefined as never)(SYNTH_CTX) as {
-        decode: (input: string, ctx: SqlCodecCallContext) => Promise<unknown>;
+        fromWire: (input: string, ctx: SqlCodecCallContext) => Promise<unknown>;
       };
-      expect(await codec.decode('-7', {})).toBe(-7);
+      expect(await codec.fromWire('-7', {})).toBe(-7);
     });
 
     it('keeps boolean values unchanged', async () => {
       const boolCodec = codecForScalar('bool') as {
-        encode: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;
-        decode: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;
+        toWire: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;
+        fromWire: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;
       };
-      expect(await boolCodec.encode(true, {})).toBe(true);
-      expect(await boolCodec.decode(false, {})).toBe(false);
+      expect(await boolCodec.toWire(true, {})).toBe(true);
+      expect(await boolCodec.fromWire(false, {})).toBe(false);
     });
   });
 
   describe('character codec', () => {
     const charCodec = codecForScalar('character') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await charCodec.encode('A', {})).toBe('A');
+      expect(await charCodec.toWire('A', {})).toBe('A');
     });
 
     it('decodes string as-is', async () => {
-      expect(await charCodec.decode('Z', {})).toBe('Z');
+      expect(await charCodec.fromWire('Z', {})).toBe('Z');
     });
   });
 
   describe('character varying codec', () => {
     const varcharCodec = codecForScalar('character varying') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await varcharCodec.encode('hello', {})).toBe('hello');
+      expect(await varcharCodec.toWire('hello', {})).toBe('hello');
     });
 
     it('decodes string as-is', async () => {
-      expect(await varcharCodec.decode('world', {})).toBe('world');
+      expect(await varcharCodec.fromWire('world', {})).toBe('world');
     });
   });
 
   describe('numeric codec', () => {
     const numericCodec = codecForScalar('numeric') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string | number, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string | number, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await numericCodec.encode('123.45', {})).toBe('123.45');
+      expect(await numericCodec.toWire('123.45', {})).toBe('123.45');
     });
 
     it('decodes number to string', async () => {
-      expect(await numericCodec.decode(42, {})).toBe('42');
+      expect(await numericCodec.fromWire(42, {})).toBe('42');
     });
   });
 
   describe('timetz codec', () => {
     const timetzCodec = codecForScalar('timetz') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await timetzCodec.encode('12:34:56+02', {})).toBe('12:34:56+02');
+      expect(await timetzCodec.toWire('12:34:56+02', {})).toBe('12:34:56+02');
     });
 
     it('decodes string as-is', async () => {
-      expect(await timetzCodec.decode('23:59:59-05', {})).toBe('23:59:59-05');
+      expect(await timetzCodec.fromWire('23:59:59-05', {})).toBe('23:59:59-05');
     });
   });
 
   describe('bit codec', () => {
     const bitCodec = codecForScalar('bit') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await bitCodec.encode('1010', {})).toBe('1010');
+      expect(await bitCodec.toWire('1010', {})).toBe('1010');
     });
 
     it('decodes string as-is', async () => {
-      expect(await bitCodec.decode('0101', {})).toBe('0101');
+      expect(await bitCodec.fromWire('0101', {})).toBe('0101');
     });
   });
 
   describe('bit varying codec', () => {
     const varbitCodec = codecForScalar('bit varying') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
+      toWire: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
+      fromWire: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
     };
 
     it('encodes string as-is', async () => {
-      expect(await varbitCodec.encode('11110000', {})).toBe('11110000');
+      expect(await varbitCodec.toWire('11110000', {})).toBe('11110000');
     });
 
     it('decodes string as-is', async () => {
-      expect(await varbitCodec.decode('00001111', {})).toBe('00001111');
+      expect(await varbitCodec.fromWire('00001111', {})).toBe('00001111');
     });
   });
 
   describe('bytea codec', () => {
     const byteaCodec = codecForScalar('bytea') as {
-      encode: (value: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
-      decode: (wire: Uint8Array | string, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
-      encodeJson: (value: Uint8Array) => unknown;
-      decodeJson: (json: unknown) => Uint8Array;
+      toWire: (value: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
+      fromWire: (wire: Uint8Array | string, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
+      dataType: DataType;
+      toDataTypeValue: (value: Uint8Array) => DataTypeValue;
+      fromDataTypeValue: (value: DataTypeValue) => Uint8Array;
     };
 
     it('round-trips a small payload', async () => {
       const input = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-      const encoded = await byteaCodec.encode(input, {});
-      const decoded = await byteaCodec.decode(encoded, {});
+      const encoded = await byteaCodec.toWire(input, {});
+      const decoded = await byteaCodec.fromWire(encoded, {});
       expect(decoded).toEqual(input);
     });
 
     it('round-trips an empty payload', async () => {
       const input = new Uint8Array(0);
-      const encoded = await byteaCodec.encode(input, {});
-      const decoded = await byteaCodec.decode(encoded, {});
+      const encoded = await byteaCodec.toWire(input, {});
+      const decoded = await byteaCodec.fromWire(encoded, {});
       expect(decoded).toEqual(input);
       expect(decoded.byteLength).toBe(0);
     });
 
     it('returns plain Uint8Array wire values by identity', async () => {
       const input = new Uint8Array([0x01, 0x02, 0x03]);
-      const decoded = await byteaCodec.decode(input, {});
+      const decoded = await byteaCodec.fromWire(input, {});
       expect(decoded).toBe(input);
     });
 
     it('normalizes Buffer wire values to a plain Uint8Array view without copying', async () => {
       const backing = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
       const buffer = Buffer.from(backing.buffer, 1, 3);
-      const decoded = await byteaCodec.decode(buffer, {});
+      const decoded = await byteaCodec.fromWire(buffer, {});
       expect(decoded).toBeInstanceOf(Uint8Array);
       expect(decoded.constructor).toBe(Uint8Array);
       expect(decoded.buffer).toBe(buffer.buffer);
@@ -307,48 +309,48 @@ describe('adapter-postgres codecs', () => {
     });
 
     it('decodes target-parsed list element hex text', async () => {
-      const decoded = await byteaCodec.decode('\\x010203', {});
+      const decoded = await byteaCodec.fromWire('\\x010203', {});
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
     });
 
     it('rejects non-hex bytea text', async () => {
-      await expect(byteaCodec.decode('not-bytea-hex', {})).rejects.toThrow(
+      await expect(byteaCodec.fromWire('not-bytea-hex', {})).rejects.toThrow(
         'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
       );
     });
 
     it('uses base64 for JSON in both directions', () => {
       const bytes = new Uint8Array([0x01, 0x02, 0xfe, 0xff]);
-      expect(byteaCodec.encodeJson(bytes)).toBe('AQL+/w==');
-      expect(byteaCodec.decodeJson('AQL+/w==')).toEqual(bytes);
-      expect(byteaCodec.encodeJson(new Uint8Array())).toBe('');
-      expect(byteaCodec.decodeJson('')).toEqual(new Uint8Array());
+      expect(toContractJson(byteaCodec, bytes)).toBe('AQL+/w==');
+      expect(fromContractJson(byteaCodec, 'AQL+/w==')).toEqual(bytes);
+      expect(toContractJson(byteaCodec, new Uint8Array())).toBe('');
+      expect(fromContractJson(byteaCodec, '')).toEqual(new Uint8Array());
     });
 
     it('rejects JSON that is not base64 text', () => {
-      expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 JSON value must be a base64 string',
+      expect(() => fromContractJson(byteaCodec, 42)).toThrow(
+        'pg/bytea JSON value must be a base64 string',
       );
-      expect(() => byteaCodec.decodeJson('not base64!')).toThrow(
-        'pg/bytea@1 JSON value must be a base64 string',
+      expect(() => fromContractJson(byteaCodec, 'not base64!')).toThrow(
+        'pg/bytea JSON value must be a base64 string',
       );
     });
 
     it('encodes Uint8Array to base64 text', () => {
       const input = new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f]);
-      expect(byteaCodec.encodeJson(input)).toBe('aGVsbG8=');
+      expect(toContractJson(byteaCodec, input)).toBe('aGVsbG8=');
     });
 
-    it('round-trips through encodeJson / decodeJson', () => {
+    it('round-trips through toDataTypeValue / fromDataTypeValue', () => {
       const input = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-      const json = byteaCodec.encodeJson(input);
-      const decoded = byteaCodec.decodeJson(json);
+      const json = toContractJson(byteaCodec, input);
+      const decoded = fromContractJson(byteaCodec, json);
       expect(Array.from(decoded)).toEqual(Array.from(input));
     });
 
-    it('throws on non-string input to decodeJson', () => {
-      expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 JSON value must be a base64 string',
+    it('its data type refuses non-string JSON', () => {
+      expect(() => fromContractJson(byteaCodec, 42)).toThrow(
+        'pg/bytea JSON value must be a base64 string',
       );
     });
   });
@@ -363,49 +365,49 @@ describe('adapter-postgres codecs', () => {
     });
 
     it('writes the value as the ISO duration PostgreSQL accepts', async () => {
-      expect(await codec.encode(fields({ days: 1 }), {})).toBe('P1D');
+      expect(await codec.toWire(fields({ days: 1 }), {})).toBe('P1D');
     });
 
     it('reads a text wire value into the three fields', async () => {
-      expect(await codec.decode('PT2H', {})).toEqual(fields({ micros: 7_200_000_000n }));
-      expect(await codec.decode('P13M', {})).toEqual(fields({ months: 13 }));
+      expect(await codec.fromWire('PT2H', {})).toEqual(fields({ micros: 7_200_000_000n }));
+      expect(await codec.fromWire('P13M', {})).toEqual(fields({ months: 13 }));
     });
 
     it('reads the interval text PostgreSQL prints into the three fields', async () => {
-      expect(await codec.decode('1 day 02:03:04', {})).toEqual(
+      expect(await codec.fromWire('1 day 02:03:04', {})).toEqual(
         fields({ days: 1, micros: 7_384_000_000n }),
       );
-      expect(await codec.decode('-1 years -2 mons +3 days -04:00:00', {})).toEqual(
+      expect(await codec.fromWire('-1 years -2 mons +3 days -04:00:00', {})).toEqual(
         fields({ months: -14, days: 3, micros: -14_400_000_000n }),
       );
     });
 
     it('rounds interval text past six fractional digits to microseconds as ISO-8601 text does', async () => {
-      expect(await codec.decode('00:00:00.1234567', {})).toEqual(
-        await codec.decode('PT0.1234567S', {}),
+      expect(await codec.fromWire('00:00:00.1234567', {})).toEqual(
+        await codec.fromWire('PT0.1234567S', {}),
       );
-      expect(await codec.decode('00:00:00.1234567', {})).toEqual(fields({ micros: 123_457n }));
-      expect(await codec.decode('-00:00:00.1234565', {})).toEqual(
-        await codec.decode('PT-0.1234565S', {}),
+      expect(await codec.fromWire('00:00:00.1234567', {})).toEqual(fields({ micros: 123_457n }));
+      expect(await codec.fromWire('-00:00:00.1234565', {})).toEqual(
+        await codec.fromWire('PT-0.1234565S', {}),
       );
     });
 
     it('rejects a text wire value that is neither an ISO-8601 duration nor interval text', async () => {
-      await expect(codec.decode('one day', {})).rejects.toThrow(
+      await expect(codec.fromWire('one day', {})).rejects.toThrow(
         'pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got one day',
       );
     });
 
     it('reads the driver component object into the three fields', async () => {
-      expect(await codec.decode({ hours: 2, minutes: 30 }, {})).toEqual(
+      expect(await codec.fromWire({ hours: 2, minutes: 30 }, {})).toEqual(
         fields({ micros: 9_000_000_000n }),
       );
     });
 
     it('carries the JSON side as the ISO duration, normalising only its spelling', () => {
-      expect(codec.encodeJson(fields({ months: 13 }))).toBe('P1Y1M');
-      expect(codec.decodeJson('P1Y1M')).toEqual(fields({ months: 13 }));
-      expect(codec.encodeJson(fields({ months: 1, days: -1 }))).toBe('P1M-1D');
+      expect(toContractJson(codec, fields({ months: 13 }))).toBe('P1Y1M');
+      expect(fromContractJson(codec, 'P1Y1M')).toEqual(fields({ months: 13 }));
+      expect(toContractJson(codec, fields({ months: 1, days: -1 }))).toBe('P1M-1D');
     });
 
     /**
@@ -414,10 +416,10 @@ describe('adapter-postgres codecs', () => {
      * `'1.9999999'` carries into `2`. Both paths into the value agree.
      */
     it('rounds fractional seconds past microsecond resolution', () => {
-      expect(codec.decodeJson('PT1.1234567S')).toEqual(fields({ micros: 1_123_457n }));
-      expect(codec.decodeJson('PT1.9999999S')).toEqual(fields({ micros: 2_000_000n }));
-      expect(codec.decodeJson('PT-1.1234567S')).toEqual(fields({ micros: -1_123_457n }));
-      expect(codec.encodeJson(fields({ micros: 1_123_457n }))).toBe('PT1.123457S');
+      expect(fromContractJson(codec, 'PT1.1234567S')).toEqual(fields({ micros: 1_123_457n }));
+      expect(fromContractJson(codec, 'PT1.9999999S')).toEqual(fields({ micros: 2_000_000n }));
+      expect(fromContractJson(codec, 'PT-1.1234567S')).toEqual(fields({ micros: -1_123_457n }));
+      expect(toContractJson(codec, fields({ micros: 1_123_457n }))).toBe('PT1.123457S');
     });
   });
 
@@ -426,15 +428,15 @@ describe('adapter-postgres codecs', () => {
       const codec = codecForScalar('int8');
 
       it('uses decimal text, so values beyond 2^53 survive', () => {
-        expect(codec.encodeJson(42n)).toBe('42');
-        expect(codec.decodeJson('42')).toBe(42n);
-        expect(codec.encodeJson(9007199254740993n)).toBe('9007199254740993');
-        expect(codec.decodeJson('9007199254740993')).toBe(9007199254740993n);
+        expect(toContractJson(codec, 42n)).toBe('42');
+        expect(fromContractJson(codec, '42')).toBe(42n);
+        expect(toContractJson(codec, 9007199254740993n)).toBe('9007199254740993');
+        expect(fromContractJson(codec, '9007199254740993')).toBe(9007199254740993n);
       });
 
       it('rejects a JSON number, which has already lost digits', () => {
-        expect(() => codec.decodeJson(42)).toThrow(
-          'pg/int8@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
+        expect(() => fromContractJson(codec, 42)).toThrow(
+          'pg/int8 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         );
       });
 
@@ -446,20 +448,20 @@ describe('adapter-postgres codecs', () => {
     describe('identity codecs', () => {
       it('pg/int4@1 round-trips numbers', () => {
         const codec = codecForScalar('int4');
-        expect(codec.encodeJson(42)).toBe(42);
-        expect(codec.decodeJson(42)).toBe(42);
+        expect(toContractJson(codec, 42)).toBe(42);
+        expect(fromContractJson(codec, 42)).toBe(42);
       });
 
       it('pg/text@1 round-trips strings', () => {
         const codec = codecForScalar('text');
-        expect(codec.encodeJson('hello')).toBe('hello');
-        expect(codec.decodeJson('hello')).toBe('hello');
+        expect(toContractJson(codec, 'hello')).toBe('hello');
+        expect(fromContractJson(codec, 'hello')).toBe('hello');
       });
 
       it('pg/bool@1 round-trips booleans', () => {
         const codec = codecForScalar('bool');
-        expect(codec.encodeJson(true)).toBe(true);
-        expect(codec.decodeJson(false)).toBe(false);
+        expect(toContractJson(codec, true)).toBe(true);
+        expect(fromContractJson(codec, false)).toBe(false);
       });
     });
   });

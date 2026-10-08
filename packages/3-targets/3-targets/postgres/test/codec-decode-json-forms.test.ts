@@ -1,5 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecInstanceContext } from '@internal/framework-components/codec';
+import type {
+  CodecInstanceContext,
+  DataType,
+  DataTypeValue,
+} from '@internal/framework-components/codec';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -38,18 +42,24 @@ import {
   pgTimestampStringDescriptor,
   pgTimestamptzStringDescriptor,
 } from '../src/core/temporal-string-codecs';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const ctx: CodecInstanceContext = { name: 'decode-json-forms' };
 
-interface DecodeJsonCase {
-  readonly codec: { readonly id: string; decodeJson(json: JsonValue): unknown };
-  /** The JSON PostgreSQL produces for the type (`to_json`, `json_agg`) and the codec's own `encodeJson` output. */
+interface ContractJsonCase {
+  readonly codec: {
+    readonly id: string;
+    readonly dataType: DataType;
+    fromDataTypeValue(value: DataTypeValue): unknown;
+  };
+  readonly params?: Readonly<Record<string, unknown>>;
+  /** The JSON PostgreSQL produces for the type (`to_json`, `json_agg`) and what the codec's `toDataTypeValue` writes. */
   readonly accepts: readonly JsonValue[];
   readonly rejects: readonly JsonValue[];
 }
 
 // The accepted forms are what PostgreSQL 17 (PGlite) wrote for each type, recorded with `to_json`, `json_build_object` and `json_agg`.
-const cases: readonly DecodeJsonCase[] = [
+const cases: readonly ContractJsonCase[] = [
   {
     codec: pgTextDescriptor.factory()(ctx),
     accepts: ['hello', ''],
@@ -57,6 +67,7 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgEnumDescriptor.factory({ typeName: 'mood' })(ctx),
+    params: { typeName: 'mood' },
     accepts: ['happy'],
     rejects: [1, false, null],
   },
@@ -88,6 +99,7 @@ const cases: readonly DecodeJsonCase[] = [
   ...[pgCharDescriptor, postgresSqlCharDescriptor].flatMap((descriptor) => [
     {
       codec: descriptor.factory({ length: 3 })(ctx),
+      params: { length: 3 },
       accepts: ['abc', 'ab', 'abc  ', '\u{1F600}\u{1F600}\u{1F600}'],
       rejects: ['abcd', ' abc', 1, null],
     },
@@ -96,6 +108,7 @@ const cases: readonly DecodeJsonCase[] = [
   ...[pgVarcharDescriptor, postgresSqlVarcharDescriptor].flatMap((descriptor) => [
     {
       codec: descriptor.factory({ length: 3 })(ctx),
+      params: { length: 3 },
       accepts: ['abc', '', '\u{1F600}\u{1F600}\u{1F600}'],
       rejects: ['abcd', 'abc ', 1, null],
     },
@@ -113,21 +126,25 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgBitDescriptor.factory({ length: 4 })(ctx),
+    params: { length: 4 },
     accepts: ['1010'],
     rejects: ['101', '10101'],
   },
   {
     codec: pgVarbitDescriptor.factory({ length: 4 })(ctx),
+    params: { length: 4 },
     accepts: ['1010', '1', ''],
     rejects: ['10101'],
   },
   {
     codec: pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+    params: { precision: 5, scale: 2 },
     accepts: ['123.45', '-999.99', '1.5', '1.50', '0', '0.01', 'NaN'],
     rejects: ['1234.5', '1000', '1.555', '0.001', 'Infinity', '-Infinity', '1e3', '+1', 'abc'],
   },
   {
     codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
+    params: { precision: 3 },
     accepts: ['999', '-999', '7'],
     rejects: ['1000', '1.5', '007', '-0'],
   },
@@ -194,7 +211,7 @@ const cases: readonly DecodeJsonCase[] = [
     accepts: [['a', 'b'], [], ['a', null]],
     rejects: ['a', [1], [true], null, {}],
   },
-  // The date and time codecs that carry PostgreSQL's own text take the canonical form their `encodeJson` writes and
+  // The date and time codecs that carry PostgreSQL's own text take the canonical form their `toDataTypeValue` writes and
   // what PostgreSQL writes for the type as text and as JSON: `::text` and `to_json` under the ISO DateStyle, in the
   // time zones UTC, Europe/Amsterdam, Asia/Kolkata and America/St_Johns, at each precision from 0 to 6. PostgreSQL holds
   // years the canonical form does not, and `24:00:00` as a time of day.
@@ -369,8 +386,8 @@ describe('the float codecs write NaN and the infinities as the text PostgreSQL w
     it(descriptor.codecId, () => {
       const codec = descriptor.factory()(ctx);
       const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-      const stored = values.map((value) => codec.encodeJson(value));
-      expect({ stored, read: stored.map((json) => codec.decodeJson(json)) }).toEqual({
+      const stored = values.map((value) => toContractJson(codec, value));
+      expect({ stored, read: stored.map((json) => fromContractJson(codec, json)) }).toEqual({
         stored: ['NaN', 'Infinity', '-Infinity'],
         read: values,
       });
@@ -378,9 +395,9 @@ describe('the float codecs write NaN and the infinities as the text PostgreSQL w
   }
 });
 
-describe('pg/text-array@1 decodeJson', () => {
+describe('pg/text-array@1 fromDataTypeValue', () => {
   it('keeps a NULL element as null', () => {
-    expect(pgTextArrayDescriptor.factory()(ctx).decodeJson(['a', null, ''])).toEqual([
+    expect(fromContractJson(pgTextArrayDescriptor.factory()(ctx), ['a', null, ''])).toEqual([
       'a',
       null,
       '',
@@ -388,18 +405,18 @@ describe('pg/text-array@1 decodeJson', () => {
   });
 });
 
-describe('decodeJson reads the stored JSON form of its type and refuses any other', () => {
-  for (const { codec, accepts, rejects } of cases) {
+describe("a codec's data type reads the stored JSON form of the type and refuses any other", () => {
+  for (const { codec, params = {}, accepts, rejects } of cases) {
     it(`${codec.id} accepts ${JSON.stringify(accepts)}`, () => {
-      for (const json of accepts) expect(() => codec.decodeJson(json)).not.toThrow();
+      for (const json of accepts) expect(() => fromContractJson(codec, json, params)).not.toThrow();
     });
 
     it(`${codec.id} refuses ${JSON.stringify(rejects)}`, () => {
       for (const json of rejects) {
-        expect(() => codec.decodeJson(json)).toThrow(
+        expect(() => fromContractJson(codec, json, params)).toThrow(
           expect.objectContaining({
             code: 'RUNTIME.DECODE_FAILED',
-            meta: expect.objectContaining({ codecId: codec.id }),
+            meta: expect.objectContaining({ dataType: codec.dataType.id }),
           }),
         );
       }
@@ -414,19 +431,21 @@ describe('the length and scale checks on a long run of padding', () => {
     [
       'pg/char@1 with a length',
       () => pgCharDescriptor.factory({ length: run + 1 })(ctx),
+      { length: run + 1 },
       `${' '.repeat(run)}x${' '.repeat(run - 1)}`,
     ],
     [
       'pg/numeric@1 with a scale',
       () => pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+      { precision: 5, scale: 2 },
       `1.${'0'.repeat(run)}1${'0'.repeat(run - 1)}`,
     ],
-  ])('%s decides in time linear in the length', (_name, build, json) => {
+  ])('%s decides in time linear in the length', (_name, build, params, json) => {
     const codec = build();
     const started = performance.now();
     let refused = false;
     try {
-      codec.decodeJson(json);
+      fromContractJson(codec, json, params);
     } catch {
       refused = true;
     }
@@ -455,7 +474,7 @@ describe('the date and time codecs that carry PostgreSQL text read what they wri
     ['pg/time-string@1', pgTimeStringDescriptor.factory({})(ctx), '12:34', '12:34:00'],
     ['pg/timetz@1', pgTimetzDescriptor.factory({})(ctx), '12:34:56+02', '12:34:56+02:00'],
   ])('%s stores %s as %s and reads that text back unchanged', (_id, codec, value, stored) => {
-    const json = codec.encodeJson(value);
-    expect({ json, read: codec.decodeJson(json) }).toEqual({ json: stored, read: stored });
+    const json = toContractJson(codec, value);
+    expect({ json, read: fromContractJson(codec, json) }).toEqual({ json: stored, read: stored });
   });
 });

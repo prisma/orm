@@ -1,4 +1,5 @@
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
+import { readContractValue } from '@internal/framework-components/codec';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -124,11 +125,12 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
             const row = result.rows[0]!;
             for (const form of [row.text, row.json]) {
               try {
-                if (codec.decodeJson(form) === form) {
+                const decoded = readContractValue(codec, form, undefined);
+                if (decoded === form) {
                   read += 1;
                   continue;
                 }
-                unread.push({ zone, type, value, form, decoded: codec.decodeJson(form) });
+                unread.push({ zone, type, value, form, decoded });
               } catch (error) {
                 unread.push({ zone, type, value, form, error: String(error) });
               }
@@ -151,20 +153,20 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
           () => 'read',
           () => 'refused',
         );
-        let decodeJson = 'read';
+        let readsJson = 'read';
         try {
-          codecFor(codecId).decodeJson(text);
+          readContractValue(codecFor(codecId), text, undefined);
         } catch {
-          decodeJson = 'refused';
+          readsJson = 'refused';
         }
-        results.push({ type, text, postgres, decodeJson });
+        results.push({ type, text, postgres, readsJson });
       }
       expect(results).toEqual(
         REFUSED.map(([, type, text]) => ({
           type,
           text,
           postgres: 'refused',
-          decodeJson: 'refused',
+          readsJson: 'refused',
         })),
       );
     },

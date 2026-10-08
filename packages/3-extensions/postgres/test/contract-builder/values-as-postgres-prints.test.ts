@@ -94,7 +94,7 @@ describe('values in a Postgres contract decode to the value a query returns', ()
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Host") member "A" has a value its codec pg/inet@1 refuses: pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
+          'enumType("Host") member "A" has a value its codec pg/inet@1 refuses: pg/inet JSON value must be an IP address as PostgreSQL writes it',
       }),
     );
   });

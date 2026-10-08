@@ -4,6 +4,7 @@ import { codecDescriptors, pgVectorDescriptor } from '../src/core/codecs';
 import { pgvectorCodecRegistry } from '../src/core/registry';
 import pgvectorExtensionDescriptor from '../src/exports/control';
 import pgvectorRuntimeDescriptor from '../src/exports/runtime';
+import { fromContractJson, toContractJson } from './contract-json';
 
 describe('pgvector PostgreSQL codec descriptor adoption', () => {
   it('uses one target descriptor instance across canonical, registry, runtime, and control contributions', () => {
@@ -32,7 +33,7 @@ describe('pgvector PostgreSQL codec descriptor adoption', () => {
     );
 
     const codec = pgVectorDescriptor.factory(ref.typeParams)({ name: 'embedding' });
-    expect(codec.encodeJson([0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
-    expect(codec.decodeJson([0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
+    expect(toContractJson(codec, [0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
+    expect(fromContractJson(codec, [0.1, 0.2, 0.3], ref.typeParams)).toEqual([0.1, 0.2, 0.3]);
   });
 });

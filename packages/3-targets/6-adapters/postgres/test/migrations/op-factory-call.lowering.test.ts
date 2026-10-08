@@ -292,6 +292,7 @@ describe('TypeScriptRenderablePostgresMigration', () => {
 describe('AddNotNullColumnWithTempDefaultCall', () => {
   it('renders the exact ADD COLUMN SQL for a parameterized codec type with its temp-default backfill', async () => {
     const vectorType = sqlDataType('test/vector', {
+      read: (json) => json,
       params: arktype({ length: 'number.integer > 0' }),
       texts: [{ text: 'vector({length})', written: true }],
     });

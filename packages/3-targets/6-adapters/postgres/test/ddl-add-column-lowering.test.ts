@@ -10,6 +10,12 @@
  *   "name" type [DEFAULT ...] [NOT NULL] [PRIMARY KEY]
  */
 
+import type { JsonValue } from '@internal/contract/types';
+import {
+  type DataTypeValue,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
@@ -146,6 +152,7 @@ describe('PostgresAlterTable ADD COLUMN lowering', () => {
 
   describe('a parameterized column whose codec answers for its params', () => {
     // A codec whose wire form depends on the length its column declares, as `pg/vector@1` does.
+    const vectorType = dataType('test/vector', { read: (json) => json });
     const descriptor = {
       codecId: 'test/vector@1',
       traits: ['equality'],
@@ -155,10 +162,12 @@ describe('PostgresAlterTable ADD COLUMN lowering', () => {
       },
       factory: (params: { readonly length: number }) => () => ({
         id: 'test/vector@1',
-        encode: async (value: readonly number[]) => `[${value.join(',')}]`,
-        decode: async (wire: unknown) => wire,
-        encodeJson: (value: unknown) => value,
-        decodeJson: (json: unknown) => {
+        dataType: vectorType,
+        toWire: async (value: readonly number[]) => `[${value.join(',')}]`,
+        fromWire: async (wire: unknown) => wire,
+        toDataTypeValue: (value: JsonValue) => dataTypeValueFor(vectorType, {}, value),
+        fromDataTypeValue: (value: DataTypeValue) => {
+          const json = value.value;
           if (!Array.isArray(json) || json.length !== params.length) {
             throw new Error(`length mismatch: expected ${params.length}, got ${String(json)}`);
           }

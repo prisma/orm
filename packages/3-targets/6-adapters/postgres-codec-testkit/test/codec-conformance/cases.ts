@@ -3,15 +3,15 @@
  * descriptor, exercised against a real database by the conformance suite.
  *
  * `notYetCanonical` marks a case whose projection disagrees with the codec's
- * **current** `encodeJson` / `decodeJson` — the projection will not execute, or
- * the parsed value differs from what `encodeJson` produces, or the value does
+ * **current** `toDataTypeValue` / `fromDataTypeValue` — the projection will not execute, or
+ * the parsed value differs from what `toDataTypeValue` produces, or the value does
  * not survive the round trip back. The suite asserts a marked case still fails
  * and still fails the recorded way, so a projection cannot be brought into
  * agreement without updating this file.
  *
  * A green run is therefore not a claim that every codec's JSON is canonical.
  * Both conditions are measured against the codec's own two methods, so a codec
- * whose `encodeJson` is itself not canonical conforms here: its projection
+ * whose `toDataTypeValue` is itself not canonical conforms here: its projection
  * faithfully realizes a representation that is simply not the one the codec ends
  * up with. Such a codec conforms, then transits through a failing state when its
  * canonical form lands, then conforms again.
@@ -186,7 +186,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/bool@1', label: 'true', value: true },
   { codecId: 'pg/bit@1', label: 'single bit', value: '1' },
-  // Values at the limit their type parameters set, which decodeJson checks. The harness stores a value in a
+  // Values at the limit their type parameters set, which the data type checks. The harness stores a value in a
   // column of the codec's native type without its type parameters, and a bare char or bit holds one character
   // or bit, so type-params.integration.test.ts covers those two.
   {
@@ -235,7 +235,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
-  // value itself rather than as text. `encodeJson` writes the data type's canonical form and the
+  // value itself rather than as text. `toDataTypeValue` writes the data type's canonical form and the
   // projection renders whatever PostgreSQL emits for the column; the harness compares the two in
   // canonical form. A `Temporal` value is not deep-equal to its copy, so these cases give the
   // round trip its own equality.

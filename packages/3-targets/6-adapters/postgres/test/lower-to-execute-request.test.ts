@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
 import { CodecDescriptorImpl, dataTypeId } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -18,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import { encodeControlQueryParams } from '../src/core/control-codecs';
 import type { PostgresContract } from '../src/core/types';
+import { defineTestCodec } from './test-codec';
 
 const adapter = new PostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),
@@ -31,13 +33,12 @@ const ctx = { contract: {} as PostgresContract };
  * codec routing (the walker calls `encode` and inlines the wire result)
  * from the type-branching fallback (which would inline the raw value).
  */
-const transformingCodec = {
-  id: 'test/transform@1',
-  encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value: unknown) => value,
-  decodeJson: (json: unknown) => json,
-} as unknown as Codec;
+const transformingCodec = defineTestCodec({
+  typeId: 'test/transform@1',
+  dataType: pgText,
+  toWire: async (value: JsonValue) => `ENC:${String(value).toUpperCase()}`,
+  fromWire: async (wire: JsonValue) => wire,
+});
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: 'test/transform@1',
@@ -50,6 +51,7 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
   dataType: pgText,
   jsonProjection: (expression: ProjectionExpr) => expression,
+  factory: () => () => transformingCodec,
 });
 const transformingCodecRegistry = createPostgresCodecRegistryWithBuiltins([transformingDescriptor]);
 
@@ -193,7 +195,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — guards', () => {
     );
   });
 
-  it('routes a codec-bearing literal default through codec.encode (not raw type-branching)', async () => {
+  it('routes a codec-bearing literal default through codec.toWire (not raw type-branching)', async () => {
     const codecAdapter = new PostgresControlAdapter(
       transformingCodecRegistry,
       createPostgresBuiltinDataTypeLookup(),
@@ -234,8 +236,8 @@ const TEST_CODEC_ID = 'test/transform@1';
 
 const queryTransformingCodec = {
   id: TEST_CODEC_ID,
-  encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
+  toWire: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
+  fromWire: async (wire: unknown) => wire,
 } as unknown as Codec;
 
 const testRegistry: ContractCodecRegistry = {
@@ -310,19 +312,20 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
   override readonly paramsSchema = undefined;
   override factory(): (ctx: object) => Codec {
     return () =>
-      ({
-        id: EXT_CODEC_ID,
-        encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-        decode: async (wire: unknown) => wire,
-        encodeJson: (v: unknown) => v as never,
-        decodeJson: (v: unknown) => v as never,
-      }) as unknown as Codec;
+      defineTestCodec({
+        typeId: EXT_CODEC_ID,
+        dataType: pgText,
+        toWire: async (value: JsonValue) => `ENC:${String(value).toUpperCase()}`,
+        fromWire: async (wire: JsonValue) => wire,
+      });
   }
 }
 
-const extTransformDescriptor = postgresCodec(new ExtTransformDescriptor(), {
+const extDescriptor = new ExtTransformDescriptor();
+const extTransformDescriptor = postgresCodec(extDescriptor, {
   dataType: pgText,
   jsonProjection: (expression: ProjectionExpr) => expression,
+  factory: () => extDescriptor.factory(),
 });
 
 function buildExtContractAndTable() {

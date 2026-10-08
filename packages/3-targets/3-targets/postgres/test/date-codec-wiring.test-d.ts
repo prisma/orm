@@ -12,6 +12,6 @@ test('Date codec participates in the public codec type map', () => {
   const codec = column.codecFactory({ name: 'at' });
   expectTypeOf(codec).not.toBeAny();
   expectTypeOf(codec.id).toEqualTypeOf<'pg/timestamptz-date@1'>();
-  expectTypeOf(codec.encode).parameter(0).toEqualTypeOf<Date>();
-  expectTypeOf(codec.decode).returns.resolves.toEqualTypeOf<Date>();
+  expectTypeOf(codec.toWire).parameter(0).toEqualTypeOf<Date>();
+  expectTypeOf(codec.fromWire).returns.resolves.toEqualTypeOf<Date>();
 });

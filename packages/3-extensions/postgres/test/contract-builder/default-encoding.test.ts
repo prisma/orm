@@ -1,4 +1,9 @@
 import 'temporal-polyfill/full/global';
+import {
+  type DataTypeValue,
+  dataType,
+  dataTypeValueFor,
+} from '@internal/framework-components/codec';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { describe, expect, it } from 'vitest';
 import {
@@ -128,7 +133,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Code") member "Long" has a value its codec pg/char@1 refuses: pg/char@1 JSON value must be a string of at most 1 character before any trailing spaces',
+          'enumType("Code") member "Long" has a value its codec pg/char@1 refuses: pg/char JSON value must be a string of at most 1 character before any trailing spaces',
         fix: 'Give the member a value the codec takes, or type the enum with a codec that takes it.',
         meta: {
           enumName: 'Code',
@@ -186,12 +191,14 @@ describe('postgres defineContract encodes literal defaults through the column co
 
   it('keeps a caller-supplied codecLookup', () => {
     const builtinCodecs = createPostgresBuiltinCodecLookup();
+    const callerType = dataType('test/caller', { read: (json) => json });
     const callerCodec = (id: string) => ({
       id,
-      encode: async (value: unknown) => value,
-      decode: async (wire: unknown) => wire,
-      encodeJson: () => 'encoded by the caller lookup',
-      decodeJson: (json: unknown) => json,
+      dataType: callerType,
+      toWire: async (value: unknown) => value,
+      fromWire: async (wire: unknown) => wire,
+      toDataTypeValue: () => dataTypeValueFor(callerType, {}, 'encoded by the caller lookup'),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
     });
     const contract = defineContract(
       {

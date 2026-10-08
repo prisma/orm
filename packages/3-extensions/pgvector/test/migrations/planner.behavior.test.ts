@@ -50,7 +50,10 @@ const testTsvectorComponent = {
   version: '0.0.0-test',
   create: () => ({ familyId: 'sql', targetId: 'postgres' }) as never,
   dataTypes: [
-    sqlDataType('test/tsvector', { texts: [{ text: 'tsvector', written: true, catalog: true }] }),
+    sqlDataType('test/tsvector', {
+      read: (json) => json,
+      texts: [{ text: 'tsvector', written: true, catalog: true }],
+    }),
   ],
   types: {
     codecTypes: {

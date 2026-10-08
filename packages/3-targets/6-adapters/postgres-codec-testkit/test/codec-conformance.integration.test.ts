@@ -3,13 +3,13 @@
  * for every built-in codec descriptor.
  *
  * An unmarked case must conform — its projection must agree with the codec's
- * `encodeJson` and survive the round trip back through `decodeJson`. A marked
+ * `toDataTypeValue` and survive the round trip back through `fromDataTypeValue`. A marked
  * case must still fail, and fail with the kind it records, so neither the marker
  * nor its recorded kind can rot as projections change.
  *
  * Conformance is measured against the codec's **current** methods, so a green
  * run does not claim every codec's JSON is already canonical: a codec whose
- * `encodeJson` is not yet canonical conforms here and is tracked by the plan.
+ * `toDataTypeValue` is not yet canonical conforms here and is tracked by the plan.
  * See `codec-conformance/cases.ts`.
  */
 
@@ -69,8 +69,8 @@ describe('PostgreSQL codec JSON-projection conformance', { concurrent: false }, 
   for (const conformanceCase of postgresConformanceCases) {
     const expectation =
       conformanceCase.notYetCanonical === undefined
-        ? 'agrees with encodeJson and round-trips through decodeJson'
-        : 'still disagrees with encodeJson or decodeJson';
+        ? 'agrees with toDataTypeValue and round-trips through fromDataTypeValue'
+        : 'still disagrees with toDataTypeValue or fromDataTypeValue';
 
     it(`${conformanceCase.codecId} (${conformanceCase.label}) ${expectation}`, {
       timeout: timeouts.spinUpPpgDev,

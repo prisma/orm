@@ -203,7 +203,7 @@ describe('contract infer writes the text-backed date and time types', () => {
         }
         const codec = descriptor.factory({})({ name: nativeType });
         try {
-          results[nativeType] = await codec.encode(await codec.decode(wire, {}), {});
+          results[nativeType] = await codec.toWire(await codec.fromWire(wire, {}), {});
         } catch (error) {
           results[nativeType] = error instanceof Error ? error.message : error;
         }

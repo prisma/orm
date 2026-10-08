@@ -3,6 +3,7 @@ import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggre
 import { describe, expect, it } from 'vitest';
 import { postgresAggregateDescriptors } from '../src/core/aggregates';
 import { postgresCodecRegistry } from '../src/core/registry';
+import { fromContractJson } from './contract-json';
 
 /**
  * A non-nullable row answers with a value where no result row reached the
@@ -23,7 +24,10 @@ function decodeEmptyResult(row: SqlAggregateDescriptor & { readonly nullable: fa
   if (descriptor === undefined) {
     throw new Error(`no registered codec for '${outputCodecId(row.output)}'`);
   }
-  return descriptor.factory(undefined)({ name: 'empty-result' }).decodeJson(row.emptyResultJson);
+  return fromContractJson(
+    descriptor.factory(undefined)({ name: 'empty-result' }),
+    row.emptyResultJson,
+  );
 }
 
 describe('PostgreSQL empty-result declarations', () => {

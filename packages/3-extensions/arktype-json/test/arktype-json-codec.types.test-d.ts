@@ -20,7 +20,9 @@ import {
   type ColumnHelperFor,
   type ColumnSpec,
   column,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
+import { pgJsonb } from '@internal/target-postgres/data-types';
 import { type } from 'arktype';
 import { expectTypeOf, test } from 'vitest';
 import {
@@ -88,16 +90,17 @@ test('coarse satisfies catches wrong typeParams shape on arktypeJsonColumn', () 
       (_ctx: CodecInstanceContext) =>
         new (class FakeCodec {
           readonly id = 'arktype/json@1' as const;
-          encode(_v: unknown, _c: unknown): Promise<string> {
+          toWire(_v: unknown, _c: unknown): Promise<string> {
             return Promise.resolve('');
           }
-          decode(_w: string, _c: unknown): Promise<unknown> {
+          fromWire(_w: string, _c: unknown): Promise<unknown> {
             return Promise.resolve(undefined);
           }
-          encodeJson(_v: unknown): unknown {
-            return null;
+          readonly dataType = pgJsonb;
+          toDataTypeValue(_v: unknown): DataTypeValue {
+            return pgJsonb.fromContract(null, {});
           }
-          decodeJson(_j: unknown): unknown {
+          fromDataTypeValue(_value: DataTypeValue): unknown {
             return undefined;
           }
         })(),

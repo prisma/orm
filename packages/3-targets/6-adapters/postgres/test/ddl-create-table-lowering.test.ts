@@ -252,7 +252,7 @@ describe('PostgresCreateTable DDL lowering', () => {
     await expect(lower('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11')).rejects.toMatchObject({
       code: 'CONTRACT.DEFAULT_INVALID',
       message:
-        'Column "tokens"."u" has a default its codec pg/uuid@1 refuses: pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12',
+        'Column "tokens"."u" has a default its codec pg/uuid@1 refuses: pg/uuid JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12',
       meta: {
         table: 'tokens',
         column: 'u',

@@ -11,6 +11,7 @@ import {
 import { arktypeJsonCodecRegistry } from '../src/core/registry';
 import { arktypeJsonExtensionDescriptor } from '../src/exports/control';
 import { arktypeJsonRuntimeDescriptor } from '../src/exports/runtime';
+import { fromContractJson, toContractJson } from './contract-json';
 
 describe('arktype-json PostgreSQL codec descriptor adoption', () => {
   it('uses one target descriptor instance across canonical, registry, runtime, and control contributions', () => {
@@ -45,7 +46,7 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
 
     const codec = column.codecFactory({ name: 'details' });
     const value = { name: 'Widget', price: 9.99 };
-    expect(codec.encodeJson(value)).toEqual(value);
-    expect(codec.decodeJson(value)).toEqual(value);
+    expect(toContractJson(codec, value)).toEqual(value);
+    expect(fromContractJson(codec, value, ref.typeParams)).toEqual(value);
   });
 });

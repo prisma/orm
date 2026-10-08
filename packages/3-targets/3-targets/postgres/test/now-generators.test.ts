@@ -9,6 +9,7 @@ import {
   plainDateTimeNow,
 } from '../src/core/plain-date-time-now-generator';
 import { postgresCodecRegistry } from '../src/core/registry';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const generate: Readonly<Record<string, () => unknown>> = {
   [INSTANT_NOW_GENERATOR_ID]: instantNow,
@@ -27,7 +28,9 @@ function presetGeneratorIds(output: object): string[] {
 const STRING_TIMESTAMP_CODEC_IDS = ['pg/timestamp-string@1', 'pg/timestamptz-string@1'];
 
 function codecFor(codecId: string) {
-  return postgresCodecRegistry.descriptorFor(codecId)?.factory({})({ name: '<test>' });
+  const descriptor = postgresCodecRegistry.descriptorFor(codecId);
+  if (descriptor === undefined) throw new Error(`no registered codec for '${codecId}'`);
+  return descriptor.factory({})({ name: '<test>' });
 }
 
 describe('the "now" generator for each codec', () => {
@@ -38,9 +41,9 @@ describe('the "now" generator for each codec', () => {
   )('generates a value %s encodes', async (codecId, generatorId) => {
     const value = generate[generatorId]?.();
     const codec = codecFor(codecId);
-    const wire = await codec?.encode(value, {});
+    const wire = await codec.toWire(value, {});
     expect(typeof wire).toBe('string');
-    expect(codec?.decodeJson(codec.encodeJson(value))).toEqual(value);
+    expect(fromContractJson(codec, toContractJson(codec, value))).toEqual(value);
   });
 
   it('has no generator for a codec without one', () => {
@@ -83,6 +86,6 @@ describe('the timestampNow value a text timestamp codec is paired with', () => {
   it.each(STRING_TIMESTAMP_CODEC_IDS)('%s encodes it as text', async (codecId) => {
     const value = generate[postgresNowGeneratorIdFor(codecId) ?? '']?.();
     expect(value).toBeInstanceOf(Date);
-    expect(typeof (await codecFor(codecId)?.encode(value, {}))).toBe('string');
+    expect(typeof (await codecFor(codecId)?.toWire(value, {}))).toBe('string');
   });
 });

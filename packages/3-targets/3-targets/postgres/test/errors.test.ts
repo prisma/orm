@@ -9,6 +9,7 @@ import { pgNumericDescriptor } from '../src/core/codecs';
 import { errorPostgresMigrationStackMissing } from '../src/core/errors';
 import { buildColumnTypeSql } from '../src/core/migrations/planner-ddl-builders';
 import { createPostgresMigrationRunner } from '../src/core/migrations/runner';
+import { toContractJson } from './contract-json';
 import { postgresTypeLookups } from './postgres-type-lookups';
 
 describe('errorPostgresMigrationStackMissing', () => {
@@ -48,9 +49,9 @@ describe('postgresError sites', () => {
     expect(error).toMatchObject({ code: 'RUNTIME.TYPE_PARAMS_INVALID' });
   });
 
-  it('pg/numeric encodeJson rejects a non-numeral value as RUNTIME.ENCODE_FAILED', () => {
+  it('pg/numeric toDataTypeValue rejects a non-numeral value as RUNTIME.ENCODE_FAILED', () => {
     const codec = pgNumericDescriptor.factory({ precision: 10, scale: 2 })({ name: 'test' });
-    const error = catchError(() => codec.encodeJson('not-a-number'));
+    const error = catchError(() => toContractJson(codec, 'not-a-number'));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',

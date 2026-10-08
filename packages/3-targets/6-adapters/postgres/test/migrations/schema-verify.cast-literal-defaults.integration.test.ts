@@ -4,6 +4,7 @@ import {
   coreHash,
   profileHash,
 } from '@internal/contract/types';
+import { readContractValue } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
@@ -217,10 +218,12 @@ const table = 'Defaults';
 
 const codecs = createPostgresBuiltinCodecLookup();
 
-function readByCodec(codecId: string, value: ColumnDefaultLiteralInputValue): void {
-  const codec = codecs.get(codecId);
-  if (codec === undefined) throw new Error(`No codec ${codecId}`);
-  for (const element of Array.isArray(value) ? value : [value]) codec.decodeJson(element);
+function readByCodec(type: DefaultCase['type'], value: ColumnDefaultLiteralInputValue): void {
+  const codec = codecs.get(type.codecId);
+  if (codec === undefined) throw new Error(`No codec ${type.codecId}`);
+  for (const element of Array.isArray(value) ? value : [value]) {
+    readContractValue(codec, element, type.typeParams);
+  }
 }
 
 function buildContract(
@@ -229,7 +232,7 @@ function buildContract(
   const columns = Object.fromEntries(
     cases.map((defaultCase) => {
       const value = defaultOf(defaultCase);
-      readByCodec(defaultCase.type.codecId, value);
+      readByCodec(defaultCase.type, value);
       return [defaultCase.column, { ...defaultCase.type, default: { kind: 'literal', value } }];
     }),
   );

@@ -1,15 +1,17 @@
-import type { JsonValue } from '@internal/contract/types';
+import type { DataType, DataTypeValue } from '@internal/framework-components/codec';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { pgVectorColumn, pgVectorDescriptor } from '../src/core/codecs';
 import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from '../src/core/constants';
+import { fromContractJson, toContractJson } from './contract-json';
 
 // The pgvector codec authors `encode`/`decode` synchronously; codecs route through `Promise`-returning methods at the boundary. The tests below cast through the Promise-returning shape and `await` every call so unit-level coverage stays aligned with the codec contract: `Codec<Id, TTraits, TWire, TInput>` — encode/decode return Promise.
 type AsyncVectorCodec = {
-  readonly encode: (value: number[]) => Promise<string>;
-  readonly decode: (wire: string) => Promise<number[]>;
-  readonly encodeJson: (value: number[]) => JsonValue;
-  readonly decodeJson: (json: JsonValue) => number[];
+  readonly toWire: (value: number[]) => Promise<string>;
+  readonly fromWire: (wire: string) => Promise<number[]>;
+  readonly dataType: DataType;
+  readonly toDataTypeValue: (value: number[]) => DataTypeValue;
+  readonly fromDataTypeValue: (value: DataTypeValue) => number[];
 };
 
 function asAsyncCodec(length: number): AsyncVectorCodec {
@@ -31,7 +33,7 @@ describe('pgvector codecs', () => {
   it('encodes number array to PostgreSQL vector format', async () => {
     const vectorCodec = asAsyncCodec(4);
     const value = [0.1, 0.2, 0.3, 0.4];
-    const encoded = await vectorCodec.encode(value);
+    const encoded = await vectorCodec.toWire(value);
     expect(encoded).toBe('[0.1,0.2,0.3,0.4]');
     expect(typeof encoded).toBe('string');
   });
@@ -39,39 +41,39 @@ describe('pgvector codecs', () => {
   it('decodes PostgreSQL vector format string', async () => {
     const vectorCodec = asAsyncCodec(4);
     const wire = '[0.1,0.2,0.3,0.4]';
-    const decoded = await vectorCodec.decode(wire);
+    const decoded = await vectorCodec.fromWire(wire);
     expect(decoded).toEqual([0.1, 0.2, 0.3, 0.4]);
   });
 
   it('round-trip encode/decode preserves values', async () => {
     const vectorCodec = asAsyncCodec(5);
     const original = [0.1, 0.2, 0.3, 0.4, 0.5];
-    const encoded = await vectorCodec.encode(original);
+    const encoded = await vectorCodec.toWire(original);
     expect(typeof encoded).toBe('string');
     expect(encoded).toBe('[0.1,0.2,0.3,0.4,0.5]');
-    const decoded = await vectorCodec.decode(encoded);
+    const decoded = await vectorCodec.fromWire(encoded);
     expect(decoded).toEqual(original);
   });
 
   it('handles empty vector', async () => {
     const vectorCodec = asAsyncCodec(0);
     const original: number[] = [];
-    const encoded = await vectorCodec.encode(original);
+    const encoded = await vectorCodec.toWire(original);
     expect(encoded).toBe('[]');
-    const decoded = await vectorCodec.decode(encoded);
+    const decoded = await vectorCodec.fromWire(encoded);
     expect(decoded).toEqual([]);
   });
 
   it('rejects when encoding non-array', async () => {
     const vectorCodec = asAsyncCodec(4);
-    await expect(vectorCodec.encode('not an array' as unknown as number[])).rejects.toThrow(
+    await expect(vectorCodec.toWire('not an array' as unknown as number[])).rejects.toThrow(
       'Vector value must be an array of numbers',
     );
   });
 
   it('rejects when encoding array with non-numbers', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.encode([1, 2, 'three'] as unknown as number[])).rejects.toThrow(
+    await expect(vectorCodec.toWire([1, 2, 'three'] as unknown as number[])).rejects.toThrow(
       'Vector value must contain only numbers',
     );
   });
@@ -83,91 +85,91 @@ describe('pgvector codecs', () => {
       const value = [1, nonFinite, 3];
       const wire = `[1,${nonFinite},3]`;
 
-      await expect(vectorCodec.encode(value)).rejects.toThrow(
+      await expect(vectorCodec.toWire(value)).rejects.toThrow(
         'Vector value must contain only finite numbers',
       );
-      await expect(vectorCodec.decode(wire)).rejects.toThrow(
+      await expect(vectorCodec.fromWire(wire)).rejects.toThrow(
         'Vector value must contain only finite numbers',
       );
-      expect(() => vectorCodec.encodeJson(value)).toThrow(
+      expect(() => toContractJson(vectorCodec, value)).toThrow(
         'Vector value must contain only finite numbers',
       );
-      expect(() => vectorCodec.decodeJson(value)).toThrow(
-        'pg/vector@1 JSON value must be an array of 3 finite numbers',
+      expect(() => fromContractJson(vectorCodec, value, { length: 3 })).toThrow(
+        'pgvector/vector JSON value must be an array of 3 finite numbers',
       );
     }
   });
 
   it('rejects when decoding invalid string format', async () => {
     const vectorCodec = asAsyncCodec(4);
-    await expect(vectorCodec.decode('not a vector format')).rejects.toThrow(
+    await expect(vectorCodec.fromWire('not a vector format')).rejects.toThrow(
       'Invalid vector format: expected "[...]", got "not a vector format"',
     );
   });
 
   it('rejects when decoding non-string', async () => {
     const vectorCodec = asAsyncCodec(4);
-    await expect(vectorCodec.decode(123 as unknown as string)).rejects.toThrow(
+    await expect(vectorCodec.fromWire(123 as unknown as string)).rejects.toThrow(
       'Vector wire value must be a string',
     );
   });
 
   it('rejects encoding when value length mismatches declared dimension', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.encode([1, 2])).rejects.toThrow(
+    await expect(vectorCodec.toWire([1, 2])).rejects.toThrow(
       'Vector length mismatch: expected 3, got 2',
     );
-    await expect(vectorCodec.encode([1, 2, 3, 4])).rejects.toThrow(
+    await expect(vectorCodec.toWire([1, 2, 3, 4])).rejects.toThrow(
       'Vector length mismatch: expected 3, got 4',
     );
   });
 
   it('rejects decoding when wire length mismatches declared dimension', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.decode('[1,2]')).rejects.toThrow(
+    await expect(vectorCodec.fromWire('[1,2]')).rejects.toThrow(
       'Vector length mismatch: expected 3, got 2',
     );
   });
 
   it('rejects decoding when the wire payload contains a non-number token', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.decode('[1,foo,3]')).rejects.toThrow(
+    await expect(vectorCodec.fromWire('[1,foo,3]')).rejects.toThrow(
       /Invalid vector value: "foo" is not a number/,
     );
   });
 
-  describe('encodeJson / decodeJson', () => {
+  describe('contract JSON', () => {
     it('encodes to a JSON numeric array', () => {
       const codec = asAsyncCodec(3);
-      expect(codec.encodeJson([0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
+      expect(toContractJson(codec, [0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
     });
 
     it('decodes a JSON numeric array', () => {
       const codec = asAsyncCodec(3);
-      expect(codec.decodeJson([0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
+      expect(fromContractJson(codec, [0.1, 0.2, 0.3], { length: 3 })).toEqual([0.1, 0.2, 0.3]);
     });
 
     it('rejects the text form, which reads back at the wrong precision', () => {
       const codec = asAsyncCodec(3);
-      expect(() => codec.decodeJson('[0.1,0.2,0.3]')).toThrow(
-        'pg/vector@1 JSON value must be an array of 3 finite numbers',
+      expect(() => fromContractJson(codec, '[0.1,0.2,0.3]', { length: 3 })).toThrow(
+        'pgvector/vector JSON value must be an array of 3 finite numbers',
       );
     });
 
-    it('rejects encodeJson when the value is not an array', () => {
+    it('rejects toDataTypeValue when the value is not an array', () => {
       const codec = asAsyncCodec(3);
-      expect(() => codec.encodeJson('nope' as unknown as number[])).toThrow(
+      expect(() => toContractJson(codec, 'nope' as unknown as number[])).toThrow(
         'Vector value must be an array of numbers',
       );
     });
 
-    it('rejects decodeJson when the array has the wrong length or bad elements', () => {
+    it('refuses contract JSON when the array has the wrong length or bad elements', () => {
       const codec = asAsyncCodec(3);
-      expect(() => codec.decodeJson([1, 2])).toThrow(
-        'pg/vector@1 JSON value must be an array of 3 finite numbers',
+      expect(() => fromContractJson(codec, [1, 2], { length: 3 })).toThrow(
+        'pgvector/vector JSON value must be an array of 3 finite numbers',
       );
-      expect(() => codec.decodeJson([1, 'two', 3] as unknown as number[])).toThrow(
-        'pg/vector@1 JSON value must be an array of 3 finite numbers',
+      expect(() => fromContractJson(codec, [1, 'two', 3], { length: 3 })).toThrow(
+        'pgvector/vector JSON value must be an array of 3 finite numbers',
       );
     });
   });
@@ -184,7 +186,7 @@ describe('pgvector codecs', () => {
       const codec = spec.codecFactory({
         name: 'embedding',
       }) as unknown as AsyncVectorCodec;
-      expect(await codec.encode([0.1, 0.2, 0.3])).toBe('[0.1,0.2,0.3]');
+      expect(await codec.toWire([0.1, 0.2, 0.3])).toBe('[0.1,0.2,0.3]');
     });
   });
 

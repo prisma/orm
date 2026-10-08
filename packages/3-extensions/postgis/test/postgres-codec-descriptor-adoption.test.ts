@@ -4,6 +4,7 @@ import { codecDescriptors, postgisGeometryDescriptor } from '../src/core/codecs'
 import { postgisCodecRegistry } from '../src/core/registry';
 import postgisExtensionDescriptor from '../src/exports/control';
 import postgisRuntimeDescriptor from '../src/exports/runtime';
+import { fromContractJson, toContractJson } from './contract-json';
 
 describe('PostGIS PostgreSQL codec descriptor adoption', () => {
   it('uses one target descriptor instance across canonical, registry, runtime, and control contributions', () => {
@@ -35,8 +36,8 @@ describe('PostGIS PostgreSQL codec descriptor adoption', () => {
       name: 'location',
     });
     const point = { type: 'Point', coordinates: [1, 2], srid: 4326 } as const;
-    const encoded = codec.encodeJson(point);
+    const encoded = toContractJson(codec, point);
     expect(encoded).toBe('0101000020E6100000000000000000F03F0000000000000040');
-    expect(codec.decodeJson(encoded)).toEqual(point);
+    expect(fromContractJson(codec, encoded, constrainedRef.typeParams)).toEqual(point);
   });
 });

@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import { CliStructuredError } from '@internal/errors/control';
 import { placeholder } from '@internal/errors/migration';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
@@ -15,6 +15,7 @@ import { createPostgresBuiltinDataTypeLookup, pgText } from '@internal/target-po
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 import { encodeControlQueryParams } from '../../src/core/control-codecs';
+import { defineTestCodec } from '../test-codec';
 
 const CONTRACT_HASH = 'contract-abc';
 
@@ -217,13 +218,12 @@ describe('dataTransform factory', () => {
 
 const TEST_CODEC_ID = 'test/transform@1';
 
-const transformingCodec: Codec = {
-  id: TEST_CODEC_ID,
-  encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (v) => v as never,
-  decodeJson: (v) => v as never,
-};
+const transformingCodec: Codec = defineTestCodec({
+  typeId: TEST_CODEC_ID,
+  dataType: pgText,
+  toWire: async (value: JsonValue) => `ENC:${String(value).toUpperCase()}`,
+  fromWire: async (wire: JsonValue) => wire,
+});
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: TEST_CODEC_ID,
@@ -236,6 +236,7 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
   dataType: pgText,
   jsonProjection: (expression: ProjectionExpr) => expression,
+  factory: () => () => transformingCodec,
 });
 const transformingCodecRegistry = createPostgresCodecRegistryWithBuiltins([transformingDescriptor]);
 

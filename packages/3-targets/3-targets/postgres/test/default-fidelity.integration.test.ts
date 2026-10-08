@@ -14,6 +14,7 @@ import { type CatalogColumnType, introspectedNativeType } from '../src/core/nati
 import { createPostgresTypeMap } from '../src/core/psl-build/postgres-type-map';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import { postgresPslTypeConstructors } from '../src/core/type-constructors';
+import { fromContractJson, toContractJson } from './contract-json';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
 type Compared = JsonValue | ColumnDefault | undefined;
@@ -50,8 +51,8 @@ function inferredCodecRef(pslType: { readonly name: string; readonly args?: read
   return args === undefined ? undefined : instantiateAuthoringTypeConstructor(descriptor, args);
 }
 
-/** The codec `contract infer` binds to the column, as `inferredColumnDefaults` chooses it. */
-function columnCodec(nativeType: string): Codec {
+/** The codec `contract infer` binds to the column, as `inferredColumnDefaults` chooses it, and the column's type parameters. */
+function columnCodec(nativeType: string): { readonly codec: Codec; readonly typeParams: unknown } {
   const elementType = nativeType.endsWith('[]') ? nativeType.slice(0, -2) : nativeType;
   const resolution = typeMap.resolve(elementType, undefined);
   if ('unsupported' in resolution) throw new Error(`no PSL type for ${elementType}`);
@@ -63,7 +64,7 @@ function columnCodec(nativeType: string): Codec {
   if (ref === undefined || descriptor === undefined) {
     throw new Error(`no codec for ${elementType}`);
   }
-  return materializeCodec(
+  const codec = materializeCodec(
     descriptor,
     {
       codecId: ref.codecId,
@@ -71,6 +72,7 @@ function columnCodec(nativeType: string): Codec {
     },
     { name: `<fidelity:${ref.codecId}>` },
   );
+  return { codec, typeParams: ref.typeParams };
 }
 type PgClient = Parameters<Parameters<typeof withClient>[1]>[0];
 
@@ -110,11 +112,14 @@ async function storedValue(
     }
     return elements;
   }
-  const codec = columnCodec(nativeType);
-  if (!many) return inColumn(oracle, codec.encodeJson(await codec.decode(stored, {})), storageType);
+  const { codec } = columnCodec(nativeType);
+  if (!many)
+    return inColumn(oracle, toContractJson(codec, await codec.fromWire(stored, {})), storageType);
   const elements: JsonValue[] = [];
   for (const element of parsePostgresListText(stored)) {
-    elements.push(element === null ? null : codec.encodeJson(await codec.decode(element, {})));
+    elements.push(
+      element === null ? null : toContractJson(codec, await codec.fromWire(element, {})),
+    );
   }
   return inColumn(oracle, elements, storageType);
 }
@@ -150,12 +155,12 @@ async function parsedValue(
 
 function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
   if (value === null) return null;
-  const codec = columnCodec(nativeType);
+  const { codec, typeParams } = columnCodec(nativeType);
   if (!nativeType.endsWith('[]') || !Array.isArray(value)) {
-    return codec.encodeJson(codec.decodeJson(value));
+    return toContractJson(codec, fromContractJson(codec, value, typeParams));
   }
   return value.map((element) =>
-    element === null ? null : codec.encodeJson(codec.decodeJson(element)),
+    element === null ? null : toContractJson(codec, fromContractJson(codec, element, typeParams)),
   );
 }
 

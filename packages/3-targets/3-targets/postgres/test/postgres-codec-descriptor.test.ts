@@ -6,6 +6,8 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  type DataType,
+  type DataTypeValue,
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
@@ -56,6 +58,11 @@ const vectorParamsSchema: StandardSchemaV1<VectorParams> = {
   },
 };
 
+const fixtureVectorType = dataType('demo/fixture', {
+  read: (json) => json,
+  params: arktype({ length: 'number.integer >= 1' }),
+});
+
 class VectorCodec<N extends number> extends CodecImpl<
   'demo/vector@1',
   readonly ['equality'],
@@ -64,28 +71,29 @@ class VectorCodec<N extends number> extends CodecImpl<
 > {
   constructor(
     descriptor: CodecDescriptor<VectorParams>,
+    type: DataType,
     readonly length: N,
   ) {
-    super(descriptor);
+    super(descriptor, type, { length });
   }
 
-  async encode(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
     return wire.slice(1, -1).split(',').map(Number);
   }
 
-  encodeJson(value: ReadonlyArray<number>): JsonValue {
-    return [...value];
+  toDataTypeValue(input: ReadonlyArray<number>): DataTypeValue {
+    return this.dataTypeValueOf([...input]);
   }
 
-  decodeJson(json: JsonValue): ReadonlyArray<number> {
-    if (!Array.isArray(json)) {
+  fromDataTypeValue(value: DataTypeValue): ReadonlyArray<number> {
+    if (!Array.isArray(value.value)) {
       throw new Error('Expected vector JSON array');
     }
-    return json.map(Number);
+    return value.value.map(Number);
   }
 }
 
@@ -115,7 +123,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureVectorType, params.length);
   }
 }
 
@@ -137,7 +145,7 @@ class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureVectorType, params.length);
   }
 }
 
@@ -262,14 +270,15 @@ describe('PostgresCodecDescriptor', () => {
   });
 });
 
-const fixtureVectorType = dataType('demo/fixture', {
-  params: arktype({ length: 'number.integer >= 1' }),
-});
+const vectorCodecFactory =
+  (descriptor: CodecDescriptor<VectorParams>, type: DataType, params: VectorParams) => () =>
+    new VectorCodec(descriptor, type, params.length);
 
 describe('postgresCodec', () => {
-  it('preserves the wrapped descriptor contract and materialization behavior', () => {
+  it('preserves the wrapped descriptor contract and builds its codec with the factory option', () => {
     const descriptor = postgresCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
+      factory: vectorCodecFactory,
       jsonProjection: (expression, params) =>
         FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(params.length)]),
     });
@@ -290,16 +299,18 @@ describe('postgresCodec', () => {
     const codec = descriptor.factory({ length: 6 })({} as CodecInstanceContext);
     expect(codec).toBeInstanceOf(VectorCodec);
     expect(codec.length).toBe(6);
-    expect(codec.descriptor).toBe(genericVectorDescriptor);
+    expect(codec.descriptor).toBe(descriptor);
   });
 
   it('takes its parameter schema from the data type, not the template', () => {
     const descriptor = postgresCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
+      factory: vectorCodecFactory,
       jsonProjection: (expression) => expression,
     });
     const withoutParams = postgresCodec(genericVectorDescriptor, {
-      dataType: dataType('demo/plain', {}),
+      dataType: dataType('demo/plain', { read: (json) => json }),
+      factory: vectorCodecFactory,
       jsonProjection: (expression) => expression,
     });
 
@@ -317,6 +328,7 @@ describe('postgresCodec', () => {
     const adapt = (wrapped: GenericVectorDescriptor) =>
       postgresCodec(wrapped, {
         dataType: fixtureVectorType,
+        factory: vectorCodecFactory,
         jsonProjection: (expression) => expression,
       });
 
@@ -333,6 +345,7 @@ describe('postgresCodec', () => {
     const overrideCalls: VectorParams[] = [];
     const descriptor = postgresCodec(genericVectorDescriptor, {
       dataType: fixtureVectorType,
+      factory: vectorCodecFactory,
       jsonProjection: (expression) => expression,
       jsonArrayProjection: (expression, params) => {
         overrideCalls.push(params);
