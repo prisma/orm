@@ -54,6 +54,7 @@ import type {
 } from './types';
 import { emptyState } from './types';
 import { resolveWhereInput } from './where-interop';
+import { combineWhereExprs } from './where-utils';
 
 interface JunctionThrough {
   readonly table: string;
@@ -946,28 +947,19 @@ async function applyChildOwnedMutation(
     setValues[childColumn] = null;
   }
 
-  if (operation.criteria.length === 0) {
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
+  const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
+  const disconnectFilters =
+    operation.criteria.length === 0
+      ? [parentJoinWhere]
+      : operation.criteria.map((criterionWhere) => and(parentJoinWhere, criterionWhere));
+  for (const filter of disconnectFilters) {
     await executeUpdateCount(
       scope,
       contract,
       relation.relatedNamespaceId,
       relation.relatedTableName,
       setValues,
-      [parentJoinWhere],
-    );
-    return;
-  }
-
-  for (const criterionWhere of operation.criteria) {
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [and(parentJoinWhere, criterionWhere)],
+      [filter],
     );
   }
 }
@@ -1196,22 +1188,24 @@ export function assertJunctionTargetMetadataLength(relation: JunctionRelationDef
   );
 }
 
-function writeJunctionColumn(
-  junctionRow: Record<string, unknown>,
-  through: JunctionThrough,
-  column: string,
-  value: unknown,
-  relationName: string,
-): void {
-  if (Object.hasOwn(junctionRow, column) && !Object.is(junctionRow[column], value)) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `Cannot write junction "${through.table}": conflicting values for junction column "${column}"`,
-      { meta: { relation: relationName, junction: through.table, column } },
-    );
+function buildJunctionRow(
+  relation: JunctionRelationDefinition,
+  parentPkValues: Map<string, unknown>,
+  targetPkValues: Map<string, unknown>,
+): Record<string, unknown> {
+  const through = relation.through;
+  const junctionRow: Record<string, unknown> = {};
+  for (const [column, value] of [...parentPkValues, ...targetPkValues]) {
+    if (Object.hasOwn(junctionRow, column) && !Object.is(junctionRow[column], value)) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_INVALID',
+        `Cannot write junction "${through.table}": conflicting values for junction column "${column}"`,
+        { meta: { relation: relation.relationName, junction: through.table, column } },
+      );
+    }
+    junctionRow[column] = value;
   }
-
-  junctionRow[column] = value;
+  return junctionRow;
 }
 
 async function insertJunctionLink(
@@ -1223,13 +1217,7 @@ async function insertJunctionLink(
   mutationKind: 'create' | 'connect',
 ): Promise<void> {
   const through = relation.through;
-  const junctionRow: Record<string, unknown> = {};
-  for (const [column, value] of parentPkValues.entries()) {
-    writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
-  }
-  for (const [column, value] of targetPkValues.entries()) {
-    writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
-  }
+  const junctionRow = buildJunctionRow(relation, parentPkValues, targetPkValues);
 
   // Mirror insertSingleRow: payload columns whose only source is an
   // execution-time onCreate default pass both the type gate and the runtime
@@ -1269,23 +1257,13 @@ async function deleteJunctionLink(
   // error as connect instead of emitting contradictory predicates that make
   // the DELETE silently match nothing.
   const through = relation.through;
-  const junctionRow: Record<string, unknown> = {};
-  for (const [column, value] of parentPkValues.entries()) {
-    writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
-  }
-  for (const [column, value] of targetPkValues.entries()) {
-    writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
-  }
+  const junctionRow = buildJunctionRow(relation, parentPkValues, targetPkValues);
 
-  const exprs: AnyExpression[] = [];
-  for (const [column, value] of Object.entries(junctionRow)) {
-    exprs.push(BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)));
-  }
-
-  const first = exprs[0];
-  const where = exprs.length === 1 && first !== undefined ? first : and(...exprs);
+  const exprs = Object.entries(junctionRow).map(([column, value]) =>
+    BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)),
+  );
   const compiled = compileDeleteCount(context.contract, through.namespaceId, through.table, [
-    where,
+    combineWhereExprs(exprs) ?? and(),
   ]);
   await scope.execute(compiled);
 }
@@ -1353,23 +1331,13 @@ function buildChildJoinWhere(
   relation: RelationDefinition,
   childValues: Map<string, unknown>,
 ): AnyExpression {
-  const exprs: AnyExpression[] = [];
-
-  for (const [childColumn, parentValue] of childValues.entries()) {
-    exprs.push(
-      BinaryExpr.eq(
-        ColumnRef.of(relation.relatedTableName, childColumn),
-        LiteralExpr.of(parentValue),
-      ),
-    );
-  }
-
-  const first = exprs[0];
-  if (exprs.length === 1 && first !== undefined) {
-    return first;
-  }
-
-  return and(...exprs);
+  const exprs = [...childValues].map(([childColumn, parentValue]) =>
+    BinaryExpr.eq(
+      ColumnRef.of(relation.relatedTableName, childColumn),
+      LiteralExpr.of(parentValue),
+    ),
+  );
+  return combineWhereExprs(exprs) ?? and();
 }
 
 async function insertSingleRow(
