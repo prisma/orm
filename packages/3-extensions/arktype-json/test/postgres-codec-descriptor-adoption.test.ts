@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import { ColumnRef } from '@internal/sql-relational-core/ast';
+import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
@@ -29,7 +29,7 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves the jsonb data type, identity projection, and structured JSON behavior', () => {
+  it('preserves the jsonb data type, projects the JSON text of the document, and keeps structured JSON behavior', () => {
     const schema = type({ name: 'string', price: 'number' });
     const column = arktypeJsonColumn(schema);
     const ref: CodecRef = {
@@ -42,7 +42,9 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     const expression = ColumnRef.of('products', 'details');
 
     expect(arktypeJsonDescriptor.dataType).toBe('pg/jsonb');
-    expect(arktypeJsonDescriptor.projectJson(expression, ref)).toBe(expression);
+    expect(arktypeJsonDescriptor.projectJson(expression, ref)).toEqual(
+      CastExpr.as(expression, 'text'),
+    );
 
     const codec = column.codecFactory({ name: 'details' });
     const value = { name: 'Widget', price: 9.99 };

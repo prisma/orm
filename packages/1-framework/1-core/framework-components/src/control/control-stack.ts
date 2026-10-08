@@ -645,8 +645,8 @@ export function collectAggregateDescriptors(
           'CONTRACT.AGGREGATE_DESCRIPTOR_INVALID',
           `Malformed aggregate descriptor contributed by "${descriptorId}". ` +
             'A descriptor declares a non-empty `operation`, an `input` match of kind `none`/`any`/`codec`/`trait`, ' +
-            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultJson`, ' +
-            "in the result codec's canonical JSON, where `nullable` is false; a `self` output needs an input to reuse.",
+            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultWire`, ' +
+            'a wire value of the result codec, where `nullable` is false; a `self` output needs an input to reuse.',
           { contributedBy: descriptorId, descriptor: contributed },
         );
       }

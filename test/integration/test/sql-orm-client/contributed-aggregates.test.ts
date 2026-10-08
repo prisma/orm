@@ -56,7 +56,7 @@ const contributedAggregateDescriptors: readonly SqlAggregateDescriptor[] = [
     input: { kind: 'none' },
     output: { kind: 'codec', codecId: 'pg/int8@1' },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
     lower: () => new AggregateExpr('count', undefined),
   },
 ];

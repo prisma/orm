@@ -1633,10 +1633,12 @@ export class CollectionBase<
         const rows = await source.toArray();
         const row = rows[0] ?? {};
         const result = Object.fromEntries(
-          results.map(({ alias, resolved, codec }) => {
-            const value = Object.hasOwn(row, alias) ? row[alias] : undefined;
-            return [alias, value ?? emptyAggregateResult(resolved, codec)];
-          }),
+          await Promise.all(
+            results.map(async ({ alias, resolved, codec }) => {
+              const value = Object.hasOwn(row, alias) ? row[alias] : undefined;
+              return [alias, value ?? (await emptyAggregateResult(resolved, codec))];
+            }),
+          ),
         );
         return blindCast<
           AggregateResult<Spec>,

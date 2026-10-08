@@ -64,7 +64,7 @@ describe('relational-core structured error codes', () => {
   it('twice-claimed aggregate overload raises RUNTIME.DUPLICATE_AGGREGATE_DESCRIPTOR', () => {
     const error = capture(() =>
       buildSqlAggregateDescriptorRegistry(
-        [sumOverNumeric, { ...sumOverNumeric, nullable: false, emptyResultJson: '0' }],
+        [sumOverNumeric, { ...sumOverNumeric, nullable: false, emptyResultWire: '0' }],
         buildCodecDescriptorRegistry([]),
       ),
     );

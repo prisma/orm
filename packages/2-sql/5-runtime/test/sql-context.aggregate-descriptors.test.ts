@@ -72,7 +72,7 @@ const countRows: AggregateDescriptor = {
   input: { kind: 'none' },
   output: { kind: 'codec', codecId: 'test/bigint@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 const sumNumeric: AggregateDescriptor = {
@@ -131,7 +131,7 @@ describe('createExecutionContext — aggregate descriptors', () => {
       operation: 'count',
       output: { codecId: 'test/bigint@1' },
       nullable: false,
-      emptyResultJson: '0',
+      emptyResultWire: '0',
       lower: undefined,
     });
   });

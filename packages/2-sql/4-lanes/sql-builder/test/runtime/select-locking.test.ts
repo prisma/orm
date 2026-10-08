@@ -26,7 +26,7 @@ const countOnlyAggregateRegistry = {
           operation,
           output: { codecId: 'pg/int8@1' },
           nullable: false as const,
-          emptyResultJson: '0',
+          emptyResultWire: '0',
           lower: undefined,
         }
       : undefined,
@@ -36,7 +36,7 @@ const countOnlyAggregateRegistry = {
       input: { kind: 'any' as const },
       output: { kind: 'codec' as const, codecId: 'pg/int8@1' },
       nullable: false as const,
-      emptyResultJson: '0',
+      emptyResultWire: '0',
     };
   },
 };
