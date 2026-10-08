@@ -467,7 +467,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-          index: { unique: true },
+          index: { unique: ['userId'] },
         },
       ]);
       expect(post.indexes).toEqual([]);
