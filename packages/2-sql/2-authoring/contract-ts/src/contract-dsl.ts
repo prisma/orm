@@ -943,7 +943,9 @@ type ForeignKeyOptions<Name extends string | undefined = string | undefined> =
     readonly onDelete?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
     readonly onUpdate?: 'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault';
     readonly constraint?: boolean;
-    /** `false` for no backing index, or the name of an index, unique constraint or primary key the table declares that backs the foreign key instead of a derived one. */
+    /**
+     * `false` for no backing index, or the name of an index, unique constraint or primary key the table declares, used instead of a derived backing index. The name is the `name` or `map` it was given, or an index's stored name, and its first columns must be the foreign key's columns in order.
+     */
     readonly index?: boolean | string;
   };
 

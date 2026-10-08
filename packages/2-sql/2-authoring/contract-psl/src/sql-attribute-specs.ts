@@ -701,7 +701,7 @@ const relationFieldSpec = fieldAttribute('relation', {
     index: {
       type: optional(oneOf(bool(), str())),
       documentation:
-        'Whether to create an index for the relation’s foreign-key fields, or the name of an index, unique constraint or primary key on this model that serves the foreign key instead.',
+        'Whether to create an index for the relation’s foreign-key fields (`false` for none), or the name of an index, unique constraint or primary key on this model to use instead. The name is the `name` or `map` it was given, or an index’s stored name, and its first columns must be the foreign-key fields in order.',
     },
   },
   refine: relationInvariants,

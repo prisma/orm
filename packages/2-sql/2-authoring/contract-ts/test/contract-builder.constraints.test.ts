@@ -321,6 +321,34 @@ describe('contract definition constraint support', () => {
     ).toThrow(/unregistered index type "made-up"/);
   });
 
+  it('supports several indexes and uniques on the same table', () => {
+    const contract = defineTestContract({
+      models: {
+        User: model('User', {
+          fields: {
+            id: field.column(int4Column).id(),
+            email: field.column(textColumn).unique(),
+            username: field.column(textColumn).unique(),
+            createdAt: field.column(int4Column),
+          },
+        }).sql(({ cols, constraints }) => ({
+          table: 'user',
+          indexes: [
+            constraints.index([cols.email, cols.createdAt]),
+            constraints.index([cols.createdAt]),
+          ],
+        })),
+      },
+    });
+
+    const user = unboundTables(contract.storage)['user']!;
+    expect(user.uniques).toEqual([{ columns: ['email'] }, { columns: ['username'] }]);
+    expect(user.indexes.map((index) => index.columns)).toEqual([
+      ['email', 'createdAt'],
+      ['createdAt'],
+    ]);
+  });
+
   it('leaves out unnamed indexes on the columns of a unique constraint', () => {
     const contract = defineTestContract({
       models: {
