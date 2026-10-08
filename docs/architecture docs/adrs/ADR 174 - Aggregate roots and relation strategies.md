@@ -174,7 +174,7 @@ This design means:
 ### Open questions
 
 - ~~**Relation storage details**: What's the shape of family-specific join info on `reference` relations? What field on the parent holds an `embed` relation's data?~~ **Resolved**: Reference relations use `on: { localFields, targetFields }`. Embed relations use `field: string`.
-- **Many-to-many**: Does a junction table appear as a model? Probably not — it's storage machinery, not a domain entity. But the relation needs to reference it somehow.
+- ~~**Many-to-many**: Does a junction table appear as a model? Probably not — it's storage machinery, not a domain entity. But the relation needs to reference it somehow.~~ **Resolved.** A junction table is a model; the relation's `through` resolves by model. See [ADR 267 — A table may hold columns its model does not map](ADR%20267%20-%20A%20table%20may%20hold%20columns%20its%20model%20does%20not%20map.md).
 - **`nullable` on relations**: Can a reference relation be nullable (User may not have an assignee)? Where does this live — on the relation, on the field, or on the storage?
 - ~~**Entity vs value object**~~: **Resolved.** Value objects are defined in a top-level `valueObjects` section, distinct from `models`. See [ADR 178 — Value objects in the contract](ADR%20178%20-%20Value%20objects%20in%20the%20contract.md).
 
