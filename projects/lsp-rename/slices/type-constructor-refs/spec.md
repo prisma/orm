@@ -42,7 +42,8 @@ Three places bind it, each with the scope that place already uses for the type n
 | anything else (a model, a block of another kind, a namespace) | `PSL_UNKNOWN_ENTITY_REF`, saying what the name resolved to and what the constructor expects |
 | none, because the argument is not a name | `PSL_INVALID_ATTRIBUTE_ARGUMENT`, the existing "expects exactly one positional argument naming the referenced entity" |
 
-- **Arity checks, the missing `columnFromEntity` hook and a hook that rejects the entity** keep their diagnostics.
+- **Arity checks and the missing `columnFromEntity` hook** keep their diagnostics.
+- **A hook that rejects the entity** keeps `PSL_UNKNOWN_ENTITY_REF`, with a text that says the entity was found and is not accepted as a column type. Today's text says no entity of that name was found, which is no longer what happened.
 - **The Prisma 7 interpreter** (`contract-prisma7/src/interpreter.ts`) has no syntax node for the name and no binder. The part of the function that turns a resolved entity into a column is split out and takes the resolved entity; the PSL path gets the entity from the binder, the Prisma 7 path from its own declaration. No entry point keeps the lookup by name.
 
 ### What the wider binder scope changes (transitional)
@@ -95,7 +96,7 @@ None. The Postgres target's source does not change; its tests gain cases.
 | Edge case | Disposition | Notes |
 | --------- | ----------- | ----- |
 | Name resolves to a model with the enum's name in scope | `PSL_UNKNOWN_ENTITY_REF` from the interpreter, wording changed | Pinned today by `psl-pg-enum-column.test.ts` with the code only |
-| Unknown name | One diagnostic, the binder's, on the argument; none from the interpreter | Four tests pin `PSL_UNKNOWN_ENTITY_REF` for this case and change |
+| Unknown name | One diagnostic, the binder's, on the argument; none from the interpreter | Two tests accepted `PSL_UNKNOWN_ENTITY_REF` loosely for this case; they now assert the full diagnostic list |
 | `pg.enum("X")`, `pg.enum(1)` | `PSL_INVALID_ATTRIBUTE_ARGUMENT` | Today a text lookup misses and reports `PSL_UNKNOWN_ENTITY_REF` |
 | Test that drives `resolveFieldTypeDescriptor` with a hand-built entity map | Rewritten to the symbol-keyed input | `interpreter.entity-ref-type-constructor.test.ts`, the no-namespace value-set case |
 | Language-server completion tests with an undeclared `pg.enum(StatusValues)` | They gain a binder diagnostic; change them only if they assert on diagnostics | `completion-symbols.test.ts` |
