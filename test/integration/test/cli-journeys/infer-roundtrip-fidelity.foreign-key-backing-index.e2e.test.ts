@@ -70,6 +70,16 @@ withTempDir(({ createTempDir }) => {
               user_id int4 NOT NULL REFERENCES users(id)
             );
             CREATE INDEX comments_user_id_first ON comments (user_id, id);
+
+            CREATE TABLE tags (
+              id int4 PRIMARY KEY
+            );
+
+            CREATE TABLE post_tags (
+              post_id int4 NOT NULL REFERENCES posts(id),
+              tag_id int4 NOT NULL REFERENCES tags(id),
+              PRIMARY KEY (post_id, tag_id)
+            );
           `),
         ),
     });
@@ -129,18 +139,29 @@ withTempDir(({ createTempDir }) => {
         const tables = contract.storage.namespaces['public']?.entries.table ?? {};
         expect(
           Object.fromEntries(
-            ['posts', 'drafts', 'notes', 'profiles', 'settings', 'labelled', 'comments'].map(
-              (table) => [table, tables[table]?.foreignKeys.map((foreignKey) => foreignKey.index)],
-            ),
+            [
+              'posts',
+              'drafts',
+              'notes',
+              'profiles',
+              'settings',
+              'labelled',
+              'comments',
+              'post_tags',
+            ].map((table) => [
+              table,
+              tables[table]?.foreignKeys.map((foreignKey) => foreignKey.index),
+            ]),
           ),
         ).toEqual({
           posts: [{ name: 'posts_user_id_live' }],
           drafts: [undefined],
           notes: [undefined],
-          profiles: [{ unique: true }],
+          profiles: [{ unique: ['user_id'] }],
           settings: [{ primaryKey: true }],
           labelled: [undefined],
           comments: [{ name: 'comments_user_id_first' }],
+          post_tags: [{ primaryKey: true }, undefined],
         });
 
         await expectVerifiesCleanAfterPull(ctx, 'foreign key backing indexes');
