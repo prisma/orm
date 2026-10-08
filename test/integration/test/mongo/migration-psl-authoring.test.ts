@@ -7,6 +7,7 @@ import {
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
 } from '@internal/framework-components/codec';
+import { planOriginOf } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import {
@@ -128,6 +129,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -348,13 +351,13 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(wildcardIdx).toBeDefined();
   });
 
-  it('PSL with sort: Desc produces mixed-direction compound index', async () => {
+  it('PSL with sort(field, Desc) produces mixed-direction compound index', async () => {
     const contract = pslToContract(`
       model Events {
         id        ObjectId @id @map("_id")
         status    String
         createdAt Date
-        @@index([status, createdAt(sort: Desc)])
+        @@index([status, sort(createdAt, Desc)])
       }
     `);
 

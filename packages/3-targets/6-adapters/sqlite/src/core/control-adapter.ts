@@ -551,13 +551,13 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
 
       // SQLite's synchronous driver serializes reads — no benefit from Promise.all
       const columnsResult = await driver.query<PragmaTableInfoRow>(
-        `PRAGMA table_info("${escapePragmaArg(tableName)}")`,
+        `PRAGMA table_info(${quoteIdentifier(tableName)})`,
       );
       const fkResult = await driver.query<PragmaForeignKeyRow>(
-        `PRAGMA foreign_key_list("${escapePragmaArg(tableName)}")`,
+        `PRAGMA foreign_key_list(${quoteIdentifier(tableName)})`,
       );
       const indexListResult = await driver.query<PragmaIndexListRow>(
-        `PRAGMA index_list("${escapePragmaArg(tableName)}")`,
+        `PRAGMA index_list(${quoteIdentifier(tableName)})`,
       );
 
       const columns: Record<string, SqlColumnIRInput> = {};
@@ -634,7 +634,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
       for (const idx of indexListResult.rows) {
         // origin: 'c' = CREATE INDEX, 'u' = UNIQUE constraint, 'pk' = PRIMARY KEY
         const idxInfoResult = await driver.query<PragmaIndexInfoRow>(
-          `PRAGMA index_info("${escapePragmaArg(idx.name)}")`,
+          `PRAGMA index_info(${quoteIdentifier(idx.name)})`,
         );
 
         const idxColumns = idxInfoResult.rows.sort((a, b) => a.seqno - b.seqno).map((r) => r.name);
@@ -675,13 +675,6 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
       tables,
     });
   }
-}
-
-// PRAGMA queries use the function-argument form (`PRAGMA table_info("name")`)
-// which doesn't support `?` placeholders — the argument is part of the
-// statement name, not a bound parameter. We quote-escape the table name instead.
-function escapePragmaArg(name: string): string {
-  return name.replace(/"/g, '""');
 }
 
 const SQLITE_REFERENTIAL_ACTION_MAP: Record<string, SqlReferentialAction> = {

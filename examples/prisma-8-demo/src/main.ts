@@ -30,7 +30,7 @@
  * - repo-recent-posts <since> [orderBy] [asc|desc] [limit]
  *                              Posts created since an ISO instant, ordered by a
  *                              field named on the command line (title or createdAt),
- *                              shaped by a shared post summary scope
+ *                              shaped by a shared post summary fragment
  * - repo-task-board [limit]    Users with their polymorphic `tasks` included —
  *                              each task comes back shaped per its variant
  *                              (Bug: severity/stepsToRepro, Feature: priority/targetRelease)

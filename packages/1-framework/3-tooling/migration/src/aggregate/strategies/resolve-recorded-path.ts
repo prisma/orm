@@ -1,4 +1,4 @@
-import type { MigrationPlan } from '@internal/framework-components/control';
+import type { MigrationPlan, MigrationPlanOperation } from '@internal/framework-components/control';
 import { InternalError } from '@internal/utils/internal-error';
 import { EMPTY_CONTRACT_HASH } from '../../constants';
 import { findPathWithDecision } from '../../migration-graph';
@@ -33,6 +33,8 @@ export interface ResolveRecordedPathInputs {
    * strategy itself does not interpret it.
    */
   readonly refName?: string;
+  /** The name the database knows the object an operation acts on by; names what a drop loses. */
+  readonly storageNameOf: (operation: MigrationPlanOperation) => string;
 }
 
 /**
@@ -114,6 +116,18 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
       displayOps: pathOps,
       destinationContract: space.contract(),
       strategy: 'resolve-recorded-path',
+      appliedStatements: [],
+      dataLoss: pathOps.flatMap((operation, operationIndex) =>
+        operation.operationClass === 'destructive'
+          ? [
+              {
+                operationIndex,
+                subject: { kind: 'storage' as const, name: input.storageNameOf(operation) },
+              },
+            ]
+          : [],
+      ),
+      accessWidening: [],
       migrationEdges: edgeRefs,
       pathDecision: outcome.decision,
     },

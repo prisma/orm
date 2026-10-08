@@ -371,6 +371,11 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       }
 
       const updateResult = await executeDbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         driver: drv,
         adapter: controlAdapter,
         familyInstance,
@@ -467,6 +472,11 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       }
 
       const updateResult = await executeDbUpdate({
+        answerQuestions: async (questions) =>
+          questions.map((question) => ({
+            verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+            text: question.subject,
+          })),
         driver: drv,
         adapter: controlAdapter,
         familyInstance,

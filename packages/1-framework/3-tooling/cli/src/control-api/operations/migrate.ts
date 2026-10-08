@@ -8,6 +8,7 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import {
@@ -177,6 +178,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       refInvariants: spaceRefInvariants,
       liveMarker,
       ...(isAppSpace ? { refName } : {}),
+      storageNameOf: (operation) => familyInstance.storageNameOf(operation),
     });
 
     if (outcome.kind === 'at-head') {
@@ -387,6 +389,7 @@ export function planSpacePath({
   refInvariants,
   liveMarker,
   refName,
+  storageNameOf,
 }: {
   readonly space: AggregateContractSpace;
   readonly aggregate: Pick<ContractSpaceAggregate, 'targetId' | 'app'>;
@@ -394,6 +397,7 @@ export function planSpacePath({
   readonly refInvariants: readonly string[] | undefined;
   readonly liveMarker: ContractMarkerRecordLike | null;
   readonly refName?: string;
+  readonly storageNameOf: (operation: MigrationPlanOperation) => string;
 }): SpacePathOutcome {
   const isAppSpace = space.spaceId === aggregate.app.spaceId;
   const headRef = requireHeadRef(space);
@@ -459,6 +463,7 @@ export function planSpacePath({
     space: targetSpace,
     currentMarker: liveMarker,
     ...(isAppSpace && refName !== undefined ? { refName } : {}),
+    storageNameOf,
   });
 
   if (walked.kind === 'unreachable') {
@@ -508,6 +513,9 @@ function buildAtHeadResolution(args: {
     displayOps: [],
     destinationContract: space.contract(),
     strategy: 'declared-state',
+    appliedStatements: [],
+    dataLoss: [],
+    accessWidening: [],
     migrationEdges: [
       buildFabricatedMigrationEdge({
         currentMarkerStorageHash: liveMarker?.storageHash,

@@ -1,0 +1,27 @@
+// use prisma-8
+
+namespace public {
+  model User {
+    id       Int    @id
+    fullName String @unique
+    handle   String
+    tenantId Int    @map("tenant_id")
+    posts    Post[]
+
+    @@index([fullName, handle])
+    @@check(name: "handle_present", expression: "(length(handle) > 0)")
+    @@rls
+  }
+
+  model Post {
+    id        Int  @id
+    profileId Int
+    profile   User @relation(fields: [profileId], references: [id])
+  }
+
+  policy_select tenant_read {
+    target = User
+    roles  = [app_user]
+    using  = "(tenant_id = 1)"
+  }
+}

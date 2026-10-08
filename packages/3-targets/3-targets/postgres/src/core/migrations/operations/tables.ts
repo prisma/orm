@@ -28,6 +28,10 @@ export function renameTableStatement(schemaName: string, fromName: string, toNam
   return `ALTER TABLE ${qualifyTableName(schemaName, fromName)} RENAME TO ${quoteIdentifier(toName)}`;
 }
 
+export function renameTableOperationId(fromName: string): string {
+  return `renameTable.${fromName}`;
+}
+
 export async function renameTable(
   schemaName: string,
   fromName: string,
@@ -41,7 +45,7 @@ export async function renameTable(
   const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
   const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.tableAbsent());
   return {
-    id: `renameTable.${fromName}`,
+    id: renameTableOperationId(fromName),
     label: `Rename table "${fromName}" to "${toName}"`,
     operationClass: 'widening',
     target: targetDetails('table', toName, schemaName),

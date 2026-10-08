@@ -163,11 +163,20 @@ Control-plane client factory. Collapses the family + target + adapter + driver w
 
 ```typescript
 import { createMongoControlClient } from '@internal/mongo/control';
+import contract from './src/prisma/contract.json' with { type: 'json' };
 
 const control = createMongoControlClient({
   connection: process.env['MONGODB_URL']!,
 });
-await control.dbUpdate({ migrations: { dir: 'migrations/app' } });
+await control.dbUpdate({
+  contract,
+  mode: 'apply',
+  migrationsDir: 'migrations',
+  answerQuestions: async (questions) => {
+    if (questions.length > 0) throw new Error('db update would lose data or widen access');
+    return [];
+  },
+});
 ```
 
 ### `@internal/mongo/bson`

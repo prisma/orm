@@ -85,18 +85,3 @@ export async function runDbUpdate(
  * which of the two they mean.
  */
 export const runDbUpdateAllowFailure = runDbUpdate;
-
-/**
- * What `db update` asks the user to type before it destroys anything: the name
- * of the connected database, which for these Postgres-backed tests is the
- * database segment of the connection URL. A run that means to accept data loss
- * passes it as `--confirm`, because `--yes` cannot grant a consent.
- */
-export function consentTokenFor(connectionString: string): string {
-  const parsed = new URL(connectionString);
-  const name = parsed.pathname.split('/').filter((segment) => segment.length > 0)[0];
-  if (name === undefined) {
-    throw new Error(`Connection URL names no database: ${connectionString}`);
-  }
-  return decodeURIComponent(name);
-}

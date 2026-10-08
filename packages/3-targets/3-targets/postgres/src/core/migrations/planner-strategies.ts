@@ -36,7 +36,7 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { type SqlTypeLookups, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import type { SqlStorage, StorageTable, StorageTypeInstance } from '@internal/sql-contract/types';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
 import {
@@ -45,8 +45,6 @@ import {
   type SqlSchemaIR,
 } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
-import { pgFloat4, pgFloat8, pgInt2, pgInt4, pgInt8 } from '../data-types';
 import { isPostgresSchema } from '../postgres-schema';
 import {
   renderColumnAlterType,
@@ -68,6 +66,7 @@ import {
 } from './op-factory-call';
 import { buildSchemaLookupMap, hasForeignKey, hasUniqueConstraint } from './planner-schema-lookup';
 import { buildTargetDetails, type PostgresPlanTargetDetails } from './planner-target-details';
+import { columnDataType, isSafeTypeWidening } from './safe-widenings';
 
 /**
  * Look up a storage table by its explicit namespace coordinate. Returns
@@ -236,29 +235,13 @@ export const notNullBackfillCallStrategy: CallMigrationStrategy = (issues, ctx) 
   };
 };
 
-const SAFE_WIDENINGS = new Set([
-  `${pgInt2.id}→${pgInt4.id}`,
-  `${pgInt2.id}→${pgInt8.id}`,
-  `${pgInt4.id}→${pgInt8.id}`,
-  `${pgFloat4.id}→${pgFloat8.id}`,
-]);
-
-/** The id of the data type a column node's codec represents. */
-function columnDataType(column: SqlColumnIR, types: SqlTypeLookups): string {
-  if (column.codecRef === undefined) {
-    throw new InternalError(
-      `Column "${column.name}" carries no codec, so its data type is unknown; a type change is planned only between columns built from contracts.`,
-    );
-  }
-  return sqlDataTypeOfCodec(column.codecRef.codecId, types).id;
-}
-
 /**
- * Handles `not-equal` column issues whose TYPE differs. `fromContract` is
- * only supplied by `migration plan` — for reconciliation (`db update` /
- * `db init`, `fromContract === null`) this strategy never fires, mirroring
- * the legacy `typeChangeCallStrategy`'s requirement of a prior contract:
- * `mapNodeIssueToCall`'s in-place ALTER covers reconciliation directly.
+ * Handles `not-equal` column issues whose TYPE differs, for a plan that has an
+ * origin contract and may include `data` operations: `migration plan`. Under
+ * `db update` or `db init`, whose policies leave out `data`, it never fires,
+ * whether or not an origin contract is known: it could only plan the in-place
+ * ALTER that `mapNodeIssueToCall` plans, so leaving that to the mapper keeps
+ * the plan, and its order, the same either way.
  *
  * A single node issue can carry BOTH type and nullability drift (Postgres
  * alters in place, so the differ emits one `not-equal` column issue where
@@ -270,8 +253,9 @@ function columnDataType(column: SqlColumnIR, types: SqlTypeLookups): string {
  * partially handled.
  */
 export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
-  if (ctx.fromContract === null) return { kind: 'no_match' };
-  const dataAllowed = ctx.policy.allowedOperationClasses.includes('data');
+  if (ctx.fromContract === null || !ctx.policy.allowedOperationClasses.includes('data')) {
+    return { kind: 'no_match' };
+  }
 
   const matched: SchemaDiffIssue[] = [];
   const calls: PostgresOpFactoryCall[] = [];
@@ -285,8 +269,7 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
 
     const fromType = columnDataType(actual, ctx.types);
     const toType = columnDataType(expected, ctx.types);
-    const isSafeWidening = SAFE_WIDENINGS.has(`${fromType}→${toType}`);
-    if (!isSafeWidening && !dataAllowed) continue;
+    const isSafeWidening = isSafeTypeWidening(fromType, toType);
 
     const ddlSchemaName = issueSchemaName(issue);
     const tableName = issueTableName(issue);
@@ -301,7 +284,9 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
       rawTargetTypeForLabel: qualifiedTargetType,
     };
     if (isSafeWidening) {
-      calls.push(new AlterColumnTypeCall(schemaName, tableName, expected.name, alterOpts));
+      calls.push(
+        new AlterColumnTypeCall(schemaName, tableName, expected.name, alterOpts, 'widening'),
+      );
     } else {
       calls.push(
         new DataTransformCall(
@@ -316,7 +301,7 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
     if (expected.nullable !== actual.nullable) {
       if (expected.nullable) {
         calls.push(new DropNotNullCall(schemaName, tableName, expected.name));
-      } else if (dataAllowed) {
+      } else {
         calls.push(
           new DataTransformCall(
             `handle-nulls-${tableName}-${expected.name}`,
@@ -325,8 +310,6 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
           ),
           new SetNotNullCall(schemaName, tableName, expected.name),
         );
-      } else {
-        calls.push(new SetNotNullCall(schemaName, tableName, expected.name));
       }
     }
   }

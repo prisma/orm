@@ -267,6 +267,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "user_tags_user_id_idx_6c952402"
+                  },
                   "source": {
                     "columns": [
                       "user_id"
@@ -283,6 +286,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "user_tags_tag_id_idx_94b47830"
+                  },
                   "source": {
                     "columns": [
                       "tag_id"
@@ -364,7 +370,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "f5ac7e302b6dafdc6e8f597bfb7b2492f53917a662583c1d551faf69eed57963"
+    "storageHash": "54ecfb534ad832630163c3bed9eefe33346c3109d91eb812e2bf31dc0c192398"
   },
   "capabilities": {
     "postgres": {

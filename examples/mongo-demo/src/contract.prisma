@@ -35,7 +35,7 @@ model Post {
   author    User @relation(fields: [authorId], references: [id])
   @@discriminator(kind)
   @@index([authorId])
-  @@index([createdAt(sort: Desc), authorId])
+  @@index([sort(createdAt, Desc), authorId])
   @@map("posts")
 }
 

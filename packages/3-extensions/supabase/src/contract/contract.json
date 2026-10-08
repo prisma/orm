@@ -5433,6 +5433,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "identities_user_id_idx"
+                  },
                   "name": "identities_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -5555,6 +5558,12 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "session_id",
+                      "authentication_method"
+                    ]
+                  },
                   "name": "mfa_amr_claims_session_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -5759,6 +5768,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "mfa_factors_user_id_idx"
+                  },
                   "name": "mfa_factors_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6314,6 +6326,12 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": [
+                      "user_id",
+                      "client_id"
+                    ]
+                  },
                   "name": "oauth_consents_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6442,6 +6460,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "one_time_tokens_user_id_token_type_key"
+                  },
                   "name": "one_time_tokens_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6553,6 +6574,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "refresh_tokens_session_id_revoked_idx"
+                  },
                   "name": "refresh_tokens_session_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6691,6 +6715,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "saml_providers_sso_provider_id_idx"
+                  },
                   "name": "saml_providers_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6805,6 +6832,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "saml_relay_states_sso_provider_id_idx"
+                  },
                   "name": "saml_relay_states_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6974,6 +7004,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "sessions_oauth_client_id_idx"
+                  },
                   "name": "sessions_oauth_client_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -6992,6 +7025,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "sessions_user_id_idx"
+                  },
                   "name": "sessions_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7087,6 +7123,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "sso_domains_sso_provider_id_idx"
+                  },
                   "name": "sso_domains_sso_provider_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7547,6 +7586,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "webauthn_challenges_user_id_idx"
+                  },
                   "name": "webauthn_challenges_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -7703,6 +7745,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "webauthn_credentials_user_id_idx"
+                  },
                   "name": "webauthn_credentials_user_id_fkey",
                   "onDelete": "cascade",
                   "source": {
@@ -8894,7 +8939,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "056bc7e3e06ba008cf414192d7116e227e2bd2af5425b26270200cafa65872cd",
+    "storageHash": "cb23216599e58b222c1fe7d880105d8f166c8490935cec5ed539dbe77847d679",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

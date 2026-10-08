@@ -1,7 +1,7 @@
 // use prisma-8
 
-// Emitted fixture for the sql-orm-client scope tests: a contract with a
-// namespace named `scope`, which takes the name of the client's `scope` method.
+// Emitted fixture for the sql-orm-client fragment tests: a contract with a
+// namespace named `scope`, a name the client does not reserve.
 
 namespace public {
   model Post {

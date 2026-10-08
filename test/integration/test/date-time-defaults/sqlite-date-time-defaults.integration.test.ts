@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, planOriginOf } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import sqlite from '@internal/target-sqlite/control';
 import { describe, expect, it } from 'vitest';
@@ -40,6 +40,8 @@ async function migrate(
     schema: await familyInstance.introspect({ driver: database }),
     policy: INIT_ADDITIVE_POLICY,
     fromContract: from,
+    origin: planOriginOf(from),
+    statements: [],
     frameworkComponents: sqliteFrameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -151,6 +153,8 @@ describe('a SQLite datetime default', () => {
       schema: await familyInstance.introspect({ driver: database }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: contract,
+      origin: planOriginOf(contract),
+      statements: [],
       frameworkComponents: sqliteFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -324,7 +324,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "c49e3b0de0128618b679583476083d8c1a3a6258ecca0a1f2e7cada734d371a1",
+    "storageHash": "716453388eb63b6d2d6906d9a54f5bdbabd38b32689538434def45662a9e719d",
     "namespaces": {
       "one": {
         "id": "one",
@@ -399,7 +399,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
                 },
                 {
                   "source": {
@@ -413,11 +416,15 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_X_B_index"
+                  }
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_X_AB_pkey"
               }
             }
           }
@@ -503,7 +510,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
                 },
                 {
                   "source": {
@@ -517,11 +527,15 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_X_B_index"
+                  }
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_X_AB_pkey"
               }
             }
           }

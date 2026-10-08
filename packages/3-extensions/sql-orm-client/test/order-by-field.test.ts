@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orderByField } from '../src/scopes';
+import { orderByField } from '../src/fragments';
 import { createChainingOrm } from './collection-chaining-fixture';
 
 const POST_FIELDS = ['id', 'title', 'userId', 'views'] as const;

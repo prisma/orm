@@ -49,9 +49,9 @@ describe('postgresStatic({ contractJson })', () => {
 
   it('enums matches what buildNamespacedEnums produces', () => {
     const result = postgresStatic<typeof contract>({ contractJson: contract });
-    const allNamespaced = buildNamespacedEnums(contract.domain) as NamespacedEnums<
-      Contract<SqlStorage>
-    >;
+    const allNamespaced = buildNamespacedEnums(contract.domain, (codecId) =>
+      result.context.contractCodecs.forCodecRef({ codecId }),
+    ) as NamespacedEnums<Contract<SqlStorage>>;
 
     expect(result.enums).toMatchObject(allNamespaced);
   });

@@ -7,12 +7,20 @@ import type {
   MigrationRunnerResult,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
+import {
+  ORIGIN_SNAPSHOT_RECOVERY,
+  type PlanQuestion,
+} from '../../src/control-api/statements/plan-questions';
 import type { ControlProgressEvent } from '../../src/control-api/types';
 
 const FAKE_MIGRATIONS_DIR = '/tmp/__test-db-update-migrations';
+
+const noQuestions = async (questions: readonly PlanQuestion[]) =>
+  questions.map((question) => ({ verb: 'delete' as const, text: question.subject }));
 
 function markerRecord(fields: {
   readonly storageHash: string;
@@ -61,6 +69,9 @@ function createMockMigrations(overrides?: {
 }) {
   const planResult: MigrationPlannerResult = overrides?.planResult ?? {
     kind: 'success',
+    dataLoss: [],
+    accessWidening: [],
+    appliedStatements: [],
     plan: {
       targetId: 'postgres',
       destination: { storageHash: 'new-hash', profileHash: 'new-profile' },
@@ -127,6 +138,7 @@ describe('executeDbUpdate', () => {
       migrations: createMockMigrations(),
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -159,6 +171,7 @@ describe('executeDbUpdate', () => {
       }),
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -175,6 +188,9 @@ describe('executeDbUpdate', () => {
     const migrations = createMockMigrations({
       planResult: {
         kind: 'success',
+        dataLoss: [],
+        accessWidening: [],
+        appliedStatements: [],
         plan: {
           targetId: 'postgres',
           destination: { storageHash: 'dest', profileHash: 'dest-profile' },
@@ -213,6 +229,7 @@ describe('executeDbUpdate', () => {
       migrations,
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -249,6 +266,7 @@ describe('executeDbUpdate', () => {
       }),
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -289,6 +307,7 @@ describe('executeDbUpdate', () => {
       }),
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -326,6 +345,9 @@ describe('executeDbUpdate', () => {
       migrations: createMockMigrations({
         planResult: {
           kind: 'success',
+          dataLoss: [],
+          accessWidening: [],
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'current', profileHash: 'current-profile' },
@@ -343,6 +365,7 @@ describe('executeDbUpdate', () => {
       }),
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -364,6 +387,9 @@ describe('executeDbUpdate', () => {
     const migrations = createMockMigrations({
       planResult: {
         kind: 'success',
+        dataLoss: [],
+        accessWidening: [],
+        appliedStatements: [],
         plan: {
           targetId: 'postgres',
           destination: { storageHash: 'same', profileHash: 'same-profile' },
@@ -396,6 +422,7 @@ describe('executeDbUpdate', () => {
       migrations,
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -411,6 +438,9 @@ describe('executeDbUpdate', () => {
   it('allows additive, widening, and destructive operation classes', async () => {
     const planFn = vi.fn().mockReturnValue({
       kind: 'success',
+      dataLoss: [],
+      accessWidening: [],
+      appliedStatements: [],
       plan: {
         targetId: 'postgres',
         destination: { storageHash: 'dest' },
@@ -446,6 +476,7 @@ describe('executeDbUpdate', () => {
       migrations,
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -458,11 +489,18 @@ describe('executeDbUpdate', () => {
     );
   });
 
-  describe('destructive changes gate', () => {
-    function createDestructiveMigrations() {
+  describe('questions before an apply', () => {
+    const NICKNAME = { kind: 'storage', name: 'user.nickname' } as const;
+    const USER = { kind: 'storage', name: 'user' } as const;
+
+    function createDestructiveMigrations(executeSpy?: ReturnType<typeof vi.fn>) {
       return createMockMigrations({
+        ...(executeSpy === undefined ? {} : { executeSpy }),
         planResult: {
           kind: 'success',
+          dataLoss: [{ operationIndex: 0, subject: NICKNAME }],
+          accessWidening: [{ operationIndex: 2, subject: USER, widens: true }],
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'dest' },
@@ -477,6 +515,11 @@ describe('executeDbUpdate', () => {
                 label: 'Add column bio to user',
                 operationClass: 'additive',
               },
+              {
+                id: 'rls.user.disable',
+                label: 'Disable row-level security on user',
+                operationClass: 'widening',
+              },
             ],
             renderTypeScript: () => {
               throw new Error('not used in db update tests');
@@ -485,43 +528,14 @@ describe('executeDbUpdate', () => {
         },
         runnerResult: ok({
           perSpaceResults: [
-            { space: 'app', value: { operationsPlanned: 2, operationsExecuted: 2 } },
+            { space: 'app', value: { operationsPlanned: 3, operationsExecuted: 3 } },
           ],
         }),
       });
     }
 
-    it('returns DESTRUCTIVE_CHANGES in apply mode without acceptDataLoss', async () => {
-      const result = await executeDbUpdate({
-        driver: createMockDriver(),
-        adapter: STUB_ADAPTER,
-        familyInstance: createMockFamilyInstance({
-          readAllMarkers: async () => new Map([['app', markerRecord({ storageHash: 'origin' })]]),
-        }),
-        contract: dummyContract,
-        mode: 'apply',
-        migrations: createDestructiveMigrations(),
-        frameworkComponents: [],
-        migrationsDir: FAKE_MIGRATIONS_DIR,
-        targetId: 'postgres',
-      });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.failure.code).toBe('DESTRUCTIVE_CHANGES');
-        expect(result.failure.summary).toContain('destructive');
-        expect(result.failure.destructiveChanges).toEqual({
-          destructiveOperations: [
-            { id: 'dropColumn.user.nickname', label: 'Drop column nickname from user' },
-          ],
-          databaseName: 'appdb',
-          planHash: expect.stringMatching(/^[0-9a-f]{64}$/),
-        });
-      }
-    });
-
-    it('applies when the consent names the refused plan', async () => {
-      const sharedInputs = () => ({
+    function applyInputs(overrides: Partial<Parameters<typeof executeDbUpdate>[0]> = {}) {
+      return {
         driver: createMockDriver(),
         adapter: STUB_ADAPTER,
         familyInstance: createMockFamilyInstance({
@@ -533,95 +547,224 @@ describe('executeDbUpdate', () => {
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
         targetId: 'postgres' as const,
-      });
+        answerQuestions: noQuestions,
+        ...overrides,
+      };
+    }
 
-      const refused = await executeDbUpdate(sharedInputs());
-      expect(refused.ok).toBe(false);
-      const planHash = !refused.ok ? refused.failure.destructiveChanges?.planHash : undefined;
-      expect(planHash).toBeDefined();
+    it('asks about each loss and each access widening in one batch before applying', async () => {
+      const asked: { question: string; subject: string; verbs: readonly string[] }[] = [];
+      const execute = vi.fn().mockResolvedValue(
+        ok({
+          perSpaceResults: [
+            { space: 'app', value: { operationsPlanned: 3, operationsExecuted: 3 } },
+          ],
+        }),
+      );
+      const result = await executeDbUpdate(
+        applyInputs({
+          migrations: createDestructiveMigrations(execute),
+          answerQuestions: async (questions) => {
+            expect(execute).not.toHaveBeenCalled();
+            asked.push(
+              ...questions.map(({ question, subject, verbs }) => ({ question, subject, verbs })),
+            );
+            return questions.map((question) => ({
+              verb: question.verbs.includes('allow') ? 'allow' : 'delete',
+              text: question.subject,
+            }));
+          },
+        }),
+      );
 
-      const result = await executeDbUpdate({
-        ...sharedInputs(),
-        consent: { planHash: planHash as string },
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.mode).toBe('apply');
-        expect(result.value.execution).toBeDefined();
-      }
+      expect(asked).toEqual([
+        {
+          question: `Drop column nickname from user would lose the data in "user.nickname", named by its storage name because the origin contract is unknown; --delete loses its rows. ${ORIGIN_SNAPSHOT_RECOVERY}`,
+          subject: 'user.nickname',
+          verbs: ['delete'],
+        },
+        {
+          question:
+            'Disable row-level security on user would widen who can read and write its rows.',
+          subject: 'user',
+          verbs: ['allow'],
+        },
+      ]);
+      expect(result.ok && result.value.appliedStatements).toEqual([
+        {
+          verb: 'delete',
+          statement: { kind: 'delete', subject: NICKNAME },
+          operationIndexes: [0],
+          description: 'delete storage "user.nickname"',
+        },
+        {
+          verb: 'allow',
+          statement: { kind: 'allow', subject: USER },
+          operationIndexes: [2],
+          description: 'allow storage "user"',
+        },
+      ]);
+      expect(execute).toHaveBeenCalledTimes(1);
     });
 
-    it('refuses a consent naming a plan it is no longer about to apply', async () => {
-      const consentedPlanHash = 'f'.repeat(64);
-      const result = await executeDbUpdate({
-        driver: createMockDriver(),
-        adapter: STUB_ADAPTER,
-        familyInstance: createMockFamilyInstance({
-          readAllMarkers: async () => new Map([['app', markerRecord({ storageHash: 'origin' })]]),
+    it('takes delete and allow statements as answers without asking', async () => {
+      const answerQuestions = vi.fn(noQuestions);
+      const result = await executeDbUpdate(
+        applyInputs({
+          statements: [
+            { verb: 'delete', text: 'user.nickname' },
+            { verb: 'allow', text: 'user' },
+          ],
+          answerQuestions,
         }),
-        contract: dummyContract,
-        mode: 'apply',
-        consent: { planHash: consentedPlanHash },
-        migrations: createDestructiveMigrations(),
-        frameworkComponents: [],
-        migrationsDir: FAKE_MIGRATIONS_DIR,
-        targetId: 'postgres',
-      });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.failure.code).toBe('CONSENT_PLAN_MISMATCH');
-        expect(result.failure.consentPlanMismatch).toEqual({
-          consentedPlanHash,
-          planHash: expect.stringMatching(/^[0-9a-f]{64}$/),
-        });
-      }
-    });
-
-    it('proceeds to runner in apply mode with acceptDataLoss: true', async () => {
-      const result = await executeDbUpdate({
-        driver: createMockDriver(),
-        adapter: STUB_ADAPTER,
-        familyInstance: createMockFamilyInstance({
-          readAllMarkers: async () => new Map([['app', markerRecord({ storageHash: 'origin' })]]),
-        }),
-        contract: dummyContract,
-        mode: 'apply',
-        acceptDataLoss: true,
-        migrations: createDestructiveMigrations(),
-        frameworkComponents: [],
-        migrationsDir: FAKE_MIGRATIONS_DIR,
-        targetId: 'postgres',
-      });
+      );
 
       expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.mode).toBe('apply');
-        expect(result.value.execution).toBeDefined();
-      }
+      expect(answerQuestions).toHaveBeenCalledWith([]);
     });
 
-    it('returns success in plan mode regardless of destructive operations', async () => {
-      const result = await executeDbUpdate({
-        driver: createMockDriver(),
-        adapter: STUB_ADAPTER,
-        familyInstance: createMockFamilyInstance({
-          readAllMarkers: async () => new Map([['app', markerRecord({ storageHash: 'origin' })]]),
+    it('refuses delete and allow statements that answer no question, before applying', async () => {
+      const execute = vi.fn();
+      const error = await executeDbUpdate(
+        applyInputs({
+          migrations: createDestructiveMigrations(execute),
+          statements: [
+            { verb: 'delete', text: 'user.nickname' },
+            { verb: 'delete', text: 'Nope' },
+            { verb: 'allow', text: 'user' },
+            { verb: 'allow', text: 'post' },
+          ],
         }),
-        contract: dummyContract,
-        mode: 'plan',
-        migrations: createDestructiveMigrations(),
-        frameworkComponents: [],
-        migrationsDir: FAKE_MIGRATIONS_DIR,
-        targetId: 'postgres',
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toMatchObject({
+        code: 'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+        message: 'Statements "--delete Nope" and "--allow post" answer no question of the plan',
+        meta: {
+          statements: [
+            { verb: 'delete', text: 'Nope' },
+            { verb: 'allow', text: 'post' },
+          ],
+          subjects: ['user.nickname', 'user'],
+        },
       });
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('answers every data-loss question with acceptDataLoss: true, and still asks about access', async () => {
+      const asked: string[] = [];
+      const result = await executeDbUpdate(
+        applyInputs({
+          acceptDataLoss: true,
+          answerQuestions: async (questions) => {
+            asked.push(...questions.map(({ subject }) => subject));
+            return questions.map(({ subject }) => ({ verb: 'allow', text: subject }));
+          },
+        }),
+      );
 
       expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.mode).toBe('plan');
-        expect(result.value.plan.operations).toHaveLength(2);
-      }
+      expect(asked).toEqual(['user']);
+    });
+
+    it('answers every question with acceptDataLoss and acceptAccessWidening', async () => {
+      const answerQuestions = vi.fn(noQuestions);
+      const result = await executeDbUpdate(
+        applyInputs({ acceptDataLoss: true, acceptAccessWidening: true, answerQuestions }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(answerQuestions).toHaveBeenCalledWith([]);
+    });
+
+    it('rejects an answer callback that leaves a question unanswered, before applying', async () => {
+      const execute = vi.fn();
+      const answers = [{ verb: 'delete', text: 'user.nickname' }] as const;
+      const error = await executeDbUpdate(
+        applyInputs({
+          migrations: createDestructiveMigrations(execute),
+          answerQuestions: async () => answers,
+        }),
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(InternalError);
+      expect(error).toMatchObject({
+        message:
+          'answerQuestions gave 1 answer for 2 questions; answer each question in order, or throw to refuse.',
+        cause: { questions: ['user.nickname', 'user'], answers },
+      });
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('rejects an answer the question does not accept, before applying', async () => {
+      const execute = vi.fn();
+      const error = await executeDbUpdate(
+        applyInputs({
+          migrations: createDestructiveMigrations(execute),
+          answerQuestions: async () => [
+            { verb: 'delete', text: 'user.nickname' },
+            { verb: 'delete', text: 'user' },
+          ],
+        }),
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(InternalError);
+      expect(error).toMatchObject({
+        message:
+          'answerQuestions answered "Disable row-level security on user would widen who can read and write its rows." with delete, which it does not accept; it accepts allow.',
+        cause: { question: 'user', verbs: ['allow'], answer: { verb: 'delete', text: 'user' } },
+      });
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('refuses, without asking, delete and allow statements that answer no question in plan mode', async () => {
+      const answerQuestions = vi.fn(noQuestions);
+      const error = await executeDbUpdate(
+        applyInputs({
+          mode: 'plan',
+          answerQuestions,
+          statements: [
+            { verb: 'delete', text: 'user.nickname' },
+            { verb: 'allow', text: 'post' },
+          ],
+        }),
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toMatchObject({
+        code: 'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+        meta: { statements: [{ verb: 'allow', text: 'post' }] },
+      });
+      expect(answerQuestions).not.toHaveBeenCalled();
+    });
+
+    it('takes delete and allow statements that answer questions in plan mode', async () => {
+      const result = await executeDbUpdate(
+        applyInputs({
+          mode: 'plan',
+          statements: [
+            { verb: 'delete', text: 'user.nickname' },
+            { verb: 'allow', text: 'user' },
+          ],
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('asks nothing in plan mode, and lists the questions an apply would ask', async () => {
+      const answerQuestions = vi.fn(noQuestions);
+      const result = await executeDbUpdate(applyInputs({ mode: 'plan', answerQuestions }));
+
+      expect(answerQuestions).not.toHaveBeenCalled();
+      expect(
+        result.ok && {
+          dataLoss: result.value.dataLoss,
+          accessWidening: result.value.accessWidening,
+        },
+      ).toEqual({
+        dataLoss: [{ operationIndex: 0, subject: NICKNAME, text: 'user.nickname' }],
+        accessWidening: [{ operationIndex: 2, subject: USER, widens: true, text: 'user' }],
+      });
     });
   });
 
@@ -635,6 +778,9 @@ describe('executeDbUpdate', () => {
       createPlanner: () => ({
         plan: vi.fn().mockReturnValue({
           kind: 'success',
+          dataLoss: [],
+          accessWidening: [],
+          appliedStatements: [],
           plan: {
             targetId: 'postgres',
             destination: { storageHash: 'dest' },
@@ -667,6 +813,7 @@ describe('executeDbUpdate', () => {
       migrations,
       frameworkComponents: [],
       migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
       targetId: 'postgres',
     });
 
@@ -698,6 +845,7 @@ describe('executeDbUpdate', () => {
         migrations: createMockMigrations(),
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
+        answerQuestions: noQuestions,
         targetId: 'postgres',
         onProgress: (event) => events.push(event),
       });
@@ -725,6 +873,7 @@ describe('executeDbUpdate', () => {
         migrations: createMockMigrations(),
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
+        answerQuestions: noQuestions,
         targetId: 'postgres',
         onProgress: (event) => events.push(event),
       });
@@ -758,6 +907,7 @@ describe('executeDbUpdate', () => {
         }),
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
+        answerQuestions: noQuestions,
         targetId: 'postgres',
         onProgress: (event) => events.push(event),
       });
@@ -786,6 +936,7 @@ describe('executeDbUpdate', () => {
         }),
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
+        answerQuestions: noQuestions,
         targetId: 'postgres',
         onProgress: (event) => events.push(event),
       });
@@ -804,6 +955,7 @@ describe('executeDbUpdate', () => {
         migrations: createMockMigrations(),
         frameworkComponents: [],
         migrationsDir: FAKE_MIGRATIONS_DIR,
+        answerQuestions: noQuestions,
         targetId: 'postgres',
       });
 

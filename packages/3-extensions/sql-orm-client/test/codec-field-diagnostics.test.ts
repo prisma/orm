@@ -8,12 +8,12 @@ const fixturePath = resolve(testDir, 'codec-field-diagnostics.virtual.ts');
 
 const fixture = `
 import type { CodecField } from '../src/types';
-import { createScopesOrm, type SoftDeleteContract } from './scopes-fixture';
+import { createFragmentsOrm, type SoftDeleteContract } from './fragments-fixture';
 
 type DeletedAt = CodecField<SoftDeleteContract, 'pg/timestamptz-temporal@1', true>;
 const notDeleted = (row: { deletedAt: DeletedAt }) => row.deletedAt.isNull();
 
-const { db } = createScopesOrm();
+const { db } = createFragmentsOrm();
 db.Post.where(notDeleted);
 db.Tag.where(notDeleted);
 `;

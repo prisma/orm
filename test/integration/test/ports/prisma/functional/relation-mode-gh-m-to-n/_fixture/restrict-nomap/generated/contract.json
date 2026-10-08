@@ -203,6 +203,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -221,6 +224,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -315,7 +321,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "251465c04c722f13fbd3751626270b297dcd2f97f041d8d54186add8098e6844"
+    "storageHash": "c3da53b9b65eacbe31c923952c04c60264421fd2a367098a165f3d121ad0c890"
   },
   "capabilities": {
     "postgres": {

@@ -46,8 +46,6 @@ describe('SqlContractSerializer logic validation', () => {
           {
             source: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'Post', columns: ['userId'] },
             target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'User', columns: ['id'] },
-            constraint: true,
-            index: true,
           },
         ],
       },
@@ -158,8 +156,6 @@ describe('SqlContractSerializer logic validation', () => {
                 tableName: 'NonExistent',
                 columns: ['id'],
               },
-              constraint: true,
-              index: true,
             },
           ],
           uniques: [],
@@ -226,8 +222,6 @@ describe('SqlContractSerializer logic validation', () => {
                 tableName: 'User',
                 columns: ['id', 'tenantId'],
               },
-              constraint: true,
-              index: true,
             },
           ],
         },
@@ -342,8 +336,6 @@ describe('SqlContractSerializer logic validation', () => {
         {
           source: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'Post', columns: ['userId'] },
           target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'User', columns: ['id'] },
-          constraint: true,
-          index: true,
         },
       ];
       expect(() => validateSqlContractFully<Contract<SqlStorage>>(contract)).not.toThrow();
@@ -376,8 +368,6 @@ describe('SqlContractSerializer logic validation', () => {
         {
           source: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'Post', columns: ['userId'] },
           target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'User', columns: ['id'] },
-          constraint: true,
-          index: true,
         },
       ];
       expect(() => validateSqlContractFully<Contract<SqlStorage>>(contract)).not.toThrow();

@@ -8,7 +8,7 @@
 
 ## At a glance
 
-An application extends `Collection` with its own query methods and registers the class with the client. The methods are the application's named queries, in the way Rails scopes are:
+An application extends `Collection` with its own query methods and registers the class with the client. The methods are the application's named queries, in the way Rails scopes are. A Rails scope is any named query, and these methods match that usage; in this project's vocabulary a scope is narrower, a query fragment that only imposes conditions on the query (ADR 259):
 
 ```ts
 class PostCollection extends Collection<Contract, 'Post'> {
@@ -43,16 +43,16 @@ This decision changes the SQL ORM client's `Collection`. The MongoDB ORM client,
 
 A collection's type is its class plus what the chain has established. Every method either keeps that class and adds a fact, or produces a different row and returns the base `Collection` type.
 
-**A chaining method has the shape of a scope.** A scope is a function from a collection to a collection, as in Rails. The built-in methods, the methods of a custom class, and a scope an application or a package writes all have the same type: a function from a receiver type `Self` to `Self` plus a fact. The facts have names, and the names are the vocabulary all three share. These are the declarations:
+**A chaining method has the shape of a query fragment.** A query fragment, or fragment, is a function from a collection to a collection (ADR 259). A fragment that only imposes conditions on the query is called a scope. The built-in methods, the methods of a custom class, and a fragment an application or a package writes all have the same type: a function from a receiver type `Self` to `Self` plus a fact. The facts have names, and the names are the vocabulary all three share. These are the declarations:
 
 ```ts
 export type Filtered<C> = C & HasWhere;
 export type Ordered<C> = C & HasOrderBy;
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
-export type Scope<In, Out> = (collection: In) => Out;
+export type Fragment<In, Out> = (collection: In) => Out;
 ```
 
-`Scope` places no constraint between `In` and `Out`, because a scope written for one model may narrow the row, for example with `select`, so its output is not always a subtype of its input.
+`Fragment` places no constraint between `In` and `Out`, because a fragment written for one model may narrow the row, for example with `select`, so its output is not always a subtype of its input.
 
 Each fact has three names. The flag `hasWhere` in the type state is set to `true` by the interface `HasWhere`, and `Filtered<C>` is `C & HasWhere`. Users write `Filtered<C>`; TypeScript prints `HasWhere` when it explains why a type does not match. `hasOrderBy`, `HasOrderBy` and `Ordered<C>` are the same fact for an order.
 
@@ -66,7 +66,7 @@ Each fact has three names. The flag `hasWhere` in the type state is set to `true
 | `select` | `Collection<Contract, Model, NarrowedRow, State>` | no | a different row |
 | `variant` | `Collection<Contract, Model, VariantRow, VariantState>` | no | a different row and a different type argument |
 
-`with` is the principle made explicit: it calls a function with the receiver and returns the result. A pure filter is `where(rowFragment)`; `with` is for what `where` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a scope is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.with((posts) => posts.where(...))` has the same type as `db.Post.withTitle(term)`. A class method is a named scope. `with` accepts any function, including one that ends in a terminal such as `first()`; when the function returns a collection, it is a scope.
+`with` is the principle made explicit: it calls a function with the receiver and returns the result. A condition on one row that needs no declared fields is `where(rowFragment)`. `with` runs a fragment: either a scope, which applies the same condition to every model with the fields it declares, or one that does what `where` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant. A class method `withTitle(term) { return this.where(...) }` has the type `Filtered<this>`; the same query as a fragment is `(posts: PostCollection) => Filtered<PostCollection>`, and `db.Post.with((posts) => posts.where(...))` has the same type as `db.Post.withTitle(term)`. A class method is a named fragment, and one that only filters, such as `withTitle`, is a named scope. `with` accepts any function, including one that ends in a terminal such as `first()`; when the function returns a collection, it is a fragment.
 
 The facts live in two declared properties on the class, the **type state** and the **row**:
 
@@ -189,12 +189,12 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 
 - **Class methods chain**, before and after the built-in methods, and after `include`.
 - **Inside a class body, a class method called on the result of another call loses that call's facts.** In `latest() { return this.withTitle('orm').newestFirst(); }`, `newestFirst()` returns `Ordered<this>`, and `Filtered` is lost; `this.include('user').withTitle('orm')` loses `user`. TypeScript resolves a method's polymorphic `this` on an intersection that contains the class's own `this` as the class's `this` alone. The `prepared` getter has the same limit: inside a class body, `this.include('user').prepared` describes the class's row without `user`. Built-in methods are not affected, because they infer their receiver. A chain of class methods written outside the class keeps every fact. But a class method whose body chains two class methods loses the first call's facts for every caller: with `latest()` above, `db.Post.latest()` is `Ordered<PostCollection>`, not `Filtered<Ordered<PostCollection>>`. Losing a fact refuses more calls, never fewer. Inside a class body, chain the built-in methods after a class method, or call one class method per expression.
-- **A built-in method, a class method and a scope are one typed thing.** A query shared between places is written once as a scope and run with `with`, or wrapped in a class method; both give the same type. A package can supply scopes without any knowledge of the application's classes.
+- **A built-in method, a class method and a fragment are one typed thing.** A query shared between places is written once as a fragment and run with `with`, or wrapped in a class method; both give the same type. A package can supply fragments without any knowledge of the application's classes.
 - **Conditional queries are sound.** A ternary, an `if`, a loop or a reassigned `let` never unlocks a write or `cursor` on a collection that may lack the filter or order.
 - **After `select` or `variant`, class methods are gone.** After `select` the rows are no longer the model's; after `variant` the type argument is a different one.
 - **A conditional between two differently flagged collections keeps a union.** `flag ? db.Post.withTitle('orm') : db.Post.newestFirst()` is `Filtered<PostCollection> | Ordered<PostCollection>`. Reads, `select`, `include` and class methods work on it; writes and `cursor` are refused, and `select` on it drops included relations from the type. A write on it fails with "The 'this' context of type 'Ordered<PostCollection> | Filtered<PostCollection>' is not assignable to method's 'this' of type 'HasWhere'", because one branch has no filter; filter both branches, or annotate the result as `PostCollection`, which reduces the union and states that the filter is not known.
 - **Chains print with the fact names.** A chain on the base type prints as `Ordered<Filtered<Collection<Contract, "Post", ...>>>`, and one on a custom class as `Ordered<Filtered<PostCollection>>`.
-- **These names are part of the public surface**, because scope authors write them and declaration output needs them for any library that exports a collection class: `Scope`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasTypeState`, `TypeState`, `RowType`, `CollectionTypeStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
+- **These names are part of the public surface**, because fragment authors write them and declaration output needs them for any library that exports a collection class: `Fragment`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasTypeState`, `TypeState`, `RowType`, `CollectionTypeStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
 - **Declarations name the family package.** The declaration of an exported collection class, or of an exported chain, imports these names from `@prisma/orm-family-sql/orm-client`, the package the facade re-exports, not from the facade the application depends on. Under pnpm that package does not resolve from the application, and with `skipLibCheck` the consumer of the declaration silently gets `any`. This predates the decision: the same specifier appears for exported chains without it. It is a separate fix in how the facades publish their types.
 - **The state and the row are read with `CollectionTypeStateOf<C>` and `CollectionRowOf<C>`**, not by extracting a type argument of `Collection`. The type arguments hold what the collection started with, and the filter fact that `variant` writes into its new type argument; every other fact is in the intersection.
 - **`ReturnType` of a chaining method does not give a collection**, because `ReturnType` of a generic method uses the type parameter's constraint: `ReturnType<C['where']>` is `HasWhere`, and `ReturnType<C['limit']>` is `unknown`. Write `Filtered<C>` or `Ordered<C>`, or `C` for the methods that add nothing.

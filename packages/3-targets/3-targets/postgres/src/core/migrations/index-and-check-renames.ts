@@ -146,8 +146,8 @@ export function pairIndexRenames(
  * drop + add.
  *
  * Runs only when the policy allows `widening` (rename's class). Without it
- * the pass no-ops and the pair degrades to the slice-1 behavior: an add,
- * plus a drop when `destructive` is allowed too.
+ * the pass no-ops and the pair degrades to an add and a drop, and the drop,
+ * which is `widening` too, is refused as a conflict.
  */
 export function pairCheckRenames(
   options: Pick<SqlMigrationPlannerPlanOptions, 'contract' | 'policy'>,

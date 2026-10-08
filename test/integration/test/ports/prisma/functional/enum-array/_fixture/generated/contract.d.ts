@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'25e3435a64a62c57889f19df48d71ff8ab48745b5cc67c159f10a7cc9f40fbc1'>;
+  StorageHashBase<'57d1ec7b747412697397995e085fef338d2bd8bbecccee6ff0833c922950e0e2'>;
 export type ExecutionHash =
   ExecutionHashBase<'e18dbda8332f8974e92016590064ce897aa2fb8f1ca059429e3460e668f4e488'>;
 export type ProfileHash =
@@ -372,6 +372,13 @@ type ContractBase = Omit<
               { readonly name: 'CUSTOM'; readonly value: 'CUSTOM' },
             ];
           };
+        };
+        readonly enumMemberTypes?: {
+          readonly Plan: readonly [
+            { readonly name: 'FREE'; readonly value: 'FREE' },
+            { readonly name: 'PAID'; readonly value: 'PAID' },
+            { readonly name: 'CUSTOM'; readonly value: 'CUSTOM' },
+          ];
         };
       };
     };

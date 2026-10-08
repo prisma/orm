@@ -10,7 +10,7 @@
  */
 
 import type { ColumnDefault } from '@internal/contract/types';
-import { errorUnfilledPlaceholder } from '@internal/errors/migration';
+import { unfilledPlaceholderOperation } from '@internal/errors/migration';
 import type {
   MigrationOperationClass,
   SqlMigrationPlanOperation,
@@ -31,11 +31,16 @@ import {
   tsQuotedTextSource,
 } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
-import { columnExistsAst, indexExistsAst, tableExistsAst } from '../../contract-free/checks';
+import {
+  columnExistsAst,
+  indexExistsAst,
+  tableExistsAst,
+  tableNameTakenAst,
+} from '../../contract-free/checks';
 import * as contractFreeDdl from '../../contract-free/ddl';
 import { sqliteError } from '../errors';
 import { quoteIdentifier } from '../sql-utils';
-import { addColumn, dropColumnExecuteSql } from './operations/columns';
+import { addColumn, dropColumnExecuteSql, renameColumn } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { step } from './operations/shared';
 import {
@@ -62,6 +67,11 @@ abstract class SqliteOpFactoryCallNode extends TsExpression implements Framework
   abstract readonly label: string;
   abstract toOp(lowerer?: Lowerer): Op | Promise<Op>;
 
+  /** The operations this call lowers to, in order: one, unless the call carries companions. */
+  toOps(lowerer?: ExecuteRequestLowerer): readonly (Op | Promise<Op>)[] {
+    return [this.toOp(lowerer)];
+  }
+
   importRequirements(): readonly ImportRequirement[] {
     return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
   }
@@ -69,6 +79,15 @@ abstract class SqliteOpFactoryCallNode extends TsExpression implements Framework
   protected freeze(): void {
     Object.freeze(this);
   }
+}
+
+export type { SqliteOpFactoryCallNode };
+
+/** Whether `call` is one of this target's calls, which lower through {@link SqliteOpFactoryCallNode.toOps}. */
+export function isSqliteOpFactoryCall(
+  call: FrameworkOpFactoryCall,
+): call is SqliteOpFactoryCallNode {
+  return call instanceof SqliteOpFactoryCallNode;
 }
 
 // ============================================================================
@@ -277,23 +296,58 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
   }
 }
 
+/** An index SQLite cannot rename, dropped and created again under its new name. */
+export interface IndexReplacement {
+  readonly drop: DropIndexCall;
+  readonly create: CreateIndexCall;
+}
+
+/** A call a table or column rename carries to replace an index whose name derives from the old name. */
+export type RenameCompanionCall = DropIndexCall | CreateIndexCall;
+
+/** The replaced indexes' drops, then their creates, since a create may take a dropped name. */
+export function indexReplacementCalls(
+  replacements: readonly IndexReplacement[],
+): RenameCompanionCall[] {
+  return [...replacements.map(({ drop }) => drop), ...replacements.map(({ create }) => create)];
+}
+
 export class RenameTableCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'renameTable' as const;
-  // `widening`: a rename is neither additive creation nor destructive, and the
-  // class vocabulary has no neutral middle class, so this is the class that
-  // plans under every allowance set except additive-only init.
   readonly operationClass = 'widening' as const;
   readonly oldTableName: string;
   /** The new name: the table's contract-side identity after the rename. */
   readonly tableName: string;
   readonly label: string;
+  /** The indexes named after the old table, which SQLite cannot rename, so it replaces them. */
+  readonly indexReplacements: readonly IndexReplacement[];
+  /**
+   * The replacements' drops, then their creates. They run after the table rename and are never
+   * rendered on their own.
+   */
+  readonly companions: readonly RenameCompanionCall[];
 
-  constructor(oldTableName: string, tableName: string) {
+  constructor(
+    oldTableName: string,
+    tableName: string,
+    indexReplacements: readonly IndexReplacement[],
+  ) {
     super();
     this.oldTableName = oldTableName;
     this.tableName = tableName;
     this.label = `Rename table ${oldTableName} to ${tableName}`;
+    this.indexReplacements = Object.freeze([...indexReplacements]);
+    this.companions = Object.freeze(indexReplacementCalls(indexReplacements));
     this.freeze();
+  }
+
+  /** The id of the operation this call lowers to. */
+  get operationId(): string {
+    return `renameTable.${this.oldTableName}`;
+  }
+
+  override toOps(lowerer?: ExecuteRequestLowerer): readonly Promise<Op>[] {
+    return [this.toOp(lowerer), ...this.companions.map((companion) => companion.toOp(lowerer))];
   }
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
@@ -307,22 +361,31 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
     const fromChecks = tableExistsAst(this.oldTableName);
     const toChecks = tableExistsAst(this.tableName);
     const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.tablePresent());
-    const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.tableAbsent());
+    const onlyCase = renameChangesOnlyCase(this.oldTableName, this.tableName);
+    const toAbsent = await lowerer.lowerToExecuteRequest(
+      onlyCase ? toChecks.tableAbsent() : tableNameTakenAst(this.tableName).nameFree(),
+    );
     const viaName = renameTableViaName(this.tableName);
-    const viaAbsent = renameChangesOnlyCase(this.oldTableName, this.tableName)
+    const viaAbsent = onlyCase
       ? await lowerer.lowerToExecuteRequest(tableExistsAst(viaName).tableAbsent())
       : undefined;
     const toPresent = await lowerer.lowerToExecuteRequest(toChecks.tablePresent());
     const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.tableAbsent());
     return {
-      id: `renameTable.${this.oldTableName}`,
+      id: this.operationId,
       label: this.label,
       summary: `Renames table ${this.oldTableName} to ${this.tableName}, keeping its rows`,
       operationClass: 'widening',
       target: { id: 'sqlite', details: buildTargetDetails('table', this.tableName) },
       precheck: [
         step(`ensure table "${this.oldTableName}" exists`, fromPresent.sql, fromPresent.params),
-        step(`ensure table "${this.tableName}" does not exist`, toAbsent.sql, toAbsent.params),
+        step(
+          onlyCase
+            ? `ensure table "${this.tableName}" does not exist`
+            : `ensure no table or index is named "${this.tableName}" in any case`,
+          toAbsent.sql,
+          toAbsent.params,
+        ),
         ...(viaAbsent === undefined
           ? []
           : [
@@ -357,6 +420,63 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
   }
 }
 
+export class RenameColumnCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'renameColumn' as const;
+  // `widening` for the same reason as `RenameTableCall`.
+  readonly operationClass = 'widening' as const;
+  readonly tableName: string;
+  readonly oldColumnName: string;
+  /** The new name: the column's contract-side identity after the rename. */
+  readonly columnName: string;
+  readonly label: string;
+  /** The indexes on the column whose wire names change, which SQLite cannot rename. */
+  readonly indexReplacements: readonly IndexReplacement[];
+  /**
+   * The replacements' drops, then their creates. They run after the column rename and are never
+   * rendered on their own.
+   */
+  readonly companions: readonly RenameCompanionCall[];
+
+  constructor(
+    tableName: string,
+    oldColumnName: string,
+    columnName: string,
+    indexReplacements: readonly IndexReplacement[],
+  ) {
+    super();
+    this.tableName = tableName;
+    this.oldColumnName = oldColumnName;
+    this.columnName = columnName;
+    this.label = `Rename column ${oldColumnName} on ${tableName} to ${columnName}`;
+    this.indexReplacements = Object.freeze([...indexReplacements]);
+    this.companions = Object.freeze(indexReplacementCalls(indexReplacements));
+    this.freeze();
+  }
+
+  override toOps(lowerer?: ExecuteRequestLowerer): readonly Promise<Op>[] {
+    return [this.toOp(lowerer), ...this.companions.map((companion) => companion.toOp(lowerer))];
+  }
+
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    if (lowerer === undefined) {
+      throw sqliteError(
+        'MIGRATION.SQLITE_CONTROL_STACK_MISSING',
+        `RenameColumnCall.toOp: a lowerer is required on the SQLite planner path (column "${this.oldColumnName}" on table "${this.tableName}"). Pass the control adapter to createSqliteMigrationPlanner.`,
+        { meta: { factory: this.factoryName, tableName: this.tableName } },
+      );
+    }
+    return renameColumn(this.tableName, this.oldColumnName, this.columnName, lowerer);
+  }
+
+  renderTypeScript(): string {
+    return `...this.renameColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${jsonToTsSource(this.oldColumnName)}, to: ${jsonToTsSource(this.columnName)} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 export class RecreateTableCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'recreateTable' as const;
   readonly operationClass: MigrationOperationClass;
@@ -367,17 +487,26 @@ export class RecreateTableCall extends SqliteOpFactoryCallNode {
   readonly summary: string;
   readonly postchecks: readonly RecreatePostcheck[];
   readonly label: string;
+  /**
+   * The columns whose values the copy can change, because their type changes. The planner reads
+   * them to name what the recreate loses; they never reach the operation or `migration.ts`.
+   */
+  readonly lossyColumns: readonly string[];
 
-  constructor(args: {
-    tableName: string;
-    contractTable: SqliteTableSpec;
-    schemaColumnNames: readonly string[];
-    indexes: readonly SqliteIndexSpec[];
-    summary: string;
-    postchecks: readonly RecreatePostcheck[];
-    operationClass: MigrationOperationClass;
-  }) {
+  constructor(
+    args: {
+      tableName: string;
+      contractTable: SqliteTableSpec;
+      schemaColumnNames: readonly string[];
+      indexes: readonly SqliteIndexSpec[];
+      summary: string;
+      postchecks: readonly RecreatePostcheck[];
+      operationClass: MigrationOperationClass;
+    },
+    lossyColumns: readonly string[] = [],
+  ) {
     super();
+    this.lossyColumns = Object.freeze([...lossyColumns]);
     this.tableName = args.tableName;
     this.contractTable = args.contractTable;
     this.schemaColumnNames = args.schemaColumnNames;
@@ -570,6 +699,11 @@ export class CreateIndexCall extends SqliteOpFactoryCallNode {
     this.freeze();
   }
 
+  /** The id of the operation this call lowers to. */
+  get operationId(): string {
+    return `index.${this.tableName}.${this.indexName}`;
+  }
+
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
     if (lowerer === undefined) {
       throw sqliteError(
@@ -584,7 +718,7 @@ export class CreateIndexCall extends SqliteOpFactoryCallNode {
     const absent = await lowerer.lowerToExecuteRequest(checks.indexAbsent());
     const present = await lowerer.lowerToExecuteRequest(checks.indexPresent());
     return {
-      id: `index.${this.tableName}.${this.indexName}`,
+      id: this.operationId,
       label: `Create index ${this.indexName} on ${this.tableName}`,
       summary: `Creates index ${this.indexName} on ${this.tableName}`,
       operationClass: 'additive',
@@ -614,7 +748,7 @@ export class CreateIndexCall extends SqliteOpFactoryCallNode {
 
 export class DropIndexCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'dropIndex' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly tableName: string;
   readonly indexName: string;
   readonly label: string;
@@ -625,6 +759,11 @@ export class DropIndexCall extends SqliteOpFactoryCallNode {
     this.indexName = indexName;
     this.label = `Drop index ${indexName} on ${tableName}`;
     this.freeze();
+  }
+
+  /** The id of the operation this call lowers to. */
+  get operationId(): string {
+    return `dropIndex.${this.tableName}.${this.indexName}`;
   }
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
@@ -641,10 +780,10 @@ export class DropIndexCall extends SqliteOpFactoryCallNode {
     const present = await lowerer.lowerToExecuteRequest(checks.indexPresent());
     const absent = await lowerer.lowerToExecuteRequest(checks.indexAbsent());
     return {
-      id: `dropIndex.${this.tableName}.${this.indexName}`,
+      id: this.operationId,
       label: `Drop index ${this.indexName} on ${this.tableName}`,
       summary: `Drops index ${this.indexName} on ${this.tableName} which is not in the contract`,
-      operationClass: 'destructive',
+      operationClass: 'widening',
       target: {
         id: 'sqlite',
         details: buildTargetDetails('index', this.indexName, this.tableName),
@@ -676,7 +815,7 @@ export class DropIndexCall extends SqliteOpFactoryCallNode {
  * any future strategy that needs a placeholder data step can construct one
  * with its own id/label.
  *
- * `toOp()` always throws `MIGRATION.UNFILLED_PLACEHOLDER`: the planner cannot lower a stubbed
+ * `toOp()` always rejects with `MIGRATION.UNFILLED_PLACEHOLDER`: the planner cannot lower a stubbed
  * transform to a runtime op — the user must edit the rendered
  * `migration.ts` and re-emit.
  */
@@ -697,8 +836,8 @@ export class DataTransformCall extends SqliteOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(_lowerer?: Lowerer): Op {
-    throw errorUnfilledPlaceholder(this.label);
+  toOp(_lowerer?: Lowerer): Promise<Op> {
+    return unfilledPlaceholderOperation(this.label);
   }
 
   renderTypeScript(): string {
@@ -767,6 +906,7 @@ export type SqliteOpFactoryCall =
   | DropTableCall
   | RecreateTableCall
   | RenameTableCall
+  | RenameColumnCall
   | AddColumnCall
   | DropColumnCall
   | CreateIndexCall

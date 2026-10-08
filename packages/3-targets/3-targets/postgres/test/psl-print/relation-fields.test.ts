@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { buildModels, fieldText, INT_COLUMN, table } from './print-support';
 
 describe('relations', () => {
-  function postAndUser(foreignKey: Record<string, unknown>) {
+  function postAndUser(
+    foreignKey: Record<string, unknown>,
+    keys: {
+      readonly indexes?: readonly unknown[];
+      readonly uniques?: readonly unknown[];
+      readonly primaryKey?: { readonly columns: readonly string[]; readonly name?: string };
+    } = {},
+  ) {
     return buildModels({
       models: {
         User: {
@@ -34,7 +41,9 @@ describe('relations', () => {
         user: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }),
         post: table({
           columns: { id: INT_COLUMN, authorId: INT_COLUMN },
-          primaryKey: { columns: ['id'] },
+          primaryKey: keys.primaryKey ?? { columns: ['id'] },
+          indexes: keys.indexes ?? [],
+          uniques: keys.uniques ?? [],
           foreignKeys: [
             {
               source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
@@ -60,6 +69,89 @@ describe('relations', () => {
       'author User @relation(fields: [authorId], references: [id], map: "post_author_fkey", index: false)',
     );
   });
+
+  it('names an index the default backing index would not be', () => {
+    const models = postAndUser(
+      { index: { name: 'post_author_live_29e42dbc' } },
+      {
+        indexes: [
+          {
+            name: 'post_author_live_29e42dbc',
+            prefix: 'post_author_live',
+            columns: ['authorId'],
+            where: 'id > 0',
+            unique: false,
+          },
+        ],
+      },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id], index: "post_author_live")',
+    );
+  });
+
+  it('writes no index argument when the default backing index is the index that backs the foreign key', () => {
+    const models = postAndUser(
+      { index: { name: 'post_authorId_idx_e47547ed' } },
+      {
+        indexes: [
+          {
+            name: 'post_authorId_idx_e47547ed',
+            prefix: 'post_authorId_idx',
+            columns: ['authorId'],
+            unique: false,
+          },
+        ],
+      },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id])',
+    );
+  });
+
+  it('names a unique constraint whose first columns are the foreign key columns', () => {
+    const models = postAndUser(
+      { index: { unique: ['authorId', 'id'] } },
+      {
+        uniques: [
+          { columns: ['authorId'], name: 'post_author_only_key' },
+          { columns: ['authorId', 'id'], name: 'post_author_key' },
+        ],
+      },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id], index: "post_author_key")',
+    );
+  });
+
+  it('writes no index argument when a unique constraint backs the foreign key', () => {
+    const models = postAndUser(
+      { index: { unique: ['authorId'] } },
+      { uniques: [{ columns: ['authorId'] }] },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id])',
+    );
+  });
+
+  it.each([
+    ['primary key', { primaryKey: { columns: ['authorId', 'id'] } }, { primaryKey: true }],
+    [
+      'unique constraint',
+      { uniques: [{ columns: ['authorId', 'id'] }] },
+      { unique: ['authorId', 'id'] },
+    ],
+  ] as const)(
+    'refuses a foreign key backed by an unnamed %s that only starts with its columns',
+    (_label, keys, index) => {
+      expect(() => postAndUser({ index }, keys)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.PRINT_UNSUPPORTED',
+          meta: { model: 'Post', field: 'author' },
+        }),
+      );
+    },
+  );
 
   it('prints the other side as a list with no arguments', () => {
     const models = postAndUser({ onDelete: 'cascade', onUpdate: 'cascade' });

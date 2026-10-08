@@ -105,6 +105,48 @@ model Token {
     ]);
   });
 
+  it('an Inet default in any form PostgreSQL reads is stored in the form PostgreSQL writes', async () => {
+    const forms = [
+      ['10.0.0.1/32', '10.0.0.1'],
+      ['::FFFF:10.0.0.1', '::ffff:10.0.0.1'],
+      ['2001:0DB8:0:0:0:0:0:1/64', '2001:db8::1/64'],
+      ['10.0.0.0/8', '10.0.0.0/8'],
+    ] as const;
+    const authored = await authorSqlContractFromPsl(`
+model Host {
+  id Int @id
+${forms.map(([form], index) => `  a${index} Inet @default("${form}")`).join('\n')}
+}
+`);
+
+    expect({
+      diagnostics: authored.diagnostics,
+      defaults: forms.map(
+        (_, index) => findStorageColumn(authored.contract!, `a${index}`)?.['default'],
+      ),
+    }).toEqual({
+      diagnostics: [],
+      defaults: forms.map(([, printed]) => ({ kind: 'literal', value: printed })),
+    });
+  });
+
+  it('an Inet default PostgreSQL does not read is refused', async () => {
+    const authored = await authorSqlContractFromPsl(`
+model Host {
+  id Int  @id
+  a  Inet @default("not an address")
+}
+`);
+
+    expect(authored.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_INVALID_LITERAL',
+        message:
+          'Field "Host.a": "not an address" is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.',
+      },
+    ]);
+  });
+
   it('a VarChar default longer than its length is refused', async () => {
     const authored = await authorSqlContractFromPsl(`
 model Token {
@@ -191,6 +233,66 @@ model Task {
         'enum "Priority" member "Low": Expected a quoted string',
       ],
       [
+        'a numeric member with a leading zero',
+        '  @@type("pg/numeric@1")\n  Low = "01.5"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "1.5", as PostgreSQL writes this value',
+      ],
+      [
+        'a numeric member written as negative zero',
+        '  @@type("pg/numeric@1")\n  Low = "-0"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/numeric@1": pg/numeric@1 JSON value must be "0", as PostgreSQL writes this value',
+      ],
+      [
+        'an int8 member with a leading zero',
+        '  @@type("pg/int8@1")\n  Low = "007"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        `enum "Priority" member "Low" was rejected by codec "pg/int8@1": pg/int8@1 JSON value must be "7", the integer's decimal text without leading zeros or a minus sign on zero`,
+      ],
+      [
+        'a string timestamp codec, which an enum cannot use',
+        '  @@type("pg/timestamp-string@1")\n  Low = "2024-01-02T03:04:05"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" cannot use the codec "pg/timestamp-string@1". A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member. Use pg/timestamp-temporal@1, whose members are Temporal values.',
+      ],
+      [
+        'a timestamptz string codec, which an enum cannot use',
+        '  @@type("pg/timestamptz-string@1")\n  Low = "2024-01-02T03:04:05Z"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        `enum "Priority" cannot use the codec "pg/timestamptz-string@1". A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member. Use pg/timestamptz-temporal@1, whose members are Temporal values.`,
+      ],
+      [
+        'a bytea codec, which an enum cannot use',
+        '  @@type("pg/bytea@1")\n  Low = "AQI="',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" cannot use the codec "pg/bytea@1". The contract stores a bytea value as base64 text, which PostgreSQL reads as the bytes of that text, so no CHECK can compare a value with the members. No enum can use a bytea codec; use a text enum instead.',
+      ],
+      [
+        'a tsquery codec, which an enum cannot use',
+        '  @@type("pg/tsquery@1")\n  Low = "a & b"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        `enum "Priority" cannot use the codec "pg/tsquery@1". PostgreSQL normalises the query text, so a member as written is not the value a query reads back: it prints a & b as 'a' & 'b'. No enum can use a tsquery codec; use a text enum instead.`,
+      ],
+      [
+        'a json codec, which an enum cannot use',
+        '  @@type("pg/json@1")\n  Low = "low"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" cannot use the codec "pg/json@1". The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.',
+      ],
+      [
+        'an inet member with /32',
+        '  @@type("pg/inet@1")\n  Low = "10.0.0.1/32"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be "10.0.0.1", as PostgreSQL writes this address',
+      ],
+      [
+        'an inet member that is not an address',
+        '  @@type("pg/inet@1")\n  Low = "not an address"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/inet@1": pg/inet@1 JSON value must be an IP address as PostgreSQL writes it',
+      ],
+      [
         'a fraction under an integer codec',
         '  @@type("pg/int4@1")\n  Low = 1.5',
         'PSL_EXTENSION_INVALID_VALUE',
@@ -221,7 +323,6 @@ model Task {
       ['pg/int8number@1', '"42"', '42'],
       ['pg/unboundedint@1', '"9223372036854775808"', '9223372036854775808'],
       ['pg/numeric@1', '"1.50"', '1.50'],
-      ['pg/json@1', '"low"', 'low'],
       ['pg/jsonb@1', '"low"', 'low'],
     ])('accepts a %s member written as %s', async (codecId, written, stored) => {
       expect(await storedEnumValues(codecId, [`Low = ${written}`])).toEqual({ values: [stored] });

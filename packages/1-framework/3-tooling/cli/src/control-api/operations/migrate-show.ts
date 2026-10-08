@@ -128,7 +128,7 @@ export async function executeMigrateShowPlan(
   if (!loaded.ok) {
     return notOk(loaded.failure);
   }
-  const { aggregate, contractHash } = loaded.value;
+  const { aggregate, contractHash, storageNameOf } = loaded.value;
   const appGraph = aggregate.app.graph();
 
   // Resolve the --to target (defaults to the on-disk contract, same as migrate).
@@ -245,6 +245,7 @@ export async function executeMigrateShowPlan(
       targetHash: spaceTargetHash,
       refInvariants: spaceRefInvariants,
       liveMarker,
+      storageNameOf,
     });
 
     if (outcome.kind === 'at-head') {

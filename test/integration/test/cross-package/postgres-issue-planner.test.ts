@@ -196,19 +196,17 @@ describe('planIssues', () => {
       expect(calls).toHaveLength(3);
       expect(calls[0]).toMatchObject({ factoryName: 'addColumn' });
       expect(calls[1]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
     });
 
-    it('DataTransformCall.toOp() throws MIGRATION.UNFILLED_PLACEHOLDER', () => {
+    it('DataTransformCall.toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER', async () => {
       const result = planAgainst(contractWithStatus(), actualWithoutStatus());
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const dtCall = result.value.calls[1]!;
       expect(dtCall.factoryName).toBe('dataTransform');
-      expect(() => dtCall.toOp()).toThrow(
-        expect.objectContaining({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' }),
-      );
+      await expect(dtCall.toOp()).rejects.toMatchObject({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' });
     });
   });
 
@@ -273,7 +271,7 @@ describe('planIssues', () => {
       const calls = result.value.calls;
       expect(calls).toHaveLength(2);
       expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
     });
   });
 
@@ -346,7 +344,10 @@ describe('planIssues', () => {
       if (!result.ok) throw new Error('expected ok');
       const calls = result.value.calls;
       expect(calls).toHaveLength(1);
-      expect(calls[0]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect(calls[0]).toMatchObject({
+        factoryName: 'alterColumnType',
+        operationClass: 'widening',
+      });
     });
 
     it('emits DataTransformCall + AlterColumnTypeCall for unsafe change', () => {
@@ -376,7 +377,10 @@ describe('planIssues', () => {
       const calls = result.value.calls;
       expect(calls).toHaveLength(2);
       expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect(calls[1]).toMatchObject({
+        factoryName: 'alterColumnType',
+        operationClass: 'destructive',
+      });
     });
   });
 
@@ -700,6 +704,8 @@ describe('planIssues', () => {
         schema: actual,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: 'app',
         snapshotsImportPath: '../../snapshots',

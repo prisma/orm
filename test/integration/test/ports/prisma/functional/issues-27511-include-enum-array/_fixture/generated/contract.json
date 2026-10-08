@@ -253,6 +253,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "workspace_member_role_memberId_idx_76b3c263"
+                  },
                   "source": {
                     "columns": [
                       "memberId"
@@ -269,6 +272,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "workspace_member_role_roleId_idx_ffccc9a4"
+                  },
                   "source": {
                     "columns": [
                       "roleId"
@@ -314,8 +320,8 @@
             "workspace_role": {
               "checks": [
                 {
-                  "expression": "array_remove(\"permissions\"::text[], NULL) <@ ARRAY['HELLO', 'WORLD']::text[]",
-                  "name": "workspace_role_permissions_check_201b87fe",
+                  "expression": "array_remove(\"permissions\", NULL) <@ '{\"HELLO\",\"WORLD\"}'",
+                  "name": "workspace_role_permissions_check_27418ee9",
                   "prefix": "workspace_role_permissions_check"
                 },
                 {
@@ -377,7 +383,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6cfb0c8ca972725b4a736582c313692cb7522518b4158a82507209db4ffa4248"
+    "storageHash": "c8a8fd8f64f8e1587979b7f400e8a7303ea2c85156259a77a6ba0cdf0fe62345"
   },
   "capabilities": {
     "postgres": {

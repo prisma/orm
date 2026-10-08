@@ -12,6 +12,7 @@ import {
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { sqliteError } from './errors';
+import { quoteIdentifier } from './sql-utils';
 
 export type SqliteDatabaseInput = {
   readonly id: string;
@@ -65,7 +66,7 @@ export class SqliteDatabase extends SqlNamespaceBase {
   }
 
   qualifyTable(tableName: string): string {
-    return `"${tableName}"`;
+    return quoteIdentifier(tableName);
   }
 }
 

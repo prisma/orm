@@ -4,6 +4,7 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
+import type * as MongoRuntime from '@internal/mongo-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>;
@@ -31,7 +32,8 @@ vi.mock('@internal/target-mongo/runtime', () => ({
   default: mocks.mongoRuntimeTarget,
 }));
 
-vi.mock('@internal/mongo-runtime', () => ({
+vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
+  buildMongoEnums: (await importOriginal<typeof MongoRuntime>()).buildMongoEnums,
   createMongoExecutionStack: mocks.createMongoExecutionStack,
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,
@@ -531,14 +533,39 @@ describe('mongo() facade', () => {
       },
     } as unknown as AnyMongoContract;
 
+    const stringCodec = {
+      decodeJson: (json: unknown) => json,
+      encodeJson: (value: unknown) => value,
+    };
+
     beforeEach(() => {
       mocks.deserializeContract.mockReturnValue(contractWithEnum);
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        codecs: { get: (id: string) => (id === 'mongo/string@1' ? stringCodec : undefined) },
+      });
     });
 
     function roleAccessor() {
       const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
       return db.enums['Role']!;
     }
+
+    it('refuses to build a client whose runtime has no codec for an enum', () => {
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        codecs: { get: () => undefined },
+      });
+      expect(() =>
+        mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          message:
+            "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
+        }),
+      );
+    });
 
     it('exposes the enum accessor at db.enums.Role', () => {
       expect(roleAccessor().values).toEqual(['user', 'admin']);

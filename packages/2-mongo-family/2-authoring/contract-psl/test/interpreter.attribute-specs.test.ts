@@ -239,7 +239,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
           ownerId ObjectId
           address Address
           @@map("items")
-          @@index([email(sort: Desc)])
+          @@index([sort(email, Desc)])
           @@unique([ownerId, email])
           @@textIndex([email])
         }
@@ -250,6 +250,88 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       `),
     ).toEqual([]);
   });
+});
+
+describe('explicit index sort functions', () => {
+  it.each(['index', 'unique', 'textIndex'])('normalizes compound @@%s keys', (attribute) => {
+    const result = interpret(`model Event {
+ id ObjectId @id @map("_id")
+ title String @map("stored_title")
+ sort String @map("stored_sort")
+ wildcard String @map("stored_wildcard")
+ @@map("events")
+ @@${attribute}([title, sort(sort, Asc), sort(wildcard, Desc)])
+}`);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            entries: {
+              collection: {
+                events: {
+                  indexes: [
+                    expect.objectContaining({
+                      keys: [
+                        {
+                          field: 'stored_title',
+                          direction: attribute === 'textIndex' ? 'text' : 1,
+                        },
+                        { field: 'stored_sort', direction: 1 },
+                        { field: 'stored_wildcard', direction: -1 },
+                      ],
+                      ...(attribute === 'unique' && { unique: true }),
+                    }),
+                  ],
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+  });
+
+  describe.each(['index', 'unique', 'textIndex'])(
+    '@@%s rejects invalid sort calls',
+    (attribute) => {
+      it('rejects an unknown sorted field through field binding', () => {
+        expect(
+          diagnosticsOf(`model Event {
+ id ObjectId @id @map("_id")
+ @@${attribute}([sort(missing, Desc)])
+}`),
+        ).toEqual([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: 'Cannot find field "missing" on "Event"',
+          }),
+        ]);
+      });
+      it.each([
+        'title(sort: Desc)',
+        'sort(sort: Desc)',
+        'wildcard(sort: Desc)',
+        'sort(title, Invalid)',
+        'sort(title, Desc, nulls: Last)',
+        'sort(title, Desc, Last)',
+      ])('rejects %s', (element) => {
+        expect(
+          diagnosticsOf(`model Event {
+ id ObjectId @id @map("_id")
+ title String
+ sort String
+ wildcard String
+ @@${attribute}([${element}])
+}`),
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX' }),
+          ]),
+        );
+      });
+    },
+  );
 });
 
 describe('an index path into a nested document', () => {
@@ -271,7 +353,7 @@ describe('an index path into a nested document', () => {
           title   String
           address Address
           @@index([title, address.city])
-          @@index([address.city(sort: Desc)])
+          @@index([sort(address.city, Desc)])
           @@unique([address.geo.lat])
           @@textIndex([address.city])
         }
@@ -305,7 +387,7 @@ describe('an index path into a nested document', () => {
           id    ObjectId @id @map("_id")
           title String
           @@index([title.value])
-          @@index([missing.city(sort: Desc)])
+          @@index([sort(missing.city, Desc)])
         }
       `).map((diagnostic) => diagnostic.message),
     ).toEqual([

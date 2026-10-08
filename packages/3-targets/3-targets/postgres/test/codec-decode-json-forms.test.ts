@@ -128,13 +128,21 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
-    accepts: ['999', '-999', '007'],
-    rejects: ['1000', '1.5'],
+    accepts: ['999', '-999', '7'],
+    rejects: ['1000', '1.5', '007', '-0'],
   },
   {
     codec: pgNumericDescriptor.factory({})(ctx),
-    accepts: ['123456789012345678901234567890.123', 'Infinity', 'NaN'],
-    rejects: ['1e3', 'abc', ''],
+    accepts: [
+      '123456789012345678901234567890.123',
+      'Infinity',
+      'NaN',
+      '0',
+      '0.00',
+      '-0.10',
+      '1.50',
+    ],
+    rejects: ['1e3', 'abc', '', '01.5', '00', '-0', '-0.00', '-007.50'],
   },
   {
     codec: pgIntDescriptor.factory()(ctx),
@@ -162,8 +170,19 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgInetDescriptor.factory()(ctx),
-    accepts: ['192.168.0.1', '::1', '10.0.0.0/8'],
-    rejects: [192, null],
+    accepts: ['192.168.0.1', '::1', '10.0.0.0/8', '::ffff:10.0.0.1', '2001:db8::1/64'],
+    rejects: [
+      192,
+      null,
+      '10.0.0.1/32',
+      '::1/128',
+      '::FFFF:10.0.0.1',
+      '2001:0db8::1',
+      '0:0:0:0:0:0:0:1',
+      '010.0.0.1',
+      'not an address',
+      '',
+    ],
   },
   {
     codec: pgTsqueryDescriptor.factory()(ctx),
@@ -386,22 +405,6 @@ describe('decodeJson reads the stored JSON form of its type and refuses any othe
       }
     });
   }
-});
-
-describe('pg/uuid@1 encodeJson', () => {
-  it('writes a UUID in the form PostgreSQL writes, which decodeJson reads', () => {
-    const codec = pgUuidDescriptor.factory()(ctx);
-    const written = [
-      'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
-      '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}',
-      'a0eebc999c0b4ef8bb6d6bb9bd380a11',
-    ].map((value) => codec.encodeJson(value));
-    expect(written.map((json) => codec.decodeJson(json))).toEqual([
-      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    ]);
-  });
 });
 
 describe('the length and scale checks on a long run of padding', () => {

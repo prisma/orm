@@ -13,6 +13,8 @@ import type {
 import type {
   ComposedAuthoringHelpers,
   ContractInput,
+  EnumTypeHandle,
+  MergeEnums,
   ModelLike,
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
@@ -25,11 +27,13 @@ type SqlitePack = typeof sqlitePack;
 
 type TypesConstraint = Record<string, AuthoredStorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
+type EnumsConstraint = Record<string, EnumTypeHandle>;
 
 type SqliteResult<
   Types extends TypesConstraint,
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
+  Enums extends EnumsConstraint,
 > = ReturnType<
   typeof buildBoundContract<
     SqlFamily,
@@ -38,6 +42,7 @@ type SqliteResult<
       readonly types?: Types;
       readonly models?: Models;
       readonly extensions?: Extensions;
+      readonly enums?: Enums;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
       readonly codecLookup: CodecLookupWithDescriptors;
       readonly dataTypeLookup: DataTypeLookup;
@@ -49,7 +54,14 @@ type SqliteBaseScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = Omit<
   ContractInput<SqlFamily, SqlitePack, Record<never, never>, Record<never, never>, Extensions>,
-  'family' | 'target' | 'types' | 'models' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
+  | 'family'
+  | 'target'
+  | 'types'
+  | 'models'
+  | 'enums'
+  | 'createNamespace'
+  | 'codecLookup'
+  | 'dataTypeLookup'
 > & {
   /** Overrides the codecs of the target and the extensions. */
   readonly codecLookup?: CodecLookupWithDescriptors;
@@ -61,14 +73,19 @@ type SqliteDefinition<
   Types extends TypesConstraint,
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
+  Enums extends EnumsConstraint,
 > = SqliteBaseScaffold<Extensions> & {
   readonly types?: Types;
   readonly models?: Models;
+  readonly enums?: Enums;
 };
 
 type SqliteScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
-> = SqliteBaseScaffold<Extensions>;
+  Enums extends EnumsConstraint,
+> = SqliteBaseScaffold<Extensions> & {
+  readonly enums?: Enums;
+};
 
 const target: TargetPackRef<'sql', 'sqlite'> = sqlitePack;
 
@@ -76,29 +93,36 @@ export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
->(definition: SqliteDefinition<Types, Models, Extensions>): SqliteResult<Types, Models, Extensions>;
+  const Enums extends EnumsConstraint = Record<never, never>,
+>(
+  definition: SqliteDefinition<Types, Models, Extensions, Enums>,
+): SqliteResult<Types, Models, Extensions, Enums>;
 
 export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
+  const ScaffoldEnums extends EnumsConstraint = Record<never, never>,
+  const FactoryEnums extends EnumsConstraint = Record<never, never>,
 >(
-  scaffold: SqliteScaffold<Extensions>,
+  scaffold: SqliteScaffold<Extensions, ScaffoldEnums>,
   factory: (helpers: ComposedAuthoringHelpers<SqlFamily, SqlitePack, Extensions>) => {
     readonly types?: Types;
     readonly models?: Models;
+    readonly enums?: FactoryEnums;
   },
-): SqliteResult<Types, Models, Extensions>;
+): SqliteResult<Types, Models, Extensions, MergeEnums<ScaffoldEnums, FactoryEnums>>;
 
 // Implementation — delegates to buildBoundContract which pre-binds family/target,
 // carrying zero casts at this layer.
 export function defineContract(
-  definition: SqliteDefinition<TypesConstraint, ModelsConstraint, undefined>,
+  definition: SqliteDefinition<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint>,
   factory?: (helpers: ComposedAuthoringHelpers<SqlFamily, SqlitePack, undefined>) => {
     readonly types?: TypesConstraint;
     readonly models?: ModelsConstraint;
+    readonly enums?: EnumsConstraint;
   },
-): SqliteResult<TypesConstraint, ModelsConstraint, undefined> {
+): SqliteResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
   const extensionPacks: readonly ExtensionPackRef<'sql', string>[] = Object.values(
     definition.extensions ?? {},
   );

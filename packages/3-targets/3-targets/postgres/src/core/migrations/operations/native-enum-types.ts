@@ -53,7 +53,7 @@ export async function dropNativeEnumType(
   return {
     id: `dropNativeEnumType.${typeName}`,
     label: `Drop enum type "${typeName}"`,
-    operationClass: 'destructive',
+    operationClass: 'widening',
     target: targetDetails('type', typeName, schemaName),
     precheck: [],
     execute: [step(`drop enum type "${typeName}"`, statement.sql, statement.params)],

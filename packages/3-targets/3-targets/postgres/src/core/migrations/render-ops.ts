@@ -4,6 +4,7 @@ import type { MigrationPlanOperation, OpFactoryCall } from '@internal/framework-
 import { blindCast } from '@internal/utils/casts';
 import { isThenable } from '@internal/utils/promise';
 import { postgresError } from '../errors';
+import { isPostgresOpFactoryCall } from './op-factory-call';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<PostgresPlanTargetDetails>;
@@ -29,22 +30,36 @@ function assertPostgresOp(op: MigrationPlanOperation, callFactoryName: string): 
   }
 }
 
+function checkedOp(
+  opOrPromise: MigrationPlanOperation | Promise<MigrationPlanOperation>,
+  callFactoryName: string,
+): Op | Promise<Op> {
+  if (isThenable(opOrPromise)) {
+    const checked = opOrPromise.then((op) => {
+      assertPostgresOp(op, callFactoryName);
+      return op;
+    });
+    // A reader may take a plan's operations without awaiting each one, as with a placeholder's.
+    checked.catch(() => undefined);
+    return checked;
+  }
+  assertPostgresOp(opOrPromise, callFactoryName);
+  return opOrPromise;
+}
+
 export function renderOps(
   calls: readonly OpFactoryCall[],
   lowerer?: ExecuteRequestLowerer,
 ): (Op | Promise<Op>)[] {
-  return calls.map((c) => {
-    const opOrPromise = blindCast<
-      { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
-      'PG OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the PG target overrides with this extended signature'
-    >(c).toOp(lowerer);
-    if (isThenable(opOrPromise)) {
-      return opOrPromise.then((op) => {
-        assertPostgresOp(op, c.factoryName);
-        return op;
-      });
-    }
-    assertPostgresOp(opOrPromise, c.factoryName);
-    return opOrPromise;
+  return calls.flatMap((c) => {
+    const lowered = isPostgresOpFactoryCall(c)
+      ? c.toOps(lowerer)
+      : [
+          blindCast<
+            { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
+            'PG OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the PG target overrides with this extended signature'
+          >(c).toOp(lowerer),
+        ];
+    return lowered.map((opOrPromise) => checkedOp(opOrPromise, c.factoryName));
   });
 }

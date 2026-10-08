@@ -10,7 +10,7 @@ import postgresPack from '@internal/target-postgres/pack';
 const dataTypeLookup = assembleDataTypes([postgresPack]).lookup;
 
 /**
- * The field builders of the `defineContract` callback for Postgres, without extensions: `field.text()`, `field.temporal.timestamptz()`, `field.uuidString()`, and `field.column(columnType)`. Use it outside a contract, for example to declare the fields of a scope.
+ * The field builders of the `defineContract` callback for Postgres, without extensions: `field.text()`, `field.temporal.timestamptz()`, `field.uuidString()`, and `field.column(columnType)`. Use it outside a contract, for example to declare the fields of a query fragment.
  */
 export const field: ComposedAuthoringHelpers<
   typeof sqlFamilyPack,

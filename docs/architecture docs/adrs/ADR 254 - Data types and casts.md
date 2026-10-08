@@ -384,6 +384,14 @@ model Place {
 - **Enum members as string values.** A member name is a reference to a declaration, resolved in scope like a field name.
 - **A vector type casting from the JSON type.** It matches on storage shape; a vector is several numbers.
 
+## Amendment (October 7, 2026) — a stored value decodes to the value a query returns
+
+**The rule.** The value a codec's `decodeJson` reads from a contract's stored form equals the value a query returns for it, and `db.enums` compares with that value. The stored form is not always the text the database prints: `pg/bytea@1` stores base64 where PostgreSQL prints hex, and timestamps are stored in ISO 8601 where PostgreSQL prints `2024-01-02 03:04:05+00`. Where the database normalises a spelling, the canonical form is the normalised spelling: `pg/uuid@1` writes lower case, the integer codecs drop leading zeros and the minus sign on zero, and `pg/inet@1` writes an address as PostgreSQL prints it. Normalisation belongs to the data type's `toCanonicalForm`; strictness, refusing any other spelling, belongs to `decodeJson`.
+
+**`pg/inet` and `pg/numeric`.** `pg/inet` declares its canonical form on the data type, as the rule says. `pg/numeric` is the exception: its codec's `encodeJson` writes the numeral as PostgreSQL prints it and its `decodeJson` refuses other spellings, and the data type declares no canonical form. The reason is `resolvedDefaultsEqual`, which compares a numeric default with the database's by the column's scale and returns early when the type has a canonical form, so a canonical form would skip the scale comparison. [TML-3479](https://linear.app/prisma-company/issue/TML-3479) removes the exception, by applying the scale rule after the canonical form and declaring one for `pg/numeric`.
+
+**Enum eligibility.** An enum compares values with its members, so every enum authoring surface, in TypeScript and PSL and in both families, refuses a codec whose descriptor does not declare the `equality` trait. A codec that declares it but whose values read back never equal a member as the contract stores it sets `enumRefusal` on its descriptor, naming the reason and what to use instead: on Postgres, the string timestamp codecs and `pg/bytea@1`. A codec without the trait may set `enumRefusal` too, to replace the generic reason with a specific one: `pg/json@1` says its type has no equality operator and names `pg/jsonb@1`, and `pg/tsquery@1` says PostgreSQL normalises query text. `pg/tsquery@1` declares no `equality` although PostgreSQL has `tsquery = tsquery`, because comparing queries means nothing to an application and no contract can author a `tsquery` column. `enumRefusalOf` reads both rules, and every surface refuses through it.
+
 ## Not decided here
 
 - Whether a codec writes the `sql` representation of a value (the DDL half of ADR 184).

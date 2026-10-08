@@ -1,8 +1,8 @@
 import {
-  backingIndexColumnKeys,
-  isBackedByColumnKeys,
+  derivedBackingIndexIsRedundant,
+  leadingBackingObjectName,
 } from '@internal/sql-contract/foreign-key-materialization';
-import type { SqlForeignKeyIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import type { SqlForeignKeyIR, SqlIndexIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { InternalError } from '@internal/utils/internal-error';
 import { deriveBackRelationFieldName, deriveRelationFieldName, pluralize } from './name-transforms';
 import type { RelationField } from './printer-config';
@@ -163,15 +163,14 @@ function deriveRelationName(
  * `tables` (e.g. a cross-space reference into another contract) can reuse the
  * same normalization instead of duplicating it.
  *
- * `hostTable` is the table the FK is declared on (i.e. `table`, not the
- * referenced parent) — its own indexes/uniques/primary key are what a
- * backing index for this FK would be. When none of them exactly match the
- * FK's source columns (in order), `index: false` is stamped so the emitted
- * `@relation` opts out of the framework's default derived backing-index
- * expectation, matching what `db verify` will find live. Passing the table
- * is optional so existing single-FK callers (e.g. cross-space resolution
- * before a host table reference is threaded through) can omit it and keep
- * the framework default.
+ * `hostTable` is the table the FK is declared on (not the referenced
+ * parent). `contract emit` derives a backing index for every relation and
+ * drops it again when the table has an identical index or a key serving its
+ * lookups, by the same rule (`derivedBackingIndexIsRedundant`). Otherwise
+ * the relation names a live named key or plain index whose first columns are
+ * the foreign key's (`leadingBackingObjectName`), or says `index: false`, so
+ * the emitted contract expects no index the database lacks. Without a host
+ * table, the relation keeps the default.
  */
 export function buildChildRelationField(
   fieldName: string,
@@ -183,22 +182,7 @@ export function buildChildRelationField(
 ): RelationField {
   const onDelete = fk.onDelete && fk.onDelete !== DEFAULT_ON_DELETE ? fk.onDelete : undefined;
   const onUpdate = fk.onUpdate && fk.onUpdate !== DEFAULT_ON_UPDATE ? fk.onUpdate : undefined;
-  const index =
-    hostTable &&
-    !isBackedByColumnKeys(
-      fk.columns,
-      // Only indexes the inferrer actually emits can back the FK in the
-      // emitted contract: partial indexes (and expression indexes, which
-      // carry no column tuple) are not emitted yet, so
-      // they must not suppress the explicit `index: false`.
-      backingIndexColumnKeys({
-        indexes: hostTable.indexes.filter((i) => i.where === undefined),
-        uniques: hostTable.uniques,
-        primaryKey: hostTable.primaryKey,
-      }),
-    )
-      ? false
-      : undefined;
+  const index = hostTable === undefined ? undefined : relationIndexArgument(fk.columns, hostTable);
 
   return {
     fieldName,
@@ -214,6 +198,21 @@ export function buildChildRelationField(
     onUpdate: onUpdate ? REFERENTIAL_ACTION_PSL[onUpdate] : undefined,
     index,
   };
+}
+
+function relationIndexArgument(
+  columns: readonly string[],
+  hostTable: SqlTableIR,
+): false | string | undefined {
+  const table = {
+    indexes: hostTable.indexes,
+    nodeOf: (index: SqlIndexIR) => index,
+    nameOf: (index: SqlIndexIR) => index.name,
+    uniques: hostTable.uniques,
+    primaryKey: hostTable.primaryKey,
+  };
+  if (derivedBackingIndexIsRedundant(columns, table)) return undefined;
+  return leadingBackingObjectName(columns, table) ?? false;
 }
 
 function resolveUniqueFieldName(

@@ -211,6 +211,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
                   "source": {
@@ -323,7 +326,7 @@
         "id": "public"
       }
     },
-    "storageHash": "7b2f0439b0d574a75fbc11105291e386a3dd903c85b764ac06d862c9d880057e",
+    "storageHash": "b56cf4366991811599174a61a05f149d07cd45829f09a42c74b6f35d4ac804ea",
     "types": {
       "Email": {
         "codecId": "pg/text@1",

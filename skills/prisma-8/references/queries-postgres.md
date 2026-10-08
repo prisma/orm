@@ -309,7 +309,7 @@ The same holds for an `if` with an early return, a `switch`, a loop and a reassi
 A custom collection class gives a model its own named queries. Extend `Collection`, register the class with `orm({ collections })`, and build that client inside the request from `db.runtime()` and `db.context`:
 
 ```typescript
-import { Collection, type Filtered, type Ordered, orm, type Scope } from '@prisma/orm-postgres/orm-client';
+import { Collection, type Filtered, type Fragment, type Ordered, orm } from '@prisma/orm-postgres/orm-client';
 import type { Contract } from './prisma/contract.d';
 
 class PostCollection extends Collection<Contract, 'Post'> {
@@ -341,10 +341,10 @@ After `.select(...)` or `.variant(...)` the class methods are gone: those return
 
 Inside a class body, a class method called on the result of another call loses what that call established. So a class method whose body chains two class methods loses the first call's facts for every caller: with `latest() { return this.byAuthor(id).newestFirst(); }`, `Post.latest()` is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
-`with(fn)` calls a function with the collection and returns its result. A pure filter is `where(rowFragment)`; `with` is for what `where` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant. A function from a collection to a collection is a scope, of type `Scope<In, Out>`, so a query can be written once and applied to any collection of that class:
+`with(fn)` calls a function with the collection and returns its result. The function is a query fragment, described in Workflow — Query fragments below, of type `Fragment<In, Out>`, so a query can be written once and applied to any collection of that class:
 
 ```typescript
-const newest: Scope<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
+const newest: Fragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
 await Post.with(newest).limit(20).all();
 ```
 
@@ -358,17 +358,17 @@ function deleteMatching(posts: Filtered<PostCollection>) {
 await deleteMatching(Post.byAuthor(userId)).toArray();
 ```
 
-## Workflow — Scopes
+## Workflow — Query fragments
 
-A piece of a query used in several places is a function. Do not build a filter object and spread it into each query; write a function and pass it to `.where(...)`, `.orderBy(...)` or `.with(...)`. A function from a collection to a collection is a **scope**, and `.with(...)` runs it. A pure filter is `where(rowFragment)`; `with` is for what `where` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant.
+A piece of a query used in several places is a function. Do not build a filter object and spread it into each query; write a function and pass it to `.where(...)`, `.orderBy(...)` or `.with(...)`. A **row fragment** is a function of the model accessor, and `.where(...)` and `.orderBy(...)` take it. A **query fragment** (a **fragment** for short) is a function from a collection to a collection, and `.with(...)` runs it. A **scope** is a fragment that only imposes conditions on the query, such as `createdSince` below, and is also run with `.with(...)`. When the condition is a function of one row and needs no declared fields, pass a row fragment to `.where(...)`. When the same condition should apply to every model that has some fields, write a scope: it declares the fields, checks them at run time, and returns the collection with the `Filtered` fact. `.with(...)` also runs what `.where(...)` cannot express, such as a shared `select` and `include`, an order, a limit or offset, or a variant.
 
-**The same filter on several models.** Define a scope with `db.orm.scope(fields, body)`. Declare each field the scope needs with the same builder the schema uses, from the `field` that `@prisma/orm-postgres/contract-builder` exports, adding `.optional()` for a field that may be null. The body sees only those fields:
+**The same filter on several models.** Define a scope with `db.orm.fragment(fields, body)`; the method is named `fragment` because it cannot know whether the body only filters. Declare each field the fragment needs with the same builder the schema uses, from the `field` that `@prisma/orm-postgres/contract-builder` exports, adding `.optional()` for a field that may be null. The body sees only those fields:
 
 ```typescript
 import { field } from '@prisma/orm-postgres/contract-builder';
 
 const createdSince = (since: Temporal.Instant) =>
-  db.orm.scope({ createdAt: field.temporal.timestamptz() }, (rows) =>
+  db.orm.fragment({ createdAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((r) => r.createdAt.gte(since)),
   );
 
@@ -376,7 +376,7 @@ await db.orm.public.User.with(createdSince(since)).all();
 await db.orm.public.Post.with(createdSince(since)).deleteAll();
 ```
 
-Pick the builder whose codec matches the field's codec in `contract.d.ts`: a PSL `DateTime` is `field.temporal.timestamptz()` (`pg/timestamptz-temporal@1`), a `String` is `field.text()` (`pg/text@1`), a `Uuid` is `field.uuidNative()` (`pg/uuid@1`). `field.column(columnType)` is the explicit form. A package that offers a scope and does not import the facade writes `{ codecId: 'pg/text@1', nullable: false }`, with a codec of the contract. For a list field such as `String[]`, add `.many()` to the builder or `many: { elementNullable: false }` to the object; for a `String?[]`, whose elements may be null, add `.many({ elementsNullable: true })` or `many: { elementNullable: true }`. Without it the declaration does not match a list field, and with it the element nullability must match too. A list of value objects such as `Address[]` is stored as one `jsonb` value and is still a list: `field.column(jsonbColumn).many()`. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a scope that filters. `updateAll`, `deleteAll` and their `AndCount` forms change every matching row and throw `ORM.ARGUMENT_INVALID` when the chain has a `limit`, `offset`, `cursor`, `distinct` or `distinctOn`, so do not put a limit in a scope that will be followed by one of them. `update` and `delete` change the one row `first()` returns, so the order, offset, cursor, `distinct` and `distinctOn` choose it, and after `limit(0)` they change nothing and return `null`; `update` with a relation callback throws on an order, a limit, an offset, a cursor, `distinct` or `distinctOn`, because it finds its row by the filter alone. A model without the field, or with the field under another codec or nullability, is a compile error, and a run-time `ORM.FIELD_UNKNOWN`. A custom collection class carries no namespace in its type, so at compile time it matches only a field that every model of that name has, with the same codec and nullability, and its real namespace is checked at run time. The codec, the nullability, whether the field is a list and the nullability of its elements are compared; the column type's parameters are not, so `field.uuidString()` (`char(36)`) also matches a `char(10)` field.
+Pick the builder whose codec matches the field's codec in `contract.d.ts`: a PSL `DateTime` is `field.temporal.timestamptz()` (`pg/timestamptz-temporal@1`), a `String` is `field.text()` (`pg/text@1`), a `Uuid` is `field.uuidNative()` (`pg/uuid@1`). `field.column(columnType)` is the explicit form. A package that offers a fragment and does not import the facade writes `{ codecId: 'pg/text@1', nullable: false }`, with a codec of the contract. For a list field such as `String[]`, add `.many()` to the builder or `many: { elementNullable: false }` to the object; for a `String?[]`, whose elements may be null, add `.many({ elementsNullable: true })` or `many: { elementNullable: true }`. Without it the declaration does not match a list field, and with it the element nullability must match too. A list of value objects such as `Address[]` is stored as one `jsonb` value and is still a list: `field.column(jsonbColumn).many()`. The body may call `where`, `orderBy`, `limit` and `offset`. The result keeps the collection's class and records the filter, so `update` and `delete` are allowed after a fragment that filters. `updateAll`, `deleteAll` and their `AndCount` forms change every matching row and throw `ORM.ARGUMENT_INVALID` when the chain has a `limit`, `offset`, `cursor`, `distinct` or `distinctOn`, so do not put a limit in a fragment that will be followed by one of them. `update` and `delete` change the one row `first()` returns, so the order, offset, cursor, `distinct` and `distinctOn` choose it, and after `limit(0)` they change nothing and return `null`; `update` with a relation callback throws on an order, a limit, an offset, a cursor, `distinct` or `distinctOn`, because it finds its row by the filter alone. A model without the field, or with the field under another codec or nullability, is a compile error, and a run-time `ORM.FIELD_UNKNOWN`. A custom collection class carries no namespace in its type, so at compile time it matches only a field that every model of that name has, with the same codec and nullability, and its real namespace is checked at run time. The codec, the nullability, whether the field is a list and the nullability of its elements are compared; the column type's parameters are not, so `field.uuidString()` (`char(36)`) also matches a `char(10)` field.
 
 For a filter used inside a larger `where`, a plain function of the row works too. Type the field with `CodecField<Contract, CodecId, Nullable>`, the type of any field with that codec:
 
@@ -391,12 +391,12 @@ await db.orm.public.Post.where((p) => and(created(since)(p), p.title.ilike('%orm
 
 Both forms check values against the codec's type, not the field's. For a field that narrows its codec's values, such as an enum stored as `pg/text@1`, they accept values the field would refuse: `row.kind.eq('superuser')` compiles even when `kind` has no such member. Write a filter on such a field inline, on the model, where the field's own type checks the value.
 
-**The same `select` and `include` in several queries.** Define it once with `.scope(...)` on a collection of the model, run it with `.with(...)`, and name its row with `CollectionRowOf`:
+**The same `select` and `include` in several queries.** Define it once with `.fragment(...)` on a collection of the model, run it with `.with(...)`, and name its row with `CollectionRowOf`:
 
 ```typescript
 import type { CollectionRowOf } from '@prisma/orm-postgres/orm-client';
 
-const postSummary = db.orm.public.Post.scope((posts) =>
+const postSummary = db.orm.public.Post.fragment((posts) =>
   posts.select('id', 'title', 'createdAt').include('tags'),
 );
 type PostSummary = CollectionRowOf<ReturnType<typeof postSummary>>;
@@ -405,7 +405,7 @@ await db.orm.public.Post.where({ userId }).with(postSummary).limit(20).all();
 await db.orm.public.User.include('posts', (posts) => posts.with(postSummary)).all();
 ```
 
-The body receives the plain collection of the model, without a custom class's methods. Apply the scope before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. Its result is always typed as the plain collection, even when the body keeps the row, so a custom class's methods are gone after it, and `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads. For a filter on one model, use a class method or `db.orm.scope`. A scope for one model refuses a collection of another model or namespace at run time with `ORM.ARGUMENT_INVALID`.
+The body receives the plain collection of the model, without a custom class's methods. Apply the fragment before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. Its result is always typed as the plain collection, even when the body keeps the row, so a custom class's methods are gone after it, and `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads. For a filter on one model, use a class method or `db.orm.fragment`. A fragment for one model refuses a collection of another model or namespace at run time with `ORM.ARGUMENT_INVALID`.
 
 **A field to order by, from a request.** Pass the request's string to `orderByField` with the fields the endpoint allows. Do not index the field proxy with the raw string:
 
@@ -647,7 +647,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 - [ ] Expressed ranges as chained `.where(...)` clauses or a single `and(...)` clause — did NOT reach for a non-existent `.between(...)` operator.
 - [ ] For cursor pagination, used `.orderBy(...).cursor({ field: lastValue }).limit(n).all()` — did NOT hand-write a `.where(p => p.field.lt(cursor))` workaround when the `.cursor()` API serves the same purpose.
 - [ ] For ORM combinators, imported `and` / `or` / `not` from `@prisma/orm-postgres/orm-client`.
-- [ ] Wrote a query piece shared between places as a function: a scope from `db.orm.scope(fields, body)` or `collection.scope(body)` run with `.with(...)`, a `where` callback typed with `CodecField`, or `orderByField` for an order parameter from a request.
+- [ ] Wrote a query piece shared between places as a function: a query fragment from `db.orm.fragment(fields, body)` or `collection.fragment(body)` run with `.with(...)`, a `where` callback typed with `CodecField`, or `orderByField` for an order parameter from a request.
 - [ ] Ran SQL-builder plans via `db.runtime().query(plan)` when they return rows and `db.runtime().execute(plan)` only for non-returning writes (`tx.query` / `tx.execute` inside a transaction). Passed `insert()` an array of rows.
 - [ ] Wrapped multi-statement work in `db.transaction(async (tx) => { ... })` where atomicity matters.
 - [ ] For top-N grouped aggregates at meaningful scale, dropped to `db.sql.<ns>.<table>` rather than JS-side sort + slice over `groupBy(...).aggregate(...)`.

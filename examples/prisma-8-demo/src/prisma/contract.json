@@ -700,6 +700,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -745,6 +748,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -851,6 +857,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -906,6 +915,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_tag_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -922,6 +934,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "post_tag_tagId_idx_86854244"
+                  },
                   "source": {
                     "columns": [
                       "tagId"
@@ -1040,6 +1055,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "task_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -1155,7 +1173,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ad6c8696da69df5c3a46cb752b6e0d53fd10f195b394341513d5f6e9c65e43ac",
+    "storageHash": "e6ffcff32f45de18e469df15dab64a2436682c3bfdbf62fd8b3a74d35e40014d",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

@@ -32,9 +32,10 @@ const dummyContract = {
 } as unknown as Contract;
 
 describe('executeDbInit', () => {
-  it('passes fromContract: null to planner.plan (no prior contract under reconciliation)', async () => {
+  it('plans from no contract, asserts no origin, gives no statements, and reports none', async () => {
     const planFn = vi.fn().mockReturnValue({
       kind: 'success',
+      appliedStatements: [],
       plan: {
         targetId: 'postgres',
         destination: { storageHash: 'dest' },
@@ -59,7 +60,7 @@ describe('executeDbInit', () => {
       ControlFamilyInstance<'sql', unknown>
     >;
 
-    await executeDbInit({
+    const result = await executeDbInit({
       driver: createMockDriver(),
       adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
       familyInstance: createMockFamilyInstance(),
@@ -72,10 +73,8 @@ describe('executeDbInit', () => {
     });
 
     expect(planFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        // `db init` reconciles against the live introspected schema and has
-        // structural representation of "no origin contract" (AC-5).
-      }),
+      expect.objectContaining({ fromContract: null, origin: null, statements: [] }),
     );
+    expect(result.assertOk()).not.toHaveProperty('appliedStatements');
   });
 });

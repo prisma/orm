@@ -2,7 +2,7 @@ import type { OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Ordered } from '../src/collection-types';
-import { orderByField } from '../src/scopes';
+import { orderByField } from '../src/fragments';
 import type { Orderable, OrderableFieldNames } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';

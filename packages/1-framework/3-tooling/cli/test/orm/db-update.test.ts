@@ -96,6 +96,9 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
 function applySuccess(): Record<string, unknown> {
   return {
     mode: 'apply',
+    appliedStatements: [],
+    dataLoss: [],
+    accessWidening: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [
@@ -123,6 +126,9 @@ function applySuccess(): Record<string, unknown> {
 function planSuccess(): Record<string, unknown> {
   return {
     mode: 'plan',
+    appliedStatements: [],
+    dataLoss: [],
+    accessWidening: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [{ id: 'op-2', label: 'drop relation legacy', operationClass: 'destructive' }],
@@ -151,6 +157,166 @@ function envelopeOf(json: readonly StreamEvent[]): unknown {
 function stepEvents(events: readonly EngineEvent[]): readonly EngineEvent[] {
   return events.filter((event) => event.kind === 'step-started' || event.kind === 'step-finished');
 }
+
+const PROFILE_TO_USER = {
+  statement: {
+    kind: 'rename',
+    entity: 'model',
+    from: { namespaceId: 'app', model: 'Profile' },
+    to: { namespaceId: 'app', model: 'User' },
+  },
+  operationIndexes: [0, 1],
+  description: 'rename model "Profile" to "User"',
+};
+
+describe('db update --rename', () => {
+  it('hands every --rename to the control API in the order given', async () => {
+    await harness().run(['db', 'update', '--rename', 'Profile:User', '--rename', 'User.a:User.b'], {
+      cwd: projectDir,
+    });
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statements: [
+          { verb: 'rename', text: 'Profile:User' },
+          { verb: 'rename', text: 'User.a:User.b' },
+        ],
+      }),
+    );
+  });
+
+  it('hands an empty list when no --rename is given', async () => {
+    await harness().run(['db', 'update'], { cwd: projectDir });
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(expect.objectContaining({ statements: [] }));
+  });
+
+  it('lists the applied statements after the operations, and in the JSON document', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({ ...applySuccess(), appliedStatements: [PROFILE_TO_USER] }),
+    );
+    const run = await harness().run(['db', 'update', '--rename', 'Profile:User'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const human = run.presented?.presentation.human ?? [];
+    expect(human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'Statements applied',
+          children: [{ label: 'rename model "Profile" to "User" (2 operations)' }],
+        },
+      ],
+    });
+    expect(run.presented?.data).toMatchObject({ appliedStatements: [PROFILE_TO_USER] });
+  });
+
+  it('lists what an apply would ask about on a dry run, in its output and its JSON', async () => {
+    const legacy = { kind: 'model', namespaceId: 'app', model: 'Legacy' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({ ...planSuccess(), dataLoss: [{ operationIndex: 0, subject: legacy, text: 'Legacy' }] }),
+    );
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const json = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [{ label: 'drop relation legacy: --delete Legacy' }],
+        },
+      ],
+    });
+    expect(json.presented?.data).toMatchObject({
+      dataLoss: [{ operationIndex: 0, subject: legacy, text: 'Legacy' }],
+      accessWidening: [],
+    });
+  });
+
+  it('marks the questions the flags of a dry run answer, and repeats the flags in the apply it suggests', async () => {
+    const legacy = { kind: 'model', namespaceId: 'app', model: 'Legacy' } as const;
+    const audit = { kind: 'storage', name: "audit log's" } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        dataLoss: [
+          { operationIndex: 0, subject: legacy, text: 'Legacy' },
+          { operationIndex: 0, subject: audit, text: "audit log's" },
+        ],
+      }),
+    );
+    const run = await harness().run(
+      ['db', 'update', '--dry-run', '--rename', 'Profile:User', '--delete', 'Legacy'],
+      { cwd: projectDir, isTty: { stdout: true } },
+    );
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            { label: 'drop relation legacy: --delete Legacy (answered)' },
+            { label: "drop relation legacy: --delete 'audit log'\\''s'" },
+          ],
+        },
+      ],
+    });
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Apply the planned operations',
+        command: 'prisma-test db update --rename Profile:User --delete Legacy',
+      },
+    ]);
+  });
+
+  it('suggests the apply with the database as a placeholder and the ref it advances', async () => {
+    mocks.dbUpdate.mockResolvedValue(ok(planSuccess()));
+    const run = await harness().run(
+      [
+        'db',
+        'update',
+        '--dry-run',
+        '--db',
+        'postgres://user:secret@localhost/appdb',
+        '--advance-ref',
+        'qa',
+      ],
+      { cwd: projectDir, isTty: { stdout: true } },
+    );
+
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Apply the planned operations',
+        command: 'prisma-test db update --db <url> --advance-ref qa',
+      },
+    ]);
+  });
+
+  it('lists the applied statements on a dry run', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({ ...planSuccess(), appliedStatements: [{ ...PROFILE_TO_USER, operationIndexes: [] }] }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run', '--rename', 'Profile:User'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'Statements applied',
+          children: [{ label: 'rename model "Profile" to "User" (no operations)' }],
+        },
+      ],
+    });
+  });
+});
 
 describe('db update', () => {
   it('settles as a completed envelope carrying the migration document', async () => {

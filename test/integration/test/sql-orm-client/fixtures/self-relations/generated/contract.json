@@ -394,6 +394,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "people_manager_id_idx_c3dee277"
+                  },
                   "source": {
                     "columns": [
                       "manager_id"
@@ -410,6 +413,11 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": [
+                      "partner_id"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "partner_id"
@@ -476,6 +484,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "person_connections_source_id_idx_b2d19e21"
+                  },
                   "source": {
                     "columns": [
                       "source_id"
@@ -492,6 +503,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "person_connections_target_id_idx_7e52b3aa"
+                  },
                   "source": {
                     "columns": [
                       "target_id"
@@ -549,6 +563,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "person_follows_follower_id_idx_e343d705"
+                  },
                   "source": {
                     "columns": [
                       "follower_id"
@@ -565,6 +582,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "person_follows_followee_id_idx_c86a372f"
+                  },
                   "source": {
                     "columns": [
                       "followee_id"
@@ -613,7 +633,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0111379d54c91b9de8efdae3c73fb2731fb3026a2f8cab93ff027b8ac78af291"
+    "storageHash": "58b04fcbef7b172c7e23ce7439a27a9f932254a90e8e11403f783753c0a8059f"
   },
   "capabilities": {
     "postgres": {

@@ -47,7 +47,7 @@ export async function dropIndex(
     id: `dropIndex.${tableName}.${indexName}`,
     label: `Drop index ${indexName} on ${tableName}`,
     summary: `Drops index ${indexName} on ${tableName} which is not in the contract`,
-    operationClass: 'destructive',
+    operationClass: 'widening',
     target: { id: 'sqlite', details: buildTargetDetails('index', indexName, tableName) },
     precheck: [step(`ensure index "${indexName}" exists`, present.sql, present.params)],
     execute: [step(`drop index "${indexName}"`, buildDropIndexSql(indexName))],

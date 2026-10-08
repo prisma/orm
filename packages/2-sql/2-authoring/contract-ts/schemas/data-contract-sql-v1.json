@@ -647,6 +647,46 @@
                                 "required": ["columns", "namespaceId", "tableName"],
                                 "additionalProperties": false
                               },
+                              "index": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["name"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "primaryKey": {
+                                        "const": true
+                                      }
+                                    },
+                                    "required": ["primaryKey"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "unique": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "required": ["unique"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  }
+                                ]
+                              },
                               "name": {
                                 "type": "string"
                               },

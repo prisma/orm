@@ -3,6 +3,7 @@ export type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
+  Fragment,
   HasNoVariant,
   HasOrderBy,
   HasRow,
@@ -11,10 +12,15 @@ export type {
   Including,
   Ordered,
   RowType,
-  Scope,
   TypeState,
 } from '../collection-types';
 export { all, and, not, or } from '../filters';
+export {
+  type DeclaredField,
+  type FieldFragment,
+  type FragmentFacts,
+  orderByField,
+} from '../fragments';
 export { GroupedCollection } from '../grouped-collection';
 export { createModelAccessor } from '../model-accessor';
 export type { OrmOptions } from '../orm';
@@ -26,12 +32,6 @@ export {
   type PreparedRowQuery,
   prepareQuery,
 } from '../prepared-row-query';
-export {
-  type DeclaredField,
-  type FieldScope,
-  orderByField,
-  type ScopeFacts,
-} from '../scopes';
 export type {
   AggregateBuilder,
   AggregateIncludeReducers,

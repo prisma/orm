@@ -151,6 +151,8 @@ async function planOpIds(
     schema,
     policy: { allowedOperationClasses: [...policy.allowedOperationClasses] },
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -254,15 +256,25 @@ describe('what does not pair', () => {
 });
 
 describe('policy gating', () => {
-  it('without widening the pair degrades to drop + add', async () => {
-    const opIds = await planOpIds(
-      buildContract([wire('items_email_present', 'ab12cd34')]),
-      actualSchema([wire('items_email_check', 'ab12cd34')]),
-      NO_WIDENING_POLICY,
-    );
-    expect(opIds).toEqual([
-      `dropCheckConstraint.${TABLE_NAME}.items_email_check_ab12cd34`,
-      `checkConstraint.${TABLE_NAME}.items_email_present_ab12cd34`,
+  it('without widening the old check can be neither renamed nor dropped, so the plan fails', () => {
+    const result = createPostgresMigrationPlanner(stubLowerer).plan({
+      contract: buildContract([wire('items_email_present', 'ab12cd34')]),
+      schema: actualSchema([wire('items_email_check', 'ab12cd34')]),
+      policy: { allowedOperationClasses: [...NO_WIDENING_POLICY.allowedOperationClasses] },
+      fromContract: null,
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresTypeComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: 'missingButNonAdditive',
+        summary: `Operation "Drop check constraint "items_email_check_ab12cd34" on "${TABLE_NAME}"" requires class "widening", but policy allows only: additive, destructive`,
+      }),
     ]);
   });
 
