@@ -487,14 +487,19 @@ async function applyJunctionOwnedMutation(
   connectTargets: readonly Map<string, unknown>[],
 ): Promise<void> {
   const contract = context.contract;
-  const parentPkValues = readLinkValues(
-    contract,
-    parentNamespaceId,
-    parentModelName,
-    parentRow,
+  const parentPkValues = completeJunctionValues(
+    relation,
     'parent',
-    relation.localColumns,
     relation.through.parentColumns,
+    readLinkValues(
+      contract,
+      parentNamespaceId,
+      parentModelName,
+      parentRow,
+      'parent',
+      relation.localColumns,
+      relation.through.parentColumns,
+    ),
   );
 
   if (operation.kind === 'updateAll' || operation.kind === 'deleteAll') {
@@ -602,15 +607,34 @@ function readJunctionTargetValues(
   relation: JunctionRelationDefinition,
   relatedRow: Record<string, unknown>,
 ): Map<string, unknown> {
-  return readLinkValues(
-    contract,
-    relation.relatedNamespaceId,
-    relation.relatedModelName,
-    relatedRow,
+  return completeJunctionValues(
+    relation,
     'target',
-    relation.through.targetColumns,
     relation.through.childColumns,
+    readLinkValues(
+      contract,
+      relation.relatedNamespaceId,
+      relation.relatedModelName,
+      relatedRow,
+      'target',
+      relation.through.targetColumns,
+      relation.through.childColumns,
+    ),
   );
+}
+
+function completeJunctionValues(
+  relation: JunctionRelationDefinition,
+  rowRole: 'parent' | 'target',
+  junctionColumns: readonly string[],
+  values: Map<string, unknown>,
+): Map<string, unknown> {
+  if (junctionColumns.length === 0 || !junctionColumns.every((column) => values.has(column))) {
+    throw new InternalError(
+      `Relation "${relation.relationName}" has incomplete junction metadata for ${rowRole} columns`,
+    );
+  }
+  return values;
 }
 
 function buildJunctionRow(
@@ -680,11 +704,18 @@ async function deleteJunctionLink(
   const through = relation.through;
   const junctionRow = buildJunctionRow(relation, parentPkValues, targetPkValues);
 
-  const exprs = Object.entries(junctionRow).map(([column, value]) =>
-    BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)),
+  const where = combineWhereExprs(
+    Object.entries(junctionRow).map(([column, value]) =>
+      BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)),
+    ),
   );
+  if (!where) {
+    throw new InternalError(
+      `Relation "${relation.relationName}" has no junction columns to identify the link to delete`,
+    );
+  }
   const compiled = compileDeleteCount(context.contract, through.namespaceId, through.table, [
-    combineWhereExprs(exprs) ?? and(),
+    where,
   ]);
   await scope.execute(compiled);
 }
@@ -731,7 +762,9 @@ function buildJunctionMembershipWhere(
   through.childColumns.forEach((junctionColumn, index) => {
     const targetColumn = through.targetColumns[index];
     if (targetColumn === undefined) {
-      return;
+      throw new InternalError(
+        `Relation "${relation.relationName}" has incomplete junction metadata for target columns`,
+      );
     }
     conditions.push(
       BinaryExpr.eq(
@@ -740,6 +773,11 @@ function buildJunctionMembershipWhere(
       ),
     );
   });
+  if (parentPkValues.size === 0 || through.childColumns.length === 0) {
+    throw new InternalError(
+      `Relation "${relation.relationName}" has incomplete junction metadata for the membership condition`,
+    );
+  }
 
   return ExistsExpr.exists(
     SelectAst.from(tableSourceForContract(contract, through.namespaceId, through.table))
@@ -752,13 +790,20 @@ function buildChildJoinWhere(
   relation: RelationDefinition,
   childValues: Map<string, unknown>,
 ): AnyExpression {
-  const exprs = [...childValues].map(([childColumn, parentValue]) =>
-    BinaryExpr.eq(
-      ColumnRef.of(relation.relatedTableName, childColumn),
-      LiteralExpr.of(parentValue),
+  const where = combineWhereExprs(
+    [...childValues].map(([childColumn, parentValue]) =>
+      BinaryExpr.eq(
+        ColumnRef.of(relation.relatedTableName, childColumn),
+        LiteralExpr.of(parentValue),
+      ),
     ),
   );
-  return combineWhereExprs(exprs) ?? and();
+  if (!where) {
+    throw new InternalError(
+      `Relation "${relation.relationName}" has no column pairing to scope its related rows to the parent`,
+    );
+  }
+  return where;
 }
 
 async function insertSingleRow(
