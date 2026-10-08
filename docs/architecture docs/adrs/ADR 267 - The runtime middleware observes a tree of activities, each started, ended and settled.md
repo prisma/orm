@@ -64,7 +64,7 @@ The SQL ORM starts an activity of kind `orm-call` for every terminal, including 
 
 Each activity has its own middleware context, and every hook of that activity receives the same `ctx`. A hook reaches its activity from `ctx`, not from the plan.
 
-A middleware keeps state on an activity with `ctx.state(key)`, which returns that middleware's state object for the activity, created empty on first use. The key is a `Symbol()` the middleware holds privately, so no other middleware can read or overwrite its state. The state lives as long as the activity's `ctx` and is dropped when the activity settles. A tracer keeps its span this way and finds its parent's through `ctx.parent`:
+A middleware keeps state on an activity with `ctx.state(key)`, which returns the state object stored under `key` for the activity, created empty on first use. The key is a string or a symbol, and the runtime places no constraint on it: two middleware that use the same key share the object. A middleware that wants its state to itself uses a `Symbol()` or an unusual string. The state lives as long as the activity's `ctx` and is dropped when the activity settles. A tracer keeps its span this way and finds its parent's through `ctx.parent`:
 
 ```ts
 const tracing = Symbol('tracing');
@@ -136,5 +136,4 @@ The scenarios this was tested against, and the full reasoning, are in the projec
 - **Parent pointers only, no child list.** The runtime already keeps the list for transactions and needs it to fire `activitySettled`. Rejected.
 - **Two completion outcomes, as in Rails.** A rejected `COMMIT` and a silently rolled-back `COMMIT` fire nothing, and a cache holds stale rows until expiry. Spring and JTA keep a third status for exactly these cases. Rejected.
 - **`startActivity` on the user-facing scope.** Users would see a client-only method on `tx`. Rejected.
-- **A shared, string-keyed state bag on `ctx`**, as .NET `Activity.SetCustomProperty` or Koa's `ctx.state`. Middleware could read or overwrite each other's entries. Rejected for `ctx.state(key)` with a private symbol.
 - **`AsyncLocalStorage` to find the parent.** Rejected by ADR 160 and ADR 220; still rejected.
