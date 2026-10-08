@@ -16,7 +16,7 @@ export interface IndexCandidate {
 }
 
 /** What serves the lookups of an index the pass removed. */
-export type IndexReplacement =
+export type BackingObject =
   | { readonly kind: 'index'; readonly index: IndexCandidate }
   | { readonly kind: 'uniqueConstraint'; readonly unique: UniqueConstraintInput }
   | { readonly kind: 'primaryKey'; readonly primaryKey: PrimaryKeyInput };
@@ -24,7 +24,7 @@ export type IndexReplacement =
 export interface DeduplicatedIndexes {
   /** The indexes the table keeps, in their original order. */
   readonly indexes: readonly IndexCandidate[];
-  readonly replacements: ReadonlyMap<IndexCandidate, IndexReplacement>;
+  readonly replacements: ReadonlyMap<IndexCandidate, BackingObject>;
 }
 
 const IDENTICAL_DESCRIPTION =
@@ -43,7 +43,7 @@ export function deduplicateIndexes(input: {
   readonly warnings: AuthoringWarningSink;
 }): DeduplicatedIndexes {
   const { tableName, warnings } = input;
-  const replacements = new Map<IndexCandidate, IndexReplacement>();
+  const replacements = new Map<IndexCandidate, BackingObject>();
 
   const groups = new Map<string, readonly [IndexCandidate, ...IndexCandidate[]]>();
   for (const candidate of input.indexes) {
@@ -112,7 +112,7 @@ function uniqueLookupFor(
   survivors: readonly IndexCandidate[],
   uniques: readonly UniqueConstraintInput[],
   primaryKey: PrimaryKeyInput | undefined,
-): IndexReplacement | undefined {
+): BackingObject | undefined {
   const { index } = candidate;
   if (index.unique || !isPlainIndex(index)) return undefined;
   if (primaryKey !== undefined && sameColumns(primaryKey.columns, index.columns)) {
@@ -155,7 +155,7 @@ function identicalIndexesWarning(
   };
 }
 
-function describeReplacement(replacement: IndexReplacement): string {
+function describeReplacement(replacement: BackingObject): string {
   switch (replacement.kind) {
     case 'primaryKey':
       return 'the primary key';
@@ -171,7 +171,7 @@ function describeReplacement(replacement: IndexReplacement): string {
 function redundantIndexWarning(
   tableName: string,
   candidate: IndexCandidate,
-  servedBy: IndexReplacement,
+  servedBy: BackingObject,
 ): AuthoringWarning {
   const name = writtenName(candidate.index);
   return {

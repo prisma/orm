@@ -6,9 +6,9 @@ import {
 } from '@internal/sql-schema-ir/naming';
 import { contractError } from './contract-errors';
 import {
+  type BackingObject,
   deduplicateIndexes,
   type IndexCandidate,
-  type IndexReplacement,
   writtenName,
 } from './index-deduplication';
 import { lowerAuthoredIndex } from './index-naming';
@@ -115,7 +115,7 @@ function declaredBackingObject(
     readonly uniques: readonly UniqueConstraintInput[];
     readonly primaryKey: PrimaryKeyInput | undefined;
   },
-): IndexReplacement {
+): BackingObject {
   const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
   const indexes = table.declaredIndexes.filter(
     (candidate) => writtenName(candidate.index) === name || nameOf(candidate.index.naming) === name,
@@ -154,9 +154,9 @@ function declaredBackingObject(
 }
 
 function resolveReplacement(
-  backing: IndexReplacement,
-  replacements: ReadonlyMap<IndexCandidate, IndexReplacement>,
-): IndexReplacement {
+  backing: BackingObject,
+  replacements: ReadonlyMap<IndexCandidate, BackingObject>,
+): BackingObject {
   let current = backing;
   while (current.kind === 'index') {
     const replacement = replacements.get(current.index);
@@ -170,7 +170,7 @@ function sameColumns(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((column, position) => column === b[position]);
 }
 
-function foreignKeyIndexOf(backing: IndexReplacement): ForeignKeyIndex {
+function foreignKeyIndexOf(backing: BackingObject): ForeignKeyIndex {
   switch (backing.kind) {
     case 'index':
       return { name: nameOf(backing.index.index.naming) };
