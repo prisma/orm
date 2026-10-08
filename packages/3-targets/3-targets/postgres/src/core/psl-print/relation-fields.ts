@@ -1,7 +1,7 @@
 import type { ContractReferenceRelation, ContractRelation } from '@internal/contract/types';
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
-import type { ForeignKey, ReferentialAction } from '@internal/sql-contract/types';
+import type { ForeignKey, Index, ReferentialAction } from '@internal/sql-contract/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
@@ -156,6 +156,33 @@ export function junctionParentRelation(
   return undefined;
 }
 
+/**
+ * The `index` argument of an owning relation. Every index the contract carries is written as its own `@@index`, and `contract emit` derives a backing index for a relation and drops it again beside an identical index or a key on its columns. So the argument is `false` for a foreign key nothing backs, the written name of an index the derived one would not match, and absent otherwise.
+ */
+function relationIndexArgument(owner: ModelWithTable, foreignKey: ForeignKey): string | undefined {
+  const backing = foreignKey.index;
+  if (backing === undefined) return 'false';
+  if (!('name' in backing)) return undefined;
+  const index = owner.table.indexes.find((candidate) => candidate.name === backing.name);
+  if (index === undefined || derivedIndexMatches(index, foreignKey.source.columns)) {
+    return undefined;
+  }
+  const written = index.prefix ?? index.name;
+  const ambiguous = owner.table.indexes.some(
+    (other) => other !== index && (other.prefix ?? other.name) === written,
+  );
+  return `"${escapePslString(ambiguous ? index.name : written)}"`;
+}
+
+function derivedIndexMatches(index: Index, columns: readonly string[]): boolean {
+  return (
+    index.columns !== undefined &&
+    sameColumns(index.columns, columns) &&
+    index.where === undefined &&
+    (index.unique || (index.type === undefined && index.options === undefined))
+  );
+}
+
 /** The PSL field one relation is written as. */
 function buildRelationField(input: {
   readonly entry: ModelRelation;
@@ -195,14 +222,10 @@ function buildRelationField(input: {
     if (foreignKey.name !== undefined) {
       args.push(namedArg('map', `"${escapePslString(foreignKey.name)}"`));
     }
-    // Every index the contract carries is written as its own `@@index`, so the
-    // relation names the one that backs it rather than asking for a new one.
-    args.push(
-      namedArg(
-        'index',
-        foreignKey.index === undefined ? 'false' : `"${escapePslString(foreignKey.index)}"`,
-      ),
-    );
+    const indexArgument = relationIndexArgument(entry.owner, foreignKey);
+    if (indexArgument !== undefined) {
+      args.push(namedArg('index', indexArgument));
+    }
   }
 
   const list = relation.cardinality === '1:N' || relation.cardinality === 'N:M';

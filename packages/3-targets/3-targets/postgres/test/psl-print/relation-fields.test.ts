@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildModels, fieldText, INT_COLUMN, table } from './print-support';
 
 describe('relations', () => {
-  function postAndUser(foreignKey: Record<string, unknown>, indexes: readonly unknown[] = []) {
+  function postAndUser(
+    foreignKey: Record<string, unknown>,
+    keys: { readonly indexes?: readonly unknown[]; readonly uniques?: readonly unknown[] } = {},
+  ) {
     return buildModels({
       models: {
         User: {
@@ -35,7 +38,8 @@ describe('relations', () => {
         post: table({
           columns: { id: INT_COLUMN, authorId: INT_COLUMN },
           primaryKey: { columns: ['id'] },
-          indexes,
+          indexes: keys.indexes ?? [],
+          uniques: keys.uniques ?? [],
           foreignKeys: [
             {
               source: { namespaceId: 'public', tableName: 'post', columns: ['authorId'] },
@@ -62,17 +66,52 @@ describe('relations', () => {
     );
   });
 
-  it('names the index that backs the foreign key', () => {
-    const models = postAndUser({ index: 'post_authorId_idx_e47547ed' }, [
+  it('names an index the default backing index would not be', () => {
+    const models = postAndUser(
+      { index: { name: 'post_author_live_29e42dbc' } },
       {
-        name: 'post_authorId_idx_e47547ed',
-        prefix: 'post_authorId_idx',
-        columns: ['authorId'],
-        unique: false,
+        indexes: [
+          {
+            name: 'post_author_live_29e42dbc',
+            prefix: 'post_author_live',
+            columns: ['authorId'],
+            where: 'id > 0',
+            unique: false,
+          },
+        ],
       },
-    ]);
+    );
     expect(models[1]?.fields.map(fieldText)[2]).toBe(
-      'author User @relation(fields: [authorId], references: [id], index: "post_authorId_idx_e47547ed")',
+      'author User @relation(fields: [authorId], references: [id], index: "post_author_live")',
+    );
+  });
+
+  it('writes no index argument when the default backing index is the index that backs the foreign key', () => {
+    const models = postAndUser(
+      { index: { name: 'post_authorId_idx_e47547ed' } },
+      {
+        indexes: [
+          {
+            name: 'post_authorId_idx_e47547ed',
+            prefix: 'post_authorId_idx',
+            columns: ['authorId'],
+            unique: false,
+          },
+        ],
+      },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id])',
+    );
+  });
+
+  it('writes no index argument when a unique constraint backs the foreign key', () => {
+    const models = postAndUser(
+      { index: { unique: true } },
+      { uniques: [{ columns: ['authorId'] }] },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id])',
     );
   });
 
