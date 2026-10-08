@@ -263,28 +263,106 @@ function hasColumnFromEntityHook(
   return 'columnFromEntity' in descriptor && typeof descriptor.columnFromEntity === 'function';
 }
 
-/**
- * Resolves a type-constructor call whose descriptor declares an
- * `entityRefArg` (e.g. `pg.enum(AalLevel)`): extracts the call's sole
- * positional-argument ref string, resolves it against the field's
- * namespace's already-lowered extension entities (keyed by the declared
- * `entityRefArg.entityKind`, then block name), and converts the resolved
- * entity to column params via the `columnFromEntity` authoring hook on the
- * codec descriptor registered for `descriptor.output.codecId`. The
- * `typeParams.typeName` `columnFromEntity` returns is bare — schema
- * qualification (e.g. `auth.aal_level`) is a target concern, applied later
- * when the target builds the field's namespace. A `valueSet` ref is
- * attached when the same namespace derived a value-set under the same block
- * name (the generic `deriveValueSet` mechanism), scoped to the field's own
- * namespace.
- */
+export interface ConstructorEntity {
+  readonly entity: unknown;
+  readonly entityKind: string;
+  readonly namespaceId: string;
+  readonly name: string;
+  readonly derivesValueSet: boolean;
+}
+
+export interface ConstructorEntityBlock {
+  readonly entityKind: string;
+  readonly lowered?: ConstructorEntity;
+}
+
+function writtenEntityArgument(
+  call: ResolvedTypeConstructorCall,
+  descriptor: AuthoringTypeConstructorDescriptor,
+): string {
+  const positional = call.args.filter((arg) => arg.kind === 'positional');
+  return positional[descriptor.entityRefArg?.index ?? 0]?.value ?? '';
+}
+
+export function columnFromConstructorEntity(input: {
+  readonly call: ResolvedTypeConstructorCall;
+  readonly descriptor: AuthoringTypeConstructorDescriptor;
+  readonly entity: ConstructorEntity;
+  readonly namespaceId: string | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
+  readonly entityLabel: string;
+}): ResolveFieldTypeResult {
+  const helperPath = input.call.path.join('.');
+  const writtenEntity = writtenEntityArgument(input.call, input.descriptor);
+  const written = `${helperPath}(${writtenEntity})`;
+  const codecId = input.descriptor.output.codecId;
+  const codecDescriptor = input.codecLookup.descriptorFor(codecId);
+  if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
+    throw contractError(
+      'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      `Type constructor "${helperPath}" registers codecId "${codecId}" with an entity-ref argument, but its codec descriptor has no "columnFromEntity" authoring hook. This is a contributor bug in the pack registering "${helperPath}", not a user-schema error.`,
+      { meta: { helperPath, codecId } },
+    );
+  }
+
+  const resolved = codecDescriptor.columnFromEntity(input.entity.entity);
+  if (resolved === undefined) {
+    input.diagnostics.push({
+      code: 'PSL_UNKNOWN_ENTITY_REF',
+      message: `${input.entityLabel} type constructor "${written}" does not resolve — no entity named "${writtenEntity}" was found in namespace "${input.namespaceId ?? '(unspecified)'}"`,
+      ...input.source.at(input.call.span),
+    });
+    return NOT_RESOLVED;
+  }
+
+  if (input.entity.derivesValueSet && input.namespaceId === undefined) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `${input.entityLabel} type constructor "${written}" resolves to a value-set-typed entity, but the field has no resolvable namespace to scope the value-set ref to`,
+      ...input.source.at(input.call.span),
+    });
+    return NOT_RESOLVED;
+  }
+
+  const valueSet: ValueSetRef | undefined =
+    input.entity.derivesValueSet && input.namespaceId !== undefined
+      ? {
+          plane: 'storage',
+          entityKind: 'valueSet',
+          namespaceId: input.namespaceId,
+          entityName: input.entity.name,
+        }
+      : undefined;
+
+  return {
+    ok: true,
+    descriptor: {
+      codecId,
+      ...(resolved.typeParams !== undefined ? { typeParams: resolved.typeParams } : {}),
+      ...(valueSet !== undefined ? { valueSet } : {}),
+    },
+  };
+}
+
+function namedEntityLabel(resolution: Resolution): string {
+  switch (resolution.kind) {
+    case 'contributedType':
+      return 'type';
+    case 'contributedNamespace':
+      return 'namespace';
+    default:
+      return resolvedKindLabel(resolution);
+  }
+}
+
 function resolveEntityRefTypeConstructorCall(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
   readonly namespaceId: string | undefined;
-  readonly namespaceExtensionEntities:
-    | Readonly<Record<string, Readonly<Record<string, unknown>>>>
-    | undefined;
+  readonly binder: Binder;
+  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
@@ -299,8 +377,15 @@ function resolveEntityRefTypeConstructorCall(input: {
 
   const helperPath = input.call.path.join('.');
   const positionalArgs = input.call.args.filter((arg) => arg.kind === 'positional');
-  const ref = positionalArgs[entityRefArg.index]?.value;
-  if (input.call.args.length !== 1 || positionalArgs.length !== 1 || ref === undefined) {
+  const argument = positionalArgs[entityRefArg.index];
+  const node = argument?.expression?.syntax;
+  const resolution = node === undefined ? undefined : input.binder.symbolForNode(node);
+  if (
+    input.call.args.length !== 1 ||
+    positionalArgs.length !== 1 ||
+    argument === undefined ||
+    resolution === undefined
+  ) {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} type constructor "${helperPath}" expects exactly one positional argument naming the referenced entity`,
@@ -308,64 +393,41 @@ function resolveEntityRefTypeConstructorCall(input: {
     });
     return NOT_RESOLVED;
   }
+  if (resolution.kind === 'unresolved') return NOT_RESOLVED;
 
-  const reportUnknownRef = (): ResolveFieldTypeResult => {
+  const written = `${helperPath}(${argument.value})`;
+  const block =
+    resolution.kind === 'block' ? input.constructorEntities.get(resolution.symbol) : undefined;
+  if (resolution.kind !== 'block' || block?.entityKind !== entityRefArg.entityKind) {
+    const name = 'symbol' in resolution ? resolution.symbol.name : argument.value;
     input.diagnostics.push({
       code: 'PSL_UNKNOWN_ENTITY_REF',
-      message: `${input.entityLabel} type constructor "${helperPath}(${ref})" does not resolve — no entity named "${ref}" was found in namespace "${input.namespaceId ?? '(unspecified)'}"`,
+      message: `${input.entityLabel} type constructor "${written}" names the ${namedEntityLabel(resolution)} "${name}"; it expects a ${entityRefArg.entityKind}.`,
       ...input.source.at(input.call.span),
     });
     return NOT_RESOLVED;
-  };
-
-  const entity = input.namespaceExtensionEntities?.[entityRefArg.entityKind]?.[ref];
-  if (entity === undefined) {
-    return reportUnknownRef();
   }
-
-  const codecId = input.descriptor.output.codecId;
-  const codecDescriptor = input.codecLookup.descriptorFor(codecId);
-  if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Type constructor "${helperPath}" registers codecId "${codecId}" with an entity-ref argument, but its codec descriptor has no "columnFromEntity" authoring hook. This is a contributor bug in the pack registering "${helperPath}", not a user-schema error.`,
-      { meta: { helperPath, codecId } },
-    );
-  }
-
-  const resolved = codecDescriptor.columnFromEntity(entity);
-  if (resolved === undefined) {
-    return reportUnknownRef();
-  }
-
-  const derivedValueSet = input.namespaceExtensionEntities?.['valueSet']?.[ref];
-  if (derivedValueSet !== undefined && input.namespaceId === undefined) {
+  const entity = block.lowered;
+  if (entity === undefined) return NOT_RESOLVED;
+  if (input.namespaceId !== undefined && entity.namespaceId !== input.namespaceId) {
     input.diagnostics.push({
-      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-      message: `${input.entityLabel} type constructor "${helperPath}(${ref})" resolves to a value-set-typed entity, but the field has no resolvable namespace to scope the value-set ref to`,
+      code: 'PSL_UNKNOWN_ENTITY_REF',
+      message: `${input.entityLabel} type constructor "${written}" names the ${resolution.symbol.keyword} "${entity.name}" of namespace "${entity.namespaceId}"; in this version it can only name a ${entityRefArg.entityKind} of namespace "${input.namespaceId}".`,
       ...input.source.at(input.call.span),
     });
     return NOT_RESOLVED;
   }
 
-  const valueSet: ValueSetRef | undefined =
-    derivedValueSet !== undefined && input.namespaceId !== undefined
-      ? {
-          plane: 'storage',
-          entityKind: 'valueSet',
-          namespaceId: input.namespaceId,
-          entityName: ref,
-        }
-      : undefined;
-
-  return {
-    ok: true,
-    descriptor: {
-      codecId,
-      ...(resolved.typeParams !== undefined ? { typeParams: resolved.typeParams } : {}),
-      ...(valueSet !== undefined ? { valueSet } : {}),
-    },
-  };
+  return columnFromConstructorEntity({
+    call: input.call,
+    descriptor: input.descriptor,
+    entity,
+    namespaceId: input.namespaceId,
+    codecLookup: input.codecLookup,
+    diagnostics: input.diagnostics,
+    source: input.source,
+    entityLabel: input.entityLabel,
+  });
 }
 
 /**
@@ -393,30 +455,13 @@ interface FieldTypeConstructorContext {
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
-  /**
-   * The field's namespace id — required to build a `valueSet` ref (`{
-   * namespaceId, entityName, … }`) when an entity-ref type constructor
-   * resolves the field's type. Storage value-sets are namespace-scoped, so
-   * the ref must point at the value-set derived in the SAME namespace the
-   * field's own column lives in.
-   */
-  readonly namespaceId?: string | undefined;
-  /**
-   * Extension entities already lowered for this namespace (the exact shape
-   * `lowerExtensionBlocksForNamespace` in the interpreter produces), keyed
-   * by entries-slot discriminator then block name. Consulted only when a
-   * type constructor's descriptor declares an `entityRefArg` (e.g.
-   * `pg.enum(Ref)`); every other resolution path ignores it.
-   */
-  readonly namespaceExtensionEntities?:
-    | Readonly<Record<string, Readonly<Record<string, unknown>>>>
-    | undefined;
-  /**
-   * Codec-id-keyed descriptor lookup — consulted only when a type
-   * constructor's descriptor declares an `entityRefArg`, to reach the
-   * registered codec's `columnFromEntity` authoring hook.
-   */
   readonly codecLookup: CodecLookupWithDescriptors;
+}
+
+interface EntityConstructorContext {
+  readonly namespaceId?: string | undefined;
+  readonly binder: Binder;
+  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
 }
 
 export function instantiateFieldTypeConstructor(
@@ -425,18 +470,6 @@ export function instantiateFieldTypeConstructor(
     readonly descriptor: AuthoringTypeConstructorDescriptor;
   },
 ): ResolveFieldTypeResult {
-  if (input.descriptor.entityRefArg !== undefined) {
-    return resolveEntityRefTypeConstructorCall({
-      call: input.call,
-      descriptor: input.descriptor,
-      namespaceId: input.namespaceId,
-      namespaceExtensionEntities: input.namespaceExtensionEntities,
-      codecLookup: input.codecLookup,
-      diagnostics: input.diagnostics,
-      source: input.source,
-      entityLabel: input.entityLabel,
-    });
-  }
   const instantiated = instantiatePslTypeConstructor({
     call: input.call,
     descriptor: input.descriptor,
@@ -512,13 +545,14 @@ function resolvedKindLabel(resolution: Resolution): string {
 }
 
 export function resolveFieldTypeDescriptor(
-  input: Omit<FieldTypeConstructorContext, 'source'> & {
-    readonly field: FieldSymbol;
-    readonly resolution: Resolution | undefined;
-    readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
-    readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
-    readonly sources: PslSources;
-  },
+  input: Omit<FieldTypeConstructorContext, 'source'> &
+    EntityConstructorContext & {
+      readonly field: FieldSymbol;
+      readonly resolution: Resolution | undefined;
+      readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+      readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
+      readonly sources: PslSources;
+    },
 ): ResolveFieldTypeResult {
   const { field, resolution, entityLabel, diagnostics } = input;
   if (field.malformedType || resolution === undefined) {
@@ -560,7 +594,19 @@ export function resolveFieldTypeDescriptor(
         });
       }
       if (call !== undefined) {
-        return instantiateFieldTypeConstructor({ ...input, call, descriptor, source });
+        return descriptor.entityRefArg === undefined
+          ? instantiateFieldTypeConstructor({ ...input, call, descriptor, source })
+          : resolveEntityRefTypeConstructorCall({
+              call,
+              descriptor,
+              namespaceId: input.namespaceId,
+              binder: input.binder,
+              constructorEntities: input.constructorEntities,
+              codecLookup: input.codecLookup,
+              diagnostics,
+              source,
+              entityLabel,
+            });
       }
       if (!isBareTypeConstructor(descriptor)) {
         reportTypeConstructorNotCalled({

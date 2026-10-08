@@ -120,7 +120,7 @@ import {
   mapFieldNamesToColumns,
   storageName,
 } from './psl-attribute-parsing';
-import type { ColumnDescriptor } from './psl-column-resolution';
+import type { ColumnDescriptor, ConstructorEntityBlock } from './psl-column-resolution';
 import {
   bareTypeConstructorOf,
   getAuthoringEntity,
@@ -452,6 +452,11 @@ function buildModelAttributesByName(
   return result;
 }
 
+interface LoweredBlockRow extends LoweredPackEntity {
+  readonly block: BlockSymbol;
+  readonly derived: boolean;
+}
+
 /**
  * This pass is intentionally generic: no discriminator value is named here.
  * The factory (registered by the target pack) owns all block-specific logic.
@@ -466,8 +471,8 @@ function lowerExtensionBlocksForNamespace(
     model: ModelSymbol,
   ) => { readonly namespaceId: string; readonly tableName: string } | undefined,
   sources: PslSources,
-): readonly LoweredPackEntity[] {
-  const rows: LoweredPackEntity[] = [];
+): readonly LoweredBlockRow[] {
+  const rows: LoweredBlockRow[] = [];
 
   for (const blockSymbol of Object.values(blocks)) {
     const envelope = parsedBlocks.get(blockSymbol);
@@ -502,7 +507,14 @@ function lowerExtensionBlocksForNamespace(
     const namespaceId = providesPslEntityPlacement(descriptor.output)
       ? descriptor.output.pslPlacement(entity).namespaceId
       : ownerNamespaceId;
-    rows.push({ namespaceId, entityKind: descriptor.discriminator, key: envelope.name, entity });
+    rows.push({
+      namespaceId,
+      entityKind: descriptor.discriminator,
+      key: envelope.name,
+      entity,
+      block: blockSymbol,
+      derived: false,
+    });
 
     const derivedValueSet = deriveValueSetFromEntity(descriptor.output, entity);
     if (derivedValueSet !== undefined) {
@@ -511,6 +523,8 @@ function lowerExtensionBlocksForNamespace(
         entityKind: 'valueSet',
         key: envelope.name,
         entity: derivedValueSet,
+        block: blockSymbol,
+        derived: true,
       });
     }
   }
@@ -596,17 +610,7 @@ interface BuildModelNodeInput {
   readonly diagnostics: PslDiagnosticCollector;
   readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
   readonly capabilities: CapabilityMatrix;
-  /**
-   * Extension entities already lowered per namespace (the exact shape
-   * `lowerExtensionBlocksForNamespace` produces), keyed by namespace id then
-   * entries-slot discriminator then block name. Forwarded to
-   * `collectResolvedFields` for entity-ref type-constructor resolution (e.g.
-   * `pg.enum(Ref)`).
-   */
-  readonly namespaceExtensionEntities?: ReadonlyMap<
-    string,
-    Readonly<Record<string, Readonly<Record<string, unknown>>>>
-  >;
+  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
@@ -699,10 +703,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     dataTypes: input.dataTypes,
   });
   const modelNamespaceId = input.namespaceId;
-  const namespaceExtensionEntitiesForModel =
-    modelNamespaceId !== undefined
-      ? input.namespaceExtensionEntities?.get(modelNamespaceId)
-      : undefined;
 
   const resolvedFields = collectResolvedFields({
     model,
@@ -723,7 +723,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     enumHandles: input.enumHandles,
     capabilities: input.capabilities,
     ...ifDefined('namespaceId', modelNamespaceId),
-    ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntitiesForModel),
+    constructorEntities: input.constructorEntities,
     codecLookup: input.codecLookup,
   });
 
@@ -1555,9 +1555,7 @@ interface BuildValueObjectNodesInput {
   readonly sources: PslSources;
   /** Composite types are placed in the default namespace, so their members resolve against it. */
   readonly defaultNamespaceId: string;
-  readonly defaultNamespaceExtensionEntities:
-    | Readonly<Record<string, Readonly<Record<string, unknown>>>>
-    | undefined;
+  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly binder: Binder;
 }
@@ -1604,7 +1602,8 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         sources,
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
         namespaceId: input.defaultNamespaceId,
-        ...ifDefined('namespaceExtensionEntities', input.defaultNamespaceExtensionEntities),
+        binder,
+        constructorEntities: input.constructorEntities,
         codecLookup: input.codecLookup,
       });
       if (!resolved.ok) {
@@ -2325,7 +2324,7 @@ export function interpretPslDocumentToSqlContract(
   // This runs before model/field resolution (not just before contract
   // assembly) so that a field-type resolver contributed by a target pack
   // (e.g. Postgres's `pg.enum(Ref)`) can resolve `Ref` against an
-  // already-lowered extension entity — see `namespaceExtensionEntities`
+  // already-lowered extension entity — see `constructorEntities`
   // threaded into `collectResolvedFields` below.
   const entityTypesByDiscriminator = buildEntityTypesByDiscriminator(input.authoringContributions);
   // Warnings pushed by entity factories run ahead of
@@ -2358,10 +2357,18 @@ export function interpretPslDocumentToSqlContract(
     return { namespaceId, tableName: storageName(model, physicalNames) };
   };
   const namespaceExtensionEntities = new Map<string, Record<string, Record<string, unknown>>>();
+  const constructorEntities = new Map<BlockSymbol, ConstructorEntityBlock>();
   const fileExtensionEntityRows = (
-    rows: readonly LoweredPackEntity[],
+    rows: readonly LoweredBlockRow[],
     blocks: Readonly<Record<string, BlockSymbol>>,
   ): void => {
+    for (const block of Object.values(blocks)) {
+      const entityKind = findBlockDescriptor(
+        input.authoringContributions?.pslBlockDescriptors,
+        block.keyword,
+      )?.discriminator;
+      if (entityKind !== undefined) constructorEntities.set(block, { entityKind });
+    }
     for (const row of rows) {
       let entities = namespaceExtensionEntities.get(row.namespaceId);
       if (entities === undefined) {
@@ -2381,6 +2388,24 @@ export function interpretPslDocumentToSqlContract(
         continue;
       }
       slot[row.key] = row.entity;
+      const filed = constructorEntities.get(row.block);
+      if (!row.derived) {
+        constructorEntities.set(row.block, {
+          entityKind: row.entityKind,
+          lowered: {
+            entity: row.entity,
+            entityKind: row.entityKind,
+            namespaceId: row.namespaceId,
+            name: row.key,
+            derivesValueSet: false,
+          },
+        });
+      } else if (filed?.lowered !== undefined) {
+        constructorEntities.set(row.block, {
+          ...filed,
+          lowered: { ...filed.lowered, derivesValueSet: true },
+        });
+      }
     }
   };
   for (const ns of namespaceSymbols) {
@@ -2448,7 +2473,7 @@ export function interpretPslDocumentToSqlContract(
     }
   }
 
-  // No checkpoint here: this pass runs early so `namespaceExtensionEntities` is
+  // No checkpoint here: this pass runs early so `constructorEntities` is
   // ready for field resolution. The checkpoint after field resolution catches
   // this pass's failures too.
 
@@ -2504,7 +2529,7 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
     sources: input.sources,
     defaultNamespaceId,
-    defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
+    constructorEntities,
     codecLookup: input.codecLookup,
     binder,
   });
@@ -2540,7 +2565,7 @@ export function interpretPslDocumentToSqlContract(
       diagnostics,
       enumHandles,
       capabilities: input.capabilities,
-      ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
+      constructorEntities,
       codecLookup: input.codecLookup,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,

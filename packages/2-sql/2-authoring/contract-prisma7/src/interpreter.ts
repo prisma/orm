@@ -52,6 +52,8 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
   buildEntityTypesByDiscriminator,
+  type ConstructorEntity,
+  columnFromConstructorEntity,
   instantiateFieldTypeConstructor,
 } from '@internal/sql-contract-psl/resolution';
 import {
@@ -145,6 +147,11 @@ interface ModelBuild {
 }
 
 type NamespaceEntities = Map<string, Record<string, Record<string, unknown>>>;
+
+interface LoweredNativeEnums {
+  readonly namespaceEntities: NamespaceEntities;
+  readonly loweredEnums: ReadonlyMap<EnumDeclaration, ConstructorEntity>;
+}
 
 function attributeText(attribute: ResolvedAttribute): string {
   const args = attribute.args.map((arg) =>
@@ -341,7 +348,7 @@ export function interpretPrisma7Documents(
     const declaration = readEnumDeclaration(source, defaultNamespaceId, diagnostics);
     if (declaration !== undefined) enums.set(declaration.name, declaration);
   }
-  const namespaceEntities = lowerNativeEnums(enums, input, diagnostics);
+  const { namespaceEntities, loweredEnums } = lowerNativeEnums(enums, input, diagnostics);
 
   const modelNames = new Set([...models.map((model) => model.symbol.name), ...ignoredModels]);
   const composedExtensions = new Set(input.composedExtensions);
@@ -366,7 +373,7 @@ export function interpretPrisma7Documents(
         modelNames,
         ignoredModels,
         enums,
-        namespaceEntities,
+        loweredEnums,
         composedExtensions,
         input,
         diagnostics,
@@ -814,9 +821,10 @@ function lowerNativeEnums(
   enums: ReadonlyMap<string, EnumDeclaration>,
   input: InterpretPrisma7DocumentsInput,
   diagnostics: ContractSourceDiagnostic[],
-): NamespaceEntities {
+): LoweredNativeEnums {
   const result: NamespaceEntities = new Map();
-  if (enums.size === 0) return result;
+  const loweredEnums = new Map<EnumDeclaration, ConstructorEntity>();
+  if (enums.size === 0) return { namespaceEntities: result, loweredEnums };
   const { entityKind } = input.binding.nativeEnum;
   const descriptor: AuthoringEntityTypeDescriptor | undefined = buildEntityTypesByDiscriminator(
     input.authoringContributions,
@@ -881,8 +889,15 @@ function lowerNativeEnums(
     if (valueSet !== undefined) {
       entities['valueSet'] = { ...entities['valueSet'], [declaration.name]: valueSet };
     }
+    loweredEnums.set(declaration, {
+      entity,
+      entityKind,
+      namespaceId: declaration.namespaceId,
+      name: declaration.name,
+      derivesValueSet: valueSet !== undefined,
+    });
   }
-  return result;
+  return { namespaceEntities: result, loweredEnums };
 }
 
 interface FieldUse {
@@ -952,7 +967,7 @@ interface ReadFieldArgs {
   readonly modelNames: ReadonlySet<string>;
   readonly ignoredModels: ReadonlySet<string>;
   readonly enums: ReadonlyMap<string, EnumDeclaration>;
-  readonly namespaceEntities: NamespaceEntities;
+  readonly loweredEnums: ReadonlyMap<EnumDeclaration, ConstructorEntity>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly input: InterpretPrisma7DocumentsInput;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -1166,17 +1181,26 @@ function readField(args: ReadFieldArgs): void {
     );
     return;
   }
+  const loweredEnum =
+    enumDeclaration === undefined ? undefined : args.loweredEnums.get(enumDeclaration);
+  if (enumDeclaration !== undefined && loweredEnum === undefined) return;
   const typeDiagnostics = createPslDiagnosticCollector(model.sources);
-  const resolved = instantiateFieldTypeConstructor({
+  const constructorInput = {
     call,
     descriptor: typeConstructor,
     diagnostics: typeDiagnostics,
     source: diagnosticSource(model.sources, field.node.syntax),
     entityLabel: label,
-    namespaceId: model.namespaceId,
-    namespaceExtensionEntities: args.namespaceEntities.get(model.namespaceId),
     codecLookup: input.codecLookup,
-  });
+  };
+  const resolved =
+    loweredEnum === undefined
+      ? instantiateFieldTypeConstructor(constructorInput)
+      : columnFromConstructorEntity({
+          ...constructorInput,
+          entity: loweredEnum,
+          namespaceId: model.namespaceId,
+        });
   diagnostics.push(...typeDiagnostics.toExternal());
   if (!resolved.ok) {
     return;

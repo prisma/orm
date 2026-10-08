@@ -43,7 +43,11 @@ import {
   getAttribute,
   storageName,
 } from './psl-attribute-parsing';
-import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
+import type {
+  ColumnDescriptor,
+  ConstructorEntityBlock,
+  FieldPresetContributions,
+} from './psl-column-resolution';
 import {
   lowerDefaultForField,
   rejectStrictListNullDefault,
@@ -199,8 +203,7 @@ export interface CollectResolvedFieldsInput {
   readonly capabilities: CapabilityMatrix;
   /** The model's resolved namespace id — forwarded to `resolveFieldTypeDescriptor` for entity-ref value-set scoping. */
   readonly namespaceId?: string;
-  /** Extension entities already lowered for this namespace — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
-  readonly namespaceExtensionEntities?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
 }
@@ -422,7 +425,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     enumHandles,
     capabilities,
     namespaceId,
-    namespaceExtensionEntities,
+    constructorEntities,
     codecLookup,
   } = input;
   const resolvedFields: ResolvedField[] = [];
@@ -493,7 +496,8 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       sources,
       entityLabel: `Field "${model.name}.${field.name}"`,
       ...ifDefined('namespaceId', namespaceId),
-      ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
+      binder,
+      constructorEntities,
       codecLookup,
     };
 

@@ -404,9 +404,9 @@ namespace auth {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNKNOWN_ENTITY_REF' })]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "NoSuchEnum"' },
+    ]);
   });
 
   it('a ref naming something other than a native_enum block is a diagnostic', () => {
@@ -426,9 +426,13 @@ namespace auth {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNKNOWN_ENTITY_REF' })]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNKNOWN_ENTITY_REF',
+        message:
+          'Field "AuthSession.aal" type constructor "pg.enum(AalLevel)" names the model "AalLevel"; it expects a native_enum.',
+      },
+    ]);
   });
 
   it('refuses pg.enum(E) on a composite type member, which has no column to store the enum in', () => {
