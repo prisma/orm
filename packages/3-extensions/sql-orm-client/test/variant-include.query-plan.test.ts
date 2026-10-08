@@ -27,7 +27,7 @@ import {
 describe('variant-owned include parent correlation', () => {
   it('correlates an MTI relation from the joined variant table without base-key projection', () => {
     const contract = buildMixedPolyContract();
-    const include = assigneeInclude('features');
+    const include = assigneeInclude('Feature');
     const childRows = assigneeRows('features', 'assignee_id');
     const aggregate = rowAggregate('assignee', childRows, ['id', 'name']);
 
@@ -50,7 +50,7 @@ describe('variant-owned include parent correlation', () => {
 
   it('correlates an STI relation from the current parent table', () => {
     const contract = buildMixedPolyContract();
-    const include = assigneeInclude('tasks');
+    const include = assigneeInclude();
     const childRows = assigneeRows('tasks', 'assignee_id');
     const aggregate = rowAggregate('assignee', childRows, ['id', 'name']);
 
@@ -75,7 +75,6 @@ describe('variant-owned include parent correlation', () => {
       relationName: 'subtasks',
       relatedModelName: 'Task',
       relatedTableName: 'tasks',
-      localTableName: 'tasks',
       targetColumn: 'parent_id',
       localColumn: 'id',
       cardinality: '1:N',
@@ -103,7 +102,7 @@ describe('variant-owned include child alias collisions', () => {
       relationName: 'relatedFeature',
       relatedModelName: 'Feature',
       relatedTableName: 'features',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'assignee_id',
       cardinality: '1:N',
@@ -139,7 +138,7 @@ describe('variant-owned include child alias collisions', () => {
       relationName: 'featureCount',
       relatedModelName: 'Feature',
       relatedTableName: 'features',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'assignee_id',
       cardinality: '1:N',

@@ -38,9 +38,8 @@ import {
   resolvePolymorphismInfo,
 } from './collection-contract';
 import {
-  bindingForTable,
   type CollectionTables,
-  variantBindingForTable,
+  requireVariantBinding,
   variantColumnLabel,
 } from './collection-tables';
 import { assertLockCompatible } from './lock-guards';
@@ -121,7 +120,7 @@ function buildProjection(
 
 interface PolymorphicProjectionSelection {
   readonly baseSelectedFields: readonly string[] | undefined;
-  readonly selectedMtiColumnsByTable: ReadonlyMap<string, ReadonlySet<string>> | undefined;
+  readonly selectedMtiColumnsByVariant: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   readonly needsHiddenDiscriminator: boolean;
 }
 
@@ -141,7 +140,7 @@ function resolvePolymorphicProjectionSelection(
   if (state.selectedFields === undefined) {
     return {
       baseSelectedFields: undefined,
-      selectedMtiColumnsByTable: undefined,
+      selectedMtiColumnsByVariant: undefined,
       needsHiddenDiscriminator: false,
     };
   }
@@ -153,7 +152,7 @@ function resolvePolymorphicProjectionSelection(
     columnToField: getCompleteColumnToFieldMap(contract, namespaceId, variant.modelName),
   }));
   const baseSelectedFields: string[] = [];
-  const selectedMtiColumnsByTable = new Map<string, Set<string>>();
+  const selectedMtiColumnsByVariant = new Map<string, Set<string>>();
   let hasVariantOwnedSelection = false;
 
   for (const selectedField of state.selectedFields) {
@@ -178,10 +177,10 @@ function resolvePolymorphicProjectionSelection(
           continue;
         }
 
-        let selectedColumns = selectedMtiColumnsByTable.get(variant.table);
+        let selectedColumns = selectedMtiColumnsByVariant.get(variant.modelName);
         if (selectedColumns === undefined) {
           selectedColumns = new Set();
-          selectedMtiColumnsByTable.set(variant.table, selectedColumns);
+          selectedMtiColumnsByVariant.set(variant.modelName, selectedColumns);
         }
         selectedColumns.add(column);
       }
@@ -194,7 +193,7 @@ function resolvePolymorphicProjectionSelection(
 
   return {
     baseSelectedFields,
-    selectedMtiColumnsByTable,
+    selectedMtiColumnsByVariant,
     needsHiddenDiscriminator:
       state.variantName === undefined &&
       hasVariantOwnedSelection &&
@@ -289,12 +288,18 @@ function buildIncludeJoinExpr(
   return joinExprs.length === 1 ? firstExpr : AndExpr.of(joinExprs);
 }
 
+function localBinding(tables: CollectionTables, include: IncludeExpr): TableBinding {
+  return include.localVariantName === undefined
+    ? tables.root
+    : requireVariantBinding(tables, include.localVariantName);
+}
+
 function resolveParentLocalRefs(
   parent: IncludeParent,
   include: IncludeExpr,
   localColumns: readonly string[],
 ): readonly ColumnRef[] {
-  const local = bindingForTable(parent.tables, include.localTableName);
+  const local = localBinding(parent.tables, include);
   const { projectedThrough } = parent;
   return localColumns.map((column) => {
     if (projectedThrough === undefined) {
@@ -387,7 +392,7 @@ function buildChildPolymorphismJoinsAndProjection(
     include.nested.tables,
     polyInfo,
     include.nested.variantName,
-    selection.selectedMtiColumnsByTable,
+    selection.selectedMtiColumnsByVariant,
   );
   return {
     joins,
@@ -409,10 +414,10 @@ function buildRequiredMtiJoinKeyProjection(
   const aliases = new Set<string>();
   const projection: ProjectionItem[] = [];
   for (const nested of include.nested.includes) {
-    const variantTable = variantBindingForTable(include.nested.tables, nested.localTableName);
-    if (variantTable === undefined) {
+    if (nested.localVariantName === undefined) {
       continue;
     }
+    const variantTable = requireVariantBinding(include.nested.tables, nested.localVariantName);
     for (const column of localColumnsForRowInclude(nested)) {
       const alias = variantColumnLabel(variantTable, column);
       if (aliases.has(alias)) {
@@ -719,7 +724,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const grandchildJoinColumns = Array.from(
     new Set(
       childState.includes.flatMap((nested) =>
-        nested.localTableName === include.relatedTableName ? localColumnsForRowInclude(nested) : [],
+        nested.localVariantName === undefined ? localColumnsForRowInclude(nested) : [],
       ),
     ),
   );
@@ -1367,7 +1372,7 @@ function buildRootPolymorphism(
           state.tables,
           polyInfo,
           state.variantName,
-          selection.selectedMtiColumnsByTable,
+          selection.selectedMtiColumnsByVariant,
         )
       : undefined;
   return {

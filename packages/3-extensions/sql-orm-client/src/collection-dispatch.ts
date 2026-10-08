@@ -58,6 +58,7 @@ import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { resolveTableForContract } from './storage-resolution';
 import type { TableBinding } from './table-scope';
 import {
   type CollectionContext,
@@ -231,7 +232,12 @@ function createPreparedIncludeConsumer(
     );
     for (const variant of polyInfo?.mtiVariants ?? []) {
       const variantTable = requireVariantBinding(include.nested.tables, variant.modelName);
-      for (const column of Object.keys(tables?.[variant.table]?.columns ?? {})) {
+      const variantColumns = resolveTableForContract(
+        contract,
+        variantTable.storage.namespaceId,
+        variantTable.storage.tableName,
+      )?.table.columns;
+      for (const column of Object.keys(variantColumns ?? {})) {
         keys.add(variantColumnLabel(variantTable, column));
       }
     }
@@ -661,6 +667,7 @@ interface DecodedValueRef {
 }
 
 interface IncludedColumnRef extends DecodedValueRef {
+  readonly namespaceId: string;
   readonly storageColumn: StorageColumn;
 }
 
@@ -699,10 +706,10 @@ function resolveIncludedColumnBinding(
 ): IncludedColumnBinding | null {
   const ref = resolveIncludedColumnRef(contract, include, key);
   if (!ref) return null;
-  const codec = context.contractCodecs.forColumn(include.relatedNamespaceId, ref.table, ref.column);
+  const codec = context.contractCodecs.forColumn(ref.namespaceId, ref.table, ref.column);
   if (!codec) return null;
   const codecRef = context.codecDescriptors.codecRefForColumn(
-    include.relatedNamespaceId,
+    ref.namespaceId,
     ref.table,
     ref.column,
   );
@@ -721,7 +728,12 @@ function resolveIncludedColumnRef(
     key,
   );
   if (baseColumn) {
-    return { table: include.relatedTableName, column: key, storageColumn: baseColumn };
+    return {
+      namespaceId: include.relatedNamespaceId,
+      table: include.relatedTableName,
+      column: key,
+      storageColumn: baseColumn,
+    };
   }
 
   const polyInfo = resolvePolymorphismInfo(
@@ -734,22 +746,17 @@ function resolveIncludedColumnRef(
   }
 
   for (const variant of polyInfo.mtiVariants) {
-    const prefix = variantColumnLabelPrefix(
-      requireVariantBinding(include.nested.tables, variant.modelName),
-    );
+    const variantTable = requireVariantBinding(include.nested.tables, variant.modelName);
+    const prefix = variantColumnLabelPrefix(variantTable);
     if (!key.startsWith(prefix)) {
       continue;
     }
 
     const column = key.slice(prefix.length);
-    const variantColumn = resolveColumn(
-      contract,
-      include.relatedNamespaceId,
-      variant.table,
-      column,
-    );
+    const { namespaceId, tableName } = variantTable.storage;
+    const variantColumn = resolveColumn(contract, namespaceId, tableName, column);
     if (variantColumn) {
-      return { table: variant.table, column, storageColumn: variantColumn };
+      return { namespaceId, table: tableName, column, storageColumn: variantColumn };
     }
   }
 

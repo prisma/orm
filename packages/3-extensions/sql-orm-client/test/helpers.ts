@@ -111,7 +111,9 @@ export function relationInclude(
       relatedModelName: relation.relatedModelName,
       relatedTableName: relation.relatedTableName,
       relatedNamespaceId: relation.relatedNamespaceId,
-      localTableName: relation.localTableName,
+      ...(relation.localVariantName === undefined
+        ? {}
+        : { localVariantName: relation.localVariantName }),
       targetColumns: relation.targetColumns,
       localColumns: relation.localColumns,
       cardinality: relation.cardinality,

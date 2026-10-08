@@ -33,7 +33,7 @@ describe('nested variant-owned include correlation', () => {
     const contract = buildMixedPolyContract();
     const nested = {
       ...selectedState('id', 'title', 'type'),
-      includes: [assigneeInclude('features')],
+      includes: [assigneeInclude('Feature')],
       variantName: 'Feature',
     };
     const plan = compileSelectWithIncludes(
@@ -71,7 +71,7 @@ describe('nested variant-owned include correlation', () => {
     const nested = {
       ...selectedState('title'),
       distinct: ['title'],
-      includes: [assigneeInclude('features')],
+      includes: [assigneeInclude('Feature')],
       variantName: 'Feature',
     };
     const plan = compileSelectWithIncludes(
@@ -132,7 +132,6 @@ describe('nested variant-owned include correlation', () => {
       relationName: 'subtasks',
       relatedModelName: 'Task',
       relatedTableName: 'tasks',
-      localTableName: 'tasks',
       targetColumn: 'parent_id',
       localColumn: 'id',
       cardinality: '1:N',
@@ -177,7 +176,7 @@ describe('nested variant-owned include correlation', () => {
       relationName: 'labels',
       relatedModelName: 'Assignee',
       relatedTableName: 'assignees',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'priority',
       cardinality: 'N:M',

@@ -24,7 +24,7 @@ changes:
         - '\bcreateModelAccessor\('
   - id: include-expr-junction-binding
     summary: |
-      A hand-built `IncludeExpr` for a many-to-many relation needs a `junction` table binding next to `through`. Compiling a `through` include without one throws.
+      A hand-built `IncludeExpr` for a many-to-many relation needs a `junction` table binding next to `through`; compiling a `through` include without one throws. `IncludeExpr.localTableName` is replaced by the optional `localVariantName`, the model name of the multi-table-inheritance variant whose table holds the relation's local columns.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -134,6 +134,16 @@ const include: IncludeExpr = { relationName: 'tags', through: { table: 'user_tag
 
 // after
 const [include] = users.include('tags').state.includes;
+```
+
+`IncludeExpr` no longer has `localTableName`. Remove the property where the relation's local columns are on the parent model's own table, which is every relation of a non-polymorphic model, a base model or a single-table-inheritance variant. Where they are on a multi-table-inheritance variant's table, set `localVariantName` to that variant's model name:
+
+```ts
+// before
+const include: IncludeExpr = { relationName: 'assignee', localTableName: 'features', /* … */ };
+
+// after
+const include: IncludeExpr = { relationName: 'assignee', localVariantName: 'Feature', /* … */ };
 ```
 
 ## `include-rejects-foreign-collection`

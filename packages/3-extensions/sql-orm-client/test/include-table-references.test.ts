@@ -4,10 +4,13 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { Collection } from '../src/collection';
+import { resolveIncludeRelation } from '../src/collection-contract';
+import { bindIncludeTables, type CollectionTables } from '../src/collection-tables';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import type { CollectionState } from '../src/types';
+import { bindTable, createTableScope } from '../src/table-scope';
+import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getTestAggregates } from './helpers';
+import { buildMixedPolyContract, getTestAggregates } from './helpers';
 
 const adapter = createPostgresAdapter();
 
@@ -198,5 +201,45 @@ describe('table references in includes', () => {
     expect(state.includes[0]?.nested.filters).toEqual([
       BinaryExpr.eq(ColumnRef.of('posts', 'views'), expect.objectContaining({ kind: 'param-ref' })),
     ]);
+  });
+
+  it('finds the local variant table by variant identity when it shares a table name with the root', () => {
+    const contract = buildMixedPolyContract();
+    const scope = createTableScope();
+    const sharedName = { namespaceId: 'public', tableName: 'tasks' };
+    const tables: CollectionTables = {
+      scope,
+      root: bindTable(scope, sharedName),
+      variants: new Map([['Feature', bindTable(scope, sharedName)]]),
+    };
+    const relation = resolveIncludeRelation(contract, 'public', 'Task', 'assignee', 'Feature');
+    expect(relation.localVariantName).toBe('Feature');
+    const child = bindIncludeTables(contract, tables, relation);
+    const assignee: IncludeExpr = {
+      relationName: 'assignee',
+      ...relation,
+      nested: { ...emptyState(child.tables), selectedFields: ['id'] },
+      scalar: undefined,
+      combine: undefined,
+    };
+
+    const plan = compileSelectWithIncludes(
+      contract,
+      getTestAggregates(),
+      {
+        ...emptyState(tables),
+        selectedFields: ['id'],
+        variantName: 'Feature',
+        includes: [assignee],
+      },
+      'Task',
+    );
+    const sql = adapter.lower(plan.ast, {
+      contract: blindCast<PostgresContract, 'the test contract targets postgres'>(contract),
+      params: plan.params,
+    }).sql;
+
+    expect(sql).toContain('"assignees"."id" = "tasks_2"."assignee_id"');
+    expect(sql).not.toContain('"assignees"."id" = "tasks"."assignee_id"');
   });
 });

@@ -931,7 +931,7 @@ export class CollectionBase<
       relatedModelName: relation.relatedModelName,
       relatedNamespaceId: relation.relatedNamespaceId,
       relatedTableName: relation.relatedTableName,
-      localTableName: relation.localTableName,
+      ...ifDefined('localVariantName', relation.localVariantName),
       targetColumns: relation.targetColumns,
       localColumns: relation.localColumns,
       cardinality: relation.cardinality,

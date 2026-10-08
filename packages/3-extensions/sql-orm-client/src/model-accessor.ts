@@ -104,7 +104,6 @@ function createModelAccessorInScope<
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const modelRelations = resolveModelRelations(contract, namespaceId, modelName);
   // When a variant is selected, MTI variant-owned fields resolve to a
   // `ColumnRef` qualified against the variant table the read path joins into
@@ -192,10 +191,15 @@ function createModelAccessorInScope<
         }
 
         const variantField = variantFieldColumns[prop];
-        const resolvedTable = variantField?.table ?? tableName;
         const fieldBinding = variantField ? variantBinding : binding;
+        const fieldStorage = fieldBinding.storage;
         const columnName = variantField?.column ?? fieldToColumn[prop] ?? prop;
-        const column = resolveColumn(contract, namespaceId, resolvedTable, columnName);
+        const column = resolveColumn(
+          contract,
+          fieldStorage.namespaceId,
+          fieldStorage.tableName,
+          columnName,
+        );
         // Unknown fields return `undefined`, matching plain JS object semantics.
         // The `ModelAccessor<TContract, ModelName>` type already rejects typos
         // at compile time for TS consumers, and contexts that iterate accessor
@@ -208,8 +212,8 @@ function createModelAccessorInScope<
         const operations = opsByCodecId.get(column.codecId) ?? [];
         const codec = codecRefForStorageColumn(
           contract.storage,
-          namespaceId,
-          resolvedTable,
+          fieldStorage.namespaceId,
+          fieldStorage.tableName,
           columnName,
         );
         return createScalarFieldAccessor(

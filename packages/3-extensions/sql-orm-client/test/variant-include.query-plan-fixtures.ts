@@ -39,7 +39,7 @@ export function includeExpr(options: {
   relationName: string;
   relatedModelName: string;
   relatedTableName: string;
-  localTableName: string;
+  localVariantName?: string;
   targetColumn: string;
   localColumn: string;
   cardinality: RelationCardinalityTag;
@@ -60,7 +60,7 @@ export function includeExpr(options: {
       relatedModelName: options.relatedModelName,
       relatedNamespaceId: 'public',
       relatedTableName: options.relatedTableName,
-      localTableName: options.localTableName,
+      ...ifDefined('localVariantName', options.localVariantName),
       targetColumns: [options.targetColumn],
       localColumns: [options.localColumn],
       cardinality: options.cardinality,
@@ -90,12 +90,12 @@ export function rootState(
   });
 }
 
-export function assigneeInclude(localTableName: string): IncludeSpec {
+export function assigneeInclude(localVariantName?: string): IncludeSpec {
   return includeExpr({
     relationName: 'assignee',
     relatedModelName: 'Assignee',
     relatedTableName: 'assignees',
-    localTableName,
+    ...ifDefined('localVariantName', localVariantName),
     targetColumn: 'id',
     localColumn: 'assignee_id',
     cardinality: 'N:1',
@@ -108,7 +108,6 @@ export function tasksInclude(nested: StateSpec): IncludeSpec {
     relationName: 'tasks',
     relatedModelName: 'Task',
     relatedTableName: 'tasks',
-    localTableName: 'projects_tbl',
     targetColumn: 'project_id',
     localColumn: 'id',
     cardinality: '1:N',

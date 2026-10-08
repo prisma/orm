@@ -77,7 +77,8 @@ export interface IncludeExpr {
   readonly relatedModelName: string;
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
-  readonly localTableName: string;
+  /** The MTI variant model whose table holds the local join columns; absent when the parent's root table holds them. */
+  readonly localVariantName?: string;
   /** Target-side join columns, positionally paired with `localColumns`. */
   readonly targetColumns: readonly string[];
   /** Local-side join columns, positionally paired with `targetColumns`. */

@@ -11,8 +11,8 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { rebaseOntoRoot } from '../src/collection-tables';
 import { bindTable, createTableScope } from '../src/table-scope';
+import { rebaseOntoRoot } from '../src/where-interop';
 
 const users = { namespaceId: 'public', tableName: 'users' };
 

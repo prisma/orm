@@ -264,7 +264,7 @@ function buildMtiJoins(
   tables: CollectionTables,
   polyInfo: PolymorphismInfo,
   variantName: string | undefined,
-  selectedColumnsByTable: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  selectedColumnsByVariant: ReadonlyMap<string, ReadonlySet<string>> | undefined,
 ): { joins: JoinAst[]; projection: ProjectionItem[] } {
   const joins: JoinAst[] = [];
   const projection: ProjectionItem[] = [];
@@ -293,10 +293,10 @@ function buildMtiJoins(
 
     const { namespaceId, tableName } = variantTable.storage;
     const variantColumns = resolveTableColumns(contract, namespaceId, tableName);
-    const selectedVariantColumns = selectedColumnsByTable?.get(tableName);
+    const selectedVariantColumns = selectedColumnsByVariant?.get(variant.modelName);
     for (const col of variantColumns) {
       if (pkColumns.includes(col)) continue;
-      if (selectedColumnsByTable !== undefined && selectedVariantColumns?.has(col) !== true) {
+      if (selectedColumnsByVariant !== undefined && selectedVariantColumns?.has(col) !== true) {
         continue;
       }
       projection.push(

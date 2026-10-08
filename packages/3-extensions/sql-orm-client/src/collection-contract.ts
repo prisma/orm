@@ -297,7 +297,8 @@ export interface ResolvedIncludeRelation {
   readonly relatedModelName: string;
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
-  readonly localTableName: string;
+  /** The MTI variant model whose table holds the local join columns; absent when the base table holds them. */
+  readonly localVariantName?: string;
   /** Target-side join columns, positionally paired with `localColumns`. */
   readonly targetColumns: readonly string[];
   /** Local-side join columns, positionally paired with `targetColumns`. */
@@ -316,7 +317,7 @@ export function resolveIncludeRelation(
   const polymorphism = resolvePolymorphismInfo(contract, namespaceId, baseModelName);
   const variant = variantName === undefined ? undefined : polymorphism?.variants.get(variantName);
   let declaringModelName = baseModelName;
-  let localTableName = resolveModelTableName(contract, namespaceId, baseModelName);
+  let localVariantName: string | undefined;
   let relation: ResolvedRelation | undefined;
 
   if (variant !== undefined) {
@@ -324,7 +325,7 @@ export function resolveIncludeRelation(
     if (candidate !== undefined) {
       relation = candidate;
       declaringModelName = variant.modelName;
-      localTableName = variant.table;
+      localVariantName = variant.strategy === 'mti' ? variant.modelName : undefined;
     }
   }
 
@@ -367,7 +368,7 @@ export function resolveIncludeRelation(
     relatedModelName: relation.to,
     relatedNamespaceId: relation.toNamespace,
     relatedTableName,
-    localTableName,
+    ...ifDefined('localVariantName', localVariantName),
     targetColumns,
     localColumns,
     cardinality: relation.cardinality,
