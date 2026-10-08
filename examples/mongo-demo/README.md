@@ -108,7 +108,7 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 2. Builds the execution stack from the Mongo target, adapter and driver, and the runtime that executes queries (with the cache middleware)
 3. Exposes the ORM with typed collection accessors (`db.orm.users`, `db.orm.posts`), the query builder (`db.query`) and the enums (`db.enums`)
 
-`mongo()` also fills generated fields such as `temporal.createdAt()` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context as `mutationDefaults`: `mongoOrm({ contract, executor, mutationDefaults: context })`. It fills generated fields such as `temporal.createdAt()`, and `mongoOrm()` refuses a contract that has them when the option is missing (`ORM.MUTATION_DEFAULTS_MISSING`).
+`mongo()` also fills generated fields such as `temporal.createdAt()` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context as `mutationDefaults` and the contract's enum accessors as `enums`: `mongoOrm({ contract, executor, mutationDefaults: context, enums: buildMongoEnums(contract, context.codecs) })`, with `buildMongoEnums` from `@prisma/orm-mongo/family-runtime`. The ORM checks a written enum value against those accessors, which are the ones `db.enums` holds. It fills generated fields such as `temporal.createdAt()`, and `mongoOrm()` refuses a contract that has them when the option is missing (`ORM.MUTATION_DEFAULTS_MISSING`).
 
 ## Key files
 

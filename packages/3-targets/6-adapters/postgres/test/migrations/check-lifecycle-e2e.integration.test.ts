@@ -637,7 +637,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const live = schema.namespaces['public']?.tables['Item']?.checks ?? [];
     expect([...live.map((c) => c.expression)].sort()).toEqual([
       '(array_position(roles, NULL::text) IS NULL)',
-      `(array_remove(roles, NULL::text) <@ ARRAY['user'::text, 'admin'::text])`,
+      `(array_remove(roles, NULL::text) <@ '{user,admin}'::text[])`,
     ]);
 
     expect((await verify(contract)).ok).toBe(true);

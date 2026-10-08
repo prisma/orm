@@ -22,7 +22,7 @@ describe('int-backed enum authoring against the real Postgres pack', () => {
       checks: expect.arrayContaining([
         expect.objectContaining({ expression: '"level" IN (1, 10)' }),
         expect.objectContaining({
-          expression: 'array_remove("levels"::numeric[], NULL) <@ ARRAY[1, 10]::numeric[]',
+          expression: `array_remove("levels", NULL) <@ '{1,10}'`,
         }),
         expect.objectContaining({ expression: 'array_position("levels", NULL) IS NULL' }),
       ]),

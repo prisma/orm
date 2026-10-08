@@ -45,8 +45,8 @@ import {
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
-import { assembleDataTypes } from '@internal/framework-components/codec';
+import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { assembleDataTypes, enumRefusalOf } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -96,6 +96,23 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
     throw errorEnumCodecNotInPackStack({ codecId });
   }
   return codec.encodeJson(value);
+}
+
+function assertEnumCanUseCodec(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors,
+): void {
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
+  if (enumRefusal === undefined) return;
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
+    {
+      fix: 'Type the enum with another codec.',
+      meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
+    },
+  );
 }
 
 // `canonicalStringify` rejects non-plain objects so a `Map` or class
@@ -757,14 +774,17 @@ type MaybeValueObjectsSection<ValueObjects extends Record<string, AnyValueObject
         readonly valueObjects: ContractValueObjectsFromRecord<ValueObjects>;
       };
 
-// Project EnumTypeHandle to the namespace enum-entry shape.
-// Uses enumMembers (which carries Values[number] literals) rather than
-// ContractEnum.members (which uses JsonValue and erases literals).
+// Project EnumTypeHandle to the namespace enum-entry shape. A member is stored in its codec's
+// JSON form, which is the authored literal only when that literal is JSON (a bigint or a Date
+// member is stored as text), so a member whose value is not JSON is typed as `JsonValue`.
 type EnumHandleToEntry<Handle> =
   Handle extends EnumTypeHandle<string, infer Values, infer _Names, infer _MembersMap>
     ? {
         readonly codecId: string;
-        readonly members: readonly { readonly name: string; readonly value: Values[number] }[];
+        readonly members: readonly {
+          readonly name: string;
+          readonly value: Values[number] extends JsonValue ? Values[number] : JsonValue;
+        }[];
       }
     : never;
 
@@ -2545,6 +2565,7 @@ function buildContractFromDefinition<
   // The value set stores each enum's codec-encoded member values (mirroring SQL's build-contract).
   const storageValueSets: Record<string, MongoValueSetInput> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    assertEnumCanUseCodec(handle, codecLookup);
     storageValueSets[enumName] = {
       kind: 'valueSet',
       values: handle.values.map((v) => encodeEnumValue(v, handle.codecId, codecLookup)),

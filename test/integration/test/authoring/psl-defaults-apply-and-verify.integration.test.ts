@@ -17,7 +17,12 @@ import {
   sqlIntColumn,
   sqlVarcharColumn,
 } from '@internal/sql-relational-core/ast';
-import { pgBitColumn, pgCharColumn } from '@internal/target-postgres/codecs';
+import {
+  pgBitColumn,
+  pgCharColumn,
+  pgInetColumn,
+  pgNumericColumn,
+} from '@internal/target-postgres/codecs';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -149,6 +154,73 @@ model Token {
         defaults: [
           { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
           { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('an Inet default written with a host prefix length or in upper case', () => {
+  it(
+    'applies, then verifies strictly against the database with no issue and plans no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Host {
+  id     Int  @id
+  host   Inet @default("10.0.0.1/32")
+  mapped Inet @default("::FFFF:10.0.0.1")
+}
+`,
+          ['host', 'mapped'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: '10.0.0.1' },
+          { kind: 'literal', value: '::ffff:10.0.0.1' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('a TypeScript numeric or inet default in a spelling Postgres prints differently', () => {
+  it(
+    'applies, then verifies strictly against the database with no issue and plans no change',
+    async () => {
+      const contract = defineContract({
+        models: {
+          Reading: model('Reading', {
+            fields: {
+              id: field.column(int4Column).id(),
+              ratio: field.column(pgNumericColumn()).default('01.5'),
+              zero: field.column(pgNumericColumn()).default('-0'),
+              host: field.column(pgInetColumn()).default('10.0.0.1/32'),
+              mapped: field.column(pgInetColumn()).default('::FFFF:10.0.0.1'),
+            },
+          }).sql({ table: 'reading' }),
+        },
+      }) as unknown as Contract<SqlStorage>;
+      expect(
+        await applyAndVerifyContract(contract, ['ratio', 'zero', 'host', 'mapped'], {
+          strict: true,
+        }),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: '1.5' },
+          { kind: 'literal', value: '0' },
+          { kind: 'literal', value: '10.0.0.1' },
+          { kind: 'literal', value: '::ffff:10.0.0.1' },
         ],
         applied: true,
         issues: [],

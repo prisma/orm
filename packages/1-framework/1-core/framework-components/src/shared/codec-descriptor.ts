@@ -49,6 +49,8 @@ export interface CodecDescriptorTemplate<P = void> {
    * per permitted value; the caller joins the results with `|`.
    */
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
+  /** Why an enum cannot use this codec, as sentences an enum's refusal quotes, ending with what to use instead. A codec with the `equality` trait sets it when no value a query reads back equals a member as the contract stores it. A codec without the trait may set it to give a more specific reason than the generic one. Read it through {@link enumRefusalOf}, which also refuses a codec without the `equality` trait. */
+  readonly enumRefusal?: string;
   /**
    * Gives a value this codec reads its canonical form, for a codec whose data type stores several codecs' values in one form and so declares none for them: a SQLite datetime, which `sqlite/text` stores. Read it through {@link canonicalFormOf}, which takes it in place of the data type's. ADR 254.
    */
@@ -77,6 +79,17 @@ export function canonicalFormOf(
   dataTypes: Pick<DataTypeLookup, 'get'>,
 ): ToCanonicalForm | undefined {
   return codec.toCanonicalForm ?? dataTypes.get(codec.dataType)?.toCanonicalForm;
+}
+
+/**
+ * Why an enum cannot use the codec `descriptor` describes, or `undefined` when one can: the codec's own {@link CodecDescriptorTemplate.enumRefusal}, else the missing `equality` trait. Every enum authoring surface refuses a codec through this.
+ */
+export function enumRefusalOf(
+  descriptor: Pick<CodecDescriptorTemplate, 'traits' | 'enumRefusal'>,
+): string | undefined {
+  if (descriptor.enumRefusal !== undefined) return descriptor.enumRefusal;
+  if (descriptor.traits.includes('equality')) return undefined;
+  return 'The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.';
 }
 
 /**
@@ -122,6 +135,8 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
   /** Optional emit-path renderer for a single stored value. See {@link CodecDescriptor.renderValueLiteral}. */
   renderValueLiteral?(value: JsonValue, side: 'output' | 'input'): string | undefined;
 
+  /** See {@link CodecDescriptorTemplate.enumRefusal}. */
+  declare readonly enumRefusal?: string;
   /** Optional canonical form of the codec's values. See {@link CodecDescriptorTemplate.toCanonicalForm}. */
   readonly toCanonicalForm?: ToCanonicalForm;
 

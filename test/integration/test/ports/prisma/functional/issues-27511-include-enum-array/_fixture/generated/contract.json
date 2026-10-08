@@ -314,8 +314,8 @@
             "workspace_role": {
               "checks": [
                 {
-                  "expression": "array_remove(\"permissions\"::text[], NULL) <@ ARRAY['HELLO', 'WORLD']::text[]",
-                  "name": "workspace_role_permissions_check_201b87fe",
+                  "expression": "array_remove(\"permissions\", NULL) <@ '{\"HELLO\",\"WORLD\"}'",
+                  "name": "workspace_role_permissions_check_27418ee9",
                   "prefix": "workspace_role_permissions_check"
                 },
                 {
@@ -377,7 +377,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6cfb0c8ca972725b4a736582c313692cb7522518b4158a82507209db4ffa4248"
+    "storageHash": "8695b7652f418281fd50e6a140bff6f32683e87cbec23d04ecef8a6a37ce7e08"
   },
   "capabilities": {
     "postgres": {

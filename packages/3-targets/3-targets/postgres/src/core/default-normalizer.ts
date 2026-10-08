@@ -1,5 +1,7 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import { canonicalNumeralText } from '@internal/sql-contract/data-type-support';
 import { blindCast } from '@internal/utils/casts';
+import { canonicalInet } from './canonical-inet';
 import { canonicalUuid } from './codec-helpers';
 
 /**
@@ -149,7 +151,9 @@ function readLiteralToken(expression: string): LiteralToken | undefined {
  * lost to a JavaScript number. A column that is not a number type stores the numeral as text.
  */
 function numberValue(numeral: string, nativeType: string | undefined): JsonValue | undefined {
-  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) return numeral;
+  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) {
+    return storedText(numeral, nativeType);
+  }
   if (nativeType !== undefined && !NUMBER_TYPE_PATTERN.test(nativeType)) return numeral;
   const parsed = Number(numeral);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -248,12 +252,18 @@ function byteaInputBase64(text: string): string | undefined {
 }
 
 /**
- * A text default as the column stores it: a uuid in the form PostgreSQL writes, which its codec
- * reads, and a bytea as the base64 of its bytes. `undefined` for bytea text PostgreSQL refuses.
+ * A text default as the column stores it: a uuid, an IP address or the numeral of an int8 or numeric
+ * in the form PostgreSQL writes, which its codec reads, and a bytea as the base64 of its bytes.
+ * `undefined` for bytea text PostgreSQL refuses.
  */
 function storedText(text: string, nativeType: string | undefined): string | undefined {
   if (nativeType === 'bytea') return byteaInputBase64(text);
-  return nativeType === 'uuid' ? (canonicalUuid(text) ?? text) : text;
+  if (nativeType === 'uuid') return canonicalUuid(text) ?? text;
+  if (nativeType === 'inet') return canonicalInet(text) ?? text;
+  if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) {
+    return canonicalNumeralText(text);
+  }
+  return text;
 }
 
 /**

@@ -39,6 +39,7 @@ import {
   type ColumnTypeDescriptor,
   codecForRef,
   type DataTypeLookup,
+  enumRefusalOf,
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -556,14 +557,26 @@ function encodeEnumMember(
 }
 
 /**
- * Each member's value in the form the enum's codec stores it, read back by the codec. A member the
- * codec refuses, a member written differently from how it is stored, and two members that store the
- * same value are each a `CONTRACT.ENUM_INVALID` naming the members at fault.
+ * Each member's value in the form the enum's codec stores it, read back by the codec. A codec an
+ * enum cannot use, a member the codec refuses, a member written differently from how it is stored,
+ * and two members that store the same value are each a `CONTRACT.ENUM_INVALID`.
  */
 function encodeEnumMembers(
   handle: EnumTypeHandle,
   codecLookup: CodecLookupWithDescriptors,
 ): readonly { readonly name: string; readonly value: JsonValue }[] {
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
+  if (enumRefusal !== undefined) {
+    throw contractError(
+      'CONTRACT.ENUM_INVALID',
+      `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
+      {
+        fix: 'Type the enum with another codec.',
+        meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
+      },
+    );
+  }
   const codec = codecLookup.get(handle.codecId);
   const memberByStoredValue = new Map<string, string>();
   return handle.enumMembers.map((member) => {
@@ -605,13 +618,6 @@ function checkMemberValues(
         'CONTRACT.ENUM_INVALID',
         `enumType("${handle.enumName}"): CHECK constraint members must encode to strings or finite numbers.`,
         { meta: { enumName: handle.enumName, reason: 'unsupported-member-value' } },
-      );
-    }
-    if (typeof value !== typeof encoded[0]) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): CHECK constraint members must encode to the same primitive type; mixed strings and numbers are not supported.`,
-        { meta: { enumName: handle.enumName, reason: 'mixed-member-types' } },
       );
     }
     values.push(value);

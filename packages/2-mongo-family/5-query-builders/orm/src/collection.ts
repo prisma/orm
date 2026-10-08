@@ -1,3 +1,4 @@
+import type { EnumAccessor } from '@internal/contract/enum-accessor';
 import {
   type ContractField,
   type ContractReferenceRelation,
@@ -210,6 +211,22 @@ function topLevelUpdateFields(
   return fields;
 }
 
+/**
+ * The contract's enum accessors by namespace and enum name, as `db.enums` holds them. The ORM checks a written enum value against them.
+ */
+export type MongoOrmEnums = Readonly<
+  Record<string, Readonly<Record<string, Pick<EnumAccessor, 'has' | 'values'>>>>
+>;
+
+function describeValue(value: unknown): string {
+  if (typeof value === 'bigint') return `${value}n`;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -225,6 +242,7 @@ class MongoCollectionImpl<
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults | undefined;
+  readonly #enums: MongoOrmEnums;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
@@ -234,11 +252,13 @@ class MongoCollectionImpl<
     modelName: ModelName,
     executor: MongoQueryExecutor,
     mutationDefaults: MutationDefaults | undefined,
+    enums: MongoOrmEnums,
   ) {
     this.#contract = contract;
     this.#modelName = modelName;
     this.#executor = executor;
     this.#mutationDefaults = mutationDefaults;
+    this.#enums = enums;
     const model = blindCast<
       MongoModelDefinition,
       'modelName is constrained to Mongo contract model keys but namespace lookup erases storage type'
@@ -1002,19 +1022,32 @@ class MongoCollectionImpl<
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
     if (contractEnum === undefined) return;
-    const allowed = contractEnum.members.map((member) => member.value);
-    const values = field.many && Array.isArray(value) ? value : [value];
-    const outside = values.find((entry) => entry !== null && !allowed.includes(entry));
-    if (outside === undefined) return;
-    const quoted = allowed.map((entry) => JSON.stringify(entry));
+    const accessor = this.#enums[valueSet.namespaceId]?.[valueSet.entityName];
+    if (accessor === undefined) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `The ORM has no accessor for enum ${valueSet.entityName}, so it cannot check the value written to ${path} in collection '${this.#collectionName}'. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).`,
+        { meta: { argument: 'enums', enum: valueSet.entityName } },
+      );
+    }
+    const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
+    const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
+    if (outside === -1) return;
+    const received = values[outside];
+    const described = accessor.values.map(describeValue);
     const list =
-      quoted.length > 1
-        ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`
-        : quoted.join('');
+      described.length > 1
+        ? `${described.slice(0, -1).join(', ')} and ${described.at(-1)}`
+        : described.join('');
     throw runtimeError(
       'RUNTIME.ENCODE_FAILED',
-      `Failed to encode field ${path} in collection '${this.#collectionName}': ${JSON.stringify(outside)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
-      { label: path, collection: this.#collectionName, received: outside, allowed },
+      `Failed to encode field ${path} in collection '${this.#collectionName}': ${describeValue(received)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
+      {
+        label: path,
+        collection: this.#collectionName,
+        received,
+        allowed: contractEnum.members.map((member) => member.value),
+      },
     );
   }
 
@@ -1265,6 +1298,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1281,6 +1315,7 @@ class MongoCollectionImpl<
       this.#modelName,
       this.#executor,
       this.#mutationDefaults,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1296,7 +1331,8 @@ export function createMongoCollection<
   contract: TContract,
   modelName: ModelName,
   executor: MongoQueryExecutor,
+  enums: MongoOrmEnums,
   mutationDefaults?: MutationDefaults,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults);
+  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults, enums);
 }

@@ -31,6 +31,7 @@ import {
 } from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
+import { canonicalInet } from './canonical-inet';
 import { canonicalUuid, fitsFloat4, pgByteaCanonical, pgIntervalCanonical } from './codec-helpers';
 import { quoteIdentifier } from './sql-utils';
 
@@ -250,7 +251,6 @@ export const pgUuid = sqlDataType('pg/uuid', {
   texts: [writtenAndCatalog('uuid')],
   casts: { [pgText.id]: asUuid },
 });
-export const pgInet = namedOnly('pg/inet', 'inet', fromText);
 
 export const pgBit = sqlDataType('pg/bit', {
   params: pgBitLengthParams,
@@ -373,6 +373,24 @@ export const pgInterval = typeCanonicalFromText('pg/interval', pgIntervalCanonic
 
 export const pgBytea = typeCanonicalFromText('pg/bytea', pgByteaCanonical, {
   texts: [writtenAndCatalog('bytea')],
+});
+
+/** Text PostgreSQL reads as an IP address, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
+function pgInetCanonical(text: string): string {
+  const inet = canonicalInet(text);
+  if (inet !== undefined) return inet;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${JSON.stringify(text)} is not an IP address: PostgreSQL reads an IPv4 address in decimal octets or an IPv6 address in hexadecimal groups, either optionally followed by / and a prefix length.`,
+    {
+      why: 'An inet column takes only text PostgreSQL reads as an IP address.',
+      fix: 'Write an address such as 192.168.0.1 or 2001:db8::1/64.',
+    },
+  );
+}
+
+export const pgInet = typeCanonicalFromText('pg/inet', pgInetCanonical, {
+  texts: [writtenAndCatalog('inet')],
 });
 
 export const pgDate = typeCanonicalFromText('pg/date', pgDateCanonical, {
