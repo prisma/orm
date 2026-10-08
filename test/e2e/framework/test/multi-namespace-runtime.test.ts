@@ -56,8 +56,6 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           tableName: 'user',
           columns: ['id'],
         },
-        constraint: true,
-        index: false,
       },
     ],
   };
