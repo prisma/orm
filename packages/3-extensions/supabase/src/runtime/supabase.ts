@@ -425,7 +425,7 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
   const extNativeEnums = blindCast<
     NamespacedNativeEnums<SupabaseExtensionContract>,
     'buildNamespacedNativeEnums returns the namespace-keyed accessor map this contract types'
-  >(Object.freeze(buildNamespacedNativeEnums(extContract.storage)));
+  >(Object.freeze(buildNamespacedNativeEnums(extContract.storage, extContract.domain)));
 
   const supabaseInternal: SupabaseInternalDb = {
     sql: sql<SupabaseExtensionContract>({ context: extContext, rawCodecInferer }),
