@@ -9,6 +9,7 @@ import type {
 } from '@internal/framework-components/codec';
 import { dataTypeValueFor } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 
 export type MongoCodecTrait = CodecTrait;
 
@@ -131,7 +132,14 @@ export function mongoCodec<
       }
     },
     toDataTypeValue: (value) => dataTypeValueFor(dataType, params, toJson(value)),
-    fromDataTypeValue: fromValue,
+    fromDataTypeValue: (value) => {
+      if (value.type !== dataType.id) {
+        throw new InternalError(
+          `Codec ${config.typeId} converts values of ${dataType.id}, and was handed a value of ${value.type}.`,
+        );
+      }
+      return fromValue(value);
+    },
   };
 }
 

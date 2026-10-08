@@ -35,12 +35,23 @@ const document = dataType('demo/document', { read: (json) => json });
 
 describe('fromContract', () => {
   it('constructs a value of the type with its parameters and its stored JSON', () => {
-    const value = decimal.fromContract('1.5', { scale: 2 });
+    const value = decimal.fromContract('1.50', { scale: 2 });
     expect({ type: value.type, params: value.params, value: value.value }).toEqual({
       type: 'demo/decimal',
       params: { scale: 2 },
-      value: '1.5',
+      value: '1.50',
     });
+  });
+
+  it('refuses JSON in a spelling other than the one its parameters give, naming that spelling', () => {
+    expect(() => decimal.fromContract('1.5', { scale: 2 })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          'demo/decimal JSON value must be "1.50", the spelling its parameters give this value',
+        meta: { dataType: 'demo/decimal', received: '"1.5"' },
+      }),
+    );
   });
 
   it('constructs a frozen value', () => {
@@ -102,6 +113,17 @@ describe('dataTypeValueFor', () => {
   it('constructs a value with the parameters, in the spelling they give it', () => {
     const value = dataTypeValueFor(decimal, { scale: 2 }, '1.5');
     expect(dataTypeValuesEqual(value, decimal.fromContract('1.50', { scale: 2 }))).toBe(true);
+  });
+
+  it('refuses a value the parameters exclude', () => {
+    expect(() => dataTypeValueFor(decimal, { scale: 2 }, '1.234')).toThrow(
+      /at most 2 fraction digits/,
+    );
+  });
+
+  it('constructs through a type declared by spreading another declaration', () => {
+    const spread = { ...decimal };
+    expect(dataTypeValueFor(spread, { scale: 2 }, '1.5').value).toBe('1.50');
   });
 });
 

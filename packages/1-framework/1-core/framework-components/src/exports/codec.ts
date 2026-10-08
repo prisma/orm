@@ -7,7 +7,7 @@
  */
 
 export type { Codec } from '../shared/codec';
-export { CodecImpl, readContractValue } from '../shared/codec';
+export { CodecImpl, readContractValue, readReportedValue } from '../shared/codec';
 export type {
   AnyCodecDescriptor,
   AnyCodecDescriptorTemplate,
@@ -56,7 +56,6 @@ export type {
 export {
   assembleDataTypes,
   createDataTypeLookup,
-  DATA_TYPE_ID_PATTERN,
   dataType,
   dataTypeId,
   dataTypeParamsOf,
@@ -66,6 +65,7 @@ export {
   requiredParamKeys,
   requiredSchemaKeys,
 } from '../shared/data-type';
+export { DATA_TYPE_ID_PATTERN } from '../shared/data-type-id-pattern';
 export type { BigIntRange, IntegerRange } from '../shared/json-readers';
 export {
   floatToJson,

@@ -14,7 +14,7 @@
  */
 
 import type { Contract, JsonValue } from '@internal/contract/types';
-import { readContractValue } from '@internal/framework-components/codec';
+import { readReportedValue } from '@internal/framework-components/codec';
 import {
   AsyncIterableResult,
   isRuntimeError,
@@ -778,7 +778,7 @@ function decodeIncludedJsonValue(
 ): unknown {
   const { ref, codecId, codec, typeParams } = binding;
   try {
-    return readContractValue(
+    return readReportedValue(
       codec,
       blindCast<JsonValue, 'SQL JSON aggregate values are JSON values'>(value),
       typeParams,

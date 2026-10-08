@@ -1,4 +1,4 @@
-import { readContractValue } from '@internal/framework-components/codec';
+import { readReportedValue } from '@internal/framework-components/codec';
 import type { AggregateResultNullability } from '@internal/framework-components/components';
 import type { Codec } from '@internal/sql-relational-core/ast';
 
@@ -20,5 +20,5 @@ export function emptyAggregateResult(
 ): unknown {
   return result.nullable
     ? null
-    : readContractValue(codec, result.emptyResultJson, result.codec.typeParams);
+    : readReportedValue(codec, result.emptyResultJson, result.codec.typeParams);
 }

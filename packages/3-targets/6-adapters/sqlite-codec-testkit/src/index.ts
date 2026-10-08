@@ -13,7 +13,7 @@
  *    type declares one (ADR 254), deep-equals the stored JSON of
  *    `codec.toDataTypeValue(value)` — the codec's current `toDataTypeValue` is
  *    the yardstick and the projection is its SQL realization; and
- * 2. the codec's data type reads the parsed value and `codec.fromDataTypeValue`
+ * 2. the codec's data type reads the parsed value as the database spells it and `codec.fromDataTypeValue`
  *    turns it back into the application value the case started from.
  *
  * Both conditions are measured against the codec's methods as they stand.
@@ -51,7 +51,7 @@ import {
   canonicalFormOf,
   createDataTypeLookup,
   dataTypeValuesEqual,
-  readContractValue,
+  readReportedValue,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
@@ -367,7 +367,7 @@ export async function runSqliteCodecProjection(
 
   let roundTripped: unknown;
   try {
-    roundTripped = readContractValue(codec, projected, conformanceCase.typeParams);
+    roundTripped = readReportedValue(codec, projected, conformanceCase.typeParams);
   } catch (error) {
     return {
       ...base,

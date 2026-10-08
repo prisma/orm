@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import { structuredError } from '@internal/utils/structured-error';
-import { DATA_TYPE_ID_PATTERN } from './data-type';
+import { DATA_TYPE_ID_PATTERN } from './data-type-id-pattern';
 
 /**
  * Readers for the JSON forms data types share. Each returns the JSON it is given in a form it reads and refuses anything else with {@link refuseJsonValue}. `owner` is the data type whose value is read, or the codec whose own limit refuses it.

@@ -17,6 +17,8 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Type } from 'arktype';
 import { canonicalizeJson } from '../utils/canonicalize-json';
+import { DATA_TYPE_ID_PATTERN } from './data-type-id-pattern';
+import { refuseJsonValue } from './json-readers';
 import { runtimeError } from './runtime-error';
 
 /**
@@ -95,7 +97,7 @@ export interface DataType {
    * through `canonicalFormOf`, which takes a codec's own form in its place.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
-  /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, and a value the parameters exclude. */
+  /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, a value the parameters exclude, and JSON in a spelling other than the one the parameters give. */
   fromContract(json: JsonValue, params: DataTypeParams): DataTypeValue;
   /** The JSON `contract.json` stores for `value`. */
   toContract(value: DataTypeValue): JsonValue;
@@ -118,9 +120,6 @@ export interface DataTypeLookup {
   has(id: string): boolean;
 }
 
-/** The whole of what a data type id is: `owner/name` in lower case, with no version. */
-export const DATA_TYPE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 /** Read `id` as a data type id, refusing anything that is not `owner/name` in lower case. */
 export function dataTypeId(id: string): DataTypeId {
   if (!DATA_TYPE_ID_PATTERN.test(id)) {
@@ -132,6 +131,14 @@ export function dataTypeId(id: string): DataTypeId {
   }
   return blindCast<DataTypeId, 'the pattern above is the whole of what a data type id is'>(id);
 }
+
+/**
+ * How each declared type constructs a value from JSON it reads and spells under the parameters, keyed by the type's `fromContract`, which a declaration that spreads another (`sqlDataType`, `mongoDataType`) keeps.
+ */
+const valueConstructors = new WeakMap<
+  DataType['fromContract'],
+  (json: JsonValue, params: DataTypeParams) => DataTypeValue
+>();
 
 /** Declare a data type. Every id it names, its own and each cast's source, is validated here. */
 export function dataType(id: string, spec: DataTypeSpec): DataType {
@@ -150,6 +157,24 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
   };
   const construct = (json: JsonValue, params: DataTypeParams): DataTypeValue =>
     new DataTypeValueRecord(typeId, Object.freeze({ ...params }), json);
+  const spelledUnder = (json: JsonValue, params: DataTypeParams): JsonValue => {
+    const accepted = read(json, params);
+    return spell === undefined ? accepted : spell(accepted, params);
+  };
+  const fromContract = (json: JsonValue, params: DataTypeParams): DataTypeValue => {
+    const spelled = spelledUnder(json, params);
+    if (canonicalizeJson(spelled) !== canonicalizeJson(json)) {
+      return refuseJsonValue(
+        typeId,
+        `${JSON.stringify(spelled)}, the spelling its parameters give this value`,
+        json,
+      );
+    }
+    return construct(json, params);
+  };
+  valueConstructors.set(fromContract, (json, params) =>
+    construct(spelledUnder(json, params), params),
+  );
   return {
     id: typeId,
     ...ifDefined('params', spec.params),
@@ -158,12 +183,9 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
       ? {}
       : { listCast: { of: listCast.of.map(dataTypeId), cast: listCast.cast } }),
     ...(spec.toCanonicalForm === undefined ? {} : { toCanonicalForm: spec.toCanonicalForm }),
-    fromContract: (json, params) => construct(read(json, params), params),
+    fromContract,
     toContract: (value) => ownValue(value).value,
-    withParams: (value, params) => {
-      const json = read(ownValue(value).value, params);
-      return construct(spell === undefined ? json : spell(json, params), params);
-    },
+    withParams: (value, params) => construct(spelledUnder(ownValue(value).value, params), params),
   };
 }
 
@@ -175,10 +197,14 @@ export function dataTypeValueFor<J extends JsonValue>(
   params: DataTypeParams,
   json: J,
 ): DataTypeValue<J> {
+  const construct = valueConstructors.get(type.fromContract);
+  if (construct === undefined) {
+    throw new InternalError(`The data type ${type.id} was not declared with dataType().`);
+  }
   return blindCast<
     DataTypeValue<J>,
     "a type's reader and spelling return JSON of the kind they read"
-  >(type.withParams(type.fromContract(json, params), params));
+  >(construct(json, params));
 }
 
 /** The parameters in `typeParams` that `type` declares; keys a codec keeps for itself are dropped. */

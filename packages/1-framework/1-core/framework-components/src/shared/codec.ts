@@ -70,6 +70,19 @@ export function readContractValue(
   );
 }
 
+/**
+ * The application value `codec` gives for `json`, a value the database reports or returns as JSON for a column with the column's `typeParams`: the codec's data type reads it in any spelling the type reads and writes the spelling the parameters give, as `toDataTypeValue` does, and the codec converts the value. A stored contract value is read with {@link readContractValue}, which refuses another spelling.
+ */
+export function readReportedValue(
+  codec: Pick<Codec, 'dataType' | 'fromDataTypeValue'>,
+  json: JsonValue,
+  typeParams: unknown,
+): unknown {
+  return codec.fromDataTypeValue(
+    dataTypeValueFor(codec.dataType, dataTypeParamsOf(codec.dataType, typeParams), json),
+  );
+}
+
 function namedDataType(descriptor: object): unknown {
   return Reflect.get(descriptor, 'dataType');
 }
@@ -77,7 +90,7 @@ function namedDataType(descriptor: object): unknown {
 /**
  * Abstract base class for concrete codec implementations.
  *
- * A codec is built with its descriptor, the data type it converts values of and the column's parameters of that type. `fromDataTypeValue` and `toDataTypeValue` convert between a value of the type and the application value, and `toDataTypeValue` finishes with {@link CodecImpl.dataTypeValueOf}, which constructs the value through the type. `fromWire` and `toWire` read and write what the driver exchanges, asynchronously.
+ * A codec is built with its descriptor, the data type it converts values of and the column's parameters of that type. The constructor makes `fromDataTypeValue` refuse a value of another data type before the subclass's conversion runs. `fromDataTypeValue` and `toDataTypeValue` convert between a value of the type and the application value, and `toDataTypeValue` finishes with {@link CodecImpl.dataTypeValueOf}, which constructs the value through the type. `fromWire` and `toWire` read and write what the driver exchanges, asynchronously.
  */
 export abstract class CodecImpl<
   Id extends string = string,
@@ -101,6 +114,22 @@ export abstract class CodecImpl<
         `Codec ${descriptor.codecId} is built with the data type ${dataType.id}, but its descriptor names ${String(named)}.`,
       );
     }
+    const convert: (value: DataTypeValue) => TInput = Reflect.get(this, 'fromDataTypeValue');
+    Object.defineProperty(this, 'fromDataTypeValue', {
+      value: (value: DataTypeValue): TInput => convert.call(this, this.ownValue(value)),
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  /** `value`, when it is a value of the codec's data type. */
+  private ownValue(value: DataTypeValue): DataTypeValue {
+    if (value.type !== this.dataType.id) {
+      throw new InternalError(
+        `Codec ${this.id} converts values of ${this.dataType.id}, and was handed a value of ${value.type}.`,
+      );
+    }
+    return value;
   }
 
   get id(): Id {

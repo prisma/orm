@@ -79,9 +79,10 @@ describe('sqlDataType', () => {
         Object.entries(type).filter(([key, value]) => key !== 'sql' && typeof value !== 'function'),
       );
     expect(fields(declared)).toEqual(fields(plain));
-    expect(declared.toContract(declared.fromContract('old', {}))).toBe(
-      plain.toContract(plain.fromContract('old', {})),
-    );
+    const refusal = 't/kept JSON value must be "new", the spelling its parameters give this value';
+    expect(() => declared.fromContract('old', {})).toThrow(refusal);
+    expect(() => plain.fromContract('old', {})).toThrow(refusal);
+    expect(declared.toContract(declared.fromContract('new', {}))).toBe('new');
   });
 
   it('validates its id like every data type', () => {

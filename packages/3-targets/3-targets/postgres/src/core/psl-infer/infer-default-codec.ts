@@ -18,7 +18,7 @@ import {
   type AnyCodecDescriptor,
   type CodecRef,
   codecForRef,
-  readContractValue,
+  readReportedValue,
 } from '@internal/framework-components/codec';
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { blindCast } from '@internal/utils/casts';
@@ -104,7 +104,7 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
         const codec = codecForRef(context.codecLookup, ref);
         if (codec === undefined) return false;
         for (const element of values) {
-          readContractValue(
+          readReportedValue(
             codec,
             blindCast<JsonValue, 'a stored literal default is JSON'>(element),
             ref.typeParams,
