@@ -83,7 +83,7 @@ const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }
 
   @@fullTextIndex([title], name: "post_title_search")
   @@fullTextIndex([[title, subtitle], body], name: "post_search")
-  @@fullTextIndex([body, title], language: "german", where: "id > 10", name: "post_search_de")
+  @@fullTextIndex([body, title], language: "german", where: sql\`id > 10\`, name: "post_search_de")
   @@fullTextIndex([[body]], map: "legacy_body_search")
 }
 `,

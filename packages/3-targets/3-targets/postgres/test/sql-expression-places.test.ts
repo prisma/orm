@@ -134,6 +134,7 @@ const NOT_SQL = [
   '@default.value',
   '@id.map',
   '@map.name',
+  '@relation.index',
   '@relation.map',
   '@relation.name',
   '@unique.map',

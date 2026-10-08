@@ -448,7 +448,9 @@ describe('@@fullTextIndex with map:', () => {
   });
 
   it('warns once when the index also has a where predicate', () => {
-    indexesOf(model(`  @@fullTextIndex([text], where: "id > 0", map: "legacy_text_search_live")`));
+    indexesOf(
+      model(`  @@fullTextIndex([text], where: sql\`id > 0\`, map: "legacy_text_search_live")`),
+    );
 
     expect(exactNameWarnings()).toHaveLength(1);
   });

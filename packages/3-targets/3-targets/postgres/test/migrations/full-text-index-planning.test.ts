@@ -375,7 +375,7 @@ model Message {
   id   Int    @id
   text String
   @@fullTextIndex([text], name: "message_text_search")
-  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_by_hand")
+  @@index(expression: sql\`to_tsvector('english', "text")\`, type: "gin", name: "message_text_by_hand")
 }
 `);
     expect(
