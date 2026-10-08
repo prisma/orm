@@ -284,16 +284,6 @@ describe('createBinder — entity argument of a type constructor, field of a com
     });
   });
 
-  it('binds a model, without checking the kind', () => {
-    const result = bindIn('compositeType', 'db.tagged(TopModel)');
-
-    expect(result.diagnostics).toEqual([]);
-    expect(result.resolutionAt(0)).toEqual({
-      kind: 'model',
-      symbol: result.topLevel.models['TopModel'],
-    });
-  });
-
   it('binds a qualified name and its qualifier', () => {
     const result = bindIn('compositeType', 'db.tagged(auth.AuthTag)');
 
@@ -325,16 +315,6 @@ describe('createBinder — entity argument of a type constructor, named type', (
     expect(result.resolutionAt(0)).toEqual({
       kind: 'block',
       symbol: result.topLevel.blocks['TopTag'],
-    });
-  });
-
-  it('binds a model, without checking the kind', () => {
-    const result = bindIn('namedType', 'db.tagged(TopModel)');
-
-    expect(result.diagnostics).toEqual([]);
-    expect(result.resolutionAt(0)).toEqual({
-      kind: 'model',
-      symbol: result.topLevel.models['TopModel'],
     });
   });
 

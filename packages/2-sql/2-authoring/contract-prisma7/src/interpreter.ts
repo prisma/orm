@@ -891,7 +891,6 @@ function lowerNativeEnums(
     }
     loweredEnums.set(declaration, {
       entity,
-      entityKind,
       namespaceId: declaration.namespaceId,
       name: declaration.name,
       derivesValueSet: valueSet !== undefined,
@@ -1199,6 +1198,7 @@ function readField(args: ReadFieldArgs): void {
       : columnFromConstructorEntity({
           ...constructorInput,
           entity: loweredEnum,
+          entityKeyword: 'enum',
           namespaceId: model.namespaceId,
         });
   diagnostics.push(...typeDiagnostics.toExternal());

@@ -265,7 +265,6 @@ function hasColumnFromEntityHook(
 
 export interface ConstructorEntity {
   readonly entity: unknown;
-  readonly entityKind: string;
   readonly namespaceId: string;
   readonly name: string;
   readonly derivesValueSet: boolean;
@@ -276,18 +275,11 @@ export interface ConstructorEntityBlock {
   readonly lowered?: ConstructorEntity;
 }
 
-function writtenEntityArgument(
-  call: ResolvedTypeConstructorCall,
-  descriptor: AuthoringTypeConstructorDescriptor,
-): string {
-  const positional = call.args.filter((arg) => arg.kind === 'positional');
-  return positional[descriptor.entityRefArg?.index ?? 0]?.value ?? '';
-}
-
 export function columnFromConstructorEntity(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
   readonly entity: ConstructorEntity;
+  readonly entityKeyword: string;
   readonly namespaceId: string | undefined;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
@@ -295,8 +287,7 @@ export function columnFromConstructorEntity(input: {
   readonly entityLabel: string;
 }): ResolveFieldTypeResult {
   const helperPath = input.call.path.join('.');
-  const writtenEntity = writtenEntityArgument(input.call, input.descriptor);
-  const written = `${helperPath}(${writtenEntity})`;
+  const written = `${helperPath}(${input.call.args.map((arg) => arg.value).join(', ')})`;
   const codecId = input.descriptor.output.codecId;
   const codecDescriptor = input.codecLookup.descriptorFor(codecId);
   if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
@@ -311,7 +302,7 @@ export function columnFromConstructorEntity(input: {
   if (resolved === undefined) {
     input.diagnostics.push({
       code: 'PSL_UNKNOWN_ENTITY_REF',
-      message: `${input.entityLabel} type constructor "${written}" does not resolve — no entity named "${writtenEntity}" was found in namespace "${input.namespaceId ?? '(unspecified)'}"`,
+      message: `${input.entityLabel} type constructor "${written}" names the ${input.entityKeyword} "${input.entity.name}", which cannot be used as a column type.`,
       ...input.source.at(input.call.span),
     });
     return NOT_RESOLVED;
@@ -422,6 +413,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     call: input.call,
     descriptor: input.descriptor,
     entity,
+    entityKeyword: resolution.symbol.keyword,
     namespaceId: input.namespaceId,
     codecLookup: input.codecLookup,
     diagnostics: input.diagnostics,

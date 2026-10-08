@@ -56,6 +56,36 @@ describe('prisma7-owned duplicate block entries', () => {
     ]);
   });
 
+  it('reports an enum that cannot be lowered once, and nothing for a field typed by it', async () => {
+    const result = await loadSchema(
+      [
+        'datasource db {',
+        '  provider = "postgresql"',
+        '}',
+        '',
+        'enum Role {',
+        '  Admin @map("same")',
+        '  User  @map("same")',
+        '}',
+        '',
+        'model A {',
+        '  id   Int  @id',
+        '  role Role',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE',
+        message: 'native_enum "Role": duplicate member value "same"',
+      },
+    ]);
+  });
+
   it('reports a duplicate datasource property once, anchored on the later entry', async () => {
     const result = await loadSchema(
       [

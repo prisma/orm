@@ -2378,12 +2378,10 @@ export function interpretPslDocumentToSqlContract(
       const slot = entities[row.entityKind] ?? {};
       entities[row.entityKind] = slot;
       if (Object.hasOwn(slot, row.key)) {
-        const block = Object.values(blocks).find((candidate) => candidate.name === row.key);
-        invariant(block !== undefined, 'Lowered entity has an owning block');
         diagnostics.pushUnlocated({
           code: 'PSL_DUPLICATE_EXTENSION_ENTITY',
           message: `entries slot "${row.entityKind}" in namespace "${row.namespaceId}": entity "${row.key}" is declared more than once in the same namespace.`,
-          ...diagnosticSource(input.sources, block.node.syntax).at(),
+          ...diagnosticSource(input.sources, row.block.node.syntax).at(),
         });
         continue;
       }
@@ -2394,7 +2392,6 @@ export function interpretPslDocumentToSqlContract(
           entityKind: row.entityKind,
           lowered: {
             entity: row.entity,
-            entityKind: row.entityKind,
             namespaceId: row.namespaceId,
             name: row.key,
             derivesValueSet: false,
