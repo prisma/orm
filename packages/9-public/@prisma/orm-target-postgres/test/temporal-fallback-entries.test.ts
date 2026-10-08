@@ -227,10 +227,9 @@ const DECODE_A_TIMESTAMP = `
   const before = typeof globalThis.Temporal;
   let decoded;
   try {
+    const codec = createPostgresBuiltinCodecLookup().get('pg/timestamptz-temporal@1');
     decoded = String(
-      createPostgresBuiltinCodecLookup()
-        .get('pg/timestamptz-temporal@1')
-        .decodeJson('2024-01-01T00:00:00Z'),
+      codec.fromDataTypeValue(codec.dataType.fromContract('2024-01-01T00:00:00Z', {})),
     );
   } catch (error) {
     decoded = error.code;

@@ -534,8 +534,9 @@ describe('mongo() facade', () => {
     } as unknown as AnyMongoContract;
 
     const stringCodec = {
-      decodeJson: (json: unknown) => json,
-      encodeJson: (value: unknown) => value,
+      dataType: { fromContract: (json: unknown) => json, toContract: (value: unknown) => value },
+      fromDataTypeValue: (value: unknown) => value,
+      toDataTypeValue: (value: unknown) => value,
     };
 
     beforeEach(() => {

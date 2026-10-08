@@ -78,8 +78,8 @@ const fixtureCodecs: Readonly<
     string,
     {
       readonly traits: readonly CodecTrait[];
-      readonly encodeJson?: (value: unknown) => JsonValue;
-      readonly decodeJson: (json: JsonValue, typeParams: Record<string, unknown>) => unknown;
+      readonly toStored?: (value: unknown) => JsonValue;
+      readonly fromStored: (json: JsonValue, typeParams: Record<string, unknown>) => unknown;
     }
   >
 > = (() => {
@@ -100,21 +100,21 @@ const fixtureCodecs: Readonly<
   };
   const text = {
     traits: ['equality', 'order', 'textual'] as const,
-    decodeJson: asText,
+    fromStored: asText,
   };
   const wholeNumber = {
     traits: ['equality', 'order', 'numeric'] as const,
-    decodeJson: asWholeNumber,
+    fromStored: asWholeNumber,
   };
   const json = {
     traits: ['equality'] as const,
-    decodeJson: (value: JsonValue) => value,
+    fromStored: (value: JsonValue) => value,
   };
   return {
     'pg/text@1': text,
     'sql/char@1': text,
     'sql/varchar@1': text,
-    'pg/bytea@1': { traits: ['equality'] as const, decodeJson: asText },
+    'pg/bytea@1': { traits: ['equality'] as const, fromStored: asText },
     'pg/timestamptz-temporal@1': text,
     'pg/timestamp-temporal@1': text,
     'pg/date-temporal@1': text,
@@ -122,7 +122,7 @@ const fixtureCodecs: Readonly<
     'pg/timetz@1': text,
     'pg/bool@1': {
       traits: ['equality', 'boolean'] as const,
-      decodeJson: (value: JsonValue) => {
+      fromStored: (value: JsonValue) => {
         if (typeof value !== 'boolean') throw new Error('value must be a boolean');
         return value;
       },
@@ -132,20 +132,20 @@ const fixtureCodecs: Readonly<
     'pg/int@1': wholeNumber,
     'pg/int8@1': {
       traits: ['equality', 'order', 'numeric'] as const,
-      encodeJson: (value: unknown) => String(value),
-      decodeJson: (value: JsonValue) => BigInt(asText(value)),
+      toStored: (value: unknown) => String(value),
+      fromStored: (value: JsonValue) => BigInt(asText(value)),
     },
     'pg/numeric@1': {
       traits: ['equality', 'order', 'numeric'] as const,
-      decodeJson: asText,
+      fromStored: asText,
     },
-    'pg/float4@1': { traits: ['equality', 'order', 'numeric'] as const, decodeJson: asDouble },
-    'pg/float8@1': { traits: ['equality', 'order', 'numeric'] as const, decodeJson: asDouble },
+    'pg/float4@1': { traits: ['equality', 'order', 'numeric'] as const, fromStored: asDouble },
+    'pg/float8@1': { traits: ['equality', 'order', 'numeric'] as const, fromStored: asDouble },
     'pg/json@1': json,
     'pg/jsonb@1': json,
     'pg/vector@1': {
       traits: ['equality'] as const,
-      decodeJson: (value: JsonValue, typeParams: Record<string, unknown>) => {
+      fromStored: (value: JsonValue, typeParams: Record<string, unknown>) => {
         if (!Array.isArray(value)) throw new Error('Vector value must be an array of numbers');
         const elements = value.map(asDouble);
         if (elements.length !== typeParams['length']) {
@@ -185,12 +185,12 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
         dataTypeValueFor(
           type,
           dataTypeParamsOf(type, params),
-          codec.encodeJson === undefined
+          codec.toStored === undefined
             ? blindCast<JsonValue, 'fixture codecs store what they decoded'>(value)
-            : codec.encodeJson(value),
+            : codec.toStored(value),
         ),
       fromDataTypeValue: (value: DataTypeValue) =>
-        codec.decodeJson(
+        codec.fromStored(
           value.value,
           blindCast<Record<string, unknown>, 'the parameter schema accepted these parameters'>(
             params ?? {},
