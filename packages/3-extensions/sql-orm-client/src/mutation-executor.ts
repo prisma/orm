@@ -16,6 +16,7 @@ import { castAs } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   getColumnToFieldMap,
+  type ResolvedThrough,
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
@@ -56,15 +57,6 @@ import { emptyState } from './types';
 import { resolveWhereInput } from './where-interop';
 import { combineWhereExprs } from './where-utils';
 
-interface JunctionThrough {
-  readonly table: string;
-  readonly namespaceId: string;
-  readonly parentColumns: readonly string[];
-  readonly childColumns: readonly string[];
-  readonly targetColumns: readonly string[];
-  readonly requiredPayloadColumns: readonly string[];
-}
-
 interface RelationDefinitionBase {
   readonly relationName: string;
   readonly relatedModelName: string;
@@ -76,7 +68,7 @@ interface RelationDefinitionBase {
 }
 
 export interface JunctionRelationDefinition extends RelationDefinitionBase {
-  readonly through: JunctionThrough;
+  readonly through: ResolvedThrough;
 }
 
 type RelationDefinition =
