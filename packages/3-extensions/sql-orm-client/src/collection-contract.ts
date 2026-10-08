@@ -297,7 +297,6 @@ export interface ResolvedIncludeRelation {
   readonly relatedModelName: string;
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
-  /** The MTI variant model whose table holds the local join columns; absent when the base table holds them. */
   readonly localVariantName?: string;
   /** Target-side join columns, positionally paired with `localColumns`. */
   readonly targetColumns: readonly string[];
