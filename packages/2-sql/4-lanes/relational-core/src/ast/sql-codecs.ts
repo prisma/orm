@@ -13,6 +13,9 @@ import {
   CodecDescriptorTemplateImpl,
   CodecImpl,
   type CodecInstanceContext,
+  type ColumnHelperFor,
+  type ColumnHelperForStrict,
+  column,
   type DataTypeValue,
   floatToJson,
   readJsonFloat,
@@ -42,7 +45,7 @@ import {
 
 type LengthParams = { readonly length?: number };
 
-/** A family codec has no data type of its own, so only a target that adapts it, naming its data type, builds its codec. */
+/** A family codec has no data type of its own, so only a target that adapts it, naming its data type, builds its codec. A column helper below names the codec for a contract; the target's adapted descriptor builds it. */
 function unadapted(codecId: string): never {
   throw new InternalError(
     `${codecId} is a SQL family template. A target adapts it with its own data type and builds its codecs; the template builds none.`,
@@ -74,11 +77,17 @@ export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlTextCodec {
-    return unadapted(this.codecId);
+    return () => unadapted(this.codecId);
   }
 }
 
 export const sqlTextDescriptor = new SqlTextDescriptor();
+
+export const sqlTextColumn = () =>
+  column(sqlTextDescriptor.factory(), sqlTextDescriptor.codecId, undefined);
+
+sqlTextColumn satisfies ColumnHelperFor<SqlTextDescriptor>;
+sqlTextColumn satisfies ColumnHelperForStrict<SqlTextDescriptor>;
 
 export class SqlIntCodec extends CodecImpl<
   typeof SQL_INT_CODEC_ID,
@@ -106,11 +115,17 @@ export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlIntCodec {
-    return unadapted(this.codecId);
+    return () => unadapted(this.codecId);
   }
 }
 
 export const sqlIntDescriptor = new SqlIntDescriptor();
+
+export const sqlIntColumn = () =>
+  column(sqlIntDescriptor.factory(), sqlIntDescriptor.codecId, undefined);
+
+sqlIntColumn satisfies ColumnHelperFor<SqlIntDescriptor>;
+sqlIntColumn satisfies ColumnHelperForStrict<SqlIntDescriptor>;
 
 export class SqlFloatCodec extends CodecImpl<
   typeof SQL_FLOAT_CODEC_ID,
@@ -137,11 +152,17 @@ export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlFloatCodec {
-    return unadapted(this.codecId);
+    return () => unadapted(this.codecId);
   }
 }
 
 export const sqlFloatDescriptor = new SqlFloatDescriptor();
+
+export const sqlFloatColumn = () =>
+  column(sqlFloatDescriptor.factory(), sqlFloatDescriptor.codecId, undefined);
+
+sqlFloatColumn satisfies ColumnHelperFor<SqlFloatDescriptor>;
+sqlFloatColumn satisfies ColumnHelperForStrict<SqlFloatDescriptor>;
 
 export class SqlCharCodec extends CodecImpl<
   typeof SQL_CHAR_CODEC_ID,
@@ -171,11 +192,17 @@ export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams>
     return sqlCharRenderOutputType(params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
-    return unadapted(this.codecId);
+    return () => unadapted(this.codecId);
   }
 }
 
 export const sqlCharDescriptor = new SqlCharDescriptor();
+
+export const sqlCharColumn = (params: LengthParams = {}) =>
+  column(sqlCharDescriptor.factory(params), sqlCharDescriptor.codecId, params);
+
+sqlCharColumn satisfies ColumnHelperFor<SqlCharDescriptor>;
+sqlCharColumn satisfies ColumnHelperForStrict<SqlCharDescriptor>;
 
 export class SqlVarcharCodec extends CodecImpl<
   typeof SQL_VARCHAR_CODEC_ID,
@@ -205,8 +232,14 @@ export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthPara
     return sqlVarcharRenderOutputType(params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
-    return unadapted(this.codecId);
+    return () => unadapted(this.codecId);
   }
 }
 
 export const sqlVarcharDescriptor = new SqlVarcharDescriptor();
+
+export const sqlVarcharColumn = (params: LengthParams = {}) =>
+  column(sqlVarcharDescriptor.factory(params), sqlVarcharDescriptor.codecId, params);
+
+sqlVarcharColumn satisfies ColumnHelperFor<SqlVarcharDescriptor>;
+sqlVarcharColumn satisfies ColumnHelperForStrict<SqlVarcharDescriptor>;
