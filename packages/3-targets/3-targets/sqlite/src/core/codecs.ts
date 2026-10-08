@@ -34,7 +34,6 @@ import {
   CastExpr,
   FunctionCallExpr,
   LiteralExpr,
-  NullCheckExpr,
   type ProjectionExpr,
   SqlCharCodec,
   SqlFloatCodec,
@@ -91,22 +90,25 @@ const decimalTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =
   CastExpr.as(expression, 'TEXT');
 
 /**
- * Projects a BLOB as hexadecimal text.
+ * Projects a blob as a one-element array of its hexadecimal text.
  *
- * SQLite's JSON functions reject a BLOB argument outright, so the encoding has
- * to replace the native conversion rather than post-process it. `hex()` emits
- * uppercase and never wraps at any length, which is the spelling `sqlite/blob`
- * stores.
- *
- * `hex(NULL)` is `''` rather than NULL, and `''` is the hex of an empty blob —
- * so without the NULL check an absent blob and an empty one would both project
- * as `''`, and `sqlite/blob` reads `''` because zero hex pairs is a valid
- * empty blob. The check keeps the two distinguishable.
+ * SQLite's JSON functions reject a BLOB argument outright, so the encoding has to replace the native
+ * conversion rather than post-process it. `hex()` emits uppercase and never wraps. The array is what
+ * tells a blob from text: outside a STRICT table a BLOB column may hold text, which passes through as
+ * text, as a row carries it, and so does NULL and any other value.
  */
 const hexJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CaseExpr.of(
-    [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
-    FunctionCallExpr.of('hex', [expression]),
+    [
+      {
+        condition: BinaryExpr.eq(
+          FunctionCallExpr.of('typeof', [expression]),
+          LiteralExpr.of('blob'),
+        ),
+        value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
+      },
+    ],
+    expression,
   );
 
 /**
@@ -508,23 +510,27 @@ sqliteRealColumn satisfies ColumnHelperForStrict<SqliteRealDescriptor>;
 export class SqliteBlobCodec extends CodecImpl<
   typeof SQLITE_BLOB_CODEC_ID,
   readonly ['equality'],
-  Uint8Array | string,
+  Uint8Array | readonly string[],
   Uint8Array
 > {
   async toWire(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return value;
   }
-  /** A row carries the blob's bytes; an include carries the hex text its projection writes, because SQLite's JSON functions refuse a blob. */
-  async fromWire(wire: Uint8Array | string, _ctx: CodecCallContext): Promise<Uint8Array> {
-    if (typeof wire !== 'string') return wire;
-    if (!BLOB_HEX_TEXT.test(wire)) {
+  /** A row carries the blob's bytes; an include carries the array of their hex text that its projection writes, because SQLite's JSON functions refuse a blob. Anything else a BLOB column holds is refused. */
+  async fromWire(
+    wire: Uint8Array | readonly string[],
+    _ctx: CodecCallContext,
+  ): Promise<Uint8Array> {
+    if (wire instanceof Uint8Array) return wire;
+    const [hex] = Array.isArray(wire) && wire.length === 1 ? wire : [];
+    if (typeof hex !== 'string' || !BLOB_HEX_TEXT.test(hex)) {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
-        'sqlite/blob@1 wire value must be bytes or the uppercase hex text of bytes',
-        { meta: { codecId: SQLITE_BLOB_CODEC_ID, received: wire } },
+        'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
+        { meta: { codecId: SQLITE_BLOB_CODEC_ID, received: String(wire) } },
       );
     }
-    return new Uint8Array(Buffer.from(wire, 'hex'));
+    return new Uint8Array(Buffer.from(hex, 'hex'));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Uint8Array {
     return new Uint8Array(Buffer.from(value.value, 'hex'));

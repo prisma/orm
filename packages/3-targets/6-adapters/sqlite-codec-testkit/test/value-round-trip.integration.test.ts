@@ -5,8 +5,10 @@ import {
   type CodecInstanceContext,
   type DataTypeValue,
 } from '@internal/framework-components/codec';
-import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr, FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import type { AnySqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
 import { SqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
+import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
 import { sqliteText } from '@internal/target-sqlite/data-types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ConformanceConnection } from '../src/index';
@@ -70,6 +72,16 @@ class UpperCasingTextDescriptor extends SqliteCodecDescriptor<void> {
   }
 }
 
+/** `sqlite/bigint@1` with a projection that adds one, so the projected value is not the value written. */
+function offByOneBigintDescriptor(): AnySqliteCodecDescriptor {
+  const bigint = sqliteCodecDescriptorRegistry.descriptorFor('sqlite/bigint@1');
+  if (bigint === undefined) throw new Error('sqlite/bigint@1 is not registered');
+  return Object.assign(Object.create(bigint), {
+    projectJson: (expression: ProjectionExpr) =>
+      CastExpr.as(FunctionCallExpr.of('add_one', [expression]), 'TEXT'),
+  });
+}
+
 describe('the harness checks that a value comes back from the application value', () => {
   let database: DatabaseSync | undefined;
   let connection: ConformanceConnection | undefined;
@@ -113,6 +125,25 @@ describe('the harness checks that a value comes back from the application value'
     expect(outcome.failure).toEqual({
       kind: 'mismatch',
       detail: "fromWire read the projected 'HELLO' as 'HELLO' and the row's 'hello' as 'hello'",
+    });
+  });
+
+  it('checks the projection of a value the driver cannot read as a row', async () => {
+    database!.function('add_one', { useBigIntArguments: true }, (value) =>
+      typeof value === 'bigint' ? value + 1n : null,
+    );
+    const outcome = await runSqliteCodecProjection(connection!, {
+      codecId: 'sqlite/bigint@1',
+      descriptor: offByOneBigintDescriptor(),
+      label: 'an integer past 2^53 projected off by one',
+      value: 9007199254740993n,
+      storageType: 'INTEGER',
+    });
+
+    expect(outcome.failure).toEqual({
+      kind: 'mismatch',
+      detail:
+        "fromWire read the projected '9007199254740994' as 9007199254740994n for an application value of 9007199254740993n",
     });
   });
 });

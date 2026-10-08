@@ -11,7 +11,6 @@ import {
   ColumnRef,
   FunctionCallExpr,
   LiteralExpr,
-  NullCheckExpr,
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
@@ -147,14 +146,21 @@ describe('SQLite built-in codec descriptors', () => {
   it('replaces the native conversion where it cannot carry the value', () => {
     const expression = ColumnRef.of('records', 'value');
 
-    // SQLite's JSON functions reject a BLOB argument outright. `hex()` is
-    // guarded on NULL because `hex(NULL)` is `''`, which is also the hex of an
-    // empty blob — so without the guard an absent blob and an empty one would
-    // be indistinguishable, and `sqlite/blob` reads `''` as a valid empty one.
+    // SQLite's JSON functions reject a BLOB argument outright. A blob is carried as its hex text inside a
+    // one-element array, which no row holds, so text in a BLOB column stays text. NULL and any other
+    // value pass through as themselves.
     expect(sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor))).toEqual(
       CaseExpr.of(
-        [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
-        FunctionCallExpr.of('hex', [expression]),
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [expression]),
+              LiteralExpr.of('blob'),
+            ),
+            value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
+          },
+        ],
+        expression,
       ),
     );
     // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their toDataTypeValue writes.

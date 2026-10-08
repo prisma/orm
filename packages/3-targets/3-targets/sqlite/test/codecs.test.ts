@@ -77,12 +77,50 @@ describe('SQLite codecs read the value an include carries', () => {
     });
   });
 
-  it('reads a blob from the uppercase hex text hex() writes', async () => {
-    expect(await blob.fromWire('0ABCFF', ctx)).toEqual(new Uint8Array([0x0a, 0xbc, 0xff]));
-    expect(await blob.fromWire('', ctx)).toEqual(new Uint8Array([]));
-    await expect(blob.fromWire('0abc', ctx)).rejects.toMatchObject({
+  it('reads a blob from the array of its uppercase hex text that its projection writes', async () => {
+    expect(await blob.fromWire(['0ABCFF'], ctx)).toEqual(new Uint8Array([0x0a, 0xbc, 0xff]));
+    expect(await blob.fromWire([''], ctx)).toEqual(new Uint8Array([]));
+  });
+
+  it.each([
+    ['text, which a BLOB column outside a STRICT table holds as text', 'ABCD'],
+    ['a number', 42],
+    ['lowercase hex', ['0abc']],
+  ])('sqlite/blob@1 refuses %s', async (_name, wire) => {
+    await expect(blob.fromWire(wire as never, ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/blob@1 wire value must be bytes or the uppercase hex text of bytes',
+      message:
+        'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
     });
   });
+
+  it.each([
+    ['sqlite/integer@1', integer, 'abc'],
+    ['sqlite/integer@1', integer, new Uint8Array([0x00, 0xff])],
+    ['sql/int@1', sqlInt, 'abc'],
+    ['sql/int@1', sqlInt, new Uint8Array([0x00, 0xff])],
+  ])(
+    '%s refuses %j, which an INTEGER column outside a STRICT table can hold',
+    async (codecId, codec, wire) => {
+      await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `${codecId} wire value must be an integer or its decimal text`,
+      });
+    },
+  );
+
+  it.each([
+    ['sqlite/real@1', real, 'abc'],
+    ['sqlite/real@1', real, new Uint8Array([0x00, 0xff])],
+    ['sql/float@1', sqlFloat, 'abc'],
+    ['sql/float@1', sqlFloat, new Uint8Array([0x00, 0xff])],
+  ])(
+    '%s refuses %j, which a REAL column outside a STRICT table can hold',
+    async (codecId, codec, wire) => {
+      await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
+      });
+    },
+  );
 });
