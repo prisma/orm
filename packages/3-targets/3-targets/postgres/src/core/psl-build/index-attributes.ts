@@ -129,7 +129,7 @@ export function buildFullTextIndexAttribute(
     args.push(namedArg('language', `"${definition.language}"`));
   }
   if (index.where !== undefined) {
-    args.push(namedArg('where', `"${escapePslString(index.where)}"`));
+    args.push(namedArg('where', printSqlExpressionLiteral(index.where)));
   }
   return buildAttribute('model', 'fullTextIndex', args);
 }

@@ -118,7 +118,7 @@ describe('keys and indexes', () => {
           options: { weightGroups: [['title']], language: 'german' },
         })?.attributes.map(attributeText),
       ).toEqual([
-        '@@fullTextIndex([title], map: "legacy_search", language: "german", where: "id > 1")',
+        '@@fullTextIndex([title], map: "legacy_search", language: "german", where: sql`id > 1`)',
       ]);
     });
   });
