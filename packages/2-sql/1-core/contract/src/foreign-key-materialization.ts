@@ -11,7 +11,11 @@ import {
   type IndexCandidate,
   writtenName,
 } from './index-deduplication';
-import { startsWithColumns } from './index-equivalence';
+import {
+  derivedBackingIndexIsRedundant,
+  indexNodeOf,
+  startsWithColumns,
+} from './index-equivalence';
 import { lowerAuthoredIndex } from './index-naming';
 import type { ForeignKeyIndex, ForeignKeyInput, ReferentialAction } from './ir/foreign-key';
 import type { ForeignKeyReferenceInput } from './ir/foreign-key-reference';
@@ -89,6 +93,25 @@ export function materializeForeignKeysAndIndexes(input: {
     }),
     indexes: deduplicated.indexes.map((candidate) => candidate.index),
   };
+}
+
+/**
+ * Whether a table's declared indexes, unique constraints or primary key already serve a foreign key on `columns`, so the build would drop a derived backing index again. A source that writes no backing index of its own, such as a Prisma 7 schema, leaves the foreign key's `index` to the build where this holds, so the stored foreign key states what backs it.
+ */
+export function declaredIndexesServeForeignKey(
+  columns: readonly string[],
+  table: {
+    readonly indexes: readonly IndexInput[];
+    readonly uniques: readonly UniqueConstraintInput[];
+    readonly primaryKey: PrimaryKeyInput | undefined;
+  },
+): boolean {
+  return derivedBackingIndexIsRedundant(columns, {
+    indexes: table.indexes,
+    nodeOf: indexNodeOf,
+    uniques: table.uniques,
+    primaryKey: table.primaryKey,
+  });
 }
 
 function derivedBackingIndex(tableName: string, columns: readonly string[]): IndexCandidate {

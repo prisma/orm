@@ -391,7 +391,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "19fc561236a5bbd22fdc96bd6355ec5a971dfca9958b14204792e09fe454219a",
+    "storageHash": "1b2fbd3da2df1928167933e6eefe5767191bdec0418aa705596f3ab16243e113",
     "namespaces": {
       "public": {
         "id": "public",
@@ -496,7 +496,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_Favorites_B_index"
+                  }
                 }
               ],
               "primaryKey": {
@@ -554,7 +557,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_Follows_B_index"
+                  }
                 }
               ],
               "primaryKey": {
@@ -612,7 +618,10 @@
                     "columns": ["id"]
                   },
                   "onDelete": "cascade",
-                  "onUpdate": "cascade"
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_PostToTag_B_index"
+                  }
                 }
               ],
               "primaryKey": {
