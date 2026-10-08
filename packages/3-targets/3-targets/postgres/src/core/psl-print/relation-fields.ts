@@ -1,7 +1,14 @@
 import type { ContractReferenceRelation, ContractRelation } from '@internal/contract/types';
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
-import type { ForeignKey, Index, ReferentialAction } from '@internal/sql-contract/types';
+import { defaultForeignKeyIndex } from '@internal/sql-contract/foreign-key-materialization';
+import type {
+  ForeignKey,
+  Index,
+  IndexInput,
+  ReferentialAction,
+} from '@internal/sql-contract/types';
+import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
@@ -162,25 +169,54 @@ export function junctionParentRelation(
 function relationIndexArgument(owner: ModelWithTable, foreignKey: ForeignKey): string | undefined {
   const backing = foreignKey.index;
   if (backing === undefined) return 'false';
-  if (!('name' in backing)) return undefined;
-  const index = owner.table.indexes.find((candidate) => candidate.name === backing.name);
-  if (index === undefined || derivedIndexMatches(index, foreignKey.source.columns)) {
+  const { table } = owner;
+  const columns = foreignKey.source.columns;
+  const derived = defaultForeignKeyIndex(owner.tableName, columns, {
+    indexes: table.indexes.map(indexInputOf),
+    uniques: table.uniques,
+    primaryKey: table.primaryKey,
+  });
+  if (derived !== undefined && JSON.stringify(derived) === JSON.stringify(backing)) {
     return undefined;
   }
-  const written = index.prefix ?? index.name;
-  const ambiguous = owner.table.indexes.some(
-    (other) => other !== index && (other.prefix ?? other.name) === written,
-  );
-  return `"${escapePslString(ambiguous ? index.name : written)}"`;
+  const name = backingObjectName(table, columns, backing);
+  return name === undefined ? undefined : `"${escapePslString(name)}"`;
 }
 
-function derivedIndexMatches(index: Index, columns: readonly string[]): boolean {
-  return (
-    index.columns !== undefined &&
-    sameColumns(index.columns, columns) &&
-    index.where === undefined &&
-    (index.unique || (index.type === undefined && index.options === undefined))
-  );
+function indexInputOf(index: Index): IndexInput {
+  const shape = {
+    naming: parseNaming(index.name, index.prefix),
+    where: index.where,
+    unique: index.unique,
+    type: index.type,
+    options: index.options,
+  };
+  return index.expression !== undefined
+    ? { ...shape, expression: index.expression }
+    : { ...shape, columns: index.columns ?? [] };
+}
+
+/** The name the printed source gives what backs a foreign key: the written name of an index, unless another index shares it, or the name of the key whose first columns are the foreign key's. */
+function backingObjectName(
+  table: ModelWithTable['table'],
+  columns: readonly string[],
+  backing: NonNullable<ForeignKey['index']>,
+): string | undefined {
+  if ('name' in backing) {
+    const index = table.indexes.find((candidate) => candidate.name === backing.name);
+    if (index === undefined) return backing.name;
+    const written = index.prefix ?? index.name;
+    const ambiguous = table.indexes.some(
+      (other) => other !== index && (other.prefix ?? other.name) === written,
+    );
+    return ambiguous ? index.name : written;
+  }
+  const keys = 'primaryKey' in backing ? [table.primaryKey] : table.uniques;
+  return keys.find((key) => key?.name !== undefined && startsWith(key.columns, columns))?.name;
+}
+
+function startsWith(keyColumns: readonly string[], columns: readonly string[]): boolean {
+  return columns.every((column, position) => keyColumns[position] === column);
 }
 
 /** The PSL field one relation is written as. */

@@ -3,6 +3,7 @@ import type { AuthoringWarning } from '@internal/framework-components/authoring'
 import { nameOf } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import {
+  defaultForeignKeyIndex,
   type ForeignKeyAuthoringInput,
   materializeForeignKeysAndIndexes,
 } from '../src/foreign-key-materialization';
@@ -347,5 +348,44 @@ describe('materializeForeignKeysAndIndexes', () => {
     ).toThrow(
       'The foreign key on table "post" columns (author_id) names "post_author_live" as its index, but table "post" has more than one index, unique constraint or primary key with that name.',
     );
+  });
+});
+
+describe('defaultForeignKeyIndex', () => {
+  it.each([
+    [
+      'an identical named index',
+      { indexes: [unnamedIndexOn(['author_id'], 'post_author').index] },
+      { name: 'post_author' },
+    ],
+    [
+      'a unique constraint on its columns',
+      { uniques: [{ columns: ['author_id'] }] },
+      { unique: true },
+    ],
+    [
+      'the primary key on its columns',
+      { primaryKey: { columns: ['author_id'] } },
+      { primaryKey: true },
+    ],
+  ] as const)('is what %s gives a relation that says nothing', (_label, table, index) => {
+    expect(
+      defaultForeignKeyIndex('post', ['author_id'], {
+        indexes: [],
+        uniques: [],
+        primaryKey: undefined,
+        ...table,
+      }),
+    ).toEqual(index);
+  });
+
+  it('is the derived index beside a table that serves nothing', () => {
+    expect(
+      defaultForeignKeyIndex('post', ['author_id'], {
+        indexes: [],
+        uniques: [],
+        primaryKey: undefined,
+      }),
+    ).toEqual({ name: 'post_author_id_idx_f3862461' });
   });
 });

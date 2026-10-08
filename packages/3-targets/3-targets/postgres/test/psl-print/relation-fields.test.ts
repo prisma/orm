@@ -105,6 +105,16 @@ describe('relations', () => {
     );
   });
 
+  it('names a unique constraint whose first columns are the foreign key columns', () => {
+    const models = postAndUser(
+      { index: { unique: true } },
+      { uniques: [{ columns: ['authorId', 'id'], name: 'post_author_key' }] },
+    );
+    expect(models[1]?.fields.map(fieldText)[2]).toBe(
+      'author User @relation(fields: [authorId], references: [id], index: "post_author_key")',
+    );
+  });
+
   it('writes no index argument when a unique constraint backs the foreign key', () => {
     const models = postAndUser(
       { index: { unique: true } },

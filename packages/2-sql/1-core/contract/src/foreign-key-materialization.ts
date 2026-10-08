@@ -1,4 +1,6 @@
+import { asNamespaceId } from '@internal/contract/types';
 import type { AuthoringWarningSink } from '@internal/framework-components/authoring';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   defaultIndexName,
   nameOf,
@@ -133,6 +135,30 @@ export function declaredBackingObjectName(
     uniques: table.uniques,
     primaryKey: table.primaryKey,
   });
+}
+
+/**
+ * What a foreign key on `columns` states it is backed by when its relation says nothing, beside a table whose indexes all carry the `name` or `map` the source gave them, as a printed contract's do. A printer writes a relation's `index` argument only where the stored foreign key differs from this.
+ */
+export function defaultForeignKeyIndex(
+  tableName: string,
+  columns: readonly string[],
+  table: {
+    readonly indexes: readonly IndexInput[];
+    readonly uniques: readonly UniqueConstraintInput[];
+    readonly primaryKey: PrimaryKeyInput | undefined;
+  },
+): ForeignKeyIndex | undefined {
+  const reference = { namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), tableName, columns };
+  const [foreignKey] = materializeForeignKeysAndIndexes({
+    tableName,
+    foreignKeys: [{ source: reference, target: reference, constraint: true, index: true }],
+    declaredIndexes: table.indexes.map((index) => ({ index, namedByUser: true })),
+    uniques: table.uniques,
+    primaryKey: table.primaryKey,
+    warnings: [],
+  }).foreignKeys;
+  return typeof foreignKey?.index === 'object' ? foreignKey.index : undefined;
 }
 
 function derivedBackingIndex(tableName: string, columns: readonly string[]): IndexCandidate {
