@@ -35,6 +35,8 @@ userCollection.include('posts', (posts) => {
   posts.all();
   // @ts-expect-error include refinement collection does not expose first()
   posts.first();
+  // @ts-expect-error include refinement collection does not expose firstOrThrow()
+  posts.firstOrThrow();
   // @ts-expect-error include refinement collection does not expose create()
   posts.create({} as never);
   // @ts-expect-error include refinement collection does not expose update()
