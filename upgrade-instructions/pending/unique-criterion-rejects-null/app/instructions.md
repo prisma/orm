@@ -2,7 +2,7 @@
 changes:
   - id: unique-criterion-rejects-null
     summary: |
-      `UniqueConstraintCriterion` in the SQL ORM client (`@prisma/orm-postgres/orm-client`, the other facades' `orm-client` entries and `@internal/sql-orm-client`) no longer accepts `null` for a nullable unique column, so the `conflictOn` of `upsert` and the criteria of a relation `connect` or `disconnect` stop compiling when a value is `null` or may be `null`. Pass a non-null value, or handle the null case before the call. The detection matches every `conflictOn`, `.connect(` and `.disconnect(`; leave as they are the calls on other objects, such as `postgres.connect(...)`, and the `conflictOn` of `createAll` and `createAndCount`, which is an array of field names.
+      `UniqueConstraintCriterion` in the SQL ORM client (`@prisma/orm-postgres/orm-client` and the other facades' `orm-client` entries) no longer accepts `null` for a nullable unique column, so the `conflictOn` of `upsert` and the criteria of a relation `connect` or `disconnect` stop compiling when a value is `null` or may be `null`. Pass a non-null value, or handle the null case before the call. The detection matches every `conflictOn`, `.connect(` and `.disconnect(`; leave as they are the calls on other objects, such as `postgres.connect(...)`, and the `conflictOn` of `createAll` and `createAndCount`, which is an array of field names.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -11,7 +11,7 @@ changes:
 
 ## `unique-criterion-rejects-null`
 
-`UniqueConstraintCriterion<TContract, ModelName>`, exported by the SQL ORM client (`@prisma/orm-postgres/orm-client`, the other facades' `orm-client` entries and `@internal/sql-orm-client`), is the object that names one row by its primary key or by one of its unique constraints. Each of its values is now the field's type without `null`. A `null` value cannot identify one row: a unique constraint allows any number of rows whose column is `NULL`.
+`UniqueConstraintCriterion<TContract, ModelName>`, exported by the SQL ORM client (`@prisma/orm-postgres/orm-client` and the other facades' `orm-client` entries), is the object that names one row by its primary key or by one of its unique constraints. Each of its values is now the field's type without `null`. A `null` value cannot identify one row: a unique constraint allows any number of rows whose column is `NULL`.
 
 The type is the argument of three calls, and each of them now refuses `null` and a value whose type includes `null`:
 

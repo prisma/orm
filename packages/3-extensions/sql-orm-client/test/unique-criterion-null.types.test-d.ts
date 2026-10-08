@@ -2,6 +2,7 @@ import type { Contract, NamespaceId, StorageHashBase } from '@internal/contract/
 import type { ContractWithTypeMaps, TypeMaps } from '@internal/sql-contract/types';
 import { describe, expectTypeOf, test } from 'vitest';
 import type { Collection } from '../src/collection';
+import type { CollectionRowOf } from '../src/collection-types';
 import type {
   MutationCreateInput,
   MutationUpdateInput,
@@ -158,9 +159,11 @@ declare const handle: string | null;
 
 describe('a unique criterion on a nullable unique column', () => {
   test('the column is nullable in the row', () => {
-    expectTypeOf(accounts.first()).resolves.toExtend<{ handle: string | null } | null>();
-    expectTypeOf<null>().toExtend<Awaited<ReturnType<typeof accounts.first>>>();
-    expectTypeOf(accounts.where({ handle: null })).not.toBeAny();
+    expectTypeOf<CollectionRowOf<typeof accounts>>().toEqualTypeOf<{
+      id: number;
+      handle: string | null;
+      ownerId: number | null;
+    }>();
   });
 
   test('has no null in its value', () => {
