@@ -2,8 +2,11 @@ import type {
   AuthoringWarning,
   AuthoringWarningSink,
 } from '@internal/framework-components/authoring';
-import { canonicalIndexContent } from '@internal/sql-schema-ir/naming';
-import { ifDefined } from '@internal/utils/defined';
+import type { SqlIndexIR } from '@internal/sql-schema-ir/types';
+import { InternalError } from '@internal/utils/internal-error';
+import type { StructuredError } from '@internal/utils/structured-error';
+import { contractError } from './contract-errors';
+import { identicalIndexes, indexNodeOf, type ServingKey, servingKey } from './index-equivalence';
 import type { PrimaryKeyInput } from './ir/primary-key';
 import type { IndexInput } from './ir/sql-index';
 import type { UniqueConstraintInput } from './ir/unique-constraint';
@@ -15,11 +18,8 @@ export interface IndexCandidate {
   readonly namedByUser: boolean;
 }
 
-/** What serves the lookups of an index the pass removed. */
-export type BackingObject =
-  | { readonly kind: 'index'; readonly index: IndexCandidate }
-  | { readonly kind: 'uniqueConstraint'; readonly unique: UniqueConstraintInput }
-  | { readonly kind: 'primaryKey'; readonly primaryKey: PrimaryKeyInput };
+/** What backs a foreign key, or serves the lookups of an index the pass removed. */
+export type BackingObject = ServingKey<IndexCandidate, UniqueConstraintInput, PrimaryKeyInput>;
 
 export interface DeduplicatedIndexes {
   /** The indexes the table keeps, in their original order. */
@@ -28,12 +28,12 @@ export interface DeduplicatedIndexes {
 }
 
 const IDENTICAL_DESCRIPTION =
-  'they have the same columns, type, options, predicate and uniqueness. The contract keeps both because each is named.';
+  'the planner sees them as the same index. The contract keeps both because each is named.';
 
 const REDUNDANT_DESCRIPTION = 'which already serves the same lookups.';
 
 /**
- * Removes the indexes of one table that duplicate another. Two indexes are identical when their columns (in order), type, options, predicate, expression and uniqueness are equal; of an identical group the pass keeps the indexes named by the user, or the first one when none is. A plain non-unique index (columns only) whose columns are those of the primary key, a unique constraint or a unique index without a predicate is redundant, and the pass removes it unless it is named by the user. Every index named by the user survives; the pass warns about each one that duplicates another.
+ * Removes the indexes of one table that duplicate another. Two indexes are identical when the planner sees them as the same index apart from their names (see {@link identicalIndexes}); of an identical group the pass keeps the indexes named by the user, or the first one when none is. A plain non-unique index whose columns are those of the primary key, a unique constraint or a unique index without a predicate is redundant (see {@link servingKey}), and the pass removes it unless it is named by the user. Every index named by the user survives; the pass warns about each one that duplicates another, and refuses two identical indexes both named with `name:`, whose wire names the planner could not tell apart.
  */
 export function deduplicateIndexes(input: {
   readonly tableName: string;
@@ -44,15 +44,30 @@ export function deduplicateIndexes(input: {
 }): DeduplicatedIndexes {
   const { tableName, warnings } = input;
   const replacements = new Map<IndexCandidate, BackingObject>();
+  const nodes = new Map(
+    input.indexes.map((candidate) => [candidate, indexNodeOf(candidate.index)]),
+  );
+  const nodeOf = (candidate: IndexCandidate): SqlIndexIR => {
+    const node = nodes.get(candidate);
+    if (node === undefined) throw new InternalError('every candidate has a node');
+    return node;
+  };
 
-  const groups = new Map<string, readonly [IndexCandidate, ...IndexCandidate[]]>();
+  const groups: (readonly [IndexCandidate, ...IndexCandidate[]])[] = [];
   for (const candidate of input.indexes) {
-    const content = contentOf(candidate.index);
-    const group = groups.get(content);
-    groups.set(content, group === undefined ? [candidate] : [...group, candidate]);
+    const position = groups.findIndex(([first]) =>
+      identicalIndexes(nodeOf(first), nodeOf(candidate)),
+    );
+    const group = groups[position];
+    if (group === undefined) groups.push([candidate]);
+    else groups[position] = [...group, candidate];
   }
-  for (const group of groups.values()) {
+  for (const group of groups) {
     const named = group.filter((candidate) => candidate.namedByUser);
+    const wireNamed = named.filter((candidate) => candidate.index.naming.kind === 'wire');
+    if (wireNamed.length > 1) {
+      throw identicalWireNamedIndexesError(tableName, wireNamed);
+    }
     const kept = named[0] ?? group[0];
     for (const candidate of group) {
       if (candidate !== kept && !candidate.namedByUser) {
@@ -66,7 +81,12 @@ export function deduplicateIndexes(input: {
 
   const survivors = input.indexes.filter((candidate) => !replacements.has(candidate));
   for (const candidate of survivors) {
-    const servedBy = uniqueLookupFor(candidate, survivors, input.uniques, input.primaryKey);
+    const servedBy = servingKey(nodeOf(candidate), {
+      indexes: survivors,
+      nodeOf,
+      uniques: input.uniques,
+      primaryKey: input.primaryKey,
+    });
     if (servedBy === undefined) continue;
     if (candidate.namedByUser) {
       warnings.push(redundantIndexWarning(tableName, candidate, servedBy));
@@ -81,53 +101,19 @@ export function deduplicateIndexes(input: {
   };
 }
 
-function contentOf(index: IndexInput): string {
-  return canonicalIndexContent({
-    ...ifDefined('columns', index.columns),
-    ...ifDefined('expression', index.expression),
-    ...ifDefined('where', index.where),
-    unique: index.unique,
-    ...ifDefined('type', index.type),
-    ...ifDefined('options', index.options),
-  });
-}
-
-function isPlainIndex(
-  index: IndexInput,
-): index is IndexInput & { readonly columns: readonly string[] } {
-  return (
-    index.columns !== undefined &&
-    index.where === undefined &&
-    index.type === undefined &&
-    index.options === undefined
+function identicalWireNamedIndexesError(
+  tableName: string,
+  wireNamed: readonly IndexCandidate[],
+): StructuredError {
+  const names = quotedList(wireNamed.map((candidate) => writtenName(candidate.index)));
+  return contractError(
+    'CONTRACT.ARGUMENT_INVALID',
+    `Indexes ${names} on table "${tableName}" are identical and both named with name:; the planner pairs wire-named indexes by their content, so it could not tell them apart.`,
+    {
+      fix: 'Remove one of them, or name one with map: to keep both under exact names.',
+      meta: { tableName, indexes: wireNamed.map((candidate) => writtenName(candidate.index)) },
+    },
   );
-}
-
-function sameColumns(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((column, position) => column === b[position]);
-}
-
-function uniqueLookupFor(
-  candidate: IndexCandidate,
-  survivors: readonly IndexCandidate[],
-  uniques: readonly UniqueConstraintInput[],
-  primaryKey: PrimaryKeyInput | undefined,
-): BackingObject | undefined {
-  const { index } = candidate;
-  if (index.unique || !isPlainIndex(index)) return undefined;
-  if (primaryKey !== undefined && sameColumns(primaryKey.columns, index.columns)) {
-    return { kind: 'primaryKey', primaryKey };
-  }
-  const unique = uniques.find((constraint) => sameColumns(constraint.columns, index.columns));
-  if (unique !== undefined) return { kind: 'uniqueConstraint', unique };
-  const uniqueIndex = survivors.find(
-    (other) =>
-      other.index.unique &&
-      other.index.columns !== undefined &&
-      other.index.where === undefined &&
-      sameColumns(other.index.columns, index.columns),
-  );
-  return uniqueIndex === undefined ? undefined : { kind: 'index', index: uniqueIndex };
 }
 
 /** The name the source wrote: the prefix of a wire-named index, the whole name of an exact one. */

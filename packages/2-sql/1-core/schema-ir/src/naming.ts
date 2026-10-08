@@ -255,16 +255,11 @@ export function normalizeIndexOptionValue(value: unknown): string {
 }
 
 export function computeIndexContentHash(parts: IndexContentHashParts): string {
-  return createHash('sha256').update(canonicalIndexContent(parts)).digest('hex').slice(0, 8);
-}
-
-/** The canonical content tuple {@link computeIndexContentHash} hashes: two indexes with equal tuples are identical apart from their names. */
-export function canonicalIndexContent(parts: IndexContentHashParts): string {
   const sortedOptions = Object.entries(parts.options ?? {})
     .map(([key, value]): readonly [string, string] => [key, normalizeIndexOptionValue(value)])
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 
-  return JSON.stringify([
+  const tuple = JSON.stringify([
     normalizeSqlBody(parts.expression ?? ''),
     normalizeSqlBody(parts.where ?? ''),
     parts.columns ?? [],
@@ -272,6 +267,7 @@ export function canonicalIndexContent(parts: IndexContentHashParts): string {
     parts.type ?? '',
     sortedOptions,
   ]);
+  return createHash('sha256').update(tuple).digest('hex').slice(0, 8);
 }
 
 /**

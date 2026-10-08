@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { deduplicateIndexes, type IndexCandidate } from '../src/index-deduplication';
 import { type AuthoredIndexInput, lowerAuthoredIndex } from '../src/index-naming';
 
-type AuthoredIndex = {
-  readonly columns: readonly string[];
+type AuthoredIndex = (
+  | { readonly columns: readonly string[]; readonly expression?: never }
+  | { readonly columns?: never; readonly expression: string }
+) & {
   readonly where?: string;
   readonly unique?: boolean;
   readonly map?: string;
@@ -15,7 +17,9 @@ type AuthoredIndex = {
 
 function declared(authored: AuthoredIndex): IndexCandidate {
   const input: AuthoredIndexInput = {
-    columns: authored.columns,
+    ...(authored.expression === undefined
+      ? { columns: authored.columns }
+      : { expression: authored.expression }),
     where: authored.where,
     unique: authored.unique,
     map: authored.map,
@@ -81,10 +85,10 @@ describe('deduplicateIndexes', () => {
       {
         code: 'PN_INDEX_DUPLICATE',
         message:
-          'Indexes "post_author_by_hand" and "post_author" on table "post" are identical: they have the same columns, type, options, predicate and uniqueness. The contract keeps both because each is named. Remove one of them.',
+          'Indexes "post_author_by_hand" and "post_author" on table "post" are identical: the planner sees them as the same index. The contract keeps both because each is named. Remove one of them.',
         item: 'table "post": indexes "post_author_by_hand" and "post_author"',
         summary:
-          'tables have named indexes that are identical: they have the same columns, type, options, predicate and uniqueness. The contract keeps both because each is named. Remove one of each.',
+          'tables have named indexes that are identical: the planner sees them as the same index. The contract keeps both because each is named. Remove one of each.',
       },
     ]);
   });
@@ -99,12 +103,64 @@ describe('deduplicateIndexes', () => {
     ]);
   });
 
+  it('treats an explicit btree index as identical to one with no type, as the planner does', () => {
+    const untyped = declared({ columns: ['author_id'] });
+    const btree = declared({
+      columns: ['author_id'],
+      name: 'post_author',
+      type: 'btree',
+      options: {},
+    });
+
+    const result = deduplicate({ indexes: [untyped, btree] });
+
+    expect(result.indexes).toEqual([btree]);
+    expect(result.replacements).toEqual(new Map([[untyped, { kind: 'index', index: btree }]]));
+  });
+
+  it('keeps one of two identical expression indexes and warns when both are named', () => {
+    const first = declared({ expression: 'lower(title)', map: 'post_title_lower' });
+    const second = declared({ expression: 'lower(title)', map: 'post_title_lower_again' });
+
+    const result = deduplicate({ indexes: [first, second] });
+
+    expect(result.indexes).toEqual([first, second]);
+    expect(result.warnings.map((warning) => warning.code)).toEqual(['PN_INDEX_DUPLICATE']);
+  });
+
+  it('keeps a plain index beside an expression unique index', () => {
+    const plain = declared({ columns: ['title'] });
+    const expressionUnique = declared({
+      expression: 'lower(title)',
+      unique: true,
+      name: 'post_title_lower_u',
+    });
+
+    expect(deduplicate({ indexes: [plain, expressionUnique] })).toEqual({
+      indexes: [plain, expressionUnique],
+      replacements: new Map(),
+      warnings: [],
+    });
+  });
+
+  it('refuses two identical indexes both named with name:, naming both and the table', () => {
+    expect(() =>
+      deduplicate({
+        indexes: [
+          declared({ columns: ['author_id'], name: 'post_author' }),
+          declared({ columns: ['author_id'], name: 'post_author_again' }),
+        ],
+      }),
+    ).toThrow(
+      'Indexes "post_author" and "post_author_again" on table "post" are identical and both named with name:; the planner pairs wire-named indexes by their content, so it could not tell them apart.',
+    );
+  });
+
   it.each([
     ['column order', { columns: ['title', 'author_id'] }],
     ['predicate', { where: 'archived_at IS NULL' }],
     ['type', { type: 'hash' }],
     ['options', { options: { fillfactor: 70 } }],
-    ['uniqueness', { unique: true }],
   ])('keeps two indexes that differ only in %s', (_label, difference) => {
     const base = { columns: ['author_id', 'title'], type: 'btree', options: {} };
     const first = declared(base);
