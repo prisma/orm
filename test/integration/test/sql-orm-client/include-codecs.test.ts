@@ -42,7 +42,10 @@ class IncludedTextCodec extends CodecImpl<
   }
 
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    if (wire === SENSITIVE_DATABASE_VALUE) {
+      throw new Error('intentional included text decode failure');
+    }
+    return `decoded-wire:${wire}`;
   }
 
   toDataTypeValue(value: string): DataTypeValue {
@@ -50,10 +53,7 @@ class IncludedTextCodec extends CodecImpl<
   }
 
   fromDataTypeValue(value: DataTypeValue<string>): string {
-    if (value.value === SENSITIVE_DATABASE_VALUE) {
-      throw new Error('intentional included text decode failure');
-    }
-    return `decoded-json:${value.value}`;
+    return value.value;
   }
 }
 
@@ -152,7 +152,7 @@ async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
 
 describe('integration/include codecs', () => {
   it(
-    'delegates JSON values to codec.fromDataTypeValue',
+    'reads JSON values with codec.fromWire',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {
@@ -210,7 +210,7 @@ describe('integration/include codecs', () => {
                 wrappedDek: new Uint8Array([1, 2, 3, 4]),
                 deletedAt: Temporal.PlainDateTime.from('2026-07-09T15:23:33.037'),
                 deletedAtTz: Temporal.Instant.from('2026-07-09T15:23:33.037Z'),
-                customText: 'decoded-json:extension value',
+                customText: 'decoded-wire:extension value',
               },
             },
           ]);
