@@ -45,15 +45,15 @@ export function deduplicateIndexes(input: {
   const { tableName, warnings } = input;
   const replacements = new Map<IndexCandidate, IndexReplacement>();
 
-  const groups = new Map<string, IndexCandidate[]>();
+  const groups = new Map<string, readonly [IndexCandidate, ...IndexCandidate[]]>();
   for (const candidate of input.indexes) {
     const content = contentOf(candidate.index);
-    groups.set(content, [...(groups.get(content) ?? []), candidate]);
+    const group = groups.get(content);
+    groups.set(content, group === undefined ? [candidate] : [...group, candidate]);
   }
   for (const group of groups.values()) {
     const named = group.filter((candidate) => candidate.namedByUser);
-    const [kept = group[0]] = named;
-    if (kept === undefined) continue;
+    const kept = named[0] ?? group[0];
     for (const candidate of group) {
       if (candidate !== kept && !candidate.namedByUser) {
         replacements.set(candidate, { kind: 'index', index: kept });

@@ -89,6 +89,16 @@ describe('deduplicateIndexes', () => {
     ]);
   });
 
+  it('names every index of an identical group in one warning', () => {
+    const indexes = ['post_author_a', 'post_author_b', 'post_author_c'].map((map) =>
+      declared({ columns: ['author_id'], map }),
+    );
+
+    expect(deduplicate({ indexes }).warnings.map((warning) => warning.item)).toEqual([
+      'table "post": indexes "post_author_a", "post_author_b" and "post_author_c"',
+    ]);
+  });
+
   it.each([
     ['column order', { columns: ['title', 'author_id'] }],
     ['predicate', { where: 'archived_at IS NULL' }],
@@ -188,18 +198,21 @@ describe('deduplicateIndexes', () => {
     ]);
   });
 
-  it('names the primary key and a named unique index in the redundancy warning', () => {
+  it('names the primary key, a named unique constraint and a unique index in the redundancy warning', () => {
     const byPrimaryKey = declared({ columns: ['id'], name: 'post_id_lookup' });
+    const byUniqueConstraint = declared({ columns: ['title'], name: 'post_title_lookup' });
     const byUniqueIndex = declared({ columns: ['slug'], map: 'post_slug_lookup' });
     const uniqueIndex = declared({ columns: ['slug'], unique: true, name: 'post_slug_u' });
 
     const result = deduplicate({
-      indexes: [byPrimaryKey, byUniqueIndex, uniqueIndex],
+      indexes: [byPrimaryKey, byUniqueConstraint, byUniqueIndex, uniqueIndex],
+      uniques: [{ columns: ['title'], name: 'post_title_key' }],
       primaryKey: { columns: ['id'] },
     });
 
     expect(result.warnings.map((warning) => warning.message)).toEqual([
       'Index "post_id_lookup" on table "post" has the same columns as the primary key, which already serves the same lookups. The contract keeps the index because it is named. Remove it.',
+      'Index "post_title_lookup" on table "post" has the same columns as the unique constraint "post_title_key", which already serves the same lookups. The contract keeps the index because it is named. Remove it.',
       'Index "post_slug_lookup" on table "post" has the same columns as the unique index "post_slug_u", which already serves the same lookups. The contract keeps the index because it is named. Remove it.',
     ]);
   });
