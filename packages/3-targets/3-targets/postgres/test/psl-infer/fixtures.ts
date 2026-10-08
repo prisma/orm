@@ -2,7 +2,6 @@ import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { printPsl } from '@internal/psl-printer';
-import { indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import {
   postgresAuthoringPslBlockDescriptors,
@@ -11,7 +10,6 @@ import {
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { postgresDataTypes } from '../../src/core/data-types';
-import { postgresIndexTypes } from '../../src/core/index-types';
 import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-contract';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
@@ -80,15 +78,11 @@ export const inferBuildContext: SqlPslBuildContext = {
     entries: postgresDataTypeEntries(),
     lookup: createDataTypeLookup(postgresDataTypes),
   },
-  indexTypes: indexTypeRegistryOf([{ id: 'postgres', indexTypes: postgresIndexTypes }]),
 };
 
 /** Infers and prints PSL from a flat introspection fixture, with the header `contract infer` writes. */
-export function printPslFromFlat(
-  schemaIR: SqlSchemaIR,
-  context: SqlPslBuildContext = inferBuildContext,
-): string {
-  return printPsl(inferPostgresPslContract(treeFromFlat(schemaIR), context), {
+export function printPslFromFlat(schemaIR: SqlSchemaIR): string {
+  return printPsl(inferPostgresPslContract(treeFromFlat(schemaIR), inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     description:
       'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',

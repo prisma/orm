@@ -6,7 +6,6 @@ export const paradedbIndexTypes = defineIndexTypes().add('bm25', {
     '+': 'reject',
     key_field: 'string',
   }),
-  backsForeignKey: false,
 });
 
 export type IndexTypes = typeof paradedbIndexTypes.IndexTypes;

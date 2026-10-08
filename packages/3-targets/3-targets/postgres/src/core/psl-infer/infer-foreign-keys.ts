@@ -126,7 +126,6 @@ export type DanglingForeignKeyInfo = {
 export function resolveForeignKeys(
   tables: Readonly<Record<string, SqlTableIR>>,
   owners: ReadonlyMap<string, SqlDescribedContractSpace>,
-  backsForeignKey: (indexType: string) => boolean,
 ): ForeignKeyResolution {
   const resultTables: Record<string, SqlTableIR> = {};
   const extraRelationsByTable = new Map<string, RelationField[]>();
@@ -167,10 +166,7 @@ export function resolveForeignKeys(
             (columnName) => table.columns[columnName]?.nullable ?? false,
           );
           const relationField: RelationField = {
-            ...buildChildRelationField(fieldName, target.modelName, fk, optional, undefined, {
-              table,
-              backsForeignKey,
-            }),
+            ...buildChildRelationField(fieldName, target.modelName, fk, optional, undefined, table),
             typeNamespaceId: target.namespaceId,
             typeContractSpaceId: target.spaceId,
           };

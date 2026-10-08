@@ -7,11 +7,7 @@ import type { IndexInput } from './ir/sql-index';
 import type { UniqueConstraintInput } from './ir/unique-constraint';
 
 export type BackingIndexCandidates = {
-  readonly indexes: readonly {
-    readonly columns?: readonly string[] | undefined;
-    readonly where?: string | undefined;
-    readonly type?: string | undefined;
-  }[];
+  readonly indexes: readonly { readonly columns?: readonly string[] }[];
   readonly uniques: readonly { readonly columns: readonly string[] }[];
   readonly primaryKey?: { readonly columns: readonly string[] } | undefined;
 };
@@ -20,26 +16,17 @@ export type BackingIndexCandidates = {
  * The column-list keys (`"colA,colB"`, order preserved) a table's own
  * indexes, unique constraints, and primary key already back. A foreign key
  * whose source columns join to one of these keys needs no separately
- * derived backing index. An index counts only when it has no `where`
- * predicate and its type is the target's default or one whose registration
- * says it can back a foreign key (`backsForeignKey`).
+ * derived backing index.
  *
  * Shared by {@link isBackedByColumnKeys}'s callers: `materializeForeignKeysAndIndexes`
  * (deriving the discrete backing-index entities persisted at `contract emit`)
  * and the postgres PSL inferrer (deciding whether an introspected relation
  * needs an explicit `index: false`).
  */
-export function backingIndexColumnKeys(
-  table: BackingIndexCandidates,
-  backsForeignKey: (indexType: string) => boolean,
-): readonly string[] {
+export function backingIndexColumnKeys(table: BackingIndexCandidates): readonly string[] {
   return [
     ...table.indexes.flatMap((index) =>
-      index.columns !== undefined &&
-      index.where === undefined &&
-      (index.type === undefined || backsForeignKey(index.type))
-        ? [index.columns.join(',')]
-        : [],
+      index.columns !== undefined ? [index.columns.join(',')] : [],
     ),
     ...table.uniques.map((unique) => unique.columns.join(',')),
     ...(table.primaryKey ? [table.primaryKey.columns.join(',')] : []),
@@ -93,10 +80,9 @@ export function materializeForeignKeysAndIndexes(
   declaredIndexes: readonly IndexInput[],
   uniques: readonly UniqueConstraintInput[],
   primaryKey: PrimaryKeyInput | undefined,
-  backsForeignKey: (indexType: string) => boolean,
 ): MaterializedTableConstraints {
   const satisfiedIndexColumns = new Set(
-    backingIndexColumnKeys({ indexes: declaredIndexes, uniques, primaryKey }, backsForeignKey),
+    backingIndexColumnKeys({ indexes: declaredIndexes, uniques, primaryKey }),
   );
   const synthesizedIndexes: IndexInput[] = [];
   const materializedForeignKeys: ForeignKeyInput[] = [];

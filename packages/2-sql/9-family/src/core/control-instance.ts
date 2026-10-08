@@ -35,7 +35,6 @@ import { isPlainRecord } from '@internal/framework-components/ir';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
-import { type IndexTypeRegistry, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -523,22 +522,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor inferPslContract hook'
   >(target).inferPslContract;
-  // Built on first use, so a pack's malformed index type registration is refused by the commands
-  // that read it rather than by every command that creates a family instance.
-  let indexTypeRegistry: IndexTypeRegistry | undefined;
-  const stackIndexTypes = (): IndexTypeRegistry => {
-    indexTypeRegistry ??= indexTypeRegistryOf([target, ...extensions]);
-    return indexTypeRegistry;
-  };
   // The stack parts `contract emit` reads a PSL document with, which `contract infer` and
   // `contract print` write one with.
   const pslBuildContext: SqlPslBuildContext = {
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
-    indexTypes: {
-      backsForeignKey: (indexType) => stackIndexTypes().backsForeignKey(indexType),
-    },
   };
   // The hook that builds the PSL document of a contract is read off the descriptor the same way.
   // Absent for targets without `contract print`.

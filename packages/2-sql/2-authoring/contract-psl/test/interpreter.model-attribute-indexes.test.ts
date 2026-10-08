@@ -28,7 +28,7 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
  */
 const targetWithIndexTypes = {
   ...postgresTarget,
-  indexTypes: defineIndexTypes().add('gin', { options: type('object'), backsForeignKey: false }),
+  indexTypes: defineIndexTypes().add('gin', { options: type('object') }),
 };
 
 const searchIndexSpecFactory: ModelAttributeSpecFactory = () =>

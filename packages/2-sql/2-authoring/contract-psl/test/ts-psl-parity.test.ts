@@ -516,10 +516,7 @@ model Post {
       familyId: 'sql',
       targetId: 'postgres',
       version: '0.0.1',
-      indexTypes: defineIndexTypes().add('bm25', {
-        options: type('object'),
-        backsForeignKey: false,
-      }),
+      indexTypes: defineIndexTypes().add('bm25', { options: type('object') }),
     } as const;
 
     const pslContract = interpretSqlContract(

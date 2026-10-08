@@ -82,7 +82,6 @@ describe('sql family buildPslContract', () => {
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
       dataTypes: stack.dataTypes,
-      indexTypes: { backsForeignKey: expect.any(Function) },
     });
   });
 
