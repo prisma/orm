@@ -615,8 +615,10 @@ interface BuildModelNodeInput {
 
 /** Where a relation names its foreign key's index, so a refusal of that name is reported at the relation. */
 interface RelationIndexLocation {
+  readonly namespaceId: string;
   readonly tableName: string;
   readonly columns: readonly string[];
+  readonly index: string;
   readonly location: ReturnType<DiagnosticSource['at']>;
 }
 
@@ -1308,8 +1310,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       });
       if (typeof parsedRelation.index === 'string') {
         relationIndexLocations.push({
+          namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
           tableName,
           columns: localColumns,
+          index: parsedRelation.index,
           location: source.at(relationAttribute.relation.span),
         });
       }
@@ -1453,8 +1457,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     });
     if (typeof parsedRelation.index === 'string') {
       relationIndexLocations.push({
+        namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
         tableName,
         columns: localColumns,
+        index: parsedRelation.index,
         location: source.at(relationAttribute.relation.span),
       });
     }
@@ -2059,11 +2065,12 @@ function relationIndexRefusal(
   if (!isStructuredError(error) || error.meta?.['reason'] !== FOREIGN_KEY_INDEX_UNRESOLVED) {
     return undefined;
   }
-  const tableName = error.meta?.['tableName'];
-  const columns = error.meta?.['columns'];
+  const { namespaceId, tableName, columns, index } = error.meta ?? {};
   const at = locations.find(
     (candidate) =>
+      candidate.namespaceId === namespaceId &&
       candidate.tableName === tableName &&
+      candidate.index === index &&
       Array.isArray(columns) &&
       candidate.columns.length === columns.length &&
       candidate.columns.every((column, position) => column === columns[position]),

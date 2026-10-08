@@ -6,6 +6,7 @@ import {
   expectBothBuilds,
   foreignKeyNaming,
   interpretPost,
+  interpretSchema,
 } from './foreign-key-backing-index.support';
 
 const btreeIndex = {
@@ -56,7 +57,7 @@ describe("a relation's backing index", () => {
     expectBothBuilds({
       psl: { authorId: ' @unique(map: "post_author_key")', relation: ', index: "post_author_key"' },
       ts: { authorId: 'namedUnique', foreignKey: { index: 'post_author_key' } },
-    }).toEqual({ indexes: [], foreignKeys: [foreignKeyNaming({ unique: true })] });
+    }).toEqual({ indexes: [], foreignKeys: [foreignKeyNaming({ unique: ['authorId'] })] });
   });
 
   it('is the primary key the relation names', () => {
@@ -133,5 +134,39 @@ describe("a relation's index argument", () => {
       `${subject('post_by_id')}, but its columns (id) do not start with the foreign key's columns, so it does not serve the foreign key's lookups.`,
       'Name an index, unique constraint or primary key whose first columns are (authorId), or drop the index argument so the foreign key gets its own backing index.',
     );
+  });
+
+  it('is reported at the relation it belongs to when two relations share the foreign key columns', () => {
+    const result = interpretSchema(`model User {
+  id Int @id
+  posts Post[]
+  @@map("user")
+}
+
+model Editor {
+  id Int @id
+  posts Post[]
+  @@map("editor")
+}
+
+model Post {
+  id Int @id
+  authorId Int
+  author User @relation(fields: [authorId], references: [id], index: "post_author")
+  editor Editor @relation(fields: [authorId], references: [id], index: "post_author_gone")
+  @@index([authorId], name: "post_author")
+  @@map("post")
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ line: 17, column: 17 }),
+        }),
+      }),
+    ]);
   });
 });

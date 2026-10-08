@@ -127,7 +127,11 @@ function postTable(storage: unknown) {
 }
 
 export function interpretPost(testCase: Case) {
-  return interpretSqlContract(pslSource(testCase), {
+  return interpretSchema(pslSource(testCase));
+}
+
+export function interpretSchema(source: string) {
+  return interpretSqlContract(source, {
     target: targetPack,
     scalarColumnDescriptors: new Map([['Int', { codecId: 'pg/int4@1' }]]),
     composedExtensions: [hashIndexPack.id],

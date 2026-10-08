@@ -84,7 +84,7 @@ export function materializeForeignKeysAndIndexes(input: {
         index === false
           ? undefined
           : typeof index === 'string'
-            ? namedBackingObject(tableName, reference.source.columns, index, {
+            ? namedBackingObject(reference.source, index, {
                 declaredIndexes,
                 uniques,
                 primaryKey,
@@ -180,8 +180,7 @@ function derivedBackingIndex(tableName: string, columns: readonly string[]): Ind
  * What a relation's `index: "<name>"` points at. The name is the `name` or `map` the source gave an index, unique constraint or primary key, or an index's stored name; an unnamed index's default name does not count. Identical indexes count as one, so the name is resolved after they merge. The object must start with the foreign key's columns, in order, or it would not serve the foreign key's lookups.
  */
 function namedBackingObject(
-  tableName: string,
-  columns: readonly string[],
+  source: ForeignKeyReferenceInput,
   name: string,
   table: {
     readonly declaredIndexes: readonly IndexCandidate[];
@@ -190,8 +189,15 @@ function namedBackingObject(
     readonly resolve: (backing: BackingObject) => ForeignKeyIndex;
   },
 ): ForeignKeyIndex {
+  const { namespaceId, tableName, columns } = source;
   const subject = `The foreign key on table "${tableName}" columns (${columns.join(', ')}) names "${name}" as its index`;
-  const meta = { reason: FOREIGN_KEY_INDEX_UNRESOLVED, tableName, columns, index: name };
+  const meta = {
+    reason: FOREIGN_KEY_INDEX_UNRESOLVED,
+    namespaceId,
+    tableName,
+    columns,
+    index: name,
+  };
   const indexes = table.declaredIndexes.filter(
     (candidate) =>
       (candidate.namedByUser && writtenName(candidate.index) === name) ||

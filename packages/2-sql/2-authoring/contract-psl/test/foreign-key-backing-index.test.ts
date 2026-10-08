@@ -59,12 +59,12 @@ describe("a relation's backing index", () => {
   });
 
   it.each([
-    ['an unnamed unique constraint', '@unique', 'unique', { unique: true }],
+    ['an unnamed unique constraint', '@unique', 'unique', { unique: ['authorId'] }],
     [
       'a named unique constraint',
       '@unique(map: "post_author_key")',
       'namedUnique',
-      { unique: true },
+      { unique: ['authorId'] },
     ],
   ] as const)('is %s on the foreign key columns', (_label, attribute, authorId, index) => {
     const fromPsl = buildFromPsl({ psl: { authorId: ` ${attribute}` }, ts: {} });
