@@ -326,3 +326,48 @@ A verification of the design against the code ran and found 54 issues, and every
 3. **The SQL data type module lives in `packages/2-sql/1-core/contract`**, not the family, because the contract builder and the schema readers sit below the family and may not import from it.
 
 Also changed from earlier notes: the SQL text collision check runs in the SQL family's assembly, not the framework's; a codec's parameter schema references its data type's instead of losing its keys; runtime casts render the base name without parameters; `srid` must be 1 or more; `db sign` signs every space that verifies and reports the rest; the framework requires at most one `inferred` mark per data type, and infer fails on a data type with none.
+
+## A data type owns its values (Will, 2026-10-07)
+
+Found while building slice 2: on SQLite one datetime default was held as two texts, `2024-01-01T00:00:00Z` in `contract.json` and `2024-01-01T00:00:00.000Z` in the `DEFAULT` clause and in every row, and verify, the planner and the test kits each carried code to make them compare equal. The cause was that a value's stored form had two owners: on Postgres the data type (`toCanonicalForm` on `pg/timestamptz`), on SQLite the codec (`toCanonicalForm` on the `sqlite/datetime@1` descriptor), with `canonicalFormOf` choosing. The design is now [ADR 254](../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md) as amended on this date, and it is built by slice 3. The handover drafts it came from (`value-ownership/design.md` and `discussion-codec-and-data-type.md`) are on the branch `handover/data-types-value-ownership` of the `bot` remote, commit 266b7c8f30.
+
+Will decided:
+
+1. **A data type owns its values; a codec only converts them.** The value passes between them as a `DataTypeValue`, `{ type, params, value }`, which only the type constructs. Data types gain `fromContract` and `toContract`.
+2. **The codec's methods are `fromDataTypeValue`, `toDataTypeValue`, `fromWire` and `toWire`.** The last two are `decode` and `encode` renamed; the first two replace `decodeJson` and `encodeJson`.
+3. **No data type parses a value outside its tag.** There is no `parse()` method on a data type besides the tag entry's.
+4. **No cast from the text type into a date or time type.** Date, time and interval types get tags, and so does `pg/bytea`. A quoted string on such a column is refused with a message that shows the tag.
+5. **SQLite gets `sqlite/datetime` and `sqlite/json` back**, each stored as `text`. This reverses "SQLite's data types are the ones the database has" (2026-09-30) and its "there is no 'stored as' concept".
+6. **Verify compares what a column is stored as**, not its data type id. This amends "Verify compares identifiers exactly" (2026-09-29): the comparison is still exact, of the storage type's id and parameters.
+7. **The SQLite datetime value always has three fraction digits**, `2024-01-01T00:00:00.000Z`, the text `toISOString()` writes for every row.
+8. **`String @default(json`…`)` on SQLite is refused**, because `sqlite/text` does not cast from `sqlite/json`.
+9. **`sqlite/bigint` stays deleted**; the `bigint` and `number` codecs both represent `sqlite/integer`.
+10. **Contract hashes may change.** Will does not mind users' contract hashes changing, so Prisma 7 date defaults become literals, and SQLite contracts change form.
+
+The orchestrator decided the rest, recorded in ADR 254, for Will's review:
+
+11. **Rows the database returns as JSON are read with `fromWire`.** Each codec's JSON projection puts into the JSON a value `fromWire` reads exactly, on Postgres the text PostgreSQL prints for the column. The runtime then has one reader of database values, and no projection has to produce the contract form in SQL. Reading an `include` becomes asynchronous, as reading a row already is.
+12. **Reported defaults are read during introspection**, which is already asynchronous and receives the contract: the target takes the literal's body out of the reported text, and the column's codec reads it with `fromWire`, then `toDataTypeValue`. The schema tree holds the value, and `verifySchema` and the planner, which are synchronous, compare values. `contract infer`, which has no contract, reads with the codec of the type constructor marked `inferred`.
+13. **DDL writes a default through the column's codec**, `fromDataTypeValue` then `toWire`, in the asynchronous DDL lowering that already exists. The planner keeps no default text and no branch on a codec or data type id.
+14. **The CLI reads every stored literal default through its type when it loads a contract**, and refuses a value the type does not hold. This replaces the "re-emit the contract" refusal in the planners and in schema IR (TML-3406's subject), which goes.
+15. **Parameter limits belong to the type.** `numeric(10,2)` refusing a third decimal place, `pg/int4`'s range and `pg/char`'s length are checked by the type; a codec checks only parameters it keeps for itself, such as `arktype/json@1`'s schema.
+16. **A type stored as another declares no texts of its own**, so no two types claim the reported text `text`.
+17. **`pg/uuid`, `pg/varchar`, `pg/char`, `pg/inet`, `pg/bit`, `pg/varbit`, `postgis/geometry` and `sqlite/blob` keep their casts from the text type.** Their values are text, or bytes for `sqlite/blob`, whose cast is unchanged; none of them has a grammar of its own the way a date does. Will may want `pg/uuid` and `sqlite/blob` reconsidered.
+18. **The `bytea` tag body is the hex text PostgreSQL prints**, `` bytea`\x68656c6c6f` ``, and the stored value stays base64.
+19. **The language server offers only the tags a value position can take**, so a date column offers its date tag and not seven others.
+20. **The Postgres target gets one pair of functions for PostgreSQL's year text** (` BC`, years past 9999), used by the codecs' wire methods and the tags. This is TML-3396, folded in, because DDL through `toWire` needs it.
+
+Added on 2026-10-08, after #30628 (TML-3382, enum values as stored) merged an amendment to ADR 254 while this design was in review. The amendment's rule, that a stored value reads back as the value a query returns, is the codec test kits' round trip here. Its parts are folded into ADR 254's "Values" and "Codecs" sections, and the orchestrator decided:
+
+21. **The step that creates a value writes its one spelling, and `fromContract` refuses any other.** #30628 put normalisation (lower-case `pg/uuid`, integer digit text, `pg/inet` as PostgreSQL prints it) in `toCanonicalForm`; it moves into the casts from text, the number classifier and the type's construction from a codec's value.
+22. **A written value takes the column's parameters through `withParams(value, params)` on the type.** It refuses a value the parameters exclude and writes the spelling they give it: `1.5` on `numeric(10,2)` is stored `"1.50"`, as PostgreSQL prints it, and `1.234` is refused rather than rounded. This closes TML-3479, which could not pad to the scale because the conversion did not receive the column's parameters.
+23. **Enum eligibility stays as #30628 built it** (the `equality` trait, `enumRefusal`, `enumRefusalOf`); `db.enums` holds each member as `fromDataTypeValue` gives it.
+
+Tickets this closes or changes:
+
+- TML-3404 (the SQLite planner writes a datetime default by one fixed codec id) is closed by decision 13.
+- TML-3405 (a TypeScript contract default goes only through the codec's `encodeJson`) is closed by decision 1: `toDataTypeValue` constructs through the type.
+- TML-3406 (move the "re-emit the contract" refusal out of schema IR) is replaced by decision 14; the code it would move is deleted. It is In Progress in Linear, so whoever holds it is told before slice 3 starts.
+- TML-3394 (the Prisma 7 reader stores a `DateTime` default as an SQL expression) is closed: the reader uses the date tags' `parse`.
+- TML-3396 (PostgreSQL's year text in six places) is closed by decision 20.
+- TML-3479 (a numeric default on a column with a scale is not stored as PostgreSQL prints it) is closed by decision 22.
