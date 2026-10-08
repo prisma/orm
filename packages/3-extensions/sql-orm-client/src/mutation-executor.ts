@@ -28,7 +28,6 @@ import { ormError } from './orm-errors';
 import {
   compileDeleteCount,
   compileInsertCount,
-  compileInsertReturning,
   compileSelect,
   compileUpdateCount,
   compileUpdateReturning,
@@ -39,6 +38,7 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
+import { applyCreateDefaults, applyUpdateDefaults, insertRowReturning } from './row-writes';
 import { tableSourceForContract } from './storage-resolution';
 import type {
   CollectionState,
@@ -383,15 +383,7 @@ async function updateSingleRow(
   }
 
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
-  const appliedUpdateDefaults = context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values: mappedUpdateData,
-  });
-  for (const def of appliedUpdateDefaults) {
-    mappedUpdateData[def.field] = def.value;
-  }
+  applyUpdateDefaults(context, namespaceId, tableName, mappedUpdateData);
   const identityFilter = buildRowIdentityFilterFromRow(
     contract,
     namespaceId,
@@ -1002,16 +994,7 @@ async function applyFilteredWrite(
     return;
   }
 
-  const appliedDefaults = context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values: setValues,
-  });
-  for (const def of appliedDefaults) {
-    setValues[def.field] = def.value;
-  }
-
+  applyUpdateDefaults(context, namespaceId, tableName, setValues);
   await executeUpdateCount(scope, contract, namespaceId, tableName, setValues, filters);
 }
 
@@ -1252,15 +1235,7 @@ async function insertJunctionLink(
   // execution-time onCreate default pass both the type gate and the runtime
   // guard, so the INSERT must populate them here or hit NOT NULL on the
   // database.
-  const applied = context.applyMutationDefaults({
-    op: 'create',
-    entry: through.table,
-    namespace: through.namespaceId,
-    values: junctionRow,
-  });
-  for (const def of applied) {
-    junctionRow[def.field] = def.value;
-  }
+  applyCreateDefaults(context, through.namespaceId, through.table, [junctionRow]);
 
   const compiled = compileInsertCount(context.contract, through.namespaceId, through.table, [
     junctionRow,
@@ -1407,28 +1382,13 @@ async function insertSingleRow(
   const contract = context.contract;
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
 
-  const mappedData = mapModelDataToStorageRow(contract, namespaceId, modelName, data);
-  const applied = context.applyMutationDefaults({
-    op: 'create',
-    entry: tableName,
-    namespace: namespaceId,
-    values: mappedData,
-  });
-
-  for (const def of applied) {
-    mappedData[def.field] = def.value;
-  }
-
-  const compiled = compileInsertReturning(
-    contract,
+  const firstRow = await insertRowReturning(
+    scope,
+    context,
     namespaceId,
     tableName,
-    [mappedData],
-    undefined,
+    mapModelDataToStorageRow(contract, namespaceId, modelName, data),
   );
-  const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
-
-  const firstRow = rows[0];
   if (!firstRow) {
     throw ormError(
       'ORM.MUTATION_ROW_MISSING',
