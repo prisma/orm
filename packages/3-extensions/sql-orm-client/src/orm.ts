@@ -9,12 +9,12 @@ import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import {
   type DeclaredFields,
-  defineFieldFragment,
-  type FieldFragment,
-  type FragmentCollection,
+  type DeclaredFieldsFragment,
+  type DeclaredFieldsFragmentCollection,
+  type DeclaredFieldsFragmentFieldDeclarations,
+  type DeclaredFieldsFragmentModelAccessor,
+  defineDeclaredFieldsFragment,
   type FragmentFacts,
-  type FragmentFieldDeclarations,
-  type FragmentModelAccessor,
 } from './fragments';
 import { ormError } from './orm-errors';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
@@ -111,19 +111,22 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
    * ```
    */
   fragment<
-    const Declarations extends FragmentFieldDeclarations<
+    const Declarations extends DeclaredFieldsFragmentFieldDeclarations<
       keyof ExtractCodecTypes<TContract> & string
     >,
     Facts extends FragmentFacts,
   >(
     fields: Declarations,
     body: (
-      rows: FragmentCollection<
-        FragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+      rows: DeclaredFieldsFragmentCollection<
+        DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
         FragmentFacts
       >,
-    ) => FragmentCollection<FragmentModelAccessor<TContract, DeclaredFields<Declarations>>, Facts>,
-  ): FieldFragment<TContract, DeclaredFields<Declarations>, Facts>;
+    ) => DeclaredFieldsFragmentCollection<
+      DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+      Facts
+    >,
+  ): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts>;
 }
 
 type OrmClient<
@@ -239,7 +242,7 @@ export function orm<
         return namespaceFacet(prop);
       }
 
-      return prop === 'fragment' ? defineFieldFragment : undefined;
+      return prop === 'fragment' ? defineDeclaredFieldsFragment : undefined;
     },
   });
 }

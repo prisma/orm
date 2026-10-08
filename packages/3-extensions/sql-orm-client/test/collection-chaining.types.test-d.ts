@@ -4,8 +4,8 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
-  Fragment,
   Ordered,
+  QueryFragment,
 } from '../src/collection-types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import type { TestContract } from './helpers';
@@ -131,7 +131,7 @@ describe('select and variant leave the class', () => {
 });
 
 describe('with', () => {
-  const published: Fragment<PostCollection, Filtered<PostCollection>> = (posts) =>
+  const published: QueryFragment<PostCollection, Filtered<PostCollection>> = (posts) =>
     posts.published();
 
   test('returns what the fragment returns', () => {

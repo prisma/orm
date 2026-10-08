@@ -309,7 +309,7 @@ The same holds for an `if` with an early return, a `switch`, a loop and a reassi
 A custom collection class gives a model its own named queries. Extend `Collection`, register the class with `orm({ collections })`, and build that client inside the request from `db.runtime()` and `db.context`:
 
 ```typescript
-import { Collection, type Filtered, type Fragment, type Ordered, orm } from '@prisma/orm-postgres/orm-client';
+import { Collection, type Filtered, type Ordered, orm, type QueryFragment } from '@prisma/orm-postgres/orm-client';
 import type { Contract } from './prisma/contract.d';
 
 class PostCollection extends Collection<Contract, 'Post'> {
@@ -341,10 +341,10 @@ After `.select(...)` or `.variant(...)` the class methods are gone: those return
 
 Inside a class body, a class method called on the result of another call loses what that call established. So a class method whose body chains two class methods loses the first call's facts for every caller: with `latest() { return this.byAuthor(id).newestFirst(); }`, `Post.latest()` is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
-`with(fn)` calls a function with the collection and returns its result. The function is a query fragment, described in Workflow — Query fragments below, of type `Fragment<In, Out>`, so a query can be written once and applied to any collection of that class:
+`with(fn)` calls a function with the collection and returns its result. The function is a query fragment, described in Workflow — Query fragments below, of type `QueryFragment<In, Out>`, so a query can be written once and applied to any collection of that class:
 
 ```typescript
-const newest: Fragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
+const newest: QueryFragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
 await Post.with(newest).limit(20).all();
 ```
 

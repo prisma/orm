@@ -3,7 +3,6 @@ export type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
-  Fragment,
   HasNoVariant,
   HasOrderBy,
   HasRow,
@@ -11,13 +10,14 @@ export type {
   HasWhere,
   Including,
   Ordered,
+  QueryFragment,
   RowType,
   TypeState,
 } from '../collection-types';
 export { all, and, not, or } from '../filters';
 export {
   type DeclaredField,
-  type FieldFragment,
+  type DeclaredFieldsFragment,
   type FragmentFacts,
   orderByField,
 } from '../fragments';

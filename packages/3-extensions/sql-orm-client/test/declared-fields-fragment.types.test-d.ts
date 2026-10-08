@@ -8,7 +8,11 @@ import { field } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
-import type { DeclaredField, FragmentFieldsCheck, MissingFragmentFields } from '../src/fragments';
+import type {
+  DeclaredField,
+  DeclaredFieldsFragmentFieldsCheck,
+  MissingDeclaredFieldsFragmentFields,
+} from '../src/fragments';
 import type { orm } from '../src/orm';
 import type { CodecField, CodecListField, ModelAccessor } from '../src/types';
 import type { Contract as FragmentNamespaceContract } from './fixtures/fragment-namespace/generated/contract';
@@ -210,14 +214,16 @@ describe('client.fragment', () => {
       readonly title: DeclaredField<'pg/text@1', false>;
     };
     expectTypeOf<
-      MissingFragmentFields<Contract, 'Comment', 'public', Fields>
+      MissingDeclaredFieldsFragmentFields<Contract, 'Comment', 'public', Fields>
     >().toEqualTypeOf<'title'>();
-    expectTypeOf<MissingFragmentFields<Contract, 'Tag', 'public', Fields>>().toEqualTypeOf<
-      'deletedAt' | 'title'
-    >();
-    expectTypeOf<MissingFragmentFields<Contract, 'Post', 'public', Fields>>().toBeNever();
     expectTypeOf<
-      MissingFragmentFields<Contract, 'Post' | 'Comment', 'public', Fields>
+      MissingDeclaredFieldsFragmentFields<Contract, 'Tag', 'public', Fields>
+    >().toEqualTypeOf<'deletedAt' | 'title'>();
+    expectTypeOf<
+      MissingDeclaredFieldsFragmentFields<Contract, 'Post', 'public', Fields>
+    >().toBeNever();
+    expectTypeOf<
+      MissingDeclaredFieldsFragmentFields<Contract, 'Post' | 'Comment', 'public', Fields>
     >().toEqualTypeOf<'title'>();
     const deletedTitled = client.fragment(
       {
@@ -262,10 +268,10 @@ describe('client.fragment', () => {
   test('a receiver whose model cannot be read from its type is refused for that reason', () => {
     type Fields = { readonly deletedAt: DeclaredField<'pg/timestamptz-temporal@1', true> };
     expectTypeOf<
-      keyof FragmentFieldsCheck<Contract, string, string, Fields>
+      keyof DeclaredFieldsFragmentFieldsCheck<Contract, string, string, Fields>
     >().toEqualTypeOf<'the fragment could not read the model of the collection from its type'>();
     expectTypeOf<
-      keyof FragmentFieldsCheck<Contract, 'Tag', 'public', Fields>
+      keyof DeclaredFieldsFragmentFieldsCheck<Contract, 'Tag', 'public', Fields>
     >().toEqualTypeOf<'the model has no field that matches the declaration in the fragment'>();
     // @ts-expect-error call cannot infer the fragment's type parameters, so the model cannot be read
     notDeleted.call(undefined, plain.Post);
@@ -384,7 +390,7 @@ describe('client.fragment', () => {
     type Strict = { readonly elementNullable: false };
     type NullableElements = { readonly elementNullable: true };
     expectTypeOf<
-      MissingFragmentFields<
+      MissingDeclaredFieldsFragmentFields<
         Contract,
         'Tag',
         'public',
@@ -392,7 +398,7 @@ describe('client.fragment', () => {
       >
     >().toEqualTypeOf<'labels'>();
     expectTypeOf<
-      MissingFragmentFields<
+      MissingDeclaredFieldsFragmentFields<
         Contract,
         'Tag',
         'public',
@@ -400,7 +406,7 @@ describe('client.fragment', () => {
       >
     >().toBeNever();
     expectTypeOf<
-      MissingFragmentFields<
+      MissingDeclaredFieldsFragmentFields<
         Contract,
         'Tag',
         'public',
@@ -408,7 +414,7 @@ describe('client.fragment', () => {
       >
     >().toEqualTypeOf<'labels'>();
     expectTypeOf<
-      MissingFragmentFields<
+      MissingDeclaredFieldsFragmentFields<
         Contract,
         'Tag',
         'public',
@@ -416,7 +422,7 @@ describe('client.fragment', () => {
       >
     >().toBeNever();
     expectTypeOf<
-      MissingFragmentFields<
+      MissingDeclaredFieldsFragmentFields<
         Contract,
         'Tag',
         'public',

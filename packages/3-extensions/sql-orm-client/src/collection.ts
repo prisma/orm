@@ -86,7 +86,6 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Filtered,
-  Fragment,
   HasNoVariant,
   HasOrderBy,
   HasRow,
@@ -95,6 +94,7 @@ import type {
   Including,
   ModelFragmentReceiver,
   Ordered,
+  QueryFragment,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   TypeState,
@@ -507,7 +507,7 @@ export class CollectionBase<
   fragment<Self extends FragmentSource, NsId extends string, Result>(
     this: Self & HasTypeState<{ readonly nsId: NsId }>,
     body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
-  ): Fragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
+  ): QueryFragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertFragmentBody(body);
     const source = { modelName: this.modelName, namespaceId: this.namespaceId };
     return (collection) => {

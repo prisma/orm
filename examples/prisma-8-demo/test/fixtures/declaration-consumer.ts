@@ -6,7 +6,7 @@ import type {
   Collection,
   CollectionRowOf,
   DeclaredField,
-  FieldFragment,
+  DeclaredFieldsFragment,
   Filtered,
   Ordered,
 } from '@prisma/orm-postgres/orm-client';
@@ -177,7 +177,7 @@ export function listFragments() {
   // @ts-expect-error Post has no labels field
   posts.where(labelledAs(['a']));
   expectTypeOf(labelled(['a'])).toEqualTypeOf<
-    FieldFragment<
+    DeclaredFieldsFragment<
       Contract,
       {
         readonly labels: DeclaredField<'pg/text@1', false, { readonly elementNullable: false }>;
