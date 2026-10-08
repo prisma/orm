@@ -562,9 +562,9 @@ function assertAllowedInCreate(
   }
 }
 
-function relationCriterionWhere(
+function resolveCriterion(
   context: ExecutionContext,
-  relation: RelationDefinition,
+  relation: RelationDefinitionBase,
   kind: 'connect' | 'disconnect',
   criterion: Record<string, unknown>,
 ): AnyExpression {
@@ -578,28 +578,6 @@ function relationCriterionWhere(
     throw invalidMutation(kind, relation, 'empty-criterion', 'requires non-empty criterion');
   }
   return criterionWhere;
-}
-
-function modelCriterionWhere(
-  context: ExecutionContext,
-  namespaceId: string,
-  modelName: string,
-  criterion: Record<string, unknown>,
-): AnyExpression {
-  const whereExpr = shorthandToWhereExpr(
-    context,
-    namespaceId,
-    modelName,
-    castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
-  );
-  if (!whereExpr) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `Nested connect for model "${modelName}" requires non-empty criterion`,
-      { meta: { kind: 'connect', model: modelName, problem: 'empty-criterion' } },
-    );
-  }
-  return whereExpr;
 }
 
 function assertNoParentLinkColumn(
@@ -751,37 +729,19 @@ function resolveOperation(
     };
   }
 
-  if (parentOwned) {
-    if (mutation.kind === 'disconnect') {
-      return { kind: 'disconnect', criteria: [] };
-    }
-    const criterion = mutation.criteria[0];
-    if (!criterion) {
-      throw invalidMutation('connect', relation, 'missing-criterion', 'requires criterion');
-    }
-    return {
-      kind: 'connect',
-      criteria: [
-        modelCriterionWhere(
-          context,
-          namespaceId,
-          modelName,
-          castAs<Record<string, unknown>>(criterion),
-        ),
-      ],
-    };
+  if (parentOwned && mutation.kind === 'disconnect') {
+    return { kind: 'disconnect', criteria: [] };
   }
-
   const criteria = mutation.criteria ?? [];
-  if (junction && mutation.kind === 'disconnect' && criteria.length === 0) {
-    throw invalidMutation('disconnect', relation, 'missing-criterion', 'requires criterion');
+  if (
+    parentOwned ? !criteria[0] : junction && mutation.kind === 'disconnect' && criteria.length === 0
+  ) {
+    throw invalidMutation(mutation.kind, relation, 'missing-criterion', 'requires criterion');
   }
   return {
     kind: mutation.kind,
-    criteria: criteria.map((criterion) =>
-      junction
-        ? modelCriterionWhere(context, namespaceId, modelName, criterion)
-        : relationCriterionWhere(context, relation, mutation.kind, criterion),
+    criteria: (parentOwned ? criteria.slice(0, 1) : criteria).map((criterion) =>
+      resolveCriterion(context, relation, mutation.kind, criterion),
     ),
   };
 }
