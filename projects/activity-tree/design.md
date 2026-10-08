@@ -124,6 +124,14 @@ Research on 2026-10-08: every query the SQL ORM issues goes through a queryable 
 
 ADR 220 argued against putting per-execution facts on `PlanMeta`: the runtime would wrap the plan, the plan reference would no longer flow through unchanged, and content hashing would have to exclude the field. The same applies here. A hook reads its activity from `ctx`.
 
+### 11. A middleware keeps private state on an activity with `ctx.state(key)`
+
+Each activity has its own `ctx`, and every hook of that activity receives the same one. `ctx.state(key)` returns the calling middleware's state object for the activity, created empty on first use; the key is a `Symbol()` the middleware holds privately. The state is dropped when the activity settles.
+
+Why: middleware already carry state between hooks, by keying a `WeakMap` on the plan object (`pending` in the cache middleware, `observedRowsByPlan` in the budgets middleware). That idiom is hard to discover, and the plan is the wrong key because plans are reused across executions. A shared string-keyed bag (.NET `Activity.SetCustomProperty`, Koa's `ctx.state`) would let middleware read or overwrite each other's entries. A private symbol gives each middleware its own slot. The runtime keeps the slots in a `WeakMap` internally, which cannot be enumerated, so only the holder of a key can reach its state. Symbol keys in a `WeakMap` need `ES2023.Collection` in the shared TypeScript `lib`, which is `ES2022` today; Node 24 already supports them.
+
+Requested by the team when the design was reviewed on 2026-10-08.
+
 ### 10. No ambient context
 
 A child learns its parent because its opener passed it the handle. ADR 160 and ADR 220 both rejected `AsyncLocalStorage` for propagating execution context, under "explicit over implicit".

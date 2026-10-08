@@ -62,7 +62,23 @@ Clients start activities through the runtime. `query()` and `execute()` start a 
 
 The SQL ORM starts an activity of kind `orm-call` for every terminal, including single-statement terminals and a call served without any query, and runs its statements and its own transaction through the handle. The runtime's kinds are `query` and `transaction`. A kind is a label for tracing; no middleware branches on it.
 
-A hook reaches its activity from the middleware context, not from the plan. A child learns its parent because its opener passed the handle; nothing is propagated through ambient context.
+Each activity has its own middleware context, and every hook of that activity receives the same `ctx`. A hook reaches its activity from `ctx`, not from the plan.
+
+A middleware keeps state on an activity with `ctx.state(key)`, which returns that middleware's state object for the activity, created empty on first use. The key is a `Symbol()` the middleware holds privately, so no other middleware can read or overwrite its state. The state lives as long as the activity's `ctx` and is dropped when the activity settles. A tracer keeps its span this way and finds its parent's through `ctx.parent`:
+
+```ts
+const tracing = Symbol('tracing');
+
+activityStarted(activity, ctx) {
+  const parentSpan = ctx.parent?.state(tracing).span;
+  ctx.state(tracing).span = tracer.startSpan(activity.kind, { parent: parentSpan });
+},
+activitySettled(activity, result, ctx) {
+  ctx.state(tracing).span?.end(result.outcome);
+},
+```
+
+A child learns its parent because its opener passed the handle; nothing is propagated through ambient context.
 
 ### When an activity settles
 
@@ -120,4 +136,5 @@ The scenarios this was tested against, and the full reasoning, are in the projec
 - **Parent pointers only, no child list.** The runtime already keeps the list for transactions and needs it to fire `activitySettled`. Rejected.
 - **Two completion outcomes, as in Rails.** A rejected `COMMIT` and a silently rolled-back `COMMIT` fire nothing, and a cache holds stale rows until expiry. Spring and JTA keep a third status for exactly these cases. Rejected.
 - **`startActivity` on the user-facing scope.** Users would see a client-only method on `tx`. Rejected.
+- **A shared, string-keyed state bag on `ctx`**, as .NET `Activity.SetCustomProperty` or Koa's `ctx.state`. Middleware could read or overwrite each other's entries. Rejected for `ctx.state(key)` with a private symbol.
 - **`AsyncLocalStorage` to find the parent.** Rejected by ADR 160 and ADR 220; still rejected.
