@@ -463,8 +463,6 @@ export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(
 export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(value);
 
 /** Reads the ISO-8601 duration `pg/interval` stores. */
-export const readPgIntervalJson = (owner: string, json: JsonValue): JsonValue =>
-  readJsonMatching(owner, json, ISO_DURATION, 'an ISO-8601 duration');
 
 const intervalTextFields = (text: string): PgInterval => {
   if (ISO_DURATION.test(text)) return intervalFieldsOf(text);

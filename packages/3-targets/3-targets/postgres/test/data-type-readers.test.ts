@@ -34,7 +34,7 @@ function read(type: DataType, json: unknown, params: Readonly<Record<string, unk
   return () => type.fromContract(json as never, params);
 }
 
-describe('the date and time types read ISO 8601 and the text PostgreSQL prints, and nothing else', () => {
+describe('the date and time types read only the stored form ADR 254 gives', () => {
   it.each([
     [pgDate, 'a date and time on a date column', '2024-01-01T10:00:00'],
     [pgDate, 'a date written without hyphens', '20240101'],
@@ -51,14 +51,44 @@ describe('the date and time types read ISO 8601 and the text PostgreSQL prints, 
 
   it.each([
     [pgDate, '2024-01-01'],
-    [pgDate, '0044-03-15 BC'],
+    [pgDate, '-000043-03-15'],
+    [pgDate, '+012026-01-02'],
     [pgDate, 'infinity'],
-    [pgTime, '24:00:00'],
-    [pgTimestamp, '2024-01-01 10:00:00.5'],
+    [pgTime, '12:34:56.5'],
+    [pgTimetz, '12:34:56Z'],
+    [pgTimetz, '12:34:56+02:00'],
+    [pgTimestamp, '2024-01-01T10:00:00.5'],
     [pgTimestamptz, '2024-01-01T00:00:00Z'],
-    [pgTimestamptz, '2024-01-15 01:00:00+01'],
+    [pgTimestamptz, '-infinity'],
+    [pgInterval, 'P1Y2MT1H30M'],
+    [pgInterval, 'PT0S'],
   ])('%s reads %s', (type, text) => {
     expect(type.fromContract(text, {}).value).toBe(text);
+  });
+
+  it.each([
+    { type: pgDate, text: '0044-03-15 BC', stored: '-000043-03-15' },
+    { type: pgDate, text: '10000-01-01', stored: '+010000-01-01' },
+    { type: pgTime, text: '12:34:56.500', stored: '12:34:56.5' },
+    { type: pgTimetz, text: '12:34:56+00', stored: '12:34:56Z' },
+    { type: pgTimetz, text: '12:34:56+02', stored: '12:34:56+02:00' },
+    { type: pgTimestamp, text: '2024-01-01 10:00:00.5', stored: '2024-01-01T10:00:00.5' },
+    { type: pgTimestamptz, text: '2024-01-15 01:00:00+01', stored: '2024-01-15T00:00:00Z' },
+    { type: pgTimestamptz, text: '2024-01-01T00:00:00.000Z', stored: '2024-01-01T00:00:00Z' },
+    { type: pgInterval, text: '1 year 2 mons', stored: 'P1Y2M' },
+    { type: pgInterval, text: 'P14MT90M', stored: 'P1Y2MT1H30M' },
+  ])('$type.id refuses the spelling $text, naming $stored', ({ type, text, stored }) => {
+    expect(read(type, text)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `${type.id} JSON value must be "${stored}", as ${type.id} stores this value`,
+        meta: { dataType: type.id, received: JSON.stringify(text) },
+      }),
+    );
+  });
+
+  it('pg/time refuses 24:00:00, which PostgreSQL prints and no stored time of day is', () => {
+    expect(read(pgTime, '24:00:00')).toThrow(refusedBy({ dataType: 'pg/time' }));
   });
 
   it('a Temporal codec no longer reads a form only Temporal.from took', () => {
@@ -75,10 +105,10 @@ describe('the date and time types read ISO 8601 and the text PostgreSQL prints, 
     );
   });
 
-  it('a Date codec reads the text PostgreSQL prints in another time zone', () => {
+  it('a Date codec refuses the text PostgreSQL prints in another time zone', () => {
     const codec = pgTimestamptzDateDescriptor.factory({})(ctx);
-    expect(readContractValue(codec, '2024-01-15 01:00:00+01', {})).toEqual(
-      new Date('2024-01-15T00:00:00Z'),
+    expect(() => readContractValue(codec, '2024-01-15 01:00:00+01', {})).toThrow(
+      refusedBy({ dataType: 'pg/timestamptz' }),
     );
   });
 });

@@ -3,11 +3,7 @@ import {
   getAuthoringTypeConstructor,
   instantiateAuthoringTypeConstructor,
 } from '@internal/framework-components/authoring';
-import {
-  type Codec,
-  materializeCodec,
-  readReportedValue,
-} from '@internal/framework-components/codec';
+import { type Codec, materializeCodec } from '@internal/framework-components/codec';
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -140,7 +136,7 @@ async function parsedValue(
   if (value instanceof Date) return parsed;
   try {
     if (!JSON_ELEMENT_TYPES.has(elementTypeOf(storageType))) {
-      return await inColumn(oracle, literalAsJson(value, nativeType), storageType);
+      return await inColumn(oracle, await literalAsJson(value, nativeType), storageType);
     }
     if (!storageType.endsWith('[]') || !Array.isArray(value)) {
       return await jsonbMatching(oracle, value, stored);
@@ -157,15 +153,20 @@ async function parsedValue(
   }
 }
 
-function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
+/** The stored JSON of a reported literal, read as the database reports it: with the column's codec's `fromWire`. */
+async function literalAsJson(value: JsonValue, nativeType: string): Promise<JsonValue> {
   if (value === null) return null;
-  const { codec, typeParams } = columnCodec(nativeType);
+  const { codec } = columnCodec(nativeType);
   if (!nativeType.endsWith('[]') || !Array.isArray(value)) {
-    return toContractJson(codec, readReportedValue(codec, value, typeParams));
+    return toContractJson(codec, await codec.fromWire(value, {}));
   }
-  return value.map((element) =>
-    element === null ? null : toContractJson(codec, readReportedValue(codec, element, typeParams)),
-  );
+  const elements: JsonValue[] = [];
+  for (const element of value) {
+    elements.push(
+      element === null ? null : toContractJson(codec, await codec.fromWire(element, {})),
+    );
+  }
+  return elements;
 }
 
 async function inColumn(oracle: Oracle, json: JsonValue, storageType: string): Promise<JsonValue> {

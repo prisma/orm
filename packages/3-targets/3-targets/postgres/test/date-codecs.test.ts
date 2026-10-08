@@ -21,9 +21,8 @@ describe('pg/timestamptz-date@1', () => {
     ['4714-11-23 23:00:00-01 BC', '-004713-11-24T00:00:00.000Z'],
     ['12026-01-02 03:04:05+00', '+012026-01-02T03:04:05.000Z'],
     ['275760-09-13 02:00:00+02', '+275760-09-13T00:00:00.000Z'],
-  ])('decodes %s consistently in flat and JSON reads', async (wire, iso) => {
+  ])('reads the wire text %s', async (wire, iso) => {
     expect(await codec.fromWire(wire, {})).toEqual(new Date(iso));
-    expect(fromContractJson(codec, wire)).toEqual(new Date(iso));
   });
 
   it.each([
@@ -48,11 +47,16 @@ describe('pg/timestamptz-date@1', () => {
   );
 
   it.each([
-    ['2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z'],
-    ['0001-01-01T00:00:00.000Z BC', '0000-01-01T00:00:00.000Z'],
-    ['0044-03-15T00:00:00.000Z BC', '-000043-03-15T00:00:00.000Z'],
-  ])('still reads %s, the JSON text it wrote before the canonical form', (json, iso) => {
-    expect(fromContractJson(codec, json)).toEqual(new Date(iso));
+    ['2026-01-02 03:04:05.123456+00', '2026-01-02T03:04:05.123456Z'],
+    ['2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05Z'],
+    ['0044-03-15T00:00:00.000Z BC', '-000043-03-15T00:00:00Z'],
+  ])('refuses the JSON %s, which is not the stored form %s', (json, stored) => {
+    expect(() => fromContractJson(codec, json)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `pg/timestamptz JSON value must be "${stored}", as pg/timestamptz stores this value`,
+      }),
+    );
   });
 
   it.each([
@@ -62,7 +66,7 @@ describe('pg/timestamptz-date@1', () => {
     ['2026-02-30 00:00:00+00', { dataType: 'pg/timestamptz' }],
     ['2026-01-01 00:00:00', { dataType: 'pg/timestamptz' }],
     ['2026-01-01', { dataType: 'pg/timestamptz' }],
-    ['294276-01-01 00:00:00+00', { codecId: 'pg/timestamptz-date@1' }],
+    ['294276-01-01 00:00:00+00', { dataType: 'pg/timestamptz' }],
     ['2026-01-01 00:00:00+25', { dataType: 'pg/timestamptz' }],
     ['2026-01-01 00:00:00+00:60', { dataType: 'pg/timestamptz' }],
   ])('rejects unrepresentable or unsupported text: %s', async (wire, refusedBy) => {
@@ -77,21 +81,19 @@ describe('pg/timestamptz-date@1', () => {
 
   describe.each(['wire', 'JSON'] as const)('%s PostgreSQL lower bound', (format) => {
     it.each([
-      '4714-11-23 23:59:59.999+00 BC',
-      '4714-11-23 23:59:59.999999+00 BC',
-      '4714-11-24 00:59:59.999+01 BC',
-      '4714-11-24 00:00:00+01 BC',
-      '4715-01-01 00:00:00+00 BC',
-    ])('rejects text before the UTC boundary: %s', async (wire) => {
+      ['4714-11-23 23:59:59.999+00 BC', '-004713-11-23T23:59:59.999Z'],
+      ['4714-11-23 23:59:59.999999+00 BC', '-004713-11-23T23:59:59.999999Z'],
+      ['4714-11-24 00:59:59.999+01 BC', '-004713-11-23T23:59:59.999Z'],
+      ['4714-11-24 00:00:00+01 BC', '-004713-11-23T23:00:00Z'],
+      ['4715-01-01 00:00:00+00 BC', '-004714-01-01T00:00:00Z'],
+    ])('rejects text before the UTC boundary: %s', async (wire, json) => {
       if (format === 'wire') {
         await expect(codec.fromWire(wire, {})).rejects.toThrow(RangeError);
       } else {
-        expect(() => fromContractJson(codec, wire)).toThrow(
+        expect(() => fromContractJson(codec, json)).toThrow(
           expect.objectContaining({
             code: 'RUNTIME.DECODE_FAILED',
-            message:
-              'pg/timestamptz-date@1 JSON value must be a timestamp with time zone a Date holds: not infinity, and from 4714-11-24 BC to +275760-09-13',
-            meta: { codecId: 'pg/timestamptz-date@1', received: JSON.stringify(wire) },
+            meta: { dataType: 'pg/timestamptz', received: JSON.stringify(json) },
           }),
         );
       }

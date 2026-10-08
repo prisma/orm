@@ -41,7 +41,7 @@ import {
   canonicalNumeralText,
   integerTextCanonicalForm,
 } from '@internal/sql-contract/data-type-support';
-import { structuredError } from '@internal/utils/structured-error';
+import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { counted, withoutTrailing } from '@internal/utils/text';
 import { type as arktype } from 'arktype';
 import { canonicalInet } from './canonical-inet';
@@ -54,17 +54,7 @@ import {
   pgByteaCanonical,
   pgIntervalCanonical,
   readPgByteaJson,
-  readPgIntervalJson,
 } from './codec-helpers';
-import {
-  pgDateStoredText,
-  pgTimeStoredText,
-  pgTimestampStoredText,
-  pgTimestamptzStoredText,
-  pgTimetzStoredText,
-  readJsonDateTimeText,
-  type StoredDateTimeText,
-} from './date-time-stored-text';
 import { quoteIdentifier } from './sql-utils';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
@@ -308,27 +298,40 @@ function refuseFinerThanPrecision(
   );
 }
 
+/** What `canonical` writes for `text`, or `undefined` for text it cannot read. */
+function storedSpelling(canonical: (text: string) => string, text: string): string | undefined {
+  try {
+    return canonical(text);
+  } catch (error) {
+    if (isStructuredError(error) && error.code === 'CONTRACT.CAST_REFUSED') return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Reads the stored form of a date or time type (ADR 254, "Date and time types"), which is the only spelling of a value: other text, such as the text PostgreSQL prints, is refused, naming the stored form when the text names a value. `fraction` finds a value's fraction digits of a second, which the column's precision limits.
+ */
+const readStoredDateTime =
+  (
+    typeId: string,
+    canonical: (text: string) => string,
+    description: string,
+    fraction: RegExp,
+  ): DataTypeReader =>
+  (json, params) => {
+    const stored = typeof json === 'string' ? storedSpelling(canonical, json) : undefined;
+    if (stored !== json) {
+      return refuseJsonValue(
+        typeId,
+        stored === undefined ? description : `"${stored}", as ${typeId} stores this value`,
+        json,
+      );
+    }
+    return refuseFinerThanPrecision(typeId, json, fraction.exec(stored)?.[1], params);
+  };
+
 const SECONDS_FRACTION = /:\d{2}\.(\d+)/;
-
-const readDateTime =
-  (stored: StoredDateTimeText): DataTypeReader =>
-  (json, params) =>
-    refuseFinerThanPrecision(
-      stored.dataType,
-      json,
-      SECONDS_FRACTION.exec(readJsonDateTimeText(json, stored))?.[1],
-      params,
-    );
-
 const INTERVAL_SECONDS_FRACTION = /\d\.(\d+)S$/;
-
-const readInterval: DataTypeReader = (json, params) =>
-  refuseFinerThanPrecision(
-    'pg/interval',
-    json,
-    INTERVAL_SECONDS_FRACTION.exec(String(readPgIntervalJson('pg/interval', json)))?.[1],
-    params,
-  );
 
 /** The precision and scale of `numeric`. PostgreSQL 15 and later take a negative scale and one above the precision. */
 export const pgNumericParams = arktype({
@@ -640,7 +643,12 @@ function typeCanonicalFromText(
 }
 
 export const pgTimetz = typeCanonicalFromText('pg/timetz', pgTimetzCanonical, {
-  read: readDateTime(pgTimetzStoredText),
+  read: readStoredDateTime(
+    'pg/timetz',
+    pgTimetzCanonical,
+    'a time of day with its UTC offset, as in "12:34:56+02:00" or "12:34:56Z"',
+    SECONDS_FRACTION,
+  ),
   params: pgPrecisionParams,
   texts: [
     written('timetz'),
@@ -651,7 +659,12 @@ export const pgTimetz = typeCanonicalFromText('pg/timetz', pgTimetzCanonical, {
 });
 
 export const pgInterval = typeCanonicalFromText('pg/interval', pgIntervalCanonical, {
-  read: readInterval,
+  read: readStoredDateTime(
+    'pg/interval',
+    pgIntervalCanonical,
+    'an ISO 8601 duration, as in "P1Y2M3DT4H5M6.5S"',
+    INTERVAL_SECONDS_FRACTION,
+  ),
   params: pgPrecisionParams,
   texts: [writtenAndCatalog('interval'), writtenAndCatalog('interval({precision})')],
 });
@@ -681,12 +694,22 @@ export const pgInet = typeCanonicalFromText('pg/inet', pgInetCanonical, {
 });
 
 export const pgDate = typeCanonicalFromText('pg/date', pgDateCanonical, {
-  read: readDateTime(pgDateStoredText),
+  read: readStoredDateTime(
+    'pg/date',
+    pgDateCanonical,
+    'a date, as in "2024-01-01", or infinity or -infinity',
+    SECONDS_FRACTION,
+  ),
   texts: [writtenAndCatalog('date')],
 });
 
 export const pgTime = typeCanonicalFromText('pg/time', pgTimeCanonical, {
-  read: readDateTime(pgTimeStoredText),
+  read: readStoredDateTime(
+    'pg/time',
+    pgTimeCanonical,
+    'a time of day, as in "12:34:56"',
+    SECONDS_FRACTION,
+  ),
   params: pgPrecisionParams,
   texts: [
     written('time'),
@@ -697,7 +720,12 @@ export const pgTime = typeCanonicalFromText('pg/time', pgTimeCanonical, {
 });
 
 export const pgTimestamp = typeCanonicalFromText('pg/timestamp', pgTimestampCanonical, {
-  read: readDateTime(pgTimestampStoredText),
+  read: readStoredDateTime(
+    'pg/timestamp',
+    pgTimestampCanonical,
+    'a date and time of day, as in "2024-01-01T12:34:56", or infinity or -infinity',
+    SECONDS_FRACTION,
+  ),
   params: pgPrecisionParams,
   texts: [
     written('timestamp'),
@@ -708,7 +736,12 @@ export const pgTimestamp = typeCanonicalFromText('pg/timestamp', pgTimestampCano
 });
 
 export const pgTimestamptz = typeCanonicalFromText('pg/timestamptz', pgTimestamptzCanonical, {
-  read: readDateTime(pgTimestamptzStoredText),
+  read: readStoredDateTime(
+    'pg/timestamptz',
+    pgTimestamptzCanonical,
+    'an instant in UTC, as in "2024-01-01T00:00:00Z", or infinity or -infinity',
+    SECONDS_FRACTION,
+  ),
   params: pgPrecisionParams,
   texts: [
     written('timestamptz'),

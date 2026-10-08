@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type SqliteFloatCodec,
+  type SqliteSqlIntCodec,
   sqliteBigintDescriptor,
   sqliteBlobDescriptor,
   sqliteIntegerDescriptor,
@@ -44,9 +46,12 @@ describe('SQLite codec JSON representations', () => {
 describe('SQLite codecs read the value an include carries', () => {
   const ctx = {};
   const integer = sqliteIntegerDescriptor.factory()({ name: 'test' });
-  const sqlInt = sqliteSqlIntDescriptor.factory()({ name: 'test' });
+  // The adapted descriptors are typed with the family codec, whose wire value is a number; the SQLite codec also reads text.
+  const sqlInt = sqliteSqlIntDescriptor.factory()({ name: 'test' }) as unknown as SqliteSqlIntCodec;
   const real = sqliteRealDescriptor.factory()({ name: 'test' });
-  const sqlFloat = sqliteSqlFloatDescriptor.factory()({ name: 'test' });
+  const sqlFloat = sqliteSqlFloatDescriptor.factory()({
+    name: 'test',
+  }) as unknown as SqliteFloatCodec;
   const blob = sqliteBlobDescriptor.factory()({ name: 'test' });
 
   it('reads an integer from its decimal text, refusing one past the safe range', async () => {

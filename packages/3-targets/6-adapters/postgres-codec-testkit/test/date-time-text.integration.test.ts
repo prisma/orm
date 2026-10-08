@@ -109,7 +109,7 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
   }, timeouts.spinUpPpgDev);
 
   it(
-    'read the text and the JSON PostgreSQL writes for each value, in each time zone and at each precision, unchanged',
+    'read the text PostgreSQL writes for each value, in each time zone and at each precision, unchanged',
     async () => {
       const unread: unknown[] = [];
       let read = 0;
@@ -118,28 +118,26 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
         for (const entry of TYPES) {
           const codec = codecFor(entry.codecId);
           for (const [type, value] of typesAtEachPrecision(entry)) {
-            const result = await driver!.query<{ text: string; json: string }>(
-              `select $1::${type}::text as text, to_json($1::${type}) as json`,
+            const result = await driver!.query<{ text: string }>(
+              `select $1::${type}::text as text`,
               [value],
             );
-            const row = result.rows[0]!;
-            for (const form of [row.text, row.json]) {
-              try {
-                const decoded = readContractValue(codec, form, undefined);
-                if (decoded === form) {
-                  read += 1;
-                  continue;
-                }
-                unread.push({ zone, type, value, form, decoded });
-              } catch (error) {
-                unread.push({ zone, type, value, form, error: String(error) });
+            const text = result.rows[0]!.text;
+            try {
+              const decoded = await codec.fromWire(text, {});
+              if (decoded === text) {
+                read += 1;
+                continue;
               }
+              unread.push({ zone, type, value, text, decoded });
+            } catch (error) {
+              unread.push({ zone, type, value, text, error: String(error) });
             }
           }
         }
       }
       await driver!.query('RESET TimeZone');
-      expect({ unread, read }).toEqual({ unread: [], read: 424 });
+      expect({ unread, read }).toEqual({ unread: [], read: 212 });
     },
     timeouts.databaseOperation,
   );

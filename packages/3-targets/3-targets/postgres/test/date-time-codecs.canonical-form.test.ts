@@ -138,26 +138,27 @@ describe('every codec of a type with a canonical form writes it', () => {
   });
 });
 
-describe('a codec still reads the text a contract held before the canonical form', () => {
+describe('a date and time type refuses text a contract held before the canonical form, naming the stored form', () => {
   const codecOf = (codecId: string): Codec => {
     const found = codecsWithCanonicalForm.find((entry) => entry.codecId === codecId);
     if (found === undefined) throw new Error(`no codec ${codecId}`);
     return found.codec;
   };
 
-  it('pg/timestamptz-temporal@1 reads a millisecond instant', () => {
-    expect(
-      String(fromContractJson(codecOf('pg/timestamptz-temporal@1'), '2024-01-01T00:00:00.000Z')),
-    ).toBe('2024-01-01T00:00:00Z');
-  });
-
-  it('pg/timestamp-string@1 reads a timestamp written with a space', () => {
-    expect(fromContractJson(codecOf('pg/timestamp-string@1'), '2024-01-01 00:00:00')).toBe(
-      '2024-01-01 00:00:00',
+  it.each([
+    [
+      'pg/timestamptz-temporal@1',
+      'pg/timestamptz',
+      '2024-01-01T00:00:00.000Z',
+      '2024-01-01T00:00:00Z',
+    ],
+    ['pg/timestamp-string@1', 'pg/timestamp', '2024-01-01 00:00:00', '2024-01-01T00:00:00'],
+    ['pg/timetz@1', 'pg/timetz', '12:34:56+02', '12:34:56+02:00'],
+  ])('%s refuses %s', (codecId, dataType, text, stored) => {
+    expect(() => fromContractJson(codecOf(codecId), text)).toThrow(
+      expect.objectContaining({
+        message: `${dataType} JSON value must be "${stored}", as ${dataType} stores this value`,
+      }),
     );
-  });
-
-  it('pg/timetz@1 reads an offset written in hours', () => {
-    expect(fromContractJson(codecOf('pg/timetz@1'), '12:34:56+02')).toBe('12:34:56+02');
   });
 });

@@ -106,6 +106,7 @@ describe('Temporal-backed temporal codecs', () => {
         projected: '2026-01-02',
         render: () => toContractJson(dateCodec, Temporal.PlainDate.from('2026-01-02')),
         read: (json: JsonValue) => fromContractJson(dateCodec, json).toString(),
+        readWire: async (wire: string) => String(await dateCodec.fromWire(wire, callCtx)),
       },
       {
         id: 'pg/timestamp-temporal@1',
@@ -114,6 +115,7 @@ describe('Temporal-backed temporal codecs', () => {
         render: () =>
           toContractJson(timestampCodec, Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456')),
         read: (json: JsonValue) => fromContractJson(timestampCodec, json).toString(),
+        readWire: async (wire: string) => String(await timestampCodec.fromWire(wire, callCtx)),
       },
       {
         id: 'pg/timestamptz-temporal@1',
@@ -122,6 +124,7 @@ describe('Temporal-backed temporal codecs', () => {
         render: () =>
           toContractJson(timestamptzCodec, Temporal.Instant.from('2026-01-02T03:04:05.123456Z')),
         read: (json: JsonValue) => fromContractJson(timestamptzCodec, json).toString(),
+        readWire: async (wire: string) => String(await timestamptzCodec.fromWire(wire, callCtx)),
       },
       {
         id: 'pg/time-temporal@1',
@@ -129,12 +132,16 @@ describe('Temporal-backed temporal codecs', () => {
         projected: '03:04:05.123456',
         render: () => toContractJson(timeCodec, Temporal.PlainTime.from('03:04:05.123456')),
         read: (json: JsonValue) => fromContractJson(timeCodec, json).toString(),
+        readWire: async (wire: string) => String(await timeCodec.fromWire(wire, callCtx)),
       },
     ] as const;
 
-    it.each(cases)('$id decodes the projected server text', ({ read, projected, text }) => {
-      expect(read(projected)).toBe(text);
-    });
+    it.each(cases)(
+      '$id reads the projected server text with fromWire',
+      async ({ readWire, projected, text }) => {
+        expect(await readWire(projected)).toBe(text);
+      },
+    );
 
     it.each(cases)('$id renders a value PostgreSQL accepts back', ({ render, text }) => {
       expect(render()).toBe(text);
