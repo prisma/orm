@@ -39,9 +39,9 @@ The attribute names `map` and `base` are written in this function. No keyword of
 Text and position:
 
 - Field: ` @map("<old>")`, one space and the attribute, inserted at the end of the field node, which is after the last attribute (or the type) and before a trailing comment. No column alignment: the rename changes name widths, so alignment is the formatter's to redo.
-- Model or block: a line `@@map("<old>")` at the indent of the block's members, inserted before the line of the closing brace. When the last member is a field, a blank line precedes it; when the block already has `@@` attributes, it follows them with no blank line. This is the layout the formatter produces, so formatting leaves these lines unchanged.
+- Model or block (amended 2026-10-08 after PR review): always `<newline><indent>@@map("<old>")<newline>`, inserted before the closing brace, at the start of the whitespace that precedes the brace on its line so the brace keeps its own indent. No branch on what precedes the brace: no blank-line detection, no check for existing `@@` attributes, no special case for a brace on the line of the last member.
+- `<newline>` and the indent unit are the project's formatter options resolved with `resolveFormatOptions` (`indent`, `newline`; defaults two spaces and LF). `<indent>` is one indent unit per enclosing block plus one: a top-level model's attribute has one unit, a model inside a namespace two. Nothing is read from the file's text to decide either.
 - The old name is an identifier, so it needs no escaping.
-- The indent is taken from the block's existing members, not from formatter options.
 
 The insertion is added to `changes` under the URI of the declaration's file, next to the name edits of that file. It does not overlap any of them: the name edit replaces the name token and the insertion is after the attributes or before the closing brace.
 
@@ -86,7 +86,8 @@ The provider is a mapping from the find-references result to edits, and it has n
 | --------- | ----------- | ----- |
 | New name equals the current name | Name edits are returned as usual; no map attribute | Every name edit replaces a token with the same text; no database name changes |
 | Field typed by a type of another contract space (`remote supabase:store.Tag`) | No attribute | Only a relation field can name such a type |
-| File with CRLF line endings | The inserted `@@map` line ends in CRLF | |
+| Project whose formatter options set `newline: 'CRLF'` and `indent: 'tab'` | The inserted text uses CRLF and tabs | The file's own text is not inspected |
+| Model that already has `@@` attributes, or a blank line before the closing brace | The same text is inserted; a blank line may precede `@@map` | The formatter owns blank lines |
 | Model with no closing brace | Name edits only | Nowhere to put the line |
 | Rename started from a reference in another file | The map attribute is inserted in the declaration's file | One insertion, on the declaration |
 | Model renamed a second time (`User` → `Account` → `Member`) | No second attribute; `@@map("User")` stays | "Unless it already has one" |
