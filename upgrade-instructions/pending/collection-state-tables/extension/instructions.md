@@ -2,7 +2,7 @@
 changes:
   - id: collection-state-carries-tables
     summary: |
-      A SQL ORM `CollectionState` has a required `tables` property holding the table scope and the bindings of the collection's root table and variant tables, and `emptyState()` takes it as its argument. Build it with `bindCollectionTables(contract, namespaceId, modelName)`. This applies to every hand-built state, including `IncludeExpr.nested`, a `combine()` branch state and the state of an include scalar selector.
+      A SQL ORM `CollectionState` has a required `tables` property holding the table scope and the aliased root table and variant tables of the collection, and `emptyState()` takes it as its argument. Build it with `createCollectionTables(contract, namespaceId, modelName)`. This applies to every hand-built state, including `IncludeExpr.nested`, a `combine()` branch state and the state of an include scalar selector.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -22,9 +22,9 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\bcreateModelAccessor\('
-  - id: include-expr-junction-binding
+  - id: include-expr-junction-table
     summary: |
-      A hand-built `IncludeExpr` for a many-to-many relation needs a `junction` table binding next to `through`; compiling a `through` include without one throws. `IncludeExpr.localTableName` is replaced by the optional `localVariantName`, the model name of the multi-table-inheritance variant whose table holds the relation's local columns.
+      A hand-built `IncludeExpr` for a many-to-many relation needs a `junction` aliased table next to `through`; compiling a `through` include without one throws. `IncludeExpr.localTableName` is replaced by the optional `localVariantName`, the model name of the multi-table-inheritance variant whose table holds the relation's local columns.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -36,9 +36,9 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\.include\s*[(<]'
-  - id: sql-orm-table-references-renamed
+  - id: sql-orm-table-aliases-renamed
     summary: |
-      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
+      The SQL ORM aliases tables in generated SQL: the first use of a table is written under its own name with no `AS`, and later uses as `<table>_<n>`. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
     detection:
       glob: "**/*.{ts,tsx,mts,cts,snap}"
       matches:
@@ -52,7 +52,7 @@ These changes concern code that imports from `@prisma/orm-family-sql/orm-client`
 
 ## `collection-state-carries-tables`
 
-`CollectionState.tables` is a `CollectionTables` value: the table scope plus the bindings of the collection's root table and of each multi-table-inheritance variant table. `emptyState` takes it as a required argument. Build it from the contract with `bindCollectionTables`:
+`CollectionState.tables` is a `CollectionTables` value: the table scope plus the aliased root table and each aliased multi-table-inheritance variant table. `emptyState` takes it as a required argument. Build it from the contract with `createCollectionTables`:
 
 ```ts
 // before
@@ -61,13 +61,13 @@ import { emptyState } from '@prisma/orm-family-sql/orm-client';
 const state = { ...emptyState(), limit: 10 };
 
 // after
-import { bindCollectionTables, emptyState } from '@prisma/orm-family-sql/orm-client';
+import { createCollectionTables, emptyState } from '@prisma/orm-family-sql/orm-client';
 
-const tables = bindCollectionTables(contract, 'public', 'User');
+const tables = createCollectionTables(contract, 'public', 'User');
 const state = { ...emptyState(tables), limit: 10 };
 ```
 
-`bindCollectionTables(contract, namespaceId, modelName)` takes the model the state is for. For a polymorphic model pass the base model name; the variant tables are bound with it.
+`createCollectionTables(contract, namespaceId, modelName)` takes the model the state is for. For a polymorphic model pass the base model name; the variant tables are bound with it.
 
 Every object typed `CollectionState` needs the property, not only top-level states:
 
@@ -79,7 +79,7 @@ A state passed to `new Collection(ctx, modelName, { state })` needs it too. A `C
 
 Do not build a `CollectionTables` or a table scope by hand. The scope must be one the package created.
 
-A state built by hand for an include child must not reuse the parent's table names. Prefer building includes through `collection.include(...)` and reading `collection.state`, which binds the child from the parent's scope. Where a child state is built by hand for a relation whose target table already appears in the parent chain (a self-relation, or an include that returns to an ancestor's table), build it through `include()` instead; `bindCollectionTables` starts a fresh scope and would give the child the same reference as its parent.
+A state built by hand for an include child must not reuse the parent's table aliases. Prefer building includes through `collection.include(...)` and reading `collection.state`, which aliases the child's tables from the parent's scope. Where a child state is built by hand for a relation whose target table already appears in the parent chain (a self-relation, or an include that returns to an ancestor's table), build it through `include()` instead; `createCollectionTables` starts a fresh scope and would give the child the same alias as its parent.
 
 ## `state-filters-planned-as-written`
 
@@ -110,23 +110,23 @@ createModelAccessor(context, 'public', 'User');
 createModelAccessor(context, 'public', 'Task', 'Feature');
 
 // after
-createModelAccessor(context, 'public', 'User', bindCollectionTables(context.contract, 'public', 'User'));
+createModelAccessor(context, 'public', 'User', createCollectionTables(context.contract, 'public', 'User'));
 createModelAccessor(
   context,
   'public',
   'Task',
-  bindCollectionTables(context.contract, 'public', 'Task'),
+  createCollectionTables(context.contract, 'public', 'Task'),
   'Feature',
 );
 ```
 
-The accessor takes the names for its relation filters and relation orders from `tables.scope` and records them there. Two relation filters over the same table built from one accessor therefore get different references (`posts`, then `posts_2`). Pass each accessor its own `bindCollectionTables(...)` result unless the expressions it builds are meant for one statement.
+The accessor takes the aliases for its relation filters and relation orders from `tables.scope` and records them there. Two relation filters over the same table built from one accessor therefore get different aliases (`posts`, then `posts_2`). Pass each accessor its own `createCollectionTables(...)` result unless the expressions it builds are meant for one statement.
 
-## `include-expr-junction-binding`
+## `include-expr-junction-table`
 
-This affects only an `IncludeExpr` object written out by hand with a `through` descriptor. An include built with `collection.include('<relation>')` carries the binding already.
+This affects only an `IncludeExpr` object written out by hand with a `through` descriptor. An include built with `collection.include('<relation>')` carries the aliased junction table already.
 
-There is no public function that binds a junction table on its own. Replace the hand-built object with the include the collection builds:
+There is no public function that aliases a junction table on its own. Replace the hand-built object with the include the collection builds:
 
 ```ts
 // before
@@ -162,7 +162,7 @@ users.include('posts', (posts) => posts.combine({ recent: posts.limit(3) }));
 
 A refinement that returned an unrelated collection used to be accepted and its state was used as the include's. To reuse a refinement across includes, share a function that takes the refinement's parameter, or a scope made with `db.orm.scope(...)` / `Model.scope(...)` and passed to `.with(...)`.
 
-## `sql-orm-table-references-renamed`
+## `sql-orm-table-aliases-renamed`
 
 No code that only runs queries needs to change. Update assertions, snapshots and log matchers that contain generated SQL or inspect the query AST:
 
@@ -187,4 +187,4 @@ Values that were written into the SQL text are now parameters:
 
 The parameter list of those statements grows by the same values, and the numbers of later parameters shift. Each value is encoded by its column's codec, as in every other filter.
 
-Names follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their names in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.
+Aliases follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their aliases in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.

@@ -17,7 +17,7 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
@@ -116,7 +116,7 @@ describe('a to-one relation accessor', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
 
     post.author.some();
@@ -130,7 +130,7 @@ describe('a to-one relation accessor', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
 
     post.author.name.asc();
@@ -143,7 +143,7 @@ describe('a to-one relation accessor', () => {
       getTestContext(),
       'public',
       'Post',
-      bindCollectionTables(getTestContext().contract, 'public', 'Post'),
+      createCollectionTables(getTestContext().contract, 'public', 'Post'),
     );
 
     expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
@@ -156,7 +156,7 @@ describe('a to-one relation accessor', () => {
       getTestContext(),
       'public',
       'Post',
-      bindCollectionTables(getTestContext().contract, 'public', 'Post'),
+      createCollectionTables(getTestContext().contract, 'public', 'Post'),
     );
 
     expect(Object.hasOwn(post.author, 'count')).toBe(false);
@@ -235,7 +235,7 @@ describe('orderBy a to-many relation count', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     expect(user.posts.count().desc()).toEqual(

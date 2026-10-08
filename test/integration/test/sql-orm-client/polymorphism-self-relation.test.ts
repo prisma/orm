@@ -49,7 +49,7 @@ async function taskTitles(runtime: PgIntegrationRuntime): Promise<readonly unkno
 
 describe('integration/polymorphism-self-relation', () => {
   it(
-    'default projection: include() of the same hierarchy decodes MTI variant children through their own table reference',
+    'default projection: include() of the same hierarchy decodes MTI variant children through their own table alias',
     async () => {
       await withTaskTree(async (runtime, tasks) => {
         const rows = await tasks

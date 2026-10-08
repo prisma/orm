@@ -18,7 +18,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import {
   buildMixedPolyContract,
@@ -91,13 +91,13 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const post = createModelAccessor(
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
 
     expectBinaryParam(user['name']!.eq('Alice'), 'users', 'name', 'eq', 'Alice');
@@ -121,7 +121,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const ilike = user['name']!.ilike;
     const result = ilike('%ali%');
@@ -136,7 +136,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
     const field = post['views'] as unknown as Record<string, unknown>;
     expect(field['ilike']).toBeUndefined();
@@ -147,7 +147,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
 
     expect(accessor['id']!.in([1, 2, 3])).toEqual(
@@ -173,7 +173,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     expect(user['email']!.isNull()).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'email')));
     expect(user['email']!.isNotNull()).toEqual(
@@ -186,7 +186,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     expect(accessor['posts']!.some()).toEqual(
@@ -203,7 +203,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     const noneExpr = accessor['posts']!.none({ views: 10 }) as ExistsExpr;
@@ -219,7 +219,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.every((post) => post['views']!.gt(10)) as ExistsExpr;
     expect(everyExpr.notExists).toBe(true);
     expect(everyExpr.subquery.where).toEqual(
@@ -235,7 +235,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     expect(accessor['posts']!.every({})).toEqual(AndExpr.true());
@@ -244,7 +244,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.none() as ExistsExpr;
     expect(expr.notExists).toBe(true);
     expect(expr.subquery.where).toEqual(
@@ -257,7 +257,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const expr = accessor['posts']!.some((post) =>
       post['comments']!.some((comment) => comment['body']!.like('%urgent%')),
@@ -268,12 +268,12 @@ describe('createModelAccessor', () => {
     expect(where.exprs[1]!.kind).toBe('exists');
   });
 
-  it('gives sibling relation filters over one table distinct references', () => {
+  it('gives sibling relation filters over one table distinct aliases', () => {
     const accessor = createModelAccessor(
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const first = accessor['posts']!.some((post) => post['views']!.gt(10)) as ExistsExpr;
     const second = accessor['posts']!.none((post) => post['views']!.gt(20)) as ExistsExpr;
@@ -302,7 +302,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.some((post) =>
       post['author']!.some((author) => author['name']!.eq('Alice')),
     ) as ExistsExpr;
@@ -323,7 +323,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     accessor['posts']!.some((post) => post['author']!.some());
     const sibling = accessor['invitedUsers']!.some() as ExistsExpr;
@@ -331,18 +331,18 @@ describe('createModelAccessor', () => {
     expect(sibling.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
   });
 
-  it('gives each accessor its own references', () => {
+  it('gives each accessor its own aliases', () => {
     createModelAccessor(
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.some();
     const expr = createModelAccessor(
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.some() as ExistsExpr;
 
     expect(expr.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
@@ -353,13 +353,13 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['invitedUsers']!.some((invitee) => invitee['name']!.eq('Bob')) as ExistsExpr;
     const inviter = createModelAccessor(
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['invitedBy']!.some((invitedBy) => invitedBy['name']!.eq('Alice')) as ExistsExpr;
 
     expect(children.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
@@ -383,7 +383,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const children = accessor['invitedUsers']!.some((invitee) =>
       invitee['name']!.eq('Bob'),
@@ -401,7 +401,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['invitedUsers']!.some((child) =>
       child['invitedUsers']!.some((grandchild) => grandchild['name']!.eq('Dan')),
     ) as ExistsExpr;
@@ -426,7 +426,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     expect((user as Record<PropertyKey, unknown>)[Symbol.iterator]).toBeUndefined();
 
@@ -440,7 +440,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     )['posts']!.some({
       unknown: undefined,
     }) as ExistsExpr;
@@ -452,7 +452,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
     const nullExpr = post['comments']!.some({ body: null }) as ExistsExpr;
     expect(nullExpr.subquery.where).toEqual(
@@ -488,7 +488,7 @@ describe('createModelAccessor', () => {
           { ...context, contract: brokenJoinContract } as never,
           'public',
           'User',
-          bindCollectionTables(brokenJoinContract, 'public', 'User'),
+          createCollectionTables(brokenJoinContract, 'public', 'User'),
         ) as unknown as Record<string, { some: () => unknown }>
       )['posts']!.some(),
     ).toThrow(/missing join columns/);
@@ -529,7 +529,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: compositeContract } as never,
         'public',
         'User',
-        bindCollectionTables(compositeContract, 'public', 'User'),
+        createCollectionTables(compositeContract, 'public', 'User'),
       ) as unknown as Record<string, { some: () => unknown }>
     )['posts']!.some() as ExistsExpr;
     expect(compositeExpr.subquery.projection).toEqual([
@@ -575,7 +575,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: noTargetFieldsContract } as never,
         'public',
         'User',
-        bindCollectionTables(noTargetFieldsContract, 'public', 'User'),
+        createCollectionTables(noTargetFieldsContract, 'public', 'User'),
       ) as unknown as Record<string, { some: () => unknown }>
     )['posts']!.some() as ExistsExpr;
     expect(fallbackExpr.subquery.projection).toEqual([
@@ -604,7 +604,7 @@ describe('createModelAccessor', () => {
       { ...context, contract: storageFallbackContract } as never,
       'public',
       'User',
-      bindCollectionTables(storageFallbackContract, 'public', 'User'),
+      createCollectionTables(storageFallbackContract, 'public', 'User'),
     );
     expect(accessor['name']).toBeUndefined();
   });
@@ -625,7 +625,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: modelNameFallbackContract } as never,
         'public',
         'User',
-        bindCollectionTables(modelNameFallbackContract, 'public', 'User'),
+        createCollectionTables(modelNameFallbackContract, 'public', 'User'),
       )['name']!.isNull(),
     ).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'name')));
   });
@@ -635,7 +635,7 @@ describe('createModelAccessor', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const predicate = accessor['posts']!.some({ title: 'A', views: 1 }) as ExistsExpr;
 
@@ -670,7 +670,7 @@ describe('createModelAccessor', () => {
           { ...context, contract: contractWithoutJoinArrays } as never,
           'public',
           'User',
-          bindCollectionTables(contractWithoutJoinArrays, 'public', 'User'),
+          createCollectionTables(contractWithoutJoinArrays, 'public', 'User'),
         ) as unknown as Record<string, { some: () => unknown }>
       )['posts']!.some(),
     ).toThrow(/missing join columns/);
@@ -683,7 +683,7 @@ describe('createModelAccessor', () => {
         { ...context, codecDescriptors },
         'public',
         'Post',
-        bindCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
       );
       const field = accessor['id'] as unknown as Record<string, unknown>;
 
@@ -711,7 +711,7 @@ describe('createModelAccessor', () => {
         { ...context, codecDescriptors },
         'public',
         'User',
-        bindCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'User'),
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'User'),
       );
       const field = accessor['name'] as unknown as Record<string, unknown>;
 
@@ -740,7 +740,7 @@ describe('createModelAccessor', () => {
         { ...context, codecDescriptors },
         'public',
         'Post',
-        bindCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
       );
 
       expect(() => accessor['comments']!.some({ postId: 42 })).toThrow(
@@ -778,7 +778,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as FieldBag;
       // `priority` lives on the joined `features` table, not the base `tasks`.
@@ -796,7 +796,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as FieldBag;
       expect(feature['title']!.eq('Dark mode')).toEqual(
@@ -813,7 +813,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as FieldBag;
       expect(feature['priority']).toBeDefined();
@@ -821,7 +821,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Bug',
       ) as unknown as FieldBag;
       // Bug is STI — its `severity` rides the base table, never the features join.
@@ -841,7 +841,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
       ) as unknown as FieldBag;
       expect(task['title']!.eq('x')).toEqual(
         new BinaryExpr('eq', ColumnRef.of('tasks', 'title'), polyParam('tasks', 'title', 'x')),
@@ -864,7 +864,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as RelationBag;
 
@@ -885,7 +885,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Bug',
       ) as unknown as RelationBag;
 
@@ -903,7 +903,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
       ) as unknown as RelationBag;
       expect(task['assignee']).toBeUndefined();
     });
@@ -913,7 +913,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as RelationBag;
 
@@ -930,7 +930,7 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        bindCollectionTables(polyContext.contract, 'public', 'Task'),
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
         'Feature',
       ) as unknown as RelationBag;
 
@@ -947,7 +947,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { some: (pred?: unknown) => unknown }>;
 
       const expr = accessor['tags']!.some() as ExistsExpr;
@@ -970,7 +970,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['tags']!.some((c: unknown) =>
@@ -991,7 +991,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { none: (pred?: unknown) => unknown }>;
 
       const expr = accessor['tags']!.none() as ExistsExpr;
@@ -1006,7 +1006,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { every: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['tags']!.every((c: unknown) =>
@@ -1029,18 +1029,18 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { every: (pred: unknown) => unknown }>;
 
       expect(accessor['tags']!.every({})).toEqual(AndExpr.true());
     });
 
-    it('gives sibling M:N filters distinct related and junction references', () => {
+    it('gives sibling M:N filters distinct related and junction aliases', () => {
       const accessor = createModelAccessor(
         context,
         'public',
         'User',
-        bindCollectionTables(context.contract, 'public', 'User'),
+        createCollectionTables(context.contract, 'public', 'User'),
       ) as unknown as Record<string, { some: () => unknown }>;
       accessor['tags']!.some();
       const expr = accessor['tags']!.some() as ExistsExpr;
@@ -1062,7 +1062,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'Project',
-        bindCollectionTables(context.contract, 'public', 'Project'),
+        createCollectionTables(context.contract, 'public', 'Project'),
       ) as unknown as Record<string, { some: () => unknown }>;
 
       const expr = accessor['related']!.some() as ExistsExpr;
@@ -1098,7 +1098,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'Project',
-        bindCollectionTables(context.contract, 'public', 'Project'),
+        createCollectionTables(context.contract, 'public', 'Project'),
       ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['related']!.some((c: unknown) =>
@@ -1128,7 +1128,7 @@ describe('createModelAccessor', () => {
         context,
         'public',
         'Project',
-        bindCollectionTables(context.contract, 'public', 'Project'),
+        createCollectionTables(context.contract, 'public', 'Project'),
       ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['related']!.some((related: unknown) =>
@@ -1212,7 +1212,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: malformedContract } as never,
         'public',
         'Project',
-        bindCollectionTables(malformedContract, 'public', 'Project'),
+        createCollectionTables(malformedContract, 'public', 'Project'),
       ) as unknown as Record<string, { some: () => unknown }>;
 
       expect(() => accessor['related']!.some()).toThrow(
@@ -1242,7 +1242,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: malformedContract } as never,
         'public',
         'Project',
-        bindCollectionTables(malformedContract, 'public', 'Project'),
+        createCollectionTables(malformedContract, 'public', 'Project'),
       ) as unknown as Record<string, { some: () => unknown }>;
 
       expect(() => accessor['related']!.some()).toThrow(
@@ -1271,13 +1271,13 @@ describe('createModelAccessor', () => {
         ctx,
         'public',
         'User',
-        bindCollectionTables(ctx.contract, 'public', 'User'),
+        createCollectionTables(ctx.contract, 'public', 'User'),
       );
       const post = createModelAccessor(
         ctx,
         'public',
         'Post',
-        bindCollectionTables(ctx.contract, 'public', 'Post'),
+        createCollectionTables(ctx.contract, 'public', 'Post'),
       );
 
       const name = user['name'] as unknown as Record<string, unknown>;
@@ -1300,7 +1300,7 @@ describe('createModelAccessor', () => {
         { ...context, queryOperations, codecDescriptors },
         'public',
         'User',
-        bindCollectionTables(
+        createCollectionTables(
           { ...context, queryOperations, codecDescriptors }.contract,
           'public',
           'User',

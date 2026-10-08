@@ -26,10 +26,10 @@ import {
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import {
-  bindCollectionTables,
-  bindIncludeTables,
-  bindStatementTable,
   type CollectionTables,
+  createCollectionTables,
+  createIncludeTables,
+  createStatementTables,
 } from '../src/collection-tables';
 import {
   type CollectionState,
@@ -37,13 +37,13 @@ import {
   type IncludeExpr,
   type RuntimeQueryable,
 } from '../src/types';
-import type { TableReferences } from '../src/where-binding';
+import type { TableAliases } from '../src/where-binding';
 import { defineContract, field, model, rel, type ScalarFieldBuilder } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
 import { defineTestCodec } from './test-codec';
 
-export function publicTables(...tableNames: string[]): TableReferences {
+export function publicTables(...tableNames: string[]): TableAliases {
   return new Map(tableNames.map((tableName) => [tableName, { namespaceId: 'public', tableName }]));
 }
 
@@ -57,8 +57,8 @@ export function tablesForTable(
   );
   const [modelName] = models.find(([, model]) => model.base === undefined) ?? models[0] ?? [];
   return modelName === undefined
-    ? bindStatementTable({ namespaceId, tableName })
-    : bindCollectionTables(contract, namespaceId, modelName, tableName);
+    ? createStatementTables({ namespaceId, tableName })
+    : createCollectionTables(contract, namespaceId, modelName, tableName);
 }
 
 export type StateFields = Partial<Omit<CollectionState, 'tables'>>;
@@ -105,7 +105,7 @@ export function relationInclude(
 ): IncludeSpec {
   const relation = resolveIncludeRelation(contract, namespaceId, parentModel, relationName);
   return (parent) => {
-    const child = bindIncludeTables(contract, parent, relation);
+    const child = createIncludeTables(contract, parent, relation);
     return {
       relationName,
       relatedModelName: relation.relatedModelName,

@@ -14,7 +14,7 @@ import {
   resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
-import { bindStatementTable, type CollectionTables } from './collection-tables';
+import { type CollectionTables, createStatementTables } from './collection-tables';
 import { and, shorthandToWhereExpr } from './filters';
 import { ormError } from './orm-errors';
 import {
@@ -31,7 +31,7 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import type {
   CollectionState,
   MutationCreateInput,
@@ -1087,7 +1087,7 @@ async function deleteJunctionLink(
     writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
   }
 
-  const junction = bindStatementTable({
+  const junction = createStatementTables({
     namespaceId: through.namespaceId,
     tableName: through.table,
   });
@@ -1138,7 +1138,7 @@ function readParentColumnValues(
 }
 
 function bindRelatedTable(relation: RelationDefinition): CollectionTables {
-  return bindStatementTable({
+  return createStatementTables({
     namespaceId: relation.relatedNamespaceId,
     tableName: relation.relatedTableName,
   });
@@ -1146,7 +1146,7 @@ function bindRelatedTable(relation: RelationDefinition): CollectionTables {
 
 function buildChildJoinWhere(
   contract: Contract<SqlStorage>,
-  related: TableBinding,
+  related: AliasedTable,
   childValues: Map<string, unknown>,
 ): AnyExpression {
   const exprs: AnyExpression[] = [];
@@ -1219,7 +1219,7 @@ async function findRowByCriterion(
   criterion: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
-  const tables = bindStatementTable({
+  const tables = createStatementTables({
     namespaceId,
     tableName: resolveModelTableName(contract, namespaceId, modelName),
   });

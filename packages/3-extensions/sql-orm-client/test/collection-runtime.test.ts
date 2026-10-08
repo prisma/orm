@@ -17,7 +17,7 @@ import {
   mapStorageRowToModelFields,
   stripHiddenMappedFields,
 } from '../src/collection-runtime';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { buildMixedPolyContract, getTestContract } from './helpers';
 
 describe('collection-runtime', () => {
@@ -177,14 +177,14 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
     );
     const pinned = createPolymorphicRowMapper(
       contract,
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       'Feature',
     );
     expect(lookup).toHaveBeenCalledWith(contract, 'public', 'Task');
@@ -230,7 +230,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
     );
 
@@ -247,7 +247,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
     );
 
@@ -271,7 +271,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
     );
 
@@ -293,7 +293,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
     );
 
@@ -310,7 +310,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
       'Bug',
     );
@@ -334,7 +334,7 @@ describe('mapPolymorphicRow()', () => {
       'public',
       'Task',
       polyInfo,
-      bindCollectionTables(contract, 'public', 'Task'),
+      createCollectionTables(contract, 'public', 'Task'),
       row,
     );
 
@@ -370,7 +370,7 @@ describe('mapPolymorphicRow()', () => {
         'public',
         'Task',
         polyInfo,
-        bindCollectionTables(contract, 'public', 'Task'),
+        createCollectionTables(contract, 'public', 'Task'),
         stiRow,
       ),
     ).toEqual({
@@ -387,7 +387,7 @@ describe('mapPolymorphicRow()', () => {
         'public',
         'Task',
         polyInfo,
-        bindCollectionTables(contract, 'public', 'Task'),
+        createCollectionTables(contract, 'public', 'Task'),
         mtiRow,
       ),
     ).toEqual({
@@ -404,7 +404,7 @@ describe('mapPolymorphicRow()', () => {
         'public',
         'Task',
         polyInfo,
-        bindCollectionTables(contract, 'public', 'Task'),
+        createCollectionTables(contract, 'public', 'Task'),
         unknownRow,
       ),
     ).toEqual({

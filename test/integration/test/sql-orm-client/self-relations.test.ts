@@ -213,7 +213,7 @@ describe('integration/self-relations', () => {
   );
 
   it(
-    'include() that returns to an ancestor table reads the ancestor row through its own reference',
+    'include() that returns to an ancestor table reads the ancestor row through its own alias',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime);

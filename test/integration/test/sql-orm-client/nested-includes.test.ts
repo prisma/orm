@@ -271,7 +271,7 @@ describe('integration/nested-includes', () => {
       'users -> invitedUsers -> invitedUsers (self-relation chained)',
       async () => {
         // Self-relation at depth 2. The existing depth-1 self-relation
-        // tests verify that the child table gets its own reference
+        // tests verify that the child table gets its own alias
         // (`users_2`) instead of the parent's table name. At depth 2 the
         // inner child must get another one (`users_3`).
         await withCollectionRuntime(async (runtime) => {

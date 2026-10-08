@@ -32,7 +32,7 @@ import { codecTraits, hasTrait, resolveColumn } from './column-codec';
 import { and, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { bindTable, type TableBinding, type TableScope } from './table-scope';
+import type { AliasedTable, TableScope } from './table-scope';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
@@ -99,8 +99,8 @@ function createModelAccessorInScope<
   modelName: ModelName,
   variantName: VariantName | undefined,
   scope: TableScope,
-  binding: TableBinding,
-  variantTable: TableBinding | undefined,
+  table: AliasedTable,
+  variantTable: AliasedTable | undefined,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
@@ -127,7 +127,7 @@ function createModelAccessorInScope<
         relations: resolveModelRelations(contract, namespaceId, variantName),
       }
     : undefined;
-  const variantBinding = variantTable ?? binding;
+  const variantFieldTable = variantTable ?? table;
 
   const opsByCodecId = new Map<string, NamedOp[]>();
 
@@ -172,7 +172,7 @@ function createModelAccessorInScope<
               namespaceId,
               variantCoordinates.name,
               scope,
-              variantBinding,
+              variantFieldTable,
               variantRelation,
             );
           }
@@ -185,14 +185,14 @@ function createModelAccessorInScope<
             namespaceId,
             modelName,
             scope,
-            binding,
+            table,
             relation,
           );
         }
 
         const variantField = variantFieldColumns[prop];
-        const fieldBinding = variantField ? variantBinding : binding;
-        const fieldStorage = fieldBinding.storage;
+        const fieldTable = variantField ? variantFieldTable : table;
+        const fieldStorage = fieldTable.storage;
         const columnName = variantField?.column ?? fieldToColumn[prop] ?? prop;
         const column = resolveColumn(
           contract,
@@ -217,7 +217,7 @@ function createModelAccessorInScope<
           columnName,
         );
         return createScalarFieldAccessor(
-          fieldBinding,
+          fieldTable,
           columnName,
           column.codecId,
           column.nullable,
@@ -236,7 +236,7 @@ function createModelAccessorInScope<
 }
 
 function createScalarFieldAccessor(
-  tableBinding: TableBinding,
+  table: AliasedTable,
   columnName: string,
   codecId: string,
   nullable: boolean,
@@ -245,7 +245,7 @@ function createScalarFieldAccessor(
   operations: readonly NamedOp[],
   context: ExecutionContext,
 ): Partial<ComparisonMethodFns<unknown>> {
-  const column = tableBinding.column(columnName);
+  const column = table.column(columnName);
   const comparisonEntries: Array<[string, unknown]> = [];
   for (const [name, meta] of Object.entries(COMPARISON_METHODS_META)) {
     if (meta.traits.some((t) => !traits.includes(t))) continue;
@@ -327,7 +327,7 @@ function createRelationFilterAccessor<
   parentNamespaceId: string,
   parentModelName: ParentModelName,
   scope: TableScope,
-  parentBinding: TableBinding,
+  parentTable: AliasedTable,
   relation: ResolvedModelRelation,
 ): RelationAccessor<TContract> {
   const relatedTableName = resolveModelTableName(
@@ -341,7 +341,7 @@ function createRelationFilterAccessor<
       parentNamespaceId,
       parentModelName,
       scope,
-      parentBinding,
+      parentTable,
       relatedTableName,
       relation,
     );
@@ -431,7 +431,7 @@ function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
 }
 
 interface CorrelatedRelatedRows {
-  readonly child: TableBinding;
+  readonly child: AliasedTable;
   readonly source: SelectAst;
   readonly correlation: AnyExpression;
   readonly keyColumn: string;
@@ -442,18 +442,18 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
   parentNamespaceId: string,
   parentModelName: string,
   scope: TableScope,
-  parentBinding: TableBinding,
+  parentTable: AliasedTable,
   relatedTableName: string,
   relation: ResolvedModelRelation,
 ): CorrelatedRelatedRows {
-  const child = bindTable(scope, {
+  const child = scope.aliasTable({
     namespaceId: relation.toNamespace,
     tableName: relatedTableName,
   });
 
   if (hasThrough(relation)) {
     const { through } = relation;
-    const junction = bindTable(scope, {
+    const junction = scope.aliasTable({
       namespaceId: through.namespaceId,
       tableName: through.table,
     });
@@ -474,7 +474,7 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
       correlation: buildPairedColumnExprs(
         junction,
         through.parentColumns,
-        parentBinding,
+        parentTable,
         parentLocalColumns,
       ),
       keyColumn: firstJoinColumn(through.targetColumns, 'targetColumns'),
@@ -488,7 +488,7 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
       context.contract,
       parentNamespaceId,
       parentModelName,
-      parentBinding,
+      parentTable,
       child,
       relation,
     ),
@@ -561,9 +561,9 @@ function firstJoinColumn(columns: readonly string[], label: string): string {
 }
 
 function buildPairedColumnExprs(
-  leftTable: TableBinding,
+  leftTable: AliasedTable,
   leftColumns: readonly string[],
-  rightTable: TableBinding,
+  rightTable: AliasedTable,
   rightColumns: readonly string[],
 ): AnyExpression {
   if (leftColumns.length !== rightColumns.length) {
@@ -595,7 +595,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
   relatedModelName: string,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
   scope: TableScope,
-  binding: TableBinding,
+  table: AliasedTable,
 ): AnyExpression | undefined {
   if (!predicate) {
     return undefined;
@@ -608,7 +608,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
     relatedModelName,
     undefined,
     scope,
-    binding,
+    table,
     undefined,
   );
 
@@ -671,8 +671,8 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
   contract: TContract,
   parentNamespaceId: string,
   parentModelName: string,
-  parentTable: TableBinding,
-  relatedTable: TableBinding,
+  parentTable: AliasedTable,
+  relatedTable: AliasedTable,
   relation: ResolvedModelRelation,
 ): AnyExpression {
   const localFields = relation.on?.localFields ?? [];

@@ -3,51 +3,49 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import { resolveModelTableName, resolvePolymorphismInfo } from './collection-contract';
 import {
-  bindTable,
-  copyTableScope,
+  type AliasedTable,
   createTableScope,
-  type TableBinding,
   type TableScope,
   type TableStorageCoordinate,
 } from './table-scope';
 
 export interface CollectionTables {
   readonly scope: TableScope;
-  readonly root: TableBinding;
-  readonly variants: ReadonlyMap<string, TableBinding>;
+  readonly root: AliasedTable;
+  readonly variants: ReadonlyMap<string, AliasedTable>;
 }
 
-function bindModelTables(
+function createModelTables(
   contract: Contract<SqlStorage>,
   scope: TableScope,
   namespaceId: string,
   modelName: string,
   tableName: string,
 ): CollectionTables {
-  const root = bindTable(scope, { namespaceId, tableName });
-  const variants = new Map<string, TableBinding>();
+  const root = scope.aliasTable({ namespaceId, tableName });
+  const variants = new Map<string, AliasedTable>();
   for (const variant of resolvePolymorphismInfo(contract, namespaceId, modelName)?.mtiVariants ??
     []) {
-    variants.set(variant.modelName, bindTable(scope, { namespaceId, tableName: variant.table }));
+    variants.set(variant.modelName, scope.aliasTable({ namespaceId, tableName: variant.table }));
   }
   return { scope, root, variants };
 }
 
-export function bindCollectionTables(
+export function createCollectionTables(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   tableName: string = resolveModelTableName(contract, namespaceId, modelName),
 ): CollectionTables {
-  return bindModelTables(contract, createTableScope(), namespaceId, modelName, tableName);
+  return createModelTables(contract, createTableScope(), namespaceId, modelName, tableName);
 }
 
 export interface IncludeTables {
   readonly tables: CollectionTables;
-  readonly junction: TableBinding | undefined;
+  readonly junction: AliasedTable | undefined;
 }
 
-export function bindIncludeTables(
+export function createIncludeTables(
   contract: Contract<SqlStorage>,
   parent: CollectionTables,
   relation: {
@@ -57,8 +55,8 @@ export function bindIncludeTables(
     readonly through?: { readonly namespaceId: string; readonly table: string } | undefined;
   },
 ): IncludeTables {
-  const scope = copyTableScope(parent.scope);
-  const tables = bindModelTables(
+  const scope = parent.scope.copy();
+  const tables = createModelTables(
     contract,
     scope,
     relation.relatedNamespaceId,
@@ -68,50 +66,47 @@ export function bindIncludeTables(
   const junction =
     relation.through === undefined
       ? undefined
-      : bindTable(scope, {
+      : scope.aliasTable({
           namespaceId: relation.through.namespaceId,
           tableName: relation.through.table,
         });
   return { tables, junction };
 }
 
-export function bindStatementTable(storage: TableStorageCoordinate): CollectionTables {
+export function createStatementTables(storage: TableStorageCoordinate): CollectionTables {
   const scope = createTableScope();
-  return { scope, root: bindTable(scope, storage), variants: new Map() };
+  return { scope, root: scope.aliasTable(storage), variants: new Map() };
 }
 
 export function withScopeCopy(tables: CollectionTables): CollectionTables {
-  return { ...tables, scope: copyTableScope(tables.scope) };
+  return { ...tables, scope: tables.scope.copy() };
 }
 
-export function requireVariantBinding(
+export function requireVariantTable(
   tables: CollectionTables,
   variantModelName: string,
-): TableBinding {
-  const binding = tables.variants.get(variantModelName);
-  if (binding === undefined) {
+): AliasedTable {
+  const variantTable = tables.variants.get(variantModelName);
+  if (variantTable === undefined) {
     throw new InternalError(
-      `Collection state has no table binding for variant "${variantModelName}"`,
+      `Collection state has no aliased table for variant "${variantModelName}"`,
     );
   }
-  return binding;
+  return variantTable;
 }
 
-export function tableReferences(
+export function tableAliases(
   tables: CollectionTables,
 ): ReadonlyMap<string, TableStorageCoordinate> {
   return new Map(
-    [tables.root, ...tables.variants.values()].map((binding) => [
-      binding.reference,
-      binding.storage,
-    ]),
+    [tables.root, ...tables.variants.values()].map((table) => [table.alias, table.storage]),
   );
 }
 
-export function variantColumnLabelPrefix(variantTable: TableBinding): string {
-  return `${variantTable.reference}__`;
+export function variantColumnLabelPrefix(variantTable: AliasedTable): string {
+  return `${variantTable.alias}__`;
 }
 
-export function variantColumnLabel(variantTable: TableBinding, column: string): string {
+export function variantColumnLabel(variantTable: AliasedTable, column: string): string {
   return `${variantColumnLabelPrefix(variantTable)}${column}`;
 }

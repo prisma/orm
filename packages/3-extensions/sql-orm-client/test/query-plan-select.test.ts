@@ -30,7 +30,7 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
@@ -1314,7 +1314,7 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     parentModel: string,
     include: IncludeSpec,
   ): CollectionState {
-    return specState(bindCollectionTables(contract, 'public', parentModel), {
+    return specState(createCollectionTables(contract, 'public', parentModel), {
       includes: [include],
     });
   }
@@ -1431,10 +1431,10 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
     expect(projectionAliases(childRows)).toContain('features__priority');
   });
 
-  it('self-relation poly include joins the child variant table on the child references', () => {
+  it('self-relation poly include joins the child variant table on the child aliases', () => {
     const contract = buildMixedPolyContract();
     // `subtasks` is a Task→Task self relation; the child base table and its
-    // variant table get their own references, and the variant join ON uses both.
+    // variant table get their own aliases, and the variant join ON uses both.
     const state = stateWithInclude(contract, 'Task', includeFor(contract, 'Task', 'subtasks'));
 
     const plan = compileSelectWithIncludes(contract, getTestAggregates(), state, 'Task');

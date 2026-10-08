@@ -12,10 +12,10 @@ import {
 } from './collection-contract';
 import {
   type CollectionTables,
-  requireVariantBinding,
+  requireVariantTable,
   variantColumnLabel,
 } from './collection-tables';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import type { CollectionContext } from './types';
 
 export interface RowEnvelope {
@@ -96,9 +96,9 @@ function getMergedColumnToFieldMap(
   namespaceId: string,
   baseModelName: string,
   variantModelName: string,
-  variantTable: TableBinding | undefined,
+  variantTable: AliasedTable | undefined,
 ): Record<string, string> {
-  const cacheKey = `${namespaceId}:${baseModelName}:${variantModelName}:${variantTable?.reference ?? ''}`;
+  const cacheKey = `${namespaceId}:${baseModelName}:${variantModelName}:${variantTable?.alias ?? ''}`;
   let perContract = mergedColumnToFieldCache.get(contract);
   if (!perContract) {
     perContract = new Map();
@@ -126,8 +126,8 @@ function getMergedColumnToFieldMap(
 function variantTableOf(
   tables: CollectionTables,
   variant: PolymorphismVariantInfo,
-): TableBinding | undefined {
-  return variant.strategy === 'mti' ? requireVariantBinding(tables, variant.modelName) : undefined;
+): AliasedTable | undefined {
+  return variant.strategy === 'mti' ? requireVariantTable(tables, variant.modelName) : undefined;
 }
 
 export function mapPolymorphicRow(

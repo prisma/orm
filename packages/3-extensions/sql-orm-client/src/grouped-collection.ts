@@ -31,7 +31,7 @@ import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 import { compileGroupedAggregate, mergeAnnotations } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import type {
   AggregateBuilder,
   AggregateResult,
@@ -336,7 +336,7 @@ function createHavingBuilder<
   aggregates: SqlAggregateDescriptorRegistry,
   namespaceId: string,
   modelName: ModelName,
-  root: TableBinding,
+  root: AliasedTable,
 ): HavingBuilder<TContract, ModelName, NsId> {
   const { tableName } = root.storage;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);

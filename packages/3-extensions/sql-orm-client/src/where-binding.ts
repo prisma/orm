@@ -24,61 +24,61 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import { ormError } from './orm-errors';
 import type { TableStorageCoordinate } from './table-scope';
 
-export type TableReferences = ReadonlyMap<string, TableStorageCoordinate>;
+export type TableAliases = ReadonlyMap<string, TableStorageCoordinate>;
 
 interface TableSourceCoordinate {
   readonly namespaceId: string | undefined;
   readonly tableName: string;
 }
 
-type ReferencesInScope = ReadonlyMap<string, TableSourceCoordinate>;
+type AliasesInScope = ReadonlyMap<string, TableSourceCoordinate>;
 
 export function bindWhereExpr(
   contract: Contract<SqlStorage>,
   expr: AnyExpression,
-  references: TableReferences,
+  aliases: TableAliases,
 ): AnyExpression {
-  return bindWhereExprInScope(contract, expr, references);
+  return bindWhereExprInScope(contract, expr, aliases);
 }
 
 function bindWhereExprInScope(
   contract: Contract<SqlStorage>,
   expr: AnyExpression,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): AnyExpression {
   return expr.accept<AnyExpression>({
     columnRef(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     identifierRef(expr) {
       return expr;
     },
     subquery(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     operation(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     aggregate(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     windowFunc(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     functionCall(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     cast(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     case(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     jsonObject(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     jsonArrayAgg(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     literal(expr) {
       return expr;
@@ -90,36 +90,36 @@ function bindWhereExprInScope(
       return expr;
     },
     list(expr) {
-      return bindExpression(contract, expr, references);
+      return bindExpression(contract, expr, aliases);
     },
     binary(expr) {
-      const left = bindExpression(contract, expr.left, references);
+      const left = bindExpression(contract, expr.left, aliases);
       const bindingColumn = left.kind === 'column-ref' ? left : undefined;
 
       return new BinaryExpr(
         expr.op,
         left,
-        bindComparable(contract, expr.right, bindingColumn, references),
+        bindComparable(contract, expr.right, bindingColumn, aliases),
       );
     },
     and(expr) {
-      return AndExpr.of(expr.exprs.map((part) => bindWhereExprInScope(contract, part, references)));
+      return AndExpr.of(expr.exprs.map((part) => bindWhereExprInScope(contract, part, aliases)));
     },
     or(expr) {
-      return OrExpr.of(expr.exprs.map((part) => bindWhereExprInScope(contract, part, references)));
+      return OrExpr.of(expr.exprs.map((part) => bindWhereExprInScope(contract, part, aliases)));
     },
     exists(expr) {
       return expr.notExists
-        ? ExistsExpr.notExists(bindSelectAst(contract, expr.subquery, references))
-        : ExistsExpr.exists(bindSelectAst(contract, expr.subquery, references));
+        ? ExistsExpr.notExists(bindSelectAst(contract, expr.subquery, aliases))
+        : ExistsExpr.exists(bindSelectAst(contract, expr.subquery, aliases));
     },
     nullCheck(expr) {
       return expr.isNull
-        ? NullCheckExpr.isNull(bindExpression(contract, expr.expr, references))
-        : NullCheckExpr.isNotNull(bindExpression(contract, expr.expr, references));
+        ? NullCheckExpr.isNull(bindExpression(contract, expr.expr, aliases))
+        : NullCheckExpr.isNotNull(bindExpression(contract, expr.expr, aliases));
     },
     not(expr) {
-      return new NotExpr(bindWhereExprInScope(contract, expr.expr, references));
+      return new NotExpr(bindWhereExprInScope(contract, expr.expr, aliases));
     },
     rawExpr(expr) {
       return expr;
@@ -131,46 +131,46 @@ function bindComparable(
   contract: Contract<SqlStorage>,
   comparable: AnyExpression,
   bindingColumn: ColumnRef | undefined,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): AnyExpression {
   if (comparable.kind === 'param-ref' || bindingColumn === undefined) {
     return comparable.kind === 'param-ref'
       ? comparable
       : comparable.kind === 'literal' || comparable.kind === 'list'
         ? comparable
-        : bindExpression(contract, comparable, references);
+        : bindExpression(contract, comparable, aliases);
   }
 
   if (comparable.kind === 'literal') {
-    return paramRefForReference(contract, bindingColumn, comparable.value, references);
+    return paramRefForAlias(contract, bindingColumn, comparable.value, aliases);
   }
 
   if (comparable.kind === 'list') {
     return ListExpression.of(
       comparable.values.map((value) =>
         value.kind === 'literal'
-          ? paramRefForReference(contract, bindingColumn, value.value, references)
+          ? paramRefForAlias(contract, bindingColumn, value.value, aliases)
           : value,
       ),
     );
   }
 
-  return bindExpression(contract, comparable, references);
+  return bindExpression(contract, comparable, aliases);
 }
 
-function unknownColumn(reference: string, column: string): Error {
-  return ormError('ORM.COLUMN_UNKNOWN', `Unknown column "${column}" in table "${reference}"`, {
-    meta: { tableName: reference, column },
+function unknownColumn(alias: string, column: string): Error {
+  return ormError('ORM.COLUMN_UNKNOWN', `Unknown column "${column}" in table "${alias}"`, {
+    meta: { tableName: alias, column },
   });
 }
 
-function paramRefForReference(
+function paramRefForAlias(
   contract: Contract<SqlStorage>,
   columnRef: ColumnRef,
   value: unknown,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): ParamRef {
-  const coordinate = references.get(columnRef.table);
+  const coordinate = aliases.get(columnRef.table);
   if (coordinate === undefined) {
     throw unknownColumn(columnRef.table, columnRef.column);
   }
@@ -180,7 +180,7 @@ function paramRefForReference(
 function paramRefForTable(
   contract: Contract<SqlStorage>,
   coordinate: TableSourceCoordinate,
-  reference: string,
+  alias: string,
   column: string,
   value: unknown,
 ): ParamRef {
@@ -190,7 +190,7 @@ function paramRefForTable(
     coordinate.namespaceId,
   );
   if (resolved === undefined || !resolved.table.columns[column]) {
-    throw unknownColumn(reference, column);
+    throw unknownColumn(alias, column);
   }
   const codec = codecRefForStorageColumn(
     contract.storage,
@@ -213,10 +213,10 @@ export function paramRefForStorageColumn(
 function bindExpression(
   contract: Contract<SqlStorage>,
   expr: AnyExpression,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): AnyExpression {
   const binder: ExpressionRewriter = {
-    select: (ast) => bindSelectAst(contract, ast, references),
+    select: (ast) => bindSelectAst(contract, ast, aliases),
   };
   return expr.rewrite(binder);
 }
@@ -224,22 +224,16 @@ function bindExpression(
 function bindProjectionExpr(
   contract: Contract<SqlStorage>,
   expr: ProjectionExpr,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): ProjectionExpr {
-  return expr.kind === 'literal' ? expr : bindExpression(contract, expr, references);
+  return expr.kind === 'literal' ? expr : bindExpression(contract, expr, aliases);
 }
 
-function bindJoin(
-  contract: Contract<SqlStorage>,
-  join: JoinAst,
-  references: ReferencesInScope,
-): JoinAst {
+function bindJoin(contract: Contract<SqlStorage>, join: JoinAst, aliases: AliasesInScope): JoinAst {
   return new JoinAst(
     join.joinType,
-    bindFromSource(contract, join.source, references),
-    join.on.kind === 'eq-col-join-on'
-      ? join.on
-      : bindWhereExprInScope(contract, join.on, references),
+    bindFromSource(contract, join.source, aliases),
+    join.on.kind === 'eq-col-join-on' ? join.on : bindWhereExprInScope(contract, join.on, aliases),
     join.lateral,
   );
 }
@@ -247,58 +241,58 @@ function bindJoin(
 function bindFromSource(
   contract: Contract<SqlStorage>,
   source: AnyFromSource,
-  references: ReferencesInScope,
+  aliases: AliasesInScope,
 ): AnyFromSource {
   if (source.kind === 'derived-table-source') {
-    return DerivedTableSource.as(source.alias, bindSelectAst(contract, source.query, references));
+    return DerivedTableSource.as(source.alias, bindSelectAst(contract, source.query, aliases));
   }
   return source;
 }
 
-function referencesWithSources(
-  outer: ReferencesInScope,
+function aliasesWithSources(
+  outer: AliasesInScope,
   sources: readonly AnyFromSource[],
-): ReferencesInScope {
-  const references = new Map(outer);
+): AliasesInScope {
+  const aliases = new Map(outer);
   for (const source of sources) {
     if (source.kind === 'table-source') {
-      references.set(source.alias ?? source.name, {
+      aliases.set(source.alias ?? source.name, {
         namespaceId: source.namespaceId,
         tableName: source.name,
       });
     }
   }
-  return references;
+  return aliases;
 }
 
 function bindSelectAst(
   contract: Contract<SqlStorage>,
   ast: SelectAst,
-  outer: ReferencesInScope,
+  outer: AliasesInScope,
 ): SelectAst {
-  const references = referencesWithSources(outer, [
+  const aliases = aliasesWithSources(outer, [
     ...(ast.from !== undefined ? [ast.from] : []),
     ...(ast.joins ?? []).map((join) => join.source),
   ]);
   return new SelectAst({
     ...(ast.from !== undefined ? { from: bindFromSource(contract, ast.from, outer) } : {}),
-    joins: ast.joins?.map((join) => bindJoin(contract, join, references)),
+    joins: ast.joins?.map((join) => bindJoin(contract, join, aliases)),
     projection: ast.projection.map(
       (projection) =>
         new ProjectionItem(
           projection.alias,
-          bindProjectionExpr(contract, projection.expr, references),
+          bindProjectionExpr(contract, projection.expr, aliases),
           projection.codec,
         ),
     ),
-    where: ast.where ? bindWhereExprInScope(contract, ast.where, references) : undefined,
+    where: ast.where ? bindWhereExprInScope(contract, ast.where, aliases) : undefined,
     orderBy: ast.orderBy?.map((orderItem) =>
-      orderItem.withExpr(bindExpression(contract, orderItem.expr, references)),
+      orderItem.withExpr(bindExpression(contract, orderItem.expr, aliases)),
     ),
     distinct: ast.distinct,
-    distinctOn: ast.distinctOn?.map((expr) => bindExpression(contract, expr, references)),
-    groupBy: ast.groupBy?.map((expr) => bindExpression(contract, expr, references)),
-    having: ast.having ? bindWhereExprInScope(contract, ast.having, references) : undefined,
+    distinctOn: ast.distinctOn?.map((expr) => bindExpression(contract, expr, aliases)),
+    groupBy: ast.groupBy?.map((expr) => bindExpression(contract, expr, aliases)),
+    having: ast.having ? bindWhereExprInScope(contract, ast.having, aliases) : undefined,
     limit: ast.limit,
     offset: ast.offset,
     locking: ast.locking,

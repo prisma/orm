@@ -9,7 +9,7 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { all, and, not, or } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
 import { normalizeWhereArg } from '../src/where-interop';
@@ -35,7 +35,7 @@ describe('SQL ORM rich AST filters', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
     const expr = and(
       user['name']!.eq('Alice'),

@@ -28,13 +28,13 @@ import {
 } from './collection-contract';
 import {
   type CollectionTables,
-  requireVariantBinding,
+  requireVariantTable,
   variantColumnLabel,
 } from './collection-tables';
 import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import type { CollectionState } from './types';
 import { paramRefForStorageColumn } from './where-binding';
 import { combineWhereExprs } from './where-utils';
@@ -47,7 +47,7 @@ type CursorOrderEntry = {
 
 function createBoundaryExpr(
   contract: Contract<SqlStorage>,
-  table: TableBinding,
+  table: AliasedTable,
   entry: CursorOrderEntry,
 ): AnyExpression {
   const comparator: BinaryOp = entry.direction === 'asc' ? 'gt' : 'lt';
@@ -60,7 +60,7 @@ function createBoundaryExpr(
 
 function buildLexicographicCursorWhere(
   contract: Contract<SqlStorage>,
-  table: TableBinding,
+  table: AliasedTable,
   entries: readonly CursorOrderEntry[],
 ): AnyExpression {
   const branches = entries.map((entry, index): AnyExpression => {
@@ -96,7 +96,7 @@ function buildLexicographicCursorWhere(
 
 function buildCursorWhere(
   contract: Contract<SqlStorage>,
-  table: TableBinding,
+  table: AliasedTable,
   orderBy: readonly OrderByItem[] | undefined,
   cursor: Readonly<Record<string, unknown>> | undefined,
 ): AnyExpression | undefined {
@@ -203,7 +203,7 @@ function wrapWithRowNumberDedup(options: {
 
 /**
  * FROM source + WHERE for `state.distinct`: wraps in a `ROW_NUMBER`-ranked
- * derived table aliased back to the root reference, so callers need no rewriting.
+ * derived table aliased back to the root alias, so callers need no rewriting.
  */
 function buildDedupedTableSource(
   contract: Contract<SqlStorage>,
@@ -240,14 +240,14 @@ function buildDedupedTableSource(
   }
 
   return {
-    source: DerivedTableSource.as(root.reference, inner),
+    source: DerivedTableSource.as(root.alias, inner),
     where: BinaryExpr.eq(root.column('__prisma_distinct_rn'), LiteralExpr.of(1)),
   };
 }
 
 function buildPrimaryKeyJoinOn(
-  left: TableBinding,
-  right: TableBinding,
+  left: AliasedTable,
+  right: AliasedTable,
   primaryKeyColumns: readonly string[],
 ): JoinOnExpr {
   const [firstColumn] = primaryKeyColumns;
@@ -283,7 +283,7 @@ function buildMtiJoins(
   );
 
   for (const variant of variantsToJoin) {
-    const variantTable = requireVariantBinding(tables, variant.modelName);
+    const variantTable = requireVariantTable(tables, variant.modelName);
     const joinOn = buildPrimaryKeyJoinOn(root, variantTable, pkColumns);
     joins.push(
       variantName
@@ -317,7 +317,7 @@ function hasEntries<T>(value: ReadonlyArray<T> | undefined): value is ReadonlyAr
 }
 
 /**
- * The rows an aggregate reduces over, one SELECT aliased to the root reference — an
+ * The rows an aggregate reduces over, one SELECT aliased to the root alias — an
  * aggregate has no outer level of its own, so where/joins/distinct/orderBy/
  * limit/offset all have to live in this one wrap.
  */
@@ -371,14 +371,14 @@ function buildAggregateInput(
     inner = inner.withOffset(state.offset);
   }
 
-  return { source: DerivedTableSource.as(root.reference, inner) };
+  return { source: DerivedTableSource.as(root.alias, inner) };
 }
 
 /**
  * The dedup wrap exposes only its projection, so an order over an expression (a relation order, a count, an operation result) cannot be evaluated above it. Each such order is projected inside the wrap as a hidden `__order_N` column and the outer order reads that column.
  */
 function projectExpressionOrders(
-  root: TableBinding,
+  root: AliasedTable,
   orderBy: readonly OrderByItem[] | undefined,
 ): { readonly projection: ProjectionItem[]; readonly orderBy: OrderByItem[] } {
   const projection: ProjectionItem[] = [];

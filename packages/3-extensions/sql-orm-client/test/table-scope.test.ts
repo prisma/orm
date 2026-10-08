@@ -1,29 +1,29 @@
 import { ColumnRef, TableSource } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindTable, copyTableScope, createTableScope, mergeTableScopes } from '../src/table-scope';
+import { createTableScope, type TableScope } from '../src/table-scope';
 import { getTestContract } from './helpers';
 
 const byteLength = (value: string) => new TextEncoder().encode(value).length;
 
 describe('TableScope', () => {
-  it('keeps the preferred name on first use', () => {
-    expect(createTableScope().name('posts')).toBe('posts');
+  it('keeps the preferred alias on first use', () => {
+    expect(createTableScope().alias('posts')).toBe('posts');
   });
 
   it('numbers later uses from 2', () => {
     const scope = createTableScope();
 
-    expect([scope.name('posts'), scope.name('posts'), scope.name('posts')]).toEqual([
+    expect([scope.alias('posts'), scope.alias('posts'), scope.alias('posts')]).toEqual([
       'posts',
       'posts_2',
       'posts_3',
     ]);
   });
 
-  it('keeps names of different preferred names independent', () => {
+  it('keeps aliases of different preferred aliases independent', () => {
     const scope = createTableScope();
 
-    expect([scope.name('posts'), scope.name('users'), scope.name('users')]).toEqual([
+    expect([scope.alias('posts'), scope.alias('users'), scope.alias('users')]).toEqual([
       'posts',
       'users',
       'users_2',
@@ -32,53 +32,53 @@ describe('TableScope', () => {
 
   it('takes the lowest number not already in the scope', () => {
     const scope = createTableScope();
-    scope.name('posts');
-    scope.name('posts_3');
+    scope.alias('posts');
+    scope.alias('posts_3');
 
-    expect([scope.name('posts'), scope.name('posts')]).toEqual(['posts_2', 'posts_4']);
+    expect([scope.alias('posts'), scope.alias('posts')]).toEqual(['posts_2', 'posts_4']);
   });
 
-  it('numbers a preferred name that equals an earlier numbered name', () => {
+  it('numbers a preferred alias that equals an earlier numbered alias', () => {
     const scope = createTableScope();
-    scope.name('posts');
-    scope.name('posts');
+    scope.alias('posts');
+    scope.alias('posts');
 
-    expect(scope.name('posts_2')).toBe('posts_2_2');
+    expect(scope.alias('posts_2')).toBe('posts_2_2');
   });
 
-  it('skips a number taken by a preferred name', () => {
+  it('skips a number taken by a preferred alias', () => {
     const scope = createTableScope();
-    scope.name('posts_2');
-    scope.name('posts');
+    scope.alias('posts_2');
+    scope.alias('posts');
 
-    expect(scope.name('posts')).toBe('posts_3');
+    expect(scope.alias('posts')).toBe('posts_3');
   });
 
-  it('keeps a 63-byte name as it is', () => {
+  it('keeps a 63-byte alias as it is', () => {
     const preferred = 'a'.repeat(63);
 
-    expect(createTableScope().name(preferred)).toBe(preferred);
+    expect(createTableScope().alias(preferred)).toBe(preferred);
   });
 
-  it('shortens a preferred name longer than 63 bytes', () => {
-    expect(createTableScope().name('a'.repeat(80))).toBe('a'.repeat(63));
+  it('shortens a preferred alias longer than 63 bytes', () => {
+    expect(createTableScope().alias('a'.repeat(80))).toBe('a'.repeat(63));
   });
 
   it('shortens the preferred part to fit the number', () => {
     const scope = createTableScope();
     const preferred = 'a'.repeat(63);
-    scope.name(preferred);
+    scope.alias(preferred);
 
-    expect(scope.name(preferred)).toBe(`${'a'.repeat(61)}_2`);
+    expect(scope.alias(preferred)).toBe(`${'a'.repeat(61)}_2`);
   });
 
-  it('keeps names unique after shortening', () => {
+  it('keeps aliases unique after shortening', () => {
     const scope = createTableScope();
     const names = [
-      scope.name(`${'a'.repeat(70)}x`),
-      scope.name(`${'a'.repeat(70)}y`),
-      scope.name('a'.repeat(63)),
-      scope.name(`${'a'.repeat(61)}_2`),
+      scope.alias(`${'a'.repeat(70)}x`),
+      scope.alias(`${'a'.repeat(70)}y`),
+      scope.alias('a'.repeat(63)),
+      scope.alias(`${'a'.repeat(61)}_2`),
     ];
 
     expect(new Set(names).size).toBe(names.length);
@@ -89,82 +89,96 @@ describe('TableScope', () => {
     const scope = createTableScope();
     const preferred = 'é'.repeat(40);
 
-    expect(scope.name(preferred)).toBe('é'.repeat(31));
-    expect(scope.name(preferred)).toBe(`${'é'.repeat(30)}_2`);
+    expect(scope.alias(preferred)).toBe('é'.repeat(31));
+    expect(scope.alias(preferred)).toBe(`${'é'.repeat(30)}_2`);
   });
 
   it('keeps separate scopes independent', () => {
-    createTableScope().name('posts');
+    createTableScope().alias('posts');
 
-    expect(createTableScope().name('posts')).toBe('posts');
+    expect(createTableScope().alias('posts')).toBe('posts');
   });
 });
 
-describe('copyTableScope', () => {
-  it('carries the taken names and leaves the original untouched', () => {
+describe('TableScope.copy', () => {
+  it('carries the taken aliases and leaves the original untouched', () => {
     const scope = createTableScope();
-    scope.name('posts');
-    const copy = copyTableScope(scope);
+    scope.alias('posts');
+    const copy = scope.copy();
 
-    expect(copy.name('posts')).toBe('posts_2');
-    expect(scope.name('posts')).toBe('posts_2');
+    expect(copy.alias('posts')).toBe('posts_2');
+    expect(scope.alias('posts')).toBe('posts_2');
   });
 });
 
-describe('mergeTableScopes', () => {
-  it('holds every name taken in any of the scopes', () => {
+describe('TableScope.merge', () => {
+  it('holds every alias taken in the receiver or any of the others', () => {
     const first = createTableScope();
-    first.name('posts');
+    first.alias('posts');
     const second = createTableScope();
-    second.name('posts');
-    second.name('posts');
-    second.name('users');
+    second.alias('posts');
+    second.alias('posts');
+    second.alias('users');
 
-    const merged = mergeTableScopes([first, second]);
+    const merged = first.merge([second]);
 
-    expect([merged.name('posts'), merged.name('users'), merged.name('tags')]).toEqual([
+    expect([merged.alias('posts'), merged.alias('users'), merged.alias('tags')]).toEqual([
       'posts_3',
       'users_2',
       'tags',
     ]);
-    expect(first.name('users')).toBe('users');
+    expect(first.alias('users')).toBe('users');
+    expect(second.alias('tags')).toBe('tags');
+  });
+
+  it('rejects a scope that was not made by createTableScope', () => {
+    const foreign: TableScope = {
+      alias: (preferred) => preferred,
+      aliasTable: (storage) => createTableScope().aliasTable(storage),
+      copy: () => foreign,
+      merge: () => foreign,
+    };
+
+    expect(() => createTableScope().merge([foreign])).toThrow(
+      'a table scope must be made by createTableScope()',
+    );
   });
 });
 
-describe('bindTable', () => {
+describe('TableScope.aliasTable', () => {
   const contract = getTestContract();
   const posts = { namespaceId: 'public', tableName: 'posts' };
 
-  it('references the first binding of a table by its bare name', () => {
-    const binding = bindTable(createTableScope(), posts);
+  it('gives the first use of a table an alias equal to its name and writes no AS', () => {
+    const table = createTableScope().aliasTable(posts);
 
-    expect(binding).toMatchObject({ reference: 'posts', storage: posts });
-    expect(binding.column('id')).toEqual(ColumnRef.of('posts', 'id'));
-    expect(binding.tableSource(contract)).toEqual(TableSource.named('posts', undefined, 'public'));
+    expect(table).toMatchObject({ alias: 'posts', storage: posts });
+    expect(table.column('id')).toEqual(ColumnRef.of('posts', 'id'));
+    expect(table.tableSource(contract)).toEqual(TableSource.named('posts', undefined, 'public'));
   });
 
-  it('gives a second binding of the same table its own reference and an aliased source', () => {
+  it('gives a second use of the same table its own alias and an aliased source', () => {
     const scope = createTableScope();
-    bindTable(scope, posts);
-    const binding = bindTable(scope, posts);
+    scope.aliasTable(posts);
+    const table = scope.aliasTable(posts);
 
-    expect(binding).toMatchObject({ reference: 'posts_2', storage: posts });
-    expect(binding.column('id')).toEqual(ColumnRef.of('posts_2', 'id'));
-    expect(binding.tableSource(contract)).toEqual(TableSource.named('posts', 'posts_2', 'public'));
+    expect(table).toMatchObject({ alias: 'posts_2', storage: posts });
+    expect(table.column('id')).toEqual(ColumnRef.of('posts_2', 'id'));
+    expect(table.tableSource(contract)).toEqual(TableSource.named('posts', 'posts_2', 'public'));
   });
 
   it('aliases a table whose bare name another item in the scope already has', () => {
     const scope = createTableScope();
-    scope.name('posts');
+    scope.alias('posts');
 
-    expect(bindTable(scope, posts).tableSource(contract)).toEqual(
+    expect(scope.aliasTable(posts).tableSource(contract)).toEqual(
       TableSource.named('posts', 'posts_2', 'public'),
     );
   });
 
   it('throws for a table the contract does not have', () => {
-    const binding = bindTable(createTableScope(), { namespaceId: 'public', tableName: 'missing' });
+    const table = createTableScope().aliasTable({ namespaceId: 'public', tableName: 'missing' });
 
-    expect(() => binding.tableSource(contract)).toThrow('Unknown table "missing"');
+    expect(() => table.tableSource(contract)).toThrow('Unknown table "missing"');
   });
 });

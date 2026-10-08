@@ -12,7 +12,7 @@ import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import type { ShorthandWhereFilter } from './types';
 import { paramRefForStorageColumn } from './where-binding';
 
@@ -41,7 +41,7 @@ export function shorthandToWhereExpr<
   namespaceId: NsId,
   modelName: ModelName,
   filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
-  table: TableBinding,
+  table: AliasedTable,
 ): AnyExpression | undefined {
   const contract = context.contract;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);

@@ -11,13 +11,13 @@ import {
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
-import type { TableBinding } from './table-scope';
-import { bindWhereExpr, type TableReferences } from './where-binding';
+import type { AliasedTable } from './table-scope';
+import { bindWhereExpr, type TableAliases } from './where-binding';
 
 interface NormalizeWhereArgOptions {
   readonly contract: Contract<SqlStorage>;
-  readonly tables: TableReferences;
-  readonly rebaseOnto?: TableBinding | undefined;
+  readonly tables: TableAliases;
+  readonly rebaseOnto?: AliasedTable | undefined;
 }
 
 export function normalizeWhereArg(arg: undefined): undefined;
@@ -69,9 +69,9 @@ function declaresTable(ast: SelectAst, tableName: string): boolean {
   );
 }
 
-export function rebaseOntoRoot(expr: AnyExpression, root: TableBinding): AnyExpression {
+export function rebaseOntoRoot(expr: AnyExpression, root: AliasedTable): AnyExpression {
   const { tableName } = root.storage;
-  if (root.reference === tableName) {
+  if (root.alias === tableName) {
     return expr;
   }
   const originals = new Map<ColumnRef, ColumnRef>();

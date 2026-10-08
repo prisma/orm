@@ -24,16 +24,16 @@ import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract } from './storage-resolution';
-import { bindTable, copyTableScope, createTableScope, type TableBinding } from './table-scope';
+import { type AliasedTable, createTableScope } from './table-scope';
 import { combineWhereExprs } from './where-utils';
 
-function bindTarget(namespaceId: string, tableName: string): TableBinding {
-  return bindTable(createTableScope(), { namespaceId, tableName });
+function aliasTarget(namespaceId: string, tableName: string): AliasedTable {
+  return createTableScope().aliasTable({ namespaceId, tableName });
 }
 
 function buildReturningColumns(
   contract: Contract<SqlStorage>,
-  target: TableBinding,
+  target: AliasedTable,
   returningColumns: readonly string[] | undefined,
 ): ReadonlyArray<ProjectionItem> {
   const { namespaceId, tableName } = target.storage;
@@ -145,7 +145,7 @@ export interface InsertConflictSkip {
 }
 
 function conflictSkipClause(
-  target: TableBinding,
+  target: AliasedTable,
   conflictSkip: InsertConflictSkip | undefined,
 ): InsertOnConflict | undefined {
   if (!conflictSkip) return undefined;
@@ -163,7 +163,7 @@ export function compileInsertReturning(
   returningColumns: readonly string[] | undefined,
   conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const target = bindTarget(namespaceId, tableName);
+  const target = aliasTarget(namespaceId, tableName);
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   const ast = InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
@@ -180,7 +180,7 @@ export function compileInsertCount(
   rows: readonly Record<string, unknown>[],
   conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const target = bindTarget(namespaceId, tableName);
+  const target = aliasTarget(namespaceId, tableName);
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   const ast = InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
@@ -216,7 +216,7 @@ function buildCountMutationWhere(
     root.storage.namespaceId,
     root.storage.tableName,
   );
-  const rootCopy = bindTable(copyTableScope(tables.scope), root.storage);
+  const rootCopy = tables.scope.copy().aliasTable(root.storage);
   const correlation = pkColumns.map((column) =>
     BinaryExpr.eq(rootCopy.column(column), root.column(column)),
   );
@@ -314,7 +314,7 @@ export function compileUpsertReturning(
   const updateAssignments = hasUpdateValues
     ? toParamAssignments(contract, namespaceId, tableName, updateValues)
     : undefined;
-  const target = bindTarget(namespaceId, tableName);
+  const target = aliasTarget(namespaceId, tableName);
   const conflictTarget = InsertOnConflict.on(
     conflictColumns.map((column) => target.column(column)),
   );

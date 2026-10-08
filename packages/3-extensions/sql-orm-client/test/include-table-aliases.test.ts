@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { Collection } from '../src/collection';
 import { resolveIncludeRelation } from '../src/collection-contract';
-import { bindIncludeTables, type CollectionTables } from '../src/collection-tables';
+import { type CollectionTables, createIncludeTables } from '../src/collection-tables';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import { bindTable, createTableScope } from '../src/table-scope';
+import { createTableScope } from '../src/table-scope';
 import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import { buildMixedPolyContract, getTestAggregates } from './helpers';
@@ -22,8 +22,8 @@ function sqlOf(state: CollectionState): string {
   }).sql;
 }
 
-describe('table references in includes', () => {
-  it('binds a self-relation child as its own reference, and its refinement filters use it', () => {
+describe('table aliases in includes', () => {
+  it('gives a self-relation child its own alias, and its refinement filters use it', () => {
     const { collection } = createCollectionFor('User');
     const state = collection
       .select('id')
@@ -86,7 +86,7 @@ describe('table references in includes', () => {
     );
   });
 
-  it('gives two sibling includes of one table distinct references', () => {
+  it('gives two sibling includes of one table distinct aliases', () => {
     const { collection } = createCollectionFor('User');
     const state = collection
       .select('id')
@@ -111,7 +111,7 @@ describe('table references in includes', () => {
     expect(sqlOf(state)).toContain('"users_3"."invited_by_id" = "users"."id"');
   });
 
-  it('shares the child reference between combine branches', () => {
+  it('shares the child alias between combine branches', () => {
     const { collection } = createCollectionFor('User');
     const state = collection.select('id').include('invitedUsers', (invited) =>
       invited.combine({
@@ -209,12 +209,12 @@ describe('table references in includes', () => {
     const sharedName = { namespaceId: 'public', tableName: 'tasks' };
     const tables: CollectionTables = {
       scope,
-      root: bindTable(scope, sharedName),
-      variants: new Map([['Feature', bindTable(scope, sharedName)]]),
+      root: scope.aliasTable(sharedName),
+      variants: new Map([['Feature', scope.aliasTable(sharedName)]]),
     };
     const relation = resolveIncludeRelation(contract, 'public', 'Task', 'assignee', 'Feature');
     expect(relation.localVariantName).toBe('Feature');
-    const child = bindIncludeTables(contract, tables, relation);
+    const child = createIncludeTables(contract, tables, relation);
     const assignee: IncludeExpr = {
       relationName: 'assignee',
       ...relation,

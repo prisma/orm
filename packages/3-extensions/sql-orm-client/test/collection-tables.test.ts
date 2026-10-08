@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { Collection } from '../src/collection';
 import { reloadMutationRowsByIdentities } from '../src/collection-dispatch';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { createCollectionFor } from './collection-fixtures';
 import {
@@ -52,7 +52,7 @@ function firstExistsFrom(collection: { state: { filters: readonly unknown[] } })
   return from;
 }
 
-describe('table bindings in collection state', () => {
+describe('aliased tables in collection state', () => {
   it('binds a ToWhereExpr literal on an MTI variant column and returns the rows', async () => {
     const { collection, runtime } = createTaskCollection();
     runtime.setNextResults([
@@ -82,7 +82,7 @@ describe('table bindings in collection state', () => {
     await reloadMutationRowsByIdentities<Record<string, unknown>>({
       context: buildTestContextFromContract(contract),
       runtime,
-      tables: bindCollectionTables(contract, 'public', 'Project'),
+      tables: createCollectionTables(contract, 'public', 'Project'),
       modelName: 'Project',
       namespaceId: 'public',
       identityRows: [{ tenant_id: 'acme', id: 7 }],
@@ -204,7 +204,7 @@ describe('table bindings in collection state', () => {
         { ...getTestContext(), contract },
         'public',
         'Task',
-        bindCollectionTables(contract, 'public', 'Task'),
+        createCollectionTables(contract, 'public', 'Task'),
       ),
     );
 

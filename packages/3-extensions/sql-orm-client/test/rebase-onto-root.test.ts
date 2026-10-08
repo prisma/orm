@@ -11,22 +11,22 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindTable, createTableScope } from '../src/table-scope';
+import { createTableScope } from '../src/table-scope';
 import { rebaseOntoRoot } from '../src/where-interop';
 
 const users = { namespaceId: 'public', tableName: 'users' };
 
 function aliasedUsers() {
   const scope = createTableScope();
-  bindTable(scope, users);
-  return bindTable(scope, users);
+  scope.aliasTable(users);
+  return scope.aliasTable(users);
 }
 
 const usersSource = () => TableSource.named('users', undefined, 'public');
 const postsSource = () => TableSource.named('posts', undefined, 'public');
 
 describe('rebaseOntoRoot', () => {
-  it('rebases a flat expression onto the root reference', () => {
+  it('rebases a flat expression onto the root alias', () => {
     const expr = BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Bob'));
 
     expect(rebaseOntoRoot(expr, aliasedUsers())).toEqual(
@@ -37,7 +37,7 @@ describe('rebaseOntoRoot', () => {
   it('returns the expression itself when the root keeps its table name', () => {
     const expr = BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Bob'));
 
-    expect(rebaseOntoRoot(expr, bindTable(createTableScope(), users))).toBe(expr);
+    expect(rebaseOntoRoot(expr, createTableScope().aliasTable(users))).toBe(expr);
   });
 
   it('leaves the references of a subquery over the same table alone', () => {

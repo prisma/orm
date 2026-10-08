@@ -4,7 +4,7 @@ import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/as
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { dispatchCollectionRows } from '../src/collection-dispatch';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import type { CollectionState } from '../src/types';
 import { createCollectionFor } from './collection-fixtures';
 import type { MockRuntime, TestContract } from './helpers';
@@ -28,7 +28,9 @@ function stateWithInclude(
   parentModel: string,
   include: IncludeSpec,
 ): CollectionState {
-  return specState(bindCollectionTables(contract, 'public', parentModel), { includes: [include] });
+  return specState(createCollectionTables(contract, 'public', parentModel), {
+    includes: [include],
+  });
 }
 
 function withSingleQueryCapabilities(contract: TestContract) {

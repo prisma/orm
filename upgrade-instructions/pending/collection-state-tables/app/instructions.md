@@ -7,9 +7,9 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\.include\s*[(<]'
-  - id: sql-orm-table-references-renamed
+  - id: sql-orm-table-aliases-renamed
     summary: |
-      The SQL ORM names tables in generated SQL as `<table>` for the first use and `<table>_<n>` for later uses. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
+      The SQL ORM aliases tables in generated SQL: the first use of a table is written under its own name with no `AS`, and later uses as `<table>_<n>`. The aliases `__orm_rel_<n>`, `__orm_junction_<n>`, `<relation>__child` and `<table>__write_filter` are gone, and a table used twice in one collection chain is now aliased where it was not before. A discriminator value in `updateAndCount` / `deleteAndCount` on a variant collection, and the values of object filters in nested writes (`connect`, `disconnect`, junction links), are now sent as parameters with the column's codec instead of being written into the SQL text. Query results are unchanged; code and tests that match on SQL text or on parameter lists need updating.
     detection:
       glob: "**/*.{ts,tsx,mts,cts,snap}"
       matches:
@@ -46,7 +46,7 @@ const publishedOnly = <C extends { where(filter: { published: boolean }): C }>(p
 db.orm.public.User.include('posts', (posts) => publishedOnly(posts));
 ```
 
-## `sql-orm-table-references-renamed`
+## `sql-orm-table-aliases-renamed`
 
 Code that only runs queries needs no change. Update assertions, snapshots and log matchers that contain SQL the ORM generated:
 
@@ -71,4 +71,4 @@ Values that were written into the SQL text are now parameters:
 
 The parameter list of those statements grows by the same values, and the numbers of later parameters shift. Each value is encoded by its column's codec, as in every other filter.
 
-Names follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their names in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.
+Aliases follow the order of the calls in the chain, so `where(...).include(...)` and `include(...).where(...)` give the two uses of a table their aliases in opposite order. Regenerate snapshots rather than editing them by hand, and check that the rows the tests assert are unchanged.

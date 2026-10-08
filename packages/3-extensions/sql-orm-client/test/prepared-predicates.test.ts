@@ -32,7 +32,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { Expression } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { shorthandToWhereExpr } from '../src/filters';
 import { COMPARISON_METHODS_META } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
@@ -296,7 +296,7 @@ describe('structured nullable prepared comparisons', () => {
         'public',
         'User',
         { id: optional },
-        bindCollectionTables(getTestContext().contract, 'public', 'User').root,
+        createCollectionTables(getTestContext().contract, 'public', 'User').root,
       ),
     ).toEqual(new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()));
   });

@@ -17,7 +17,7 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { expect } from 'vitest';
-import { bindIncludeTables } from '../src/collection-tables';
+import { createIncludeTables } from '../src/collection-tables';
 import { createIncludeScalar } from '../src/include-descriptors';
 import type {
   CollectionState,
@@ -48,7 +48,7 @@ export function includeExpr(options: {
   through?: IncludeThroughDescriptor;
 }): IncludeSpec {
   return (parent) => {
-    const child = bindIncludeTables(fixtureContract, parent, {
+    const child = createIncludeTables(fixtureContract, parent, {
       relatedNamespaceId: 'public',
       relatedModelName: options.relatedModelName,
       relatedTableName: options.relatedTableName,

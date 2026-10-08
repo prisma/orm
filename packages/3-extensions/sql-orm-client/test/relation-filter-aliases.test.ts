@@ -16,8 +16,8 @@ function sqlOf(state: CollectionState): string {
   }).sql;
 }
 
-describe('table references in relation filters', () => {
-  it('renders two filters over one relation against separate references', () => {
+describe('table aliases in relation filters', () => {
+  it('renders two filters over one relation under separate aliases', () => {
     const { collection } = createCollectionFor('User');
     const state = collection.select('id').where((user) =>
       and(
@@ -31,7 +31,7 @@ describe('table references in relation filters', () => {
     );
   });
 
-  it('renders a self-relation filter nested in itself against separate references', () => {
+  it('renders a self-relation filter nested in itself under separate aliases', () => {
     const { collection } = createCollectionFor('User');
     const state = collection
       .select('id')

@@ -258,9 +258,9 @@ The reach is one hop: the related model's own relations are not exposed. A to-on
 
 ## Table names in generated SQL
 
-Every table a collection chain puts in a statement gets a reference from one scope. The first use of a table keeps its table name. Each later use of the same name gets `<table>_<n>`, with `n` starting at 2. A reference is at most 63 bytes; a longer name is shortened to fit.
+Every table a collection chain puts in a statement gets an alias from one scope. The first use of a table gets an alias equal to its own name, and no `AS` is written for it. Each later use of the same name gets `<table>_<n>`, with `n` starting at 2. An alias is at most 63 bytes; a longer name is shortened to fit.
 
-The scope covers the whole chain: the collection's own table and its multi-table-inheritance variant tables, every relation filter and relation order, and every include at any depth, including the junction table of a many-to-many relation. A name is taken when the call that needs it runs, so the names follow the order of the chain.
+The scope covers the whole chain: the collection's own table and its multi-table-inheritance variant tables, every relation filter and relation order, and every include at any depth, including the junction table of a many-to-many relation. An alias is taken when the call that needs it runs, so the aliases follow the order of the chain.
 
 ```ts
 db.User
@@ -271,13 +271,13 @@ db.User
   );
 ```
 
-The filter in the `invitedUsers` refinement reads `"users_2"."name"`. A ready-made expression passed to `where()` on such a collection may name the bare table: references to it are moved to the collection's own reference, except inside a subquery that itself reads that table.
+The filter in the `invitedUsers` refinement reads `"users_2"."name"`. A ready-made expression passed to `where()` on such a collection may name the bare table: references to it are moved to the collection's own alias, except inside a subquery that itself reads that table.
 
-Collections are immutable, and so are their names. Two collections derived from the same parent get the same names for the same calls, and neither sees the names the other took. `combine()` branches read the related table under one shared reference.
+Collections are immutable, and so are their aliases. Two collections derived from the same parent get the same aliases for the same calls, and neither sees the aliases the other took. `combine()` branches read the related table under one shared alias.
 
-The derived tables an include is built from (`<relation>__rows`, `<relation>__distinct`, `<relation>__ranked`, `<relation>__scalar`, `<relation>__scalar_distinct`, `<relation>__combine__<branch>`) are named from the same scope, and get a `_<n>` suffix when the same name is needed twice in a statement. The column of a variant table is projected under the label `<variant table reference>__<column>`.
+The derived tables an include is built from (`<relation>__rows`, `<relation>__distinct`, `<relation>__ranked`, `<relation>__scalar`, `<relation>__scalar_distinct`, `<relation>__combine__<branch>`) are aliased from the same scope, and get a `_<n>` suffix when the same alias is needed twice in a statement. The column of a variant table is projected under the label `<variant table alias>__<column>`.
 
-`CollectionState.tables` holds the scope and the bindings of the collection's root table and variant tables. Build it with `bindCollectionTables(contract, namespaceId, modelName)` and pass it to `emptyState(tables)` and `createModelAccessor(context, namespaceId, modelName, tables)`. A `TableScope` is created by `bindCollectionTables` and by the collection methods; it cannot be implemented outside the package.
+`CollectionState.tables` holds the scope and the aliased root table and variant tables of the collection. Build it with `createCollectionTables(contract, namespaceId, modelName)` and pass it to `emptyState(tables)` and `createModelAccessor(context, namespaceId, modelName, tables)`. A `TableScope` is created by `createCollectionTables` and by the collection methods; it cannot be implemented outside the package.
 
 ## Codec Roundtrip
 

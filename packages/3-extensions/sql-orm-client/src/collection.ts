@@ -81,10 +81,10 @@ import {
 } from './collection-mutation-dispatch';
 import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
 import {
-  bindCollectionTables,
-  bindIncludeTables,
-  requireVariantBinding,
-  tableReferences,
+  createCollectionTables,
+  createIncludeTables,
+  requireVariantTable,
+  tableAliases,
   variantColumnLabel,
   withScopeCopy,
 } from './collection-tables';
@@ -148,7 +148,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import { mergeTableScopes, type TableScope } from './table-scope';
+import type { TableScope } from './table-scope';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -367,7 +367,7 @@ export class CollectionBase<
     this.state =
       options.state ??
       emptyState(
-        bindCollectionTables(this.contract, options.namespaceId, modelName, this.tableName),
+        createCollectionTables(this.contract, options.namespaceId, modelName, this.tableName),
       );
     this.registry = options.registry ?? new Map<string, CollectionConstructor<TContract>>();
     this.includeRefinementMode = options.includeRefinementMode ?? false;
@@ -489,7 +489,7 @@ export class CollectionBase<
             );
     const filter = normalizeWhereArg(whereArg, {
       contract: this.contract,
-      tables: tableReferences(tables),
+      tables: tableAliases(tables),
       rebaseOnto: isWhereDirectInput(input) ? tables.root : undefined,
     });
 
@@ -854,7 +854,7 @@ export class CollectionBase<
       this.state.variantName,
     );
 
-    const child = bindIncludeTables(this.contract, this.state.tables, relation);
+    const child = createIncludeTables(this.contract, this.state.tables, relation);
     let nestedState = emptyState(child.tables);
     let adoptedScope = child.tables.scope;
     let scalarSelector: IncludeScalar<unknown> | undefined;
@@ -907,12 +907,11 @@ export class CollectionBase<
             { meta: { relation: relationName, kind: 'combine' } },
           );
         }
-        adoptedScope = mergeTableScopes([
-          child.tables.scope,
-          ...Object.values(refined.branches).map((branch) =>
+        adoptedScope = child.tables.scope.merge(
+          Object.values(refined.branches).map((branch) =>
             derivedScope(branch.kind === 'rows' ? branch.state : branch.selector.state),
           ),
-        ]);
+        );
         combineBranches = refined.branches;
       } else if (isCollectionStateCarrier(refined)) {
         adoptedScope = derivedScope(refined.state);
@@ -2082,7 +2081,7 @@ export class CollectionBase<
     const modelName = this.modelName;
     const namespaceId = this.namespaceId;
     const tables = this.state.tables;
-    const variantTable = requireVariantBinding(tables, variant.modelName);
+    const variantTable = requireVariantTable(tables, variant.modelName);
 
     const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
     const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
@@ -3091,7 +3090,7 @@ export class CollectionBase<
       assertLockCapability(this.contract, lockOptionCapabilities[waitPolicy], strength);
     }
     const clause = LockingClause.of(strength, {
-      of: [this.state.tables.root.reference],
+      of: [this.state.tables.root.alias],
       ...ifDefined('waitPolicy', waitPolicy),
     });
     return this.#clone({ locking: [...(this.state.locking ?? []), clause] });

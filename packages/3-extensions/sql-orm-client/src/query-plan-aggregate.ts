@@ -23,7 +23,7 @@ import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildAggregateInput, buildMtiJoins, buildStateWhere } from './query-plan-source';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import {
   type AggregateSelector,
   type CollectionState,
@@ -34,7 +34,7 @@ import {
 function toAggregateProjection(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  root: TableBinding,
+  root: AliasedTable,
   selector: AggregateSelector<unknown>,
 ): { expr: AnyExpression; codec: CodecRef | undefined } {
   const { namespaceId, tableName } = root.storage;
@@ -184,7 +184,7 @@ function validateGroupedHavingExpr(expr: AnyExpression): AnyExpression {
 
 // `__row` covers a bare `count()` with no orderBy column — SQL needs an output column.
 function aggregateInputColumns(
-  root: TableBinding,
+  root: AliasedTable,
   entries: ReadonlyArray<[string, AggregateSelector<unknown>]>,
   orderBy: ReadonlyArray<OrderByItem> | undefined,
   groupByColumns: ReadonlyArray<string> = [],

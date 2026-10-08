@@ -1,4 +1,4 @@
-import { bindCollectionTables, createModelAccessor } from '@internal/sql-orm-client';
+import { createCollectionTables, createModelAccessor } from '@internal/sql-orm-client';
 import {
   BinaryExpr,
   ColumnRef,
@@ -17,7 +17,7 @@ describe('createModelAccessor (pgvector extension)', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
     const result = post['embedding']!.cosineDistance([1, 2, 3]) as unknown as Record<
       string,
@@ -39,13 +39,13 @@ describe('createModelAccessor (pgvector extension)', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
     const otherPost = createModelAccessor(
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
 
     const result = post['embedding']!.cosineDistance(otherPost['embedding']!) as unknown as Record<
@@ -68,7 +68,7 @@ describe('createModelAccessor (pgvector extension)', () => {
         context,
         'public',
         'Post',
-        bindCollectionTables(context.contract, 'public', 'Post'),
+        createCollectionTables(context.contract, 'public', 'Post'),
       );
       const embedding = accessor['embedding'] as unknown as Record<string, unknown>;
       const title = accessor['title'] as unknown as Record<string, unknown>;
@@ -82,7 +82,7 @@ describe('createModelAccessor (pgvector extension)', () => {
         context,
         'public',
         'Post',
-        bindCollectionTables(context.contract, 'public', 'Post'),
+        createCollectionTables(context.contract, 'public', 'Post'),
       );
       const embedding = accessor['embedding'] as unknown as Record<
         string,
@@ -104,7 +104,7 @@ describe('createModelAccessor (pgvector extension)', () => {
         context,
         'public',
         'Post',
-        bindCollectionTables(context.contract, 'public', 'Post'),
+        createCollectionTables(context.contract, 'public', 'Post'),
       );
       const embedding = accessor['embedding'] as unknown as Record<
         string,
@@ -137,7 +137,7 @@ describe('createModelAccessor (pgvector extension)', () => {
         context,
         'public',
         'Post',
-        bindCollectionTables(context.contract, 'public', 'Post'),
+        createCollectionTables(context.contract, 'public', 'Post'),
       );
       const embedding = accessor['embedding'] as unknown as Record<
         string,

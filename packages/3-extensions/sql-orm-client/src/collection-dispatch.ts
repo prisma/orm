@@ -50,7 +50,7 @@ import {
 } from './collection-runtime';
 import {
   type CollectionTables,
-  requireVariantBinding,
+  requireVariantTable,
   variantColumnLabel,
   variantColumnLabelPrefix,
 } from './collection-tables';
@@ -59,7 +59,7 @@ import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import { resolveTableForContract } from './storage-resolution';
-import type { TableBinding } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import {
   type CollectionContext,
   type CollectionState,
@@ -231,7 +231,7 @@ function createPreparedIncludeConsumer(
       include.relatedModelName,
     );
     for (const variant of polyInfo?.mtiVariants ?? []) {
-      const variantTable = requireVariantBinding(include.nested.tables, variant.modelName);
+      const variantTable = requireVariantTable(include.nested.tables, variant.modelName);
       const variantColumns = resolveTableForContract(
         contract,
         variantTable.storage.namespaceId,
@@ -517,7 +517,7 @@ function emptyResult<Row>(): AsyncIterableResult<Row> {
 // the `IN` list (or the composite-key `OR` of equality tuples) directly.
 function buildIdentityInFilter(
   contract: Contract<SqlStorage>,
-  table: TableBinding,
+  table: AliasedTable,
   identityColumns: readonly string[],
   identityRows: readonly Record<string, unknown>[],
 ): AnyExpression | undefined {
@@ -746,7 +746,7 @@ function resolveIncludedColumnRef(
   }
 
   for (const variant of polyInfo.mtiVariants) {
-    const variantTable = requireVariantBinding(include.nested.tables, variant.modelName);
+    const variantTable = requireVariantTable(include.nested.tables, variant.modelName);
     const prefix = variantColumnLabelPrefix(variantTable);
     if (!key.startsWith(prefix)) {
       continue;

@@ -9,7 +9,7 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindCollectionTables } from '../src/collection-tables';
+import { createCollectionTables } from '../src/collection-tables';
 import { all, and, not, or, shorthandToWhereExpr } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
 import { getTestContext, getTestContract, withPatchedDomainModels } from './helpers';
@@ -33,7 +33,7 @@ describe('filters', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     const andExpr = and(user['name']!.eq('Alice'), user['email']!.neq('bob@example.com'));
@@ -83,7 +83,7 @@ describe('filters', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     expect(not(user['id']!.neq(1))).toEqual(
@@ -121,7 +121,7 @@ describe('filters', () => {
       context,
       'public',
       'Post',
-      bindCollectionTables(context.contract, 'public', 'Post'),
+      createCollectionTables(context.contract, 'public', 'Post'),
     );
     const userId = post['userId']! as { eq: (v: unknown) => unknown; neq: (v: unknown) => unknown };
 
@@ -134,7 +134,7 @@ describe('filters', () => {
       context,
       'public',
       'User',
-      bindCollectionTables(context.contract, 'public', 'User'),
+      createCollectionTables(context.contract, 'public', 'User'),
     );
 
     expect(not(user['name']!.like('%a%'))).toEqual(
@@ -152,7 +152,7 @@ describe('filters', () => {
         userId: null,
         views: undefined,
       },
-      bindCollectionTables(context.contract, 'public', 'Post').root,
+      createCollectionTables(context.contract, 'public', 'Post').root,
     );
 
     expect(expr).toEqual(
@@ -190,7 +190,7 @@ describe('filters', () => {
         'public',
         'User',
         { email: 'a@b.com' },
-        bindCollectionTables(stubbedContext.contract, 'public', 'User').root,
+        createCollectionTables(stubbedContext.contract, 'public', 'User').root,
       ),
     ).toThrow(/does not support equality comparisons/);
   });
@@ -203,7 +203,7 @@ describe('filters', () => {
         'public',
         'User',
         { posts: 'oops' } as never,
-        bindCollectionTables(context.contract, 'public', 'User').root,
+        createCollectionTables(context.contract, 'public', 'User').root,
       ),
     ).toThrow(/does not support equality comparisons/);
   });
@@ -224,7 +224,7 @@ describe('filters', () => {
         'public',
         'User',
         { email: 'a@b.com' },
-        bindCollectionTables(stubbedContext.contract, 'public', 'User').root,
+        createCollectionTables(stubbedContext.contract, 'public', 'User').root,
       ),
     ).toThrow(/does not support equality comparisons/);
   });
@@ -236,7 +236,7 @@ describe('filters', () => {
         'public',
         'User',
         {},
-        bindCollectionTables(context.contract, 'public', 'User').root,
+        createCollectionTables(context.contract, 'public', 'User').root,
       ),
     ).toBeUndefined();
 
@@ -248,7 +248,7 @@ describe('filters', () => {
         {
           email: 'alice@example.com',
         },
-        bindCollectionTables(context.contract, 'public', 'User').root,
+        createCollectionTables(context.contract, 'public', 'User').root,
       ),
     ).toEqual(
       BinaryExpr.eq(
@@ -274,7 +274,7 @@ describe('filters', () => {
         {
           unknownField: null,
         } as never,
-        bindCollectionTables(withoutStorageFields, 'public', 'User').root,
+        createCollectionTables(withoutStorageFields, 'public', 'User').root,
       ),
     ).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'unknownField')));
   });
