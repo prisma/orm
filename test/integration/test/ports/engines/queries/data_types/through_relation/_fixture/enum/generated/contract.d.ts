@@ -472,6 +472,13 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly Color: readonly [
+            { readonly name: 'Red'; readonly value: 'Red' },
+            { readonly name: 'Green'; readonly value: 'Green' },
+            { readonly name: 'Blue'; readonly value: 'Blue' },
+          ];
+        };
       };
     };
   };

@@ -412,7 +412,7 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'keeps baseline on disk when delta planner fails after baseline succeeded',
+      'writes nothing when the delta planner refuses after the baseline was planned',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
@@ -425,9 +425,7 @@ withTempDir(({ createTempDir }) => {
             const plan = await runMigrationPlan(ctx, ['--name', 'blocked-delta', '--json']);
             expect(plan.exitCode).toBe(2);
 
-            const dirs = listAppMigrationBundleDirs(ctx);
-            expect(dirs).toHaveLength(1);
-            expect(readManifest(ctx, dirs[0]!).from).toBeNull();
+            expect(listAppMigrationBundleDirs(ctx)).toHaveLength(0);
           });
         });
       },

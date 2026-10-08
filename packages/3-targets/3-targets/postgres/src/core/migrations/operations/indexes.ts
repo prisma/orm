@@ -76,6 +76,14 @@ export async function createIndex(
  * and the class vocabulary has no neutral middle class — it is NOT that a
  * rename widens anything.
  */
+export function renameIndexOperationId(
+  schemaName: string,
+  tableName: string,
+  fromName: string,
+): string {
+  return `index.${schemaName}.${tableName}.${fromName}.rename`;
+}
+
 export async function renameIndex(
   schemaName: string,
   tableName: string,
@@ -95,7 +103,7 @@ export async function renameIndex(
   });
   const execute = await lowerer.lowerToExecuteRequest(ddlNode);
   return {
-    id: `index.${schemaName}.${tableName}.${fromName}.rename`,
+    id: renameIndexOperationId(schemaName, tableName, fromName),
     label: `Rename index "${fromName}" to "${toName}" on "${tableName}"`,
     operationClass: 'widening',
     target: targetDetails('index', toName, schemaName, tableName),
@@ -120,7 +128,7 @@ export async function dropIndex(
   return {
     id: `dropIndex.${tableName}.${indexName}`,
     label: `Drop index "${indexName}"`,
-    operationClass: 'destructive',
+    operationClass: 'widening',
     target: targetDetails('index', indexName, schemaName, tableName),
     precheck: [step(`ensure index "${indexName}" exists`, present.sql, present.params)],
     execute: [step(`drop index "${indexName}"`, execute.sql, execute.params)],

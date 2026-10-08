@@ -4,7 +4,7 @@ import type { ForeignKey, SqlModelStorage, SqlStorage } from '@internal/sql-cont
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -97,7 +97,7 @@ function makeSupabaseExtensionContractUnbound(): Contract {
 }
 
 const baseInput = {
-  ...fixtureTypeLookups,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),

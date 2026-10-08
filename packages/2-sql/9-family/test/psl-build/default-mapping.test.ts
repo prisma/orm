@@ -9,8 +9,8 @@ import {
 import { numeralText } from '@internal/sql-contract/data-type';
 import {
   createNumberClassifier,
-  parseJsonBody,
-  printJsonBody,
+  parseJsonText,
+  printJsonText,
   signedRange,
 } from '@internal/sql-contract/data-type-support';
 import {
@@ -118,8 +118,8 @@ const entries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
     documentation: 'A number.',
   },
   [json.id]: {
-    written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-    print: printJsonBody,
+    written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+    print: printJsonText,
     documentation: 'A JSON document.',
   },
   [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry,
@@ -130,8 +130,7 @@ function forColumn(
   shape: { readonly list?: true } = {},
 ): DefaultMappingOptions {
   return {
-    dataTypeEntries: entries,
-    dataTypeLookup: createDataTypeLookup(types),
+    dataTypes: { entries, lookup: createDataTypeLookup(types) },
     columnCodec: { dataType: columnDataType.id },
     ...(shape.list === true ? { list: true } : {}),
   };
@@ -296,7 +295,7 @@ describe('mapDefault with a tag entry that names the type its body is', () => {
         kind: 'tag',
         tag: 'json',
         type: storedText.id,
-        parse: (body) => JSON.stringify(parseJsonBody(body)),
+        parse: (body) => JSON.stringify(parseJsonText(body)),
       },
       print: (value) => String(value),
       documentation: 'A JSON document stored as its text.',
@@ -313,8 +312,7 @@ describe('mapDefault with a tag entry that names the type its body is', () => {
       mapDefault(
         { kind: 'literal', value: '{"a":1}' },
         {
-          dataTypeEntries: textEntries,
-          dataTypeLookup: createDataTypeLookup([storedText]),
+          dataTypes: { entries: textEntries, lookup: createDataTypeLookup([storedText]) },
           columnCodec: { dataType: storedText.id },
         },
       ),

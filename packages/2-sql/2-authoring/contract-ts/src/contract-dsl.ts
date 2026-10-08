@@ -16,6 +16,7 @@ import type {
   CodecLookupWithDescriptors,
   ColumnTypeDescriptor,
   DataTypeLookup,
+  ScalarFieldDeclarationBuilder,
 } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
@@ -240,7 +241,9 @@ export type ManyOptions =
   | { readonly elementsNullable: true }
   | { readonly elementsNullable: false };
 
-export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState> {
+export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState>
+  implements ScalarFieldDeclarationBuilder
+{
   declare readonly __state: State;
 
   constructor(private readonly state: State) {}

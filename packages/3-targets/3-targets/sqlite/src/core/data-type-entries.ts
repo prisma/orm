@@ -12,7 +12,7 @@ import { canonicalizeJson } from '@internal/framework-components/utils';
 import { numeralText } from '@internal/sql-contract/data-type';
 import {
   createNumberClassifier,
-  parseJsonBody,
+  parseJsonText,
   signedRange,
 } from '@internal/sql-contract/data-type-support';
 import { sqliteInteger, sqliteReal, sqliteText } from './data-types';
@@ -48,11 +48,11 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
         kind: 'tag',
         tag: 'json',
         type: sqliteText.id,
-        parse: (text) => canonicalizeJson(parseJsonBody(text)),
+        parse: (text) => canonicalizeJson(parseJsonText(text)),
       },
       print: (value) => String(value),
       documentation:
-        'Reads the body as a JSON document and stores its JSON text as the default value.',
+        'Reads the text as a JSON document and stores its JSON text as the default value.',
     },
   };
 }

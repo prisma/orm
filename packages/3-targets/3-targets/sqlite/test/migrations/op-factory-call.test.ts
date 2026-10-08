@@ -364,12 +364,13 @@ describe('CreateIndexCall', () => {
 });
 
 describe('DropIndexCall', () => {
-  it('produces a destructive DROP INDEX IF EXISTS op', async () => {
+  it('produces a widening DROP INDEX IF EXISTS op, since an index holds no stored data', async () => {
     const lowerer = stubLowerer('CHECK SQL');
     const call = new DropIndexCall('user', 'idx_email');
     const op = await call.toOp(lowerer);
+    expect(call.operationClass).toBe('widening');
     expect(op.id).toBe('dropIndex.user.idx_email');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
     expect(op.execute[0]?.sql).toBe('DROP INDEX IF EXISTS "idx_email"');
   });
 
@@ -624,8 +625,10 @@ describe('DataTransformCall', () => {
       'email',
     );
 
-  it('toOp() throws MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', () => {
-    expect(() => makeCall().toOp()).toThrowError(/MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i);
+  it('toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', async () => {
+    await expect(makeCall().toOp()).rejects.toThrowError(
+      /MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i,
+    );
   });
 
   it('renderTypeScript() emits a dataTransform({...}) call with a placeholder run slot', () => {

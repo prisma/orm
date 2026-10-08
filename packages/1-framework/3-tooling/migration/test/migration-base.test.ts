@@ -237,6 +237,29 @@ describe('buildMigrationArtifacts', () => {
     expect(JSON.parse(metadataJson)).toEqual(metadata);
   });
 
+  it('begins each read of the operations before building, so each build reads them from the start', async () => {
+    const events: string[] = [];
+    class M extends Migration {
+      readonly targetId = 'test';
+      override get operations() {
+        events.push('read operations');
+        return [{ id: 'op1', label: 'Test op', operationClass: 'additive' }] as never;
+      }
+      override describe() {
+        return { from: 'abc', to: 'def' };
+      }
+      protected override beginOperationsRead(): void {
+        events.push('begin');
+      }
+    }
+    const migration = new M();
+
+    await buildMigrationArtifacts(migration, null);
+    await buildMigrationArtifacts(migration, null);
+
+    expect(events).toEqual(['begin', 'read operations', 'begin', 'read operations']);
+  });
+
   it('preserves createdAt from existing metadata', async () => {
     const existingMetadata: Partial<MigrationMetadata> = {
       from: 'from',

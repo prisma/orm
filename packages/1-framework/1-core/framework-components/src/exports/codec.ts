@@ -18,6 +18,7 @@ export {
   CodecDescriptorImpl,
   CodecDescriptorTemplateImpl,
   canonicalFormOf,
+  enumRefusalOf,
 } from '../shared/codec-descriptor';
 export type {
   CodecCallContext,
@@ -30,10 +31,13 @@ export type {
 } from '../shared/codec-types';
 export { emptyCodecLookup } from '../shared/codec-types';
 export type {
+  CodecDescriptorRef,
   ColumnHelperFor,
   ColumnHelperForStrict,
   ColumnSpec,
   ColumnTypeDescriptor,
+  ScalarFieldDeclaration,
+  ScalarFieldDeclarationBuilder,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
 export type {

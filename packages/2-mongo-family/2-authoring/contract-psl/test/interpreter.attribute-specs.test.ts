@@ -1,6 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
@@ -14,11 +15,8 @@ function interpret(schema: string) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
-    dataTypeLookup: createDataTypeLookup([]),
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    dataTypes: EMPTY_DATA_TYPES,
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
   });
 }
 

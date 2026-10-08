@@ -62,6 +62,8 @@ export function retryCommandFor(args: {
   readonly from?: string | undefined;
   readonly to: string | undefined;
   readonly advanceRef?: string | undefined;
+  /** The `--rename` statements as given, in order. */
+  readonly renames?: readonly string[] | undefined;
   /** The command runs without a database when `--from` names a contract. */
   readonly canRunOffline: boolean;
 }): string {
@@ -74,6 +76,7 @@ export function retryCommandFor(args: {
     ...(suggestsOffline ? ['--from <contract>'] : []),
     ...(args.to === undefined ? [] : [`--to ${args.to}`]),
     ...(args.advanceRef === undefined ? [] : [`--advance-ref ${args.advanceRef}`]),
+    ...(args.renames ?? []).map((rename) => `--rename ${rename}`),
     ...(needsConnection ? ['--db $DATABASE_URL'] : []),
   ].join(' ');
 }

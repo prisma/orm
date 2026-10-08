@@ -10,8 +10,9 @@ import type {
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk } from '@internal/utils/result';
+import type { StatementText } from '../statements/statement-text';
 import type { DbUpdateResult, OnControlProgress } from '../types';
-import { executeRun } from './db-run';
+import { type ExecuteRunSharedOptions, executeRun } from './db-run';
 import { computePlanHash } from './plan-identity';
 
 export const DB_UPDATE_POLICY = {
@@ -51,6 +52,11 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /**
+   * The statements as the user wrote them, in the order given. Both the plan
+   * and the destructive pre-plan resolve and apply them.
+   */
+  readonly statements?: readonly StatementText[];
   readonly onProgress?: OnControlProgress;
 }
 
@@ -78,6 +84,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     extensions: options.extensions ?? [],
     policy: DB_UPDATE_POLICY,
     action: 'dbUpdate' as const,
+    statements: options.statements ?? [],
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onProgress', options.onProgress),
   };
@@ -100,7 +107,10 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
  * run.
  */
 async function guardDestructiveChanges<TFamilyId extends string, TTargetId extends string>(
-  sharedInputs: Omit<Parameters<typeof executeRun<TFamilyId, TTargetId>>[0], 'mode'>,
+  sharedInputs: Omit<ExecuteRunSharedOptions<TFamilyId, TTargetId>, 'mode'> & {
+    readonly action: 'dbUpdate';
+    readonly statements: readonly StatementText[];
+  },
 ): Promise<DbUpdateResult | null> {
   const planResult = (await executeRun<TFamilyId, TTargetId>({
     ...sharedInputs,

@@ -12,7 +12,7 @@ export type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 export { assembleAuthoringContributions } from '@internal/framework-components/control';
-export { checkSqlDefaultBody } from '@internal/sql-contract/validators';
+export { checkSqlDefaultText } from '@internal/sql-contract/validators';
 export { extractCodecControlHooks } from '../core/assembly';
 export type { SqlControlFamilyInstance } from '../core/control-instance';
 export type {
@@ -20,14 +20,6 @@ export type {
   SqlDescribedContractSpace,
   SqlPslBuildContext,
 } from '../core/control-target-descriptor';
-export type {
-  AppliedTableRename,
-  ApplyTableRenameInput,
-  RenameTableReferences,
-  ResolvedTableRename,
-  TableRename,
-} from '../core/migrations/apply-table-rename';
-export { applyTableRename } from '../core/migrations/apply-table-rename';
 export type {
   ContractToSchemaIROptions,
   DefaultRenderer,
@@ -56,16 +48,46 @@ export {
 } from '../core/migrations/plan-helpers';
 export { INIT_ADDITIVE_POLICY } from '../core/migrations/policies';
 export type {
+  ColumnRename,
+  ColumnRenameRequest,
+} from '../core/migrations/resolve-column-rename';
+export {
+  COLUMN_RENAME_UNMATCHED_CODE,
+  resolveColumnRenameAgainst,
+  unmatchedColumnRename,
+} from '../core/migrations/resolve-column-rename';
+export type {
+  TableRename,
+  TableRenameRequest,
+} from '../core/migrations/resolve-table-rename';
+export {
+  resolveTableRenameAgainst,
+  unmatchedTableRename,
+} from '../core/migrations/resolve-table-rename';
+export type {
   SqlSchemaDiffFn,
   SqlSchemaDiffInput,
   SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
+export type { SchemaTables } from '../core/migrations/schema-tables';
 export { sqlTypeLookupsOf } from '../core/migrations/sql-type-lookups';
 export type {
-  TableNameCaseGuardTable,
-  TableRenameByHand,
-  TableRenameInMigration,
-} from '../core/migrations/table-name-case-guard';
+  CallWithCompanions,
+  ColumnOnOneSide,
+  FieldStorageEffect,
+  ModelStorageEffect,
+  ModelTable,
+  NoTable,
+  PlannedStatements,
+  SingleOperationCall,
+  StatementPlanningTarget,
+} from '../core/migrations/statement-planning';
+export {
+  fieldRenameStorageEffect,
+  modelRenameStorageEffect,
+  planStatements,
+} from '../core/migrations/statement-planning';
+export type { TableNameCaseGuardTable } from '../core/migrations/table-name-case-guard';
 export {
   detectTableNameCaseChanges,
   TABLE_NAME_CASE_CHANGED_CODE,

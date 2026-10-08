@@ -1,6 +1,8 @@
+import { dataTypeId } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { bool } from '../src/attribute-spec/combinators/bool';
+import { dataTypeValue } from '../src/attribute-spec/combinators/data-type-value';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { funcCall } from '../src/attribute-spec/combinators/func-call';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
@@ -8,6 +10,7 @@ import { numLiteral } from '../src/attribute-spec/combinators/num-literal';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { createBinder } from '../src/binder';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
@@ -169,6 +172,50 @@ describe('createBinder — function calls', () => {
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
     expect(binder.symbolForNode(call.name()!.syntax)).toBeUndefined();
   });
+
+  it.each([
+    ['a number', '8', true],
+    ['a quoted string', '"8"', true],
+    ['a tagged literal', 'sql`8`', true],
+    ['an identifier', 'eight', false],
+  ])(
+    'records a function whose parameter is typed by a data type when its argument is %s: %s',
+    (_, argument, recorded) => {
+      const sizeFunc = funcCall('sized', {
+        documentation: '',
+        positional: [
+          {
+            key: 'size',
+            type: dataTypeValue(dataTypeId('fixture/int'), EMPTY_DATA_TYPES),
+            documentation: '',
+          },
+        ],
+      });
+      const attributeSpec = fieldAttribute('attr', {
+        documentation: '',
+        named: { value: { type: oneOf(sizeFunc, str()), documentation: '' } },
+      });
+      const { symbolTable, binder } = bind(
+        `model User {\n  id Int @attr(value: sized(${argument}))\n}`,
+        binderContext({
+          contributedTypes: scalarTypes,
+          attributeSpecs: { field: { attr: () => attributeSpec }, model: {} },
+        }),
+      );
+      const field = symbolTable.topLevel.models['User']!.fields['id']!;
+      const attribute = [...field.node.attributes()][0]!;
+      const callArg = [...attribute.argList()!.args()][0]!;
+      const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
+      expect(binder.symbolForNode(call.name()!.syntax)).toEqual(
+        recorded
+          ? {
+              kind: 'function',
+              symbol: { kind: 'function', name: 'sized', signature: sizeFunc.signature },
+            }
+          : undefined,
+      );
+    },
+  );
 
   it('records a function past leading scalar leaves, in the real @default arm order', () => {
     const autoincrementFunc = funcCall('autoincrement', {

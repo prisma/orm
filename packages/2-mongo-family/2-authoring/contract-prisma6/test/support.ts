@@ -26,7 +26,7 @@ export function mongoSourceContext(resolvedInputs: readonly string[]): ContractS
     composedExtensionContracts: mongoStack.extensionContracts,
     authoringContributions: mongoStack.authoringContributions,
     codecLookup: mongoStack.codecLookup,
-    dataTypeLookup: mongoStack.dataTypeLookup,
+    dataTypes: mongoStack.dataTypes,
     controlMutationDefaults: mongoStack.controlMutationDefaults,
     resolvedInputs,
     capabilities: mongoStack.capabilities,

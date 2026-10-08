@@ -38,6 +38,7 @@ import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
 } from './collection-contract';
+import { assertLockCompatible } from './lock-guards';
 import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
@@ -1439,6 +1440,9 @@ function buildSelectAst(
   if (options.joins && options.joins.length > 0) {
     ast = ast.withJoins(options.joins);
   }
+  if (state.locking !== undefined) {
+    ast = ast.withLocking(state.locking);
+  }
 
   return ast;
 }
@@ -1450,6 +1454,7 @@ export function compileSelect(
   state: CollectionState,
   modelName?: string,
 ): SqlQueryPlan<Record<string, unknown>> {
+  assertLockCompatible(state);
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
   }
@@ -1508,6 +1513,7 @@ export function compileSelectWithIncludes(
   state: CollectionState,
   modelName?: string,
 ): SqlQueryPlan<Record<string, unknown>> {
+  assertLockCompatible(state);
   const includeJoins: JoinAst[] = [];
   const includeProjection: ProjectionItem[] = [];
   const topLevelWhere = buildStateWhere(contract, tableName, state, { namespaceId });

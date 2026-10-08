@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   interpretSqlContract,
@@ -17,7 +17,7 @@ function interpret(schema: string) {
     authoringContributions: { type: postgresScalarAuthoringTypes },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true, checkConstraint: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });

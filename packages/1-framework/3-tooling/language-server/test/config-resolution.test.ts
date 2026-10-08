@@ -9,6 +9,7 @@ import {
   errorUnexpected,
 } from '@internal/errors/control';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
 import type { ControlStack } from '@internal/framework-components/control';
 import * as control from '@internal/framework-components/control';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
@@ -73,13 +74,32 @@ function stubStackWithContext(): ControlStack {
   } as unknown as ControlStack;
 }
 
+const stubInt = dataType('demo/int', {});
+const stubDataTypeEntries = {
+  [stubInt.id]: {
+    written: {
+      kind: 'plain',
+      syntax: 'number',
+      types: [stubInt.id],
+      classify: () => ({ type: stubInt.id, value: 0 }),
+    },
+    print: String,
+    documentation: 'A number.',
+  },
+} as const;
+const stubDataTypes = {
+  entries: stubDataTypeEntries,
+  lookup: createDataTypeLookup([stubInt]),
+};
+
 function stubStack(
   scalarTypes: readonly string[],
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
 ): ControlStack {
   return {
     scalarTypes,
-    authoringContributions: { pslBlockDescriptors },
+    authoringContributions: { pslBlockDescriptors, dataTypes: stubDataTypeEntries },
+    dataTypes: stubDataTypes,
   } as unknown as ControlStack;
 }
 
@@ -207,8 +227,10 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     expect(result.controlStack).toEqual({
       scalarTypes: ['Int'],
       pslBlockDescriptors: {},
-      authoringContributions: { pslBlockDescriptors: {} },
+      authoringContributions: { pslBlockDescriptors: {}, dataTypes: stubDataTypeEntries },
+      dataTypes: stubDataTypes,
     });
+    expect(result.controlStack.dataTypes).toBe(stubDataTypes);
     expect(result.inputs.includes(pathToFileURL('/abs/schema.psl').toString())).toBe(true);
   });
 });
@@ -253,8 +275,10 @@ describe('control-stack input derivation', () => {
     expect(result.controlStack).toEqual({
       scalarTypes: ['Int', 'String'],
       pslBlockDescriptors,
-      authoringContributions: { pslBlockDescriptors },
+      authoringContributions: { pslBlockDescriptors, dataTypes: stubDataTypeEntries },
+      dataTypes: stubDataTypes,
     });
+    expect(result.controlStack.dataTypes).toBe(stubDataTypes);
   });
 
   it('carries the parser options a psl source declares', async () => {

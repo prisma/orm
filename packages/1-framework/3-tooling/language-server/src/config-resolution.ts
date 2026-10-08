@@ -91,6 +91,7 @@ function lspControlStackFromStack(stack: ControlStack): LspControlStack {
     scalarTypes: [...stack.scalarTypes],
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
     authoringContributions: stack.authoringContributions,
+    dataTypes: stack.dataTypes,
     ...(stack.controlMutationDefaults === undefined
       ? {}
       : { controlMutationDefaults: stack.controlMutationDefaults }),
@@ -115,7 +116,7 @@ function resolveInterpretation(
       authoringContributions: stack.authoringContributions,
       ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
       codecLookup: stack.codecLookup,
-      dataTypeLookup: stack.dataTypeLookup,
+      dataTypes: stack.dataTypes,
       controlMutationDefaults: stack.controlMutationDefaults,
       resolvedInputs: [...inputs.uris()],
       capabilities: stack.capabilities,

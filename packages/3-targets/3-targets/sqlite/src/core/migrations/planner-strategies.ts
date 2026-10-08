@@ -94,11 +94,10 @@ function classifyNodeIssue(issue: SchemaDiffIssue): 'widening' | 'destructive' |
       return expected.nullable ? 'widening' : 'destructive';
     }
     case RelationalSchemaNodeKind.columnDefault:
-      return issueOutcome(issue) === 'not-expected' ? 'destructive' : 'widening';
     case RelationalSchemaNodeKind.primaryKey:
     case RelationalSchemaNodeKind.foreignKey:
     case RelationalSchemaNodeKind.unique:
-      return 'destructive';
+      return 'widening';
     default:
       return null;
   }

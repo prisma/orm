@@ -324,7 +324,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "c49e3b0de0128618b679583476083d8c1a3a6258ecca0a1f2e7cada734d371a1",
+    "storageHash": "9738464cd9e5d135bc92081134a90fd3d7f64d6555d3410418d08fea877eae3b",
     "namespaces": {
       "one": {
         "id": "one",
@@ -417,7 +417,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_X_AB_pkey"
               }
             }
           }
@@ -521,7 +522,8 @@
                 }
               ],
               "primaryKey": {
-                "columns": ["A", "B"]
+                "columns": ["A", "B"],
+                "name": "_X_AB_pkey"
               }
             }
           }

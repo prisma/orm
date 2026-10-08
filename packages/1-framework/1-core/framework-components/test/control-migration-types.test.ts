@@ -11,10 +11,12 @@ describe('MigrationPlannerSuccessResult', () => {
     const result: MigrationPlannerSuccessResult = {
       kind: 'success',
       plan: stubPlan,
+      appliedStatements: [],
     };
     expect(result).toEqual({
       kind: 'success',
       plan: stubPlan,
+      appliedStatements: [],
     });
     expect('warnings' in result).toBe(false);
   });
@@ -27,6 +29,7 @@ describe('MigrationPlannerSuccessResult', () => {
     const result: MigrationPlannerSuccessResult = {
       kind: 'success',
       plan: stubPlan,
+      appliedStatements: [],
       warnings: Object.freeze([Object.freeze(warning)]),
     };
     expect(result.warnings).toEqual([warning]);

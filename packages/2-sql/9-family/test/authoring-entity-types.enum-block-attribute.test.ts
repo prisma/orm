@@ -1,5 +1,10 @@
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  EMPTY_DATA_TYPES,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
@@ -16,6 +21,7 @@ function build(source: string) {
         pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      dataTypes: EMPTY_DATA_TYPES,
     },
   });
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({

@@ -13,10 +13,9 @@
  * shape and keeps CLI wiring one step removed from target internals.
  *
  * Placeholder-bearing plans: `renderTypeScript()` always succeeds and embeds
- * `() => placeholder("slot")` at each stub. `operations`, in contrast, is
- * _not safe to enumerate_ on a stub-bearing plan — `DataTransformCall.toOp()`
- * throws `MIGRATION.UNFILLED_PLACEHOLDER` because a planner-stubbed closure cannot be lowered
- * to a runtime op. Callers that know a plan may carry stubs must render to
+ * `() => placeholder("slot")` at each stub. `operations`, in contrast, holds a promise that
+ * rejects with `MIGRATION.UNFILLED_PLACEHOLDER` for each stub, because a planner-stubbed closure
+ * cannot be lowered to a runtime op; the other operations resolve. Callers that know a plan may carry stubs must render to
  * `migration.ts`, let the user fill the slots, and re-load the edited
  * migration before enumerating ops. The walk-schema planner does not emit
  * `DataTransformCall`s today, so this asymmetry is invisible until the

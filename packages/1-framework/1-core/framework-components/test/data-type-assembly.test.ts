@@ -410,6 +410,25 @@ describe('createControlStack', () => {
       { type: uuid, contributedBy: 'ext' },
     ]);
   });
+
+  it('exposes its data types with their authoring entries as one pair', () => {
+    const input = {
+      family: { kind: 'family', id: 'fam', version: '0.0.1', dataTypes: [int2] },
+      target: {
+        kind: 'target',
+        id: 'tgt',
+        version: '0.0.1',
+        authoring: { dataTypes: { [int2.id]: numberEntry() } },
+      },
+      extensions: [],
+    } as unknown as CreateControlStackInput;
+
+    const stack = createControlStack(input);
+
+    expect(stack.dataTypes.entries).toBe(stack.authoringContributions.dataTypes);
+    expect(stack.dataTypes.lookup.get(int2.id)).toBe(int2);
+    expect(Object.keys(stack.dataTypes.entries)).toEqual([int2.id]);
+  });
 });
 
 describe('tagEntryKey', () => {

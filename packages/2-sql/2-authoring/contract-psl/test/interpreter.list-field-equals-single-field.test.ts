@@ -1,7 +1,7 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -44,7 +44,7 @@ describe('interpretPslDocumentToSqlContract a list field equals the single field
           type: varCharishTypes,
           dataTypes: fixtureDataTypeSupport.entries,
         },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
@@ -85,7 +85,7 @@ namespace public {
           type: postgresScalarAuthoringTypes,
           dataTypes: fixtureDataTypeSupport.entries,
         },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
@@ -132,7 +132,7 @@ model Product {
           type: postgresScalarAuthoringTypes,
           valueObjectStorageType: 'Jsonb',
         },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
@@ -170,7 +170,7 @@ model User {
           pslBlockDescriptors,
           dataTypes: fixtureDataTypeSupport.entries,
         },
-        ...fixtureTypeLookups,
+        ...fixtureInterpreterTypes,
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },

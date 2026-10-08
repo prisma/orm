@@ -431,6 +431,13 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly UserRole: readonly [
+            { readonly name: 'Admin'; readonly value: 'admin' },
+            { readonly name: 'Author'; readonly value: 'author' },
+            { readonly name: 'Reader'; readonly value: 'reader' },
+          ];
+        };
       };
     };
   };

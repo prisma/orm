@@ -1,5 +1,6 @@
 import { coreHash, type JsonValue } from '@internal/contract/types';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
+import { planOriginOf } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import {
   buildMongoNamespace,
@@ -111,6 +112,8 @@ function planSuccess(
     schema,
     policy,
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -318,6 +321,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ADDITIVE_ONLY_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -349,6 +354,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ADDITIVE_ONLY_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -373,6 +380,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ADDITIVE_ONLY_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1244,6 +1253,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1264,6 +1275,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1287,6 +1300,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1314,6 +1329,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1343,6 +1360,8 @@ describe('MongoMigrationPlanner', () => {
         schema: origin,
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1363,6 +1382,8 @@ describe('MongoMigrationPlanner', () => {
         schema: emptyIR(),
         policy: { allowedOperationClasses: [] },
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1721,6 +1742,8 @@ describe('MongoMigrationPlanner', () => {
         schema: emptyIR(),
         policy: ALL_CLASSES_POLICY,
         fromContract,
+        origin: planOriginOf(fromContract),
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -1736,6 +1759,8 @@ describe('MongoMigrationPlanner', () => {
         schema: emptyIR(),
         policy: ALL_CLASSES_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });

@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'6cfb0c8ca972725b4a736582c313692cb7522518b4158a82507209db4ffa4248'>;
+  StorageHashBase<'8695b7652f418281fd50e6a140bff6f32683e87cbec23d04ecef8a6a37ce7e08'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -598,6 +598,12 @@ type ContractBase = Omit<
               { readonly name: 'WORLD'; readonly value: 'WORLD' },
             ];
           };
+        };
+        readonly enumMemberTypes?: {
+          readonly workspace_permission: readonly [
+            { readonly name: 'HELLO'; readonly value: 'HELLO' },
+            { readonly name: 'WORLD'; readonly value: 'WORLD' },
+          ];
         };
       };
     };

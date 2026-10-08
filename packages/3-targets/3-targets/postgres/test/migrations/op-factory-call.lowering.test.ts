@@ -888,13 +888,13 @@ describe('RawSqlCall', () => {
 });
 
 describe('DataTransformCall', () => {
-  it('toOp() always throws MIGRATION.UNFILLED_PLACEHOLDER for the unfilled placeholder', () => {
+  it('toOp() always rejects with MIGRATION.UNFILLED_PLACEHOLDER for the unfilled placeholder', async () => {
     const call = new DataTransformCall(
       'Backfill status',
       'backfill-status:check',
       'backfill-status:run',
     );
-    expect(() => call.toOp()).toThrow(
+    await expect(call.toOp()).rejects.toThrow(
       expect.objectContaining({
         code: 'MIGRATION.UNFILLED_PLACEHOLDER',
         meta: { slot: 'Backfill status' },

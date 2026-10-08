@@ -106,6 +106,8 @@ async function planAndGetFkSql(
     schema: emptySchema,
     policy: INIT_ADDITIVE_POLICY,
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: postgresComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',

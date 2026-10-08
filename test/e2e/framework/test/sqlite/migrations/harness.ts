@@ -13,6 +13,7 @@ import {
   issueOutcome,
   type MigrationOperationPolicy,
   type MigrationRunnerFailure,
+  planOriginOf,
 } from '@prisma/orm-sqlite/components/control';
 import type { Contract } from '@prisma/orm-sqlite/contract/types';
 import { field } from '@prisma/orm-sqlite/contract-builder';
@@ -141,6 +142,8 @@ export async function applyMigration(
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: fw,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
@@ -171,6 +174,8 @@ export async function applyMigration(
       schema: currentSchema,
       policy,
       fromContract: options.origin ?? null,
+      origin: planOriginOf(options.origin ?? null),
+      statements: [],
       frameworkComponents: fw,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -21,7 +21,7 @@ export function contractSourceContextFromControlStack(
     authoringContributions: stack.authoringContributions,
     ...ifDefined('pslDiagnostics', stack.family.pslDiagnostics),
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs: [],
     capabilities: stack.capabilities,

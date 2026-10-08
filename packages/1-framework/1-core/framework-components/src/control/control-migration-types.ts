@@ -20,6 +20,7 @@ import type {
   ControlFamilyInstance,
 } from './control-instances';
 import type { OperationContext } from './control-operation-results';
+import type { AppliedMigrationStatement, ResolvedMigrationStatement } from './migration-statements';
 
 // ============================================================================
 // Migration Package Metadata
@@ -67,13 +68,34 @@ export interface MigrationMetadata {
 // ============================================================================
 
 /**
- * Migration operation classes define the safety level of an operation.
- * - 'additive': Adds new structures without modifying existing ones (safe)
- * - 'widening': Relaxes constraints or expands types (generally safe)
- * - 'destructive': Removes or alters existing structures (potentially unsafe)
- * - 'data': Data transformation operation (e.g., backfill, type conversion)
+ * What an operation can do to the data. `destructive` means the operation loses data; no other
+ * class loses a row or a value.
+ * - 'additive': adds structure without changing what exists.
+ * - 'widening': changes existing structure without losing data: a rename, a relaxed constraint or
+ *   a wider type, and a drop of an object that holds no data (an index; a unique, foreign-key or
+ *   check constraint; a default; a native enum type; a row-level-security policy) or disabling
+ *   row-level security. Dropping a policy or disabling row-level security widens who can read and
+ *   write rows.
+ * - 'destructive': loses data, such as dropping a table or a column.
+ * - 'data': transforms data, such as a backfill or a type conversion.
  */
 export type MigrationOperationClass = 'additive' | 'widening' | 'destructive' | 'data';
+
+/**
+ * The state a plan asserts it starts from: the storage hash, and optionally the profile hash, the
+ * runner checks the marker for. A planner's `origin` option and a plan's `origin` share this type.
+ */
+export interface PlanOrigin {
+  readonly storageHash: string;
+  readonly profileHash?: string;
+}
+
+/** The origin a plan from `contract` asserts, or `null` when it starts from no contract. */
+export function planOriginOf(
+  contract: { readonly storage: { readonly storageHash: string } } | null,
+): PlanOrigin | null {
+  return contract === null ? null : { storageHash: contract.storage.storageHash };
+}
 
 /**
  * Policy defining which operation classes are allowed during a migration.
@@ -91,7 +113,14 @@ export interface MigrationOperationPolicy {
  * Contains only the fields needed for CLI output (tree view, JSON envelope).
  */
 export interface MigrationPlanOperation {
-  /** Unique identifier for this operation (e.g., "table.users.create"). */
+  /**
+   * Names what the operation changes (e.g., "table.users"). Ids are not guaranteed unique within a
+   * plan: on Postgres, same-named tables in two schemas give operations the same id. So anything
+   * that points at one operation of a plan, such as `AppliedMigrationStatement.operationIndexes`,
+   * uses its position in `operations`. Ids are written to `ops.json`, so they are part of a
+   * migration's hash; the ledger records executed operations, ids included, but nothing compares
+   * them.
+   */
   readonly id: string;
   /** Human-readable label for display in UI/CLI (e.g., "Create table users"). */
   readonly label: string;
@@ -197,10 +226,7 @@ export interface MigrationPlan {
    * Origin contract identity that the plan expects the database to currently be at.
    * If omitted or null, the runner skips origin validation entirely.
    */
-  readonly origin?: {
-    readonly storageHash: string;
-    readonly profileHash?: string;
-  } | null;
+  readonly origin?: PlanOrigin | null;
   /** Destination contract identity that the plan intends to reach. */
   readonly destination: {
     readonly storageHash: string;
@@ -268,6 +294,11 @@ export interface MigrationPlannerConflict {
   readonly why?: string;
   /** Set when the conflict is an operation the policy does not allow: the class of that operation. */
   readonly refusedOperationClass?: MigrationOperationClass;
+  /**
+   * Set when the conflict refuses a statement: the statement, in domain coordinates. Consumers key
+   * on this field, not on the conflict's kind, which each family names.
+   */
+  readonly refusedStatement?: ResolvedMigrationStatement;
 }
 
 /**
@@ -280,6 +311,8 @@ export interface MigrationPlannerSuccessResult {
   readonly kind: 'success';
   readonly plan: MigrationPlanWithAuthoringSurface;
   readonly warnings?: readonly MigrationPlannerConflict[];
+  /** The statements the plan applied, one per statement it was given, in order. */
+  readonly appliedStatements: readonly AppliedMigrationStatement[];
 }
 
 /**
@@ -438,23 +471,24 @@ export interface MigrationPlanner<
     readonly schema: unknown;
     readonly policy: MigrationOperationPolicy;
     /**
-     * The "from" contract (the state the planner assumes the database starts
-     * at), or `null` for a baseline plan with no prior state.
-     *
-     * Planners derive any "from" identity they need to stamp onto the
-     * produced plan's `describe()` from `fromContract?.storage.storageHash
-     * ?? null`. They also pass this to data-safety strategies so they can
-     * compare `from` and `to` column shapes (e.g. to detect unsafe type
-     * changes).
-     *
-     * Required at every call site to make the structural fact "I have a
-     * prior contract / I don't" visible in the type. Reconciliation
-     * commands (`db init`, `db update`) introspect a live schema and pass
-     * `null`; authoring commands (`migration plan`) read the predecessor's
-     * contract from the snapshot store by its storage hash and pass the
-     * parsed value.
+     * The contract the planner reads as the starting state, or `null` when it has none: statements
+     * resolve against it, and data-safety strategies compare its column shapes with the
+     * destination's. `migration plan` passes the predecessor's contract; `db update` passes the
+     * contract the marker names only when statements are given.
      */
     readonly fromContract: Contract | null;
+    /**
+     * The origin the produced plan asserts, which the runner checks against the marker: the
+     * plan's `origin` and its `describe().from`. `migration plan` passes its starting contract's
+     * hash ({@link planOriginOf}); reconciliation commands (`db init`, `db update`) pass `null`,
+     * because their plans apply from whatever state the database is in.
+     */
+    readonly origin: PlanOrigin | null;
+    /**
+     * Statements the user gave, resolved against `fromContract` and `contract`,
+     * in the order given. Empty when the user gave none.
+     */
+    readonly statements: readonly ResolvedMigrationStatement[];
     /**
      * Active framework components participating in this composition.
      * Families/targets can interpret this list to derive family-specific metadata.

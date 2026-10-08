@@ -13,6 +13,7 @@ import type {
   MigrationPlanResult,
 } from '../../control-api/operations/migration-plan';
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
+import { renameStatements } from '../../control-api/statements/statement-text';
 import type { CreateControlClient, DestructivePlanOperation } from '../../control-api/types';
 import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
 import {
@@ -25,6 +26,7 @@ import { destructiveOperationList, errorConsentOperationsMissing } from '../db/c
 import { defineOrmCommand } from '../define-command';
 import { consentToken } from '../init-inputs';
 import { normalizeError } from '../normalize-error';
+import { appliedStatementBlocks } from '../statement-blocks';
 import {
   appMigrationsDirFor,
   baseDirFor,
@@ -161,7 +163,12 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
   if (result.noOp) {
     return [
       ...warningBlocks(result),
-      { kind: 'summary', status: 'ok', text: 'No changes detected' },
+      {
+        kind: 'summary',
+        status: 'ok',
+        text: result.appliedStatements.length > 0 ? result.summary : 'No changes detected',
+      },
+      ...appliedStatementBlocks(result.appliedStatements),
       outcome,
     ];
   }
@@ -170,6 +177,8 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
       ...warningBlocks(result),
       { kind: 'summary', status: 'warn', text: result.summary },
       ...originNoticeBlocks(result),
+      ...operationBlocks(result),
+      ...appliedStatementBlocks(result.appliedStatements),
       outcome,
     ];
   }
@@ -178,6 +187,7 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
     { kind: 'summary', status: 'ok', text: result.summary },
     ...originNoticeBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements),
     outcome,
     ...previewBlocks(result),
   ];
@@ -291,6 +301,11 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
           brief: `Destination contract reference (${RECORDED_CONTRACT_REF_FORMS}); defaults to the emitted contract`,
           placeholder: 'contract',
         }),
+        rename: flag.repeated({
+          brief:
+            'Rename a model or field: Model, namespace.Model, Model.field or namespace.Model.field on each side; repeat for several, applied in order',
+          placeholder: 'old:new',
+        }),
       },
     },
     needs: { config: ormConfigSection },
@@ -326,6 +341,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
             ...ifDefined('name', args.flags.name),
             ...ifDefined('from', args.flags.from),
             ...ifDefined('to', args.flags.to),
+            statements: renameStatements(args.flags.rename),
             ...ifDefined('consent', consent),
             ...ifDefined(
               'carryEmittedExtensionDirs',

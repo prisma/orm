@@ -185,6 +185,11 @@ describe('db update --to bundle resolution', () => {
     { flags: [], command: 'db update', after: '' },
     { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
     { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
+    {
+      flags: ['--rename', 'Profile:User', '--rename', 'User.name:User.fullName'],
+      command: 'db update',
+      after: ' --rename Profile:User --rename User.name:User.fullName',
+    },
   ])(
     'keeps --to and $flags in the retry command when no connection is configured',
     async ({ flags, command, after }) => {

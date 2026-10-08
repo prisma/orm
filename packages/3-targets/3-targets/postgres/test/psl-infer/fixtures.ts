@@ -74,10 +74,12 @@ export const inferBuildContext: SqlPslBuildContext = {
       ...postgresAuthoringTypes,
       ...postgresPslTypeConstructors,
     },
-    dataTypes: postgresDataTypeEntries(),
   },
   codecLookup: createPostgresBuiltinCodecLookup(),
-  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+  dataTypes: {
+    entries: postgresDataTypeEntries(),
+    lookup: createDataTypeLookup(postgresDataTypes),
+  },
   indexTypes: indexTypeRegistryOf([{ id: 'postgres', indexTypes: postgresIndexTypes }]),
 };
 

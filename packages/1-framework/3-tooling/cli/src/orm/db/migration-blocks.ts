@@ -8,6 +8,7 @@ import {
   renderPreviewStatement,
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { appliedStatementBlocks } from '../statement-blocks';
 
 interface PlannedOperation {
   readonly label: string;
@@ -158,6 +159,7 @@ function planBlocks(result: MigrationCommandResult): readonly Block[] {
     { kind: 'summary', status: 'ok', text: planSummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements ?? []),
     {
       kind: 'fields',
       rows: [
@@ -222,6 +224,7 @@ function applyBlocks(result: MigrationCommandResult): readonly Block[] {
     { kind: 'summary', status: 'ok', text: applySummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...fallbackMarkerBlocks(result),
     ...(advanced === null || advanced === undefined
       ? []

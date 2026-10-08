@@ -4,6 +4,7 @@ import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
+  type MongoCodecLookup,
   type MongoRuntime,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
@@ -37,7 +38,7 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
     const driver = await createMongoDriver(connectionUri, dbName);
     runtime = createMongoRuntime({ context, driver });
 
-    const ctx: MongodContext = { connectionUri, dbName, client, runtime };
+    const ctx: MongodContext = { connectionUri, dbName, client, runtime, codecs: context.codecs };
     return await fn(ctx);
   } finally {
     await runtime?.close();
@@ -51,6 +52,8 @@ export interface MongodContext {
   readonly dbName: string;
   readonly client: MongoClient;
   readonly runtime: MongoRuntime;
+  /** The execution context's codecs, which `buildMongoEnums()` reads enum members through. */
+  readonly codecs: MongoCodecLookup;
 }
 
 export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => void): void {
@@ -58,6 +61,7 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
     let replSet: MongoMemoryReplSet;
     let client: MongoClient;
     let runtime: MongoRuntime;
+    let codecs: MongoCodecLookup;
     const dbName = 'test';
 
     const ctx: MongodContext = {
@@ -70,6 +74,9 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
       },
       get runtime() {
         return runtime;
+      },
+      get codecs() {
+        return codecs;
       },
     };
 
@@ -90,6 +97,7 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
       const context = createMongoExecutionContext({ contract: {}, stack });
       const driver = await createMongoDriver(replSet.getUri(), dbName);
       runtime = createMongoRuntime({ context, driver });
+      codecs = context.codecs;
     }, timeouts.spinUpMongoMemoryServer);
 
     beforeEach(async () => {

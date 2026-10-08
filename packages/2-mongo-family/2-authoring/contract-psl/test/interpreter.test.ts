@@ -108,11 +108,10 @@ function interpret(
     {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
       controlMutationDefaults: {
-        dataTypeEntries: {},
         defaultFunctionRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,
-      dataTypeLookup: mongoDataTypeLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       ...overrides,
     },
     'test.prisma',
@@ -242,7 +241,7 @@ model Item {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: mongoDataTypeLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       resolvedInputs: [],
       capabilities: {},
     };
@@ -262,12 +261,9 @@ model Item {
         symbolTable,
         binder,
         scalarTypeCodecIds: new Map(),
-        controlMutationDefaults: {
-          ...context.controlMutationDefaults,
-          dataTypeEntries: context.authoringContributions.dataTypes,
-        },
+        controlMutationDefaults: context.controlMutationDefaults,
+        dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
-        dataTypeLookup: context.dataTypeLookup,
         authoringContributions: context.authoringContributions,
       }),
       mapPslDiagnostics([...symbolTableDiagnostics, ...binderDiagnostics], input.sources),
@@ -1606,6 +1602,28 @@ model Item {
       expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
     });
 
+    it('reports a wrong argument of a field function in @@index inside that function', () => {
+      const result = interpret(`model Events {
+  id    ObjectId @id @map("_id")
+  email String
+  @@index([email(sort: Up)])
+}
+`);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        {
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: Asc | Desc',
+          sourceId: 'test.prisma',
+          span: {
+            start: { offset: 86, line: 4, column: 24 },
+            end: { offset: 88, line: 4, column: 26 },
+          },
+        },
+      ]);
+    });
+
     it('creates descending index from sort: Desc', () => {
       const ir = interpretOk(`
         model Events {
@@ -2597,7 +2615,6 @@ model Post {
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
           controlMutationDefaults: {
-            dataTypeEntries: {},
             defaultFunctionRegistry: new Map(),
           },
         },
@@ -2626,7 +2643,6 @@ model Post {
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
           controlMutationDefaults: {
-            dataTypeEntries: {},
             defaultFunctionRegistry: new Map(),
           },
         },
@@ -2651,7 +2667,6 @@ model Post {
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
           controlMutationDefaults: {
-            dataTypeEntries: {},
             defaultFunctionRegistry: new Map(),
           },
         },

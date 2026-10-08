@@ -36,24 +36,49 @@ export async function removeOfflineProjects(): Promise<void> {
   }
 }
 
-export function contractJson(storageHash: string): Record<string, unknown> {
+/**
+ * An emitted contract. With `models`, it carries an application domain whose
+ * one namespace `app` declares those models, so statements can resolve.
+ */
+export function contractJson(
+  storageHash: string,
+  models?: readonly string[],
+): Record<string, unknown> {
   return {
     storage: { storageHash, namespaces: {} },
     schemaVersion: '1.0.0',
     target: 'postgres',
     targetFamily: 'sql',
     models: {},
+    ...(models === undefined
+      ? {}
+      : {
+          domain: {
+            namespaces: {
+              app: {
+                models: Object.fromEntries(
+                  models.map((model) => [model, { fields: {}, relations: {}, storage: {} }]),
+                ),
+              },
+            },
+          },
+        }),
   };
 }
 
 export async function createOfflineProject(options: {
   readonly storageHash: string;
+  readonly models?: readonly string[];
 }): Promise<OfflineProject> {
   const dir = createTestProjectDir('orm-offline');
   created.push(dir);
   const contractPath = join(dir, 'output', 'contract.json');
   await mkdir(join(dir, 'output'), { recursive: true });
-  await writeFile(contractPath, JSON.stringify(contractJson(options.storageHash)), 'utf-8');
+  await writeFile(
+    contractPath,
+    JSON.stringify(contractJson(options.storageHash, options.models)),
+    'utf-8',
+  );
   await writeFile(
     join(dir, 'package.json'),
     JSON.stringify({ name: 'offline-fixture', dependencies: {} }),
@@ -118,9 +143,10 @@ export async function seedMigrationPackage(options: {
 export async function seedContractSnapshot(options: {
   readonly migrationsDir: string;
   readonly storageHash: string;
+  readonly models?: readonly string[];
 }): Promise<void> {
   await writeContractSnapshot(options.migrationsDir, options.storageHash, {
-    contractJson: contractJson(options.storageHash),
+    contractJson: contractJson(options.storageHash, options.models),
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -141,30 +167,51 @@ export async function seedDbRef(options: {
  * the test asked for; `emptyMigration` renders the stub `migration new` writes.
  * With `throwOnOperations`, any scripted `operations` still resolve alongside
  * the rejection — mirroring a real plan where some operations resolve and a
- * placeholder op rejects.
+ * placeholder op rejects. `operationsByPlan` gives each successive `plan`
+ * call its own operations, such as an auto-baseline's baseline and delta legs.
  */
 export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
+  readonly operationsByPlan?: ReadonlyArray<readonly MigrationPlanOperation[]>;
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
   readonly throwOnOperations?: unknown;
   readonly throwOnPlan?: unknown;
+  /** Receives the statements of every `plan` call, in call order. */
+  readonly statementsReceived?: unknown[][];
+  /** Fails every `plan` call that is given statements, as a planner that refuses them does. */
+  readonly refuseStatements?: boolean;
 }
 
 function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
+  let planCalls = 0;
   return {
-    plan: () => {
+    plan: (options: { readonly statements: readonly unknown[] }) => {
+      script.statementsReceived?.push([...options.statements]);
       if (script.throwOnPlan !== undefined) {
         throw script.throwOnPlan;
+      }
+      const operations = script.operationsByPlan?.[planCalls] ?? script.operations;
+      planCalls += 1;
+      const [refused] = script.refuseStatements === true ? options.statements : [];
+      if (refused !== undefined) {
+        return {
+          kind: 'failure',
+          conflicts: [{ kind: 'statementRefused', summary: 'Refused', refusedStatement: refused }],
+        };
       }
       return script.conflicts === undefined
         ? {
             kind: 'success',
+            appliedStatements: options.statements.map((statement) => ({
+              statement,
+              operationIndexes: (operations ?? [ADDITIVE_OP]).map((_, index) => index),
+            })),
             plan: {
               operations:
                 script.throwOnOperations === undefined
-                  ? (script.operations ?? [ADDITIVE_OP]).map((op) => Promise.resolve(op))
+                  ? (operations ?? [ADDITIVE_OP]).map((op) => Promise.resolve(op))
                   : [
-                      ...(script.operations ?? []).map((op) => Promise.resolve(op)),
+                      ...(operations ?? []).map((op) => Promise.resolve(op)),
                       Promise.reject(script.throwOnOperations),
                     ],
               renderTypeScript: () => '// planned migration\n',

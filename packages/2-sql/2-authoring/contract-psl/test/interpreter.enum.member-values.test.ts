@@ -1,7 +1,7 @@
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
@@ -38,7 +38,7 @@ model Post {
       pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
       dataTypes: fixtureDataTypeSupport.entries,
     },
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     createNamespace: createTestSqlNamespace,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
     capabilities: { sql: { scalarList: true } },
@@ -78,7 +78,7 @@ describe('enum members written as number literals', () => {
   it('reports why the number is refused when the codec refuses it too', () => {
     expect(storedValues('pg/text@1', ['Low = 1']).diagnostics).toContainEqual({
       code: 'PSL_EXTENSION_INVALID_VALUE',
-      message: 'enum "Key" member "Low": pg/text has no cast from pg/int2; it casts from nothing',
+      message: 'enum "Key" member "Low": Expected a quoted string',
     });
   });
 });

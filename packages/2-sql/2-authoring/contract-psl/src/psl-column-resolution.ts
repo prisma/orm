@@ -14,10 +14,14 @@ import type {
   ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
 import {
+  type DataTypeSupport,
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
+  readWrittenValue,
   validateAuthoringHelperArguments,
   validateAuthoringTypeParams,
+  type WrittenScalar,
+  type WrittenValue,
 } from '@internal/framework-components/authoring';
 import type {
   AnyCodecDescriptor,
@@ -38,7 +42,6 @@ import type {
   NamedTypeSymbol,
   NumLiteral,
   ParsedTaggedLiteral,
-  PslDiagnostic,
   PslSpan,
   Resolution,
   ResolvedTypeConstructorCall,
@@ -58,6 +61,7 @@ import {
 } from '@internal/psl-parser/interpret';
 import {
   ArrayLiteralAst,
+  type ExpressionAst,
   type FieldAttributeAst,
   IdentifierAst,
   type PslSources,
@@ -67,18 +71,11 @@ import {
   SQL_EXPRESSION_TAG,
   sqlTextFromCanonical,
 } from '@internal/sql-contract/sql-expression';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
+import { checkSqlDefaultText, reservedSqlDefaultText } from '@internal/sql-contract/validators';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
-import {
-  type DataTypeSupport,
-  entryForTag,
-  knownTags,
-  lowerDataTypeDefault,
-  readValue,
-  type WrittenValue,
-} from './data-type-default';
+import { type DefaultRefusalPlace, lowerDataTypeDefault } from './data-type-default';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
 
 import { getAttribute } from './psl-attribute-parsing';
@@ -632,37 +629,13 @@ const TAGGED_LITERAL_CANONICALIZATION_CODES = {
   'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
 } as const;
 
-type TaggedLiteralRead =
-  | { readonly ok: false; readonly diagnostic: PslDiagnostic }
-  | { readonly ok: true; readonly written: Extract<WrittenValue, { readonly kind: 'tag' }> };
+function defaultValueExpression(node: FieldAttributeAst): ExpressionAst | undefined {
+  return [...(node.argList()?.args() ?? [])].find((arg) => arg.colon() === undefined)?.value();
+}
 
-function readTaggedLiteral(
-  literal: ParsedTaggedLiteral,
-  support: DataTypeSupport,
-  source: DiagnosticSource,
-): TaggedLiteralRead {
-  const reject = (code: string, message: string): TaggedLiteralRead => ({
-    ok: false,
-    diagnostic: {
-      code,
-      message,
-      ...source.at(literal.span),
-    },
-  });
-  if (entryForTag(support, literal.tag) === undefined) {
-    return reject(
-      'PSL_UNKNOWN_LITERAL_TAG',
-      `Unknown literal tag "${literal.tag}". Known tags: ${knownTags(support).join(', ')}.`,
-    );
-  }
-  const { canonicalization } = literal;
-  if (!canonicalization.ok) {
-    return reject(
-      TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
-      describeTaggedLiteralFailure(canonicalization.reason),
-    );
-  }
-  return { ok: true, written: { kind: 'tag', tag: literal.tag, text: canonicalization.body } };
+function listElements(expression: ExpressionAst | undefined): readonly ExpressionAst[] {
+  const list = expression === undefined ? undefined : ArrayLiteralAst.cast(expression.syntax);
+  return list === undefined ? [] : [...list.elements()];
 }
 
 export function rejectStrictListNullDefault(input: {
@@ -707,7 +680,7 @@ export function lowerDefaultForField(input: {
     | undefined;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly dataTypeSupport: DataTypeSupport;
+  readonly dataTypes: DataTypeSupport;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
@@ -723,10 +696,8 @@ export function lowerDefaultForField(input: {
       model: input.model,
       field: input.field,
       binder: input.binder,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: input.defaultFunctionRegistry,
-        dataTypeEntries: input.dataTypeSupport.entries,
-      },
+      controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
+      dataTypes: input.dataTypes,
     }),
   );
   const interpreted = interpretFieldAttribute({
@@ -758,25 +729,40 @@ export function lowerDefaultForField(input: {
     }
     return { defaultValue: { kind: 'literal', value: null, canonical: true } };
   }
+  const valueExpression = defaultValueExpression(node);
+  const refusalLocation = (place: DefaultRefusalPlace) => {
+    if (place.kind === 'attribute') return source.at();
+    const expression =
+      place.elementIndex === undefined
+        ? valueExpression
+        : listElements(valueExpression)[place.elementIndex];
+    if (expression === undefined) {
+      throw new InternalError(
+        `Field "${input.modelName}.${input.fieldName}": the refused @default value has no written expression.`,
+      );
+    }
+    return diagnosticSource(input.sources, expression.syntax).at();
+  };
   // A list of value objects is stored in one column whose value is the whole list: a list literal
   // fills it element by element, as it fills a list column, and any other literal is read as the
   // whole value.
   const readsListElements = (written: WrittenValue) =>
     input.isListColumn || (input.field.list && written.kind === 'list');
-  const readAsLiteral = (written: WrittenValue) => {
+  const readAsLiteral = (written: WrittenValue, sourceElementIndexes?: readonly number[]) => {
     const lowered = lowerDataTypeDefault({
       written,
+      sourceElementIndexes,
       isList: readsListElements(written),
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
-      support: input.dataTypeSupport,
+      dataTypes: input.dataTypes,
       fieldPath: `${input.modelName}.${input.fieldName}`,
     });
     if (!lowered.ok) {
       input.diagnostics.push({
         code: lowered.code,
         message: lowered.message,
-        ...source.at(),
+        ...refusalLocation(lowered.place),
       });
       return {};
     }
@@ -803,7 +789,7 @@ export function lowerDefaultForField(input: {
         elementNullable: input.field.elementOptional,
         ...input.valueObjectDefault,
         codecLookup: input.codecLookup,
-        dataTypeLookup: input.dataTypeSupport.lookup,
+        dataTypeLookup: input.dataTypes.lookup,
       });
       for (const { code, message } of mismatches) {
         input.diagnostics.push({ code, message, ...source.at() });
@@ -814,25 +800,29 @@ export function lowerDefaultForField(input: {
     return { defaultValue: { kind: 'literal' as const, value: restoredValue, canonical: true } };
   };
 
-  const writtenElement = (
+  const writtenScalar = (
     element: string | boolean | NumLiteral | ParsedTaggedLiteral,
-  ): WrittenValue | { readonly ok: false } => {
+  ): WrittenScalar | { readonly ok: false } => {
     if (typeof element === 'string') return { kind: 'string', text: element };
     if (typeof element === 'boolean') return { kind: 'boolean', value: element };
     if ('text' in element) return { kind: 'number', text: element.text };
-    const literal = readTaggedLiteral(element, input.dataTypeSupport, source);
-    if (!literal.ok) {
-      input.diagnostics.push(literal.diagnostic);
+    const { canonicalization } = element;
+    if (!canonicalization.ok) {
+      input.diagnostics.push({
+        code: TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
+        message: describeTaggedLiteralFailure(canonicalization.reason),
+        ...source.at(element.span),
+      });
       return { ok: false };
     }
-    return literal.written;
+    return { kind: 'tag', tag: element.tag, text: canonicalization.text };
   };
 
   const sqlExpressionDefault = (text: string, span: PslSpan) => {
-    const reserved = reservedSqlDefaultBody(text);
+    const reserved = reservedSqlDefaultText(text);
     const refusal =
       reserved === undefined
-        ? checkSqlDefaultBody(text)
+        ? checkSqlDefaultText(text)
         : `Write @default(${reserved}()) instead of ${SQL_EXPRESSION_TAG}\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`;
     if (refusal !== undefined) {
       input.diagnostics.push({
@@ -861,13 +851,15 @@ export function lowerDefaultForField(input: {
 
   if (Array.isArray(value)) {
     const elements: WrittenValue[] = [];
-    for (const element of value) {
+    const sourceElementIndexes: number[] = [];
+    for (const [sourceIndex, element] of value.entries()) {
       if (element === null) continue;
-      const written = writtenElement(element);
+      const written = writtenScalar(element);
       if ('ok' in written) return {};
       elements.push(written);
+      sourceElementIndexes.push(sourceIndex);
     }
-    return readAsLiteral({ kind: 'list', elements });
+    return readAsLiteral({ kind: 'list', elements }, sourceElementIndexes);
   }
 
   if (typeof value === 'string') return readAsLiteral({ kind: 'string', text: value });
@@ -878,16 +870,13 @@ export function lowerDefaultForField(input: {
   }
 
   if ('tag' in value) {
-    const literal = readTaggedLiteral(value, input.dataTypeSupport, source);
-    if (!literal.ok) {
-      input.diagnostics.push(literal.diagnostic);
-      return {};
+    const written = writtenScalar(value);
+    if ('ok' in written) return {};
+    const read = readWrittenValue(input.dataTypes, written);
+    if (read.ok && read.value.type === SQL_EXPRESSION_DATA_TYPE_ID) {
+      return sqlExpressionDefault(sqlTextFromCanonical(read.value.value), value.span);
     }
-    const read = readValue(input.dataTypeSupport, literal.written, undefined);
-    if (read.ok && read.typed.type === SQL_EXPRESSION_DATA_TYPE_ID) {
-      return sqlExpressionDefault(sqlTextFromCanonical(read.typed.value), value.span);
-    }
-    return readAsLiteral(literal.written);
+    return readAsLiteral(written);
   }
 
   if (typeof value === 'object') {

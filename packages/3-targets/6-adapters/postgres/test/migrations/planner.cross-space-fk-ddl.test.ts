@@ -169,6 +169,8 @@ async function planAndGetFkExecuteSql(contract: Contract<SqlStorage>): Promise<s
     schema: emptySchema,
     policy: INIT_ADDITIVE_POLICY,
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: postgresComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',

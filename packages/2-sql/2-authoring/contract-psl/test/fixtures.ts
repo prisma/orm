@@ -50,7 +50,7 @@ import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
 import { sqlContextInput } from '../src/test';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
@@ -167,12 +167,14 @@ export function testRenderCheckExpressions(input: {
     const members = input.memberValues
       .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
       .join(', ');
-    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
+    const elements = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `"${v}"`))
+      .join(',');
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}, NULL) <@ '{${elements}}'`
         : `${column} IN (${members})`,
     });
   }
@@ -415,7 +417,7 @@ function contextForInterpretOptions(
     | 'authoringContributions'
     | 'controlMutationDefaults'
     | 'codecLookup'
-    | 'dataTypeLookup'
+    | 'dataTypes'
     | 'composedExtensions'
     | 'composedExtensionContracts'
     | 'capabilities'
@@ -440,14 +442,14 @@ function contextForInterpretOptions(
       pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
       modelAttributes: authoring?.modelAttributes ?? {},
       attributeSpecs: authoring?.attributeSpecs ?? sqlAttributeSpecs,
-      dataTypes: authoring?.dataTypes ?? {},
+      dataTypes: authoring?.dataTypes ?? options.dataTypes.entries,
       ...(authoring?.valueObjectStorageType === undefined
         ? {}
         : { valueObjectStorageType: authoring.valueObjectStorageType }),
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     codecLookup: options.codecLookup,
-    dataTypeLookup: options.dataTypeLookup,
+    dataTypes: options.dataTypes,
     controlMutationDefaults: options.controlMutationDefaults ?? {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -532,7 +534,7 @@ export function createPostgresTestContext(
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    ...fixtureTypeLookups,
+    ...fixtureInterpreterTypes,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,

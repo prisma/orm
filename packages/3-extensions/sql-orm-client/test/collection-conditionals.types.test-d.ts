@@ -244,23 +244,23 @@ describe('inside a class method, every conditional form on this reduces to the c
   });
 });
 
-describe('inside apply, every conditional form reduces to the receiver', () => {
+describe('inside with, every conditional form reduces to the receiver', () => {
   test('ternary, filtered branch first', () => {
-    const posts = Post.apply((c) => (flag ? c.published() : c));
+    const posts = Post.with((c) => (flag ? c.published() : c));
     expectTypeOf(posts).toEqualTypeOf<PostCollection>();
     // @ts-expect-error the collection may have no filter
     posts.deleteAll();
   });
 
   test('ternary, unfiltered branch first', () => {
-    const posts = Post.apply((c) => (flag ? c : c.published()));
+    const posts = Post.with((c) => (flag ? c : c.published()));
     expectTypeOf(posts).toEqualTypeOf<PostCollection>();
     // @ts-expect-error the collection may have no filter
     posts.deleteAll();
   });
 
   test('if with an early return', () => {
-    const posts = Post.apply((c) => {
+    const posts = Post.with((c) => {
       if (!flag) return c;
       return c.published();
     });
@@ -270,7 +270,7 @@ describe('inside apply, every conditional form reduces to the receiver', () => {
   });
 
   test('switch', () => {
-    const posts = Post.apply((c) => {
+    const posts = Post.with((c) => {
       switch (mode) {
         case 'published':
           return c.published();
@@ -286,7 +286,7 @@ describe('inside apply, every conditional form reduces to the receiver', () => {
   });
 
   test('loop', () => {
-    const posts = Post.apply((c) => {
+    const posts = Post.with((c) => {
       let filtered = c;
       for (const title of titles) filtered = filtered.where({ title });
       return filtered;
@@ -297,7 +297,7 @@ describe('inside apply, every conditional form reduces to the receiver', () => {
   });
 
   test('let with if', () => {
-    const posts = Post.apply((c) => {
+    const posts = Post.with((c) => {
       let filtered = c;
       if (flag) filtered = filtered.published();
       return filtered;
@@ -308,7 +308,7 @@ describe('inside apply, every conditional form reduces to the receiver', () => {
   });
 
   test('a filter on the plain collection', () => {
-    const posts = plain.Post.apply((c) => (flag ? c.where({ title: 'x' }) : c));
+    const posts = plain.Post.with((c) => (flag ? c.where({ title: 'x' }) : c));
     expectTypeOf(posts).toEqualTypeOf<PlainPost>();
     // @ts-expect-error the collection may have no filter
     posts.deleteAll();

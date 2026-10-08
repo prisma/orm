@@ -171,9 +171,14 @@ export function buildSqlitePlanDiff(input: {
   // normalizes either input uniformly (an already-real tree passes through
   // untouched — its nested values are already instances) and is a no-op
   // rebuild in the common (real-instance) case, so this is always safe to run.
-  const actual = new SqlSchemaIR(withRecordKeyNames(input.actualSchema));
+  const actual = sqliteActualSchema(input.actualSchema);
   const issues = diffSchemas(expected, actual);
   return { expected, actual, issues };
+}
+
+/** The schema a plan starts from as a `SqlSchemaIR`, its table and column names taken from their keys. */
+export function sqliteActualSchema(actualSchema: SqlSchemaIRNode): SqlSchemaIR {
+  return new SqlSchemaIR(withRecordKeyNames(actualSchema));
 }
 
 /**

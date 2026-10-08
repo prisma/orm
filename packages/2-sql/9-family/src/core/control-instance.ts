@@ -535,7 +535,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   const pslBuildContext: SqlPslBuildContext = {
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     indexTypes: {
       backsForeignKey: (indexType) => stackIndexTypes().backsForeignKey(indexType),
     },

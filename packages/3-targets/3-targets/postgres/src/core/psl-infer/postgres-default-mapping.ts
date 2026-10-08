@@ -4,7 +4,9 @@ import { createPostgresBuiltinDataTypeLookup } from '../data-types';
 
 export function createPostgresDefaultMapping(): DefaultMappingOptions {
   return {
-    dataTypeEntries: postgresDataTypeEntries(),
-    dataTypeLookup: createPostgresBuiltinDataTypeLookup(),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createPostgresBuiltinDataTypeLookup(),
+    },
   };
 }

@@ -128,6 +128,13 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly Plan: readonly [
+            { readonly name: 'FREE'; readonly value: 'FREE' },
+            { readonly name: 'PAID'; readonly value: 'PAID' },
+            { readonly name: 'CUSTOM'; readonly value: 'CUSTOM' },
+          ];
+        };
       };
     };
   };

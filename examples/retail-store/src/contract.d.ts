@@ -1356,6 +1356,17 @@ type ContractBase = Omit<
             ];
           };
         };
+        readonly enumMemberTypes?: {
+          readonly OrderType: readonly [
+            { readonly name: 'Delivery'; readonly value: 'delivery' },
+            { readonly name: 'Pickup'; readonly value: 'pickup' },
+          ];
+          readonly ProductStatus: readonly [
+            { readonly name: 'Active'; readonly value: 'active' },
+            { readonly name: 'Discontinued'; readonly value: 'discontinued' },
+            { readonly name: 'OutOfStock'; readonly value: 'out-of-stock' },
+          ];
+        };
       };
     };
   };

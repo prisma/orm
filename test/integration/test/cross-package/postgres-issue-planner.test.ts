@@ -199,16 +199,14 @@ describe('planIssues', () => {
       expect(calls[2]).toMatchObject({ factoryName: 'setNotNull' });
     });
 
-    it('DataTransformCall.toOp() throws MIGRATION.UNFILLED_PLACEHOLDER', () => {
+    it('DataTransformCall.toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER', async () => {
       const result = planAgainst(contractWithStatus(), actualWithoutStatus());
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const dtCall = result.value.calls[1]!;
       expect(dtCall.factoryName).toBe('dataTransform');
-      expect(() => dtCall.toOp()).toThrow(
-        expect.objectContaining({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' }),
-      );
+      await expect(dtCall.toOp()).rejects.toMatchObject({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' });
     });
   });
 
@@ -700,6 +698,8 @@ describe('planIssues', () => {
         schema: actual,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: 'app',
         snapshotsImportPath: '../../snapshots',

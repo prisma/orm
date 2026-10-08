@@ -22,6 +22,7 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import { retryCommandFor } from '../../control-api/operations/ref-resolution';
+import { renameStatements } from '../../control-api/statements/statement-text';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
@@ -110,6 +111,7 @@ function updateDocument(inputs: {
           },
         }),
     ...ifDefined('perSpace', value.perSpace),
+    appliedStatements: value.appliedStatements,
     ...ifDefined('warnings', value.warnings),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
@@ -148,6 +150,11 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           brief: 'Advance the named ref to the post-command contract hash',
           placeholder: 'name',
         }),
+        rename: flag.repeated({
+          brief:
+            'Rename a model or field: Model, namespace.Model, Model.field or namespace.Model.field on each side; repeat for several, applied in order',
+          placeholder: 'old:new',
+        }),
       },
     },
     needs: { config: ormConfigSection },
@@ -178,6 +185,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
           to: args.flags.to,
           advanceRef: args.flags.advanceRef,
+          renames: args.flags.rename,
           canRunOffline: false,
         }),
       });
@@ -217,6 +225,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             contract: contractJson,
             mode,
             migrationsDir,
+            statements: renameStatements(args.flags.rename),
             ...(consent === undefined ? {} : { consent }),
             onProgress: controlProgressReporter(ctx.report),
           });

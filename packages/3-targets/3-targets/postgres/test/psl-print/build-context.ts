@@ -49,7 +49,6 @@ export function testBuildContext(
         ...postgresPslTypeConstructors,
         ...extra.types,
       },
-      dataTypes: postgresDataTypeEntries(),
     },
     codecLookup: {
       get: () => undefined,
@@ -57,7 +56,10 @@ export function testBuildContext(
       descriptorFor: (codecId) =>
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),
     },
-    dataTypeLookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
+    },
     indexTypes: indexTypeRegistryOf([{ id: 'postgres', indexTypes: postgresIndexTypes }]),
   };
 }

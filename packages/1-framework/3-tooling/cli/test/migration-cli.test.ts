@@ -19,8 +19,10 @@ import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const loadConfigMock = vi.fn();
-const createControlStackMock = vi.fn();
+const { loadConfigMock, createControlStackMock } = vi.hoisted(() => ({
+  loadConfigMock: vi.fn(),
+  createControlStackMock: vi.fn(),
+}));
 
 vi.mock('@internal/config-loader', () => ({
   loadConfigForSections: loadConfigMock,

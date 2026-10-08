@@ -1,8 +1,6 @@
 import type { Contract } from '@internal/contract/types';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ContractSerializer,
@@ -39,9 +37,9 @@ export interface SqlDescribedContractSpace {
  * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, and a literal default through the data type of the column's codec, and both read back.
  */
 export interface SqlPslBuildContext {
-  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'dataTypes'>;
+  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type'>;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly dataTypes: DataTypeSupport;
   /**
    * The index types the target and the extension packs register, which say whether an index of a
    * type can back a foreign key. `contract infer` reads the same answer `contract emit` does.

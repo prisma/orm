@@ -5,7 +5,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
-import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 describe('composed mutation default registries', () => {
@@ -22,7 +22,7 @@ describe('composed mutation default registries', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
-      | 'dataTypeLookup'
+      | 'dataTypes'
       | 'codecLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
@@ -32,7 +32,7 @@ describe('composed mutation default registries', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      ...fixtureTypeLookups,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });

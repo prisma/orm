@@ -114,6 +114,8 @@ describe('nullability-tightening backfill', async () => {
       schema: nullableEmailSchema(),
       policy: { allowedOperationClasses: ['additive', 'destructive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -134,6 +136,8 @@ describe('nullability-tightening backfill', async () => {
       schema: nullableEmailSchema(),
       policy: { allowedOperationClasses: ['additive', 'destructive', 'data'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -142,11 +146,17 @@ describe('nullability-tightening backfill', async () => {
     expect(result.kind).toBe('success');
     if (result.kind !== 'success') return;
 
-    // Accessing operations throws because the DataTransformCall stub's
-    // toOp() unconditionally throws MIGRATION.UNFILLED_PLACEHOLDER — the user must fill the
-    // rendered migration.ts before the plan is executable. This mirrors
-    // Postgres's behavior.
-    expect(() => result.plan.operations).toThrowError(/unfilled/i);
+    // The DataTransformCall stub's operation rejects with MIGRATION.UNFILLED_PLACEHOLDER — the
+    // user must fill the rendered migration.ts before the plan is executable — while the other
+    // operations still resolve. This mirrors Postgres's behavior.
+    const settled = await Promise.allSettled(result.plan.operations);
+    expect(settled.filter((entry) => entry.status === 'rejected')).toEqual([
+      {
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' }),
+      },
+    ]);
+    expect(settled.some((entry) => entry.status === 'fulfilled')).toBe(true);
 
     // The rendered TypeScript contains the dataTransform placeholder and
     // the recreate follows it.
@@ -205,6 +215,8 @@ describe('nullability-tightening backfill', async () => {
       schema,
       policy: { allowedOperationClasses: ['additive', 'widening', 'data'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

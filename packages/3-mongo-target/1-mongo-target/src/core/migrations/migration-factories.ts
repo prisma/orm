@@ -169,6 +169,10 @@ export function createIndex(
   };
 }
 
+/**
+ * Dropping an index loses no documents, but this stays 'destructive' on MongoDB until it moves to
+ * 'widening' as it has on the SQL targets.
+ */
 export function dropIndex(
   collectionName: string,
   keys: ReadonlyArray<MongoIndexKey>,

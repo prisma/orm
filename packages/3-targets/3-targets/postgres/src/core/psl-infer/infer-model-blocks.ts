@@ -404,9 +404,9 @@ function literalOrRawAttribute(
           kind: 'literal',
           value: defaultInCanonicalForm(
             columnDefault.value,
-            defaultMapping.columnCodec === undefined || defaultMapping.dataTypeLookup === undefined
+            defaultMapping.columnCodec === undefined || defaultMapping.dataTypes === undefined
               ? undefined
-              : canonicalFormOf(defaultMapping.columnCodec, defaultMapping.dataTypeLookup),
+              : canonicalFormOf(defaultMapping.columnCodec, defaultMapping.dataTypes.lookup),
             defaultMapping.list === true,
           ).value,
         }

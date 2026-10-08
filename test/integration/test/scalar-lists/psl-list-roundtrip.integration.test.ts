@@ -55,6 +55,8 @@ async function migrateContract(
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

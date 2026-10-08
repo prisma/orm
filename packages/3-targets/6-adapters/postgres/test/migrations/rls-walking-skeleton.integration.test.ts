@@ -128,6 +128,8 @@ describe('RLS walking skeleton — author → plan → apply → filter → veri
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

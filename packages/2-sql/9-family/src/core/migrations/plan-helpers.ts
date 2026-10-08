@@ -1,3 +1,4 @@
+import type { AppliedMigrationStatement } from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
 import type { NotOk, Ok } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
@@ -118,11 +119,13 @@ export function createMigrationPlan<TTargetDetails>(
 
 export function plannerSuccess<TTargetDetails>(
   plan: SqlMigrationPlan<TTargetDetails>,
+  appliedStatements: readonly AppliedMigrationStatement[],
   warnings?: readonly SqlPlannerConflict[],
 ): SqlPlannerSuccessResult<TTargetDetails> {
   return Object.freeze({
     kind: 'success',
     plan,
+    appliedStatements: Object.freeze([...appliedStatements]),
     ...(warnings && warnings.length > 0
       ? {
           warnings: Object.freeze(
@@ -132,6 +135,12 @@ export function plannerSuccess<TTargetDetails>(
                 summary: conflict.summary,
                 ...(conflict.why ? { why: conflict.why } : {}),
                 ...(conflict.location ? { location: Object.freeze({ ...conflict.location }) } : {}),
+                ...(conflict.refusedStatement
+                  ? { refusedStatement: conflict.refusedStatement }
+                  : {}),
+                ...(conflict.refusedOperationClass
+                  ? { refusedOperationClass: conflict.refusedOperationClass }
+                  : {}),
                 ...(conflict.meta ? { meta: cloneRecord(conflict.meta) } : {}),
               }),
             ),
@@ -151,6 +160,10 @@ export function plannerFailure(conflicts: readonly SqlPlannerConflict[]): SqlPla
           summary: conflict.summary,
           ...(conflict.why ? { why: conflict.why } : {}),
           ...(conflict.location ? { location: Object.freeze({ ...conflict.location }) } : {}),
+          ...(conflict.refusedStatement ? { refusedStatement: conflict.refusedStatement } : {}),
+          ...(conflict.refusedOperationClass
+            ? { refusedOperationClass: conflict.refusedOperationClass }
+            : {}),
           ...(conflict.meta ? { meta: cloneRecord(conflict.meta) } : {}),
         }),
       ),

@@ -167,6 +167,7 @@ describe('db init', () => {
       plannedAdvanceRef: null,
       summary: 'Database initialized',
     });
+    expect(run.presented?.data).not.toHaveProperty('appliedStatements');
   });
 
   it('reports the control API`s spans as step events rather than printing them', async () => {

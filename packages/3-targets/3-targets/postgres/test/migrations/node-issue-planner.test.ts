@@ -1,17 +1,10 @@
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { index } from '@internal/sql-contract/factories';
-import {
-  SqlStorage,
-  StorageTable,
-  type StorageTypeInstance,
-  toStorageTypeInstance,
-} from '@internal/sql-contract/types';
+import { toStorageTypeInstance } from '@internal/sql-contract/types';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPlanDiff } from '../../src/core/migrations/diff-database-schema';
 import {
@@ -20,11 +13,16 @@ import {
   planIssues as planNodeIssues,
 } from '../../src/core/migrations/issue-planner';
 import { AlterColumnTypeCall, RenameIndexCall } from '../../src/core/migrations/op-factory-call';
-import { PostgresSchema } from '../../src/core/postgres-schema';
-import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
+import {
+  emptyRoot,
+  makeContract,
+  planFor,
+  rootOf,
+  type TableSpec,
+} from './node-issue-planner-fixtures';
 
 /**
  * Direct coverage for the node-based Postgres planner (the one-differ path):
@@ -40,60 +38,6 @@ import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lo
  * replaces it with a type identity comparison.
  */
 
-type TableSpec = ConstructorParameters<typeof StorageTable>[0];
-
-function makeContract(
-  tables: Record<string, TableSpec>,
-  types?: Record<string, StorageTypeInstance>,
-): Contract<SqlStorage> {
-  const publicSchema = new PostgresSchema({
-    id: 'public',
-    entries: {
-      table: Object.fromEntries(
-        Object.entries(tables).map(([name, spec]) => [name, new StorageTable(spec)]),
-      ),
-    },
-  });
-  return {
-    target: 'postgres',
-    targetFamily: 'sql',
-    profileHash: profileHash('node-planner'),
-    storage: new SqlStorage({
-      storageHash: coreHash('node-planner'),
-      ...ifDefined('types', types),
-      namespaces: { public: publicSchema },
-    }),
-    roots: {},
-    domain: applicationDomainOf({ models: {} }),
-    capabilities: {},
-    extensions: {},
-    meta: {},
-  };
-}
-
-function emptyRoot(): PostgresDatabaseSchemaNode {
-  return new PostgresDatabaseSchemaNode({
-    namespaces: {},
-    roles: [],
-    existingSchemas: ['public'],
-    pgVersion: 'unknown',
-  });
-}
-
-function rootOf(tables: Record<string, PostgresTableSchemaNode>): PostgresDatabaseSchemaNode {
-  return new PostgresDatabaseSchemaNode({
-    namespaces: {
-      public: new PostgresNamespaceSchemaNode({
-        schemaName: 'public',
-        tables,
-      }),
-    },
-    roles: [],
-    existingSchemas: ['public'],
-    pgVersion: 'unknown',
-  });
-}
-
 const userTable: TableSpec = {
   columns: {
     id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
@@ -104,32 +48,6 @@ const userTable: TableSpec = {
   uniques: [],
   indexes: [],
 };
-
-function planFor(contract: Contract<SqlStorage>, actual: PostgresDatabaseSchemaNode) {
-  const { issues } = buildPostgresPlanDiff({
-    contract,
-    actualSchema: actual,
-    frameworkComponents: postgresTypeComponents,
-  });
-  // Subtree coalescing is the planner's responsibility (per the differ's
-  // contract) — the total differ emits an issue for every node in a
-  // missing/extra subtree, redundant once the table-level call accounts for it.
-  const coalesced = coalesceSubtreeIssues(issues);
-  const result = planNodeIssues({
-    issues: coalesced,
-    toContract: contract,
-    fromContract: null,
-    schemaName: 'public',
-    codecHooks: new Map(),
-    types: postgresTypeLookups,
-    storageTypes: contract.storage.types ?? {},
-    // The default per-issue mapper is what this suite pins — the real
-    // strategy list is covered elsewhere (see module docstring).
-    strategies: [],
-  });
-  if (!result.ok) throw new Error(`expected ok, got conflicts: ${JSON.stringify(result.failure)}`);
-  return result.value.calls;
-}
 
 describe('buildPostgresPlanDiff + planNodeIssues (one-differ path)', () => {
   it('a fresh table becomes CreateTable (+ PK inline)', () => {

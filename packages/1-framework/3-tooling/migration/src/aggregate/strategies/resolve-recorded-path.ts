@@ -114,6 +114,7 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
       displayOps: pathOps,
       destinationContract: space.contract(),
       strategy: 'resolve-recorded-path',
+      appliedStatements: [],
       migrationEdges: edgeRefs,
       pathDecision: outcome.decision,
     },

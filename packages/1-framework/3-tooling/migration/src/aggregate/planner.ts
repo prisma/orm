@@ -9,6 +9,7 @@ import { resolveRecordedPath } from './strategies/resolve-recorded-path';
 export type {
   AggregateCurrentDBState,
   AggregateMigrationEdgeRef,
+  AppSpacePlanningInputs,
   CallerPolicy,
   PerSpacePlan,
   PlannerError,
@@ -19,6 +20,9 @@ export type {
 
 /**
  * Plan a migration across every contract space of a {@link ContractSpaceAggregate}.
+ *
+ * Statements in `input.appSpace` apply only to a diff plan, so the planner refuses them with
+ * `policyConflict` unless `callerPolicy.ignoreGraphFor` includes the app space.
  *
  * Per-space operation selection, in order; first match wins:
  *
@@ -49,6 +53,16 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 ): Promise<PlannerOutput> {
   const { aggregate, currentDBState, callerPolicy } = input;
 
+  const appSpaceId = aggregate.app.spaceId;
+  const statementCount = input.appSpace.statements.length;
+  if (statementCount > 0 && !callerPolicy.ignoreGraphFor.has(appSpaceId)) {
+    return notOk({
+      kind: 'policyConflict',
+      spaceId: appSpaceId,
+      detail: `${statementCount} statement${statementCount === 1 ? ' was' : 's were'} given for space "${appSpaceId}", but only a plan built from the diff applies statements, and \`callerPolicy.ignoreGraphFor\` does not include "${appSpaceId}". Add "${appSpaceId}" to \`ignoreGraphFor\` or give no statements.`,
+    });
+  }
+
   const perSpace = new Map<string, PerSpacePlan>();
 
   for (const space of spacesInApplyOrder(aggregate)) {
@@ -78,6 +92,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
         migrations: input.migrations,
         frameworkComponents: input.frameworkComponents,
         operationPolicy: input.operationPolicy,
+        ...(space.spaceId === appSpaceId ? input.appSpace : { fromContract: null, statements: [] }),
       });
       if (diffOutcome.kind === 'failure') {
         return notOk({
@@ -158,6 +173,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
       displayOps: [],
       destinationContract: space.contract(),
       strategy: 'declared-state',
+      appliedStatements: [],
       migrationEdges: [
         buildFabricatedMigrationEdge({
           currentMarkerStorageHash: currentMarker?.storageHash,

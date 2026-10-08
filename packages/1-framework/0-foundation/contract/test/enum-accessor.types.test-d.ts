@@ -110,3 +110,64 @@ test('enums.public.Role.Value is the literal value union', () => {
 test('enums.public.Status.Value is the literal value union', () => {
   expectTypeOf(publicEnums.Status.Value).toEqualTypeOf<'active' | 'inactive'>();
 });
+
+// ---------------------------------------------------------------------------
+// An emitted contract: a namespace's `enum` types each member as
+// `contract.json` stores it, and `enumMemberTypes` types it as the application
+// reads it.
+// ---------------------------------------------------------------------------
+
+type EmittedContract = Omit<EnumContract, 'enumAccessors' | 'domain'> & {
+  readonly domain: {
+    readonly namespaces: {
+      readonly public: {
+        readonly models: Record<string, never>;
+        readonly enum: {
+          readonly Level: {
+            readonly codecId: 'pg/int8@1';
+            readonly members: readonly [
+              { readonly name: 'Low'; readonly value: '1' },
+              { readonly name: 'High'; readonly value: '10' },
+            ];
+          };
+        };
+        readonly enumMemberTypes?: {
+          readonly Level: readonly [
+            { readonly name: 'Low'; readonly value: 1n },
+            { readonly name: 'High'; readonly value: 10n },
+          ];
+        };
+      };
+      readonly audit: {
+        readonly models: Record<string, never>;
+        readonly enum: {
+          readonly Kind: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [{ readonly name: 'Login'; readonly value: 'login' }];
+          };
+        };
+      };
+    };
+  };
+};
+
+type EmittedEnums = NamespacedEnums<EmittedContract>;
+const emittedLevel = {} as EmittedEnums['public']['Level'];
+
+test('an emitted contract types members as the application reads them', () => {
+  expectTypeOf(emittedLevel.members.Low).toEqualTypeOf<1n>();
+  expectTypeOf(emittedLevel.values).toEqualTypeOf<readonly [1n, 10n]>();
+  expectTypeOf(emittedLevel.names).toEqualTypeOf<readonly ['Low', 'High']>();
+  expectTypeOf(emittedLevel.Value).toEqualTypeOf<1n | 10n>();
+});
+
+test('has() narrows a value read from the database to the member union', () => {
+  const read: bigint = 1n;
+  if (emittedLevel.has(read)) {
+    expectTypeOf(read).toEqualTypeOf<1n | 10n>();
+  }
+});
+
+test('a namespace without emitted member types falls back to the stored forms', () => {
+  expectTypeOf<EmittedEnums['audit']['Kind']['members']['Login']>().toEqualTypeOf<'login'>();
+});

@@ -95,6 +95,8 @@ describe('PostgresMigrationPlanner - unique constraints vs indexes (structural n
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

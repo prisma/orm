@@ -2,6 +2,8 @@
 
 Status: **Accepted**
 
+> **Note (2026-10-05).** Dropping an index is now classed `widening`, not `destructive`, because an index holds no stored data. Where this ADR says an index is dropped under a destructive policy, read a policy that allows `widening`.
+
 Related: [ADR 234 — Content-addressed wire names for Postgres-normalized objects](<./ADR 234 - Content-addressed wire names for Postgres-normalized objects.md>) (extended here), [ADR 235 — The schema differ walks two derived schema IRs](<./ADR 235 - The schema differ walks two derived schema IRs.md>), [ADR 009 — Deterministic Naming Scheme](<./ADR 009 - Deterministic Naming Scheme.md>), [ADR 161 — Explicit foreign key constraint and index configuration](<./ADR 161 - Explicit foreign key constraint and index configuration.md>), [ADR 210 — Index-type registry](<./ADR 210 - Index-type registry.md>), [ADR 224 — Control Policy](<./ADR 224 - Control Policy — framework-locked vocabulary and family-owned dispatch.md>).
 
 ## Decision
