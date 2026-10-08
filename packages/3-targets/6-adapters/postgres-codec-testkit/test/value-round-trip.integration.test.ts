@@ -124,4 +124,23 @@ describe('the harness checks that a value comes back from the application value'
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'compares the projection with the row exactly, though the case compares the row with its value more loosely',
+    async () => {
+      const outcome = await runPostgresCodecProjection(connection!, {
+        codecId: 'test/upper-casing-text@1',
+        descriptor: new UpperCasingTextDescriptor(),
+        label: 'a projection that changes the case of the text',
+        value: 'hello',
+        valueEquality: (left, right) => String(left).toLowerCase() === String(right).toLowerCase(),
+      });
+
+      expect(outcome.failure).toEqual({
+        kind: 'mismatch',
+        detail: "fromWire read the projected 'HELLO' as 'HELLO' and the row's 'hello' as 'hello'",
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

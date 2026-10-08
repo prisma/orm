@@ -10,7 +10,8 @@
  * A projection conforms when the codec's `fromWire` reads the projected value to
  * the same application value it reads the ordinary row's value to (ADR 254,
  * "Rows the database returns as JSON"), and that value is the one the case
- * started from. Each comparison uses the case's `valueEquality` when it has one.
+ * started from. The row is compared with the case's value by the case's `valueEquality` when it has
+ * one, and the projection with the row by its `projectionEquality`, or exactly.
  *
  * For every case the harness also checks that `toDataTypeValue(fromDataTypeValue(v))`
  * equals `v`, where `v` is the value `toDataTypeValue` gives for the case.
@@ -154,8 +155,10 @@ export interface PostgresCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
-  /** Compares two application values of the codec, for a value that is not deep-equal to its copy. */
+  /** Compares the application value the row reads to with the case's value, for a value that is not deep-equal to its copy. */
   readonly valueEquality?: (left: unknown, right: unknown) => boolean;
+  /** Compares the application value the projection reads to with the row's, for a value that is not deep-equal to its copy. The comparison is otherwise exact. */
+  readonly projectionEquality?: (left: unknown, right: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -383,13 +386,11 @@ function projectedElements(projected: unknown): readonly unknown[] {
 }
 
 function valuesAgree(
-  conformanceCase: PostgresCodecConformanceCase,
+  equality: ((left: unknown, right: unknown) => boolean) | undefined,
   left: unknown,
   right: unknown,
 ): boolean {
-  return conformanceCase.valueEquality === undefined
-    ? isDeepStrictEqual(left, right)
-    : conformanceCase.valueEquality(left, right);
+  return equality === undefined ? isDeepStrictEqual(left, right) : equality(left, right);
 }
 
 export async function runPostgresCodecProjection(
@@ -501,7 +502,7 @@ export async function runPostgresCodecProjection(
       },
     };
   }
-  if (!valuesAgree(conformanceCase, fromRow, conformanceCase.value)) {
+  if (!valuesAgree(conformanceCase.valueEquality, fromRow, conformanceCase.value)) {
     return {
       ...base,
       failure: {
@@ -523,7 +524,7 @@ export async function runPostgresCodecProjection(
       },
     };
   }
-  if (!valuesAgree(conformanceCase, fromProjection, fromRow)) {
+  if (!valuesAgree(conformanceCase.projectionEquality, fromProjection, fromRow)) {
     return {
       ...base,
       failure: {

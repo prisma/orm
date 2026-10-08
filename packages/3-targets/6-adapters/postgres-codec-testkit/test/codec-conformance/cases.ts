@@ -250,6 +250,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
     typeParams: { precision: 6 },
     valueEquality: plainDateTimesEqual,
+    projectionEquality: plainDateTimesEqual,
   },
   {
     codecId: 'pg/timestamptz-temporal@1',
@@ -257,6 +258,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
     typeParams: { precision: 6 },
     valueEquality: instantsEqual,
+    projectionEquality: instantsEqual,
   },
   {
     codecId: 'pg/time-temporal@1',
@@ -270,6 +272,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: new Date('2026-01-02T03:04:05.123Z'),
     typeParams: { precision: 3 },
     valueEquality: (left, right) =>
+      left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
+    projectionEquality: (left, right) =>
       left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
   },
   // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written

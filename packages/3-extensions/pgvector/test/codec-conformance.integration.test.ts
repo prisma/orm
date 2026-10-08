@@ -27,9 +27,9 @@ import { pgvectorVector } from '../src/core/data-types';
 const INSTALL_VECTOR = ['CREATE EXTENSION IF NOT EXISTS vector'] as const;
 
 /**
- * Two vectors are equal when their elements are the same `real`s. An ordinary row and the projection
- * both carry the shortest decimal that reads back as each `real`, so `0.1` is read where the value
- * written was `Math.fround(0.1)`.
+ * Two vectors are equal when their elements are the same `real`s. A row carries the shortest decimal
+ * that reads back as each `real`, so `0.1` is read where the value written was `Math.fround(0.1)`.
+ * The kit compares the row with the value written this way, and the projection with the row exactly.
  */
 function vectorsEqualAsReals(left: unknown, right: unknown): boolean {
   return (
