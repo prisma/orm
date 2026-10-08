@@ -462,15 +462,123 @@ export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(
 /** Renders the application value as its canonical ISO-8601 duration. */
 export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(value);
 
-/** Reads the ISO-8601 duration `pg/interval` stores. */
+const ZERO_INTERVAL: PgInterval = { months: 0, days: 0, micros: 0n };
 
+/** `count` with the sign `negative` gives it, never `-0`. */
+const signed = (negative: boolean, count: number): number =>
+  negative && count !== 0 ? -count : count;
+
+const negated = ({ months, days, micros }: PgInterval): PgInterval => ({
+  months: signed(true, months),
+  days: signed(true, days),
+  micros: -micros,
+});
+
+/** Hours, minutes, seconds and a fraction of a second, with one sign for all of them. */
+function timeMicros(
+  negative: boolean,
+  hours: string,
+  minutes: string,
+  seconds: string,
+  fraction: string,
+): bigint {
+  const magnitude =
+    (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
+    microsFromFraction(fraction, negative);
+  return negative ? -magnitude : magnitude;
+}
+
+const VERBOSE_FIELD = /^(-?)(\d+)(?:\.(\d+))? (year|mon|day|hour|min|sec)s?$/;
+
+/**
+ * An interval as PostgreSQL prints it under `IntervalStyle = 'postgres_verbose'`: `@ 1 year 2 mons
+ * -3 days 4 hours 5 mins 6.5 secs`, each field with its own sign, and ` ago` negating the whole; `@ 0`
+ * for zero.
+ */
+function verboseIntervalFields(text: string): PgInterval | undefined {
+  if (!text.startsWith('@ ')) return undefined;
+  const ago = text.endsWith(' ago');
+  const body = text.slice(2, ago ? -4 : undefined);
+  if (body === '0') return ZERO_INTERVAL;
+  const words = body.split(' ');
+  if (words.length === 0 || words.length % 2 !== 0) return undefined;
+  let months = 0;
+  let days = 0;
+  let micros = 0n;
+  for (let index = 0; index < words.length; index += 2) {
+    const match = VERBOSE_FIELD.exec(`${words[index]} ${words[index + 1]}`);
+    if (match === null) return undefined;
+    const [, sign = '', whole = '0', fraction, unit] = match;
+    if (fraction !== undefined && unit !== 'sec') return undefined;
+    const negative = sign === '-';
+    const count = signed(negative, Number(whole));
+    if (unit === 'year') months += count * 12;
+    else if (unit === 'mon') months += count;
+    else if (unit === 'day') days += count;
+    else if (unit === 'hour') micros += BigInt(count) * 3_600n * MICROS_PER_SECOND;
+    else if (unit === 'min') micros += BigInt(count) * 60n * MICROS_PER_SECOND;
+    else micros += timeMicros(negative, '0', '0', whole, fraction ?? '');
+  }
+  const fields = { months, days, micros };
+  return ago ? negated(fields) : fields;
+}
+
+const SQL_MIXED = /^([+-])(\d+)-(\d+) ([+-])(\d+) ([+-])(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+const SQL_YEAR_MONTH = /^(-?)(\d+)-(\d+)$/;
+const SQL_DAY_TIME = /^(-?)(?:(\d+) )?(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+
+/**
+ * An interval as PostgreSQL prints it under `IntervalStyle = 'sql_standard'`. A value with fields of
+ * one sign and of one kind, year-month or day-time, has a single leading sign for all of them:
+ * `-1-2`, `-1 2:03:04`, `-0:00:01.5`. Any other value signs each part: `+1-2 -3 +4:05:06.5`. Zero is
+ * `0`.
+ */
+function sqlStandardIntervalFields(text: string): PgInterval | undefined {
+  if (text === '0') return ZERO_INTERVAL;
+  const mixed = SQL_MIXED.exec(text);
+  if (mixed !== null) {
+    const [, yearSign, years = '0', months = '0', daySign, days = '0', timeSign] = mixed;
+    const monthCount = Number(years) * 12 + Number(months);
+    return {
+      months: signed(yearSign === '-', monthCount),
+      days: signed(daySign === '-', Number(days)),
+      micros: timeMicros(
+        timeSign === '-',
+        mixed[7] ?? '0',
+        mixed[8] ?? '0',
+        mixed[9] ?? '0',
+        mixed[10] ?? '',
+      ),
+    };
+  }
+  const yearMonth = SQL_YEAR_MONTH.exec(text);
+  if (yearMonth !== null) {
+    const [, sign, years = '0', months = '0'] = yearMonth;
+    const monthCount = Number(years) * 12 + Number(months);
+    return { months: signed(sign === '-', monthCount), days: 0, micros: 0n };
+  }
+  const dayTime = SQL_DAY_TIME.exec(text);
+  if (dayTime === null) return undefined;
+  const [, sign, days = '0', hours = '0', minutes = '0', seconds = '0', fraction = ''] = dayTime;
+  const negative = sign === '-';
+  return {
+    months: 0,
+    days: signed(negative, Number(days)),
+    micros: timeMicros(negative, hours, minutes, seconds, fraction),
+  };
+}
+
+/** Reads the interval text PostgreSQL prints under any `IntervalStyle`. */
 const intervalTextFields = (text: string): PgInterval => {
-  if (ISO_DURATION.test(text)) return intervalFieldsOf(text);
-  const fields = postgresIntervalFields(text);
+  const fields = ISO_DURATION.test(text)
+    ? intervalFieldsOf(text)
+    : (postgresIntervalFields(text) ??
+      verboseIntervalFields(text) ??
+      sqlStandardIntervalFields(text));
   if (fields === undefined) {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
-      `pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got ${text}`,
+      `pg/interval@1 value must be interval text PostgreSQL prints under an IntervalStyle, got ${text}`,
       { meta: { codecId: 'pg/interval@1', received: text } },
     );
   }
@@ -537,20 +645,37 @@ export function pgByteaCanonical(text: string): string {
   return Buffer.from(text, 'base64').toString('base64');
 }
 
+/** The text PostgreSQL prints for `bytea` under `bytea_output = 'escape'`: `\\` for a backslash, `\nnn` in octal for a byte outside printable ASCII, and every other byte as itself. */
+const BYTEA_ESCAPE_TEXT = /^(?:[ -[\]-~]|\\\\|\\[0-3][0-7]{2})*$/;
+const BYTEA_ESCAPE = /\\\\|\\([0-3][0-7]{2})|[ -[\]-~]/g;
+
+function byteaOfEscapeText(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const [token, octal] of text.matchAll(BYTEA_ESCAPE)) {
+    bytes.push(
+      octal !== undefined
+        ? Number.parseInt(octal, 8)
+        : token === '\\\\'
+          ? 0x5c
+          : token.charCodeAt(0),
+    );
+  }
+  return Uint8Array.from(bytes);
+}
+
 export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
   if (wire instanceof Uint8Array) {
     return wire.constructor === Uint8Array
       ? wire
       : new Uint8Array(wire.buffer, wire.byteOffset, wire.byteLength);
   }
-  if (!BYTEA_TEXT.test(wire)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
-      { meta: { codecId: 'pg/bytea@1', received: wire } },
-    );
-  }
-  return new Uint8Array(Buffer.from(wire.slice(2), 'hex'));
+  if (BYTEA_TEXT.test(wire)) return new Uint8Array(Buffer.from(wire.slice(2), 'hex'));
+  if (!wire.startsWith('\\x') && BYTEA_ESCAPE_TEXT.test(wire)) return byteaOfEscapeText(wire);
+  throw postgresError(
+    'RUNTIME.DECODE_FAILED',
+    "pg/bytea@1 wire value must be a Uint8Array or bytea text, as PostgreSQL prints it under bytea_output 'hex' or 'escape'",
+    { meta: { codecId: 'pg/bytea@1', received: wire } },
+  );
 };
 
 const parseJsonWire: (text: string) => JsonValue = JSON.parse;

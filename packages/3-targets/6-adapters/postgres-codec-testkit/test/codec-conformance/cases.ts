@@ -216,6 +216,19 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'byte string one past the base64 line break',
     value: Uint8Array.from({ length: 57 }, (_, index) => index),
   },
+  // `bytea_output` decides the text PostgreSQL prints for a row and for the projection alike.
+  {
+    codecId: 'pg/bytea@1',
+    label: 'bytes, a backslash and a quote under bytea_output escape',
+    value: Uint8Array.from([0x00, 0xff, 0x41, 0x20, 0x5c, 0x27, 0x7e, 0x7f]),
+    setupSql: ["SET bytea_output = 'escape'"],
+  },
+  {
+    codecId: 'pg/bytea@1',
+    label: 'no bytes under bytea_output escape',
+    value: new Uint8Array([]),
+    setupSql: ["SET bytea_output = 'escape'"],
+  },
   {
     codecId: 'pg/bytea@1',
     label: 'byte string spanning several base64 line breaks',
@@ -345,6 +358,23 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: interval({ months: -1, days: -1, micros: -1_250_000n }),
   },
   { codecId: 'pg/interval@1', label: 'zero', value: interval({}) },
+  // An include reads the text PostgreSQL prints, as a row does, so `fromWire` reads every IntervalStyle.
+  ...(['postgres_verbose', 'sql_standard', 'iso_8601'] as const).flatMap((style) =>
+    (
+      [
+        ['every component', interval({ months: 14, days: 3, micros: 14_706_500_000n })],
+        ['mixed signs', interval({ months: 14, days: -3, micros: 14_400_000_000n })],
+        ['wholly negative', interval({ days: -1, micros: -7_384_000_000n })],
+        ['a negative time', interval({ micros: -1_500_000n })],
+        ['zero', interval({})],
+      ] as const
+    ).map(([label, value]) => ({
+      codecId: 'pg/interval@1',
+      label: `${label} under IntervalStyle ${style}`,
+      value,
+      setupSql: [`SET IntervalStyle = '${style}'`],
+    })),
+  ),
   {
     codecId: 'pg/interval@1',
     label: 'months past a year, which the ISO rendering normalises but the value keeps',
@@ -355,22 +385,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'every component under a hostile session',
     value: interval({ months: 14, days: 3, micros: 14_706_000_000n }),
     setupSql: HOSTILE_TEMPORAL_SESSION,
-    notYetCanonical: {
-      kind: 'row-from-wire-rejects',
-      reason:
-        "fromWire reads the interval text of IntervalStyle 'postgres' and 'iso_8601', not 'sql_standard', for a row and an include alike",
-    },
   },
   {
     codecId: 'pg/interval@1',
     label: 'mixed signs under a hostile session',
     value: interval({ months: 1, days: -1 }),
     setupSql: HOSTILE_TEMPORAL_SESSION,
-    notYetCanonical: {
-      kind: 'row-from-wire-rejects',
-      reason:
-        "fromWire reads the interval text of IntervalStyle 'postgres' and 'iso_8601', not 'sql_standard', for a row and an include alike",
-    },
   },
   { codecId: 'pg/json@1', label: 'document', value: { a: 1, b: ['x'] } },
   { codecId: 'pg/jsonb@1', label: 'document', value: { a: 1, b: ['x'] } },
