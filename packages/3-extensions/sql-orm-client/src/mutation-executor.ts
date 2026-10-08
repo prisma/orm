@@ -13,6 +13,7 @@ import {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   getColumnToFieldMap,
@@ -435,10 +436,11 @@ function parseMutationInput(
     }
 
     if (!isRelationMutationCallback(value)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" expects a mutator callback`,
-        { meta: { relation: fieldName, model: modelName, problem: 'missing-callback' } },
+      throw invalidRelationField(
+        fieldName,
+        modelName,
+        'missing-callback',
+        'expects a mutator callback',
       );
     }
 
@@ -455,6 +457,45 @@ function parseMutationInput(
   };
 }
 
+function invalidRelationField(
+  fieldName: string,
+  modelName: string,
+  problem: string,
+  detail: string,
+  index?: number,
+) {
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `Relation field "${fieldName}" on model "${modelName}" ${detail}`,
+    { meta: { relation: fieldName, model: modelName, problem, ...ifDefined('index', index) } },
+  );
+}
+
+function invalidMutation(
+  kind: string,
+  relation: RelationDefinitionBase,
+  problem: string,
+  detail: string,
+  extraMeta: Record<string, unknown> = {},
+) {
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `${kind}() nested mutation for relation "${relation.relationName}" ${detail}`,
+    { meta: { kind, relation: relation.relationName, problem, ...extraMeta } },
+  );
+}
+
+function unsupportedMutation(
+  kind: string,
+  relation: RelationDefinitionBase,
+  message: string,
+  extraMeta: Record<string, unknown> = {},
+) {
+  return ormError('ORM.RELATION_MUTATION_UNSUPPORTED', message, {
+    meta: { kind, relation: relation.relationName, ...extraMeta },
+  });
+}
+
 function toRelationMutationList(
   fieldName: string,
   modelName: string,
@@ -462,10 +503,11 @@ function toRelationMutationList(
 ): readonly RelationMutation<Contract<SqlStorage>, string>[] {
   if (!Array.isArray(result)) {
     if (!isRelationMutationDescriptor(result)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor`,
-        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor' } },
+      throw invalidRelationField(
+        fieldName,
+        modelName,
+        'invalid-descriptor',
+        'returned an invalid mutation descriptor',
       );
     }
     return [result];
@@ -475,17 +517,21 @@ function toRelationMutationList(
   const mutations: RelationMutation<Contract<SqlStorage>, string>[] = [];
   for (const [index, element] of elements.entries()) {
     if (Array.isArray(element)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" returned a nested array at index ${index}; return one flat array of mutations`,
-        { meta: { relation: fieldName, model: modelName, problem: 'nested-array', index } },
+      throw invalidRelationField(
+        fieldName,
+        modelName,
+        'nested-array',
+        `returned a nested array at index ${index}; return one flat array of mutations`,
+        index,
       );
     }
     if (!isRelationMutationDescriptor(element)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor at index ${index}`,
-        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor', index } },
+      throw invalidRelationField(
+        fieldName,
+        modelName,
+        'invalid-descriptor',
+        `returned an invalid mutation descriptor at index ${index}`,
+        index,
       );
     }
     mutations.push(element);
@@ -508,49 +554,12 @@ function assertAllowedInCreate(
   mutation: RelationMutation<Contract<SqlStorage>, string>,
 ): void {
   if (mutation.kind === 'disconnect' || isFilteredWrite(mutation)) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+    throw unsupportedMutation(
+      mutation.kind,
+      relation,
       `${mutation.kind}() is only supported in update() nested mutations`,
-      { meta: { kind: mutation.kind, relation: relation.relationName } },
     );
   }
-}
-
-function toOneFilteredWriteError(
-  relation: RelationDefinition,
-  kind: FilteredWriteMutation['kind'],
-) {
-  return ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
-    `${kind}() nested mutation for relation "${relation.relationName}" is only supported on to-many relations`,
-    { meta: { kind, relation: relation.relationName, reason: 'to-one-relation' } },
-  );
-}
-
-function createMissingDataError(relation: RelationDefinition) {
-  return ormError(
-    'ORM.RELATION_MUTATION_INVALID',
-    `create() nested mutation for relation "${relation.relationName}" requires data`,
-    { meta: { kind: 'create', relation: relation.relationName, problem: 'missing-data' } },
-  );
-}
-
-function connectMissingCriterionError(relation: RelationDefinition) {
-  return ormError(
-    'ORM.RELATION_MUTATION_INVALID',
-    `connect() nested mutation for relation "${relation.relationName}" requires criterion`,
-    { meta: { kind: 'connect', relation: relation.relationName, problem: 'missing-criterion' } },
-  );
-}
-
-function junctionDisconnectMissingCriteriaError(relation: RelationDefinition) {
-  return ormError(
-    'ORM.RELATION_MUTATION_INVALID',
-    `disconnect() nested mutation for relation "${relation.relationName}" requires criterion`,
-    {
-      meta: { kind: 'disconnect', relation: relation.relationName, problem: 'missing-criterion' },
-    },
-  );
 }
 
 function relationCriterionWhere(
@@ -566,11 +575,7 @@ function relationCriterionWhere(
     castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
   );
   if (!criterionWhere) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `${kind}() nested mutation for relation "${relation.relationName}" requires non-empty criterion`,
-      { meta: { kind, relation: relation.relationName, problem: 'empty-criterion' } },
-    );
+    throw invalidMutation(kind, relation, 'empty-criterion', 'requires non-empty criterion');
   }
   return criterionWhere;
 }
@@ -609,17 +614,12 @@ function assertNoParentLinkColumn(
       toFieldName(contract, relation.relatedNamespaceId, relation.relatedModelName, column),
     );
   if (parentLinkFields.length > 0) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `updateAll() nested mutation for relation "${relation.relationName}" cannot set ${parentLinkFields.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
-      {
-        meta: {
-          kind: 'updateAll',
-          relation: relation.relationName,
-          problem: 'parent-link-column',
-          fields: parentLinkFields,
-        },
-      },
+    throw invalidMutation(
+      'updateAll',
+      relation,
+      'parent-link-column',
+      `cannot set ${parentLinkFields.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
+      { fields: parentLinkFields },
     );
   }
 }
@@ -678,20 +678,15 @@ function assertCreateRowsAreObjects(
   const rows: readonly unknown[] = mutation.data;
   rows.forEach((row, index) => {
     if (row === null || row === undefined) {
-      throw createMissingDataError(relation);
+      throw invalidMutation('create', relation, 'missing-data', 'requires data');
     }
     if (typeof row !== 'object' || Array.isArray(row)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `create() nested mutation for relation "${relation.relationName}" requires an object for each row; the value at index ${index} is not an object`,
-        {
-          meta: {
-            kind: 'create',
-            relation: relation.relationName,
-            problem: 'invalid-data',
-            index,
-          },
-        },
+      throw invalidMutation(
+        'create',
+        relation,
+        'invalid-data',
+        `requires an object for each row; the value at index ${index} is not an object`,
+        { index },
       );
     }
   });
@@ -713,7 +708,12 @@ function resolveOperation(
 
   if (isFilteredWrite(mutation)) {
     if (parentOwned || (relation.ownership === 'child' && relation.cardinality === '1:1')) {
-      throw toOneFilteredWriteError(relation, mutation.kind);
+      throw unsupportedMutation(
+        mutation.kind,
+        relation,
+        `${mutation.kind}() nested mutation for relation "${relation.relationName}" is only supported on to-many relations`,
+        { reason: 'to-one-relation' },
+      );
     }
     const filters = mutation.filters.flatMap((input) => {
       const filter = resolveWhereInput(input, {
@@ -741,7 +741,7 @@ function resolveOperation(
     assertCreateRowsAreObjects(relation, mutation);
     const inputs = parentOwned ? mutation.data.slice(0, 1) : mutation.data;
     if (parentOwned && inputs.length === 0) {
-      throw createMissingDataError(relation);
+      throw invalidMutation('create', relation, 'missing-data', 'requires data');
     }
     return {
       kind: 'create',
@@ -757,7 +757,7 @@ function resolveOperation(
     }
     const criterion = mutation.criteria[0];
     if (!criterion) {
-      throw connectMissingCriterionError(relation);
+      throw invalidMutation('connect', relation, 'missing-criterion', 'requires criterion');
     }
     return {
       kind: 'connect',
@@ -774,7 +774,7 @@ function resolveOperation(
 
   const criteria = mutation.criteria ?? [];
   if (junction && mutation.kind === 'disconnect' && criteria.length === 0) {
-    throw junctionDisconnectMissingCriteriaError(relation);
+    throw invalidMutation('disconnect', relation, 'missing-criterion', 'requires criterion');
   }
   return {
     kind: mutation.kind,
@@ -1065,12 +1065,11 @@ async function preflightJunctionOwnedCreateMutation(
     );
     const targetKey = JSON.stringify([...targetValues.entries()]);
     if (seenTargetKeys.has(targetKey)) {
-      throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `connect() nested mutation for relation "${relation.relationName}" resolved duplicate junction link targets; remove the duplicate criteria`,
-        {
-          meta: { kind: 'connect', relation: relation.relationName, problem: 'duplicate-criteria' },
-        },
+      throw invalidMutation(
+        'connect',
+        relation,
+        'duplicate-criteria',
+        'resolved duplicate junction link targets; remove the duplicate criteria',
       );
     }
     seenTargetKeys.add(targetKey);
@@ -1090,17 +1089,11 @@ function assertJunctionPayloadWritable(
   }
 
   const cols = through.requiredPayloadColumns.map((c) => `\`${c}\``).join(', ');
-  throw ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
+  throw unsupportedMutation(
+    mutationKind,
+    relation,
     `Cannot \`${mutationKind}\` on relation \`${relation.relationName}\`: its junction \`${through.table}\` has required column(s) ${cols} the relation API can't populate. Write the \`${through.table}\` junction directly or use the SQL builder.`,
-    {
-      meta: {
-        kind: mutationKind,
-        relation: relation.relationName,
-        reason: 'junction-required-columns',
-        junction: through.table,
-      },
-    },
+    { reason: 'junction-required-columns', junction: through.table },
   );
 }
 
