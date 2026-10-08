@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\b(?:FieldFragment|FieldScope)\b'
+        - '\b(?:FieldFragment|FieldScope|ScopeFacts)\b'
         - '(?:import|export)\s+(?:type\s+)?\{[^}]*\b(?:Fragment|Scope)\b[^}]*\}\s*from\s*[''"]@(?:prisma/[\w-]+/orm-client|internal/sql-orm-client)[''"]'
         - 'import\s+(?:type\s+)?\*\s+as\s+([\w$]+)\s+from\s*[''"]@(?:prisma/[\w-]+/orm-client|internal/sql-orm-client)[''"][\s\S]*\b\1\.(?:Fragment|Scope)\b'
         - 'import\(\s*[''"]@(?:prisma/[\w-]+/orm-client|internal/sql-orm-client)[''"]\s*\)\.(?:Fragment|FieldFragment|Scope|FieldScope)\b'
