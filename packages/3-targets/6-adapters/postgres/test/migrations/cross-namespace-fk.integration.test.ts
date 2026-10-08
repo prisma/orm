@@ -57,8 +57,6 @@ function buildCrossNamespaceFkContract(): Contract<SqlStorage> {
                       tableName: 'user',
                       columns: ['id'],
                     },
-                    constraint: true,
-                    index: false,
                   },
                 ],
               },

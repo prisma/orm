@@ -472,6 +472,8 @@ export function buildRelationField(
     }
     if (rel.index === false) {
       args.push(namedArg('index', 'false'));
+    } else if (rel.index !== undefined) {
+      args.push(namedArg('index', `"${escapePslString(rel.index)}"`));
     }
   } else if (rel.relationName) {
     args.push(namedArg('name', `"${escapePslString(rel.relationName)}"`));

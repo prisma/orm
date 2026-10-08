@@ -319,6 +319,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "identity_contactId_idx_ec98db2a"
+                  },
                   "source": {
                     "columns": [
                       "contactId"
@@ -377,6 +380,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "subscription_audienceId_idx_7242acd1"
+                  },
                   "source": {
                     "columns": [
                       "audienceId"
@@ -393,6 +399,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "subscription_identityId_idx_e29a7785"
+                  },
                   "source": {
                     "columns": [
                       "identityId"
@@ -440,7 +449,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "22a56333d721e776a5177278358831560e41e829e24bc4713f7cf6694136fc8a"
+    "storageHash": "7de45ac6c94e9c42f833ecb92a36aa1952776562c6d6ad25b146c3dd61dff155"
   },
   "capabilities": {
     "postgres": {

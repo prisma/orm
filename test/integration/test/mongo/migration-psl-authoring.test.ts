@@ -351,13 +351,13 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(wildcardIdx).toBeDefined();
   });
 
-  it('PSL with sort: Desc produces mixed-direction compound index', async () => {
+  it('PSL with sort(field, Desc) produces mixed-direction compound index', async () => {
     const contract = pslToContract(`
       model Events {
         id        ObjectId @id @map("_id")
         status    String
         createdAt Date
-        @@index([status, createdAt(sort: Desc)])
+        @@index([status, sort(createdAt, Desc)])
       }
     `);
 

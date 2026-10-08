@@ -326,6 +326,7 @@ model Feature {
           source: expect.objectContaining({ tableName: 'features', columns: ['id'] }),
           target: expect.objectContaining({ tableName: 'tasks', columns: ['id'] }),
           onDelete: 'cascade',
+          index: { primaryKey: true },
         }),
       ]);
       expect(featureTable?.indexes).toEqual([]);

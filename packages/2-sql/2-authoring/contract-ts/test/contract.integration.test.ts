@@ -134,8 +134,6 @@ describe('SqlContractSerializer', () => {
                 tableName: 'NonExistent',
                 columns: ['id'],
               },
-              constraint: true,
-              index: true,
             },
           ],
         },

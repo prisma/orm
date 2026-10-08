@@ -364,6 +364,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "comments_post_id_idx_865a6df2"
+                  },
                   "source": {
                     "columns": [
                       "post_id"
@@ -440,6 +443,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "posts_user_id_idx_6c952402"
+                  },
                   "source": {
                     "columns": [
                       "user_id"
@@ -559,7 +565,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d47690818486249cb9b769e6aabc468b9401be23997f9b365b0abfb04d607ec0"
+    "storageHash": "dfd3186b551a7868c3339bf4a5f80ca2a3ad4aa43a610cc64189db7c62a1e475"
   },
   "capabilities": {
     "postgres": {

@@ -253,6 +253,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "workspace_member_role_memberId_idx_76b3c263"
+                  },
                   "source": {
                     "columns": [
                       "memberId"
@@ -269,6 +272,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "workspace_member_role_roleId_idx_ffccc9a4"
+                  },
                   "source": {
                     "columns": [
                       "roleId"
@@ -377,7 +383,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8695b7652f418281fd50e6a140bff6f32683e87cbec23d04ecef8a6a37ce7e08"
+    "storageHash": "c8a8fd8f64f8e1587979b7f400e8a7303ea2c85156259a77a6ba0cdf0fe62345"
   },
   "capabilities": {
     "postgres": {

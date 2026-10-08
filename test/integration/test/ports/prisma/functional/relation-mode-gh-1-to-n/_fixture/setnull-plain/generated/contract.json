@@ -203,6 +203,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postOneToMany_authorId_idx_e47547ed"
+                  },
                   "source": {
                     "columns": [
                       "authorId"
@@ -251,6 +254,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postOptionalOneToMany_authorId_idx_e47547ed"
+                  },
                   "onDelete": "setNull",
                   "onUpdate": "setNull",
                   "source": {
@@ -314,7 +320,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "44ebb7b8aa2dea08e12d6d565f3729a817cf6ef955b2ae29399ad051e7f25fd3"
+    "storageHash": "9387d613566ab4e068594d5a5c5d89354c6ee3e69e403aa2882d90e397687072"
   },
   "capabilities": {
     "postgres": {

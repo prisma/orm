@@ -524,7 +524,7 @@ model Member {
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
-    expect(fks[0]).not.toHaveProperty('index');
+    expect(fks[0]).toMatchObject({ index: { name: 'Member_teamId_idx_f2b72ab3' } });
     expect(memberTable?.indexes).toEqual([
       {
         name: 'Member_teamId_idx_f2b72ab3',

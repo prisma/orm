@@ -251,6 +251,7 @@ model Child {
           source: { namespaceId: 'public', tableName: 'child', columns: ['key'] },
           target: { namespaceId: 'public', tableName: 'Base', columns: ['key'] },
           onDelete: 'cascade',
+          index: { primaryKey: true },
         },
       ],
     });

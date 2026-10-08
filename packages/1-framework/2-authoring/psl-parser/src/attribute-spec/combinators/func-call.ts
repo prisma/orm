@@ -7,10 +7,11 @@ import { interpretArgs } from '../interpret';
 import type { AttributeCtx, FuncCallArgType, FuncCallSig, TypedFuncCall } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-export function funcCall<const Name extends string, const Signature extends FuncCallSig>(
-  name: Name,
-  sig: Signature,
-): FuncCallArgType<Name, AttributeCtx, Signature> {
+export function funcCall<
+  const Name extends string,
+  Ctx extends AttributeCtx,
+  const Signature extends FuncCallSig<Ctx>,
+>(name: Name, sig: Signature & FuncCallSig<Ctx>): FuncCallArgType<Name, Ctx, Signature> {
   return {
     kind: 'funcCall',
     label: `${name}()`,

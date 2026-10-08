@@ -230,6 +230,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId_AtMap"
+                    ]
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -282,6 +287,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId_AtMap"
+                    ]
+                  },
                   "onDelete": "restrict",
                   "onUpdate": "restrict",
                   "source": {
@@ -342,7 +352,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "709669aa2fa366456b33a33c6868298e680b8dccf200bdc18720d7c7b82ca4cc"
+    "storageHash": "a2162324b39e02d5644d839998de668b9770b46c99b5556d208fca9112c2666d"
   },
   "capabilities": {
     "postgres": {
