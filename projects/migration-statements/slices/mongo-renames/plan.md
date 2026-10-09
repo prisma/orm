@@ -32,4 +32,4 @@ One implementer and one reviewer, both on Opus, resumed across every dispatch. B
 ## Open items
 
 - ADR 188 and ADR 264 amendments: written by the orchestrator in dispatch 4's branch.
-- If dispatch 1 finds that TML-2447 makes variant field renames wrong, they move to 4b, and Will is told.
+- Dispatch 1 found TML-2447's gaps fixed on `main`: variants share their base's collection, and the validator has a `oneOf` branch per variant pinned to its discriminator value. Variant field renames stay in 4a. Dispatch 4 removes the stale "Known gaps" paragraph from the MongoDB Family doc § Polymorphic variants.
