@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { type ControlPolicy, effectiveControlPolicy } from '@internal/contract/types';
 import type { AuthoringWarning } from '@internal/framework-components/authoring';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
@@ -117,7 +118,7 @@ export function lowerTable(
  * The checks sorted by name in UTF-16 code-unit order, the order contract canonicalization gives them. The table's storage is then the same whichever declaration each column came from and in whatever order the columns were listed.
  */
 function inCanonicalOrder(checks: readonly CheckConstraint[]): readonly CheckConstraint[] {
-  return [...checks].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return [...checks].sort((a, b) => compareCodeUnits(a.name, b.name));
 }
 
 function authoredIndexInput(index: IndexNode): AuthoredIndexInput {
