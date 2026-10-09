@@ -13,13 +13,21 @@ import {
   EMPTY_DATA_TYPES,
   findBlockDescriptor,
   isNamespaceLike,
+  lookupMixinReference,
+  type MixinSymbol,
   memberEntries,
+  type ScopeResolution,
   type SymbolTable,
 } from '@internal/psl-parser';
-import type {
+import {
+  CompositeTypeDeclarationAst,
+  filterChildren,
   GenericBlockDeclarationAst,
-  SourceFile,
-  SyntaxNode,
+  MixinInclusionAst,
+  ModelDeclarationAst,
+  NamespaceDeclarationAst,
+  type SourceFile,
+  type SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import {
@@ -32,6 +40,7 @@ import type {
   AttributeNameCompletionContext,
   DeclarationKeywordCompletionContext,
   GenericBlockKeyCompletionContext,
+  MixinInclusionCompletionContext,
   ModelTypeCompletionContext,
   NamespaceMemberCompletionContext,
   PslCompletionContext,
@@ -214,6 +223,13 @@ export function providePslCompletionItems(
         clientSupportsSnippets: input.clientSupportsSnippets,
         clientSupportsTriggerSuggestCommand: input.clientSupportsTriggerSuggestCommand === true,
       });
+    case 'mixinInclusion':
+      return provideMixinInclusionCompletionItems(
+        context,
+        input.sourceFile,
+        input.candidates,
+        input,
+      );
     case 'modelType':
       return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates, input);
     case 'namespaceMember':
@@ -536,6 +552,74 @@ function provideModelTypeCompletionItems(
       end: sourceFile.positionAt(context.offset),
     },
     capabilities,
+  );
+}
+
+function includingBlockKeyword(block: SyntaxNode): string | undefined {
+  if (ModelDeclarationAst.cast(block) !== undefined) return 'model';
+  if (CompositeTypeDeclarationAst.cast(block) !== undefined) return 'type';
+  return GenericBlockDeclarationAst.cast(block)?.keyword()?.text;
+}
+
+function includedMixins(
+  block: SyntaxNode,
+  except: MixinInclusionAst,
+  source: PslCompletionCandidateSource,
+): ReadonlySet<MixinSymbol> {
+  const included = new Set<MixinSymbol>();
+  for (const inclusion of filterChildren(block, MixinInclusionAst.cast)) {
+    if (inclusion.syntax === except.syntax) continue;
+    const name = inclusion.name();
+    const resolution = name === undefined ? undefined : source.binder.symbolForNode(name.syntax);
+    if (resolution?.kind === 'mixin') included.add(resolution.symbol);
+  }
+  return included;
+}
+
+function provideMixinInclusionCompletionItems(
+  context: MixinInclusionCompletionContext,
+  sourceFile: SourceFile,
+  source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
+): readonly CompletionItem[] {
+  const block = context.inclusion.syntax.parent;
+  const keyword = block === undefined ? undefined : includingBlockKeyword(block);
+  if (block === undefined || keyword === undefined) return [];
+  const { topLevel } = source.symbolTable;
+  const enclosing = block.findAncestor(NamespaceDeclarationAst.cast);
+  const declared =
+    enclosing === undefined ? undefined : source.binder.declaredSymbol(enclosing.syntax);
+  const namespace = declared?.kind === 'namespace' ? declared : undefined;
+  const namespaceId = context.namespace;
+  const qualifier = namespaceId === undefined ? undefined : topLevel.namespaces[namespaceId];
+  const visible =
+    namespaceId === undefined
+      ? source.binder.scopeAt(block).entries()
+      : qualifier === undefined
+        ? []
+        : memberEntries({ kind: 'namespace', symbol: qualifier });
+  const entries: (readonly [string, ScopeResolution])[] = [];
+  for (const [name, resolution] of visible) {
+    if (resolution.kind === 'namespace') {
+      entries.push([name, resolution]);
+      continue;
+    }
+    const mixin = lookupMixinReference(topLevel, namespace, { namespaceId, name });
+    if (mixin?.kind === 'mixin') entries.push([name, mixin]);
+  }
+  const included = includedMixins(block, context.inclusion, source);
+  return scopeCompletionItems(
+    entries,
+    source.binder,
+    {
+      start: sourceFile.positionAt(context.replacementStartOffset),
+      end: sourceFile.positionAt(context.offset),
+    },
+    capabilities,
+    {
+      offers: (mixin) => mixin.keyword === keyword && !included.has(mixin),
+      namespaces: namespaceId === undefined,
+    },
   );
 }
 

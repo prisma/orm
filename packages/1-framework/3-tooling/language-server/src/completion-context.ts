@@ -12,6 +12,7 @@ import {
   GenericBlockDeclarationAst,
   IdentifierAst,
   KeyValuePairAst,
+  MixinInclusionAst,
   ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
@@ -74,6 +75,14 @@ export interface NamespaceMemberCompletionContext {
   readonly replacementStartOffset: number;
   readonly namespace: string;
   readonly space?: string;
+}
+
+export interface MixinInclusionCompletionContext {
+  readonly kind: 'mixinInclusion';
+  readonly offset: number;
+  readonly replacementStartOffset: number;
+  readonly inclusion: MixinInclusionAst;
+  readonly namespace?: string;
 }
 
 export interface GenericBlockKeyCompletionContext {
@@ -255,6 +264,7 @@ export type PslCompletionContext =
   | AttributeArgumentCompletionContext
   | DeclarationKeywordCompletionContext
   | GenericBlockKeyCompletionContext
+  | MixinInclusionCompletionContext
   | ModelTypeCompletionContext
   | NamespaceMemberCompletionContext
   | SpaceMemberCompletionContext
@@ -295,6 +305,16 @@ export function classifyPslCompletionContext(
     classifyModelAttribute(attributeClassifierInput);
   if (attributeContext !== undefined) {
     return attributeContext;
+  }
+
+  const inclusionContext = classifyMixinInclusion({
+    precedingToken: preceding,
+    offset,
+    replacementStartOffset,
+    text: input.sourceFile.text,
+  });
+  if (inclusionContext !== undefined) {
+    return inclusionContext;
   }
 
   const declarationKeywordContext = classifyDeclarationKeyword({
@@ -945,6 +965,32 @@ function hasUnsupportedAncestor(node: SyntaxNode | undefined): boolean {
 
 /** The significant token preceding the cursor — the in-progress edit identifier
  *  is skipped, so the result is the token the classifier anchors on. */
+function classifyMixinInclusion(input: {
+  readonly precedingToken: SyntaxToken | undefined;
+  readonly offset: number;
+  readonly replacementStartOffset: number;
+  readonly text: string;
+}): MixinInclusionCompletionContext | UnsupportedPslCompletionContext | undefined {
+  const { precedingToken: preceding, offset, replacementStartOffset } = input;
+  if (preceding === undefined || (preceding.kind !== 'Plus' && preceding.kind !== 'Dot')) {
+    return undefined;
+  }
+  const inclusion = preceding.parent.findAncestor(MixinInclusionAst.cast);
+  if (inclusion === undefined) return undefined;
+  if (input.text.slice(preceding.endOffset, replacementStartOffset).includes('\n')) {
+    return undefined;
+  }
+  const position = { kind: 'mixinInclusion' as const, offset, replacementStartOffset, inclusion };
+  if (preceding.kind === 'Plus') return position;
+  const qualifiers = Array.from(inclusion.name()?.segments() ?? []).filter(
+    (segment) => segment.syntax.endOffset <= preceding.offset,
+  );
+  const namespace = qualifiers[0]?.name();
+  return namespace === undefined || qualifiers.length > 1
+    ? UNSUPPORTED
+    : { ...position, namespace };
+}
+
 function precedingToken(at: TokenAtOffset, edit: SyntaxToken | undefined): SyntaxToken | undefined {
   const start = edit !== undefined ? edit.prevToken : at.leftBiased();
   return start === undefined ? undefined : skipTriviaToken(start, 'prev');

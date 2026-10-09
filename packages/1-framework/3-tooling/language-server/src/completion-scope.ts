@@ -3,6 +3,7 @@ import {
   type EntitySelector,
   entityReference,
   isNamespaceLike,
+  type MixinSymbol,
   matchesSelector,
   memberEntries,
   type ScopeResolution,
@@ -27,16 +28,23 @@ export interface EntitySelection {
   readonly namespaces: boolean;
 }
 
+export interface MixinSelection {
+  readonly offers: (mixin: MixinSymbol) => boolean;
+  readonly namespaces: boolean;
+}
+
 export function scopeCompletionItems(
   entries: Iterable<readonly [string, ScopeResolution]>,
   binder: Binder,
   range: Range,
   capabilities: ScopeCompletionCapabilities,
-  selection?: EntitySelection,
+  selection?: EntitySelection | MixinSelection,
 ): readonly CompletionItem[] {
   const items: CompletionItem[] = [];
   for (const [name, resolution] of entries) {
-    if (selection !== undefined) {
+    if (selection !== undefined && 'offers' in selection) {
+      if (!offersMixin(resolution, selection)) continue;
+    } else if (selection !== undefined) {
       if (!offersEntity(resolution, selection)) continue;
     } else if (resolution.kind === 'block' || resolution.kind === 'mixin') {
       continue;
@@ -107,10 +115,19 @@ export function scopeCompletionItems(
             : CompletionItemKind.Keyword;
         item.detail = resolution.symbol.keyword;
         break;
+      case 'mixin':
+        item.kind = CompletionItemKind.Interface;
+        item.detail = `${resolution.symbol.keyword} mixin`;
+        break;
     }
     items.push(item);
   }
   return items;
+}
+
+function offersMixin(resolution: ScopeResolution, selection: MixinSelection): boolean {
+  if (resolution.kind === 'mixin') return selection.offers(resolution.symbol);
+  return resolution.kind === 'namespace' && selection.namespaces;
 }
 
 function offersEntity(resolution: ScopeResolution, selection: EntitySelection): boolean {
