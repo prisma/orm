@@ -47,7 +47,12 @@ Decided by Will on 2026-10-09: a column whose type has no Prisma 8 codec is refu
 
 ### Already-signed projects
 
-A project whose Prisma 7 schema uses `@ignore` or `@@ignore` and that signed with an earlier Prisma 8 has a storage hash computed without the ignored objects; after upgrading, its contract's hash changes. While Prisma 7 still owns migrations, the fix is to sign again (`prisma db sign`). After the handover, the next `migration plan` diffs the old snapshot, which lacks the ignored objects, against the new contract, which has them, so it would plan creates for objects that exist. The upgrade instruction tells users to sign again after upgrading in both cases, and a test proves that `db sign` on the handover database moves the marker to the new hash with no findings and that the next `migration plan` then plans nothing.
+A project whose Prisma 7 schema uses `@ignore` or `@@ignore` and that signed with an earlier Prisma 8 has a storage hash computed without the ignored objects; after upgrading, its contract's hash changes.
+
+- While Prisma 7 still owns migrations: `prisma contract emit`, then `prisma db sign`.
+- After the handover: `prisma contract emit`, then `prisma migration plan`, then `prisma db sign`. The plan records the creates of the ignored objects, so a database rebuilt from `migrations/` gets them; signing marks the existing database, which already has them, as current, so `db migrate` applies nothing there. Signing before planning leaves the `db` ref on a hash that is not in the migration graph, and the next plan fails with `MIGRATION.HASH_NOT_IN_GRAPH`. Running `db migrate` before signing would try to create tables that exist.
+
+`examples/prisma7-adoption/test/upgrade-ignore.test.ts` proves the post-handover order, and the upgrade instruction `prisma7-ignore-keeps-storage` gives both.
 
 ## Coherence rationale
 
