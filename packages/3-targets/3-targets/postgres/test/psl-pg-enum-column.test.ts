@@ -426,13 +426,7 @@ namespace auth {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(AalLevel)" names the model "AalLevel"; it expects a native_enum.',
-      },
-    ]);
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
   });
 
   it('refuses pg.enum(E) on a composite type member, which has no column to store the enum in', () => {

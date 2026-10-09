@@ -20,6 +20,7 @@ import type {
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
+  NamespaceSymbol,
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
@@ -43,11 +44,7 @@ import {
   getAttribute,
   storageName,
 } from './psl-attribute-parsing';
-import type {
-  ColumnDescriptor,
-  ConstructorEntityBlock,
-  FieldPresetContributions,
-} from './psl-column-resolution';
+import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
 import {
   lowerDefaultForField,
   rejectStrictListNullDefault,
@@ -203,9 +200,11 @@ export interface CollectResolvedFieldsInput {
   readonly capabilities: CapabilityMatrix;
   /** The model's resolved namespace id — forwarded to `resolveFieldTypeDescriptor` for entity-ref value-set scoping. */
   readonly namespaceId?: string;
-  readonly constructorEntities: ReadonlyMap<BlockSymbol, ConstructorEntityBlock>;
+  /** Extension entities already lowered for this namespace — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
+  readonly namespaceExtensionEntities?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
+  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
 }
 
 /**
@@ -425,8 +424,9 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     enumHandles,
     capabilities,
     namespaceId,
-    constructorEntities,
+    namespaceExtensionEntities,
     codecLookup,
+    namespaceIdOf,
   } = input;
   const resolvedFields: ResolvedField[] = [];
   const valueObjectStorageTypeName = authoringContributions?.valueObjectStorageType;
@@ -496,8 +496,8 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       sources,
       entityLabel: `Field "${model.name}.${field.name}"`,
       ...ifDefined('namespaceId', namespaceId),
-      binder,
-      constructorEntities,
+      ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
+      entityNames: { binder, namespaceIdOf },
       codecLookup,
     };
 

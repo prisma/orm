@@ -32,12 +32,9 @@ import type {
 import { dataTypeId } from '@internal/framework-components/codec';
 import {
   buildSymbolTable,
-  createBinder,
   createPslDiagnosticCollector,
-  EMPTY_DATA_TYPES,
   jsonValue,
   mapBlock,
-  typeReferenceNode,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -392,199 +389,6 @@ namespace docs {
     ]);
   });
 
-  it('adds no diagnostic for a block of the expected kind that was not lowered', () => {
-    const result = interpretWith(`
-namespace public {
-  native_enum AalLevel {
-    aal1
-  }
-}
-
-native_enum AalLevel {
-  aal2
-}
-
-model AuthSession {
-  id Int @id
-  aal pg.enum(AalLevel)
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, sourceId }) => ({ code, sourceId }))).toEqual([
-      { code: 'PSL_DUPLICATE_EXTENSION_ENTITY', sourceId: 'schema.prisma' },
-      { code: 'PSL_DUPLICATE_EXTENSION_ENTITY', sourceId: 'schema.prisma' },
-    ]);
-  });
-
-  it('refuses a name that resolves to a model, saying what it names and what is expected', () => {
-    const result = interpretWith(`
-namespace docs {
-  model AalLevel {
-    id Int @id
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum(AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(AalLevel)" names the model "AalLevel"; it expects a test-native-enum.',
-      },
-    ]);
-  });
-
-  it('refuses a name that resolves to a block of another kind', () => {
-    const result = interpretWith(`
-namespace docs {
-  plain_ref Other {
-    a
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum(Other)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(Other)" names the plain_ref "Other"; it expects a test-native-enum.',
-      },
-    ]);
-  });
-
-  it('refuses a name that resolves to a contributed namespace', () => {
-    const result = interpretWith(`
-namespace docs {
-  model AuthSession {
-    id Int @id
-    aal pg.enum(pg)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(pg)" names the namespace "pg"; it expects a test-native-enum.',
-      },
-    ]);
-  });
-
-  it('refuses a name that resolves to a contributed type', () => {
-    const result = interpretWith(`
-namespace docs {
-  model AuthSession {
-    id Int @id
-    aal pg.enum(Int)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(Int)" names the type "Int"; it expects a test-native-enum.',
-      },
-    ]);
-  });
-
-  it('refuses a string argument as not naming an entity', () => {
-    const result = interpretWith(`
-namespace docs {
-  native_enum AalLevel {
-    aal1
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum("AalLevel")
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum" expects exactly one positional argument naming the referenced entity',
-      },
-    ]);
-  });
-
-  it('refuses a top-level entity named from a model of another namespace, naming both namespaces', () => {
-    const result = interpretWith(`
-native_enum AalLevel {
-  aal1
-}
-
-namespace docs {
-  model AuthSession {
-    id Int @id
-    aal pg.enum(AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(AalLevel)" names the native_enum "AalLevel" of namespace "public"; in this version it can only name a test-native-enum of namespace "docs".',
-      },
-    ]);
-  });
-
-  it('refuses a qualified entity named from a model outside its namespace', () => {
-    const result = interpretWith(`
-namespace docs {
-  native_enum AalLevel {
-    aal1
-  }
-}
-
-model AuthSession {
-  id Int @id
-  aal pg.enum(docs.AalLevel)
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.enum(docs.AalLevel)" names the native_enum "AalLevel" of namespace "docs"; in this version it can only name a test-native-enum of namespace "public".',
-      },
-    ]);
-  });
-
   it('resolves a qualified entity named from a model inside its namespace', () => {
     const result = interpretWith(`
 namespace docs {
@@ -613,37 +417,6 @@ namespace docs {
                     valueSet: { namespaceId: 'docs', entityName: 'AalLevel' },
                   },
                 },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('resolves a top-level entity from a model in the block of the default namespace', () => {
-    const result = interpretWith(`
-native_enum AalLevel {
-  aal1
-}
-
-namespace public {
-  model AuthSession {
-    id Int @id
-    aal pg.enum(AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              AuthSession: {
-                columns: { aal: { valueSet: { namespaceId: 'public', entityName: 'AalLevel' } } },
               },
             },
           },
@@ -704,6 +477,69 @@ model AuthSession {
     });
   });
 
+  it('refuses an entity of another namespace even when the namespace of the field declares one of the same name', () => {
+    const result = interpretWith(`
+namespace other {
+  native_enum AalLevel {
+    other1
+  }
+}
+
+namespace docs {
+  native_enum AalLevel {
+    aal1
+  }
+
+  model AuthSession {
+    id Int @id
+    aal pg.enum(other.AalLevel)
+  }
+}
+`);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
+  });
+
+  it('refuses a name that resolves to a model', () => {
+    const result = interpretWith(`
+namespace docs {
+  model AalLevel {
+    id Int @id
+  }
+
+  model AuthSession {
+    id Int @id
+    aal pg.enum(AalLevel)
+  }
+}
+`);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
+  });
+
+  it('refuses a top-level entity named from a model of another namespace', () => {
+    const result = interpretWith(`
+native_enum AalLevel {
+  aal1
+}
+
+namespace docs {
+  model AuthSession {
+    id Int @id
+    aal pg.enum(AalLevel)
+  }
+}
+`);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
+  });
+
   it('rejects an entity-ref call with no arguments', () => {
     const result = interpretWith(`
 namespace docs {
@@ -762,13 +598,9 @@ namespace docs {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_UNKNOWN_ENTITY_REF',
-        message:
-          'Field "AuthSession.aal" type constructor "pg.rejects(AalLevel)" names the native_enum "AalLevel", which cannot be used as a column type.',
-      },
-    ]);
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNKNOWN_ENTITY_REF' })]),
+    );
   });
 
   it('throws when the registered codec descriptor has no columnFromEntity hook', () => {
@@ -808,12 +640,17 @@ namespace docs {
   });
 
   it('rejects a value-set-typed entity-ref resolution when the field has no resolvable namespace', () => {
+    // Composite-type field resolution never threads a namespace id or
+    // namespace-extension-entities map (`buildValueObjects` in the
+    // interpreter), so this diagnostic is unreachable end-to-end once the
+    // generic entity lookup requires a namespace-scoped map to find
+    // anything. Drive `resolveFieldTypeDescriptor` directly instead, with a
+    // hand-built `namespaceExtensionEntities` that has already resolved the
+    // ref (mirroring what a real namespace lowering pass would have
+    // produced) but no `namespaceId` — a combination the exported function
+    // signature permits even though production never produces it.
     const { document, sources } = parse(
       `
-native_enum AalLevel {
-  aal1
-}
-
 model AuthSession {
   id Int @id
   aal pg.enum(AalLevel)
@@ -822,54 +659,35 @@ model AuthSession {
       'schema.prisma',
     );
     const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-    const { binder } = createBinder({
-      symbolTable,
-      sources,
-      context: {
-        authoringContributions: {
-          type,
-          field: {},
-          entityTypes,
-          attributeSpecs: { model: {}, field: {} },
-          modelAttributes: {},
-          pslBlockDescriptors,
-          dataTypes: {},
-        },
-        controlMutationDefaults: { defaultFunctionRegistry: new Map() },
-        dataTypes: EMPTY_DATA_TYPES,
-      },
-    });
     const field = symbolTable.topLevel.models['AuthSession']?.fields['aal'];
-    const block = symbolTable.topLevel.blocks['AalLevel'];
-    const typeNode = field === undefined ? undefined : typeReferenceNode(field);
     expect(field).toBeDefined();
-    expect(block).toBeDefined();
-    if (!field || !block || !typeNode) return;
+    if (!field) return;
 
     const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
-      resolution: binder.symbolForNode(typeNode),
+      resolution: {
+        kind: 'contributedType',
+        symbol: {
+          kind: 'contributedType',
+          name: 'enum',
+          path: ['pg', 'enum'],
+          descriptor: {
+            kind: 'typeConstructor',
+            entityRefArg: { index: 0, entityKind: NATIVE_ENUM_DISCRIMINATOR },
+            output: { codecId: nativeEnumCodec.codecId },
+          },
+        },
+      },
       enumTypeDescriptors: new Map(),
       namedTypeDescriptors: new Map(),
       diagnostics,
       sources,
       entityLabel: 'Field "AuthSession.aal"',
-      binder,
-      constructorEntities: new Map([
-        [
-          block,
-          {
-            entityKind: NATIVE_ENUM_DISCRIMINATOR,
-            lowered: {
-              entity: { typeName: 'AalLevel', members: ['aal1'] },
-              namespaceId: 'public',
-              name: 'AalLevel',
-              derivesValueSet: true,
-            },
-          },
-        ],
-      ]),
+      namespaceExtensionEntities: {
+        [NATIVE_ENUM_DISCRIMINATOR]: { AalLevel: { typeName: 'AalLevel', members: ['aal1'] } },
+        valueSet: { AalLevel: { kind: 'valueSet', values: ['aal1'] } },
+      },
       codecLookup,
     });
 

@@ -7,8 +7,6 @@ export {
 export { buildEntityTypesByDiscriminator } from '../interpreter';
 export {
   type ColumnDescriptor,
-  type ConstructorEntity,
-  columnFromConstructorEntity,
   instantiateFieldTypeConstructor,
   type ResolveFieldTypeResult,
 } from '../psl-column-resolution';
