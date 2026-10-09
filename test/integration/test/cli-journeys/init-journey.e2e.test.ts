@@ -340,6 +340,9 @@ function expectConfigFile(project: JourneyProject, cell: CellId): void {
     `from '${facadeFor(cell)}/config'`,
   );
   expect(contents, 'config references the schema file').toContain(schemaPath(cell));
+  // prisma/orm#30116: the config reads DATABASE_URL and the CLI's config
+  // loader does not read .env itself, so the config must load .env.
+  expect(contents, 'config loads .env for DATABASE_URL').toContain("import 'dotenv/config'");
 }
 
 function schemaPath(cell: CellId): string {
