@@ -11,9 +11,9 @@ import { countMutationWhere, deleteAst, updateAst } from '../query-plan-mutation
 import { collectionSelectAst } from '../query-plan-select';
 import type { CollectionState } from '../types';
 import { combineWhereExprs } from '../where-utils';
-import { After, FilterData } from './edges';
+import { after, filterData, type Input, type NodeId } from './edges';
 import { Graph } from './graph';
-import { Delete, Find, type Node, Update } from './nodes';
+import { Delete, Find, Update } from './nodes';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
@@ -22,10 +22,14 @@ export function updateAllGraph(
 ): Graph {
   const { context, namespaceId, tableName } = collection;
   const graph = new Graph(form, collection);
-  const update = new Update(
-    updateAst(context.contract, namespaceId, tableName, set, whereOf(collection, form)),
+  const update = updateAst(
+    context.contract,
+    namespaceId,
+    tableName,
+    set,
+    whereOf(collection, form),
   );
-  graph.setResult(graph.add(update));
+  graph.setResult(graph.add(new Update(update)));
   return graph;
 }
 
@@ -36,10 +40,8 @@ export function deleteAllGraph(
   const { context, namespaceId, modelName, tableName, state } = collection;
   if (form === 'count' || state.includes.length === 0) {
     const graph = new Graph(form, collection);
-    const del = new Delete(
-      deleteAst(context.contract, namespaceId, tableName, whereOf(collection, form)),
-    );
-    graph.setResult(graph.add(del));
+    const del = deleteAst(context.contract, namespaceId, tableName, whereOf(collection, form));
+    graph.setResult(graph.add(new Delete(del)));
     return graph;
   }
 
@@ -52,12 +54,9 @@ export function deleteAllGraph(
     state.includes,
   );
   const graph = new Graph(form, collection);
-  const find = new Find(selectColumnsAst(collection, state, identityColumns));
-  const del = new Delete(
-    deleteAst(context.contract, namespaceId, tableName, whereOf(collection, 'count')),
-  );
-  graph.add(find);
-  graph.add(del, new After(find, del));
+  const find = graph.add(new Find(selectColumnsAst(collection, state, identityColumns)));
+  const del = deleteAst(context.contract, namespaceId, tableName, whereOf(collection, 'count'));
+  graph.add(new Delete(del), after(find));
   graph.setResult(find);
   return graph;
 }
@@ -73,8 +72,8 @@ export function updateFirstGraph(
     return graph;
   }
 
-  const update = new Update(updateAst(context.contract, namespaceId, tableName, set, undefined));
-  graph.setResult(graph.add(update, sameRow(find, update, collection)));
+  const update = updateAst(context.contract, namespaceId, tableName, set, undefined);
+  graph.setResult(graph.add(new Update(update), sameRow(find, collection)));
   return graph;
 }
 
@@ -86,18 +85,19 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
     return graph;
   }
 
-  const del = new Delete(deleteAst(context.contract, namespaceId, tableName, undefined));
-  graph.add(del, sameRow(find, del, collection));
-  graph.setResult(state.includes.length > 0 ? find : del);
+  const del = deleteAst(context.contract, namespaceId, tableName, undefined);
+  const deleted = graph.add(new Delete(del), sameRow(find, collection));
+  graph.setResult(state.includes.length > 0 ? find : deleted);
   return graph;
 }
 
 function addFindOfFirstRow(
   graph: Graph,
   collection: DescribeCollectionRowsOptions,
-): Find | undefined {
+): NodeId | undefined {
   const { modelName, tableName, state } = collection;
-  if (identityColumnsOf(collection).length === 0) {
+  const identityColumns = identityColumnsOf(collection);
+  if (identityColumns.length === 0) {
     throw ormError(
       'ORM.ROW_IDENTITY_MISSING',
       `update()/delete() on model "${modelName}" requires the table to have a primary key or unique constraint`,
@@ -108,11 +108,7 @@ function addFindOfFirstRow(
   if (state.limit === 0) {
     return undefined;
   }
-  const find = new Find(
-    selectColumnsAst(collection, { ...state, limit: 1 }, identityColumnsOf(collection)),
-  );
-  graph.add(find);
-  return find;
+  return graph.add(new Find(selectColumnsAst(collection, { ...state, limit: 1 }, identityColumns)));
 }
 
 function selectColumnsAst(
@@ -136,10 +132,9 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
   );
 }
 
-function sameRow(find: Find, node: Node, collection: DescribeCollectionRowsOptions): FilterData {
-  return new FilterData(
+function sameRow(find: NodeId, collection: DescribeCollectionRowsOptions): Input {
+  return filterData(
     find,
-    node,
     identityColumnsOf(collection).map((column) => [column, column]),
   );
 }

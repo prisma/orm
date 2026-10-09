@@ -1,72 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { After, FilterData } from '../../src/mutation-graph/edges';
-import { deleteUsers, findUsers } from './statements';
+import { After, after, FilterData, filterData } from '../../src/mutation-graph/edges';
 
 describe('After', () => {
-  it('holds the node it comes from and the node it goes to', () => {
-    const find = findUsers();
-    const del = deleteUsers();
-
-    const edge = new After(find, del);
-
-    expect(edge.from).toBe(find);
-    expect(edge.to).toBe(del);
+  it('holds the position it comes from and the position it goes to', () => {
+    expect(new After(0, 1)).toMatchObject({ from: 0, to: 1 });
   });
 
   it('is frozen', () => {
-    const edge = new After(findUsers(), deleteUsers());
-
-    expect(Object.isFrozen(edge)).toBe(true);
-  });
-
-  it('gives a new edge with one node replaced', () => {
-    const find = findUsers();
-    const del = deleteUsers();
-    const otherFind = findUsers();
-
-    const edge = new After(find, del).replaceNode(find, otherFind);
-
-    expect(edge).toBeInstanceOf(After);
-    expect(edge.from).toBe(otherFind);
-    expect(edge.to).toBe(del);
+    expect(Object.isFrozen(new After(0, 1))).toBe(true);
   });
 });
 
 describe('FilterData', () => {
-  it('holds its nodes and its column pairs', () => {
-    const find = findUsers();
-    const del = deleteUsers();
-
-    const edge = new FilterData(find, del, [
+  it('holds its positions and its column pairs', () => {
+    const edge = new FilterData(0, 1, [
       ['tenant_id', 'tenant_id'],
       ['id', 'user_id'],
     ]);
 
-    expect(edge.from).toBe(find);
-    expect(edge.to).toBe(del);
-    expect(edge.columns).toEqual([
-      ['tenant_id', 'tenant_id'],
-      ['id', 'user_id'],
-    ]);
+    expect(edge).toMatchObject({
+      from: 0,
+      to: 1,
+      columns: [
+        ['tenant_id', 'tenant_id'],
+        ['id', 'user_id'],
+      ],
+    });
   });
 
   it('is frozen', () => {
-    const edge = new FilterData(findUsers(), deleteUsers(), [['id', 'id']]);
+    const edge = new FilterData(0, 1, [['id', 'id']]);
 
     expect(Object.isFrozen(edge)).toBe(true);
     expect(Object.isFrozen(edge.columns)).toBe(true);
   });
+});
 
-  it('gives a new edge with one node replaced and the same column pairs', () => {
-    const find = findUsers();
-    const del = deleteUsers();
-    const otherDelete = deleteUsers();
+describe('inputs', () => {
+  it('after gives an After once it is told where it goes', () => {
+    expect(after(0)(3)).toEqual(new After(0, 3));
+  });
 
-    const edge = new FilterData(find, del, [['id', 'id']]).replaceNode(del, otherDelete);
-
-    expect(edge).toBeInstanceOf(FilterData);
-    expect(edge.from).toBe(find);
-    expect(edge.to).toBe(otherDelete);
-    expect(edge).toMatchObject({ columns: [['id', 'id']] });
+  it('filterData gives a FilterData once it is told where it goes', () => {
+    expect(filterData(0, [['id', 'user_id']])(3)).toEqual(
+      new FilterData(0, 3, [['id', 'user_id']]),
+    );
   });
 });

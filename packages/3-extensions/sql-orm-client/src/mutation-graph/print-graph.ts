@@ -5,12 +5,12 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { type Edge, FilterData } from './edges';
+import { type Edge, FilterData, type NodeId } from './edges';
 import type { Graph } from './graph';
-import type { Node, StatementAst } from './nodes';
+import type { StatementAst } from './nodes';
 import { printExpression } from './print-expression';
 
-type NodeNames = ReadonlyMap<Node, string>;
+type NodeNames = ReadonlyMap<NodeId, string>;
 
 function printWhere(where: AnyExpression | undefined, tableName: string): string {
   if (where === undefined) {
@@ -92,14 +92,16 @@ function printInputs(names: NodeNames, inputs: readonly Edge[]): string {
 
 function printResult(names: NodeNames, graph: Graph): string {
   const { node, form } = graph.result;
-  return node === undefined ? 'result: none' : `result: ${names.get(node)} ${form}`;
+  const name = node === undefined ? undefined : names.get(node);
+  return name === undefined ? 'result: none' : `result: ${name} ${form}`;
 }
 
 export function printGraph(graph: Graph): string {
-  const names: NodeNames = new Map(graph.nodes.map((node, index) => [node, `n${index + 1}`]));
-  const lines = graph.nodes.map(
-    (node) =>
-      `${names.get(node)} ${printStatement(node.ast)}${printInputs(names, graph.inputsOf(node))}`,
+  const nodes = graph.nodes();
+  const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
+  const lines = nodes.map(
+    ([id, node]) =>
+      `${names.get(id)} ${printStatement(node.ast)}${printInputs(names, graph.edgesInto(id))}`,
   );
   lines.push(printResult(names, graph));
   return lines.join('\n');

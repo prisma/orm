@@ -29,13 +29,13 @@ import { queryPlanRows } from '../query-plan-rows';
 import { codecRefForTableSource } from '../storage-resolution';
 import type { RuntimeQueryable } from '../types';
 import { combineWhereExprs } from '../where-utils';
-import { type ColumnPair, FilterData } from './edges';
+import { type ColumnPair, FilterData, type NodeId } from './edges';
 import type { Graph } from './graph';
 import type { Node, StatementAst } from './nodes';
 
 type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
 type StorageRow = Record<string, unknown>;
-type CollectedRows = ReadonlyMap<Node, readonly StorageRow[]>;
+type CollectedRows = readonly (readonly StorageRow[])[];
 
 interface Outcome<Row> {
   readonly rows: readonly Row[];
@@ -47,11 +47,11 @@ export function runForRows<Row>(
   runtime: RuntimeQueryable,
   annotations: Annotations,
 ): AsyncIterableResult<Row> {
-  const { node } = graph.result;
-  if (node !== undefined && graph.nodes.length === 1) {
-    const plan = planOf(graph, statementOf(graph, node, new Map()), annotations);
+  const [only, ...others] = graph.nodes();
+  if (only !== undefined && others.length === 0 && only[0] === graph.result.node) {
+    const plan = planOf(graph, statementOf(graph, only[0], only[1], []), annotations);
     const storageRows = () => queryPlanRows(runtime, plan);
-    return resultRows<Row>(graph, node, storageRows, runtime, annotations);
+    return resultRows<Row>(graph, only[0], only[1], storageRows, runtime, annotations);
   }
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
     const outcome = await runAllNodes<Row>(graph, runtime, annotations);
@@ -83,7 +83,7 @@ function runAllNodes<Row>(
   runtime: RuntimeQueryable,
   annotations: Annotations,
 ): Promise<Outcome<Row>> {
-  if (graph.nodes.length > 1) {
+  if (graph.nodes().length > 1) {
     return withMutationScope(runtime, (scope) => runNodesInOrder<Row>(graph, scope, annotations));
   }
   return runNodesInOrder<Row>(graph, runtime, annotations);
@@ -94,18 +94,18 @@ async function runNodesInOrder<Row>(
   scope: RuntimeQueryable,
   annotations: Annotations,
 ): Promise<Outcome<Row>> {
-  const collected = new Map<Node, readonly StorageRow[]>();
+  const collected: (readonly StorageRow[])[] = [];
   let rows: readonly Row[] = [];
   let count = 0;
 
-  for (const node of graph.nodes) {
-    const isResult = node === graph.result.node;
-    if (sourcesOf(graph, node).some((edge) => rowsOf(collected, edge.from).length === 0)) {
-      collected.set(node, []);
+  for (const [id, node] of graph.nodes()) {
+    const isResult = id === graph.result.node;
+    if (sourcesOf(graph, id).some((edge) => rowsOf(collected, edge.from).length === 0)) {
+      collected[id] = [];
       continue;
     }
 
-    const ast = statementOf(graph, node, collected);
+    const ast = statementOf(graph, id, node, collected);
     const plan = planOf(graph, ast, annotations);
     if (ast.kind !== 'select' && ast.returning === undefined) {
       const stats = await scope.execute(plan);
@@ -114,35 +114,29 @@ async function runNodesInOrder<Row>(
     }
 
     const storageRows = await queryPlanRows(scope, plan).toArray();
-    collected.set(node, storageRows);
+    collected[id] = storageRows;
     if (isResult) {
       count = storageRows.length;
     }
     if (isResult && graph.result.form !== 'count') {
-      const loaded = resultRows<Row>(
-        graph,
-        node,
-        () => rowsResult(storageRows),
-        scope,
-        annotations,
-      );
-      rows = await loaded.toArray();
+      const loaded = () => rowsResult(storageRows);
+      rows = await resultRows<Row>(graph, id, node, loaded, scope, annotations).toArray();
     }
   }
 
   return { rows, count };
 }
 
-function statementOf(graph: Graph, node: Node, collected: CollectedRows): StatementAst {
+function statementOf(graph: Graph, id: NodeId, node: Node, collected: CollectedRows): StatementAst {
   const ast = node.ast;
   if (ast.kind === 'select') {
     return ast;
   }
   const { contract } = graph.result.collection.context;
-  const conditions = sourcesOf(graph, node).flatMap((edge) =>
+  const conditions = sourcesOf(graph, id).flatMap((edge) =>
     conditionsFromRows(contract, ast.table, edge.columns, rowsOf(collected, edge.from)),
   );
-  const columns = [...resultColumns(graph, node), ...columnsReadFrom(graph, node)];
+  const columns = [...resultColumns(graph, id), ...columnsReadFrom(graph, id)];
   return withConditions(ast, conditions).withReturning(
     projectTableColumns(contract, ast.table, [...new Set(columns)]),
   );
@@ -169,24 +163,24 @@ function planOf(
   return mergeAnnotations(buildOrmQueryPlan<StorageRow>(contract, ast, params), annotations);
 }
 
-function sourcesOf(graph: Graph, node: Node): readonly FilterData[] {
-  return graph.inputsOf(node).filter((edge) => edge instanceof FilterData);
+function sourcesOf(graph: Graph, id: NodeId): readonly FilterData[] {
+  return graph.edgesInto(id).filter((edge) => edge instanceof FilterData);
 }
 
-function rowsOf(collected: CollectedRows, node: Node): readonly StorageRow[] {
-  return collected.get(node) ?? [];
+function rowsOf(collected: CollectedRows, id: NodeId): readonly StorageRow[] {
+  return collected[id] ?? [];
 }
 
-function columnsReadFrom(graph: Graph, node: Node): readonly string[] {
+function columnsReadFrom(graph: Graph, id: NodeId): readonly string[] {
   return graph
-    .usersOf(node)
+    .edgesOutOf(id)
     .filter((edge) => edge instanceof FilterData)
     .flatMap((edge) => edge.columns.map(([sourceColumn]) => sourceColumn));
 }
 
-function resultColumns(graph: Graph, node: Node): readonly string[] {
+function resultColumns(graph: Graph, id: NodeId): readonly string[] {
   const { form, collection } = graph.result;
-  if (node !== graph.result.node || form === 'count') {
+  if (id !== graph.result.node || form === 'count') {
     return [];
   }
   const { context, namespaceId, modelName, tableName, state } = collection;
@@ -231,13 +225,14 @@ function conditionsFromRows(
 
 function resultRows<Row>(
   graph: Graph,
+  id: NodeId,
   node: Node,
   storageRows: () => AsyncIterableResult<StorageRow>,
   runtime: RuntimeQueryable,
   annotations: Annotations,
 ): AsyncIterableResult<Row> {
   const { context, namespaceId, tableName, modelName, state } = graph.result.collection;
-  const selected = resultColumns(graph, node);
+  const selected = resultColumns(graph, id);
   return mapMutationRows<Row>(storageRows, {
     context,
     runtime,
@@ -247,7 +242,7 @@ function resultRows<Row>(
     variantName: state.variantName,
     includes: state.includes,
     selectedFields: state.selectedFields,
-    hiddenColumns: columnsReadFrom(graph, node).filter((column) => !selected.includes(column)),
+    hiddenColumns: columnsReadFrom(graph, id).filter((column) => !selected.includes(column)),
     annotations,
     orderBy: node.ast.kind === 'select' ? node.ast.orderBy : undefined,
     mapRow: (mapped) =>

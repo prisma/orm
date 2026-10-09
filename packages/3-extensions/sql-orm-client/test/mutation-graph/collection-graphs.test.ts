@@ -58,7 +58,7 @@ describe('updateAllGraph', () => {
   it('builds the Update without the columns it returns', () => {
     const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
 
-    expect(graph.nodes[0]?.ast).toMatchObject({ kind: 'update', returning: undefined });
+    expect(graph.nodeAt(0)?.ast).toMatchObject({ kind: 'update', returning: undefined });
   });
 });
 
@@ -82,7 +82,7 @@ describe('deleteAllGraph', () => {
         'result: n1 rows',
       ].join('\n'),
     );
-    expect(graph.nodes[0]?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
+    expect(graph.nodeAt(0)?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
     expect(graph.result.collection).toBe(targetWithIncludes);
   });
 
@@ -105,7 +105,7 @@ describe('updateFirstGraph', () => {
         'result: n2 first row',
       ].join('\n'),
     );
-    expect(graph.nodes[0]?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
+    expect(graph.nodeAt(0)?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
     expect(graph.result.collection).toBe(target);
   });
 

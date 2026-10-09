@@ -17,7 +17,7 @@ describe('Find', () => {
   it('is its own peephole result', () => {
     const find = findUsers();
 
-    expect(find.peephole(graphOfUsers())).toBe(find);
+    expect(find.peephole(graphOfUsers(), 0)).toBe(find);
   });
 });
 
@@ -36,11 +36,11 @@ describe('Update', () => {
   it('is its own peephole result when it sets a value', () => {
     const update = updateUsers({ name: 'Ada' });
 
-    expect(update.peephole(graphOfUsers())).toBe(update);
+    expect(update.peephole(graphOfUsers(), 0)).toBe(update);
   });
 
   it('has no peephole result when it sets nothing', () => {
-    expect(updateUsers({}, nameIsAda).peephole(graphOfUsers())).toBeUndefined();
+    expect(updateUsers({}, nameIsAda).peephole(graphOfUsers(), 0)).toBeUndefined();
   });
 });
 
@@ -59,6 +59,6 @@ describe('Delete', () => {
   it('is its own peephole result', () => {
     const del = deleteUsers();
 
-    expect(del.peephole(graphOfUsers())).toBe(del);
+    expect(del.peephole(graphOfUsers(), 0)).toBe(del);
   });
 });

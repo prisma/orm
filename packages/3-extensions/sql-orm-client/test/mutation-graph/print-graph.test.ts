@@ -17,7 +17,7 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { After, FilterData } from '../../src/mutation-graph/edges';
+import { after, filterData } from '../../src/mutation-graph/edges';
 import { Delete, Find, type Node, Update } from '../../src/mutation-graph/nodes';
 import { printGraph } from '../../src/mutation-graph/print-graph';
 import { graphOfUsers } from './statements';
@@ -64,10 +64,8 @@ describe('printGraph', () => {
 
     it('prints a Find and a Delete after it, with the Find as the result', () => {
       const graph = graphOfUsers('rows');
-      const find = findUser(idIsOne);
-      const del = deleteFrom(user, idIsOne);
-      graph.add(find);
-      graph.add(del, new After(find, del));
+      const find = graph.add(findUser(idIsOne));
+      graph.add(deleteFrom(user, idIsOne), after(find));
       graph.setResult(find);
 
       expect(printGraph(graph)).toBe(
@@ -81,10 +79,9 @@ describe('printGraph', () => {
 
     it('prints a Find whose row goes into the where of an Update', () => {
       const graph = graphOfUsers('first row');
-      const find = findUser(idIsOne);
+      const find = graph.add(findUser(idIsOne));
       const update = updateUser({ name: ParamRef.of('Ada') });
-      graph.add(find);
-      graph.setResult(graph.add(update, new FilterData(find, update, [['id', 'id']])));
+      graph.setResult(graph.add(update, filterData(find, [['id', 'id']])));
 
       expect(printGraph(graph)).toBe(
         [
@@ -105,6 +102,21 @@ describe('printGraph', () => {
     });
   });
 
+  describe('names', () => {
+    it('numbers the nodes that remain, without gaps', () => {
+      const graph = graphOfUsers('rows');
+      const first = graph.add(findUser(idIsOne));
+      const removed = graph.add(findUser());
+      const del = graph.add(deleteFrom(user), after(first));
+      graph.remove(removed);
+      graph.setResult(del);
+
+      expect(printGraph(graph)).toBe(
+        ['n1 Find user where id = 1', 'n2 Delete user <- After n1', 'result: n2 rows'].join('\n'),
+      );
+    });
+  });
+
   describe('result line', () => {
     it('prints none for a graph with no node', () => {
       expect(printGraph(graphOfUsers())).toBe('result: none');
@@ -112,10 +124,8 @@ describe('printGraph', () => {
 
     it('prints none for an empty result next to other nodes', () => {
       const graph = graphOfUsers('first row');
-      const find = findUser(idIsOne);
-      const update = updateUser({});
-      graph.add(find);
-      graph.setResult(graph.add(update, new FilterData(find, update, [['id', 'id']])));
+      const find = graph.add(findUser(idIsOne));
+      graph.setResult(graph.add(updateUser({}), filterData(find, [['id', 'id']])));
 
       expect(printGraph(graph)).toBe(['n1 Find user where id = 1', 'result: none'].join('\n'));
     });
@@ -124,18 +134,15 @@ describe('printGraph', () => {
   describe('edges', () => {
     it('prints every column pair of a FilterData and every input of a node', () => {
       const graph = graphOfUsers();
-      const findUsers = findUser();
-      const findPosts = new Find(SelectAst.from(post));
-      const del = deleteFrom(post);
-      graph.add(findUsers);
-      graph.add(findPosts);
+      const findUsers = graph.add(findUser());
+      const findPosts = graph.add(new Find(SelectAst.from(post)));
       graph.add(
-        del,
-        new FilterData(findUsers, del, [
+        deleteFrom(post),
+        filterData(findUsers, [
           ['tenant_id', 'tenant_id'],
           ['id', 'author_id'],
         ]),
-        new After(findPosts, del),
+        after(findPosts),
       );
 
       expect(printGraph(graph)).toBe(
@@ -244,8 +251,7 @@ describe('printGraph', () => {
 
     it('prints an Update that sets nothing, which only replace can put in a graph', () => {
       const graph = graphOfUsers();
-      const find = findUser();
-      graph.add(find);
+      const find = graph.add(findUser());
       graph.replace(find, updateUser({}));
 
       expect(printGraph(graph)).toBe(['n1 Update user set nothing', 'result: none'].join('\n'));

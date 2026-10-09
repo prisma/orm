@@ -1,4 +1,5 @@
 import type { DeleteAst, SelectAst, UpdateAst } from '@internal/sql-relational-core/ast';
+import type { NodeId } from './edges';
 import type { Graph } from './graph';
 
 export type StatementAst = SelectAst | UpdateAst | DeleteAst;
@@ -6,7 +7,7 @@ export type StatementAst = SelectAst | UpdateAst | DeleteAst;
 export abstract class Node {
   abstract readonly ast: StatementAst;
 
-  peephole(_graph: Graph): Node | undefined {
+  peephole(_graph: Graph, _id: NodeId): Node | undefined {
     return this;
   }
 }
@@ -30,7 +31,7 @@ export class Update extends Node {
     Object.freeze(this);
   }
 
-  override peephole(_graph: Graph): Node | undefined {
+  override peephole(_graph: Graph, _id: NodeId): Node | undefined {
     return Object.keys(this.ast.set).length === 0 ? undefined : this;
   }
 }

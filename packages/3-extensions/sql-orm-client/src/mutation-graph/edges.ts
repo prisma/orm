@@ -1,44 +1,39 @@
-import type { Node } from './nodes';
+export type NodeId = number;
 
 export type ColumnPair = readonly [sourceColumn: string, targetColumn: string];
 
-export abstract class Edge {
-  readonly from: Node;
-  readonly to: Node;
+export class After {
+  readonly from: NodeId;
+  readonly to: NodeId;
 
-  constructor(from: Node, to: Node) {
+  constructor(from: NodeId, to: NodeId) {
     this.from = from;
     this.to = to;
-  }
-
-  abstract replaceNode(old: Node, next: Node): Edge;
-}
-
-export class After extends Edge {
-  constructor(from: Node, to: Node) {
-    super(from, to);
     Object.freeze(this);
   }
-
-  override replaceNode(old: Node, next: Node): After {
-    return new After(this.from === old ? next : this.from, this.to === old ? next : this.to);
-  }
 }
 
-export class FilterData extends Edge {
+export class FilterData {
+  readonly from: NodeId;
+  readonly to: NodeId;
   readonly columns: readonly ColumnPair[];
 
-  constructor(from: Node, to: Node, columns: readonly ColumnPair[]) {
-    super(from, to);
+  constructor(from: NodeId, to: NodeId, columns: readonly ColumnPair[]) {
+    this.from = from;
+    this.to = to;
     this.columns = Object.freeze([...columns]);
     Object.freeze(this);
   }
+}
 
-  override replaceNode(old: Node, next: Node): FilterData {
-    return new FilterData(
-      this.from === old ? next : this.from,
-      this.to === old ? next : this.to,
-      this.columns,
-    );
-  }
+export type Edge = After | FilterData;
+
+export type Input = (to: NodeId) => Edge;
+
+export function after(from: NodeId): Input {
+  return (to) => new After(from, to);
+}
+
+export function filterData(from: NodeId, columns: readonly ColumnPair[]): Input {
+  return (to) => new FilterData(from, to, columns);
 }
