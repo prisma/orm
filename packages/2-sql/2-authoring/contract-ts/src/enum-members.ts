@@ -1,5 +1,5 @@
 import type { JsonValue, ValueSetRef } from '@internal/contract/types';
-import type { EnumTypeHandle } from '@internal/contract-authoring';
+import { assertEnumMembersStoredUniquely, type EnumTypeHandle } from '@internal/contract-authoring';
 import {
   type Codec,
   type CodecLookupWithDescriptors,
@@ -100,28 +100,16 @@ export function encodeEnumMembers(
     );
   }
   const codec = codecLookup.get(handle.codecId);
-  const memberByStoredValue = new Map<string, string>();
-  return handle.enumMembers.map((member) => {
+  const members = handle.enumMembers.map((member) => {
     const value = encodeEnumMember(handle, member, codec);
     if (codec !== undefined) assertStoredAsWritten(handle.enumName, member, value, codec);
-    const key = canonicalStringify(value);
-    const earlier = memberByStoredValue.get(key);
-    if (earlier !== undefined) {
-      throw contractError(
-        'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): members "${earlier}" and "${member.name}" both store ${JSON.stringify(value)}. Member values must be unique as the column stores them.`,
-        {
-          meta: {
-            enumName: handle.enumName,
-            members: [earlier, member.name],
-            reason: 'duplicate-member-value',
-          },
-        },
-      );
-    }
-    memberByStoredValue.set(key, member.name);
     return { name: member.name, value };
   });
+  assertEnumMembersStoredUniquely(
+    handle.enumName,
+    members.map(({ name, value }) => ({ name, stored: value })),
+  );
+  return members;
 }
 
 /**

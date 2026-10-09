@@ -413,7 +413,7 @@ await db.orm.public.Post.where((p) => and(created(since)(p), p.title.ilike('%orm
 
 Both forms check values against the codec's type, not the field's. For a field that narrows its codec's values, such as an enum stored as `pg/text@1`, they accept values the field would refuse: `row.kind.eq('superuser')` compiles even when `kind` has no such member. Write a filter on such a field inline, on the model, where the field's own type checks the value.
 
-**The same `select` and `include` in several queries.** Define it once with `.fragment(...)` on a collection of the model, run it with `.with(...)`, and name its row with `CollectionRowOf`:
+**The same `select` and `include` in several queries.** Define it once with `.fragment(...)` on the model's root collection, such as `db.orm.public.Post`, run it with `.with(...)`, and name its row with `CollectionRowOf`:
 
 ```typescript
 import type { CollectionRowOf } from '@prisma/orm-postgres/orm-client';
@@ -427,7 +427,7 @@ await db.orm.public.Post.where({ userId }).with(postSummary).limit(20).all();
 await db.orm.public.User.include('posts', (posts) => posts.with(postSummary)).all();
 ```
 
-The body receives the plain collection of the model, without a custom class's methods. Apply the fragment before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. Its result is always typed as the plain collection, even when the body keeps the row, so a custom class's methods are gone after it, and `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads. For a filter on one model, use a class method or `db.orm.fragment`. A fragment for one model refuses a collection of another model or namespace at run time with `ORM.ARGUMENT_INVALID`.
+The body receives the plain collection of the model, without a custom class's methods. Apply the fragment before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. Its result is always typed as the plain collection, even when the body keeps the row, so a custom class's methods are gone after it, and a filter or order applied before it is not recorded, although an earlier `.where(...)` still runs. `update` and `delete` are refused after it unless the body itself calls `where`, and `cursor` unless the body calls `orderBy`. For a filter on one model, use a class method or `db.orm.fragment`. A fragment for one model refuses a collection of another model or namespace at run time with `ORM.ARGUMENT_INVALID`. Calling `.fragment(...)` on a collection with chained calls throws `ORM.ARGUMENT_INVALID`, because the fragment is built from the model alone; a filter, an order or an include before it, or a receiver typed by a type parameter such as `this` in a class method, is a compile error. Inside a class method, chain on `this` directly instead.
 
 **A field to order by, from a request.** Pass the request's string to `orderByField` with the fields the endpoint allows. Do not index the field proxy with the raw string:
 

@@ -35,7 +35,7 @@ export function buildPostgresStaticContext<TContract extends Contract<SqlStorage
   const nativeEnums = blindCast<
     NamespacedNativeEnums<TContract>,
     'buildNamespacedNativeEnums returns the namespace-keyed accessor map this contract types'
-  >(Object.freeze(buildNamespacedNativeEnums(context.contract.storage)));
+  >(Object.freeze(buildNamespacedNativeEnums(context.contract.storage, context.contract.domain)));
   return { context, contract: context.contract, enums, nativeEnums, sql: sqlDb, raw };
 }
 

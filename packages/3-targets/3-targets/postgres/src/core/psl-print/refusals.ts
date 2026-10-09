@@ -584,24 +584,43 @@ export function refuseUnwritableIndexOptions(entry: ModelWithTable, index: Index
   }
 }
 
-/**
- * Refuses an index, check or policy whose SQL a `sql` literal cannot write back unchanged, because
- * reading the literal canonicalizes it into different text.
- */
-export function refuseSqlTextThatDoesNotReadBack(input: {
-  readonly kind: 'index' | 'check' | 'policy';
-  readonly namespaceId: string;
-  readonly table: string;
-  readonly name: string;
-  readonly texts: readonly (string | undefined)[];
-}): void {
+type SqlTextOwner =
+  | {
+      readonly kind: 'index' | 'check' | 'policy';
+      readonly namespaceId: string;
+      readonly table: string;
+      readonly name: string;
+    }
+  | { readonly kind: 'default'; readonly coordinate: string };
+
+function describeSqlTextOwner(owner: SqlTextOwner): {
+  readonly subject: string;
+  readonly meta: Record<string, unknown>;
+} {
+  if (owner.kind === 'default') {
+    return {
+      subject: `default of column ${owner.coordinate}`,
+      meta: { coordinate: owner.coordinate },
+    };
+  }
+  const { kind, namespaceId, table, name } = owner;
+  return {
+    subject: `${kind} "${name}" on "${namespaceId}"."${table}"`,
+    meta: kind === 'policy' ? { namespaceId, table, policy: name } : { namespaceId, table, name },
+  };
+}
+
+/** Refuses an index, check, policy or column default whose SQL a `sql` literal cannot write back unchanged, because reading the literal canonicalizes it into different text. */
+export function refuseSqlTextThatDoesNotReadBack(
+  input: SqlTextOwner & { readonly texts: readonly (string | undefined)[] },
+): void {
   if (sqlTextsReadBack(input.texts)) return;
-  const { kind, namespaceId, table, name } = input;
+  const { subject, meta } = describeSqlTextOwner(input);
   throw unsupported(
-    `${kind} "${name}" on "${namespaceId}"."${table}" holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.`,
+    `${subject} holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.`,
     'A sql literal is canonicalized when it is read: indentation shared by every line, blank lines at the start or end, a carriage return and a whitespace-only line are removed, so this text would read back as different SQL.',
     "Write the SQL in that canonical form in the contract's source, or keep authoring this contract in its current source.",
-    kind === 'policy' ? { namespaceId, table, policy: name } : { namespaceId, table, name },
+    meta,
   );
 }
 

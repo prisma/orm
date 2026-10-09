@@ -119,4 +119,24 @@ describe('SQL a sql literal cannot write back unchanged', () => {
       }),
     );
   });
+
+  it('refuses a column default whose expression holds a carriage return', () => {
+    const print = printingWidget({
+      fields: { label: TEXT_FIELD },
+      columns: {
+        label: { ...TEXT_COLUMN, default: { kind: 'function', expression: "lower('a\r\nb')" } },
+      },
+    });
+
+    expect(print).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        message:
+          'contract print: default of column "public"."Widget"."label" holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.',
+        why: WHY,
+        fix: FIX,
+        meta: { coordinate: '"public"."Widget"."label"' },
+      }),
+    );
+  });
 });

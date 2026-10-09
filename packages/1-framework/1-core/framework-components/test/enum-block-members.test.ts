@@ -15,6 +15,14 @@ const SPAN = {
   end: { offset: 0, line: 1, column: 1 },
 };
 
+/** Where the member at `index` is written: line `index + 2`, distinct from the block and every other member. */
+function memberSpan(index: number) {
+  return {
+    start: { offset: 10 * (index + 1), line: index + 2, column: 3 },
+    end: { offset: 10 * (index + 1) + 5, line: index + 2, column: 8 },
+  };
+}
+
 function enumBlock(
   values: Record<string, JsonValue | undefined>,
 ): ParsedPslExtensionBlock<Readonly<Record<string, JsonValue | undefined>>> {
@@ -23,7 +31,9 @@ function enumBlock(
     keyword: 'enum',
     name: 'Key',
     values,
-    parameterSpans: Object.fromEntries(Object.keys(values).map((key) => [key, SPAN])),
+    parameterSpans: Object.fromEntries(
+      Object.keys(values).map((key, index) => [key, memberSpan(index)]),
+    ),
     attributes: {},
     span: SPAN,
   };
@@ -75,15 +85,15 @@ describe('readEnumBlockMembers', () => {
     });
   });
 
-  it('refuses two members that store the same value, naming both', () => {
-    expect(read({ Upper: 'A0EE', Lower: 'a0ee' })).toEqual({
+  it('refuses two members that store the same value, naming both, at the later member', () => {
+    expect(read({ Upper: 'A0EE', Other: 'b0ee', Lower: 'a0ee' })).toEqual({
       members: undefined,
       diagnostics: [
         {
           code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
           message: 'enum "Key": members "Upper" and "Lower" both store "a0ee"',
           sourceId: 'schema.prisma',
-          span: SPAN,
+          span: memberSpan(2),
         },
       ],
     });
@@ -98,7 +108,7 @@ describe('readEnumBlockMembers', () => {
           message:
             'enum "Key" member "A" was rejected by codec "test/lower-casing@1": expected text, got number',
           sourceId: 'schema.prisma',
-          span: SPAN,
+          span: memberSpan(0),
         },
       ],
     });
@@ -210,7 +220,7 @@ describe('readEnumBlockMembers', () => {
             code: 'PSL_EXTENSION_INVALID_VALUE',
             message: 'enum "Key" member "Low": test/text has no cast from test/integer',
             sourceId: 'schema.prisma',
-            span: SPAN,
+            span: memberSpan(0),
           },
         ],
       });

@@ -44,7 +44,7 @@ import {
 } from './entity-reference';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
-import { type ResolvedAttribute, readResolvedAttributes } from './resolve';
+import type { ResolvedAttribute } from './resolve';
 import {
   contributedScope,
   documentScope,
@@ -65,7 +65,6 @@ import type {
   NamespaceSymbol,
   SymbolTable,
 } from './symbol-table';
-import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
 import {
   ArrayLiteralAst,
   BooleanLiteralExprAst,
@@ -487,7 +486,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
   });
   const spec = blockSpecFactoryOf(descriptor)(specContext);
 
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
     const parameter =
@@ -511,7 +510,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
 
   const attributeSpecs = descriptor.attributes ?? {};
   if (Object.keys(attributeSpecs).length === 0) return;
-  for (const attribute of readResolvedAttributes(block.node.attributes(), ctx.sources)) {
+  for (const attribute of block.attributes) {
     const factory = attributeSpecs[attribute.name];
     if (factory === undefined) continue;
     const attributeSpec = blindCast<
@@ -752,10 +751,8 @@ function bindAttributes<Factory>(
   instantiate: (factory: Factory) => BoundSpec | undefined,
   ctx: BindContext,
 ): void {
-  const declared: Iterable<FieldAttributeAst | ModelAttributeAst> = holder.node.attributes();
-  const nodes = Array.from(declared);
   const level = holder.kind === 'field' ? 'field' : 'model';
-  attributes.forEach((attribute, index) => {
+  attributes.forEach((attribute) => {
     const factory = own(specs, attribute.name);
     if (factory === undefined) {
       const diagnostic = ctx.describeUnsupportedAttribute?.({
@@ -775,7 +772,7 @@ function bindAttributes<Factory>(
       level,
       spec,
     };
-    const nameNode = nodes[index]?.name()?.syntax;
+    const nameNode = attribute.node.name()?.syntax;
     if (nameNode !== undefined) {
       ctx.references.set(nameNode, { kind: 'attribute', symbol: attributeSymbol });
     }

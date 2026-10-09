@@ -5,7 +5,9 @@
  * `.column()` override or a contract-level column naming convention, both of
  * which are unknown while the model is being authored.
  */
+
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import { sql } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
@@ -39,6 +41,7 @@ const render = (columns: readonly DeferredIndexColumn[]) =>
 function messageIndexes(options: {
   readonly mappedColumn?: string;
   readonly naming?: ContractInput['naming'];
+  readonly render?: (columns: readonly DeferredIndexColumn[]) => string;
 }) {
   const searchText = options.mappedColumn
     ? field.column(textColumn).column(options.mappedColumn)
@@ -56,7 +59,7 @@ function messageIndexes(options: {
         table: 'message',
         indexes: [
           constraints.index({
-            expression: { fields: [cols.searchText], render },
+            expression: { fields: [cols.searchText], render: options.render ?? render },
             name: 'message_text_search',
           }),
         ],
@@ -86,6 +89,28 @@ describe('a deferred index expression', () => {
     });
   });
 
+  it('canonicalizes the rendered text as a sql literal is canonicalized', () => {
+    const multiLine = (columns: readonly DeferredIndexColumn[]) => `
+        to_tsvector(
+          'english', "${columns[0]?.name}"
+        )
+      `;
+    expect(messageIndexes({ render: multiLine })[0]).toMatchObject({
+      expression: `to_tsvector(\n  'english', "searchText"\n)`,
+    });
+  });
+
+  it('refuses a rendered text the canonicalizer refuses, naming the index', () => {
+    expect(() => messageIndexes({ render: () => 'a\u0000b' })).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.SQL_EXPRESSION_INVALID',
+        message:
+          'Index "message_text_search" expression: Tagged literals must not contain NUL characters.',
+        meta: { what: 'Index "message_text_search" expression', reason: 'nul', offset: 1 },
+      }),
+    );
+  });
+
   it('lowers to exactly what the equivalent string expression lowers to', () => {
     const deferred = messageIndexes({ mappedColumn: 'body_text' });
     const literal = defineContract({
@@ -103,7 +128,7 @@ describe('a deferred index expression', () => {
           table: 'message',
           indexes: [
             constraints.index({
-              expression: `to_tsvector('english', "body_text")`,
+              expression: sql`to_tsvector('english', "body_text")`,
               name: 'message_text_search',
             }),
           ],

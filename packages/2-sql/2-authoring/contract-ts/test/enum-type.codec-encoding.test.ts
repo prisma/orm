@@ -264,6 +264,97 @@ describe('enum lowering encodes member values through the codec', () => {
     );
   });
 
+  describe('compares members as the codec stores them', () => {
+    const jsonbLookup = codecLookupOf({
+      'pg/jsonb@1': stubCodec('pg/jsonb@1', (v) => v as JsonValue),
+    });
+    const timestampLookup = codecLookupOf({
+      'pg/timestamptz@1': stubCodec(
+        'pg/timestamptz@1',
+        (v) => (v instanceof Date ? v.toISOString() : null),
+        (json) => new Date(String(json)),
+      ),
+    });
+
+    it('accepts two different object members', () => {
+      const Shape = enumType(
+        'Shape',
+        { codecId: 'pg/jsonb@1' },
+        member('Square', { sides: 4 }),
+        member('Triangle', { sides: 3 }),
+      );
+
+      const contract = buildSqlContractFromDefinition(
+        definitionWith(Shape),
+        ...withTestTypes(jsonbLookup),
+      );
+
+      expect(memberValues(contract, 'Shape')).toEqual([{ sides: 4 }, { sides: 3 }]);
+    });
+
+    it('accepts two dates a millisecond apart', () => {
+      const Moment = enumType(
+        'Moment',
+        { codecId: 'pg/timestamptz@1' },
+        member('Start', new Date('2024-01-01T00:00:00.000Z')),
+        member('JustAfter', new Date('2024-01-01T00:00:00.001Z')),
+      );
+
+      const contract = buildSqlContractFromDefinition(
+        definitionWith(Moment),
+        ...withTestTypes(timestampLookup),
+      );
+
+      expect(memberValues(contract, 'Moment')).toEqual([
+        '2024-01-01T00:00:00.000Z',
+        '2024-01-01T00:00:00.001Z',
+      ]);
+    });
+
+    it('refuses two equal object members, showing the stored object', () => {
+      const Shape = enumType(
+        'Shape',
+        { codecId: 'pg/jsonb@1' },
+        member('Wide', { width: 2, height: 1 }),
+        member('AlsoWide', { height: 1, width: 2 }),
+      );
+
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Shape), ...withTestTypes(jsonbLookup)),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          message:
+            'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as their codec stores them.',
+          meta: {
+            enumName: 'Shape',
+            members: ['Wide', 'AlsoWide'],
+            reason: 'duplicate-member-value',
+          },
+        }),
+      );
+    });
+
+    it('refuses two equal dates', () => {
+      const Moment = enumType(
+        'Moment',
+        { codecId: 'pg/timestamptz@1' },
+        member('Start', new Date('2024-01-01T00:00:00.000Z')),
+        member('SameStart', new Date('2024-01-01T00:00:00.000Z')),
+      );
+
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Moment), ...withTestTypes(timestampLookup)),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          message:
+            'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as their codec stores them.',
+        }),
+      );
+    });
+  });
+
   it('refuses two members the codec stores as the same value, naming both', () => {
     const Moment = enumType(
       'Moment',
@@ -285,7 +376,7 @@ describe('enum lowering encodes member values through the codec', () => {
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as the column stores them.',
+          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as their codec stores them.',
         meta: expect.objectContaining({
           enumName: 'Moment',
           members: ['Early', 'Late'],

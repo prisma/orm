@@ -1,0 +1,26 @@
+// use prisma-8
+
+native_enum TicketStatus {
+  OPEN   = "open"
+  CLOSED = "closed"
+  @@map("ticket_status")
+}
+
+native_enum Unused {
+  ONE = "one"
+  TWO = "two"
+}
+
+enum Priority {
+  @@type("pg/int8@1")
+  Low  = "1"
+  High = "10"
+}
+
+model Ticket {
+  id       Int                     @id
+  status   pg.enum(TicketStatus)
+  priority Priority
+
+  @@map("tickets")
+}

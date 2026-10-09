@@ -200,7 +200,7 @@ model('Post', { fields: { id, title, subtitle, body } }).sql(({ cols }) => ({
 }));
 ```
 
-Both take an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:`; both are repeatable. The column names come from the resolved storage columns, so `@map` is honoured. With `map:` the index keeps the exact database name you give it, and `db verify` compares the rendered search document with the text Postgres prints back for the index exactly, character for character. Postgres prints it in its own form (`to_tsvector('english'::regconfig, title)`), so a `map:` full-text index reports drift; `@@fullTextIndex` and `fullTextIndex` warn about this with `PN_EXACT_NAME_BODY_COMPARISON`. Use `name:` unless the database already has the index under that name.
+Both take an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index (a `sql` value in TypeScript), and `name:` xor `map:`; both are repeatable. The column names come from the resolved storage columns, so `@map` is honoured. With `map:` the index keeps the exact database name you give it, and `db verify` compares the rendered search document with the text Postgres prints back for the index exactly, character for character. Postgres prints it in its own form (`to_tsvector('english'::regconfig, title)`), so a `map:` full-text index reports drift; `@@fullTextIndex` and `fullTextIndex` warn about this with `PN_EXACT_NAME_BODY_COMPARISON`. Use `name:` unless the database already has the index under that name.
 
 To search a full-text index from the SQL builder, pass the index itself, read from the table's `indexes` by the name the contract gave it. `fullTextMatches` and `fullTextRank` then search the document the index was built over, with its weight groups and its language, so the query always matches the index:
 
@@ -218,7 +218,7 @@ The index states its language, so passing `language` with one is a type error an
 
 The document is one of three things: a full-text index, one column, or a document built by `fullTextDocument` from `./full-text`, which takes weight groups of columns, checks them by the same rules as an index, and searches several columns no index covers: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. With a column or a `fullTextDocument`, Postgres uses an index only when the groups, their order and the `language` are the index's; a mismatch is not an error, the query just falls back to a sequential scan. ``@@index(expression: sql`to_tsvector('english', "text")`, type: "gin", name: …)`` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
-Every argument that holds raw SQL (`where:`, `expression:`, and a policy's `using` and `withCheck`) takes a `sql` literal; a plain string is refused. See [ADR 268](../../../../docs/architecture%20docs/adrs/ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
+Every argument that holds raw SQL (`where:`, `expression:`, and a policy's `using` and `withCheck`) takes a `sql` literal in PSL and a `sql` value in the TypeScript builder; a plain string is refused. See [ADR 268](../../../../docs/architecture%20docs/adrs/ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
 
 ## Codec descriptor authoring
 

@@ -7,7 +7,7 @@ import type {
 } from '@internal/framework-components/components';
 import { defineIndexTypes } from '@internal/sql-contract/index-types';
 import type { ForeignKey, SqlStorage } from '@internal/sql-contract/types';
-import { defineContract, field, model, rel } from '@internal/sql-contract-ts/contract-builder';
+import { defineContract, field, model, rel, sql } from '@internal/sql-contract-ts/contract-builder';
 import { countSemanticLines } from '@repo/test-utils/semantic-lines';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
@@ -488,7 +488,7 @@ model Post {
           },
         }).sql(({ constraints }) => ({
           table: 'user',
-          indexes: [constraints.index({ expression: 'lower(email)', name: 'users_email_eq' })],
+          indexes: [constraints.index({ expression: sql`lower(email)`, name: 'users_email_eq' })],
         })),
       },
       createNamespace: createTestSqlNamespace,
@@ -562,8 +562,8 @@ model Post {
             table: 'user',
             indexes: [
               constraints.index({
-                expression: 'eql_v3.eq_term(email)',
-                where: '(deleted_at IS NULL)',
+                expression: sql`eql_v3.eq_term(email)`,
+                where: sql`(deleted_at IS NULL)`,
                 unique: true,
                 name: 'users_email_eq',
                 type: 'bm25',
