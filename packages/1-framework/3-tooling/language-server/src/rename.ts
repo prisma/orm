@@ -97,6 +97,7 @@ function mapAttributeEdit(input: ProvideRenameInput): MapAttributeEdit | undefin
     case 'compositeType':
     case 'namedType':
     case 'namespace':
+    case 'mixin':
       return undefined;
   }
 }

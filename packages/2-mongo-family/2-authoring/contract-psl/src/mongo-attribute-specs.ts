@@ -90,7 +90,7 @@ export function describeUnsupportedMongoAttribute(
     if (level === 'model') {
       return {
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        message: `${owner.kind === 'mixin' ? 'Mixin' : 'Model'} "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
         ...diagnosticSource(sources, owner.node.syntax).at(attribute.span),
       };
     }

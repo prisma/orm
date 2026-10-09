@@ -32,6 +32,7 @@ export function pslSymbolOf(resolution: Resolution): PslSymbol | undefined {
     case 'field':
     case 'namespace':
       return resolution.symbol;
+    case 'mixin':
     case 'contributedType':
     case 'contributedNamespace':
     case 'crossSpace':

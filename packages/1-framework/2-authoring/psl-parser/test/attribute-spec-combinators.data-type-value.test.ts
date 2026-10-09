@@ -102,7 +102,14 @@ function argOf(source: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   if (expr === undefined) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, cursor.sourceFile]]);
   const symbols = {
-    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+    topLevel: {
+      namespaces: {},
+      models: {},
+      compositeTypes: {},
+      namedTypes: {},
+      blocks: {},
+      mixins: {},
+    },
   };
   return {
     expr,
@@ -128,7 +135,14 @@ function colonQualifiedArgOf(source: string): { expr: ExpressionAst; ctx: Attrib
   if (expr === undefined) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, new Cursor('schema.prisma', `@x(${source})`).sourceFile]]);
   const symbols = {
-    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+    topLevel: {
+      namespaces: {},
+      models: {},
+      compositeTypes: {},
+      namedTypes: {},
+      blocks: {},
+      mixins: {},
+    },
   };
   return {
     expr,

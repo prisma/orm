@@ -7,7 +7,6 @@ import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import {
   assembleAttributeSpecs,
@@ -36,7 +35,7 @@ import {
   contributedTypeScope,
   mergeContributedTypes,
 } from './contributed-type-scope';
-import { diagnosticSource } from './diagnostic';
+import { diagnosticSource, PSL_UNRESOLVED_REFERENCE } from './diagnostic';
 import {
   describeWrittenEntityReference,
   type WrittenEntityReference,
@@ -50,6 +49,7 @@ import {
   documentScope,
   isNamespaceLike,
   lookupMember,
+  lookupMixinReference,
   namedTypeBaseScope,
   namespaceScope,
   type Scope,
@@ -60,6 +60,7 @@ import type {
   BlockSymbol,
   CompositeTypeSymbol,
   FieldSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
@@ -78,11 +79,9 @@ import {
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
+import { type AstNode, printSyntax } from './syntax/ast-helpers';
 import type { SyntaxNode } from './syntax/red';
 import { readWrittenScalar } from './written-scalar';
-
-export const PSL_UNRESOLVED_REFERENCE =
-  'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
 
 export type BoundSpec =
   | AttributeSpec<never, ModelAttributeCtx>
@@ -120,7 +119,10 @@ export type PslSymbol =
   | NamedTypeSymbol
   | BlockSymbol
   | NamespaceSymbol
+  | MixinSymbol
   | FieldSymbol;
+
+export type FieldOwner = ModelSymbol | CompositeTypeSymbol | MixinSymbol;
 
 export type Resolution =
   | ScopeResolution
@@ -141,7 +143,7 @@ export interface Binder {
 export interface UnsupportedAttribute {
   readonly attribute: ResolvedAttribute;
   readonly level: 'model' | 'field';
-  readonly owner: ModelSymbol | CompositeTypeSymbol;
+  readonly owner: FieldOwner;
   readonly field: FieldSymbol | undefined;
 }
 
@@ -151,7 +153,7 @@ export type DescribeUnsupportedAttribute = (
 
 export interface UnresolvedTypeReference {
   readonly field: FieldSymbol;
-  readonly owner: ModelSymbol | CompositeTypeSymbol;
+  readonly owner: FieldOwner;
   readonly written: string;
 }
 
@@ -251,21 +253,50 @@ class ScopeStack {
   }
 }
 
-function walkEntities(
+const FIELD_MIXIN_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+function hasFields(mixin: MixinSymbol): boolean {
+  return FIELD_MIXIN_KEYWORDS.has(mixin.keyword);
+}
+
+function walkFieldOwners(
   symbolTable: SymbolTable,
   stack: ScopeStack,
   binder: Binder,
-  visit: (entity: ModelSymbol | CompositeTypeSymbol, namespace?: NamespaceSymbol) => void,
+  visit: (owner: FieldOwner, namespace?: NamespaceSymbol) => void,
 ): void {
   const { topLevel } = symbolTable;
-  for (const entity of Object.values(topLevel.models)) visit(entity);
-  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
+  const visitAll = (
+    records: SymbolTable['topLevel'] | NamespaceSymbol,
+    namespace?: NamespaceSymbol,
+  ): void => {
+    for (const entity of Object.values(records.models)) visit(entity, namespace);
+    for (const entity of Object.values(records.compositeTypes)) visit(entity, namespace);
+    for (const mixin of Object.values(records.mixins)) {
+      if (hasFields(mixin)) visit(mixin, namespace);
+    }
+  };
+  visitAll(topLevel);
   for (const namespace of Object.values(topLevel.namespaces)) {
     stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
-    for (const entity of Object.values(namespace.models)) visit(entity, namespace);
-    for (const entity of Object.values(namespace.compositeTypes)) visit(entity, namespace);
+    visitAll(namespace, namespace);
     stack.pop();
   }
+}
+
+function isWrittenIn(member: SyntaxNode, holder: { readonly node: AstNode }): boolean {
+  return member.parent === holder.node.syntax;
+}
+
+function ownFields(owner: FieldOwner): readonly FieldSymbol[] {
+  return Object.values(owner.fields).filter((field) => isWrittenIn(field.node.syntax, owner));
+}
+
+function ownAttributes<TAttribute extends ResolvedAttribute>(holder: {
+  readonly node: AstNode;
+  readonly attributes: readonly TAttribute[];
+}): readonly TAttribute[] {
+  return holder.attributes.filter((attribute) => isWrittenIn(attribute.node.syntax, holder));
 }
 
 function declarationResolution(
@@ -332,6 +363,14 @@ function bind(options: BindingInputs): BinderResult {
     const outcome = resolveTypeReference(name, baseScope, references);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
+    if (outcome.resolution.kind === 'mixin' && outcome.message !== undefined) {
+      diagnostics.push({
+        code: PSL_UNRESOLVED_REFERENCE,
+        message: outcome.message,
+        data: { reference: 'type', name: outcome.name, constructorCall: symbol.isConstructor },
+        ...diagnosticSource(sources, name.syntax).at(),
+      });
+    }
     bindEntityConstructorArgument(symbol, outcome.resolution, {
       scope: baseScope,
       sources,
@@ -343,6 +382,11 @@ function bind(options: BindingInputs): BinderResult {
     declarations.set(symbol.node.syntax, symbol);
     const declaredName = symbol.node.name()?.syntax;
     if (declaredName !== undefined) references.set(declaredName, { kind: 'block', symbol });
+  }
+  for (const symbol of Object.values(symbolTable.topLevel.mixins)) {
+    declarations.set(symbol.node.syntax, symbol);
+    const declaredName = symbol.node.name()?.syntax;
+    if (declaredName !== undefined) references.set(declaredName, { kind: 'mixin', symbol });
   }
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     const scope = namespaceScope(namespace, document);
@@ -361,18 +405,31 @@ function bind(options: BindingInputs): BinderResult {
         references.set(declaredName, { kind: 'block', symbol, namespace });
       }
     }
+    for (const symbol of Object.values(namespace.mixins)) {
+      declarations.set(symbol.node.syntax, symbol);
+      const declaredName = symbol.node.name()?.syntax;
+      if (declaredName !== undefined) {
+        references.set(declaredName, { kind: 'mixin', symbol, namespace });
+      }
+    }
+  }
+  bindInclusions(symbolTable.topLevel, undefined, references);
+  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    bindInclusions(symbolTable.topLevel, namespace, references);
   }
 
   // Attributes are parsed in a second walk once every field type is bound.
   // @relation(references: [x]) reads the referenced model's fields, and that
   // model may be declared further down the file.
-  walkEntities(symbolTable, stack, binder, (entity, namespace) => {
-    declarations.set(entity.node.syntax, entity);
-    const declaredName = entity.node.name()?.syntax;
-    if (declaredName !== undefined) {
-      references.set(declaredName, declarationResolution(entity, namespace));
+  walkFieldOwners(symbolTable, stack, binder, (entity, namespace) => {
+    if (entity.kind !== 'mixin') {
+      declarations.set(entity.node.syntax, entity);
+      const declaredName = entity.node.name()?.syntax;
+      if (declaredName !== undefined) {
+        references.set(declaredName, declarationResolution(entity, namespace));
+      }
     }
-    for (const field of Object.values(entity.fields)) {
+    for (const field of ownFields(entity)) {
       declarations.set(field.node.syntax, field);
       const fieldName = field.node.name()?.syntax;
       if (fieldName !== undefined) references.set(fieldName, { kind: 'field', symbol: field });
@@ -405,7 +462,7 @@ function bind(options: BindingInputs): BinderResult {
     }
   });
 
-  walkEntities(symbolTable, stack, binder, (entity) => {
+  walkFieldOwners(symbolTable, stack, binder, (entity) => {
     const context = {
       owner: entity,
       scope: stack.current(),
@@ -416,17 +473,17 @@ function bind(options: BindingInputs): BinderResult {
       describeUnsupportedAttribute,
     };
     const specContext =
-      entity.kind === 'model'
+      entity.kind === 'model' || (entity.kind === 'mixin' && entity.keyword === 'model')
         ? { symbols: symbolTable, model: entity, defaultFunctionRegistry, dataTypes }
         : undefined;
     bindAttributes(
       entity,
-      entity.attributes,
+      ownAttributes(entity),
       attributeSpecs.model,
       (factory) => (specContext === undefined ? undefined : factory(specContext)),
       { ...context, field: undefined },
     );
-    for (const field of Object.values(entity.fields)) {
+    for (const field of ownFields(entity)) {
       bindAttributes(
         field,
         field.attributes,
@@ -450,18 +507,68 @@ function bind(options: BindingInputs): BinderResult {
     references,
     diagnostics,
   };
-  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
+  const bindBlocks = (records: SymbolTable['topLevel'] | NamespaceSymbol) => {
     const context = { ...blockContext, scope: stack.current() };
-    for (const block of Object.values(blocks)) bindBlock(block, context);
+    for (const block of Object.values(records.blocks)) {
+      bindBlock(
+        {
+          keyword: block.keyword,
+          entries: block.entries.filter((entry) => isWrittenIn(entry.syntax, block)),
+          attributes: ownAttributes(block),
+        },
+        context,
+      );
+    }
+    for (const mixin of Object.values(records.mixins)) {
+      if (!hasFields(mixin)) bindBlock(mixin, context);
+    }
   };
-  bindBlocks(symbolTable.topLevel.blocks);
+  bindBlocks(symbolTable.topLevel);
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
-    bindBlocks(namespace.blocks);
+    bindBlocks(namespace);
     stack.pop();
   }
 
   return { binder, diagnostics };
+}
+
+function bindInclusions(
+  topLevel: SymbolTable['topLevel'],
+  namespace: NamespaceSymbol | undefined,
+  references: ResolutionSink,
+): void {
+  const records = namespace ?? topLevel;
+  const holders = [
+    ...Object.values(records.models),
+    ...Object.values(records.compositeTypes),
+    ...Object.values(records.blocks),
+    ...Object.values(records.mixins),
+  ];
+  for (const holder of holders) {
+    for (const inclusion of holder.node.inclusions()) {
+      const reference = inclusion.name();
+      const name = reference?.identifier()?.name();
+      if (reference === undefined || name === undefined || reference.isOverQualified()) continue;
+      const qualifier = reference.namespace();
+      const namespaceId = qualifier?.name();
+      const qualifierSymbol =
+        namespaceId === undefined ? undefined : topLevel.namespaces[namespaceId];
+      if (qualifier !== undefined && qualifierSymbol !== undefined) {
+        references.set(qualifier.syntax, { kind: 'namespace', symbol: qualifierSymbol });
+      }
+      const resolution =
+        reference.space() === undefined
+          ? lookupMixinReference(topLevel, namespace, { namespaceId, name })
+          : undefined;
+      references.set(
+        reference.syntax,
+        resolution?.kind === 'mixin'
+          ? resolution
+          : { kind: 'unresolved', name: printSyntax(reference.syntax) },
+      );
+    }
+  }
 }
 
 interface ReferenceContext {
@@ -477,7 +584,9 @@ interface BlockBindContext extends ReferenceContext {
   readonly dataTypes: DataTypeSupport;
 }
 
-function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
+type BlockMembers = Pick<BlockSymbol, 'keyword' | 'entries' | 'attributes'>;
+
+function bindBlock(block: BlockMembers, ctx: BlockBindContext): void {
   const descriptor = findBlockDescriptor(ctx.pslBlockDescriptors, block.keyword);
   if (descriptor === undefined) return;
   const specContext = blockSpecContext({
@@ -739,13 +848,13 @@ function recordValues(expression: ExpressionAst): Iterable<ExpressionAst> | unde
 }
 
 interface BindContext extends ReferenceContext {
-  readonly owner: ModelSymbol | CompositeTypeSymbol;
+  readonly owner: FieldOwner;
   readonly field: FieldSymbol | undefined;
   readonly describeUnsupportedAttribute: DescribeUnsupportedAttribute | undefined;
 }
 
 function bindAttributes<Factory>(
-  holder: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
+  holder: FieldOwner | FieldSymbol,
   attributes: readonly ResolvedAttribute[],
   specs: Readonly<Record<string, Factory>>,
   instantiate: (factory: Factory) => BoundSpec | undefined,
@@ -974,11 +1083,16 @@ function resolveTypeReference(
       name: found.qualifier,
     };
   }
-  if (found.kind === 'namespace' || found.kind === 'contributedNamespace') {
+  if (
+    found.kind === 'namespace' ||
+    found.kind === 'contributedNamespace' ||
+    found.kind === 'mixin'
+  ) {
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
+    const kind = found.kind === 'mixin' ? 'mixin' : 'namespace';
     return {
       resolution: found,
-      message: `"${written}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
+      message: `"${written}" is a ${kind}; a type reference must name a model, composite type, enum, or named type`,
       name: written,
     };
   }

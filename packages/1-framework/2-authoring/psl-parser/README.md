@@ -65,7 +65,11 @@ Strongly typed AST classes wrap the tree for convenient reading. A mixin declara
 
 `buildSymbolTable({ documents, sources })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
 
-Mixin declarations are not collected and take no part in duplicate detection. The symbol table reports each mixin declaration and each inclusion as not supported yet.
+Mixin declarations are collected too, each as a mixin symbol with the keyword it is for and its own fields or entries and attributes. A mixin's name must be unique among the models, composite types, generic blocks and mixins of its namespace.
+
+A symbol's members include the members of every mixin its declaration includes, at the position of the inclusion, so a consumer that reads members from symbols sees an included member exactly as it sees one written in the block. An included member is the same object in every block that includes it. The name of an inclusion is looked up in the namespace of the including block and then at the top level; `ns.Name` is looked up in namespace `ns` only.
+
+The symbol table reports an inclusion it cannot place, at the inclusion: a name that is not a mixin, a name with a contract-space qualifier, a mixin for a different block keyword, a mixin included twice in one block, a field or entry key the block already has, and an inclusion inside a mixin. When a member is provided twice, the earlier one is kept.
 
 Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
 
@@ -79,9 +83,13 @@ An unqualified name is looked up in this order:
 2. the top level;
 3. the types the configured target and its extensions contribute (scalars, type constructors, field presets).
 
-Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
+Mixins are found by the same lookup as models, composite types and generic blocks. Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
 
 The binder also resolves what attribute and block specifications describe: attribute names, argument keys, function names, fixed identifier values, and the references inside argument values. Where a specification offers alternatives, the binder picks the first alternative the written value fits by its syntactic shape. Checking the value itself, such as a number range or an allowed string, is left to interpretation.
+
+A name resolves to one of these kinds: a model, a composite type, a named type, a generic block, a mixin, a namespace, a contributed type or namespace, a field, an attribute, a parameter, a function, a constant, a type of another contract space, or unresolved. The name of an inclusion resolves to its mixin, and its qualifier to the namespace. A mixin is not a type: a field or a named type whose type names a mixin is reported as an unresolved reference.
+
+A mixin body is bound once, where it is written, whether or not anything includes it. The types of its fields are looked up from the namespace of the mixin, not from the namespace of a block that includes it, and a field name in one of its attributes must be a field of the mixin itself. A block binds only the members written in it, so a diagnostic about a mixin's member is reported once, in the mixin. An attribute written in a block can name any of the block's fields, including one a mixin provides.
 
 A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
 

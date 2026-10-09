@@ -3,7 +3,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { Resolution } from '../binder';
 import type { BlockSpecContext } from '../block-spec/types';
-import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
+import type { FieldSymbol, MixinSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type {
   AttributeSpec,
   BlockAttributeCtx,
@@ -13,7 +13,7 @@ import type {
 
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
-  readonly model: ModelSymbol;
+  readonly model: ModelSymbol | MixinSymbol;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
 }

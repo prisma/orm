@@ -247,11 +247,12 @@ export function describeUnsupportedSqlAttribute(sources: PslSources): DescribeUn
   return ({ attribute, level, owner, field }) => {
     // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
     if (owner.kind === 'compositeType') return undefined;
+    if (owner.kind === 'mixin' && owner.keyword === 'type') return undefined;
     if (level === 'model') {
       const source = diagnosticSource(sources, owner.node.syntax);
       return {
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        message: `${owner.kind === 'mixin' ? 'Mixin' : 'Model'} "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
         ...source.at(attribute.span),
       };
     }

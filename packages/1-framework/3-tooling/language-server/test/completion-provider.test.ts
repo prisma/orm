@@ -1828,4 +1828,26 @@ namespace app {
   ])('completes without an error %s', (_case, markedSource) => {
     expect(() => complete(markedSource)).not.toThrow();
   });
+
+  it('does not offer a mixin as a field type, by its name or as a namespace member', () => {
+    const mixins = [
+      'model mixin Timestamps {',
+      '  createdAt DateTime',
+      '}',
+      'namespace shared {',
+      '  model mixin Audited {',
+      '    actor String',
+      '  }',
+      '  model Marker {',
+      '    id Int',
+      '  }',
+      '}',
+    ].join('\n');
+    const unqualified = complete(`${mixins}\nmodel Post {\n  stamps |\n}`).items;
+    const qualified = complete(`${mixins}\nmodel Post {\n  stamps shared.|\n}`).items;
+
+    expect(unqualified.map((item) => item.label)).toContain('shared');
+    expect(unqualified.map((item) => item.label)).not.toContain('Timestamps');
+    expect(qualified.map((item) => item.label)).toEqual(['Marker']);
+  });
 });

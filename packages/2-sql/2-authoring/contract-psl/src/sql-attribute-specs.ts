@@ -795,7 +795,7 @@ export function modelSpecContext(input: {
 
 export function fieldSpecContext(input: {
   readonly symbols: SymbolTable;
-  readonly model: ModelSymbol;
+  readonly model: AttributeSpecContext['model'];
   readonly field: FieldSymbol;
   readonly binder: Binder;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
