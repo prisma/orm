@@ -95,7 +95,7 @@ describe('storage no model maps', () => {
     );
   });
 
-  it('refuses a generated default on a column no field maps, since the ORM never writes it', () => {
+  it('refuses a generated default on a column no field maps, since execution defaults belong to fields', () => {
     const contract = createContract<SqlStorage>({
       storage: storage(tables),
       models: { User: userModel({ id: { column: 'id' }, email: { column: 'email' } }) },
@@ -113,7 +113,7 @@ describe('storage no model maps', () => {
 
     expect(() => validateSqlContractFully(contract)).toThrow(
       new ContractValidationError(
-        'Execution default for column "legacy_key" of table "__unbound__.user" targets a column no field maps; the ORM never writes such a column, so the default could never run. Give the column a database default instead.',
+        'Execution default for column "legacy_key" of table "__unbound__.user" targets a column no field maps; execution defaults are declared on fields. Give the column a database default instead.',
         'storage',
       ),
     );

@@ -629,7 +629,7 @@ A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate --adva
 
 ### CONTRACT.VALIDATION_FAILED
 
-Aggregate contract validation failed: structural validation of the contract JSON (`ContractValidationError` with a `phase` of structural/domain/storage), semantic validation during `buildContract`, or storage/model validators rejecting the built contract. Raised at emit/authoring time and whenever a contract is loaded and validated. Also raised by `migration new` when the emitted contract has no `storageHash`; that site has no meta. Payload: `errors` (aggregate site); the error class also carries `phase`.
+Aggregate contract validation failed: structural validation of the contract JSON (`ContractValidationError` with a `phase` of structural/domain/storage), semantic validation during `buildContract`, or storage/model validators rejecting the built contract. The SQL validators also refuse a domain field with no storage entry, an execution default on a column no field maps, and a relation that joins on a name that is not a field of its model (the target side of a many-to-many relation names junction columns and is exempt). Raised at emit/authoring time and whenever a contract is loaded and validated. Also raised by `migration new` when the emitted contract has no `storageHash`; that site has no meta. Payload: `errors` (aggregate site); the error class also carries `phase`.
 
 ### CONTRACT.VARIANT_COLUMN_NOT_ON_BASE_TABLE
 
@@ -966,7 +966,7 @@ A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by 
 
 ### ORM.FIELD_UNKNOWN
 
-A name the caller passed is not a field of the model, or of the variant the collection is narrowed to. The SQL ORM client never treats such a name as a column name, so a column no field maps cannot be read, written or filtered on. Raised by `where` shorthand and the `where`/`orderBy` callback accessor, relation filters, `select`, `distinct`, `distinctOn`, `groupBy`, `cursor`, aggregates and `having`, `create`/`update`/`upsert` data (including variant creates), `conflictOn`, include nested selects and scalar reducers, and relation join fields. The message is `Model "<model>" has no field "<name>"`. A fragment applied to a collection whose model lacks a declared field, or whose field does not match the declaration, raises it too, with its own message. Payload: `model`, `field`.
+A name the caller passed is not a field of the model, or of the variant the collection is narrowed to. The SQL ORM client never treats such a name as a column name, so a column no field maps cannot be read, written or filtered on. Raised by `where` shorthand and the `where`/`orderBy` callback accessor, relation filters, `select`, `distinct`, `distinctOn`, `groupBy`, `cursor`, aggregates and `having`, `create`/`update`/`upsert` data (including variant creates), `conflictOn`, and include nested selects and scalar reducers. The message is `Model "<model>" has no field "<name>"`. A fragment applied to a collection whose model lacks a declared field, or whose field does not match the declaration, raises it too, with its own message. Payload: `model`, `field`.
 
 ### ORM.FILTER_UNSUPPORTED
 
