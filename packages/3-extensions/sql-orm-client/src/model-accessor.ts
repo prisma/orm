@@ -46,13 +46,14 @@ import {
 } from './collection-contract';
 import { assertModelFieldNames } from './collection-runtime';
 import { codecTraits, hasTrait, resolveColumn } from './column-codec';
-import { and, type Condition, conditionExpr, not } from './filters';
+import { and, conditionExpr, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableForContract, tableSourceForContract } from './storage-resolution';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
+  type Condition,
   type ModelAccessor,
   type ModelCallbackTools,
   type Orderable,
@@ -147,20 +148,30 @@ class ModelAccessorScope {
     readonly current: SqlTableBinding,
     visibleBindings: readonly SqlTableBinding[],
     aliasCounter: RelationAliasCounter,
+    readonly rawCodecInferer: RawCodecInferer | undefined,
   ) {
     this.#visibleBindings = Object.freeze([...visibleBindings]);
     this.#aliasCounter = aliasCounter;
     Object.freeze(this);
   }
 
-  static root(namespaceId: string, tableName: string): ModelAccessorScope {
+  static root(
+    namespaceId: string,
+    tableName: string,
+    rawCodecInferer: RawCodecInferer | undefined,
+  ): ModelAccessorScope {
     const binding = SqlTableBinding.unaliased({ namespaceId, tableName });
-    return new ModelAccessorScope(binding, [binding], { nextId: 1 });
+    return new ModelAccessorScope(binding, [binding], { nextId: 1 }, rawCodecInferer);
   }
 
   forRelation(namespaceId: string, tableName: string): ModelAccessorScope {
     const binding = this.#allocateBinding(namespaceId, tableName, 'rel');
-    return new ModelAccessorScope(binding, [...this.#visibleBindings, binding], this.#aliasCounter);
+    return new ModelAccessorScope(
+      binding,
+      [...this.#visibleBindings, binding],
+      this.#aliasCounter,
+      this.rawCodecInferer,
+    );
   }
 
   forManyToManyRelation(
@@ -179,6 +190,7 @@ class ModelAccessorScope {
       initialChildScope.current,
       [...initialChildScope.#visibleBindings, junctionBinding],
       this.#aliasCounter,
+      this.rawCodecInferer,
     );
     return { childScope, junctionBinding };
   }
@@ -188,7 +200,12 @@ class ModelAccessorScope {
       return this;
     }
     const binding = SqlTableBinding.unaliased({ namespaceId, tableName });
-    return new ModelAccessorScope(binding, [...this.#visibleBindings, binding], this.#aliasCounter);
+    return new ModelAccessorScope(
+      binding,
+      [...this.#visibleBindings, binding],
+      this.#aliasCounter,
+      this.rawCodecInferer,
+    );
   }
 
   #allocateBinding(
@@ -232,8 +249,7 @@ export function createModelAccessor<
     namespaceId,
     modelName,
     variantName,
-    ModelAccessorScope.root(namespaceId, tableName),
-    rawCodecInferer,
+    ModelAccessorScope.root(namespaceId, tableName, rawCodecInferer),
   );
 }
 
@@ -255,8 +271,7 @@ export function createModelCallbackTools<
     context,
     namespaceId,
     modelName,
-    ModelAccessorScope.root(namespaceId, tableName).current,
-    rawCodecInferer,
+    ModelAccessorScope.root(namespaceId, tableName, rawCodecInferer),
   );
 }
 
@@ -268,11 +283,10 @@ function callbackToolsFor<
   context: ExecutionContext<TContract>,
   namespaceId: NsId,
   modelName: ModelName,
-  binding: SqlTableBinding,
-  rawCodecInferer: RawCodecInferer | undefined,
+  scope: ModelAccessorScope,
 ): ModelCallbackTools<TContract, ModelName, NsId> {
-  return createCallbackTools<TContract, ModelName, NsId>(context, rawCodecInferer, () =>
-    indexReferencesOf(context, namespaceId, modelName, binding),
+  return createCallbackTools<TContract, ModelName, NsId>(context, scope.rawCodecInferer, () =>
+    indexReferencesOf(context, namespaceId, modelName, scope.current),
   );
 }
 
@@ -328,7 +342,6 @@ function createModelAccessorInScope<
   modelName: ModelName,
   variantName: VariantName | undefined,
   scope: ModelAccessorScope,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldColumns = getModelAndVariantFieldColumns(
@@ -409,21 +422,13 @@ function createModelAccessorInScope<
               variantCoordinates.name,
               scope.forJoinedSource(namespaceId, variantCoordinates.tableName),
               variantRelation,
-              rawCodecInferer,
             );
           }
         }
 
         const relation = Object.hasOwn(modelRelations, prop) ? modelRelations[prop] : undefined;
         if (relation) {
-          return createRelationFilterAccessor(
-            context,
-            namespaceId,
-            modelName,
-            scope,
-            relation,
-            rawCodecInferer,
-          );
+          return createRelationFilterAccessor(context, namespaceId, modelName, scope, relation);
         }
 
         const variantField = Object.hasOwn(variantFieldColumns, prop)
@@ -569,7 +574,6 @@ function createRelationFilterAccessor<
   parentModelName: ParentModelName,
   parentScope: ModelAccessorScope,
   relation: ResolvedModelRelation,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): RelationAccessor<TContract> {
   const relatedTableName = resolveModelTableName(
     context.contract,
@@ -587,12 +591,9 @@ function createRelationFilterAccessor<
     );
 
   const filters: RelationFilterAccessor<TContract, string, string> = {
-    some: (predicate) =>
-      buildExistsExpr(context, relation, correlate(), 'some', predicate, rawCodecInferer),
-    every: (predicate) =>
-      buildExistsExpr(context, relation, correlate(), 'every', predicate, rawCodecInferer),
-    none: (predicate) =>
-      buildExistsExpr(context, relation, correlate(), 'none', predicate, rawCodecInferer),
+    some: (predicate) => buildExistsExpr(context, relation, correlate(), 'some', predicate),
+    every: (predicate) => buildExistsExpr(context, relation, correlate(), 'every', predicate),
+    none: (predicate) => buildExistsExpr(context, relation, correlate(), 'none', predicate),
   };
 
   if (isToOneCardinality(relation.cardinality)) {
@@ -618,9 +619,7 @@ function createRelationFilterAccessor<
   return {
     ...filters,
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
-      createOrderable(() =>
-        buildRelationCountExpr(context, relation, correlate(), predicate, rawCodecInferer),
-      ),
+      createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
   };
 }
 
@@ -678,7 +677,6 @@ function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
   relation: ResolvedModelRelation,
   rows: CorrelatedRelatedRows,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression {
   const childWhere = toRelationWhereExpr(
     context,
@@ -686,7 +684,6 @@ function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
     relation.to,
     predicate,
     rows.childScope,
-    rawCodecInferer,
   );
   return SubqueryExpr.of(
     rows.source
@@ -767,7 +764,6 @@ function buildExistsExpr<TContract extends Contract<SqlStorage>>(
   rows: CorrelatedRelatedRows,
   mode: RelationFilterMode,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression {
   const childWhere = toRelationWhereExpr(
     context,
@@ -775,7 +771,6 @@ function buildExistsExpr<TContract extends Contract<SqlStorage>>(
     relation.to,
     predicate,
     rows.childScope,
-    rawCodecInferer,
   );
 
   const filterPlan = planRelationFilterMode(rows.correlation, childWhere, mode);
@@ -860,7 +855,6 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
   relatedModelName: string,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
   scope: ModelAccessorScope,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression | undefined {
   if (!predicate) {
     return undefined;
@@ -873,21 +867,11 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
     relatedModelName,
     undefined,
     scope,
-    rawCodecInferer,
   );
 
   if (typeof predicate === 'function') {
     return conditionExpr(
-      predicate(
-        accessor,
-        callbackToolsFor(
-          context,
-          relatedNamespaceId,
-          relatedModelName,
-          scope.current,
-          rawCodecInferer,
-        ),
-      ),
+      predicate(accessor, callbackToolsFor(context, relatedNamespaceId, relatedModelName, scope)),
     );
   }
 

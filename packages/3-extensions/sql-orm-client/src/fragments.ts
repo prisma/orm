@@ -621,7 +621,7 @@ export function defineDeclaredFieldsFragment<
     const receiver: unknown = collection;
     assertFragmentReceiver(receiver);
     assertDeclaredFieldsFragmentFields(receiver, fields);
-    const result: unknown = body(
+    const returned: unknown = body(
       blindCast<
         DeclaredFieldsFragmentCollection<
           DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
@@ -629,11 +629,58 @@ export function defineDeclaredFieldsFragment<
           TContract
         >,
         'a collection offers where, orderBy, limit and offset with these run-time shapes'
-      >(collection),
+      >(withoutIndexes(receiver)),
     );
+    const result = collectionBehind(returned);
     assertDeclaredFieldsFragmentResult(receiver, result);
     return result;
   });
+}
+
+const NO_INDEXES = Object.freeze({});
+
+const collectionsBehindViews = new WeakMap<object, unknown>();
+
+const BODY_CHAIN_METHODS: ReadonlySet<PropertyKey> = new Set([
+  'where',
+  'orderBy',
+  'limit',
+  'offset',
+]);
+
+/**
+ * The collection as the body of a fragment for any model sees it: a `where` or `orderBy` callback receives `fns` and an `indexes` with no members, as the body does not know its model.
+ */
+function withoutIndexes(collection: object): object {
+  const view = new Proxy(collection, {
+    get(target, prop) {
+      const member: unknown = Reflect.get(target, prop, target);
+      if (typeof member !== 'function') return member;
+      if (!BODY_CHAIN_METHODS.has(prop)) return member.bind(target);
+      return (...args: unknown[]) => {
+        const result: unknown = Reflect.apply(member, target, args.map(withoutIndexesInCallbacks));
+        return typeof result === 'object' && result !== null ? withoutIndexes(result) : result;
+      };
+    },
+  });
+  collectionsBehindViews.set(view, collection);
+  return view;
+}
+
+function withoutIndexesInCallbacks(argument: unknown): unknown {
+  if (Array.isArray(argument)) return argument.map(withoutIndexesInCallbacks);
+  if (typeof argument !== 'function') return argument;
+  return (row: unknown, tools: unknown) =>
+    Reflect.apply(argument, undefined, [
+      row,
+      { fns: Reflect.get(Object(tools), 'fns'), indexes: NO_INDEXES },
+    ]);
+}
+
+function collectionBehind(value: unknown): unknown {
+  return typeof value === 'object' && value !== null
+    ? (collectionsBehindViews.get(value) ?? value)
+    : value;
 }
 
 export interface ModelCollection<

@@ -1,28 +1,21 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { WhereArg } from '@internal/sql-relational-core/ast';
 import {
   type Expression,
   isExpression,
   type RawCodecInferer,
+  type RawSqlBuilder,
+  type RawSqlInterpolation,
   type ScopeField,
 } from '@internal/sql-relational-core/expression';
-import { type BooleanCodecType, createFunctions } from '@internal/sql-relational-core/functions';
+import { createFunctions } from '@internal/sql-relational-core/functions';
 import type { IndexReference } from '@internal/sql-relational-core/index-reference';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { codecTraits } from './column-codec';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
-import type {
-  ModelCallbackTools,
-  ModelIndexReferences,
-  OrderOptions,
-  OrmFunctions,
-  WhereCallbackResult,
-} from './types';
-
-const NO_INDEXES: Readonly<Record<string, IndexReference>> = Object.freeze({});
+import type { ModelCallbackTools, ModelIndexReferences, OrderOptions, OrmFunctions } from './types';
 
 /**
  * Refuses a bare value in `fns.raw` for an ORM client built without the adapter's raw codec inferer.
@@ -41,16 +34,39 @@ const rawCodecInfererUnavailable: RawCodecInferer = {
   },
 };
 
+/**
+ * The expression with `asc()` and `desc()` added. Every other member reads from the expression itself, so its own methods keep working.
+ */
+function orderable(expression: Expression<ScopeField>): unknown {
+  const order = {
+    asc: (options?: OrderOptions) => checkedOrderByItem('asc', expression.buildAst(), options),
+    desc: (options?: OrderOptions) => checkedOrderByItem('desc', expression.buildAst(), options),
+  };
+  return new Proxy(expression, {
+    has: (target, prop) => prop === 'asc' || prop === 'desc' || Reflect.has(target, prop),
+    get(target, prop) {
+      if (prop === 'asc' || prop === 'desc') return order[prop];
+      const member: unknown = Reflect.get(target, prop, target);
+      return typeof member === 'function' ? member.bind(target) : member;
+    },
+  });
+}
+
 function orderableValue(context: ExecutionContext, result: unknown): unknown {
   if (!isExpression(result)) return result;
   if (codecTraits(context, result.returnType.codecId).includes('boolean')) return result;
-  const value: Expression<ScopeField> = result;
-  return Object.freeze({
-    returnType: value.returnType,
-    buildAst: () => value.buildAst(),
-    asc: (options?: OrderOptions) => checkedOrderByItem('asc', value.buildAst(), options),
-    desc: (options?: OrderOptions) => checkedOrderByItem('desc', value.buildAst(), options),
-  });
+  return orderable(result);
+}
+
+function orderableRaw(
+  raw: (strings: TemplateStringsArray, ...values: RawSqlInterpolation[]) => RawSqlBuilder,
+) {
+  return (strings: TemplateStringsArray, ...values: RawSqlInterpolation[]) => {
+    const builder = raw(strings, ...values);
+    return {
+      returns: (spec: Parameters<RawSqlBuilder['returns']>[0]) => orderable(builder.returns(spec)),
+    };
+  };
 }
 
 function createOrmFunctions<TContract extends Contract<SqlStorage>>(
@@ -58,18 +74,17 @@ function createOrmFunctions<TContract extends Contract<SqlStorage>>(
   rawCodecInferer: RawCodecInferer | undefined,
 ): OrmFunctions<TContract> {
   const operations = context.queryOperations.entries();
-  const fns: Readonly<Record<string, unknown>> = createFunctions(
-    operations,
-    rawCodecInferer ?? rawCodecInfererUnavailable,
-  );
+  const fns = createFunctions(operations, rawCodecInferer ?? rawCodecInfererUnavailable);
+  const raw = orderableRaw(fns.raw);
   return new Proxy(
     blindCast<OrmFunctions<TContract>, 'the handler answers every function name'>({}),
     {
       get(_target, prop) {
         if (typeof prop !== 'string') return undefined;
-        const fn = fns[prop];
+        if (prop === 'raw') return raw;
+        const fn: unknown = Reflect.get(fns, prop);
         if (typeof fn !== 'function' || !Object.hasOwn(operations, prop)) return fn;
-        return (...args: unknown[]) => orderableValue(context, fn(...args));
+        return (...args: unknown[]) => orderableValue(context, Reflect.apply(fn, undefined, args));
       },
     },
   );
@@ -98,21 +113,4 @@ export function createCallbackTools<
       >(resolved);
     },
   });
-}
-
-/** The callback tools of a body that does not know its model: every function, and no index. */
-export function createModellessCallbackTools<TContract extends Contract<SqlStorage>>(
-  context: ExecutionContext<TContract>,
-  rawCodecInferer: RawCodecInferer | undefined,
-) {
-  return createCallbackTools<TContract, string, string>(context, rawCodecInferer, () => NO_INDEXES);
-}
-
-/** A `where` callback's result as a filter: a condition from `fns` is an expression, and becomes its AST. */
-export function whereArgOf(result: WhereCallbackResult): WhereArg {
-  return isFunctionCondition(result) ? result.buildAst() : result;
-}
-
-function isFunctionCondition(result: WhereCallbackResult): result is Expression<BooleanCodecType> {
-  return isExpression(result);
 }

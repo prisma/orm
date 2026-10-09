@@ -98,8 +98,8 @@ describe('where with fns and indexes', () => {
           .where((_u, { fns, indexes }) => fns.fullTextMatches(indexes.users_search, q)),
       );
 
-    expect(usersSqlWithIncludes(users.state)).toContain(
-      `${searchOf('invitedUsers__child')} @@ websearch_to_tsquery('english', $1)`,
+    expect(usersSqlWithIncludes(users.state)).toBe(
+      `SELECT "users"."id" AS "id", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id")), json_build_array()) AS "invitedUsers" FROM (SELECT "invitedUsers__child"."id" AS "id" FROM "public"."users" AS "invitedUsers__child" WHERE ("invitedUsers__child"."invited_by_id" = "users"."id" AND ${searchOf('invitedUsers__child')} @@ websearch_to_tsquery('english', $1))) AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users"`,
     );
   });
 });

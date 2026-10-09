@@ -38,7 +38,6 @@ import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import { aggregateOperationNames } from './aggregate-operations';
-import { whereArgOf } from './callback-tools';
 import {
   mapCursorValuesToColumns,
   mapFieldsToColumns,
@@ -112,7 +111,7 @@ import type {
   RowType,
   TypeState,
 } from './collection-types';
-import { shorthandToWhereExpr } from './filters';
+import { shorthandToWhereExpr, whereArgOf } from './filters';
 import {
   assertFragmentBody,
   assertModelFragmentReceiver,

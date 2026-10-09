@@ -5,6 +5,7 @@ import type {
   ExtractCodecTypes,
   ExtractFieldOutputTypes,
   ExtractQueryOperationTypes,
+  QueryOperationTypesBase,
   SqlStorage,
   StorageColumn,
 } from '@internal/sql-contract/types';
@@ -23,7 +24,11 @@ import {
   type AggregateFn as SqlAggregateFn,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
-import type { Expression, RawCodecInferer } from '@internal/sql-relational-core/expression';
+import type {
+  Expression,
+  RawCodecInferer,
+  RawSqlInterpolation,
+} from '@internal/sql-relational-core/expression';
 import type { BooleanCodecType, BuiltinFunctions } from '@internal/sql-relational-core/functions';
 import type {
   IndexReference,
@@ -520,7 +525,7 @@ export type RelationPredicate<
 > = (
   model: ModelAccessor<TContract, ModelName, NsId>,
   tools: ModelCallbackTools<TContract, ModelName, NsId>,
-) => AnyExpression | Expression<BooleanCodecType>;
+) => Condition;
 
 export type RelationPredicateInput<
   TContract extends Contract<SqlStorage>,
@@ -652,8 +657,14 @@ export type VariantAwareModelAccessor<
     : ModelAccessor<TContract, ModelName, NsId>
   : ModelAccessor<TContract, ModelName, NsId>;
 
-/** A condition a `where` callback may return: an ORM filter expression, or a condition from `fns`. */
-export type WhereCallbackResult = WhereArg | Expression<BooleanCodecType>;
+/** A condition from `fns`. */
+export type FunctionCondition = Expression<BooleanCodecType>;
+
+/** A condition: an ORM filter expression, or a condition from `fns`. */
+export type Condition = AnyExpression | FunctionCondition;
+
+/** What a `where` callback may return: a filter, or a condition from `fns`. */
+export type WhereCallbackResult = WhereArg | FunctionCondition;
 
 type IsBooleanCodec<
   CodecId,
@@ -674,27 +685,70 @@ type OrmFunctionResult<R, TCodecTypes extends Record<string, unknown>> =
       : R & Orderable
     : R;
 
-type OrmOperation<Impl, TCodecTypes extends Record<string, unknown>> = Impl extends {
+/**
+ * An operation's implementation with each result as {@link OrmFunctionResult}. Up to four overloads keep their parameters; a generic signature keeps its parameters at their constraints.
+ */
+type OrmOperation<Impl, CT extends Record<string, unknown>> = Impl extends {
   (...args: infer A1): infer R1;
   (...args: infer A2): infer R2;
+  (...args: infer A3): infer R3;
+  (...args: infer A4): infer R4;
 }
   ? {
-      (...args: A1): OrmFunctionResult<R1, TCodecTypes>;
-      (...args: A2): OrmFunctionResult<R2, TCodecTypes>;
+      (...args: A1): OrmFunctionResult<R1, CT>;
+      (...args: A2): OrmFunctionResult<R2, CT>;
+      (...args: A3): OrmFunctionResult<R3, CT>;
+      (...args: A4): OrmFunctionResult<R4, CT>;
     }
-  : Impl extends (...args: infer A) => infer R
-    ? (...args: A) => OrmFunctionResult<R, TCodecTypes>
-    : Impl;
+  : Impl extends {
+        (...args: infer A1): infer R1;
+        (...args: infer A2): infer R2;
+        (...args: infer A3): infer R3;
+      }
+    ? {
+        (...args: A1): OrmFunctionResult<R1, CT>;
+        (...args: A2): OrmFunctionResult<R2, CT>;
+        (...args: A3): OrmFunctionResult<R3, CT>;
+      }
+    : Impl extends {
+          (...args: infer A1): infer R1;
+          (...args: infer A2): infer R2;
+        }
+      ? {
+          (...args: A1): OrmFunctionResult<R1, CT>;
+          (...args: A2): OrmFunctionResult<R2, CT>;
+        }
+      : Impl extends (...args: infer A) => infer R
+        ? (...args: A) => OrmFunctionResult<R, CT>
+        : Impl;
+
+/** `fns.raw` in the ORM: its result also has `asc()` and `desc()`. */
+export interface OrmRawSqlBuilder {
+  returns<S extends string>(spec: S): Expression<{ codecId: S; nullable: false }> & Orderable;
+  returns<S extends string, N extends boolean = false>(spec: {
+    readonly codecId: S;
+    readonly nullable?: N;
+  }): Expression<{ codecId: S; nullable: N }> & Orderable;
+}
+
+export type OrmRawSqlTag = (
+  strings: TemplateStringsArray,
+  ...values: RawSqlInterpolation[]
+) => OrmRawSqlBuilder;
+
+/** The SQL query builder's functions over the given codec types and query operations, as the ORM's callbacks receive them. */
+export type OrmFunctionsOf<
+  CT extends Record<string, { readonly input: unknown }>,
+  OT extends QueryOperationTypesBase,
+> = Omit<BuiltinFunctions<CT>, 'raw'> & { readonly raw: OrmRawSqlTag } & {
+  readonly [K in keyof OT]: OrmOperation<OT[K]['impl'], CT>;
+};
 
 /** The SQL query builder's functions for a contract, as the ORM's callbacks receive them. */
-export type OrmFunctions<TContract extends Contract<SqlStorage>> = BuiltinFunctions<
-  ExtractCodecTypes<TContract>
-> & {
-  readonly [K in keyof ExtractQueryOperationTypes<TContract>]: OrmOperation<
-    ExtractQueryOperationTypes<TContract>[K]['impl'],
-    ExtractCodecTypes<TContract>
-  >;
-};
+export type OrmFunctions<TContract extends Contract<SqlStorage>> = OrmFunctionsOf<
+  ExtractCodecTypes<TContract>,
+  ExtractQueryOperationTypes<TContract>
+>;
 
 /** The indexes of the table a model is stored in, keyed by the name the contract source gave each. */
 export type ModelIndexReferences<

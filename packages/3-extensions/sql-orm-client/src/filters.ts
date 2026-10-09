@@ -7,9 +7,9 @@ import {
   LiteralExpr,
   NullCheckExpr,
   OrExpr,
+  type WhereArg,
 } from '@internal/sql-relational-core/ast';
-import { type Expression, isExpression } from '@internal/sql-relational-core/expression';
-import type { BooleanCodecType } from '@internal/sql-relational-core/functions';
+import { isExpression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   columnOfCallerField,
@@ -21,18 +21,25 @@ import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
-import type { ShorthandWhereFilter } from './types';
-
-/** A condition: an ORM filter expression, or a condition from `fns`. */
-export type Condition = AnyExpression | Expression<BooleanCodecType>;
+import type {
+  Condition,
+  FunctionCondition,
+  ShorthandWhereFilter,
+  WhereCallbackResult,
+} from './types';
 
 /** The filter expression of a condition: a condition from `fns` becomes its AST. */
 export function conditionExpr(condition: Condition): AnyExpression {
   return isFunctionCondition(condition) ? condition.buildAst() : condition;
 }
 
-function isFunctionCondition(condition: Condition): condition is Expression<BooleanCodecType> {
-  return isExpression(condition);
+/** A `where` callback's result as a filter: a condition from `fns` becomes its AST. */
+export function whereArgOf(result: WhereCallbackResult): WhereArg {
+  return isFunctionCondition(result) ? result.buildAst() : result;
+}
+
+function isFunctionCondition(value: Condition | WhereCallbackResult): value is FunctionCondition {
+  return isExpression(value);
 }
 
 export function and(...exprs: Condition[]): AndExpr {

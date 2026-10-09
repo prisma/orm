@@ -2,6 +2,7 @@ import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { Filtered, Ordered } from '../src/collection-types';
+import type { ModelAccessor, ModelCallbackTools } from '../src/exports/index';
 import { orm } from '../src/orm';
 import { createChainingOrm, type UserCollection } from './collection-chaining-fixture';
 import { createMockRuntime, getTestContext, type TestContract } from './helpers';
@@ -117,9 +118,9 @@ describe('a where callback with fns and indexes', () => {
   });
 
   test('refuses an index that is not a full-text index', () => {
-    plain.User.where((_u, { fns, indexes }) =>
-      // @ts-expect-error users_invited_by_id_idx is a btree index
-      fns.fullTextMatches(indexes.users_invited_by_id_idx, q),
+    plain.Post.where((_p, { fns, indexes }) =>
+      // @ts-expect-error posts_user_id_idx is a btree index
+      fns.fullTextMatches(indexes.posts_user_id_idx, q),
     );
   });
 
@@ -128,6 +129,20 @@ describe('a where callback with fns and indexes', () => {
       // @ts-expect-error the index states its language
       fns.fullTextMatches(indexes.users_search, q, { language: 'german' }),
     );
+  });
+});
+
+describe('a reusable condition', () => {
+  test('types its second parameter with the exported ModelCallbackTools', () => {
+    const matchesSearch =
+      (query: typeof q) =>
+      (
+        _u: ModelAccessor<TestContract, 'User'>,
+        { fns, indexes }: ModelCallbackTools<TestContract, 'User'>,
+      ) =>
+        fns.fullTextMatches(indexes.users_search, query);
+
+    expectTypeOf(plain.User.where(matchesSearch(q))).not.toBeAny();
   });
 });
 
