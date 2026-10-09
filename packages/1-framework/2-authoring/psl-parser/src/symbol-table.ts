@@ -199,6 +199,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           blocks[name] = buildBlock(name, declaration, sources);
         }
       } else if (declaration instanceof MixinDeclarationAst) {
+        if (lacksBlockKeyword(declaration)) continue;
         const name = claim(topLevelNames, declaration.name());
         if (name !== undefined) {
           mixins[name] = buildMixin(name, declaration, sources, diagnostics);
@@ -309,6 +310,7 @@ function extendNamespace(
   const { models, compositeTypes, blocks, mixins } = namespace;
 
   for (const member of node.declarations()) {
+    if (member instanceof MixinDeclarationAst && lacksBlockKeyword(member)) continue;
     const memberName = member.name()?.name();
     if (memberName === undefined) continue;
     if (
@@ -341,6 +343,10 @@ function extendNamespace(
 }
 
 const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+function lacksBlockKeyword(mixin: MixinDeclarationAst): boolean {
+  return mixin.keyword()?.text === 'mixin';
+}
 
 function buildMixin(
   name: string,

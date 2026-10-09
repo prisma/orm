@@ -1,0 +1,139 @@
+{
+  "files": ["shared.prisma", "app.prisma", "policies.prisma"],
+  "steps": [
+    {
+      "id": "11.0",
+      "kind": "open",
+      "file": "app.prisma"
+    },
+    {
+      "id": "11.1",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.2",
+      "kind": "prepareRename",
+      "file": "app.prisma",
+      "at": "+Soft|Delete"
+    },
+    {
+      "id": "11.3",
+      "kind": "rename",
+      "file": "app.prisma",
+      "at": "+Soft|Delete",
+      "newName": "Archivable",
+      "apply": true
+    },
+    {
+      "id": "11.4",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.5",
+      "kind": "rename",
+      "file": "app.prisma",
+      "at": "role Role\n  +auth.Time|stamps",
+      "newName": "Stamps"
+    },
+    {
+      "id": "11.6",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "model mixin Time|stamps",
+      "newName": "Stamps",
+      "apply": true
+    },
+    {
+      "id": "11.7",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.8",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "model mixin Sta|mps",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    },
+    {
+      "id": "11.9",
+      "kind": "rename",
+      "file": "policies.prisma",
+      "at": "policy_select mixin Owner|Read",
+      "newName": "OwnerOnly",
+      "apply": true
+    },
+    {
+      "id": "11.10",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "enum mixin Base|Roles",
+      "newName": "CoreRoles",
+      "apply": true
+    },
+    {
+      "id": "11.11",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.12",
+      "kind": "save",
+      "to": "after-mixin-rename"
+    },
+    {
+      "id": "11.13",
+      "kind": "rename",
+      "file": "app.prisma",
+      "at": "@@index([tenant|Id])",
+      "newName": "orgId"
+    },
+    {
+      "id": "11.14",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "tenant|Id Int",
+      "newName": "orgId",
+      "apply": true
+    },
+    {
+      "id": "11.15",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.16",
+      "kind": "format",
+      "file": "shared.prisma"
+    },
+    {
+      "id": "11.17",
+      "kind": "format",
+      "file": "app.prisma"
+    },
+    {
+      "id": "11.18",
+      "kind": "save",
+      "to": "after-field-rename"
+    },
+    {
+      "id": "11.19",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "create|dAt DateTime",
+      "newName": "madeAt"
+    },
+    {
+      "id": "11.20",
+      "kind": "rename",
+      "file": "policies.prisma",
+      "at": "policy_select mixin OwnerOnly {\n    ro|les",
+      "newName": "grantees"
+    },
+    {
+      "id": "11.21",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "model mixin Sta|mps",
+      "newName": "User"
+    }
+  ]
+}

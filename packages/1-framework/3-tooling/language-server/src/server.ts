@@ -142,7 +142,7 @@ function createServerOn(connection: Connection): LanguageServer {
         documentFormattingProvider: true,
         foldingRangeProvider: true,
         semanticTokensProvider: { legend: semanticTokensLegend, full: true, range: true },
-        completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
+        completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ',', '+'] },
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
         hoverProvider: true,
         definitionProvider: true,

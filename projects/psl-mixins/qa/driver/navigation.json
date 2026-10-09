@@ -1,0 +1,201 @@
+{
+  "files": ["shared.prisma", "app.prisma", "policies.prisma"],
+  "steps": [
+    {
+      "id": "9.1",
+      "kind": "definition",
+      "file": "app.prisma",
+      "at": "+Soft|Delete"
+    },
+    {
+      "id": "9.2",
+      "kind": "definition",
+      "file": "app.prisma",
+      "at": "role Role\n  +auth.Time|stamps"
+    },
+    {
+      "id": "9.3",
+      "kind": "definition",
+      "file": "app.prisma",
+      "at": "role Role\n  +au|th.Timestamps"
+    },
+    {
+      "id": "9.4",
+      "kind": "definition",
+      "file": "app.prisma",
+      "at": "+Base|Roles"
+    },
+    {
+      "id": "9.5",
+      "kind": "definition",
+      "file": "policies.prisma",
+      "at": "target = Profile\n    +Owner|Read"
+    },
+    {
+      "id": "9.6",
+      "kind": "definition",
+      "file": "app.prisma",
+      "at": "@@index([tenant|Id])"
+    },
+    {
+      "id": "9.7",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "model mixin Time|stamps",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.8",
+      "kind": "references",
+      "file": "app.prisma",
+      "at": "role Role\n  +auth.Time|stamps",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.9",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "model mixin Time|stamps"
+    },
+    {
+      "id": "9.10",
+      "kind": "references",
+      "file": "app.prisma",
+      "at": "+Soft|Delete",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.11",
+      "kind": "references",
+      "file": "policies.prisma",
+      "at": "policy_select mixin Owner|Read",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.12",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "tenant|Id Int",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.13",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "namespace au|th",
+      "includeDeclaration": true
+    },
+    {
+      "id": "9.14",
+      "kind": "definition",
+      "file": "shared.prisma",
+      "at": "model mixin Time|stamps"
+    },
+    {
+      "id": "10.1",
+      "kind": "hover",
+      "file": "app.prisma",
+      "at": "role Role\n  +auth.Time|stamps"
+    },
+    {
+      "id": "10.2",
+      "kind": "hover",
+      "file": "app.prisma",
+      "at": "+Soft|Delete"
+    },
+    {
+      "id": "10.3",
+      "kind": "hover",
+      "file": "shared.prisma",
+      "at": "model mixin Time|stamps"
+    },
+    {
+      "id": "10.4",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "policy_se|lect mixin OwnerRead"
+    },
+    {
+      "id": "10.5",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "policy_select mixin Owner|Read"
+    },
+    {
+      "id": "10.6",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "target = Profile\n    +Owner|Read"
+    },
+    {
+      "id": "10.7",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "policy_select mi|xin OwnerRead"
+    },
+    {
+      "id": "10.8",
+      "kind": "hover",
+      "file": "app.prisma",
+      "at": "+Base|Roles"
+    },
+    {
+      "id": "10.9",
+      "kind": "hover",
+      "file": "app.prisma",
+      "at": "@@index([tenant|Id])"
+    },
+    {
+      "id": "10.10",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "policy_select mixin OwnerRead {\n    ro|les"
+    },
+    {
+      "id": "15.1",
+      "kind": "semanticTokens",
+      "file": "shared.prisma",
+      "at": "|  model mixin Timestamps {",
+      "lines": 6
+    },
+    {
+      "id": "15.2",
+      "kind": "semanticTokens",
+      "file": "app.prisma",
+      "at": "role Role\n|  +auth.Timestamps",
+      "lines": 3
+    },
+    {
+      "id": "15.3",
+      "kind": "semanticTokens",
+      "file": "policies.prisma",
+      "at": "|  policy_select mixin OwnerRead {",
+      "lines": 4
+    },
+    {
+      "id": "15.4",
+      "kind": "semanticTokens",
+      "file": "policies.prisma",
+      "at": "target = Profile\n|    +OwnerRead",
+      "lines": 1
+    },
+    {
+      "id": "15.5",
+      "kind": "semanticTokens",
+      "file": "shared.prisma",
+      "at": "|enum mixin BaseRoles {",
+      "lines": 3
+    },
+    {
+      "id": "15.6",
+      "kind": "semanticTokens",
+      "file": "app.prisma",
+      "at": "|model Account {",
+      "lines": 3
+    },
+    {
+      "id": "15.7",
+      "kind": "diagnostics"
+    }
+  ]
+}

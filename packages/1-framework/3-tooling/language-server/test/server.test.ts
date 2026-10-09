@@ -1137,7 +1137,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       range: true,
     });
     expect(result.capabilities.completionProvider).toEqual({
-      triggerCharacters: ['.', '@', '[', '(', '{', ':', ','],
+      triggerCharacters: ['.', '@', '[', '(', '{', ':', ',', '+'],
     });
     expect(result.capabilities.signatureHelpProvider).toEqual({
       triggerCharacters: ['(', ','],

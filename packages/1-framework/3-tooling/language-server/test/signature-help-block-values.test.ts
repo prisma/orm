@@ -70,3 +70,15 @@ describe('generic block value signature help', () => {
     },
   );
 });
+
+describe('generic block value signature help inside a mixin body', () => {
+  it.each([['run = every(|'], ['run = every(5, |'], ['run = every(5, unit: |']])(
+    'gives the signature a block of the keyword gives at %s',
+    (entry) => {
+      const inMixin = help(['schedule mixin nightly {', `  ${entry}`, '}'].join('\n'));
+
+      expect(inMixin).toEqual(schedule(entry));
+      expect(inMixin?.signatures[0]?.label).toBe(everyLabel);
+    },
+  );
+});

@@ -919,3 +919,74 @@ describe('buildSymbolTable() reporting an inclusion', () => {
     ]);
   });
 });
+
+describe('buildSymbolTable() given a mixin written without its block keyword', () => {
+  const declaration = ['mixin Timestamps {', '  createdAt DateTime', '}'];
+  const model = ['model User {', '  id Int', '  +Timestamps', '}'];
+
+  it('does not collect it, and reports an inclusion that names it as not found', () => {
+    const source = lines(...declaration, ...model);
+    const { topLevel, diagnostics } = build(source);
+
+    expect(Object.keys(topLevel.blocks)).toEqual([]);
+    expect(Object.keys(topLevel.mixins)).toEqual([]);
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find mixin "Timestamps"',
+        filename: '0.psl',
+        range: rangeOf(source, '+Timestamps'),
+      },
+    ]);
+    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id']);
+  });
+
+  it('does not collect it in a namespace', () => {
+    const indent = (source: readonly string[]) => source.map((line) => `  ${line}`);
+    const source = lines('namespace app {', ...indent(declaration), ...indent(model), '}');
+    const { topLevel, diagnostics } = build(source);
+    const app = topLevel.namespaces['app'];
+
+    expect(Object.keys(app?.blocks ?? {})).toEqual([]);
+    expect(Object.keys(app?.mixins ?? {})).toEqual([]);
+    expect(diagnostics.map(({ code, message, range }) => ({ code, message, range }))).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find mixin "Timestamps"',
+        range: rangeOf(source, '+Timestamps'),
+      },
+    ]);
+  });
+
+  it('leaves it out of the duplicate-name check', () => {
+    const before = build(lines(...declaration, 'model Timestamps {', '}'));
+    const after = build(lines('model Timestamps {', '}', ...declaration));
+    const inNamespace = build(
+      lines('namespace app {', '  model Timestamps {', '  }', '  mixin Timestamps {', '  }', '}'),
+    );
+
+    expect(before.diagnostics).toEqual([]);
+    expect(after.diagnostics).toEqual([]);
+    expect(inNamespace.diagnostics).toEqual([]);
+    expect(Object.keys(before.topLevel.models)).toEqual(['Timestamps']);
+  });
+
+  it('does not collect a mixin whose block keyword is the word mixin', () => {
+    const { topLevel, diagnostics } = build(
+      lines('mixin mixin T {', '}', 'model User {', '  +T', '}'),
+    );
+
+    expect(Object.keys(topLevel.mixins)).toEqual([]);
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find mixin "T"']);
+  });
+
+  it('collects the same source as a block in the prisma-7 grammar', () => {
+    const { document, sources } = parse(lines(...declaration), 'legacy.psl', {
+      grammar: 'prisma-7',
+    });
+    const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
+
+    expect(diagnostics).toEqual([]);
+    expect(symbolTable.topLevel.blocks['Timestamps']?.keyword).toBe('mixin');
+  });
+});

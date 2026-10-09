@@ -21,11 +21,13 @@ import {
   type SymbolTable,
   typeReferenceNode,
 } from '@internal/psl-parser';
-import type {
-  FieldDeclarationAst,
+import {
+  CompositeTypeDeclarationAst,
+  type FieldDeclarationAst,
   GenericBlockDeclarationAst,
   MixinDeclarationAst,
   ModelDeclarationAst,
+  type SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import type { ArgumentGrammar } from './attribute-argument-grammar';
@@ -39,20 +41,50 @@ export interface AttributeSpecSource {
   readonly dataTypes?: DataTypeSupport;
 }
 
+export type ModelBlockAst = ModelDeclarationAst | MixinDeclarationAst;
+
+export type FieldBlockAst = ModelBlockAst | CompositeTypeDeclarationAst;
+
+export type EntryBlockAst = GenericBlockDeclarationAst | MixinDeclarationAst;
+
+const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+export function castModelBlock(node: SyntaxNode): ModelBlockAst | undefined {
+  const model = ModelDeclarationAst.cast(node);
+  if (model !== undefined) return model;
+  const mixin = MixinDeclarationAst.cast(node);
+  return mixin?.keyword()?.text === 'model' ? mixin : undefined;
+}
+
+export function castFieldBlock(node: SyntaxNode): FieldBlockAst | undefined {
+  const block = ModelDeclarationAst.cast(node) ?? CompositeTypeDeclarationAst.cast(node);
+  if (block !== undefined) return block;
+  const mixin = MixinDeclarationAst.cast(node);
+  return FIELD_BLOCK_KEYWORDS.has(mixin?.keyword()?.text ?? '') ? mixin : undefined;
+}
+
+export function castEntryBlock(node: SyntaxNode): EntryBlockAst | undefined {
+  const block = GenericBlockDeclarationAst.cast(node);
+  if (block !== undefined) return block;
+  const mixin = MixinDeclarationAst.cast(node);
+  const keyword = mixin?.keyword()?.text;
+  return keyword !== undefined && !FIELD_BLOCK_KEYWORDS.has(keyword) ? mixin : undefined;
+}
+
 export interface FieldAttributeOwner {
   readonly ownerKind: 'field';
   readonly field: FieldDeclarationAst;
-  readonly model: ModelDeclarationAst | MixinDeclarationAst;
+  readonly model: ModelBlockAst;
 }
 
 export interface ModelAttributeOwner {
   readonly ownerKind: 'model';
-  readonly model: ModelDeclarationAst;
+  readonly model: ModelBlockAst;
 }
 
 export interface BlockAttributeOwner {
   readonly ownerKind: 'block';
-  readonly block: GenericBlockDeclarationAst;
+  readonly block: EntryBlockAst;
   readonly blockKeyword: string;
 }
 
@@ -66,7 +98,7 @@ export type AttributeArgumentOwner = AttributeOwner & NamedAttribute;
 
 export interface BlockValueOwner {
   readonly ownerKind: 'blockValue';
-  readonly block: GenericBlockDeclarationAst;
+  readonly block: EntryBlockAst;
   readonly blockKeyword: string;
   readonly key: string;
 }
@@ -126,8 +158,8 @@ export function attributeSpecResolver(
     }
     case 'model': {
       if (source.authoringContributions === undefined) return () => undefined;
-      const model = source.binder.declaredSymbol(context.model.syntax);
-      if (model?.kind !== 'model' || source.controlMutationDefaults === undefined) {
+      const model = fieldSpecModel(source.binder.declaredSymbol(context.model.syntax));
+      if (model === undefined || source.controlMutationDefaults === undefined) {
         return () => undefined;
       }
       const specs = assembleAttributeSpecs(source.authoringContributions);
