@@ -1,4 +1,4 @@
-import { tsQuotedTextSource } from '@internal/ts-render';
+import { tsQuotedTextSource, tsTemplateText } from '@internal/ts-render';
 
 /**
  * `text` is the canonical value of the literal. Every failure `offset` is an
@@ -176,24 +176,32 @@ export function printedTaggedLiteralReadsBack(text: string): boolean {
   return canonical.ok && canonical.text === text;
 }
 
-/** TypeScript source for `text` in generated code: a template literal with `tag` when the tag reads it back unchanged, else a string literal. */
-export function renderTaggedTemplateSource(
+/**
+ * TypeScript source for `text` in generated code: a template literal with `tag`, or `tsQuotedTextSource(text)`. It
+ * writes a template only when the tag's TypeScript function canonicalizes its text as `canonicalizeTaggedLiteralBody`
+ * does and that leaves `text` unchanged, which holds for `sql`. It also falls back when a line ends in a space or a
+ * tab, which editors strip on save, and when `text` holds a character a template would carry unescaped and invisible.
+ */
+export function tsTaggedTemplateSource(
   tag: string,
   text: string,
 ): { readonly source: string; readonly usesTag: boolean } {
   if (!templateHoldsUnchanged(text)) return { source: tsQuotedTextSource(text), usesTag: false };
-  const escaped = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  const escaped = tsTemplateText(text);
   const source = text.includes('\n') ? `${tag}\`\n${escaped}\n\`` : `${tag}\`${escaped}\``;
   return { source, usesTag: true };
 }
 
 const WHITESPACE_ONLY_LINE = /^\s+$/;
+const TRAILING_SPACE_OR_TAB = /[ \t]$/;
 
 function templateHoldsUnchanged(text: string): boolean {
   const canonical = canonicalizeTaggedLiteralBody(text);
   if (!canonical.ok || canonical.text !== text) return false;
   const lines = text.split('\n');
-  if (lines.some((line) => WHITESPACE_ONLY_LINE.test(line) && !BLANK_LINE.test(line))) {
+  const indentTreatsAsBlank = (line: string) =>
+    WHITESPACE_ONLY_LINE.test(line) && !BLANK_LINE.test(line);
+  if (lines.some((line) => indentTreatsAsBlank(line) || TRAILING_SPACE_OR_TAB.test(line))) {
     return false;
   }
   return !holdsCharacterThatNeedsAnEscape(text);

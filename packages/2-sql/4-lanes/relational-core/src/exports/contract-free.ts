@@ -5,8 +5,8 @@ export {
   fn,
   foreignKey,
   lit,
-  type MigrationSqlText,
   primaryKey,
+  type SqlTextInput,
   sqlTextOf,
   unique,
 } from '../contract-free/column';

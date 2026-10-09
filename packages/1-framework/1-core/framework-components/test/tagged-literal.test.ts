@@ -4,10 +4,10 @@ import {
   describeTaggedLiteralFailure,
   printedTaggedLiteralReadsBack,
   printTaggedLiteral,
-  renderTaggedTemplateSource,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
+  tsTaggedTemplateSource,
 } from '../src/shared/tagged-literal';
 
 const MAX_BYTES = 65536;
@@ -256,7 +256,7 @@ describe('printedTaggedLiteralReadsBack', () => {
   });
 });
 
-describe('renderTaggedTemplateSource', () => {
+describe('tsTaggedTemplateSource', () => {
   function readBackIndented(source: string, tag: string, indent: string): string | undefined {
     const raw = source.slice(tag.length + 1, -1);
     const indented = raw
@@ -277,7 +277,7 @@ describe('renderTaggedTemplateSource', () => {
     ['a backslash', "E'\\n' <> x", "sql`E'\\\\n' <> x`"],
     ['a dollar brace', 'a $' + '{x}', 'sql`a \\$' + '{x}`'],
   ])('prints %s as a template the tag reads back unchanged', (_name, text, source) => {
-    const rendered = renderTaggedTemplateSource('sql', text);
+    const rendered = tsTaggedTemplateSource('sql', text);
 
     expect(rendered).toEqual({ source, usesTag: true });
     expect(readBackIndented(rendered.source, 'sql', '      ')).toBe(text);
@@ -296,12 +296,15 @@ describe('renderTaggedTemplateSource', () => {
     ['U+2028', 'a b', '"a\\u2028b"'],
     ['U+2029', 'a b', '"a\\u2029b"'],
     ['a NUL character', 'a\u0000b', '"a\\u0000b"'],
+    ['a trailing space on a line of several', "x = 'a  \nb'", '"x = \'a  \\nb\'"'],
+    ['a trailing tab on the last line', 'a\nb\t', '"a\\nb\\t"'],
+    ['a trailing space on one line', 'now() ', '"now() "'],
   ])('falls back to a string literal for %s', (_name, text, source) => {
-    expect(renderTaggedTemplateSource('sql', text)).toEqual({ source, usesTag: false });
+    expect(tsTaggedTemplateSource('sql', text)).toEqual({ source, usesTag: false });
   });
 
   it('falls back to an untagged template for text with both quote kinds the tag cannot hold', () => {
-    expect(renderTaggedTemplateSource('sql', ` "a" = 'b'`)).toEqual({
+    expect(tsTaggedTemplateSource('sql', ` "a" = 'b'`)).toEqual({
       source: `\` "a" = 'b'\``,
       usesTag: false,
     });

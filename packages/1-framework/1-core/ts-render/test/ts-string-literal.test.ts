@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { tsQuotedTextSource, tsStringLiteral } from '../src/ts-string-literal';
+import { tsQuotedTextSource, tsStringLiteral, tsTemplateText } from '../src/ts-string-literal';
 
 describe('tsStringLiteral', () => {
   it('escapes DEL', () => {
@@ -81,5 +81,17 @@ describe('tsQuotedTextSource', () => {
     it('renders text with both quote kinds and a lone low surrogate as a string literal', () => {
       expect(tsQuotedTextSource(`"a" = '\udc00'`)).toBe('"\\"a\\" = \'\\udc00\'"');
     });
+  });
+});
+
+describe('tsTemplateText', () => {
+  it.each([
+    ['a backslash', 'a\\b', 'a\\\\b'],
+    ['a backtick', 'a`b', 'a\\`b'],
+    ['a dollar brace', 'a$' + '{b}', 'a\\$' + '{b}'],
+    ['a dollar without a brace', 'a$b', 'a$b'],
+    ['a line break and a quote', 'a\n"b\'', 'a\n"b\''],
+  ])('escapes %s for the inside of a template literal', (_name, text, escaped) => {
+    expect(tsTemplateText(text)).toBe(escaped);
   });
 });

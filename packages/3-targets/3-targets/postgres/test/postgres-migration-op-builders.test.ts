@@ -13,7 +13,7 @@ import {
   col,
   fn,
   lit,
-  type MigrationSqlText,
+  type SqlTextInput,
 } from '@internal/sql-relational-core/contract-free';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
@@ -128,7 +128,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly constraint: string;
-    readonly expression: MigrationSqlText;
+    readonly expression: SqlTextInput;
   }): Promise<Op> {
     return this.addCheckConstraint(options);
   }
@@ -166,7 +166,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly column: string;
-    readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: MigrationSqlText };
+    readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: SqlTextInput };
     readonly operationClass?: AlterColumnTypeClass;
   }): Promise<Op> {
     return this.alterColumnType(options);
@@ -210,7 +210,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly table: string;
     readonly index: string;
     readonly columns: readonly string[];
-    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText };
+    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: SqlTextInput };
   }): Promise<Op> {
     return this.createIndex(options);
   }
@@ -219,8 +219,8 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly index: string;
-    readonly expression: MigrationSqlText;
-    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText };
+    readonly expression: SqlTextInput;
+    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: SqlTextInput };
   }): Promise<Op> {
     return this.createIndex(options);
   }
@@ -229,8 +229,8 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & {
-      readonly using?: MigrationSqlText;
-      readonly withCheck?: MigrationSqlText;
+      readonly using?: SqlTextInput;
+      readonly withCheck?: SqlTextInput;
     };
   }): Promise<Op> {
     return this.createRlsPolicy(options);
@@ -625,7 +625,7 @@ function astRecordingControlStack(): ControlStack<'sql', 'postgres'> {
 describe('PostgresMigration op-builder methods with sql values', () => {
   const sqlCases: ReadonlyArray<{
     readonly name: string;
-    readonly run: (m: ExposedMigration, text: (body: string) => MigrationSqlText) => Promise<Op>;
+    readonly run: (m: ExposedMigration, text: (body: string) => SqlTextInput) => Promise<Op>;
   }> = [
     {
       name: 'createIndex expression',
@@ -709,5 +709,26 @@ describe('PostgresMigration op-builder methods with sql values', () => {
     const fromSql = await run(m, (body) => new SqlExpression(body));
 
     expect(fromSql).toEqual(fromString);
+  });
+
+  it('names the argument when a value is neither a string nor a sql value', () => {
+    const m = new ExposedMigration(astRecordingControlStack());
+    const notSql = { text: 'x' } as unknown as SqlTextInput;
+
+    expect(() =>
+      m.callCreateIndex({
+        schema: 'public',
+        table: 'widget',
+        index: 'widget_name_idx',
+        columns: ['name'],
+        extras: { where: notSql },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: 'createIndex "widget_name_idx" where must be a string or a sql`...` value.',
+        meta: { what: 'createIndex "widget_name_idx" where' },
+      }),
+    );
   });
 });

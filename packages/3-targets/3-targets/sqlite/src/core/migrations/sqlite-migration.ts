@@ -17,7 +17,7 @@ import type { ControlStack } from '@internal/framework-components/control';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
-import { type MigrationSqlText, sqlTextOf } from '@internal/sql-relational-core/contract-free';
+import { type SqlTextInput, sqlTextOf } from '@internal/sql-relational-core/contract-free';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -257,9 +257,10 @@ export abstract class SqliteMigration<
     readonly table: string;
     readonly column: SqliteColumnSpecInput;
   }): Promise<Op> {
-    return new AddColumnCall(options.table, columnSpecOf(options.column)).toOp(
-      this.controlAdapterFor('addColumn'),
-    );
+    return new AddColumnCall(
+      options.table,
+      columnSpecOf(options.column, 'addColumn', options.table),
+    ).toOp(this.controlAdapterFor('addColumn'));
   }
 
   protected dropColumn(options: { readonly table: string; readonly column: string }): Promise<Op> {
@@ -297,7 +298,9 @@ export abstract class SqliteMigration<
       ...options,
       contractTable: {
         ...options.contractTable,
-        columns: options.contractTable.columns.map(columnSpecOf),
+        columns: options.contractTable.columns.map((column) =>
+          columnSpecOf(column, 'recreateTable', options.tableName),
+        ),
       },
     }).toOp(this.controlAdapterFor('recreateTable'));
   }
@@ -305,7 +308,7 @@ export abstract class SqliteMigration<
 
 type ColumnDefaultInput =
   | Exclude<ColumnDefault, { readonly kind: 'function' }>
-  | { readonly kind: 'function'; readonly expression: MigrationSqlText };
+  | { readonly kind: 'function'; readonly expression: SqlTextInput };
 
 type SqliteColumnSpecInput = Omit<SqliteColumnSpec, 'default'> & {
   readonly default?: ColumnDefaultInput;
@@ -315,19 +318,24 @@ type SqliteTableSpecInput = Omit<SqliteTableSpec, 'columns'> & {
   readonly columns: readonly SqliteColumnSpecInput[];
 };
 
-function columnDefaultOf(columnDefault: ColumnDefaultInput): ColumnDefault {
+function columnDefaultOf(columnDefault: ColumnDefaultInput, what: string): ColumnDefault {
   return columnDefault.kind === 'function'
-    ? { kind: 'function', expression: sqlTextOf(columnDefault.expression) }
+    ? { kind: 'function', expression: sqlTextOf(columnDefault.expression, what) }
     : columnDefault;
 }
 
-function columnSpecOf(column: SqliteColumnSpecInput): SqliteColumnSpec {
+function columnSpecOf(
+  column: SqliteColumnSpecInput,
+  operation: 'addColumn' | 'recreateTable',
+  table: string,
+): SqliteColumnSpec {
   const { default: columnDefault, ...rest } = column;
+  const what = `${operation} ${JSON.stringify(table)}.${JSON.stringify(column.name)} default`;
   return {
     ...rest,
     ...ifDefined(
       'default',
-      columnDefault === undefined ? undefined : columnDefaultOf(columnDefault),
+      columnDefault === undefined ? undefined : columnDefaultOf(columnDefault, what),
     ),
   };
 }

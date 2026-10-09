@@ -8,7 +8,7 @@ import type {
 } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
 import { SqlExpression } from '@internal/sql-contract/sql-expression';
-import type { MigrationSqlText } from '@internal/sql-relational-core/contract-free';
+import type { SqlTextInput } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
 import type { SqliteIndexSpec } from '../src/core/migrations/operations/shared';
 import type { RecreatePostcheck } from '../src/core/migrations/operations/tables';
@@ -22,7 +22,7 @@ type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
 interface ColumnSpecInput {
   readonly name: string;
   readonly typeSql: string;
-  readonly default?: { readonly kind: 'function'; readonly expression: MigrationSqlText };
+  readonly default?: { readonly kind: 'function'; readonly expression: SqlTextInput };
   readonly nullable: boolean;
 }
 
@@ -69,7 +69,7 @@ const DEFAULT_SQL = "lower(\n  'a' || 'b'\n)";
 describe('SqliteMigration function defaults written as sql values', () => {
   const cases: ReadonlyArray<{
     readonly name: string;
-    readonly run: (m: ExposedMigration, expression: MigrationSqlText) => Promise<Op>;
+    readonly run: (m: ExposedMigration, expression: SqlTextInput) => Promise<Op>;
   }> = [
     {
       name: 'addColumn',
@@ -116,5 +116,27 @@ describe('SqliteMigration function defaults written as sql values', () => {
 
     expect(JSON.stringify(fromString)).toContain("'a' || 'b'");
     expect(fromSql).toEqual(fromString);
+  });
+
+  it('names the argument when a default is neither a string nor a sql value', () => {
+    const m = new ExposedMigration(astRecordingControlStack());
+
+    expect(() =>
+      m.callAddColumn({
+        table: 'user',
+        column: {
+          name: 'slug',
+          typeSql: 'TEXT',
+          default: { kind: 'function', expression: { text: 'x' } as unknown as SqlTextInput },
+          nullable: true,
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: 'addColumn "user"."slug" default must be a string or a sql`...` value.',
+        meta: { what: 'addColumn "user"."slug" default' },
+      }),
+    );
   });
 });

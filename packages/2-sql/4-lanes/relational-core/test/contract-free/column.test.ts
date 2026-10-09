@@ -12,8 +12,8 @@ import {
   fn,
   foreignKey,
   lit,
-  type MigrationSqlText,
   primaryKey,
+  type SqlTextInput,
   sqlTextOf,
   unique,
 } from '../../src/exports/contract-free';
@@ -147,24 +147,36 @@ describe('sql values in contract-free helpers', () => {
   });
 
   it('sqlTextOf returns a string unchanged', () => {
-    expect(sqlTextOf('  lower("email")  ')).toBe('  lower("email")  ');
+    expect(sqlTextOf('  lower("email")  ', 'index expression')).toBe('  lower("email")  ');
   });
 
   it('sqlTextOf rebuilds a sql value another installed copy made, canonicalizing its text', () => {
     const fromAnotherCopy = {
       [Symbol.for('@prisma/sql-expression')]: true,
       text: '\n    "userId" = auth.uid()\n      AND NOT "locked"\n  ',
-    } as unknown as MigrationSqlText;
+    } as unknown as SqlTextInput;
 
-    expect(sqlTextOf(fromAnotherCopy)).toBe('"userId" = auth.uid()\n  AND NOT "locked"');
+    expect(sqlTextOf(fromAnotherCopy, 'policy using')).toBe(
+      '"userId" = auth.uid()\n  AND NOT "locked"',
+    );
   });
 
-  it('sqlTextOf refuses a value that is neither a string nor a sql value', () => {
-    expect(() => sqlTextOf({ text: 'now()' } as unknown as MigrationSqlText)).toThrow(
+  it('sqlTextOf refuses a value that is neither a string nor a sql value, naming the argument', () => {
+    expect(() => sqlTextOf({ text: 'now()' } as unknown as SqlTextInput, 'policy using')).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ARGUMENT_INVALID',
-        message: 'SQL text must be a sql`...` value.',
+        message: 'policy using must be a string or a sql`...` value.',
+        meta: { what: 'policy using' },
       }),
+    );
+  });
+
+  it('fn and checkExpression name their argument when they refuse a value', () => {
+    const notSql = { text: 'now()' } as unknown as SqlTextInput;
+
+    expect(() => fn(notSql)).toThrow('fn expression must be a string or a sql`...` value.');
+    expect(() => checkExpression('user_age_check', notSql)).toThrow(
+      'checkExpression "user_age_check" expression must be a string or a sql`...` value.',
     );
   });
 });
