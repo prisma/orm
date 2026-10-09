@@ -24,7 +24,7 @@ GA is the last chance to make breaking changes, so this stream decides the date.
 | 4 | 🔄 5/6 | SQL expression literals | Must | Will | 5 slices merged, 1 in review | Review the TypeScript builder PR (TML-3289) |
 | 5 | ⏳ | PSL mixins, then remove type aliases and field presets | Must | Serhii | No spec |  |
 | 6 | ⏳ | Remove `@noCheck` and `.noCheck()` | Must | Will | Not started, no ticket, unblocked |  |
-| 7 | 🔄 2/4 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Not decided | Will | 2 of 4 slices merged, including the breaking one | Slice 3 (TML-3477): convert, backfill and the remaining renames |
+| 7 | 🔄 2/4 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Must | Will | 2 of 4 slices merged, including the breaking one | Slice 3 (TML-3477): convert, backfill and the remaining renames |
 
 ## Stream 2: Upgrade path from Prisma 7
 
@@ -32,7 +32,7 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 🔄 5/11 | Close every urgent and high upgrade issue | Must | Will | 5 closed, 6 open | TML-3267 next: `@updatedAt` with `@default(now())`. Close TML-3250 |
+| 1 | 🔄 6/11 | Close every urgent and high upgrade issue | Must | Will | 6 closed, 5 open | TML-3267 next: `@updatedAt` with `@default(now())` |
 | 2 | 🔄 2/7 | Prisma 8 owns migrations in a Prisma 7 project that still reads `schema.prisma` | Must | Will | Proven. Follow-ups: 1 PR merged, 5 gaps open. Project docs PR open | Merge the docs PR, then the two high planner gaps (TML-3456, TML-3457) |
 | 3 | 🔄 0/4 | Storage a model does not map: a table may hold columns its model does not map, and a table may have no model | Must | Will | Design settled 2026-10-07, in a design PR. Then 3 slices | Approve the design PR (give it a free ADR number first), then slice 1: split the lowering into derive and assemble, and the ORM projects per model |
 | 4 | ⏳ | Upgrade guide rewrite | Must | Will | Not tracked. One known error in the guide |  |
