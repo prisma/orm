@@ -135,3 +135,50 @@ Ten cases were skipped because `renderOps` itself refuses them: in each target, 
 ### New findings
 
 None. Note: `createSqlTextSources` holds state. Its `imports()` is correct only after every `source()` call of the same call. Each call class keeps that true by creating the writer inside a private `#written()` that both `renderTypeScript()` and `importRequirements()` use. This is not a defect, and the per-class tests in both targets catch a call that breaks it.
+
+## Review of f84d9c1101
+
+Scope: `git show f84d9c1101`. The commit moves `createSqlTextSources` to `@internal/family-sql/control`, indents a multi-line template body one level in `tsTaggedTemplateSource`, and adds `indentTaggedTemplates`, which `formatMigrationTs` runs after prettier.
+
+While I worked, someone else changed the working tree: they deleted `indent-tagged-templates.ts`, removed the pass from `formatMigrationTs`, and rebuilt the packages several times. So I took the pass from the commit itself (`git show f84d9c1101:…/indent-tagged-templates.ts`). I ran the write path exactly as `formatMigrationTs` does it at that commit: prettier with the same options, then the pass. Two runs failed with `ERR_MODULE_NOT_FOUND` while the other build was running. I reran them after that build finished, and they passed. Logs: `wip/5-review/r2-*.log`. Crafted inputs: `wip/5-review/crafted.ts.txt`.
+
+**Write-path probe (Postgres).** The full path was: render → prettier → pass → run the file under `tsx` → compare `ops.json` with `renderOps(calls)`. It used 24 texts, each placed at five depths: a `fn` default inside `col` inside `columns`, two `checkExpression` arguments, `addCheckConstraint` `expression`, `createIndex` `expression` and `extras.where`, and policy `using` and `withCheck`. The texts include:
+
+- backticks and `` \` `` inside SQL string constants;
+- `${`, `$${` and `\${`;
+- `//` and `/*` inside string constants, an unclosed `/*`, and a real `--` comment;
+- a first body line less indented, and one more indented, than later lines;
+- tabs, an empty inner line, a backslash at line end;
+- a body line that starts with a backtick, and a body line that is only a backtick;
+- both quote kinds, very long lines, and a fallback text.
+
+All 24 pass: `ops.json` is unchanged. For each case I also compared the output with prettier's output alone. The pass acted in every file that holds a multi-line template, and every body line sits under its opening line, with the closing backtick at that line's indent. Templates on adjacent lines were handled: `expression` and `extras.where`, `using` and `withCheck`, and the two `checkExpression` calls. A file holding one call of every Postgres call class, plus a multi-line check, is also re-indented (the pass does not bail on `rawSql`, `dataTransform` or `placeholder` output).
+
+From reading `reindent`: it removes the same leading whitespace from each non-blank line that the `sql` canonicalization removes. It refuses whitespace-only lines, as the renderer does. So no input it rewrites can change the text that `sql` reads back. The probe found none either.
+
+### C05. One construct the pass cannot read stops it for the whole file, silently
+
+Location: packages/1-framework/3-tooling/migration/src/indent-tagged-templates.ts lines 10–31 and 45–62 (at f84d9c1101)
+
+Issue: When `lineEnding` meets something it does not follow, the pass returns the whole source unchanged, with no signal. Any of these anywhere in the file disables it:
+
+- a `/*` comment, including a JSDoc header;
+- a regex literal holding a quote;
+- an untagged multi-line template;
+- two templates where one closes and the next opens on the same line (`` `, sql` ``).
+
+In the last case even earlier templates are left as they were (crafted inputs: "block comment elsewhere", "jsdoc before class", "regex literal elsewhere", "untagged multi-line elsewhere", "adjacent on one line" all come back UNCHANGED). The generated files I produced contain none of these, so nothing fails today. But one renderer change, such as a doc comment above the class, would switch the pass off for every generated file. The file would still run correctly, so the only test that would notice is one that checks the indentation of a real generated file.
+
+Suggestion: Skip only the template the reader cannot follow, not the whole file. At least treat `/* … */` on one line, and a JSDoc block, as code. Add a test that runs a generated file with every call class through `formatMigrationTs` and asserts that every multi-line template body sits under its opening line. That test catches a header comment or any other construct that switches the pass off.
+
+### C06. The pass re-indents a template under any tag, but is safe only for a tag that removes shared indentation
+
+Location: packages/1-framework/3-tooling/migration/src/indent-tagged-templates.ts lines 1–9, 57–59 (at f84d9c1101)
+
+Issue: The pass treats any identifier before a backtick as a tag and moves the template's lines. For `sql`, the value does not change. For a tag that keeps whitespace, the value changes: the crafted input `` html`\n<p>\n  </p>\n` `` comes back with every line indented four more spaces. The doc comment says generated files use only such tags, but nothing in the code checks that. `formatMigrationTs` is exported and runs for every target's generated file, Mongo included.
+
+Suggestion: Give the pass the tags it may move (`indentTaggedTemplates(source, ['sql'])`), and have the caller pass `SQL_EXPRESSION_TAG`, or match `sql` only. Add a test that a template under another tag is left alone.
+
+### Not probed
+
+I did not rerun the SQLite write path. The pass does not depend on the target, and in SQLite this commit only moves where `createSqlTextSources` is imported from.

@@ -168,3 +168,63 @@ Location: projects/sql-expression-literals/design.md section 17.1 (the code bloc
 Issue: Section 17.1 still shows `sqlTextOf(value: SqlTextInput): string` with no `what` parameter. It says a non-string value is read with `requireSqlExpression(value, 'SQL text')`, and its doc comment still says "SQL in a migration-file argument". Section 17.2 still says each call computes its imports by calling `tsTaggedTemplateSource` again over a separate list of texts. The code now builds both through `createSqlTextSources`. The design is the record later slices and reviewers read, so it should match the code.
 
 Suggestion: Update 17.1 to the two-argument `sqlTextOf` and its message, and replace the 17.2 import paragraph with one sentence about `createSqlTextSources`.
+
+## Review of f84d9c1101
+
+Scope: `git show f84d9c1101`. It moves `createSqlTextSources` to `@internal/family-sql/control`, and it adds a step after prettier, `indentTaggedTemplates`, that `formatMigrationTs` runs inside `writeMigrationTs`. I read the code and tests. I did not run anything.
+
+A10 is fixed. `createSqlTextSources` now lives in `packages/2-sql/9-family/src/core/migrations/sql-text-sources.ts`, is exported from `@internal/family-sql/control`, and returns `ImportRequirement`. `SqlTagImport` is gone.
+
+The step itself sits in the right package: `writeMigrationTs` already formats every generated file in `migration-tools`. Rendering with known indentation would not work instead. The renderer writes each call on one line, and only prettier decides where lines break and how deep the template's line ends up. Prettier options cannot help either: prettier keeps template text as written, and re-indents an embedded template only through a plugin's `embed` hook, which is how it formats `css`, `graphql` and `html` templates. So some step after prettier is needed. My findings are about who owns the rule the step depends on, and how the step is tested and documented.
+
+### A13. The step changes any tagged template, but nothing passes it the tags it may safely change
+
+Location: packages/1-framework/3-tooling/migration/src/indent-tagged-templates.ts lines 1-9, 35 (`TAG_CHARACTER`) and 57-61; packages/1-framework/1-core/framework-components/src/shared/tagged-literal.ts lines 178-198 (`tsTaggedTemplateSource` at line 186)
+
+Issue: The step moves the body of every multi-line template whose opening backtick follows an identifier character, whatever the tag is. That is safe only for a tag whose function removes the indentation all lines share. For `String.raw`, a `graphql` tag, or the Postgres `tsquery` tag, the step changes the value. The file then produces different `ops.json` than `renderOps`, with no error.
+
+The rule that makes it safe is written only in the step's doc comment: "Generated migration files write such a template only with a tag that removes the shared indentation". Neither side holds that rule in code:
+
+- `tsTaggedTemplateSource` writes multi-line templates for any `tag` its caller passes.
+- The caller that picks the tag is in the SQL family (`createSqlTextSources`).
+- The step that depends on the rule is in framework tooling, and it has no way to check it.
+
+A new target or extension that writes a multi-line template with another tag breaks the rule without touching any file that states it. The step is generic because it ignores the tag, not because the framework decided which tags are safe.
+
+The framework cannot name `sql`, which is family vocabulary. So the list of safe tags has to come from the family, as data.
+
+Suggestion: Make the safe tags an input. For example, `formatMigrationTs(source, { indentInsensitiveTags })`, where the list comes from the plan that rendered the file. `MigrationPlanWithAuthoringSurface` already hands the CLI the file's source, so it can also say which of its tags remove shared indentation. The SQL family then supplies `['sql']`, and the step moves only templates whose tag is on the list. State the rule once, at `tsTaggedTemplateSource`: a caller passes only a tag whose function removes shared indentation, because the formatter re-indents the body. The step's doc comment then links to that statement.
+
+### A14. One construct the step cannot follow turns it off for the whole file
+
+Location: packages/1-framework/3-tooling/migration/src/indent-tagged-templates.ts lines 10-32 and 42-62
+
+Issue: The step is a partial TypeScript lexer that reads one line at a time. When it meets a block comment, a `${` inside a template, or a string it cannot close on its line, it returns the whole file unchanged. Generated SQL files hold none of these today, so this works. But a scaffold change elsewhere in the file, such as a `/** … */` doc comment, would silently turn the step off for every template in the file. The templates would keep the renderer's two-space indentation. That is still correct SQL, but it is the layout this commit set out to fix, and no test would notice.
+
+For generated input of a known shape, a conservative text step is an acceptable design. The alternative is a prettier plugin that uses prettier's own syntax tree and indentation through its `embed` hook. That is more robust but heavier, and it is not recorded anywhere.
+
+Suggestion: Keep the text step, but have it skip only a template it cannot follow instead of the whole file. Teach it to skip a block comment, since a generated file may plausibly gain one. Record the prettier-plugin alternative and why it was not chosen in the Migration System doc (see A17).
+
+### A15. Two places decide how deep the template body is indented
+
+Location: packages/1-framework/1-core/framework-components/src/shared/tagged-literal.ts lines 193-197; packages/1-framework/3-tooling/migration/src/indent-tagged-templates.ts lines 85-90; packages/1-framework/3-tooling/migration/src/migration-ts.ts lines 43-50
+
+Issue: `tsTaggedTemplateSource` now indents a multi-line body by two spaces. The step then removes the indentation the lines share and adds the opening line's indentation plus two spaces. So the renderer's indentation matters only when the step does not run or gives up. The two-space unit is written in both places, and it also repeats prettier's default `tabWidth`, which the `format` call does not set. A framework function that prints a value now carries a layout choice that belongs to the file formatter.
+
+Suggestion: Let the formatter own the layout. Either have `tsTaggedTemplateSource` write the body without added indentation and let the step place it, or keep the renderer's indentation as the fallback but set `tabWidth: 2` in the `format` call and have the step take its unit from that same constant.
+
+### A16. No test runs a formatted file and compares its `ops.json`
+
+Location: packages/3-targets/3-targets/postgres/test/migrations/render-typescript.test.ts and packages/3-targets/3-targets/sqlite/test/migrations/render-typescript.test.ts (the new `formatMigrationTs` tests); packages/3-targets/6-adapters/{postgres,sqlite}/test/migrations/render-typescript.roundtrip.test.ts
+
+Issue: The property that makes this commit safe is that the file `writeMigrationTs` writes produces the same `ops.json` as `renderOps`. The new target tests check only the layout of the formatted text. The adapter round-trip tests run the output of `renderTypeScript` without `formatMigrationTs`. So the file users actually get, after prettier and the new step, is never run against `renderOps`. A defect in the step that changed a template's value would pass every test.
+
+Suggestion: In one round-trip test per target, pass the rendered source through `formatMigrationTs` before writing it. Include a multi-line `sql` template nested deep enough that the step moves it. Assert that `ops.json` equals `renderOps(calls)`.
+
+### A17. The docs do not describe the formatting step or the rule it depends on
+
+Location: docs/architecture docs/subsystems/7. Migration System.md line 125; docs/architecture docs/adrs/ADR 195 - Planner IR with two renderers.md lines 133-135
+
+Issue: The Migration System doc says a multi-line text "is written on its own lines inside the template". It does not say that the formatter re-indents the template after prettier, or that this is safe only because the `sql` tag removes shared indentation. ADR 195's argument for why the exception is safe reasons only about the renderer: the file holds a template only when canonicalization leaves the text unchanged. After this commit the file's raw template text is also changed by the formatter. The argument still holds, but only because of a second property of the tag, and that property is not stated.
+
+Suggestion: Add one sentence to each. In the Migration System doc: `writeMigrationTs` re-indents each multi-line tagged template under the line it opens on, and does so only for tags that remove shared indentation (with A13's list as the source). In ADR 195: the formatter changes only indentation that all lines share, which the `sql` tag removes, so the text is unchanged.

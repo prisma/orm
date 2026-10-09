@@ -705,6 +705,8 @@ export function tsTaggedTemplateSource(tag: string, text: string): { readonly so
 2. `escaped`: `\` → `\\`, then `` ` `` → `` \` ``, then `${` → `\${`.
 3. One line: `` `${tag}\`${escaped}\`` ``. Several lines: `` `${tag}\`\n${escaped}\n\`` ``.
 
+A multi-line template's body is indented two spaces inside the template. Prettier formats the file afterwards and keeps template text exactly as written, so the template sits shallower than the code around it; the `sql` tag removes shared indentation, so the text and `ops.json` are unchanged. A pass after prettier that moved the template to the surrounding indentation was built and removed in review (slice 5, A13 and C06): it is safe only for tags that remove shared indentation, and the framework's file writer cannot know a tag's rules without new plumbing from the SQL family. Moving multi-line SQL into constants at the top of the file was also rejected, because it separates a CHECK's SQL from its table. A round-trip test per target runs the file exactly as `writeMigrationTs` formats it and compares its `ops.json` with `renderOps` (A16).
+
 These slice 4 sites use `tsTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source` in place of `tsQuotedTextSource`, because their text is user or contract SQL that a migration function now takes as a `sql` value:
 
 - Postgres `op-factory-call.ts`: `renderDdlColumnDefault` (`fn(...)`), `renderDdlConstraintAsTsCall` (`checkExpression`), `AddCheckConstraintCall`, `CreateIndexCall` (`expression` and `where`), `CreatePostgresRlsPolicyCall` (`using` and `withCheck`).
