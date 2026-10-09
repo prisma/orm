@@ -81,6 +81,7 @@
       "types": "./runtime/client.d.ts",
       "node": {
         "require": "./runtime/client.js",
+        "import": "./runtime/client.mjs",
         "default": "./runtime/client.js"
       },
       "require": "./runtime/client.js",
