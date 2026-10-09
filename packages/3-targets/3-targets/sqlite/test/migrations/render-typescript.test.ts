@@ -1,4 +1,3 @@
-import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { TsExpression } from '@internal/ts-render';
 import { describe, expect, it } from 'vitest';
@@ -253,37 +252,5 @@ describe('renderCallsToTypeScript (sqlite) — the sql import', () => {
       templateCalls: printing(templateCalls),
       fallbackOnlyCalls: printing(fallbackOnlyCalls),
     }).toEqual({ oneCallPerClass: 0, templateCalls: 3, fallbackOnlyCalls: 0 });
-  });
-});
-
-describe('renderCallsToTypeScript (sqlite) — multi-line sql templates', () => {
-  it('indents a template in a createTable column default under the line it opens on, after formatting', async () => {
-    const output = await formatMigrationTs(
-      renderTypeScript(
-        [
-          new CreateTableCall('profile', [
-            col('id', 'INTEGER', { primaryKey: true }),
-            col('slug', 'TEXT', { default: fn('lower(\n  hex(randomblob(4))\n)') }),
-          ]),
-        ],
-        { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
-      ),
-    );
-    const lines = output.split('\n');
-    const opening = lines.findIndex((line) => line.endsWith('sql`'));
-    const openingIndent = lines[opening]?.match(/^ */)?.[0] ?? '';
-
-    expect({
-      openingIndent: openingIndent.length,
-      template: lines.slice(opening + 1, opening + 5),
-    }).toEqual({
-      openingIndent: 12,
-      template: [
-        `${openingIndent}  lower(`,
-        `${openingIndent}    hex(randomblob(4))`,
-        `${openingIndent}  )`,
-        `${openingIndent}\`),`,
-      ],
-    });
   });
 });

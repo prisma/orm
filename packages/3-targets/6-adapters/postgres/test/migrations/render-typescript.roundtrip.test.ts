@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
+import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { checkExpression, col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
@@ -307,6 +308,48 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     const ops = JSON.parse(opsJson);
 
     const expected = await Promise.all(renderOps(calls, testAdapter));
+    expect(ops).toEqual(expected);
+  });
+
+  it('runs a multi-line sql template exactly as writeMigrationTs writes it, giving renderOps(calls)', {
+    timeout: timeouts.coldTransformImport,
+  }, async () => {
+    const calls = [
+      new CreateTableCall(
+        'public',
+        'profile',
+        [
+          col('id', 'int4', { notNull: true }),
+          col('slug', 'text', { default: fn("lower(\n  'a' || 'b'\n)") }),
+        ],
+        [
+          primaryKey(['id']),
+          checkExpression(
+            'profile_valid',
+            `"id" > 0\n  AND length("slug") < 280\n  AND "slug" <> '  x'`,
+          ),
+        ],
+      ),
+    ];
+    const migration = new TypeScriptRenderablePostgresMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+      testAdapter,
+    );
+
+    const written = await formatMigrationTs(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(written).toContain('sql`\n');
+    await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(written));
+
+    const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+      cwd: tmpDir,
+    });
+    expect(stderr).toBe('');
+
+    const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+    const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
     expect(ops).toEqual(expected);
   });
 

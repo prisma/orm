@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
+import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
@@ -204,6 +205,40 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
 
     const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
 
+    expect(ops).toEqual(expected);
+  });
+
+  it('runs a multi-line sql template exactly as writeMigrationTs writes it, giving renderOps(calls)', {
+    timeout: timeouts.coldTransformImport,
+  }, async () => {
+    const calls = [
+      new CreateTableCall(
+        'profile',
+        [
+          col('id', 'INTEGER', { primaryKey: true }),
+          col('slug', 'TEXT', { default: fn("lower(\n  'a' || 'b'\n    AND '  x'\n)") }),
+        ],
+        [primaryKey(['id'])],
+      ),
+    ];
+    const migration = new TypeScriptRenderableSqliteMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+    );
+
+    const written = await formatMigrationTs(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(written).toContain('sql`\n');
+    await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(written));
+
+    const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+      cwd: tmpDir,
+    });
+    expect(stderr).toBe('');
+
+    const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+    const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
     expect(ops).toEqual(expected);
   });
 

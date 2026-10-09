@@ -10,7 +10,6 @@
 import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'pathe';
 import { format } from 'prettier';
-import { indentTaggedTemplates } from './indent-tagged-templates';
 
 const MIGRATION_TS_FILE = 'migration.ts';
 
@@ -39,15 +38,14 @@ export async function writeMigrationTs(packageDir: string, content: string): Pro
   );
 }
 
-/** `source` as `writeMigrationTs` writes it: formatted by prettier, with each multi-line tagged template indented to sit inside the code around it (`indentTaggedTemplates`). */
+/** `source` as `writeMigrationTs` writes it: formatted by prettier. */
 export async function formatMigrationTs(source: string): Promise<string> {
-  const formatted = await format(source, {
+  return format(source, {
     parser: 'typescript',
     singleQuote: true,
     semi: true,
     printWidth: 100,
   });
-  return indentTaggedTemplates(formatted);
 }
 
 /**
