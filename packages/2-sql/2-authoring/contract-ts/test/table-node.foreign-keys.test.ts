@@ -131,3 +131,31 @@ describe('a foreign key that names its target table', () => {
     );
   });
 });
+
+describe('a foreign key that names its target model', () => {
+  it("targets the model's namespace when it names the empty namespace", () => {
+    const auditRow: ModelNode = {
+      modelName: 'AuditRow',
+      tableName: 'audit_rows',
+      namespaceId: 'audit',
+      fields: [field('id')],
+      id: { columns: ['id'] },
+    };
+    const owner: ModelNode = {
+      ...user,
+      fields: [field('id'), field('auditId')],
+      foreignKeys: [
+        {
+          columns: ['auditId'],
+          references: { model: 'AuditRow', table: 'audit_rows', namespaceId: '', columns: ['id'] },
+        },
+      ],
+    };
+    const contract = build(definitionOf([owner, auditRow]));
+    expect(
+      contract.storage.namespaces['public']?.entries.table?.['User']?.foreignKeys.map(
+        (fk) => fk.target,
+      ),
+    ).toEqual([{ namespaceId: 'audit', tableName: 'audit_rows', columns: ['id'] }]);
+  });
+});

@@ -108,7 +108,10 @@ export function resolveForeignKey(
     source,
     target: {
       namespaceId: asNamespaceId(
-        fk.references.namespaceId ?? modelNamespaceId(targetModel, context.defaultNamespaceId),
+        namespaceIdOrDefault(
+          fk.references.namespaceId,
+          modelNamespaceId(targetModel, context.defaultNamespaceId),
+        ),
       ),
       tableName: fk.references.table,
       columns: fk.references.columns,
