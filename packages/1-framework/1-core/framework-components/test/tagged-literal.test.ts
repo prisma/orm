@@ -4,6 +4,7 @@ import {
   describeTaggedLiteralFailure,
   printedTaggedLiteralReadsBack,
   printTaggedLiteral,
+  renderTaggedTemplateSource,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
@@ -252,5 +253,57 @@ describe('printedTaggedLiteralReadsBack', () => {
     ['leading indentation in the double-quote form', '  a `b`'],
   ])('fails for text with %s, which the literal canonicalizes away', (_name, text) => {
     expect(printedTaggedLiteralReadsBack(text)).toBe(false);
+  });
+});
+
+describe('renderTaggedTemplateSource', () => {
+  function readBackIndented(source: string, tag: string, indent: string): string | undefined {
+    const raw = source.slice(tag.length + 1, -1);
+    const indented = raw
+      .split('\n')
+      .map((line) => (line.trim() ? `${indent}${line}` : line))
+      .join('\n');
+    const canonical = canonicalizeTaggedLiteralBody(resolveTemplateTagEscapes(indented));
+    return canonical.ok ? canonical.text : undefined;
+  }
+
+  it.each([
+    ['one line', 'now()', 'sql`now()`'],
+    ['both quote kinds', `"kind" IN ('a', 'b')`, `sql\`"kind" IN ('a', 'b')\``],
+    ['several lines', 'a > 0\n  AND b < 1', 'sql`\na > 0\n  AND b < 1\n`'],
+    ['an internal empty line', 'a > 0\n\nAND b', 'sql`\na > 0\n\nAND b\n`'],
+    ['a tab', 'a\t> 0', 'sql`a\t> 0`'],
+    ['a backtick', 'a = `b`', 'sql`a = \\`b\\``'],
+    ['a backslash', "E'\\n' <> x", "sql`E'\\\\n' <> x`"],
+    ['a dollar brace', 'a $' + '{x}', 'sql`a \\$' + '{x}`'],
+  ])('prints %s as a template the tag reads back unchanged', (_name, text, source) => {
+    const rendered = renderTaggedTemplateSource('sql', text);
+
+    expect(rendered).toEqual({ source, usesTag: true });
+    expect(readBackIndented(rendered.source, 'sql', '      ')).toBe(text);
+  });
+
+  it.each([
+    ['leading whitespace', '  now()', '"  now()"'],
+    ['a blank first line', '\nnow()', '"\\nnow()"'],
+    ['a trailing blank line', 'now()\n', '"now()\\n"'],
+    ['a whitespace-only line', 'a\n  \nb', '"a\\n  \\nb"'],
+    ['a carriage return', 'a\r\nb', '"a\\r\\nb"'],
+    ['a line holding only a non-breaking space', 'a\n \nb', '"a\\n \\nb"'],
+    ['a lone surrogate', 'a\ud800b', '"a\\ud800b"'],
+    ['a control character', 'a\u0007b', '"a\\u0007b"'],
+    ['DEL', 'a\u007fb', '"a\\x7fb"'],
+    ['U+2028', 'a b', '"a\\u2028b"'],
+    ['U+2029', 'a b', '"a\\u2029b"'],
+    ['a NUL character', 'a\u0000b', '"a\\u0000b"'],
+  ])('falls back to a string literal for %s', (_name, text, source) => {
+    expect(renderTaggedTemplateSource('sql', text)).toEqual({ source, usesTag: false });
+  });
+
+  it('falls back to an untagged template for text with both quote kinds the tag cannot hold', () => {
+    expect(renderTaggedTemplateSource('sql', ` "a" = 'b'`)).toEqual({
+      source: `\` "a" = 'b'\``,
+      usesTag: false,
+    });
   });
 });

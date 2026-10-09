@@ -16,7 +16,9 @@ import type {
   SqlMigrationPlanOperation,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
+import { renderTaggedTemplateSource } from '@internal/framework-components/authoring';
 import type { OpFactoryCall as FrameworkOpFactoryCall } from '@internal/framework-components/control';
+import { SQL_EXPRESSION_TAG } from '@internal/sql-contract/sql-expression';
 import type {
   AnyDdlColumnDefault,
   DdlColumn,
@@ -98,12 +100,35 @@ export function isSqliteOpFactoryCall(
 // TypeScript rendering helpers for DdlColumn / DdlTableConstraint
 // ---------------------------------------------------------------------------
 
+function sqlTextSource(text: string): string {
+  return renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source;
+}
+
+function sqlTagImports(texts: readonly (string | undefined)[]): ImportRequirement[] {
+  const usesTag = texts.some(
+    (text) => text !== undefined && renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag,
+  );
+  return usesTag ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: SQL_EXPRESSION_TAG }] : [];
+}
+
+function ddlColumnSqlTexts(columns: readonly DdlColumn[]): (string | undefined)[] {
+  return columns.map((column) =>
+    column.default?.kind === 'function' ? column.default.expression.text : undefined,
+  );
+}
+
+function columnSpecSqlTexts(columns: readonly SqliteColumnSpec[]): (string | undefined)[] {
+  return columns.map((column) =>
+    column.default?.kind === 'function' ? column.default.expression : undefined,
+  );
+}
+
 function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (!def) return '';
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${tsQuotedTextSource(def.expression.text)})`;
+  return `fn(${sqlTextSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(column: DdlColumn): string {
@@ -245,6 +270,7 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
     for (const sym of constraintImportSymbols(this.constraints)) {
       req.push({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: sym });
     }
+    req.push(...sqlTagImports(ddlColumnSqlTexts(this.columns)));
     return req;
   }
 }
@@ -554,7 +580,7 @@ export class RecreateTableCall extends SqliteOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return sqlTagImports(columnSpecSqlTexts(this.contractTable.columns));
   }
 }
 
@@ -601,7 +627,7 @@ export class AddColumnCall extends SqliteOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return sqlTagImports(columnSpecSqlTexts([this.column]));
   }
 }
 
@@ -954,7 +980,7 @@ function renderSpecDefault(columnDefault: ColumnDefault): string {
   if (columnDefault.kind === 'literal') return jsonToTsSource(columnDefault);
   const sources: RenderedSources<typeof columnDefault> = {
     kind: jsonToTsSource(columnDefault.kind),
-    expression: tsQuotedTextSource(columnDefault.expression),
+    expression: sqlTextSource(columnDefault.expression),
   };
   return tsObjectSource(definedSourceEntries(sources));
 }

@@ -219,7 +219,7 @@ describe('AddColumnCall', () => {
     await expect(async () => call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
   });
 
-  it('renders a default holding both quote kinds as a template literal', () => {
+  it('renders a default holding both quote kinds as a sql template', () => {
     const call = new AddColumnCall(
       'user',
       colSpec({
@@ -234,11 +234,14 @@ describe('AddColumnCall', () => {
         'this.addColumn({ table: "user", column: {',
         '  name: "meta",',
         '  typeSql: "TEXT",',
-        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  default: { kind: "function", expression: sql`\'{"a": 1}\'` },',
         '  nullable: false,',
         '} })',
       ].join('\n'),
     );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'sql' },
+    ]);
   });
 
   it('renders a literal default as its JSON value', () => {
@@ -543,7 +546,7 @@ describe('RecreateTableCall', () => {
     await expect(call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
   });
 
-  it('renders a column default and a postcheck holding both quote kinds as template literals', () => {
+  it('renders a column default as a sql template and its planner-built postcheck SQL as a string', () => {
     const call = new RecreateTableCall({
       tableName: 'user',
       contractTable: tableSpec(
@@ -591,7 +594,7 @@ describe('RecreateTableCall', () => {
         '  {',
         '  name: "meta",',
         '  typeSql: "TEXT",',
-        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  default: { kind: "function", expression: sql`\'{"a": 1}\'` },',
         '  codecRef: { codecId: "sqlite/text@1" },',
         '  nullable: false,',
         '},',
@@ -614,6 +617,9 @@ describe('RecreateTableCall', () => {
         '})',
       ].join('\n'),
     );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'sql' },
+    ]);
   });
 });
 

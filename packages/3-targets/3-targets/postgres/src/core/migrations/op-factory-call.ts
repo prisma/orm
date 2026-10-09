@@ -23,12 +23,14 @@
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
+import { renderTaggedTemplateSource } from '@internal/framework-components/authoring';
 import type {
   OpFactoryCall as FrameworkOpFactoryCall,
   MigrationOperationClass,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
+import { SQL_EXPRESSION_TAG } from '@internal/sql-contract/sql-expression';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import type { AnyDdlColumnDefault, DdlTableConstraint } from '@internal/sql-relational-core/ast';
 import {
@@ -43,7 +45,6 @@ import {
   jsonToTsSource,
   TsExpression,
   tsObjectSource,
-  tsQuotedTextSource,
 } from '@internal/ts-render';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -184,12 +185,39 @@ export function postgresDefaultToDdlColumnDefault(
 // TypeScript rendering helpers for DdlColumn / DdlTableConstraint
 // ---------------------------------------------------------------------------
 
+function sqlTextSource(text: string): string {
+  return renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source;
+}
+
+function sqlTagImports(texts: readonly (string | undefined)[]): ImportRequirement[] {
+  const usesTag = texts.some(
+    (text) => text !== undefined && renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag,
+  );
+  return usesTag
+    ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: SQL_EXPRESSION_TAG }]
+    : [];
+}
+
+function columnSqlTexts(columns: readonly DdlColumn[]): (string | undefined)[] {
+  return columns.map((column) =>
+    column.default?.kind === 'function' ? column.default.expression.text : undefined,
+  );
+}
+
+function constraintSqlTexts(
+  constraints: readonly DdlTableConstraint[] | undefined,
+): (string | undefined)[] {
+  return (constraints ?? []).map((constraint) =>
+    constraint.kind === 'check-expression' ? constraint.expression.text : undefined,
+  );
+}
+
 function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (!def) return '';
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${tsQuotedTextSource(def.expression.text)})`;
+  return `fn(${sqlTextSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(col: DdlColumn): string {
@@ -221,7 +249,7 @@ function renderDdlConstraintAsTsCall(constraint: DdlTableConstraint): string {
       return `unique(${jsonToTsSource(constraint.columns)}${nameOpt})`;
     }
     case 'check-expression':
-      return `checkExpression(${jsonToTsSource(constraint.name)}, ${tsQuotedTextSource(constraint.expression.text)})`;
+      return `checkExpression(${jsonToTsSource(constraint.name)}, ${sqlTextSource(constraint.expression.text)})`;
   }
 }
 
@@ -340,6 +368,9 @@ export class CreateTableCall extends PostgresOpFactoryCallNode {
     for (const sym of constraintImportSymbols(this.constraints)) {
       req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
     }
+    req.push(
+      ...sqlTagImports([...columnSqlTexts(this.columns), ...constraintSqlTexts(this.constraints)]),
+    );
     return req;
   }
 }
@@ -515,6 +546,7 @@ export class AddColumnCall extends PostgresOpFactoryCallNode {
     for (const sym of defaultImportSymbols([this.column])) {
       req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
     }
+    req.push(...sqlTagImports(columnSqlTexts([this.column])));
     return req;
   }
 }
@@ -843,6 +875,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
         moduleSpecifier: POSTGRES_MIGRATION_FACADE,
         symbol,
       })),
+      ...sqlTagImports(columnSqlTexts([this.column])),
     ];
   }
 }
@@ -1308,11 +1341,11 @@ export class AddCheckConstraintCall extends PostgresOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${tsQuotedTextSource(this.expression)} })`;
+    return `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${sqlTextSource(this.expression)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return sqlTagImports([this.expression]);
   }
 }
 
@@ -1436,7 +1469,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
     if (this.columns !== undefined) {
       opts.push(`columns: ${jsonToTsSource(this.columns)}`);
     } else {
-      opts.push(`expression: ${tsQuotedTextSource(this.expression ?? '')}`);
+      opts.push(`expression: ${sqlTextSource(this.expression ?? '')}`);
     }
     if (
       this.indexType !== undefined ||
@@ -1447,7 +1480,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
       const extrasParts: string[] = [];
       if (this.indexType !== undefined) extrasParts.push(`type: ${jsonToTsSource(this.indexType)}`);
       if (this.options !== undefined) extrasParts.push(`options: ${jsonToTsSource(this.options)}`);
-      if (this.where !== undefined) extrasParts.push(`where: ${tsQuotedTextSource(this.where)}`);
+      if (this.where !== undefined) extrasParts.push(`where: ${sqlTextSource(this.where)}`);
       if (this.unique) extrasParts.push('unique: true');
       opts.push(`extras: { ${extrasParts.join(', ')} }`);
     }
@@ -1455,7 +1488,10 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return sqlTagImports([
+      this.columns === undefined ? (this.expression ?? '') : undefined,
+      this.where,
+    ]);
   }
 }
 
@@ -1957,8 +1993,8 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
       namespaceId: jsonToTsSource(input.namespaceId),
       operation: jsonToTsSource(input.operation),
       roles: jsonToTsSource(input.roles),
-      using: input.using === undefined ? undefined : tsQuotedTextSource(input.using),
-      withCheck: input.withCheck === undefined ? undefined : tsQuotedTextSource(input.withCheck),
+      using: input.using === undefined ? undefined : sqlTextSource(input.using),
+      withCheck: input.withCheck === undefined ? undefined : sqlTextSource(input.withCheck),
       permissive: jsonToTsSource(input.permissive),
     };
     const policy = tsObjectSource(
@@ -1970,7 +2006,7 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return sqlTagImports([this.policy.using, this.policy.withCheck]);
   }
 }
 

@@ -106,7 +106,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
     expect(output).toContain('export default class M extends Migration<Start, End> {');
   });
 
-  it('renders a function default as fn() with the SQL text', () => {
+  it('renders a function default as fn() with a sql template and imports sql', () => {
     const output = renderTypeScript(
       [
         new CreateTableCall('t', [
@@ -117,18 +117,21 @@ describe('renderCallsToTypeScript (sqlite)', () => {
     );
 
     expect(output).toContain(
-      `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn("datetime('now')") })] })`,
+      `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn(sql\`datetime('now')\`) })] })`,
+    );
+    expect(output).toContain(
+      "import { Migration, MigrationCLI, col, fn, sql } from '@internal/sqlite/migration';",
     );
   });
 
-  it('renders a function default holding both quote kinds as a template literal', () => {
+  it('renders a function default holding both quote kinds as a sql template', () => {
     const output = renderTypeScript(
       [new CreateTableCall('t', [col('label', 'TEXT', { default: fn(`printf("%s", 'x')`) })])],
       { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
     );
 
     expect(output).toContain(
-      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(`printf("%s", \'x\')`) })] })',
+      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(sql`printf("%s", \'x\')`) })] })',
     );
   });
 });

@@ -56,7 +56,7 @@ describe('CreateTableCall', () => {
     ]);
   });
 
-  it('renders a default and a CHECK holding both quote kinds as template literals', () => {
+  it('renders a default and a CHECK holding both quote kinds as sql templates', () => {
     const call = new CreateTableCall(
       'public',
       'user',
@@ -64,8 +64,12 @@ describe('CreateTableCall', () => {
       [checkExpression('user_kind_check', `"kind" IN ('admin', 'user')`)],
     );
     expect(call.renderTypeScript()).toBe(
-      'this.createTable({ schema: "public", table: "user", columns: [col("kind", "text", { default: fn(`concat("prefix", \'user\')`) })], constraints: [checkExpression("user_kind_check", `"kind" IN (\'admin\', \'user\')`)] })',
+      'this.createTable({ schema: "public", table: "user", columns: [col("kind", "text", { default: fn(sql`concat("prefix", \'user\')`) })], constraints: [checkExpression("user_kind_check", sql`"kind" IN (\'admin\', \'user\')`)] })',
     );
+    expect(call.importRequirements()).toContainEqual({
+      moduleSpecifier: '@internal/postgres/migration',
+      symbol: 'sql',
+    });
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
@@ -186,9 +190,11 @@ describe('AddCheckConstraintCall', () => {
     expect(op.execute[0]?.sql).toContain("CHECK (\"priority\" IN ('low', 'high'))");
     expect(op.precheck[0]).toMatchObject({ sql: 'LOWERED 1', params: ['p1'] });
     expect(call.renderTypeScript()).toBe(
-      'this.addCheckConstraint({ schema: "public", table: "post", constraint: "post_priority_check", expression: `"priority" IN (\'low\', \'high\')` })',
+      'this.addCheckConstraint({ schema: "public", table: "post", constraint: "post_priority_check", expression: sql`"priority" IN (\'low\', \'high\')` })',
     );
-    expect(call.importRequirements()).toEqual([]);
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+    ]);
   });
 });
 

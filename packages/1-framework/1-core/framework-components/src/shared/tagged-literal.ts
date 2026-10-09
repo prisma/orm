@@ -1,3 +1,5 @@
+import { tsQuotedTextSource } from '@internal/ts-render';
+
 /**
  * `text` is the canonical value of the literal. Every failure `offset` is an
  * index into the resolved body the function was given, including `too-large`,
@@ -172,4 +174,38 @@ export function printedTaggedLiteralReadsBack(text: string): boolean {
   const resolvedBody = isPrintedOnOwnLines(text) ? `\n${text}\n` : text;
   const canonical = canonicalizeTaggedLiteralBody(resolvedBody);
   return canonical.ok && canonical.text === text;
+}
+
+/** TypeScript source for `text` in generated code: a template literal with `tag` when the tag reads it back unchanged, else a string literal. */
+export function renderTaggedTemplateSource(
+  tag: string,
+  text: string,
+): { readonly source: string; readonly usesTag: boolean } {
+  if (!templateHoldsUnchanged(text)) return { source: tsQuotedTextSource(text), usesTag: false };
+  const escaped = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  const source = text.includes('\n') ? `${tag}\`\n${escaped}\n\`` : `${tag}\`${escaped}\``;
+  return { source, usesTag: true };
+}
+
+const WHITESPACE_ONLY_LINE = /^\s+$/;
+
+function templateHoldsUnchanged(text: string): boolean {
+  const canonical = canonicalizeTaggedLiteralBody(text);
+  if (!canonical.ok || canonical.text !== text) return false;
+  const lines = text.split('\n');
+  if (lines.some((line) => WHITESPACE_ONLY_LINE.test(line) && !BLANK_LINE.test(line))) {
+    return false;
+  }
+  return !holdsCharacterThatNeedsAnEscape(text);
+}
+
+function holdsCharacterThatNeedsAnEscape(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    const isControl = (code < 0x20 && char !== '\n' && char !== '\t') || code === 0x7f;
+    const isLineOrParagraphSeparator = code === 0x2028 || code === 0x2029;
+    const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+    if (isControl || isLineOrParagraphSeparator || isLoneSurrogate) return true;
+  }
+  return false;
 }
