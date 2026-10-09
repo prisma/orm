@@ -19,7 +19,6 @@ test('a vector column with a length reads as a vector of that length', () => {
 });
 
 test('a vector column without a length reads as the plain vector type', () => {
-  expectTypeOf<VectorOutput<Record<never, never>>>().toEqualTypeOf<
-    CodecTypes['pg/vector@1']['output']
-  >();
+  expectTypeOf<VectorOutput<Record<never, never>>>().not.toBeAny();
+  expectTypeOf<VectorOutput<Record<never, never>>>().toEqualTypeOf<Vector>();
 });

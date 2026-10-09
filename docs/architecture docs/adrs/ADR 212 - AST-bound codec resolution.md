@@ -72,7 +72,7 @@ By the time anything reaches `ops.json`, all codec resolution has already happen
 
 ### Honest descriptor signatures
 
-With the triangulation removed, descriptors no longer need to accept `undefined` params as a proxy for "no params known". `PgVectorDescriptor.factory(params: VectorParams)` reads `params.length` directly; the defensive `(params as VectorParams | undefined)?.length` cast is deleted. `PgVectorCodec.length` narrows from `number | undefined` to `number`. The undimensioned `vectorColumn` helper (which relied on the representative-codec hack) is retired; users use `vector(N)` exclusively.
+With the triangulation removed, descriptors no longer need to accept `undefined` params as a proxy for "no params known". `PgVectorDescriptor.factory(params: VectorParams)` reads `params.length` directly; the defensive `(params as VectorParams | undefined)?.length` cast is deleted. `VectorParams` permits an optional `length`, so `PgVectorCodec.length` is `number | undefined`. The public `vector()` and `pgVectorColumn()` helpers explicitly supply `{}` for variable dimensions; `vector(N)` and `pgVectorColumn(N)` supply `{ length: N }` for a fixed dimension. An empty parameter object is a validated choice, not a proxy for unknown codec identity. All four conversion paths (`encode`, `decode`, `encodeJson`, and `decodeJson`) require 1–16,000 finite numbers for undimensioned vectors and exactly N finite numbers for dimensioned vectors.
 
 ## Consequences
 
@@ -88,7 +88,7 @@ With the triangulation removed, descriptors no longer need to accept `undefined`
 
 - **Builder construction sites must stamp `codec`.** Every column-bound `ParamRef` and `ProjectionItem` construction site calls `codecRefForColumn` at build time. This is a one-time cost per node (previously the builder was already calling `forColumn` to derive `refs`), but the call is now explicit and required rather than optional.
 - **Refs-less raw SQL paths require explicit codec.** `sql.value(42)` without an explicit codec argument fails at build time. Default-codec ergonomics (e.g. `defaultCodecForJsType` on the family adapter) are out of scope; tracked separately.
-- **Breaking: `vectorColumn` retired.** The undimensioned vector column helper is removed. Users migrate to `vector(N)`. This is acceptable because the undimensioned form only worked due to the representative-codec hack, and any future parameterized codec whose wire format depends on its params would have silently produced malformed output.
+- **Variable dimensions are explicit.** `vector()` emits the PostgreSQL type `vector` and the TypeScript type `Vector`; `vector(N)` emits `vector(N)` and `Vector<N>`. Their validated parameter objects distinguish them in the content-keyed resolver without a representative-codec fallback. Variable dimensions allow rows with different vector lengths, but distance operations still require compatible dimensions.
 
 ## References
 
