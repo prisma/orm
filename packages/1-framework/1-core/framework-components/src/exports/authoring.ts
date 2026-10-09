@@ -87,6 +87,7 @@ export {
   printedTaggedLiteralReadsBack,
   printTaggedLiteral,
   resolveTemplateTagEscapes,
+  tsTaggedTemplateSource,
 } from '../shared/tagged-literal';
 export type { PresetStorageTemplate } from '../shared/temporal-presets';
 export {

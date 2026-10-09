@@ -1,3 +1,4 @@
+import { sql } from '@internal/sql-contract/sql-expression';
 import { StorageColumn } from '@internal/sql-contract/types';
 import {
   checkExpression,
@@ -300,6 +301,71 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
         `@internal/postgres/migration must export "${name}" — the renderer emits an import for it in generated migration.ts files`,
       ).toBe(true);
     }
+  });
+
+  it('the facade exports the sql tag of sql/expression', () => {
+    expect(migrationFacade.sql).toBe(sql);
+  });
+
+  function facadeImportNames(output: string): string[] {
+    const facadeImport = output.match(
+      /import\s*\{([\s\S]*?)\}\s*from\s*'@internal\/postgres\/migration';/,
+    );
+    return (facadeImport?.[1] ?? '').split(',').map((entry) => entry.trim());
+  }
+
+  const sqlTextCalls = [
+    new AddColumnCall('public', 'note', col('created', 'timestamptz', { default: fn('now()') })),
+    new SetDefaultCall('public', 'note', col('created', 'timestamptz', { default: fn('now()') })),
+    new CreateIndexCall('public', 'note', 'note_kind_idx', { columns: ['kind'] }, { where: 'x' }),
+  ];
+
+  const fallbackOnlyCalls = [
+    new AddCheckConstraintCall('public', 'note', 'note_kind_check', '  "kind" IN (\'draft\')'),
+    new CreateIndexCall(
+      'public',
+      'note',
+      'note_kind_idx',
+      { expression: 'lower(kind)\r\n, id' },
+      { where: '"kind" <> \'\u2028\'' },
+    ),
+  ];
+
+  it.each(
+    [...oneCallPerClass, ...sqlTextCalls, ...fallbackOnlyCalls].map((call) => ({
+      name: call.constructor.name,
+      call,
+    })),
+  )('$name imports sql exactly when it prints a sql template', ({ call }) => {
+    const output = renderTypeScript([call], {
+      from: null,
+      to: TO_HASH,
+      snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+    });
+    const body = output.slice(output.indexOf('export default class'));
+
+    expect(facadeImportNames(output).includes('sql')).toBe(/\bsql`/.test(body));
+  });
+
+  it('prints sql templates and imports sql for the calls that hold SQL text', () => {
+    const printingCalls = [...oneCallPerClass, ...sqlTextCalls, ...fallbackOnlyCalls].filter(
+      (call) =>
+        /\bsql`/.test(
+          renderTypeScript([call], {
+            from: null,
+            to: TO_HASH,
+            snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+          }),
+        ),
+    );
+    expect(printingCalls.map((call) => call.constructor.name)).toEqual([
+      'CreateTableCall',
+      'AddCheckConstraintCall',
+      'CreatePostgresRlsPolicyCall',
+      'AddColumnCall',
+      'SetDefaultCall',
+      'CreateIndexCall',
+    ]);
   });
 
   it('a migration containing a data transform imports endContract exactly once', () => {

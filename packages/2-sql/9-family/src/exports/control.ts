@@ -86,6 +86,10 @@ export type {
   SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
 export type { SchemaTables } from '../core/migrations/schema-tables';
+export {
+  createSqlTextSources,
+  type SqlTextSources,
+} from '../core/migrations/sql-text-sources';
 export { sqlTypeLookupsOf } from '../core/migrations/sql-type-lookups';
 export type {
   CallWithCompanions,

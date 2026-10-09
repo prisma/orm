@@ -1,3 +1,4 @@
+import { sql } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import {
   DdlColumn,
@@ -12,6 +13,8 @@ import {
   foreignKey,
   lit,
   primaryKey,
+  type SqlTextInput,
+  sqlTextOf,
   unique,
 } from '../../src/exports/contract-free';
 
@@ -123,5 +126,57 @@ describe('contract-free table constraint helpers', () => {
       ].map(Object.isFrozen),
       columnsUnaffected: constraint.columns,
     }).toEqual({ frozen: [true, true, true, true], columnsUnaffected: ['id'] });
+  });
+});
+
+describe('sql values in contract-free helpers', () => {
+  it('fn and checkExpression read a sql value as its text', () => {
+    expect({
+      fn: fn(sql`datetime('now')`).expression,
+      check: checkExpression(
+        'user_age_check',
+        sql`
+        age >= 0
+          AND age < 200
+      `,
+      ).expression,
+    }).toEqual({
+      fn: opaqueSql("datetime('now')"),
+      check: opaqueSql('age >= 0\n  AND age < 200'),
+    });
+  });
+
+  it('sqlTextOf returns a string unchanged', () => {
+    expect(sqlTextOf('  lower("email")  ', 'index expression')).toBe('  lower("email")  ');
+  });
+
+  it('sqlTextOf rebuilds a sql value another installed copy made, canonicalizing its text', () => {
+    const fromAnotherCopy = {
+      [Symbol.for('@prisma/sql-expression')]: true,
+      text: '\n    "userId" = auth.uid()\n      AND NOT "locked"\n  ',
+    } as unknown as SqlTextInput;
+
+    expect(sqlTextOf(fromAnotherCopy, 'policy using')).toBe(
+      '"userId" = auth.uid()\n  AND NOT "locked"',
+    );
+  });
+
+  it('sqlTextOf refuses a value that is neither a string nor a sql value, naming the argument', () => {
+    expect(() => sqlTextOf({ text: 'now()' } as unknown as SqlTextInput, 'policy using')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: 'policy using must be a string or a sql`...` value.',
+        meta: { what: 'policy using' },
+      }),
+    );
+  });
+
+  it('fn and checkExpression name their argument when they refuse a value', () => {
+    const notSql = { text: 'now()' } as unknown as SqlTextInput;
+
+    expect(() => fn(notSql)).toThrow('fn expression must be a string or a sql`...` value.');
+    expect(() => checkExpression('user_age_check', notSql)).toThrow(
+      'checkExpression "user_age_check" expression must be a string or a sql`...` value.',
+    );
   });
 });

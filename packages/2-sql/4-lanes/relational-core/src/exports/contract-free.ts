@@ -6,6 +6,8 @@ export {
   foreignKey,
   lit,
   primaryKey,
+  type SqlTextInput,
+  sqlTextOf,
   unique,
 } from '../contract-free/column';
 export {

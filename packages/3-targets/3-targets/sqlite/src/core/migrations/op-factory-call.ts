@@ -11,9 +11,11 @@
 
 import type { ColumnDefault } from '@internal/contract/types';
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
-import type {
-  MigrationOperationClass,
-  SqlMigrationPlanOperation,
+import {
+  createSqlTextSources,
+  type MigrationOperationClass,
+  type SqlMigrationPlanOperation,
+  type SqlTextSources,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type { OpFactoryCall as FrameworkOpFactoryCall } from '@internal/framework-components/control';
@@ -98,19 +100,24 @@ export function isSqliteOpFactoryCall(
 // TypeScript rendering helpers for DdlColumn / DdlTableConstraint
 // ---------------------------------------------------------------------------
 
-function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
+interface WrittenCall {
+  readonly source: string;
+  readonly imports: readonly ImportRequirement[];
+}
+
+function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined, sql: SqlTextSources): string {
   if (!def) return '';
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${tsQuotedTextSource(def.expression.text)})`;
+  return `fn(${sql.source(def.expression.text)})`;
 }
 
-function renderDdlColumnAsTsCall(column: DdlColumn): string {
+function renderDdlColumnAsTsCall(column: DdlColumn, sql: SqlTextSources): string {
   const opts: string[] = [];
   if (column.notNull) opts.push('notNull: true');
   if (column.primaryKey) opts.push('primaryKey: true');
-  if (column.default) opts.push(`default: ${renderDdlColumnDefault(column.default)}`);
+  if (column.default) opts.push(`default: ${renderDdlColumnDefault(column.default, sql)}`);
   if (column.codecRef) opts.push(`codecRef: ${jsonToTsSource(column.codecRef)}`);
   const optsStr = opts.length > 0 ? `, { ${opts.join(', ')} }` : '';
   return `col(${jsonToTsSource(column.name)}, ${jsonToTsSource(column.type)}${optsStr})`;
@@ -221,7 +228,14 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    const columnsList = this.columns.map(renderDdlColumnAsTsCall).join(', ');
+    return this.#written().source;
+  }
+
+  #written(): WrittenCall {
+    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const columnsList = this.columns
+      .map((column) => renderDdlColumnAsTsCall(column, sql))
+      .join(', ');
     const constraintsList = this.constraints
       ? this.constraints.map(renderDdlConstraintAsTsCall).join(', ')
       : undefined;
@@ -231,7 +245,7 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
     opts.push(`columns: [${columnsList}]`);
     if (constraintsList) opts.push(`constraints: [${constraintsList}]`);
 
-    return `this.createTable({ ${opts.join(', ')} })`;
+    return { source: `this.createTable({ ${opts.join(', ')} })`, imports: sql.imports() };
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -245,6 +259,7 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
     for (const sym of constraintImportSymbols(this.constraints)) {
       req.push({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: sym });
     }
+    req.push(...this.#written().imports);
     return req;
   }
 }
@@ -541,20 +556,25 @@ export class RecreateTableCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
+    return this.#written().source;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return this.#written().imports;
+  }
+
+  #written(): WrittenCall {
+    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
     const args = tsObjectSource([
       ['tableName', jsonToTsSource(this.tableName)],
-      ['contractTable', renderTableSpec(this.contractTable)],
+      ['contractTable', renderTableSpec(this.contractTable, sql)],
       ['schemaColumnNames', jsonToTsSource(this.schemaColumnNames)],
       ['indexes', jsonToTsSource(this.indexes)],
       ['summary', jsonToTsSource(this.summary)],
       ['postchecks', tsArraySource(this.postchecks.map(renderPostcheck))],
       ['operationClass', jsonToTsSource(this.operationClass)],
     ]);
-    return `this.recreateTable(${args})`;
-  }
-
-  override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return { source: `this.recreateTable(${args})`, imports: sql.imports() };
   }
 }
 
@@ -597,11 +617,17 @@ export class AddColumnCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumnSpec(this.column)} })`;
+    return this.#written().source;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return this.#written().imports;
+  }
+
+  #written(): WrittenCall {
+    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const source = `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumnSpec(this.column, sql)} })`;
+    return { source, imports: sql.imports() };
   }
 }
 
@@ -928,11 +954,11 @@ function renderIfDefined(value: unknown): string | undefined {
   return value === undefined ? undefined : jsonToTsSource(value);
 }
 
-function renderColumnSpec(column: SqliteColumnSpec): string {
+function renderColumnSpec(column: SqliteColumnSpec, sql: SqlTextSources): string {
   const sources: RenderedSources<SqliteColumnSpec> = {
     name: jsonToTsSource(column.name),
     typeSql: jsonToTsSource(column.typeSql),
-    default: column.default === undefined ? undefined : renderSpecDefault(column.default),
+    default: column.default === undefined ? undefined : renderSpecDefault(column.default, sql),
     codecRef: renderIfDefined(column.codecRef),
     nullable: jsonToTsSource(column.nullable),
     inlineAutoincrementPrimaryKey: renderIfDefined(column.inlineAutoincrementPrimaryKey),
@@ -940,9 +966,9 @@ function renderColumnSpec(column: SqliteColumnSpec): string {
   return tsObjectSource(definedSourceEntries(sources));
 }
 
-function renderTableSpec(table: SqliteTableSpec): string {
+function renderTableSpec(table: SqliteTableSpec, sql: SqlTextSources): string {
   const sources: RenderedSources<SqliteTableSpec> = {
-    columns: tsArraySource(table.columns.map(renderColumnSpec)),
+    columns: tsArraySource(table.columns.map((column) => renderColumnSpec(column, sql))),
     primaryKey: renderIfDefined(table.primaryKey),
     uniques: renderIfDefined(table.uniques),
     foreignKeys: renderIfDefined(table.foreignKeys),
@@ -950,11 +976,11 @@ function renderTableSpec(table: SqliteTableSpec): string {
   return tsObjectSource(definedSourceEntries(sources));
 }
 
-function renderSpecDefault(columnDefault: ColumnDefault): string {
+function renderSpecDefault(columnDefault: ColumnDefault, sql: SqlTextSources): string {
   if (columnDefault.kind === 'literal') return jsonToTsSource(columnDefault);
   const sources: RenderedSources<typeof columnDefault> = {
     kind: jsonToTsSource(columnDefault.kind),
-    expression: tsQuotedTextSource(columnDefault.expression),
+    expression: sql.source(columnDefault.expression),
   };
   return tsObjectSource(definedSourceEntries(sources));
 }

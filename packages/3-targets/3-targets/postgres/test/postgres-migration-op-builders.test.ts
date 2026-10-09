@@ -5,9 +5,16 @@ import type {
   SqlControlAdapter,
 } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
+import { SqlExpression } from '@internal/sql-contract/sql-expression';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import {
+  checkExpression,
+  col,
+  fn,
+  lit,
+  type SqlTextInput,
+} from '@internal/sql-relational-core/contract-free';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import type { AlterColumnTypeOptions } from '../src/core/migrations/op-factory-call';
@@ -17,6 +24,7 @@ import type { CreateIndexExtras } from '../src/core/migrations/operations/indexe
 import type { ForeignKeySpec } from '../src/core/migrations/operations/shared';
 import type { PostgresPlanTargetDetails } from '../src/core/migrations/planner-target-details';
 import { PostgresMigration } from '../src/core/migrations/postgres-migration';
+import type { RenderedRlsPolicyLiteral } from '../src/core/postgres-rls-policy';
 import type { Contract } from './fixtures/namespaced-contract.d';
 import contractJson from './fixtures/namespaced-contract.json' with { type: 'json' };
 
@@ -120,7 +128,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly constraint: string;
-    readonly expression: string;
+    readonly expression: SqlTextInput;
   }): Promise<Op> {
     return this.addCheckConstraint(options);
   }
@@ -158,7 +166,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly schema: string;
     readonly table: string;
     readonly column: string;
-    readonly options: AlterColumnTypeOptions;
+    readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: SqlTextInput };
     readonly operationClass?: AlterColumnTypeClass;
   }): Promise<Op> {
     return this.alterColumnType(options);
@@ -202,9 +210,30 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
     readonly table: string;
     readonly index: string;
     readonly columns: readonly string[];
-    readonly extras?: CreateIndexExtras;
+    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: SqlTextInput };
   }): Promise<Op> {
     return this.createIndex(options);
+  }
+
+  callCreateExpressionIndex(options: {
+    readonly schema: string;
+    readonly table: string;
+    readonly index: string;
+    readonly expression: SqlTextInput;
+    readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: SqlTextInput };
+  }): Promise<Op> {
+    return this.createIndex(options);
+  }
+
+  callCreateRlsPolicy(options: {
+    readonly schema: string;
+    readonly table: string;
+    readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & {
+      readonly using?: SqlTextInput;
+      readonly withCheck?: SqlTextInput;
+    };
+  }): Promise<Op> {
+    return this.createRlsPolicy(options);
   }
 
   callDropIndex(options: {
@@ -578,5 +607,128 @@ describe('PostgresMigration op-builder methods with a ControlStack', () => {
     const op = await m.callSetNotNull({ schema: 'public', table: 'widget', column: 'name' });
 
     expect(op.operationClass).toBe('widening');
+  });
+});
+
+function astRecordingControlStack(): ControlStack<'sql', 'postgres'> {
+  const lowerer: ExecuteRequestLowerer = {
+    lower: () => ({ sql: 'UNUSED', params: [] }),
+    renderColumnDefault: async (column) => JSON.stringify(column.default),
+    lowerToExecuteRequest: async (ast) => ({ sql: JSON.stringify(ast), params: [] }),
+  };
+  const adapter = lowerer as unknown as SqlControlAdapter<'postgres'>;
+  return {
+    adapter: { create: () => adapter },
+  } as unknown as ControlStack<'sql', 'postgres'>;
+}
+
+describe('PostgresMigration op-builder methods with sql values', () => {
+  const sqlCases: ReadonlyArray<{
+    readonly name: string;
+    readonly run: (m: ExposedMigration, text: (body: string) => SqlTextInput) => Promise<Op>;
+  }> = [
+    {
+      name: 'createIndex expression',
+      run: (m, text) =>
+        m.callCreateExpressionIndex({
+          schema: 'public',
+          table: 'widget',
+          index: 'widget_lower_name_idx',
+          expression: text('lower("name")'),
+        }),
+    },
+    {
+      name: 'createIndex extras.where',
+      run: (m, text) =>
+        m.callCreateIndex({
+          schema: 'public',
+          table: 'widget',
+          index: 'widget_name_idx',
+          columns: ['name'],
+          extras: { unique: true, where: text(`"status" = 'active'`) },
+        }),
+    },
+    {
+      name: 'addCheckConstraint',
+      run: (m, text) =>
+        m.callAddCheckConstraint({
+          schema: 'public',
+          table: 'widget',
+          constraint: 'widget_status_check',
+          expression: text(`"status" IN ('active',\n  'inactive')`),
+        }),
+    },
+    {
+      name: 'createRlsPolicy using and withCheck',
+      run: (m, text) =>
+        m.callCreateRlsPolicy({
+          schema: 'public',
+          table: 'widget',
+          policy: {
+            naming: { kind: 'wire', prefix: 'widget_owner', hash: '0a1b2c3d' },
+            tableName: 'widget',
+            namespaceId: 'public',
+            operation: 'all',
+            roles: ['authenticated'],
+            using: text('"userId" = auth.uid()'),
+            withCheck: text('"userId" = auth.uid() AND NOT "locked"'),
+            permissive: true,
+          },
+        }),
+    },
+    {
+      name: 'alterColumnType using',
+      run: (m, text) =>
+        m.callAlterColumnType({
+          schema: 'public',
+          table: 'widget',
+          column: 'count',
+          options: {
+            qualifiedTargetType: 'int8',
+            formatTypeExpected: 'bigint',
+            rawTargetTypeForLabel: 'int8',
+            using: text('"count"::int8'),
+          },
+        }),
+    },
+    {
+      name: 'fn and checkExpression',
+      run: (m, text) =>
+        m.callCreateTable({
+          schema: 'public',
+          table: 'widget',
+          columns: [col('created_at', 'timestamptz', { default: fn(text('now()')) })],
+          constraints: [checkExpression('widget_count_check', text('"count" >= 0'))],
+        }),
+    },
+  ];
+
+  it.each(sqlCases)('$name gives the same op for a string and a sql value', async ({ run }) => {
+    const m = new ExposedMigration(astRecordingControlStack());
+    const fromString = await run(m, (body) => body);
+    const fromSql = await run(m, (body) => new SqlExpression(body));
+
+    expect(fromSql).toEqual(fromString);
+  });
+
+  it('names the argument when a value is neither a string nor a sql value', () => {
+    const m = new ExposedMigration(astRecordingControlStack());
+    const notSql = { text: 'x' } as unknown as SqlTextInput;
+
+    expect(() =>
+      m.callCreateIndex({
+        schema: 'public',
+        table: 'widget',
+        index: 'widget_name_idx',
+        columns: ['name'],
+        extras: { where: notSql },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: 'createIndex "widget_name_idx" where must be a string or a sql`...` value.',
+        meta: { what: 'createIndex "widget_name_idx" where' },
+      }),
+    );
   });
 });

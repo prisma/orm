@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
+import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
@@ -160,6 +161,8 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
           col('id', 'INTEGER', { primaryKey: true }),
           col('email', 'TEXT', { notNull: true }),
           col('label', 'TEXT', { default: fn(`printf("%s", 'user')`) }),
+          col('slug', 'TEXT', { default: fn("lower(\n  'a' || 'b'\n)") }),
+          col('code', 'TEXT', { default: fn("  'x'") }),
         ],
         [primaryKey(['id'])],
       ),
@@ -185,8 +188,10 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     );
 
     const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
-    expect(tsSource).toContain('default: fn(`printf("%s", \'user\')`)');
-    expect(tsSource).toContain('default: { kind: "function", expression: `\'{"a": 1}\'` }');
+    expect(tsSource).toContain('default: fn(sql`printf("%s", \'user\')`)');
+    expect(tsSource).toContain('default: fn(sql`\n');
+    expect(tsSource).toContain('default: fn("  \'x\'")');
+    expect(tsSource).toContain('default: { kind: "function", expression: sql`\'{"a": 1}\'` }');
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     const { stdout, stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -200,6 +205,40 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
 
     const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
 
+    expect(ops).toEqual(expected);
+  });
+
+  it('runs a multi-line sql template exactly as writeMigrationTs writes it, giving renderOps(calls)', {
+    timeout: timeouts.coldTransformImport,
+  }, async () => {
+    const calls = [
+      new CreateTableCall(
+        'profile',
+        [
+          col('id', 'INTEGER', { primaryKey: true }),
+          col('slug', 'TEXT', { default: fn("lower(\n  'a' || 'b'\n    AND '  x'\n)") }),
+        ],
+        [primaryKey(['id'])],
+      ),
+    ];
+    const migration = new TypeScriptRenderableSqliteMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+    );
+
+    const written = await formatMigrationTs(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(written).toContain('sql`\n');
+    await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(written));
+
+    const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+      cwd: tmpDir,
+    });
+    expect(stderr).toBe('');
+
+    const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+    const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
     expect(ops).toEqual(expected);
   });
 
@@ -307,7 +346,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     );
 
     const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
-    expect(tsSource).toContain('default: { kind: "function", expression: `\'{"a": 1}\'` }');
+    expect(tsSource).toContain('default: { kind: "function", expression: sql`\'{"a": 1}\'` }');
     expect(tsSource).toContain(
       "sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'email' AND \"notnull\" = 0`",
     );
@@ -320,4 +359,60 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     const expected = JSON.parse(JSON.stringify(await Promise.all(renderOps(calls, testAdapter))));
     expect(ops).toEqual(expected);
   });
+  it('a migration file written with sql values produces the same ops.json as one written with strings', {
+    timeout: timeouts.repeatedScriptRuns,
+  }, async () => {
+    const stringSource = handWrittenMigration(asStringLiteral);
+    const sqlSource = handWrittenMigration(asSqlTemplate);
+    expect(sqlSource).toContain('fn(sql`\n');
+
+    const run = async (source: string) => {
+      await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(source));
+      const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
+        cwd: tmpDir,
+      });
+      expect(stderr).toBe('');
+      return readFile(join(tmpDir, 'ops.json'), 'utf-8');
+    };
+    const fromStrings = await run(stringSource);
+    const fromSql = await run(sqlSource);
+
+    expect(fromStrings).toContain("'a' || 'b'");
+    expect(fromStrings).toContain("datetime('now')");
+    expect(fromStrings).toContain('hex(randomblob(4))');
+    expect(fromSql).toBe(fromStrings);
+  });
 });
+
+function asStringLiteral(text: string): string {
+  return JSON.stringify(text);
+}
+
+function asSqlTemplate(text: string): string {
+  if (!text.includes('\n')) return `sql\`${text}\``;
+  const lines = text.split('\n').map((line) => `          ${line}`);
+  return `sql\`\n${lines.join('\n')}\n        \``;
+}
+
+function handWrittenMigration(write: (text: string) => string): string {
+  const operations = [
+    `this.createTable({ table: "account", columns: [col("id", "INTEGER", { primaryKey: true }), col("slug", "TEXT", { default: fn(${write("lower(\n  'a' || 'b'\n)")}) })], constraints: [primaryKey(["id"])] }),`,
+    `this.addColumn({ table: "account", column: { name: "created", typeSql: "TEXT", default: { kind: "function", expression: ${write("datetime('now')")} }, nullable: true } }),`,
+    `this.recreateTable({ tableName: "account", contractTable: { columns: [{ name: "id", typeSql: "INTEGER", nullable: false }, { name: "code", typeSql: "TEXT", default: { kind: "function", expression: ${write('hex(randomblob(4))')} }, nullable: true }], primaryKey: { columns: ["id"] }, uniques: [], foreignKeys: [] }, schemaColumnNames: ["id"], indexes: [], summary: "Recreates table account", postchecks: [], operationClass: "widening" }),`,
+  ].join('\n');
+  const scaffold = new TypeScriptRenderableSqliteMigration(
+    [],
+    META,
+    APP_SPACE_ID,
+    SNAPSHOTS_IMPORT_PATH,
+  ).renderTypeScript(keepInternalSpecifiers);
+  const source = scaffold
+    .replace(
+      'import { Migration, MigrationCLI }',
+      'import { Migration, MigrationCLI, col, fn, primaryKey, sql }',
+    )
+    .replace('    return [\n\n    ];', `    return [\n${operations}\n    ];`);
+  expect(source).toContain(operations);
+  expect(source).toContain('primaryKey, sql }');
+  return source;
+}

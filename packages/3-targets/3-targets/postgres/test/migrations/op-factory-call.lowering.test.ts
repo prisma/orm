@@ -147,15 +147,19 @@ describe('AddColumnCall', () => {
     ]);
   });
 
-  it('renders a function default holding both quote kinds as a template literal', () => {
+  it('renders a function default holding both quote kinds as a sql template', () => {
     const call = new AddColumnCall(
       'public',
       'user',
       col('label', 'text', { default: fn(`concat("prefix", 'user')`) }),
     );
     expect(call.renderTypeScript()).toBe(
-      'this.addColumn({ schema: "public", table: "user", column: col("label", "text", { default: fn(`concat("prefix", \'user\')`) }) })',
+      'this.addColumn({ schema: "public", table: "user", column: col("label", "text", { default: fn(sql`concat("prefix", \'user\')`) }) })',
     );
+    expect(call.importRequirements()).toContainEqual({
+      moduleSpecifier: '@internal/postgres/migration',
+      symbol: 'sql',
+    });
   });
 });
 
@@ -449,11 +453,11 @@ describe('SetDefaultCall', () => {
     });
   });
 
-  it('renders a default holding both quote kinds as a template literal', () => {
+  it('renders a default holding both quote kinds as a sql template', () => {
     const meta = col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) });
     const call = new SetDefaultCall('public', 'user', meta);
     expect(call.renderTypeScript()).toBe(
-      'this.setDefault({ schema: "public", table: "user", column: col("meta", "jsonb", { default: fn(`\'{"a": 1}\'::jsonb`) }) })',
+      'this.setDefault({ schema: "public", table: "user", column: col("meta", "jsonb", { default: fn(sql`\'{"a": 1}\'::jsonb`) }) })',
     );
   });
 });
@@ -720,11 +724,14 @@ describe('CreateIndexCall', () => {
     expect(ddlNode.elements).toEqual({ expression: opaqueSql('lower(email)') });
     expect(op.execute[0]?.sql).toBe('LOWERED 1');
     expect(call.renderTypeScript()).toBe(
-      'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: "lower(email)", extras: { where: "deleted_at IS NULL", unique: true } })',
+      'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: sql`lower(email)`, extras: { where: sql`deleted_at IS NULL`, unique: true } })',
     );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+    ]);
   });
 
-  it('renders an expression and a where holding both quote kinds as template literals', () => {
+  it('renders an expression and a where holding both quote kinds as sql templates', () => {
     const call = new CreateIndexCall(
       'public',
       'user',
@@ -733,7 +740,7 @@ describe('CreateIndexCall', () => {
       { where: `"kind" <> 'guest'` },
     );
     expect(call.renderTypeScript()).toBe(
-      'this.createIndex({ schema: "public", table: "user", index: "user_kind_idx", expression: `("kind" || \'x\')`, extras: { where: `"kind" <> \'guest\'` } })',
+      'this.createIndex({ schema: "public", table: "user", index: "user_kind_idx", expression: sql`("kind" || \'x\')`, extras: { where: sql`"kind" <> \'guest\'` } })',
     );
   });
 });
@@ -1072,12 +1079,14 @@ describe('CreatePostgresRlsPolicyCall', () => {
         '  namespaceId: "public",',
         '  operation: "select",',
         '  roles: ["authenticated"],',
-        '  using: "author_id = current_user_id()",',
+        '  using: sql`author_id = current_user_id()`,',
         '  permissive: true,',
         '} })',
       ].join('\n'),
     );
-    expect(call.importRequirements()).toEqual([]);
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+    ]);
   });
 
   it('renders an exact policy literal as the exact naming arm', () => {
@@ -1103,14 +1112,14 @@ describe('CreatePostgresRlsPolicyCall', () => {
         '  namespaceId: "public",',
         '  operation: "select",',
         '  roles: ["app_user"],',
-        '  using: "(tenant_id = 1)",',
+        '  using: sql`(tenant_id = 1)`,',
         '  permissive: true,',
         '} })',
       ].join('\n'),
     );
   });
 
-  it('renders using and withCheck holding both quote kinds as template literals', () => {
+  it('renders using and withCheck holding both quote kinds as sql templates', () => {
     const call = new CreatePostgresRlsPolicyCall(
       'public',
       'post',
@@ -1133,8 +1142,8 @@ describe('CreatePostgresRlsPolicyCall', () => {
         '  namespaceId: "public",',
         '  operation: "all",',
         '  roles: ["app_user"],',
-        '  using: `"status" = \'published\'`,',
-        '  withCheck: `"status" <> \'archived\'`,',
+        '  using: sql`"status" = \'published\'`,',
+        '  withCheck: sql`"status" <> \'archived\'`,',
         '  permissive: false,',
         '} })',
       ].join('\n'),

@@ -1,3 +1,5 @@
+import { tsQuotedTextSource, tsTemplateText } from '@internal/ts-render';
+
 /**
  * `text` is the canonical value of the literal. Every failure `offset` is an
  * index into the resolved body the function was given, including `too-large`,
@@ -172,4 +174,51 @@ export function printedTaggedLiteralReadsBack(text: string): boolean {
   const resolvedBody = isPrintedOnOwnLines(text) ? `\n${text}\n` : text;
   const canonical = canonicalizeTaggedLiteralBody(resolvedBody);
   return canonical.ok && canonical.text === text;
+}
+
+/**
+ * TypeScript source for `text` in generated code: a template literal with `tag`, or `tsQuotedTextSource(text)`. It
+ * writes a template only when the tag's TypeScript function canonicalizes its text as `canonicalizeTaggedLiteralBody`
+ * does and that leaves `text` unchanged, which holds for `sql`. It also falls back when a line ends in a space or a
+ * tab, which editors strip on save, and when `text` holds a character a template would carry unescaped and invisible.
+ * A multi-line template's lines sit one level deeper than the line it opens on.
+ */
+export function tsTaggedTemplateSource(
+  tag: string,
+  text: string,
+): { readonly source: string; readonly usesTag: boolean } {
+  if (!templateHoldsUnchanged(text)) return { source: tsQuotedTextSource(text), usesTag: false };
+  const escaped = tsTemplateText(text);
+  if (!text.includes('\n')) return { source: `${tag}\`${escaped}\``, usesTag: true };
+  const body = escaped
+    .split('\n')
+    .map((line) => (line.length === 0 ? line : `  ${line}`))
+    .join('\n');
+  return { source: `${tag}\`\n${body}\n\``, usesTag: true };
+}
+
+const WHITESPACE_ONLY_LINE = /^\s+$/;
+const TRAILING_SPACE_OR_TAB = /[ \t]$/;
+
+function templateHoldsUnchanged(text: string): boolean {
+  const canonical = canonicalizeTaggedLiteralBody(text);
+  if (!canonical.ok || canonical.text !== text) return false;
+  const lines = text.split('\n');
+  const indentTreatsAsBlank = (line: string) =>
+    WHITESPACE_ONLY_LINE.test(line) && !BLANK_LINE.test(line);
+  if (lines.some((line) => indentTreatsAsBlank(line) || TRAILING_SPACE_OR_TAB.test(line))) {
+    return false;
+  }
+  return !holdsCharacterThatNeedsAnEscape(text);
+}
+
+function holdsCharacterThatNeedsAnEscape(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    const isControl = (code < 0x20 && char !== '\n' && char !== '\t') || code === 0x7f;
+    const isLineOrParagraphSeparator = code === 0x2028 || code === 0x2029;
+    const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+    if (isControl || isLineOrParagraphSeparator || isLoneSurrogate) return true;
+  }
+  return false;
 }

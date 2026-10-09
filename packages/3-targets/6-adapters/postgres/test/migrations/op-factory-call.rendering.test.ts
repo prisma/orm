@@ -64,9 +64,9 @@ describe('Postgres call classes - renderTypeScript + importRequirements', () => 
       widening: widening.renderTypeScript(),
       imports: additive.importRequirements().map((requirement) => requirement.symbol),
     }).toEqual({
-      additive: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }) })`,
-      widening: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }), operationClass: "widening" })`,
-      imports: ['col', 'fn'],
+      additive: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn(sql\`now()\`) }) })`,
+      widening: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn(sql\`now()\`) }), operationClass: "widening" })`,
+      imports: ['col', 'fn', 'sql'],
     });
   });
 

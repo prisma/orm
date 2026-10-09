@@ -1,6 +1,21 @@
-import { col, fn } from '@internal/sql-relational-core/contract-free';
+import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
+import { TsExpression } from '@internal/ts-render';
 import { describe, expect, it } from 'vitest';
-import { CreateTableCall, DropTableCall } from '../../src/core/migrations/op-factory-call';
+import * as opFactoryCalls from '../../src/core/migrations/op-factory-call';
+import {
+  AddColumnCall,
+  CreateIndexCall,
+  CreateTableCall,
+  DataTransformCall,
+  DropColumnCall,
+  DropIndexCall,
+  DropTableCall,
+  RawSqlCall,
+  RecreateTableCall,
+  RenameColumnCall,
+  RenameTableCall,
+} from '../../src/core/migrations/op-factory-call';
+import type { SqliteColumnSpec } from '../../src/core/migrations/operations/shared';
 import { renderCallsToTypeScript } from '../../src/core/migrations/render-typescript';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
@@ -106,7 +121,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
     expect(output).toContain('export default class M extends Migration<Start, End> {');
   });
 
-  it('renders a function default as fn() with the SQL text', () => {
+  it('renders a function default as fn() with a sql template and imports sql', () => {
     const output = renderTypeScript(
       [
         new CreateTableCall('t', [
@@ -117,18 +132,125 @@ describe('renderCallsToTypeScript (sqlite)', () => {
     );
 
     expect(output).toContain(
-      `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn("datetime('now')") })] })`,
+      `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn(sql\`datetime('now')\`) })] })`,
+    );
+    expect(output).toContain(
+      "import { Migration, MigrationCLI, col, fn, sql } from '@internal/sqlite/migration';",
     );
   });
 
-  it('renders a function default holding both quote kinds as a template literal', () => {
+  it('renders a function default holding both quote kinds as a sql template', () => {
     const output = renderTypeScript(
       [new CreateTableCall('t', [col('label', 'TEXT', { default: fn(`printf("%s", 'x')`) })])],
       { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
     );
 
     expect(output).toContain(
-      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(`printf("%s", \'x\')`) })] })',
+      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(sql`printf("%s", \'x\')`) })] })',
     );
+  });
+});
+
+describe('renderCallsToTypeScript (sqlite) — the sql import', () => {
+  const recreateTable = (columns: readonly SqliteColumnSpec[]) =>
+    new RecreateTableCall({
+      tableName: 'note',
+      contractTable: { columns, primaryKey: { columns: ['id'] }, uniques: [], foreignKeys: [] },
+      schemaColumnNames: ['id'],
+      indexes: [],
+      summary: 'Recreates table note',
+      postchecks: [{ description: 'verify', sql: `SELECT "a" = 'b'` }],
+      operationClass: 'widening',
+    });
+  const idColumn: SqliteColumnSpec = { name: 'id', typeSql: 'INTEGER', nullable: false };
+  const functionDefault = (expression: string): SqliteColumnSpec => ({
+    name: 'slug',
+    typeSql: 'TEXT',
+    default: { kind: 'function', expression },
+    nullable: true,
+  });
+
+  const oneCallPerClass = [
+    new CreateTableCall('note', [
+      col('id', 'INTEGER'),
+      col('kind', 'TEXT', { default: lit('draft') }),
+    ]),
+    new DropTableCall('stale'),
+    new RenameTableCall('stale', 'archived', []),
+    new RenameColumnCall('note', 'title', 'heading', []),
+    recreateTable([idColumn]),
+    new AddColumnCall('note', { name: 'nickname', typeSql: 'TEXT', nullable: true }),
+    new DropColumnCall('note', 'nickname'),
+    new CreateIndexCall('note', 'note_kind_idx', ['kind']),
+    new DropIndexCall('note', 'note_kind_idx'),
+    new DataTransformCall('data_migration.backfill', 'Backfill', 'note', 'kind'),
+    new RawSqlCall({
+      id: 'raw.custom.1',
+      label: 'raw custom 1',
+      operationClass: 'additive',
+      target: { id: 'sqlite' },
+      precheck: [],
+      execute: [{ description: 'do thing', sql: 'SELECT 1' }],
+      postcheck: [],
+    }),
+  ];
+
+  const templateCalls = [
+    new CreateTableCall('note', [col('created', 'TEXT', { default: fn("datetime('now')") })]),
+    new AddColumnCall('note', functionDefault('lower(hex(randomblob(4)))')),
+    recreateTable([idColumn, functionDefault('lower(hex(randomblob(4)))')]),
+  ];
+
+  const fallbackOnlyCalls = [
+    new CreateTableCall('note', [col('created', 'TEXT', { default: fn("  datetime('now')") })]),
+    new AddColumnCall('note', functionDefault('lower(\n  x)  ')),
+    recreateTable([idColumn, functionDefault('\nx')]),
+  ];
+
+  function facadeImportNames(output: string): string[] {
+    const facadeImport = output.match(
+      /import\s*\{([\s\S]*?)\}\s*from\s*'@internal\/sqlite\/migration';/,
+    );
+    return (facadeImport?.[1] ?? '').split(',').map((entry) => entry.trim());
+  }
+
+  const render = (call: (typeof oneCallPerClass)[number]) =>
+    renderTypeScript([call], {
+      from: null,
+      to: TO_HASH,
+      snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+    });
+
+  it('the fixture list covers every op-factory-call class (a new class must be added here)', () => {
+    const moduleMembers: unknown[] = Object.values(opFactoryCalls);
+    const allCallClasses = moduleMembers.filter(
+      (value): value is abstract new () => TsExpression =>
+        typeof value === 'function' && value.prototype instanceof TsExpression,
+    );
+    const covered = new Set(oneCallPerClass.map((call) => call.constructor));
+    expect(allCallClasses.filter((cls) => !covered.has(cls)).map((cls) => cls.name)).toEqual([]);
+  });
+
+  it.each(
+    [...oneCallPerClass, ...templateCalls, ...fallbackOnlyCalls].map((call) => ({
+      name: call.constructor.name,
+      call,
+    })),
+  )('$name imports sql exactly when it prints a sql template', ({ call }) => {
+    const output = render(call);
+    const body = output.slice(output.indexOf('export default class'));
+
+    expect(facadeImportNames(output).includes('sql')).toBe(/\bsql`/.test(body));
+  });
+
+  it('prints sql templates only for the calls whose SQL the tag holds', () => {
+    const printing = (calls: readonly (typeof oneCallPerClass)[number][]) =>
+      calls.filter((call) => /\bsql`/.test(render(call))).length;
+
+    expect({
+      oneCallPerClass: printing(oneCallPerClass),
+      templateCalls: printing(templateCalls),
+      fallbackOnlyCalls: printing(fallbackOnlyCalls),
+    }).toEqual({ oneCallPerClass: 0, templateCalls: 3, fallbackOnlyCalls: 0 });
   });
 });

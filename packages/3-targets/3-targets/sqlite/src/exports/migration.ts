@@ -9,6 +9,7 @@ export { MigrationCLI } from '@internal/cli/migration-cli';
 // `placeholder("…")` slots, instead of pulling in `@internal/errors`
 // directly. The planner emits an import from this same module.
 export { placeholder } from '@internal/errors/migration';
+export { sql } from '@internal/sql-contract/sql-expression';
 export {
   col,
   fn,

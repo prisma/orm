@@ -1,5 +1,8 @@
 import type { ColumnDefaultLiteralInputValue } from '@internal/contract/types';
+import type { SqlExpression } from '@internal/sql-contract/sql-expression';
+import { readSqlExpression } from '@internal/sql-contract/sql-expression';
 import type { ReferentialAction } from '@internal/sql-contract/types';
+import { structuredError } from '@internal/utils/structured-error';
 import type { CodecRef } from '../ast/codec-types';
 import type { AnyDdlColumnDefault } from '../ast/ddl-types';
 import {
@@ -13,6 +16,24 @@ import {
 } from '../ast/ddl-types';
 import { opaqueSql } from '../ast/opaque-sql';
 
+/** Raw SQL given as a `sql` value or as a string, before it is read. The string form is permanent. */
+export type SqlTextInput = string | SqlExpression;
+
+/**
+ * The SQL text of `value`. A `sql` value from another installed copy is canonicalized. Anything that is neither a
+ * string nor a `sql` value throws CONTRACT.ARGUMENT_INVALID naming the argument `what`.
+ */
+export function sqlTextOf(value: SqlTextInput, what: string): string {
+  if (typeof value === 'string') return value;
+  const expression = readSqlExpression(value);
+  if (expression !== undefined) return expression.text;
+  throw structuredError(
+    'CONTRACT.ARGUMENT_INVALID',
+    `${what} must be a string or a sql\`...\` value.`,
+    { meta: { what } },
+  );
+}
+
 export interface DdlColumnOptions {
   readonly notNull?: boolean;
   readonly primaryKey?: boolean;
@@ -24,8 +45,8 @@ export function lit(value: ColumnDefaultLiteralInputValue): LiteralColumnDefault
   return new LiteralColumnDefault(value);
 }
 
-export function fn(expression: string): FunctionColumnDefault {
-  return new FunctionColumnDefault(opaqueSql(expression));
+export function fn(expression: SqlTextInput): FunctionColumnDefault {
+  return new FunctionColumnDefault(opaqueSql(sqlTextOf(expression, 'fn expression')));
 }
 
 export function col(name: string, type: string, options?: DdlColumnOptions): DdlColumn {
@@ -59,6 +80,11 @@ export function unique(
   return new UniqueConstraint({ columns, ...options });
 }
 
-export function checkExpression(name: string, expression: string): CheckExpressionConstraint {
-  return new CheckExpressionConstraint({ name, expression: opaqueSql(expression) });
+export function checkExpression(name: string, expression: SqlTextInput): CheckExpressionConstraint {
+  return new CheckExpressionConstraint({
+    name,
+    expression: opaqueSql(
+      sqlTextOf(expression, `checkExpression ${JSON.stringify(name)} expression`),
+    ),
+  });
 }
