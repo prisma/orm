@@ -1,6 +1,6 @@
 # ADR 270 — ORM queries use the query builder's functions and a model's indexes
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-09
 **Builds on:** [ADR 265 — A collection keeps its class through the chain](ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md), [ADR 259 — Query fragments are functions](ADR%20259%20-%20Query%20fragments%20are%20functions.md), [ADR 206 — Operations as TypeScript functions](ADR%20206%20-%20Operations%20as%20TypeScript%20functions.md), [ADR 210 — Index-type registry](ADR%20210%20-%20Index-type%20registry.md), [ADR 236 — Target-contributed model attributes](ADR%20236%20-%20Target-contributed%20model%20attributes.md)
 
@@ -85,13 +85,13 @@ The model accessor's members are the model's fields. A member named `indexes` or
 ### The second argument
 
 ```ts
-type ModelCallbackTools<Contract, ModelName, NsId> = {
-  readonly fns: Functions<QueryContextOf<Contract>>;
-  readonly indexes: ModelIndexReferences<Contract, ModelName, NsId>;
-};
+interface ModelCallbackTools<TContract, ModelName, NsId> {
+  readonly fns: OrmFunctions<TContract>;
+  readonly indexes: ModelIndexReferences<TContract, ModelName, NsId>;
+}
 ```
 
-The ORM builds the object once per callback call, from the collection's execution context and the table reference it already holds for the model accessor. `indexes` is a lazy getter, as on the SQL query builder's table proxy, so a callback that does not read it costs nothing at run time.
+`OrmFunctions<TContract>` is the SQL query builder's `Functions` for the contract, except that a query operation's result that is a value, not a condition, also has `asc()` and `desc()`. The ORM builds the object once per callback call, from the collection's execution context and the table reference it already holds for the model accessor. `indexes` is a lazy getter, as on the SQL query builder's table proxy, so a callback that does not read it costs nothing at run time. `fns.raw` binds an interpolated value through the adapter's raw codec inferer, which the database clients pass to `orm({ rawCodecInferer })`.
 
 ### Index references in the ORM
 
@@ -116,27 +116,30 @@ An application that searches in many places names the search once, with what alr
 
 ```ts
 class PostCollection extends Collection<Contract, 'Post'> {
-  search(q: TsqueryArgument) {
+  search(query: string) {
+    const q = websearchToTsquery(query);
     return this
       .where((p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
       .orderBy((p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc());
   }
 }
 
-db.Post.search(q).limit(20).all();
+db.Post.search(input.search).limit(20).all();
 ```
 
 Inside an include refinement the custom class is not available (ADR 265, "Later decisions"), so the same body is written as a fragment for one model and run with `with`:
 
 ```ts
-const search = (q: TsqueryArgument) =>
-  db.Post.fragment((posts) =>
+const search = (query: string) => {
+  const q = websearchToTsquery(query);
+  return db.Post.fragment((posts) =>
     posts
       .where((p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
       .orderBy((p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc()),
   );
+};
 
-db.User.where({ id }).include('posts', (posts) => posts.with(search(q)).limit(3));
+db.User.where({ id }).include('posts', (posts) => posts.with(search(input.search)).limit(3));
 ```
 
 ## Responsibilities
@@ -156,7 +159,7 @@ db.User.where({ id }).include('posts', (posts) => posts.with(search(q)).limit(3)
 - **The index's name is part of the application's code.** Renaming an index in the schema breaks the queries that name it, at compile time. This is the same as renaming a field.
 - **A query can still write a search document by hand**, with `fullTextDocument(...)` from `@prisma/orm-postgres/target/full-text` or a single column. It gets no error when it differs from every index, only a sequential scan. Naming the index is the form the documentation leads with.
 - **The MongoDB ORM client is unchanged.** It has no `fns` surface and its indexes have no names in the contract.
-- **Type-checking cost** is measured on `examples/prisma-8-demo` when the feature is unused and when it is used, and recorded here when the slice lands.
+- **Type-checking cost is small.** Measured with `tsc --extendedDiagnostics`, twice each with identical counts. On `examples/prisma-8-demo`, the merge base checks in 793,326 instantiations. With this change and the demo not using the feature, 788,361 (−0.6%); the drop comes from moving the index reference to the shared package, where its type resolves only the columns an index covers. Ten uses at different sites (`where` and `orderBy` on a root and a chained collection, an include refinement, a relation filter, a fragment, a custom collection method, a `first` filter, `fns.eq` between two fields and an `orderBy` array) add 1,287 (+0.16%). In the ORM client package, without this change's tests, 1,876,427 at the merge base and 1,885,961 with the change (+0.5%, which includes a new index in the test fixture); ten uses add 12,398 (+0.66%).
 
 ## Later decision: collection scopes built from indexes
 

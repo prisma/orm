@@ -80,6 +80,18 @@ describe('a where callback with fns and indexes', () => {
     expectTypeOf(plain.User.with(search)).not.toBeAny();
   });
 
+  test('runs a fragment for one model inside an include refinement', () => {
+    const search = plain.User.fragment((users) =>
+      users
+        .where((_u, { fns, indexes }) => fns.fullTextMatches(indexes.users_search, q))
+        .orderBy((_u, { fns, indexes }) => fns.fullTextRank(indexes.users_search, q).desc()),
+    );
+    const users = plain.User.where({ id: 1 }).include('invitedUsers', (invited) =>
+      invited.with(search).limit(3),
+    );
+    expectTypeOf(users).not.toBeAny();
+  });
+
   test('gives the body of a fragment for any model every function and no index', () => {
     client.fragment({ name: { codecId: 'pg/text@1', nullable: false } }, (rows) =>
       rows.where((r, { fns }) => fns.fullTextMatches(r.name, q)),
