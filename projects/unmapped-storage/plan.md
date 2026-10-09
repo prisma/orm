@@ -28,7 +28,7 @@ Salvage from `tml-3468-unexposed-storage` (head `64601ebc15`): `resolveModelColu
 
 ### 3. `prisma7-ignore-keeps-storage`
 
-Starts only when the two open questions are decided. Regenerates the Prisma 7 fixtures and the planner golden manifest.
+Starts only when the two open questions are decided. Regenerates the Prisma 7 fixtures and the planner golden manifest. The reader must not give an `@ignore` field's column an execution (ORM-generated) default such as `uuid()` or `@updatedAt`: slice 2's validator refuses an execution default on a column no field maps. Such a field keeps only its column and any database default.
 
 ## Close-out
 
