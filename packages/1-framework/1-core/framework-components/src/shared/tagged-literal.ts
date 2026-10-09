@@ -66,10 +66,11 @@ interface Line {
 
 /**
  * Turns the escape-resolved body of a tagged literal into its canonical text:
- * newlines become `\n`, a blank first and last line are dropped, common leading
- * whitespace is removed, internal blank lines become empty, and no trailing
- * newline is added. Fails on a NUL character or when the result is larger than
- * 65536 UTF-8 bytes.
+ * newlines become `\n`, every blank line before the first non-blank line and
+ * after the last one is dropped, common leading whitespace is removed, internal
+ * blank lines become empty, and no trailing newline is added. The result is its
+ * own canonical text. Fails on a NUL character or when the result is larger
+ * than 65536 UTF-8 bytes.
  */
 export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization {
   const nul = resolved.indexOf('\0');
@@ -77,10 +78,10 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
     return { ok: false, reason: 'nul', offset: nul };
   }
   const lines = splitLines(resolved);
-  if (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
+  while (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
     lines.shift();
   }
-  if (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
+  while (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
     lines.pop();
   }
   const indent = commonIndent(lines);

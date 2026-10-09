@@ -40,7 +40,7 @@ describe("a relation's backing index", () => {
 
   it('is derived beside a partial index on the foreign key columns', () => {
     expectBothBuilds({
-      psl: { model: '@@index([authorId], where: "id > 0", name: "post_author_live")' },
+      psl: { model: '@@index([authorId], where: sql`id > 0`, name: "post_author_live")' },
       ts: { indexes: ['partial'] },
     }).toEqual({
       indexes: [partialIndex, backingIndex],
@@ -92,7 +92,7 @@ describe("a relation's backing index", () => {
     expectBothBuilds({
       psl: {
         relation: ', index: "post_author_live"',
-        model: '@@index([authorId], where: "id > 0", name: "post_author_live")',
+        model: '@@index([authorId], where: sql`id > 0`, name: "post_author_live")',
       },
       ts: { foreignKey: { index: 'post_author_live' }, indexes: ['partial'] },
     }).toEqual({

@@ -67,9 +67,15 @@ function requiredArguments(signature: ArgumentSignature): readonly RequiredArgum
 
 function requiredArgumentSnippet(argument: RequiredArgument, tabStop: number): string {
   if (argument.kind === 'positional') {
-    return argSnippetPlaceholder(argument.argument.type.kind, tabStop, argument.argument.key);
+    return argumentPlaceholder(argument.argument.type, tabStop, argument.argument.key);
   }
-  return `${argument.key}: ${argSnippetPlaceholder(argument.type.kind, tabStop, argument.key)}`;
+  return `${argument.key}: ${argumentPlaceholder(argument.type, tabStop, argument.key)}`;
+}
+
+function argumentPlaceholder(type: ArgType<unknown, never>, tabStop: number, key: string): string {
+  const tag = type.kind === 'dataTypeValue' ? type.tags[0] : undefined;
+  if (tag !== undefined) return `${tag}\`\${${tabStop.toString()}:${key}}\``;
+  return argSnippetPlaceholder(type.kind, tabStop, key);
 }
 
 function argSnippetPlaceholder(

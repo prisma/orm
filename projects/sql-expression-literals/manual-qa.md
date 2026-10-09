@@ -348,3 +348,402 @@ CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
 ok
   stored default: ["\"default\":{\"kind\":\"literal\",\"value\":[1,2,3]}"]
 ```
+
+## Slice 2b: the six places take `sql` literals
+
+Slice 2b makes `@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)`, and a policy's `using` and `withCheck` receive `sql/expression`. Every value other than a `sql` literal is refused at the written value.
+
+### Script
+
+The script writes a one-model schema with one place filled in for each case, runs `prisma contract emit` with the Postgres stack, and prints each diagnostic's code, start position and message, or the stored text when the emit succeeds. It needs no database. Each case line is a place and a value; `\n` in the value is a line break.
+
+1. Run `pnpm install` and `pnpm build` at the repository root.
+2. Create the folder `examples/prisma-8-demo/wip-qa/` with the `prisma.config.ts` of the slice 2a script and the `run.sh` below. Do not commit it.
+3. Run `sh examples/prisma-8-demo/wip-qa/run.sh`.
+4. Delete `examples/prisma-8-demo/wip-qa/`.
+
+`run.sh`:
+
+```sh
+#!/bin/sh
+cd "$(dirname "$0")"
+i=0
+while IFS=' ' read -r place value; do
+  i=$((i+1))
+  v=$(printf '%b' "$value")
+  attr=''; block=''
+  case "$place" in
+    index-where) attr="@@index([title], where: $v)" ;;
+    index-expression) attr="@@index(expression: $v, name: \"t_expr\")" ;;
+    fts-where) attr="@@fullTextIndex([title], where: $v, name: \"t_fts\")" ;;
+    check) attr="@@check(expression: $v, name: \"t_check\")" ;;
+    using) block="policy_select t_read {
+  target = T
+  using  = $v
+}" ;;
+    withCheck) block="policy_insert t_write {
+  target    = T
+  withCheck = $v
+}" ;;
+  esac
+  printf '// use prisma-8\nmodel T {\n  id    Int    @id\n  title String\n  @@rls\n  %s\n}\n%s\n' "$attr" "$block" > contract.prisma
+  echo "=== case $i: $place $value"
+  (cd .. && pnpm exec prisma contract emit --config wip-qa/prisma.config.ts) 2>&1 | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+      for (const l of s.split("\n")) { let j; try{j=JSON.parse(l)}catch{ if(l.trim()) console.log(l); continue }
+        if (j.kind!=="result") continue;
+        const e=j.envelope; if(e.ok){console.log("ok");continue}
+        console.log(e.error.code+": "+e.error.summary);
+        for(const d of e.error.meta?.diagnostics??[]) console.log("  "+d.code+" ["+JSON.stringify(d.span?.start)+"] "+d.message);
+      }})'
+  if [ -f contract.json ]; then node -e '
+    const c=require("./contract.json");const t=c.storage.namespaces.public.entries.table.T;
+    const p=Object.values(c.storage.namespaces.public.entries.policy??{})[0];
+    console.log("  stored:",JSON.stringify({where:t.indexes?.[0]?.where,expression:t.indexes?.[0]?.expression,check:t.checks?.[0]?.expression,using:p?.using,withCheck:p?.withCheck}))'; rm -f contract.json contract.d.ts; fi
+done <<'CASES'
+index-where "(title IS NULL)"
+index-where 42
+index-where true
+index-where archived
+index-where pg.sql`x`
+index-where sql`\n    title IS NOT NULL\n      AND id > 0\n  `
+index-expression "lower(title)"
+index-expression 42
+index-expression true
+index-expression archived
+index-expression pg.sql`x`
+index-expression sql`\n    lower(title),\n    id\n  `
+fts-where "(title IS NULL)"
+fts-where 42
+fts-where true
+fts-where archived
+fts-where pg.sql`x`
+fts-where sql`\n    title IS NOT NULL\n      AND id > 0\n  `
+check "id > 0"
+check 42
+check true
+check archived
+check pg.sql`x`
+check sql`\n    id > 0\n      AND length(title) < 200\n  `
+check sql``
+using "\\"id\\" = 1"
+using 42
+using true
+using archived
+using pg.sql`x`
+using sql`\n    EXISTS (\n      SELECT 1 FROM "T" WHERE "T".id = 1\n    )\n  `
+withCheck "id > 0"
+withCheck 42
+withCheck true
+withCheck archived
+withCheck pg.sql`x`
+withCheck sql`\n    id > 0\n      AND title <> ''\n  `
+index-where "  title IS NULL"
+CASES
+rm -f contract.prisma contract.json contract.d.ts
+```
+
+### What to check
+
+For each of the six places, in this order: a plain string, a number, `true`, an identifier, `pg.sql`, and a multi-line `sql` literal. Every diagnostic starts at the written value, not at the attribute or the block.
+
+| Case | Expected |
+| --- | --- |
+| Plain string | `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...`; write sql`<the same text>` `` |
+| `42` | `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...` `` |
+| `true` | `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...` `` |
+| `archived` | `PSL_INVALID_ATTRIBUTE_SYNTAX`, ``Expected sql`...`; got an identifier`` |
+| `` pg.sql`x` `` | `PSL_UNKNOWN_LITERAL_TAG`, `Unknown literal tag "pg.sql". Known tags: sql, json.` |
+| Multi-line `sql` literal | `ok`; the stored text has the common indentation and the blank lines at the start and end removed |
+| 25, `` @@check(expression: sql``) `` | `PSL_CHECK_EXPRESSION_EMPTY`, at the attribute |
+| 38, a plain string with leading spaces | `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...` `` with no rewrite, because the exact rewrite would read back without the spaces |
+
+### Run on 2026-09-30
+
+Run on commit `6287c89999`, after `pnpm build`. Result: every case gave the expected code, message and start. The start column differs by place because the value sits at a different column in each template.
+
+```text
+=== case 1: index-where "(title IS NULL)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] sql/expression has no cast from pg/text; write it as sql`(title IS NULL)`
+=== case 2: index-where 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 3: index-where true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 4: index-where archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":94,"line":6,"column":27}] Expected sql`...`, got an identifier
+=== case 5: index-where pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":94,"line":6,"column":27}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 6: index-where sql`
+    title IS NOT NULL
+      AND id > 0
+  `
+ok
+  stored: {"where":"title IS NOT NULL\n  AND id > 0"}
+=== case 7: index-expression "lower(title)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/text; write it as sql`lower(title)`
+=== case 8: index-expression 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 9: index-expression true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 10: index-expression archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":90,"line":6,"column":23}] Expected sql`...`, got an identifier
+=== case 11: index-expression pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":90,"line":6,"column":23}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 12: index-expression sql`
+    lower(title),
+    id
+  `
+ok
+  stored: {"expression":"lower(title),\nid"}
+=== case 13: fts-where "(title IS NULL)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] sql/expression has no cast from pg/text; write it as sql`(title IS NULL)`
+=== case 14: fts-where 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 15: fts-where true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 16: fts-where archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":102,"line":6,"column":35}] Expected sql`...`, got an identifier
+=== case 17: fts-where pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":102,"line":6,"column":35}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 18: fts-where sql`
+    title IS NOT NULL
+      AND id > 0
+  `
+ok
+  stored: {"where":"title IS NOT NULL\n  AND id > 0","expression":"to_tsvector('english', \"title\")"}
+=== case 19: check "id > 0"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/text; write it as sql`id > 0`
+=== case 20: check 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 21: check true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 22: check archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":90,"line":6,"column":23}] Expected sql`...`, got an identifier
+=== case 23: check pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":90,"line":6,"column":23}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 24: check sql`
+    id > 0
+      AND length(title) < 200
+  `
+ok
+  stored: {"check":"id > 0\n  AND length(title) < 200"}
+=== case 25: check sql``
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_CHECK_EXPRESSION_EMPTY [{"offset":70,"line":6,"column":3}] `@@check` expression must not be empty — an empty predicate is not a constraint
+=== case 26: using "\"id\" = 1"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] sql/expression has no cast from pg/text; write it as sql`"id" = 1`
+=== case 27: using 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 28: using true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 29: using archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":120,"line":10,"column":12}] Expected sql`...`, got an identifier
+=== case 30: using pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":120,"line":10,"column":12}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 31: using sql`
+    EXISTS (
+      SELECT 1 FROM "T" WHERE "T".id = 1
+    )
+  `
+ok
+  stored: {"using":"EXISTS (\n  SELECT 1 FROM \"T\" WHERE \"T\".id = 1\n)"}
+=== case 32: withCheck "id > 0"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] sql/expression has no cast from pg/text; write it as sql`id > 0`
+=== case 33: withCheck 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] sql/expression has no cast from pg/int2; write sql`...`
+=== case 34: withCheck true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] sql/expression has no cast from pg/bool; write sql`...`
+=== case 35: withCheck archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":127,"line":10,"column":15}] Expected sql`...`, got an identifier
+=== case 36: withCheck pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":127,"line":10,"column":15}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 37: withCheck sql`
+    id > 0
+      AND title <> ''
+  `
+ok
+  stored: {"withCheck":"id > 0\n  AND title <> ''"}
+=== case 38: index-where "  title IS NULL"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] sql/expression has no cast from pg/text; write it as a sql literal
+```
+
+### Run on 2026-10-07, after the round 3 review fixes
+
+Run on commit `1e6660ca79`, on a freshly built and installed workspace. The script ran as written; no path had moved. Result: every case matched the table.
+
+- Plain strings (cases 1, 7, 13, 19, 26, 32): `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...`; write sql`<the same text>` ``.
+- `42` and `true` (cases 2, 3, 8, 9, 14, 15, 20, 21, 27, 28, 33, 34): `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...` ``.
+- `archived` (cases 4, 10, 16, 22, 29, 35): `PSL_INVALID_ATTRIBUTE_SYNTAX`, ``Expected sql`...`; got an identifier``.
+- `` pg.sql`x` `` (cases 5, 11, 17, 23, 30, 36): `PSL_UNKNOWN_LITERAL_TAG`, `Unknown literal tag "pg.sql". Known tags: sql, json.`
+- Multi-line `sql` literals (cases 6, 12, 18, 24, 31, 37): `ok`. Each stored text has the common indentation and the blank lines at the start and end removed.
+- Case 25, `` @@check(expression: sql``) ``: `PSL_CHECK_EXPRESSION_EMPTY`, starting at the attribute (line 6, column 3).
+- Case 38, a plain string with leading spaces: `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...` `` with no rewrite.
+
+Every other diagnostic starts at the written value: line 6, column 27 for `index-where`; line 6, column 23 for `index-expression` and `check`; line 6, column 35 for `fts-where`; line 10, column 12 for `using`; line 10, column 15 for `withCheck`. These are the same starts as the 2026-09-30 run.
+
+```text
+=== case 1: index-where "(title IS NULL)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] Expected sql`...`; write sql`(title IS NULL)`
+=== case 2: index-where 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] Expected sql`...`
+=== case 3: index-where true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] Expected sql`...`
+=== case 4: index-where archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":94,"line":6,"column":27}] Expected sql`...`; got an identifier
+=== case 5: index-where pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":94,"line":6,"column":27}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 6: index-where sql`
+    title IS NOT NULL
+      AND id > 0
+  `
+ok
+  stored: {"where":"title IS NOT NULL\n  AND id > 0"}
+=== case 7: index-expression "lower(title)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`; write sql`lower(title)`
+=== case 8: index-expression 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`
+=== case 9: index-expression true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`
+=== case 10: index-expression archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":90,"line":6,"column":23}] Expected sql`...`; got an identifier
+=== case 11: index-expression pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":90,"line":6,"column":23}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 12: index-expression sql`
+    lower(title),
+    id
+  `
+ok
+  stored: {"expression":"lower(title),\nid"}
+=== case 13: fts-where "(title IS NULL)"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] Expected sql`...`; write sql`(title IS NULL)`
+=== case 14: fts-where 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] Expected sql`...`
+=== case 15: fts-where true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":102,"line":6,"column":35}] Expected sql`...`
+=== case 16: fts-where archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":102,"line":6,"column":35}] Expected sql`...`; got an identifier
+=== case 17: fts-where pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":102,"line":6,"column":35}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 18: fts-where sql`
+    title IS NOT NULL
+      AND id > 0
+  `
+ok
+  stored: {"where":"title IS NOT NULL\n  AND id > 0","expression":"to_tsvector('english', \"title\")"}
+=== case 19: check "id > 0"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`; write sql`id > 0`
+=== case 20: check 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`
+=== case 21: check true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":90,"line":6,"column":23}] Expected sql`...`
+=== case 22: check archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":90,"line":6,"column":23}] Expected sql`...`; got an identifier
+=== case 23: check pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":90,"line":6,"column":23}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 24: check sql`
+    id > 0
+      AND length(title) < 200
+  `
+ok
+  stored: {"check":"id > 0\n  AND length(title) < 200"}
+=== case 25: check sql``
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_CHECK_EXPRESSION_EMPTY [{"offset":70,"line":6,"column":3}] `@@check` expression must not be empty — an empty predicate is not a constraint
+=== case 26: using "\"id\" = 1"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] Expected sql`...`; write sql`"id" = 1`
+=== case 27: using 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] Expected sql`...`
+=== case 28: using true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":120,"line":10,"column":12}] Expected sql`...`
+=== case 29: using archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":120,"line":10,"column":12}] Expected sql`...`; got an identifier
+=== case 30: using pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":120,"line":10,"column":12}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 31: using sql`
+    EXISTS (
+      SELECT 1 FROM "T" WHERE "T".id = 1
+    )
+  `
+ok
+  stored: {"using":"EXISTS (\n  SELECT 1 FROM \"T\" WHERE \"T\".id = 1\n)"}
+=== case 32: withCheck "id > 0"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] Expected sql`...`; write sql`id > 0`
+=== case 33: withCheck 42
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] Expected sql`...`
+=== case 34: withCheck true
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":127,"line":10,"column":15}] Expected sql`...`
+=== case 35: withCheck archived
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_INVALID_ATTRIBUTE_SYNTAX [{"offset":127,"line":10,"column":15}] Expected sql`...`; got an identifier
+=== case 36: withCheck pg.sql`x`
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_UNKNOWN_LITERAL_TAG [{"offset":127,"line":10,"column":15}] Unknown literal tag "pg.sql". Known tags: sql, json.
+=== case 37: withCheck sql`
+    id > 0
+      AND title <> ''
+  `
+ok
+  stored: {"withCheck":"id > 0\n  AND title <> ''"}
+=== case 38: index-where "  title IS NULL"
+CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
+  PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] Expected sql`...`
+```

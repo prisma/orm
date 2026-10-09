@@ -60,7 +60,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0", name: "order_total_positive")
+  @@check(expression: sql\`total > 0\`, name: "order_total_positive")
 }
 `);
     expect(pslResult.ok, pslResult.ok ? '' : JSON.stringify(pslResult.failure.diagnostics)).toBe(
@@ -102,7 +102,7 @@ model LegacyOrder {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "(total > (0)::numeric)", map: "positive_total")
+  @@check(expression: sql\`(total > (0)::numeric)\`, map: "positive_total")
 }
 `);
       expect(pslResult.ok, pslResult.ok ? '' : JSON.stringify(pslResult.failure.diagnostics)).toBe(
@@ -147,8 +147,8 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0", name: "order_total_positive")
-  @@check(expression: "(total > (0)::numeric)", map: "positive_total")
+  @@check(expression: sql\`total > 0\`, name: "order_total_positive")
+  @@check(expression: sql\`(total > (0)::numeric)\`, map: "positive_total")
 }
 `);
       expect(pslResult.ok, pslResult.ok ? '' : JSON.stringify(pslResult.failure.diagnostics)).toBe(
@@ -206,7 +206,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0")
+  @@check(expression: sql\`total > 0\`)
 }
 `,
       'PSL_CHECK_REQUIRES_NAME_OR_MAP',
@@ -221,7 +221,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0", name: "a", map: "b")
+  @@check(expression: sql\`total > 0\`, name: "a", map: "b")
 }
 `,
       'PSL_CHECK_NAME_XOR_MAP',
@@ -236,7 +236,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "", name: "order_total_positive")
+  @@check(expression: sql\`\`, name: "order_total_positive")
 }
 `,
       'PSL_CHECK_EXPRESSION_EMPTY',
@@ -251,7 +251,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "   ", name: "order_total_positive")
+  @@check(expression: sql\`   \`, name: "order_total_positive")
 }
 `,
       'PSL_CHECK_EXPRESSION_EMPTY',
@@ -274,7 +274,7 @@ model Bug {
   severity String
 
   @@base(Task, "bug")
-  @@check(expression: "severity <> ''", name: "bug_severity_present")
+  @@check(expression: sql\`severity <> ''\`, name: "bug_severity_present")
 }
 `,
       'PSL_CHECK_ON_STI_VARIANT',
@@ -298,7 +298,7 @@ model Bug {
 
   @@base(Task, "bug")
   @@map("bug")
-  @@check(expression: "severity <> ''", name: "bug_severity_present")
+  @@check(expression: sql\`severity <> ''\`, name: "bug_severity_present")
 }
 `);
     expect(result.ok, result.ok ? '' : JSON.stringify(result.failure.diagnostics)).toBe(true);
@@ -320,7 +320,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0", name: "order_total_positive")
+  @@check(expression: sql\`total > 0\`, name: "order_total_positive")
 }
 `,
       {
@@ -354,7 +354,7 @@ model Order {
   id    Int     @id
   total Decimal
 
-  @@check(expression: "total > 0", name: "order_total_positive")
+  @@check(expression: sql\`total > 0\`, name: "order_total_positive")
 }
 `,
       {

@@ -13,9 +13,7 @@ function interpret(schema: string) {
     schema,
     {
       scalarTypeCodecIds,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map(),
-      },
+      defaultFunctionRegistry: new Map(),
     },
     'test.prisma',
   );

@@ -82,6 +82,7 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
     binder,
+    dataTypes: EMPTY_DATA_TYPES,
   });
   const diagnostics = [...collectionDiagnostics, ...binderDiagnostics, ...blockDiagnostics];
   const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(

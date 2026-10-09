@@ -1,12 +1,13 @@
-import { blockSpecFactoryOf, buildSymbolTable } from '@internal/psl-parser';
+import { blockSpecContext, blockSpecFactoryOf, buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../src/core/authoring';
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
 function specContext() {
   const { document, sources } = parse('', 'block-documentation.test.psl');
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  return { symbols: symbolTable };
+  return blockSpecContext({ symbols: symbolTable, dataTypes: postgresDataTypeSupport });
 }
 
 describe('PostgreSQL block documentation', () => {

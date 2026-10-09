@@ -1,6 +1,6 @@
 # SQL expression literals — design notes
 
-Decisions made with Will on 2026-09-24 while deciding TML-3282, revised the same day after an architect review and a principal-engineer review. Each one says why, and what it assumes. They move into a new ADR (decision 13) and short amendments to ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 before close-out.
+Decisions made with Will on 2026-09-24 while deciding TML-3282, revised the same day after an architect review and a principal-engineer review. Each one says why, and what it assumes. They move into a new ADR (decision 13) and short amendments to ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 262 before close-out.
 
 ## Principles
 
@@ -96,7 +96,7 @@ Why: it collapses all whitespace, line breaks included, to one space. So `a -- n
 
 ### 13. The decision gets its own ADR
 
-A new ADR records why raw SQL is a value of the data type `sql/expression`, with decisions 1 to 7, 11 and 12 and their rejected alternatives. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 255 are amended briefly and link to it. Why: ADR 129 called this "a separate decision", and without one ADR no single place answers why. (Added 2026-09-24 after the architect review.)
+A new ADR records why raw SQL is a value of the data type `sql/expression`, with decisions 1 to 7, 11 and 12 and their rejected alternatives. ADRs 129, 195, 231, 234, 236, 243, 244, 249, 254 and 262 are amended briefly and link to it. Why: ADR 129 called this "a separate decision", and without one ADR no single place answers why. (Added 2026-09-24 after the architect review.)
 
 ### 14. The typed argument ships before the places that use it
 

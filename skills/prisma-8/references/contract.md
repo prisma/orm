@@ -118,11 +118,11 @@ Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `refere
 
 **Temporal columns.** On PostgreSQL, `Date`, `Timestamp(p)`, `Timestamptz(p)` and `Time(p)` read and write `Temporal` values (`Temporal.PlainDate`, `PlainDateTime`, `Instant`, `PlainTime`), never JavaScript `Date`. They need a global `Temporal` at query time: Node.js 26.8.2 and later ship `globalThis.Temporal`; 26.8.1 and earlier — including every 22 and 24 release — do not, and the first read or write of such a column throws `RUNTIME.TEMPORAL_UNAVAILABLE`. On those runtimes either `import 'temporal-polyfill/full/global'` before the first query (add `temporal-polyfill` as a dependency) or author the column as `DateString` / `TimestampString(p)` / `TimestamptzString(p)` / `TimeString(p)`, which carry PostgreSQL's own text and need no `Temporal`. `prisma contract emit`, `prisma db init` and the other commands need no global `Temporal`: the Postgres target loads `temporal-polyfill` as a fallback `Temporal` for the control plane, and sets no global. `temporal-polyfill` is a required peer dependency of `@prisma/orm-postgres`. npm, pnpm and bun install it automatically. With Yarn, add `temporal-polyfill` (`^1.0.4`) to the project's dependencies, or the commands fail because Node.js cannot find the package. That fallback is held once per process. An application that loads control-plane code in its own process, such as server code under `vite dev` with the Prisma Vite plugin or a script that calls the control client, decodes dates without its own `Temporal`, and then fails in production. An application that uses the Temporal codecs must load its own `Temporal`. A TypeScript contract file that constructs a `Temporal` value must load an implementation too.
 
-`@@index` also accepts `expression:` (instead of a fields list), `where:` (partial-index predicate), `unique:`, `type:`/`options:` (target-registered access method), and `name:` xor `map:`:
+`@@index` also accepts `expression:` (instead of a fields list), `where:` (partial-index predicate), `unique:`, `type:`/`options:` (target-registered access method), and `name:` xor `map:`. Raw SQL in `expression:` and `where:` is a `sql` literal; a quoted string is refused with `PSL_VALUE_TYPE_INCOMPATIBLE`, whose message gives the rewrite:
 
 ```prisma
-@@index(expression: "lower(email)", name: "users_email_lower")
-@@index([authorId], where: "(archived_at IS NULL)", name: "posts_author_active")
+@@index(expression: sql`lower(email)`, name: "users_email_lower")
+@@index([authorId], where: sql`(archived_at IS NULL)`, name: "posts_author_active")
 ```
 
 `name:` declares a wire-named index (physical name `<name>_<8-hex hash>`, renames plan as `ALTER INDEX … RENAME`); `map:` adopts an exact physical name verbatim (for infer-captured objects — combining it with a SQL body warns, because drift detection byte-compares the authored text against Postgres's reprint). An `expression:` requires `name:` or `map:`. The TS builder mirrors this via `constraints.index([cols.x], {...})` / `constraints.index({ expression, ... })` — see `packages/2-sql/2-authoring/contract-ts/README.md`.
@@ -132,7 +132,7 @@ Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `refere
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
 @@fullTextIndex([summary], language: "german", name: "message_summary_search_de")
-@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
 @@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
@@ -326,11 +326,11 @@ model Order {
   total Decimal
 
   // name: is a prefix — the physical constraint becomes order_total_positive_<8-hex hash>.
-  @@check(expression: "total > 0", name: "order_total_positive")
+  @@check(expression: sql`total > 0`, name: "order_total_positive")
 }
 ```
 
-`expression` is the raw predicate — the text that goes inside `CHECK (...)` — and it is never parsed, so get it right; Prisma 8 does not validate SQL syntax. Exactly one of `name:` or `map:` is required, and they're mutually exclusive:
+`expression` is the raw predicate — the text that goes inside `CHECK (...)`, written as a `sql` literal (a quoted string is refused) — and it is never parsed, so get it right; Prisma 8 does not validate SQL syntax. Exactly one of `name:` or `map:` is required, and they're mutually exclusive:
 
 - **`name:`** — declaring a new rule. Prisma 8 picks the physical constraint name and future plans compare by that name, so Postgres's own reprint of your predicate (which rarely matches what you typed byte-for-byte) never causes false drift.
 - **`map:`** — adopting a rule that already exists. Give the constraint's exact physical name and Prisma 8 compares the predicate byte-for-byte against what's live. This is the form `contract infer` writes for you (see *Workflow — Brownfield introspection* below) when it finds a hand-written check in the database. Every `map:` body warns at emit time (`PN_EXACT_NAME_BODY_COMPARISON`) — the warning fires on the text, not on who wrote it, so the check `contract infer` just wrote warns again on your next `contract emit` too. That is expected, not a defect: the comparison is still sound because both sides are Postgres's own reprint. Prefer `name:` for anything you're authoring fresh: your text and Postgres's reprint of it rarely match character-for-character, and a byte comparison reports that as drift even when both mean exactly the same thing. Reserve `map:` for adopting what's already there, where both sides are the database's own reprint and so do match.

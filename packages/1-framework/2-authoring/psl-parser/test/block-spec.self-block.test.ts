@@ -3,6 +3,7 @@ import { ok } from '@internal/utils/result';
 import { expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { str } from '../src/attribute-spec/combinators/str';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import type { ArgType, BlockAttributeCtx } from '../src/attribute-spec/types';
 import { structBlock } from '../src/block-spec/constructors';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
@@ -58,6 +59,7 @@ it('passes the block being parsed to its values and attributes through the parse
     sources,
     pslBlockDescriptors,
     binder: supportBinder({ sources, symbolTable, pslBlockDescriptors }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
 
   const first = symbolTable.topLevel.blocks['First']!;
@@ -70,5 +72,7 @@ it('passes the block being parsed to its values and attributes through the parse
   expect(parsedBlocks.get(second)).toMatchObject({ values: { owner: 'Second' } });
   expect(refinedBlocks).toEqual([first]);
   expect(factoryContexts.length).toBeGreaterThan(0);
-  for (const ctx of factoryContexts) expect(ctx).toEqual({ symbols: symbolTable });
+  for (const ctx of factoryContexts) {
+    expect(ctx).toEqual({ symbols: symbolTable, dataTypes: EMPTY_DATA_TYPES });
+  }
 });

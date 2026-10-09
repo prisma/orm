@@ -429,7 +429,7 @@ describe('inferPostgresPslContract', () => {
         expression: 'lower(email)',
         unique: false,
       });
-      expect(psl).toContain('@@index(expression: "lower(email)", map: "users_email_lower")');
+      expect(psl).toContain('@@index(expression: sql`lower(email)`, map: "users_email_lower")');
     });
 
     it('an expression index whose reprint re-hashes to the live suffix re-detects wire-named', () => {
@@ -439,7 +439,7 @@ describe('inferPostgresPslContract', () => {
         expression: 'lower(email)',
         unique: false,
       });
-      expect(psl).toContain('@@index(expression: "lower(email)", name: "users_lower")');
+      expect(psl).toContain('@@index(expression: sql`lower(email)`, name: "users_lower")');
     });
 
     it('a partial index emits its where: predicate verbatim', () => {
@@ -450,7 +450,7 @@ describe('inferPostgresPslContract', () => {
         unique: false,
       });
       expect(psl).toContain(
-        '@@index([email], map: "users_email_active", where: "(email IS NOT NULL)")',
+        '@@index([email], map: "users_email_active", where: sql`(email IS NOT NULL)`)',
       );
     });
 
@@ -461,7 +461,7 @@ describe('inferPostgresPslContract', () => {
         unique: true,
       });
       expect(psl).toContain(
-        '@@index(expression: "lower(email)", map: "users_email_ci_key", unique: true)',
+        '@@index(expression: sql`lower(email)`, map: "users_email_ci_key", unique: true)',
       );
     });
 

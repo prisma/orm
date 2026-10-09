@@ -2,7 +2,7 @@ import type {
   AuthoringModelAttributeDescriptor,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
-import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
@@ -19,8 +19,8 @@ import type {
   ModelAttributeCtx,
   ModelAttributeSpecFactory,
   ModelSymbol,
-  NumLiteral,
-  ParsedTaggedLiteral,
+  ParsedWrittenList,
+  ParsedWrittenScalar,
   PslDiagnostic,
   PslSpan,
   RejectingArgType,
@@ -29,6 +29,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  dataTypeValue,
   diagnosticSource,
   entityRef,
   fieldAttribute,
@@ -38,6 +39,7 @@ import {
   interpretAttribute,
   leafDiagnostic,
   list,
+  mapArg,
   modelAttribute,
   nodePslSpan,
   numLiteral,
@@ -49,6 +51,8 @@ import {
   str,
   taggedLiteral,
   typeReferenceNode,
+  writtenList,
+  writtenScalar,
 } from '@internal/psl-parser';
 import type {
   AstNode,
@@ -57,7 +61,10 @@ import type {
   PslSources,
 } from '@internal/psl-parser/syntax';
 import { FunctionCallAst } from '@internal/psl-parser/syntax';
-import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
+import {
+  SQL_EXPRESSION_DATA_TYPE_ID,
+  sqlTextFromCanonical,
+} from '@internal/sql-contract/sql-expression';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
@@ -187,13 +194,28 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral | null;
+export interface EnumMemberDefault {
+  readonly kind: 'member';
+  readonly name: string;
+}
 
-function nullLiteral(): ArgType<null, AttributeCtx> {
+/** A written `null`, as a nullable field's default or a list element, with its span. */
+export interface ParsedNullLiteral {
+  readonly kind: 'null';
+  readonly span: PslSpan;
+}
+
+/** An enum list default: its members and nulls. */
+export interface EnumMemberListDefault {
+  readonly kind: 'member-list';
+  readonly elements: readonly (EnumMemberDefault | ParsedNullLiteral)[];
+}
+
+function nullLiteral(): ArgType<ParsedNullLiteral, AttributeCtx> {
   const nullIdentifier = identifier('null', {
     documentation: 'A null list element or nullable scalar default.',
   });
-  return {
+  const nullArm: ArgType<null, AttributeCtx> = {
     kind: 'null',
     label: 'null',
     parse: (arg, ctx) => {
@@ -201,14 +223,37 @@ function nullLiteral(): ArgType<null, AttributeCtx> {
       return result.ok ? ok(null) : result;
     },
   };
+  return mapArg(nullArm, (_null, arg, ctx) => ({
+    kind: 'null',
+    span: nodePslSpan(arg.syntax, ctx.sources),
+  }));
 }
 
-type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
+/** A call to a registered default function, such as `uuid()`. Not the contract's `{ kind: 'function' }` storage default. */
+export interface DefaultFunctionCall {
+  readonly kind: 'default-function';
+  readonly call: TypedFuncCall;
+}
+
+type DefaultArgValue =
+  | ParsedWrittenScalar
+  | ParsedNullLiteral
+  | ParsedWrittenList<ParsedWrittenScalar | ParsedNullLiteral>
+  | DefaultFunctionCall
+  | EnumMemberDefault
+  | EnumMemberListDefault;
+
+function defaultFunctionArm(
+  name: string,
+  signature: FuncCallSig,
+): ArgType<DefaultFunctionCall, AttributeCtx> {
+  return mapArg(funcCall(name, signature), (call) => ({ kind: 'default-function', call }));
+}
 
 function scalarDefaultArms(
   isList: boolean,
   dataTypes: DataTypeSupport,
-  registries: ControlDefaultRegistries,
+  defaultFunctionRegistry: ControlMutationDefaultRegistry,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   // One arm per distinct documentation, so each tag's completion and signature help carries the
   // text of the tag it names rather than every registered tag's text run together.
@@ -221,7 +266,7 @@ function scalarDefaultArms(
       else tags.push(entry.written.tag);
     }
     return [...tagsByDocumentation].map(([documentation, tags]) =>
-      taggedLiteral(tags, { documentation }),
+      writtenScalar(taggedLiteral(tags, { documentation })),
     );
   };
   const anyTag = () => tagArms(() => true);
@@ -229,15 +274,15 @@ function scalarDefaultArms(
   // SQL expression is never a list element, so the list does not offer its tag.
   const literal = () =>
     oneOf(
-      str(),
-      numLiteral(),
-      bool(),
+      writtenScalar(str()),
+      writtenScalar(numLiteral()),
+      writtenScalar(bool()),
       nullLiteral(),
       ...tagArms((dataType) => dataType !== SQL_EXPRESSION_DATA_TYPE_ID),
     );
-  const listArm = () => list(literal(), { label: `list of (${literal().label})` });
-  const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
-    funcCall(
+  const listArm = () => writtenList(literal());
+  const funcArms = [...defaultFunctionRegistry.entries()].map(([name, entry]) =>
+    defaultFunctionArm(
       name,
       blindCast<
         FuncCallSig,
@@ -247,7 +292,15 @@ function scalarDefaultArms(
   );
   return isList
     ? [listArm(), ...funcArms, ...anyTag()]
-    : [str(), numLiteral(), bool(), nullLiteral(), ...funcArms, ...anyTag(), listArm()];
+    : [
+        writtenScalar(str()),
+        writtenScalar(numLiteral()),
+        writtenScalar(bool()),
+        nullLiteral(),
+        ...funcArms,
+        ...anyTag(),
+        listArm(),
+      ];
 }
 
 /**
@@ -259,7 +312,7 @@ function defaultValueArm(
     ArgType<DefaultArgValue, AttributeCtx>,
     ...ArgType<DefaultArgValue, AttributeCtx>[],
   ],
-  registry: ControlDefaultRegistries['defaultFunctionRegistry'],
+  registry: ControlMutationDefaultRegistry,
 ) {
   const value = arms.length === 1 && arms[0].kind === 'list' ? arms[0] : oneOf(...arms);
   return {
@@ -309,9 +362,19 @@ function enumDefaultArms(
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
-  const member = (name: string) =>
-    identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
-  if (isList) return [list(oneOf(member(first), ...rest.map(member), nullLiteral()))];
+  const member = (name: string): ArgType<EnumMemberDefault, AttributeCtx> =>
+    mapArg(
+      identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` }),
+      (parsed) => ({ kind: 'member', name: parsed }),
+    );
+  if (isList) {
+    return [
+      mapArg(
+        list(oneOf(member(first), ...rest.map(member), nullLiteral())),
+        (elements): EnumMemberListDefault => ({ kind: 'member-list', elements }),
+      ),
+    ];
+  }
   return [member(first), ...rest.map(member)];
 }
 
@@ -319,14 +382,14 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const members = enumMemberNames(ctx);
   const valueArms =
     members === undefined
-      ? scalarDefaultArms(ctx.field.list, ctx.dataTypes, ctx.controlMutationDefaults)
+      ? scalarDefaultArms(ctx.field.list, ctx.dataTypes, ctx.defaultFunctionRegistry)
       : enumDefaultArms(members, ctx.field.typeName, ctx.field.list);
   return fieldAttribute('default', {
     documentation: 'Supplies a default value when this field is omitted from a mutation.',
     positional: [
       {
         key: 'value',
-        type: defaultValueArm(valueArms, ctx.controlMutationDefaults.defaultFunctionRegistry),
+        type: defaultValueArm(valueArms, ctx.defaultFunctionRegistry),
         documentation:
           'A literal, enum member, or registered default function compatible with this field.',
       },
@@ -418,82 +481,84 @@ export const PSL_INDEX_EXPRESSION_REQUIRES_NAME: ContributedPslDiagnosticCode =
   'PSL_INDEX_EXPRESSION_REQUIRES_NAME';
 export const PSL_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode = 'PSL_INDEX_NAME_XOR_MAP';
 
-const indexModelSpec = modelAttribute('index', {
-  documentation:
-    'Declares a database index over fields or a SQL expression, optionally restricted by a predicate.',
-  positional: [
-    {
-      key: 'fields',
-      type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
-      documentation:
-        'The ordered list of distinct indexed fields. Mutually exclusive with `expression`.',
+function indexModelSpec(ctx: AttributeSpecContext) {
+  return modelAttribute('index', {
+    documentation:
+      'Declares a database index over fields or a SQL expression, optionally restricted by a predicate.',
+    positional: [
+      {
+        key: 'fields',
+        type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
+        documentation:
+          'The ordered list of distinct indexed fields. Mutually exclusive with `expression`.',
+      },
+    ],
+    named: {
+      expression: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation:
+          'The SQL index expression. Requires `name` or `map` and cannot be combined with a fields list.',
+      },
+      where: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation: 'The SQL predicate restricting rows included in a partial index.',
+      },
+      unique: { type: optional(bool()), documentation: 'Whether the index enforces uniqueness.' },
+      name: {
+        type: optional(str()),
+        documentation: 'The index name. Mutually exclusive with `map`.',
+      },
+      map: {
+        type: optional(str()),
+        documentation: 'The database index name. Mutually exclusive with `name`.',
+      },
+      type: { type: optional(str()), documentation: 'The target-specific index access method.' },
+      options: {
+        type: optional(record(str())),
+        documentation: 'Target-specific index options. Requires an explicit `type`.',
+      },
     },
-  ],
-  named: {
-    expression: {
-      type: optional(str()),
-      documentation:
-        'The SQL index expression. Requires `name` or `map` and cannot be combined with a fields list.',
+    refine: (value, ctx, attributeNode) => {
+      const diagnostics: PslDiagnostic[] = [];
+      if ((value.fields === undefined) === (value.expression === undefined)) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@index` requires exactly one of a fields list or an `expression` argument',
+            PSL_INDEX_FIELDS_XOR_EXPRESSION,
+          ),
+        );
+      }
+      if (value.expression !== undefined && value.name === undefined && value.map === undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@index` with an `expression` argument requires a `name` or `map` argument (a default name cannot be derived from an expression)',
+            PSL_INDEX_EXPRESSION_REQUIRES_NAME,
+          ),
+        );
+      }
+      if (value.name !== undefined && value.map !== undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@index` takes at most one of `name` and `map`',
+            PSL_INDEX_NAME_XOR_MAP,
+          ),
+        );
+      }
+      if (value.options !== undefined && value.type === undefined) {
+        diagnostics.push(
+          leafDiagnostic(ctx, attributeNode, '`@@index` options argument requires a type argument'),
+        );
+      }
+      return diagnostics;
     },
-    where: {
-      type: optional(str()),
-      documentation: 'The SQL predicate restricting rows included in a partial index.',
-    },
-    unique: { type: optional(bool()), documentation: 'Whether the index enforces uniqueness.' },
-    name: {
-      type: optional(str()),
-      documentation: 'The index name. Mutually exclusive with `map`.',
-    },
-    map: {
-      type: optional(str()),
-      documentation: 'The database index name. Mutually exclusive with `name`.',
-    },
-    type: { type: optional(str()), documentation: 'The target-specific index access method.' },
-    options: {
-      type: optional(record(str())),
-      documentation: 'Target-specific index options. Requires an explicit `type`.',
-    },
-  },
-  refine: (value, ctx, attributeNode) => {
-    const diagnostics: PslDiagnostic[] = [];
-    if ((value.fields === undefined) === (value.expression === undefined)) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@index` requires exactly one of a fields list or an `expression` argument',
-          PSL_INDEX_FIELDS_XOR_EXPRESSION,
-        ),
-      );
-    }
-    if (value.expression !== undefined && value.name === undefined && value.map === undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@index` with an `expression` argument requires a `name` or `map` argument (a default name cannot be derived from an expression)',
-          PSL_INDEX_EXPRESSION_REQUIRES_NAME,
-        ),
-      );
-    }
-    if (value.name !== undefined && value.map !== undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@index` takes at most one of `name` and `map`',
-          PSL_INDEX_NAME_XOR_MAP,
-        ),
-      );
-    }
-    if (value.options !== undefined && value.type === undefined) {
-      diagnostics.push(
-        leafDiagnostic(ctx, attributeNode, '`@@index` options argument requires a type argument'),
-      );
-    }
-    return diagnostics;
-  },
-});
+  });
+}
 
 // `@@check` cross-argument diagnostic codes — contributed by this package
 // through the family-neutral `ContributedPslDiagnosticCode` seam; the
@@ -512,54 +577,59 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
  */
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
 
-const checkModelSpec = modelAttribute('check', {
-  documentation: 'Declares a named database CHECK constraint on this table.',
-  named: {
-    expression: { type: str(), documentation: 'The nonempty SQL predicate checked for each row.' },
-    name: {
-      type: optional(str()),
-      documentation: 'The constraint name. Exactly one of `name` and `map` is required.',
+function checkModelSpec(ctx: AttributeSpecContext) {
+  return modelAttribute('check', {
+    documentation: 'Declares a named database CHECK constraint on this table.',
+    named: {
+      expression: {
+        type: dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes),
+        documentation: 'The nonempty SQL predicate checked for each row.',
+      },
+      name: {
+        type: optional(str()),
+        documentation: 'The constraint name. Exactly one of `name` and `map` is required.',
+      },
+      map: {
+        type: optional(str()),
+        documentation: 'The database constraint name. Exactly one of `name` and `map` is required.',
+      },
     },
-    map: {
-      type: optional(str()),
-      documentation: 'The database constraint name. Exactly one of `name` and `map` is required.',
+    refine: (value, ctx, attributeNode) => {
+      const diagnostics: PslDiagnostic[] = [];
+      if (sqlTextFromCanonical(value.expression.value).trim().length === 0) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@check` expression must not be empty — an empty predicate is not a constraint',
+            PSL_CHECK_EXPRESSION_EMPTY,
+          ),
+        );
+      }
+      if (value.name === undefined && value.map === undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@check` requires a `name` or `map` argument (a default name cannot be derived — a check has no column tuple to name itself after)',
+            PSL_CHECK_REQUIRES_NAME_OR_MAP,
+          ),
+        );
+      }
+      if (value.name !== undefined && value.map !== undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@check` takes at most one of `name` and `map`',
+            PSL_CHECK_NAME_XOR_MAP,
+          ),
+        );
+      }
+      return diagnostics;
     },
-  },
-  refine: (value, ctx, attributeNode) => {
-    const diagnostics: PslDiagnostic[] = [];
-    if (value.expression.trim().length === 0) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@check` expression must not be empty — an empty predicate is not a constraint',
-          PSL_CHECK_EXPRESSION_EMPTY,
-        ),
-      );
-    }
-    if (value.name === undefined && value.map === undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@check` requires a `name` or `map` argument (a default name cannot be derived — a check has no column tuple to name itself after)',
-          PSL_CHECK_REQUIRES_NAME_OR_MAP,
-        ),
-      );
-    }
-    if (value.name !== undefined && value.map !== undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@check` takes at most one of `name` and `map`',
-          PSL_CHECK_NAME_XOR_MAP,
-        ),
-      );
-    }
-    return diagnostics;
-  },
-});
+  });
+}
 
 const controlModelSpec = modelAttribute('control', {
   documentation: 'Sets how schema management treats this model’s storage.',
@@ -712,13 +782,13 @@ export type SqlRelationOutput = InferAttr<typeof relationFieldSpec>;
 export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
-    controlMutationDefaults: input.controlMutationDefaults,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypes: input.dataTypes,
   };
 }
@@ -728,7 +798,7 @@ export function fieldSpecContext(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly binder: Binder;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
 }): FieldAttributeSpecContext {
   const node = typeReferenceNode(input.field);
@@ -737,28 +807,29 @@ export function fieldSpecContext(input: {
     model: input.model,
     field: input.field,
     typeResolution: node === undefined ? undefined : input.binder.symbolForNode(node),
-    controlMutationDefaults: input.controlMutationDefaults,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypes: input.dataTypes,
   };
 }
 
+/** Every entry is a factory over the spec context, whether or not its spec reads it. ADR 249. */
 export const sqlAttributeSpecs = {
   model: {
-    map: () => mapModelSpec,
-    id: () => idModelSpec,
-    unique: () => uniqueModelSpec,
-    index: () => indexModelSpec,
-    check: () => checkModelSpec,
-    control: () => controlModelSpec,
-    discriminator: () => discriminatorModelSpec,
-    base: baseModelSpec,
+    map: (_ctx: AttributeSpecContext) => mapModelSpec,
+    id: (_ctx: AttributeSpecContext) => idModelSpec,
+    unique: (_ctx: AttributeSpecContext) => uniqueModelSpec,
+    index: indexModelSpec,
+    check: checkModelSpec,
+    control: (_ctx: AttributeSpecContext) => controlModelSpec,
+    discriminator: (_ctx: AttributeSpecContext) => discriminatorModelSpec,
+    base: (_ctx: AttributeSpecContext) => baseModelSpec(),
   },
   field: {
-    map: () => mapFieldSpec,
-    id: () => idFieldSpec,
-    unique: () => uniqueFieldSpec,
-    noCheck: () => noCheckFieldSpec,
-    relation: () => relationFieldSpec,
+    map: (_ctx: FieldAttributeSpecContext) => mapFieldSpec,
+    id: (_ctx: FieldAttributeSpecContext) => idFieldSpec,
+    unique: (_ctx: FieldAttributeSpecContext) => uniqueFieldSpec,
+    noCheck: (_ctx: FieldAttributeSpecContext) => noCheckFieldSpec,
+    relation: (_ctx: FieldAttributeSpecContext) => relationFieldSpec,
     default: defaultFieldSpec,
   },
 } as const satisfies AttributeSpecNamespace;

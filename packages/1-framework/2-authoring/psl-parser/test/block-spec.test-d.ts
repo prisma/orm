@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import { describe, expectTypeOf, it } from 'vitest';
 import { bool } from '../src/attribute-spec/combinators/bool';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
@@ -155,7 +156,10 @@ describe('PslBlockSpecDescriptor', () => {
     const withContext = {
       ...descriptor,
       spec: (ctx: BlockSpecContext) => {
-        expectTypeOf(ctx).toEqualTypeOf<{ readonly symbols: SymbolTable }>();
+        expectTypeOf(ctx).toEqualTypeOf<{
+          readonly symbols: SymbolTable;
+          readonly dataTypes: DataTypeSupport;
+        }>();
         return policySpec();
       },
     } satisfies PslBlockSpecDescriptor;

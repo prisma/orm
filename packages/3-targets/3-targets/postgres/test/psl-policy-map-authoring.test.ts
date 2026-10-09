@@ -8,14 +8,8 @@
  * per-build batch as indexes (one flush covering both).
  */
 
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import {
-  buildSymbolTable,
-  createBinder,
-  EMPTY_DATA_TYPES,
-  interpretExtensionBlocks,
-} from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -25,7 +19,6 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   afterAll,
   afterEach,
@@ -45,8 +38,8 @@ import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
@@ -72,7 +65,7 @@ function blockResolutionBinder(
         pslBlockDescriptors: assembled.pslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
-      dataTypes: EMPTY_DATA_TYPES,
+      dataTypes: postgresDataTypeSupport,
     },
   }).binder;
 }
@@ -103,6 +96,7 @@ function parsePsl(source: string) {
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
     binder: blockResolutionBinder(symbolTable, sources),
+    dataTypes: postgresDataTypeSupport,
   });
   return {
     symbolTable,
@@ -138,7 +132,7 @@ function interpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },
@@ -209,7 +203,7 @@ describe('@@map lowers an exact-named policy', () => {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
     @@map("Tenant members can read")
   }
 `),
@@ -231,7 +225,7 @@ describe('@@map lowers an exact-named policy', () => {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("${longName}")
   }
 `),
@@ -247,14 +241,14 @@ describe('@@map lowers an exact-named policy', () => {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("shared physical name")
   }
 
   policy_update p_write {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("shared physical name")
   }
 `),
@@ -282,14 +276,14 @@ namespace public {
   policy_select p_read_profile {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("shared physical name")
   }
 
   policy_select p_read_account {
     target = account
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("shared physical name")
   }
 }
@@ -312,7 +306,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("first physical name")
   }
 }
@@ -320,7 +314,7 @@ namespace public {
 policy_select p_read {
   target = profile
   roles  = [app_user]
-  using  = "owner_id = 1"
+  using  = sql\`owner_id = 1\`
   @@map("second physical name")
 }
 `);
@@ -340,7 +334,7 @@ policy_select p_read {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map()
   }
 `),
@@ -359,7 +353,7 @@ policy_select p_read {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map(foo)
   }
 `),
@@ -378,7 +372,7 @@ policy_select p_read {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("")
   }
 `),
@@ -397,7 +391,7 @@ policy_select p_read {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
   }
 `),
     );
@@ -423,7 +417,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target     = profile
     roles      = [app_user]
-    using      = "owner_id = 1"
+    using      = sql\`owner_id = 1\`
     permissive = false
   }
 `),
@@ -440,7 +434,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target     = profile
     roles      = [app_user]
-    using      = "owner_id = 1"
+    using      = sql\`owner_id = 1\`
     permissive = false
   }
 `),
@@ -450,7 +444,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
   }
 `),
     );
@@ -465,7 +459,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target     = profile
     roles      = [app_user]
-    using      = "owner_id = 1"
+    using      = sql\`owner_id = 1\`
     permissive = true
   }
 `),
@@ -475,7 +469,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
   }
 `),
     );
@@ -491,7 +485,7 @@ describe('permissive is an authorable block property', () => {
   policy_select p_read {
     target     = profile
     roles      = [app_user]
-    using      = "owner_id = 1"
+    using      = sql\`owner_id = 1\`
     permissive = false
     @@map("Restrictive tenant read")
   }
@@ -519,7 +513,7 @@ describe('exact-name body-comparison warning for @@map policies — shared per-b
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("Tenant members can read")
   }
 `),
@@ -536,7 +530,7 @@ describe('exact-name body-comparison warning for @@map policies — shared per-b
 
   it('an over-threshold mixed batch flushes once as TWO summaries, each true of every member', () => {
     const indexAttributes = [1, 2, 3, 4, 5, 6]
-      .map((n) => `    @@index([email], where: "(owner_id = ${n})", map: "adopted_idx_${n}")`)
+      .map((n) => `    @@index([email], where: sql\`(owner_id = \${n})\`, map: "adopted_idx_${n}")`)
       .join('\n');
     const policyBlocks = ['a', 'b', 'c', 'd', 'e', 'f']
       .map(
@@ -544,7 +538,7 @@ describe('exact-name body-comparison warning for @@map policies — shared per-b
   policy_select p_read_${n} {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = 1"
+    using  = sql\`owner_id = 1\`
     @@map("adopted policy ${n}")
   }
 `,

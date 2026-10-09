@@ -1,5 +1,6 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import type { EntitySelector, PslBlockSpecDescriptor } from '../src/exports';
 import {
   blockAttribute,
@@ -128,6 +129,7 @@ describe('syntax-scoped entity resolution', () => {
       symbols: result.symbolTable,
       sources,
       binder,
+      dataTypes: EMPTY_DATA_TYPES,
     });
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.attributes['target']?.args).toEqual({

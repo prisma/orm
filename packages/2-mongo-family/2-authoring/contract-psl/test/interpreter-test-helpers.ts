@@ -64,8 +64,7 @@ function contextForInterpretOptions(
     codecLookup: options.codecLookup ?? { ...emptyCodecLookup, descriptorFor: () => undefined },
     dataTypes: options.dataTypes ?? EMPTY_DATA_TYPES,
     controlMutationDefaults: {
-      defaultFunctionRegistry:
-        options.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
+      defaultFunctionRegistry: options.defaultFunctionRegistry,
       generatorDescriptors: [],
     },
     resolvedInputs: [],

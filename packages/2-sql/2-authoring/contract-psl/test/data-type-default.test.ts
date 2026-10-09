@@ -68,7 +68,6 @@ describe('readStoredValue', () => {
         ok: false,
         code: 'PSL_INVALID_LITERAL',
         message: 'Field "T.at": "12:00" has no zone.',
-        place: { kind: 'attribute' },
       },
     });
   });

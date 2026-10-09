@@ -36,7 +36,7 @@ const USERS = `  model User {
     posts    Post[]
 
     @@index([fullName, handle])
-    @@check(name: "handle_present", expression: "(length(handle) > 0)")
+    @@check(name: "handle_present", expression: sql\`(length(handle) > 0)\`)
     @@rls
   }
 
@@ -51,7 +51,7 @@ const POLICY = (target: string) => `
   policy_select tenant_read {
     target = ${target}
     roles  = [app_user]
-    using  = "(tenant_id = 1)"
+    using  = sql\`(tenant_id = 1)\`
   }
 `;
 
@@ -73,7 +73,7 @@ namespace public {
     posts    Post[]
 
     @@index([name, handle])
-    @@check(name: "handle_present", expression: "(length(handle) > 0)")
+    @@check(name: "handle_present", expression: sql\`(length(handle) > 0)\`)
     @@rls
   }
 

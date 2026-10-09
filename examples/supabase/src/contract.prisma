@@ -14,14 +14,14 @@ namespace public {
   policy_select profile_owner_read {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   // anon may read every profile (a public directory listing).
   policy_select profile_public_read {
     target = Profile
     roles  = [anon]
-    using  = "true"
+    using  = sql`true`
   }
 
   // authenticated may update only their own profile (USING), and may not
@@ -29,7 +29,7 @@ namespace public {
   policy_update profile_owner_write {
     target    = Profile
     roles     = [authenticated]
-    using     = "\"userId\"::uuid = auth.uid()"
-    withCheck = "\"userId\"::uuid = auth.uid()"
+    using     = sql`"userId"::uuid = auth.uid()`
+    withCheck = sql`"userId"::uuid = auth.uid()`
   }
 }

@@ -17,13 +17,17 @@ import { temporalAuthoringPresets } from '@internal/framework-components/authori
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
+  AttributeSpecContext,
+  BlockSpecContext,
   InferBlock,
   ModelAttributeSpecFactory,
+  ParsedTypedValue,
   PslBlockSpecDescriptor,
 } from '@internal/psl-parser';
 import {
   blockAttribute,
   bool,
+  dataTypeValue,
   entityRef,
   fieldRef,
   identifier,
@@ -44,6 +48,10 @@ import type {
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
+import {
+  SQL_EXPRESSION_DATA_TYPE_ID,
+  sqlTextFromCanonical,
+} from '@internal/sql-contract/sql-expression';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-schema-ir/naming';
 import { assertDefined, invariant } from '@internal/utils/assertions';
@@ -155,49 +163,53 @@ const policyRolesParam = {
   type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
   documentation: 'The database roles to which this policy applies.',
 };
-const policyUsingParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate controlling which rows this policy permits.',
-};
-const policyWithCheckParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate checking rows being written by this policy.',
-};
+function policyUsingParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate controlling which rows this policy permits.',
+  };
+}
+function policyWithCheckParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate checking rows being written by this policy.',
+  };
+}
 const policyPermissiveParam = {
   type: optional(bool()),
   documentation:
     'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
 };
 
-export function policyUsingOnlySpec() {
+export function policyUsingOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
+      using: policyUsingParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyWithCheckOnlySpec() {
+export function policyWithCheckOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      withCheck: policyWithCheckParam,
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyBothPredicatesSpec() {
+export function policyBothPredicatesSpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
-      withCheck: policyWithCheckParam,
+      using: policyUsingParam(ctx),
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
@@ -310,8 +322,12 @@ function lowerRlsPolicyFromBlock(
       : block.values.roles
           .map((role) => (typeof role === 'string' ? role : role.declaration.name))
           .sort();
-  const using = block.values.using;
-  const withCheck = block.values.withCheck;
+  const using =
+    block.values.using === undefined ? undefined : sqlTextFromCanonical(block.values.using.value);
+  const withCheck =
+    block.values.withCheck === undefined
+      ? undefined
+      : sqlTextFromCanonical(block.values.withCheck.value);
   const permissive = block.values.permissive ?? true;
 
   // `@@map("physical name")` adopts an EXACT-named policy: the lowered
@@ -615,81 +631,83 @@ const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
 
 const fullTextField = fieldRef();
 
-const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
-  documentation:
-    "Indexes text fields for full-text search. Each item of the list is a weight group, strongest first; a nested list puts several fields in one group. Pass the index from the table's `indexes` to `fullTextMatches` and `fullTextRank` to search the same document.",
-  positional: [
-    {
-      key: 'fields',
-      type: oneOf(
-        fullTextField,
-        list(oneOf(fullTextField, list(fullTextField)), {
-          allowEmpty: false,
-          label: '(field name | field name[])[]',
-        }),
-      ),
-      documentation:
-        'The fields to index: one field, or a list of fields and lists of fields. Each top-level item is a weight group, from A down to D.',
-    },
-  ],
-  named: {
-    language: {
-      type: optional(
-        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
-      ),
-      documentation:
-        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
-    },
-    name: {
-      type: optional(str()),
-      documentation: 'The index name. Mutually exclusive with `map`.',
-    },
-    map: {
-      type: optional(str()),
-      documentation: 'The database index name. Mutually exclusive with `name`.',
-    },
-    where: {
-      type: optional(str()),
-      documentation: 'The SQL predicate restricting rows included in a partial index.',
-    },
-  },
-  refine: (value, ctx, attributeNode) => {
-    const problems = fullTextIndexProblems({
-      weightGroups: weightGroupsOf(value.fields, isFieldName),
-    });
-    const diagnostics = problems
-      .filter(isPslFullTextIndexProblem)
-      .map((problem) =>
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          describeFullTextIndexProblem('`@@fullTextIndex`', problem),
-          FULL_TEXT_INDEX_PROBLEM_CODES[problem.kind],
+function postgresFullTextIndexSpec(ctx: AttributeSpecContext) {
+  return modelAttribute('fullTextIndex', {
+    documentation:
+      "Indexes text fields for full-text search. Each item of the list is a weight group, strongest first; a nested list puts several fields in one group. Pass the index from the table's `indexes` to `fullTextMatches` and `fullTextRank` to search the same document.",
+    positional: [
+      {
+        key: 'fields',
+        type: oneOf(
+          fullTextField,
+          list(oneOf(fullTextField, list(fullTextField)), {
+            allowEmpty: false,
+            label: '(field name | field name[])[]',
+          }),
         ),
-      );
-    if (value.name === undefined && value.map === undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` requires a `name` or `map` argument',
-          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+        documentation:
+          'The fields to index: one field, or a list of fields and lists of fields. Each top-level item is a weight group, from A down to D.',
+      },
+    ],
+    named: {
+      language: {
+        type: optional(
+          oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
         ),
-      );
-    }
-    if (value.name !== undefined && value.map !== undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` takes at most one of `name` and `map`',
-          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
-        ),
-      );
-    }
-    return diagnostics;
-  },
-});
+        documentation:
+          'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+      },
+      name: {
+        type: optional(str()),
+        documentation: 'The index name. Mutually exclusive with `map`.',
+      },
+      map: {
+        type: optional(str()),
+        documentation: 'The database index name. Mutually exclusive with `name`.',
+      },
+      where: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation: 'The SQL predicate restricting rows included in a partial index.',
+      },
+    },
+    refine: (value, ctx, attributeNode) => {
+      const problems = fullTextIndexProblems({
+        weightGroups: weightGroupsOf(value.fields, isFieldName),
+      });
+      const diagnostics = problems
+        .filter(isPslFullTextIndexProblem)
+        .map((problem) =>
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            describeFullTextIndexProblem('`@@fullTextIndex`', problem),
+            FULL_TEXT_INDEX_PROBLEM_CODES[problem.kind],
+          ),
+        );
+      if (value.name === undefined && value.map === undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` requires a `name` or `map` argument',
+            PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+          ),
+        );
+      }
+      if (value.name !== undefined && value.map !== undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` takes at most one of `name` and `map`',
+            PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+          ),
+        );
+      }
+      return diagnostics;
+    },
+  });
+}
 
 function isFieldName(value: unknown): value is string {
   return typeof value === 'string';
@@ -720,14 +738,15 @@ const FULL_TEXT_INDEX_PROBLEM_CODES: Record<
   'not-text': PSL_FULL_TEXT_INDEX_TEXT_FIELD,
 };
 
-const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = (ctx) =>
+  postgresFullTextIndexSpec(ctx);
 
 type PostgresFullTextIndexParsed = {
   readonly fields: FullTextFieldsInput<string>;
   readonly language?: FullTextSearchLanguage;
   readonly name?: string;
   readonly map?: string;
-  readonly where?: string;
+  readonly where?: ParsedTypedValue;
 };
 
 /**
@@ -795,7 +814,7 @@ export const postgresAuthoringModelAttributes = {
             weightGroups,
             language: parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
           },
-          where: parsed.where,
+          where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value),
           unique: undefined,
           name: parsed.name,
           map: parsed.map,

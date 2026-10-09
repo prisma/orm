@@ -515,6 +515,51 @@ policy Probe { on = auth.User\n other = Top.User }`,
     ).toBeUndefined();
   });
 
+  it('classifies a sql literal as a keyword tag and a string per line of its literal', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model Post {',
+        '  id Int',
+        '  @@check(expression: sql`',
+        '    id > 0',
+        '    AND id < 10',
+        '  `, name: "post_id_range")',
+        '}',
+      ].join('\n'),
+    );
+
+    const details = collectDetails(source).filter((token) => token.line >= 2 && token.line <= 5);
+
+    expect(details.map(({ text, tokenType }) => ({ text, tokenType }))).toEqual([
+      { text: '@@check', tokenType: 'decorator' },
+      { text: 'expression', tokenType: 'property' },
+      { text: 'sql', tokenType: 'keyword' },
+      { text: '`', tokenType: 'string' },
+      { text: '    id > 0', tokenType: 'string' },
+      { text: '    AND id < 10', tokenType: 'string' },
+      { text: '  `', tokenType: 'string' },
+      { text: 'name', tokenType: 'property' },
+      { text: '"post_id_range"', tokenType: 'string' },
+    ]);
+  });
+
+  it('classifies the namespace of a namespaced tag', () => {
+    const source = parseSemanticTokenSource(
+      ['model Post {', '  id Int @default(ext.money`1`)', '}'].join('\n'),
+    );
+
+    const details = collectDetails(source).filter((token) => token.line === 1);
+
+    expect(details.map(({ text, tokenType }) => ({ text, tokenType }))).toEqual([
+      { text: 'id', tokenType: 'property' },
+      { text: 'Int', tokenType: 'type' },
+      { text: '@default', tokenType: 'decorator' },
+      { text: 'ext', tokenType: 'namespace' },
+      { text: 'money', tokenType: 'keyword' },
+      { text: '`1`', tokenType: 'string' },
+    ]);
+  });
+
   it('classifies each segment of a dotted index path as a property', () => {
     const source = parseSemanticTokenSource(
       [

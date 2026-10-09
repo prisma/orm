@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import { buildPolicyBlocks } from '../../src/core/psl-print/row-level-security';
 
-it('writes policy expressions without changing references, role order, or escaping', () => {
+it('writes policy expressions as sql literals without changing references or role order', () => {
   const [block] = buildPolicyBlocks({
     namespaceId: 'public',
     entries: {
@@ -12,7 +12,7 @@ it('writes policy expressions without changing references, role order, or escapi
         tableName: 'widgets',
         operation: 'all',
         roles: ['writer', 'reader'],
-        using: '"owner" = \'a\\b\'\n',
+        using: '"owner" = \'a\\b\'\nOR "id" = 1',
         withCheck: '"active" = true',
         permissive: false,
       }),
@@ -23,8 +23,11 @@ it('writes policy expressions without changing references, role order, or escapi
   expect(block?.parameters).toEqual({
     target: { expression: 'public.Widget', span: expect.any(Object) },
     roles: { expression: '[writer, reader]', span: expect.any(Object) },
-    using: { expression: JSON.stringify('"owner" = \'a\\b\'\n'), span: expect.any(Object) },
-    withCheck: { expression: JSON.stringify('"active" = true'), span: expect.any(Object) },
+    using: {
+      expression: 'sql`\n"owner" = \'a\\\\b\'\nOR "id" = 1\n`',
+      span: expect.any(Object),
+    },
+    withCheck: { expression: 'sql`"active" = true`', span: expect.any(Object) },
     permissive: { expression: 'false', span: expect.any(Object) },
   });
   expect(block?.blockAttributes).toEqual([

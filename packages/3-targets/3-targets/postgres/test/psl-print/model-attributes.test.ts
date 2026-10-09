@@ -118,7 +118,7 @@ describe('keys and indexes', () => {
           options: { weightGroups: [['title']], language: 'german' },
         })?.attributes.map(attributeText),
       ).toEqual([
-        '@@fullTextIndex([title], map: "legacy_search", language: "german", where: "id > 1")',
+        '@@fullTextIndex([title], map: "legacy_search", language: "german", where: sql`id > 1`)',
       ]);
     });
   });
@@ -156,8 +156,8 @@ describe('keys and indexes', () => {
       },
     });
     expect(model?.attributes.map(attributeText)).toEqual([
-      '@@check(expression: "id > 0", map: "widget_id_positive")',
-      '@@check(expression: "id < 100", map: "widget_id_small")',
+      '@@check(expression: sql`id > 0`, map: "widget_id_positive")',
+      '@@check(expression: sql`id < 100`, map: "widget_id_small")',
     ]);
   });
 

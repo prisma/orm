@@ -87,7 +87,7 @@ describe('printPsl — @@check emission', () => {
         id    Int @id
         total Int
 
-        @@check(expression: "(total > (0)::numeric)", map: "positive_total")
+        @@check(expression: sql\`(total > (0)::numeric)\`, map: "positive_total")
         @@map("orders")
       }
       "
@@ -133,7 +133,7 @@ describe('printPsl — @@check emission', () => {
         id   Int      @id
         tags String[]
 
-        @@check(expression: "deleted_at IS NULL OR deleted_at > now()", map: "users_soft_delete_check")
+        @@check(expression: sql\`deleted_at IS NULL OR deleted_at > now()\`, map: "users_soft_delete_check")
         @@map("users")
       }
       "

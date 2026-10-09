@@ -1,6 +1,7 @@
 import type {
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import type {
   ParsedPslExtensionBlock,
@@ -21,6 +22,7 @@ import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import { NumberLiteralExprAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 import { blockSpecFactoryOf } from './descriptor';
+import { blockSpecContext } from './spec-context';
 import type { BlockSpec, InferBlock, MapBlockSpec, StructBlockSpec } from './types';
 
 export interface InterpretExtensionBlockInput<S> {
@@ -30,12 +32,13 @@ export interface InterpretExtensionBlockInput<S> {
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
+  readonly dataTypes: DataTypeSupport;
 }
 
 export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   input: InterpretExtensionBlockInput<S>,
 ): Result<ParsedPslExtensionBlock<InferBlock<S>>, readonly PslDiagnostic[]> {
-  const { block, descriptor, spec, symbols, sources, binder } = input;
+  const { block, descriptor, spec, symbols, sources, binder, dataTypes } = input;
   const ctx: BlockAttributeCtx = { sources, symbols, binder, selfBlock: block };
   const entries =
     spec.mode === 'struct'
@@ -49,6 +52,7 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
     symbols,
     sources,
     binder,
+    dataTypes,
   });
   diagnostics.push(...interpretedAttributes.diagnostics);
 
@@ -238,13 +242,14 @@ export interface InterpretExtensionBlockAttributesInput {
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
+  readonly dataTypes: DataTypeSupport;
 }
 
 export function interpretExtensionBlockAttributes(input: InterpretExtensionBlockAttributesInput): {
   readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly diagnostics: readonly PslDiagnostic[];
 } {
-  const { block, descriptor, symbols, sources, binder } = input;
+  const { block, descriptor, symbols, sources, binder, dataTypes } = input;
   const declared = descriptor.attributes ?? {};
   const attributes: Record<string, PslExtensionBlockParsedAttribute> = Object.create(null);
   const diagnostics: PslDiagnostic[] = [];
@@ -274,7 +279,7 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
       BlockAttributeSpecFactory,
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; this is the single point that restores the factory type the descriptor surface documents'
     >(declared[name]);
-    const spec = factory({ symbols });
+    const spec = factory(blockSpecContext({ symbols, dataTypes }));
     const result = interpretAttribute(attribute, spec, {
       sources,
       symbols,
@@ -317,12 +322,14 @@ export interface InterpretExtensionBlocksInput {
   readonly sources: PslSources;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly binder: Binder;
+  /** The data types `binder` was created with, so binding and interpretation build each block's spec from the same data types. */
+  readonly dataTypes: DataTypeSupport;
 }
 
 export function interpretExtensionBlocks(
   input: InterpretExtensionBlocksInput,
 ): InterpretExtensionBlocksResult {
-  const { symbolTable, sources, pslBlockDescriptors, binder } = input;
+  const { symbolTable, sources, pslBlockDescriptors, binder, dataTypes } = input;
   const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
   const diagnostics: PslDiagnostic[] = [];
   const scopes = [symbolTable.topLevel, ...Object.values(symbolTable.topLevel.namespaces)];
@@ -330,7 +337,9 @@ export function interpretExtensionBlocks(
     for (const block of Object.values(scope.blocks)) {
       const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
       if (descriptor === undefined) continue;
-      const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable });
+      const spec = blockSpecFactoryOf(descriptor)(
+        blockSpecContext({ symbols: symbolTable, dataTypes }),
+      );
       const parsed = interpretExtensionBlock({
         block,
         descriptor,
@@ -338,6 +347,7 @@ export function interpretExtensionBlocks(
         symbols: symbolTable,
         sources,
         binder,
+        dataTypes,
       });
       if (parsed.ok) parsedBlocks.set(block, parsed.value);
       else diagnostics.push(...parsed.failure);

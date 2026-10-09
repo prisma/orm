@@ -138,13 +138,13 @@ describe('sign a database this toolchain has never seen, then transition to wire
       expect(infer.exitCode, `2.1: contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
       inferredPsl = readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
       expect(inferredPsl).toContain(
-        '@@index(expression: "lower(email)", map: "documents_email_lower_idx")',
+        '@@index(expression: sql`lower(email)`, map: "documents_email_lower_idx")',
       );
       expect(inferredPsl).toContain(
-        '@@index([tenantId], map: "documents_active_idx", where: "(archived_at IS NULL)")',
+        '@@index([tenantId], map: "documents_active_idx", where: sql`(archived_at IS NULL)`)',
       );
       expect(inferredPsl).toContain(
-        '@@index(expression: "lower(email)", map: "documents_email_ci_key", unique: true)',
+        '@@index(expression: sql`lower(email)`, map: "documents_email_ci_key", unique: true)',
       );
       // Fields-only indexes adopt exactly too — default-named and
       // custom-named (folded in from the deleted index-name-convergence
@@ -210,8 +210,8 @@ describe('sign a database this toolchain has never seen, then transition to wire
       // matching policy transition is owned by the rls-exact-name-adoption
       // journey.)
       const transitioned = inferredPsl.replace(
-        '@@index(expression: "lower(email)", map: "documents_email_lower_idx")',
-        '@@index(expression: "lower(email)", name: "documents_email_lower")',
+        '@@index(expression: sql`lower(email)`, map: "documents_email_lower_idx")',
+        '@@index(expression: sql`lower(email)`, name: "documents_email_lower")',
       );
       expect(transitioned, '3.2: the map: spelling is gone').not.toContain(
         'map: "documents_email_lower_idx"',

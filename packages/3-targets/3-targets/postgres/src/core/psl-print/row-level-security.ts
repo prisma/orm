@@ -1,5 +1,6 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { printSqlExpressionLiteral } from '@internal/sql-contract/sql-expression';
 import { formatWireName } from '@internal/sql-schema-ir/naming';
 import { invariant } from '@internal/utils/assertions';
 import { POLICY_BLOCK_KEYWORDS } from '../authoring';
@@ -15,6 +16,7 @@ import {
   refusePolicyWithoutModel,
   refusePolicyWithoutRls,
   refuseRoleOutsideUnbound,
+  refuseSqlTextThatDoesNotReadBack,
   refuseUnwritableName,
 } from './refusals';
 
@@ -128,6 +130,13 @@ export function buildPolicyBlocks(input: {
     if (!input.rlsTables.has(policy.tableName)) refusePolicyWithoutRls(policy);
     if (!policyNameReadsBack(head, policy)) refusePolicyNameNotDerived(policy);
     for (const role of policy.roles) refuseUnwritableName('role', role);
+    refuseSqlTextThatDoesNotReadBack({
+      kind: 'policy',
+      namespaceId: policy.namespaceId,
+      table: policy.tableName,
+      name: policy.name,
+      texts: [policy.using, policy.withCheck],
+    });
 
     return {
       kind: 'policy',
@@ -142,7 +151,7 @@ export function buildPolicyBlocks(input: {
         ...(policy.using !== undefined
           ? {
               using: {
-                expression: JSON.stringify(policy.using),
+                expression: printSqlExpressionLiteral(policy.using),
                 span: SYNTHETIC_SPAN,
               },
             }
@@ -150,7 +159,7 @@ export function buildPolicyBlocks(input: {
         ...(policy.withCheck !== undefined
           ? {
               withCheck: {
-                expression: JSON.stringify(policy.withCheck),
+                expression: printSqlExpressionLiteral(policy.withCheck),
                 span: SYNTHETIC_SPAN,
               },
             }

@@ -5,7 +5,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -21,7 +20,6 @@ import {
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { opaqueSql } from '@internal/sql-relational-core/ast';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
@@ -39,9 +37,9 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresRenderDefault } from '../../src/exports/control';
+import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const TYPED_ATTRIBUTE_SCHEMA = `
@@ -65,7 +63,7 @@ const HAND_WRITTEN_EXPRESSION_SCHEMA = `
 model Message {
   id   Int    @id
   text String
-  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_search")
+  @@index(expression: sql\`to_tsvector('english', "text")\`, type: "gin", name: "message_text_search")
 }
 `;
 
@@ -110,7 +108,7 @@ function authoredContract(schema: string): Contract<SqlStorage> {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: {},
     },
@@ -377,7 +375,7 @@ model Message {
   id   Int    @id
   text String
   @@fullTextIndex([text], name: "message_text_search")
-  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_by_hand")
+  @@index(expression: sql\`to_tsvector('english', "text")\`, type: "gin", name: "message_text_by_hand")
 }
 `);
     expect(

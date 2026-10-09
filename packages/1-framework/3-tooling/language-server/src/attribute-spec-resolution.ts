@@ -11,6 +11,7 @@ import {
   assembleAttributeSpecs,
   type Binder,
   type BlockAttributeSpecFactory,
+  blockSpecContext,
   blockSpecFactoryOf,
   EMPTY_DATA_TYPES,
   findBlockDescriptor,
@@ -88,7 +89,12 @@ function blockValueGrammar(
 ): ArgumentGrammar | undefined {
   const descriptor = findBlockDescriptor(source.pslBlockDescriptors, owner.blockKeyword);
   if (descriptor === undefined) return undefined;
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
+  const spec = blockSpecFactoryOf(descriptor)(
+    blockSpecContext({
+      symbols: source.symbolTable,
+      dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
+    }),
+  );
   if (spec.mode === 'map') return spec.value.type;
   return Object.hasOwn(spec.parameters, owner.key) ? spec.parameters[owner.key]?.type : undefined;
 }
@@ -106,7 +112,12 @@ export function attributeSpecResolver(
         return blindCast<
           BlockAttributeSpecFactory,
           'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-        >(factory)({ symbols: source.symbolTable });
+        >(factory)(
+          blockSpecContext({
+            symbols: source.symbolTable,
+            dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
+          }),
+        );
       };
     }
     case 'model': {
@@ -119,7 +130,7 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: source.controlMutationDefaults,
+        defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       return (name) => specs.model[name]?.(specContext);
@@ -136,7 +147,7 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: source.controlMutationDefaults,
+        defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       const node = typeReferenceNode(field);

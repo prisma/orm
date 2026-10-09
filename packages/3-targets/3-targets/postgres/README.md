@@ -180,6 +180,7 @@ Postgres computes `to_tsvector` per row unless an index covers the predicate's e
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
 @@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
@@ -215,7 +216,9 @@ post
 
 The index states its language, so passing `language` with one is a type error and raises `RUNTIME.ARGUMENT_INVALID`; so is an index of another type. An index read from an aliased table, `post.as('p').indexes.post_search`, searches that alias's columns.
 
-The document is one of three things: a full-text index, one column, or a document built by `fullTextDocument` from `./full-text`, which takes weight groups of columns, checks them by the same rules as an index, and searches several columns no index covers: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. With a column or a `fullTextDocument`, Postgres uses an index only when the groups, their order and the `language` are the index's; a mismatch is not an error, the query just falls back to a sequential scan. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+The document is one of three things: a full-text index, one column, or a document built by `fullTextDocument` from `./full-text`, which takes weight groups of columns, checks them by the same rules as an index, and searches several columns no index covers: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. With a column or a `fullTextDocument`, Postgres uses an index only when the groups, their order and the `language` are the index's; a mismatch is not an error, the query just falls back to a sequential scan. ``@@index(expression: sql`to_tsvector('english', "text")`, type: "gin", name: …)`` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+
+Every argument that holds raw SQL (`where:`, `expression:`, and a policy's `using` and `withCheck`) takes a `sql` literal; a plain string is refused. See [ADR 268](../../../../docs/architecture%20docs/adrs/ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
 
 ## Codec descriptor authoring
 

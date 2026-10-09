@@ -1,11 +1,13 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { isPslIdentifier } from '@internal/psl-parser';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { printSqlExpressionLiteral, sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import { POLICY_BLOCK_KEYWORDS } from '../authoring';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
+import { SQL_DOES_NOT_READ_BACK } from './infer-sql-text';
 
 /** Replaces invalid character runs with `_`; prepends `_` when the first character is invalid. */
 function sanitizePolicyHead(raw: string): string {
@@ -68,13 +70,20 @@ export function buildIntrospectedPolicyBlocks(
       `buildIntrospectedPolicyBlocks: policy "${policy.name}" targets table "${tableName}" with no emitted model; tables and policies come from the same introspection walk`,
     );
 
+    const skipNote = (reason: string) => {
+      const notes = skipNotesByTable.get(tableName) ?? [];
+      notes.push(`// prisma: skipped policy "${policy.name}": ${reason}`);
+      skipNotesByTable.set(tableName, notes);
+    };
     const badRole = policy.roles.find((role) => !isPslIdentifier(role));
     if (badRole !== undefined) {
-      const notes = skipNotesByTable.get(tableName) ?? [];
-      notes.push(
-        `// prisma: skipped policy "${policy.name}": role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
+      skipNote(
+        `role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
       );
-      skipNotesByTable.set(tableName, notes);
+      continue;
+    }
+    if (!sqlTextsReadBack([policy.using, policy.withCheck])) {
+      skipNote(SQL_DOES_NOT_READ_BACK);
       continue;
     }
 
@@ -94,10 +103,20 @@ export function buildIntrospectedPolicyBlocks(
         target: { expression: modelName, span: SYNTHETIC_SPAN },
         roles: { expression: `[${policy.roles.join(', ')}]`, span: SYNTHETIC_SPAN },
         ...(policy.using !== undefined
-          ? { using: { expression: JSON.stringify(policy.using), span: SYNTHETIC_SPAN } }
+          ? {
+              using: {
+                expression: printSqlExpressionLiteral(policy.using),
+                span: SYNTHETIC_SPAN,
+              },
+            }
           : {}),
         ...(policy.withCheck !== undefined
-          ? { withCheck: { expression: JSON.stringify(policy.withCheck), span: SYNTHETIC_SPAN } }
+          ? {
+              withCheck: {
+                expression: printSqlExpressionLiteral(policy.withCheck),
+                span: SYNTHETIC_SPAN,
+              },
+            }
           : {}),
         ...(policy.permissive ? {} : { permissive: { expression: 'false', span: SYNTHETIC_SPAN } }),
       },

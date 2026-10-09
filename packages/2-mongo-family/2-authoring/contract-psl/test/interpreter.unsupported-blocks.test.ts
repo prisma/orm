@@ -10,7 +10,7 @@ function interpret(schema: string) {
       ['ObjectId', 'mongo/objectId@1'],
     ]),
     dataTypes: EMPTY_DATA_TYPES,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
   });
 }

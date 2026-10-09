@@ -165,7 +165,6 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
-  ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
@@ -177,9 +176,7 @@ export type {
   SourceSpan,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
-export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
-  canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,

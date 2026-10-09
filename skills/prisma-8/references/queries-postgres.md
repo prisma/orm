@@ -104,7 +104,7 @@ Without an index Postgres recomputes `to_tsvector` for every row, and it only us
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
-@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
 ```
 
 Give the index and the operation the same `language`: a mismatch raises no error, the query silently falls back to a sequential scan.

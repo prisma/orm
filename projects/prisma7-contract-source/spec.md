@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Prisma 7 users have a `schema.prisma`. Prisma 8 reads a `contract.prisma` in a different dialect. During the side-by-side period Prisma 7 keeps owning the database and its migrations, so the Prisma 7 schema is the source of truth until cutover. Today the only way to get a Prisma 8 contract from an existing database is `contract infer`, which loses relation field names, ORM-side defaults, and `@updatedAt`, and needs hand fixing after every Prisma 7 migration.
+Prisma 7 users have a `schema.prisma`. Prisma 8 reads a `contract.prisma` in a different dialect. During the side-by-side period the Prisma 7 schema is the source of truth until cutover. Prisma 7 owns the migrations at first, and Prisma 8 can take them over before cutover while it still reads the same file. Today the only way to get a Prisma 8 contract from an existing database is `contract infer`, which loses relation field names, ORM-side defaults, and `@updatedAt`, and needs hand fixing after every Prisma 7 migration.
 
 This project lets Prisma 8 read the Prisma 7 schema directly as a contract source, so the transition needs no second schema file, and gives users a converter that prints that contract as Prisma 8 PSL for cutover.
 
@@ -27,6 +27,16 @@ export default definePrismaConfig({
 
 `prisma contract emit` and `prisma db sign` work unchanged. When Prisma 7 migrates, the user runs them again.
 
+To hand migrations to Prisma 8, the user stops running `prisma7 migrate` and, after the last `db sign`, changes the schema with Prisma 8's own loop. There is no baseline step: `db sign` sets the `db` ref, and the first `migration plan` writes the baseline itself (slice 5).
+
+```bash
+# edit prisma/schema.prisma in the Prisma 7 dialect
+prisma contract emit
+prisma migration plan --name add-comments
+prisma db migrate --advance-ref db
+prisma7 generate
+```
+
 At cutover:
 
 ```bash
@@ -46,7 +56,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 ## Place in the larger world
 
-- The transition story this serves is the public upgrade guides listed under § References: Prisma 7 owns migrations, Prisma 8 adopts the database read-only with `db sign`, and cutover happens once. The older note `projects/prisma-8-rc1/parallel-install.md` assumes `prisma-next` and is out of date; `design-notes.md` reads the guides instead.
+- The transition story this serves is the public upgrade guides listed under § References: Prisma 8 adopts the database read-only with `db sign`, Prisma 7 owns migrations until the guide's phase 4 hands them to Prisma 8, and cutover to a Prisma 8 contract file happens once. Slice 5 showed that the handover does not depend on cutover: Prisma 8 owns migrations while it still reads the Prisma 7 schema. The older note `projects/prisma-8-rc1/parallel-install.md` assumes `prisma-next` and is out of date; `design-notes.md` reads the guides instead.
 - Contract sources are `ContractConfig` objects whose `source.load` returns a contract or diagnostics; `contract emit` and `contract print` call it without caring about format (`packages/1-framework/3-tooling/cli/src/control-api/operations/load-contract-source.ts`). The framework knows two source formats, `psl` and `typescript`: the PSL source (`packages/2-sql/2-authoring/contract-psl/src/provider.ts`) and the TypeScript source (`packages/2-sql/2-authoring/contract-ts/src/config-types.ts`). The Prisma 7 source is a `psl` source in its own package per family, mirroring `contract-psl`.
 - The Prisma 8 syntax parser (`@internal/psl-parser`) already reads the Prisma 7 grammar almost completely. See `design-notes.md`.
 - Every existing PSL printer starts from the database schema description, not from a contract. The contract-to-PSL printer is new and exposed as a target-descriptor hook beside `inferPslContract`.
@@ -179,6 +189,6 @@ Found by the adoption example (slice 4). Each is outside this project's scope an
 
 ## References
 
-- The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
+- The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 hands migrations to Prisma 8, which slice 5 proved needs no baseline step and no Prisma 8 contract file.
 - `design-notes.md` for alternatives considered.
-- `slices/01-postgres-source/spec.md`, `slices/03-contract-to-psl-and-print/spec.md`, and for the Mongo source the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).
+- `slices/01-postgres-source/spec.md`, `slices/03-contract-to-psl-and-print/spec.md`, `slices/05-migration-ownership-handover/spec.md`, and for the Mongo source the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).

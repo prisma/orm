@@ -26,7 +26,7 @@ function interpretPost() {
     SCHEMA,
     {
       scalarTypeCodecIds,
-      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     },

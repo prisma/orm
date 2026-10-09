@@ -8,6 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { createBinder } from '../src/binder';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
@@ -97,6 +98,7 @@ function build(source: string) {
     sources,
     pslBlockDescriptors: DESCRIPTORS,
     binder,
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return {
     symbolTable,
@@ -432,6 +434,7 @@ describe('interpretExtensionBlocks() — consumer-resolved envelopes', () => {
       sources: result.sources,
       pslBlockDescriptors: DESCRIPTORS,
       binder: result.binder,
+      dataTypes: EMPTY_DATA_TYPES,
     });
 
     expect([...again.parsedBlocks.keys()]).toEqual([...result.parsedBlocks.keys()]);

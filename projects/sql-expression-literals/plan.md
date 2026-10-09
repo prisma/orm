@@ -47,6 +47,7 @@ flowchart LR
 - `schema-ir/test/naming.test.ts`: `normalizeSqlBody` for the rows E1–E12 of [research/review-followups.md](research/review-followups.md) F02 under rule A3 (E1 and E2 differ; one-line bodies and bodies without `--` are unchanged; CRLF and lone CR end a line; the function gives the same output on its own output); the pinned hash table is unchanged; check, index and policy hashes of E1 and E2 differ.
 - The existing render and lowering tests in [research/ddl.md](research/ddl.md) §8 are updated for the new field types; every exact-SQL assertion stays byte-identical.
 - `git status` shows no committed `ops.json` or `migration.json` changed.
+- `test/integration/test/cli-journeys/sql-expression-literals.e2e.test.ts` (update): one text ends in a `--` comment, as slice 2b's plan entry asked; slice 2b left it out because the SQL breaks until this slice.
 
 ## Slice 2a — The `sql` tag writes the data type `sql/expression`
 
@@ -95,9 +96,9 @@ flowchart LR
 
 ## Slice 2b — The six places take `sql` literals
 
-**Linear:** TML-3288. **Design:** 8, 9, 11.2, 12, 13, 18.1, 18.3 (2b items), 19 (2b rows, ADR 256), 20 (2b row).
+**Linear:** TML-3288. **Design:** 8, 9, 11.2, 12, 13, 18.1, 18.3 (2b items), 19 (2b rows, ADR 268), 20 (2b row).
 
-**Outcome.** `@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)` and a policy's `using` and `withCheck` take `sql` literals and refuse every other literal through the cast rule, with messages that end in the exact rewrite. `contract infer` prints them as `sql` literals and skips a body that would not read back. The language server completes and colours them. The Supabase pack contract is regenerated. ADR 256 records the decision.
+**Outcome.** `@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)` and a policy's `using` and `withCheck` take `sql` literals and refuse every other literal through the cast rule, with messages that end in the exact rewrite. `contract infer` prints them as `sql` literals and skips a body that would not read back. The language server completes and colours them. The Supabase pack contract is regenerated. ADR 268 records the decision.
 
 **Dispatches** (F30): (a) data types in the block spec context (section 9.1); (b) the six places, printers and every fixture and artefact change in section 18.1, in one dispatch; (c) language-server completion and colouring (section 12 only); (d) docs, ADRs, the codemod and upgrade fragments.
 
@@ -112,13 +113,13 @@ flowchart LR
 - `postgres/test/psl-infer/*` (update): index, check and policy texts print as `sql` literals; a text holding a backtick in the double-quote form; a CHECK whose reprint holds `E'a\r\nb'` is skipped with the note in design 11.2, and so is a policy.
 - `language-server/test/completion-provider.test.ts` (update): `@@index(where: |` and `@@check(expression: |` offer `sql`; the `@@check(` snippet is ``check(expression: sql`${1:expression}`)``; a source with no data types still completes model and field attributes.
 - `language-server/test/semantic-tokens.test.ts`: a `sql` literal gives a `keyword` token for `sql` and a `string` token per line of its literal.
-- `test/integration/test/cli-journeys/sql-expression-literals.e2e.test.ts` (new): author a partial index, an expression index, a CHECK and a policy with `using` and `withCheck`; one text spans several lines, one ends in a `--` comment, one policy has an `EXISTS (SELECT … FROM … WHERE …)` predicate. Emit, plan, apply, verify clean. Infer, and assert every text prints as a `sql` literal. Emit the inferred schema and verify it clean against the same database. Infer again and assert the PSL equals the first inference.
+- `test/integration/test/cli-journeys/sql-expression-literals.e2e.test.ts` (new): author a partial index, an expression index, a CHECK and a policy with `using` and `withCheck`; one text spans several lines, one policy has an `EXISTS (SELECT … FROM … WHERE …)` predicate. Emit, plan, apply, verify clean. Infer, and assert every text prints as a `sql` literal. Emit the inferred schema and verify it clean against the same database. Infer again and assert the PSL equals the first inference.
 - `test/integration/test/cli-journeys/infer-roundtrip-fidelity*.e2e.test.ts` and `sign-the-database.e2e.test.ts` (update): assertions expect `sql` literals and the round trips still verify clean.
 
 **Carried over from the slice 2a review:**
 
 - `sqlTextReadsBack` and its tests move here from slice 2a, next to their only caller (design section 11.2). Its test: true for canonical text (a single line, several lines, an empty text); false for indented text, a blank first or last line, a carriage return and a NUL character. Add `canonicalizeTaggedLiteralBody` to the framework's `authoring` export with it.
-- Before writing ADR 256, check the ADR numbering: three files are already numbered 255.
+- Before writing ADR 268, check the ADR numbering: three files are already numbered 255.
 - `docs/architecture docs/subsystems/6. Ecosystem Extensions & Packs.md`, section "Template-Tagged Literals": add an `` @@index(where: sql`...`) `` example.
 
 **Carried over from the slice 2t review:**
@@ -126,7 +127,7 @@ flowchart LR
 - Put `defaultFunctionRegistry` directly on `AttributeSpecContext` and delete `ControlDefaultRegistries`, which now holds only that registry under a third name; this slice builds every spec context again.
 - Let the `@default` literal arms yield a written scalar with its span, for example a small combinator on `readWrittenScalar`, so `lowerDataTypeDefault` reports at the span it is given and `writtenScalar`, `defaultValueExpression` and `listElements` in `psl-column-resolution.ts` go.
 - A number of the wrong size reads `pg/int4 has no cast from pg/int8; write a number` to an author who wrote a number. This is shipped behaviour of `@default` since slice 2t (`@default(100000000000000099)` on an `Int` column gives exactly that message, as manual QA case 4 of slice 2t shows), and applies to a number-typed `dataTypeValue` too; word that case in both, in the caller's choice of what follows `write`, before a number-typed place ships or in the release notes.
-- When the first attribute place uses `dataTypeValue`, update its doc comment: cite ADR 256 and say it also serves as a named attribute argument, not only a `funcCall` parameter.
+- When the first attribute place uses `dataTypeValue`, update its doc comment: cite ADR 268 and say it also serves as a named attribute argument, not only a `funcCall` parameter.
 - The rewrite for a plain string whose text is not canonical, such as `where: "  x"`, reads back as different text; check the rewrite with `sqlTextReadsBack` (design section 11.2) before offering it.
 - Test that the Mongo provider forwards the stack's data types, in the block spec context test of design section 9.1.
 - `describeAdmittedForms` returns `no written form` for a type nothing can write. `@default` now says `` write sql`...` `` in that case, because it always takes a `sql` literal; a `dataTypeValue` position for such a type would still end `write no written form`, which is a pack bug rather than a user error, so word it as one if a place ever hits it.
@@ -145,6 +146,11 @@ flowchart LR
 - `contract-ts/test/contract-dsl.default-sql-expression.test.ts`: `` .default(sql`now()`) `` and `` sql`autoincrement()` `` throw `CONTRACT.DEFAULT_INVALID` with the exact messages; unsafe SQL throws; `.default(now())` does not.
 - Postgres extension `test/contract-builder/rls-handles.test-d.ts` and `full-text-index.test-d.ts` (update): strings are type errors.
 - `test/integration/test/authoring/parity/sql-expressions/` (new parity fixture: `contract.ts`, `schema.prisma`, `packs.ts`, `expected.contract.json`): a partial index, an expression index, a `@@fullTextIndex` with `where`, a `@@check`, a policy with `using` and `withCheck`, and a raw default; at least two texts span several indented lines, one holds `"quoted"` identifiers, one a backslash, and one TS predicate is composed by interpolation.
+
+**Carried over from the slice 2b review:**
+
+- Export the SQL family's data type registration (the `sql/expression` declaration and its authoring entry) as one value from `@internal/sql-contract/sql-expression`, use it in `packages/2-sql/9-family/src/core/control-descriptor.ts`, and spread it in the four test fixtures that rebuild it by hand (`postgres/test/fixtures/postgres-data-type-support.ts`, `adapters/postgres/test/helpers/postgres-data-type-support.ts`, `contract-psl/test/fixture-data-types.ts`, `language-server/test/completion-provider.test.ts`).
+- A default expression whose string constant holds a whitespace-only line, a carriage return or indentation shared by every line reads back from its `sql` literal with that constant changed. `mapDefault` prints it without the read-back check, because `resolvedDefaultsEqual` compares default expressions with case and whitespace ignored, so no plan shows the change. After this slice makes every text a TypeScript contract builds canonical, only a contract built before this slice can hold such a default. Decide whether `mapDefault` checks defaults too (ADR 129).
 
 ## Slice 4 — Migration files write template literals
 
@@ -188,6 +194,12 @@ Whichever PR merges second rebases. From [research/review-followups.md](research
 | #30278, #30308, #30301, #30306, #30095 | 1, 2a, 2b | Postgres migration operations and `psl-infer` tests |
 | #30396, #30392, #30362, #30333, #30202, #30152, #30133, #30101, #29953, #30277 | 2a, 2b | Docs, skills and single test files |
 
+## Deferred beyond this project
+
+- The four DDL sites that render a string wrapped in `opaqueSql(...)` on the spot (`addCheckConstraint`, both targets' `buildColumnDefaultSql`, the `alterColumnType` USING clause) should become DDL nodes, so the type of the field enforces the render rule instead of the doc. Found by the slice 1 architect review (A01); it belongs to the typed-DDL work, not this project.
+- Column defaults refuse `--` at authoring and in `assertSafeDefaultExpression`, so a default cannot carry a line comment. Slice 1 keeps the ban and documents why; lifting it is a separate decision.
+- `contract infer` can also produce such a default from a database. Postgres reprints a default from its parsed form, so whitespace outside string constants is normalized, but a string constant is reprinted with its characters unchanged, including line breaks, carriage returns and whitespace-only lines. An inferred default holding such a constant prints as a `sql` literal that reads back as a different value, and a database created from the inferred schema gets that value. Whether infer should check defaults, or skip such a default with a note, is a separate decision.
+
 ## Close-out
 
-After the last delivered slice merges: final retro; map every decision in `design-notes.md` to its durable home (ADR 256, or an amended ADR) in the close-out PR; delete `projects/sql-expression-literals/`; mark the Linear project completed.
+After the last delivered slice merges: final retro; map every decision in `design-notes.md` to its durable home (ADR 268, or an amended ADR) in the close-out PR; delete `projects/sql-expression-literals/`; mark the Linear project completed.

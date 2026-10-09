@@ -43,7 +43,7 @@ function interpret(schema: string) {
     authoringContributions,
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     dataTypes: EMPTY_DATA_TYPES,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
     reportWarning: (diagnostic) => {
       warnings.push(diagnostic);
     },
@@ -91,7 +91,7 @@ describe('deprecated Mongo PSL scalar names', () => {
       authoringContributions,
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       dataTypes: EMPTY_DATA_TYPES,
-      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      defaultFunctionRegistry: new Map(),
     });
     expect(result.ok).toBe(true);
   });

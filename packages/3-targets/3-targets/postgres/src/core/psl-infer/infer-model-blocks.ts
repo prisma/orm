@@ -20,6 +20,7 @@ import type {
   PslTypeConstructorCall,
 } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -50,6 +51,7 @@ import { createUniqueFieldName } from '../psl-build/unique-name';
 import type { InferredColumnDefaults } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
+import { printableIndex, SQL_DOES_NOT_READ_BACK } from './infer-sql-text';
 
 export function buildModel(
   table: SqlTableIR,
@@ -128,17 +130,29 @@ export function buildModel(
     }
   }
 
+  const sqlSkipNotes: string[] = [];
+  const skipNote = (kind: 'index' | 'check', name: string) =>
+    sqlSkipNotes.push(`// prisma: skipped ${kind} "${name}": ${SQL_DOES_NOT_READ_BACK}`);
+
   for (const index of table.indexes) {
-    const indexFieldNames = index.columns?.map((columnName) =>
+    const printable = printableIndex(index);
+    if (printable === undefined) {
+      skipNote('index', index.name);
+      continue;
+    }
+    const indexFieldNames = printable.columns?.map((columnName) =>
       resolveColumnFieldName(fieldNamesByTable, table.name, columnName),
     );
-    modelAttributes.push(buildIndexAttribute(index, indexFieldNames));
+    modelAttributes.push(buildIndexAttribute(printable, indexFieldNames));
   }
 
   for (const check of table.checks ?? []) {
-    if (!derivedCheckNames.has(check.name)) {
-      modelAttributes.push(buildCheckAttribute(check));
+    if (derivedCheckNames.has(check.name)) continue;
+    if (!sqlTextsReadBack([check.expression])) {
+      skipNote('check', check.name);
+      continue;
     }
+    modelAttributes.push(buildCheckAttribute(check));
   }
 
   if (mapName) {
@@ -170,6 +184,7 @@ export function buildModel(
   const commentLines = [
     ...(warnings.length > 0 ? [`// WARNING: ${warnings.join(' ')}`] : []),
     ...policySkipNotes,
+    ...sqlSkipNotes,
   ];
   const comment = commentLines.length > 0 ? commentLines.join('\n') : undefined;
 

@@ -7,7 +7,6 @@
 
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
@@ -19,7 +18,6 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -30,8 +28,7 @@ import {
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
-
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
 const assembled = assembleAuthoringContributions([
   {
@@ -95,7 +92,7 @@ function interpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: postgresDataTypeSupport,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },
@@ -219,7 +216,7 @@ model Message {
 
   it('passes a where predicate through to the index', () => {
     const indexes = indexesOf(
-      model(`  @@fullTextIndex([text], where: "id > 0", name: "message_text_search_live")`),
+      model(`  @@fullTextIndex([text], where: sql\`id > 0\`, name: "message_text_search_live")`),
     );
 
     expect(indexes[0]).toMatchObject({ columns: ['text'], where: 'id > 0' });
@@ -243,6 +240,36 @@ model Message {
     ]);
 
     expect(names.size).toBe(4);
+  });
+
+  it.each([
+    ['"id > 0"', 'Expected sql`...`; write sql`id > 0`'],
+    ['42', 'Expected sql`...`'],
+    ['true', 'Expected sql`...`'],
+  ])('refuses the where value %s at the value', (value, message) => {
+    const source = model(
+      `  @@fullTextIndex([text], where: ${value}, name: "message_text_search_live")`,
+    );
+    const line = source.split('\n').findIndex((text) => text.includes('@@fullTextIndex')) + 1;
+    const lineText = source.split('\n')[line - 1] ?? '';
+    const lineOffset = source.indexOf(lineText);
+    const column = lineText.indexOf(value) + 1;
+
+    expect(diagnosticsOf(source)).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message,
+        sourceId: 'psl-full-text-index.test.psl',
+        span: {
+          start: { offset: lineOffset + column - 1, line, column },
+          end: {
+            offset: lineOffset + column - 1 + value.length,
+            line,
+            column: column + value.length,
+          },
+        },
+      },
+    ]);
   });
 
   it('rejects a field that is not textual, naming the field and its type', () => {
@@ -421,7 +448,9 @@ describe('@@fullTextIndex with map:', () => {
   });
 
   it('warns once when the index also has a where predicate', () => {
-    indexesOf(model(`  @@fullTextIndex([text], where: "id > 0", map: "legacy_text_search_live")`));
+    indexesOf(
+      model(`  @@fullTextIndex([text], where: sql\`id > 0\`, map: "legacy_text_search_live")`),
+    );
 
     expect(exactNameWarnings()).toHaveLength(1);
   });
