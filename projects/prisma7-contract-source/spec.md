@@ -107,7 +107,7 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 4. The version at which the implicit junction gained a primary key (slice 1). Resolved: Prisma 6.0.0; 7.10.0 emits `_AToB_AB_pkey`.
 5. Whether Mongo verify compares index names. Resolved by the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)): it does not.
 6. The exact Prisma 7 Postgres native type table (slice 1). Resolved: `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
-7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key, which `@ignore` and `@@ignore` rely on because Prisma 7 still creates that schema (slice 1).
+7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key (slice 1). Resolved: it does, with zero findings. Since the project "Storage a model does not map", the contract keeps the storage of `@ignore` and `@@ignore` objects, so neither attribute relies on it any more; see [ADR 267](https://github.com/prisma/orm/pull/30641).
 
 ## Deferred gaps
 
