@@ -17,13 +17,17 @@ import { temporalAuthoringPresets } from '@internal/framework-components/authori
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
+  AttributeSpecContext,
+  BlockSpecContext,
   InferBlock,
   ModelAttributeSpecFactory,
+  ParsedTypedValue,
   PslBlockSpecDescriptor,
 } from '@internal/psl-parser';
 import {
   blockAttribute,
   bool,
+  dataTypeValue,
   entityRef,
   fieldRef,
   identifier,
@@ -44,6 +48,12 @@ import type {
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
+import {
+  requireSqlExpression,
+  SQL_EXPRESSION_DATA_TYPE_ID,
+  type SqlExpression,
+  sqlTextFromCanonical,
+} from '@internal/sql-contract/sql-expression';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-schema-ir/naming';
 import { assertDefined, invariant } from '@internal/utils/assertions';
@@ -59,10 +69,14 @@ import {
 } from './codec-ids';
 import { postgresError } from './errors';
 import {
-  isFullTextIndexableCodec,
-  renderFullTextIndexExpression,
-} from './full-text-index-expression';
+  describeFullTextIndexProblem,
+  FULL_TEXT_INDEX_TYPE,
+  type FullTextIndexProblem,
+  fullTextIndexProblems,
+} from './full-text-index-definition';
+import { type FullTextFieldsInput, weightGroupsOf } from './full-text-weight-groups';
 import { postgresNowGeneratorIds } from './now-generators';
+import { postgresCodecTraitsOf } from './postgres-codec-traits';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
@@ -86,7 +100,12 @@ import {
 // `sql-attribute-specs.ts` convention) is the settled spelling for pack
 // codes; inline string literals bypass it.
 const PSL_POLICY_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_POLICY_INVALID_MAP';
-const PSL_FULL_TEXT_INDEX_ONE_FIELD: ContributedPslDiagnosticCode = 'PSL_FULL_TEXT_INDEX_ONE_FIELD';
+const PSL_FULL_TEXT_INDEX_TOO_MANY_GROUPS: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_TOO_MANY_GROUPS';
+const PSL_FULL_TEXT_INDEX_EMPTY_GROUP: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_EMPTY_GROUP';
+const PSL_FULL_TEXT_INDEX_DUPLICATE_FIELD: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_DUPLICATE_FIELD';
 const PSL_FULL_TEXT_INDEX_REQUIRES_NAME: ContributedPslDiagnosticCode =
   'PSL_FULL_TEXT_INDEX_REQUIRES_NAME';
 const PSL_FULL_TEXT_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode =
@@ -146,49 +165,53 @@ const policyRolesParam = {
   type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
   documentation: 'The database roles to which this policy applies.',
 };
-const policyUsingParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate controlling which rows this policy permits.',
-};
-const policyWithCheckParam = {
-  type: optional(str()),
-  documentation: 'A SQL predicate checking rows being written by this policy.',
-};
+function policyUsingParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate controlling which rows this policy permits.',
+  };
+}
+function policyWithCheckParam(ctx: BlockSpecContext) {
+  return {
+    type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+    documentation: 'A SQL predicate checking rows being written by this policy.',
+  };
+}
 const policyPermissiveParam = {
   type: optional(bool()),
   documentation:
     'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
 };
 
-export function policyUsingOnlySpec() {
+export function policyUsingOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
+      using: policyUsingParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyWithCheckOnlySpec() {
+export function policyWithCheckOnlySpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      withCheck: policyWithCheckParam,
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
 }
 
-export function policyBothPredicatesSpec() {
+export function policyBothPredicatesSpec(ctx: BlockSpecContext) {
   return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
-      using: policyUsingParam,
-      withCheck: policyWithCheckParam,
+      using: policyUsingParam(ctx),
+      withCheck: policyWithCheckParam(ctx),
       permissive: policyPermissiveParam,
     },
   });
@@ -301,8 +324,12 @@ function lowerRlsPolicyFromBlock(
       : block.values.roles
           .map((role) => (typeof role === 'string' ? role : role.declaration.name))
           .sort();
-  const using = block.values.using;
-  const withCheck = block.values.withCheck;
+  const using =
+    block.values.using === undefined ? undefined : sqlTextFromCanonical(block.values.using.value);
+  const withCheck =
+    block.values.withCheck === undefined
+      ? undefined
+      : sqlTextFromCanonical(block.values.withCheck.value);
   const permissive = block.values.permissive ?? true;
 
   // `@@map("physical name")` adopts an EXACT-named policy: the lowered
@@ -576,6 +603,7 @@ export const postgresAuthoringPslBlockDescriptors = {
     discriminator: 'native_enum',
     name: { required: true },
     spec: nativeEnumSpec,
+    nameIsStorageName: true,
     attributes: { map: () => nativeEnumMapAttribute },
   } satisfies PslBlockSpecDescriptor,
   /**
@@ -603,81 +631,124 @@ const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
 
-const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
-  documentation:
-    'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
-  positional: [
-    {
-      key: 'fields',
-      type: list(fieldRef(), { allowEmpty: false, unique: true }),
-      documentation: 'The single field to index.',
-    },
-  ],
-  named: {
-    language: {
-      type: optional(
-        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
-      ),
-      documentation:
-        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
-    },
-    name: {
-      type: optional(str()),
-      documentation: 'The index name. Mutually exclusive with `map`.',
-    },
-    map: {
-      type: optional(str()),
-      documentation: 'The database index name. Mutually exclusive with `name`.',
-    },
-    where: {
-      type: optional(str()),
-      documentation: 'The SQL predicate restricting rows included in a partial index.',
-    },
-  },
-  refine: (value, ctx, attributeNode) => {
-    const diagnostics = [];
-    if (value.fields.length !== 1) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
-          PSL_FULL_TEXT_INDEX_ONE_FIELD,
-        ),
-      );
-    }
-    if (value.name === undefined && value.map === undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
-          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
-        ),
-      );
-    }
-    if (value.name !== undefined && value.map !== undefined) {
-      diagnostics.push(
-        leafDiagnostic(
-          ctx,
-          attributeNode,
-          '`@@fullTextIndex` takes at most one of `name` and `map`',
-          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
-        ),
-      );
-    }
-    return diagnostics;
-  },
-});
+const fullTextField = fieldRef();
 
-const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+function postgresFullTextIndexSpec(ctx: AttributeSpecContext) {
+  return modelAttribute('fullTextIndex', {
+    documentation:
+      "Indexes text fields for full-text search. Each item of the list is a weight group, strongest first; a nested list puts several fields in one group. Pass the index from the table's `indexes` to `fullTextMatches` and `fullTextRank` to search the same document.",
+    positional: [
+      {
+        key: 'fields',
+        type: oneOf(
+          fullTextField,
+          list(oneOf(fullTextField, list(fullTextField)), {
+            allowEmpty: false,
+            label: '(field name | field name[])[]',
+          }),
+        ),
+        documentation:
+          'The fields to index: one field, or a list of fields and lists of fields. Each top-level item is a weight group, from A down to D.',
+      },
+    ],
+    named: {
+      language: {
+        type: optional(
+          oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
+        ),
+        documentation:
+          'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+      },
+      name: {
+        type: optional(str()),
+        documentation: 'The index name. Mutually exclusive with `map`.',
+      },
+      map: {
+        type: optional(str()),
+        documentation: 'The database index name. Mutually exclusive with `name`.',
+      },
+      where: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation: 'The SQL predicate restricting rows included in a partial index.',
+      },
+    },
+    refine: (value, ctx, attributeNode) => {
+      const problems = fullTextIndexProblems({
+        weightGroups: weightGroupsOf(value.fields, isFieldName),
+      });
+      const diagnostics = problems
+        .filter(isPslFullTextIndexProblem)
+        .map((problem) =>
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            describeFullTextIndexProblem('`@@fullTextIndex`', problem),
+            FULL_TEXT_INDEX_PROBLEM_CODES[problem.kind],
+          ),
+        );
+      if (value.name === undefined && value.map === undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` requires a `name` or `map` argument',
+            PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+          ),
+        );
+      }
+      if (value.name !== undefined && value.map !== undefined) {
+        diagnostics.push(
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '`@@fullTextIndex` takes at most one of `name` and `map`',
+            PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+          ),
+        );
+      }
+      return diagnostics;
+    },
+  });
+}
+
+function isFieldName(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/**
+ * `@@fullTextIndex` has no `unique` argument, so it never writes a unique index, and its spec
+ * refuses an empty field list before these rules run.
+ */
+type PslFullTextIndexProblem = Exclude<
+  FullTextIndexProblem,
+  { readonly kind: 'unique' | 'no-fields' }
+>;
+
+function isPslFullTextIndexProblem(
+  problem: FullTextIndexProblem,
+): problem is PslFullTextIndexProblem {
+  return problem.kind !== 'unique' && problem.kind !== 'no-fields';
+}
+
+const FULL_TEXT_INDEX_PROBLEM_CODES: Record<
+  PslFullTextIndexProblem['kind'],
+  ContributedPslDiagnosticCode
+> = {
+  'too-many-groups': PSL_FULL_TEXT_INDEX_TOO_MANY_GROUPS,
+  'empty-group': PSL_FULL_TEXT_INDEX_EMPTY_GROUP,
+  'duplicate-field': PSL_FULL_TEXT_INDEX_DUPLICATE_FIELD,
+  'not-text': PSL_FULL_TEXT_INDEX_TEXT_FIELD,
+};
+
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = (ctx) =>
+  postgresFullTextIndexSpec(ctx);
 
 type PostgresFullTextIndexParsed = {
-  readonly fields: readonly string[];
+  readonly fields: FullTextFieldsInput<string>;
   readonly language?: FullTextSearchLanguage;
   readonly name?: string;
   readonly map?: string;
-  readonly where?: string;
+  readonly where?: ParsedTypedValue;
 };
 
 /**
@@ -708,32 +779,44 @@ export const postgresAuthoringModelAttributes = {
     spec: postgresFullTextIndexSpecFactory,
     repeatable: true,
     lower: (parsed: PostgresFullTextIndexParsed, ctx: AuthoringModelAttributeContext) => {
-      const fieldName = parsed.fields[0];
-      invariant(
-        fieldName !== undefined && parsed.fields.length === 1,
-        `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
-      );
-      const columnName = ctx.fieldStorageName(fieldName);
-      const codecId = ctx.fieldCodecId(fieldName);
-      // A relation field parses as a field reference but stores no value, so it
-      // reaches here with neither a column nor a codec.
-      if (columnName === undefined || codecId === undefined || !isFullTextIndexableCodec(codecId)) {
+      const fieldGroups = weightGroupsOf(parsed.fields, isFieldName);
+      const problems = fullTextIndexProblems({
+        weightGroups: fieldGroups,
+        codecs: {
+          // A relation field parses as a field reference but stores no value, so it has no column.
+          codecIdOf: (fieldName) =>
+            ctx.fieldStorageName(fieldName) === undefined ? undefined : ctx.fieldCodecId(fieldName),
+          traitsOf: postgresCodecTraitsOf,
+        },
+      }).filter(isPslFullTextIndexProblem);
+      for (const problem of problems) {
         ctx.diagnostics?.push({
-          code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
-          message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,
+          code: FULL_TEXT_INDEX_PROBLEM_CODES[problem.kind],
+          message: describeFullTextIndexProblem(
+            '`@@fullTextIndex`',
+            problem,
+            (fieldName) => `${ctx.modelName}.${fieldName}`,
+          ),
           sourceId: ctx.sourceId ?? 'unknown',
         });
-        return undefined;
       }
+      if (problems.length > 0) return undefined;
+      const weightGroups = fieldGroups.map((group) =>
+        group.map((fieldName) => {
+          const columnName = ctx.fieldStorageName(fieldName);
+          assertDefined(columnName, `@@fullTextIndex field "${fieldName}" has no storage column`);
+          return columnName;
+        }),
+      );
       return {
         index: {
-          expression: renderFullTextIndexExpression(
-            parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
-            columnName,
-          ),
-          type: 'gin',
-          options: undefined,
-          where: parsed.where,
+          columns: weightGroups.flat(),
+          type: FULL_TEXT_INDEX_TYPE,
+          options: {
+            weightGroups,
+            language: parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+          },
+          where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value),
           unique: undefined,
           name: parsed.name,
           map: parsed.map,
@@ -882,8 +965,12 @@ interface RlsPolicyHandleShape {
   readonly operation: RlsPolicyOperation;
   readonly name: string;
   readonly roles: readonly { readonly name: string }[];
-  readonly using?: string;
-  readonly withCheck?: string;
+  readonly using?: SqlExpression;
+  readonly withCheck?: SqlExpression;
+}
+
+function predicateText(predicate: SqlExpression | undefined, what: string): string | undefined {
+  return predicate === undefined ? undefined : requireSqlExpression(predicate, what).text;
 }
 
 interface RlsTargetCoordinate {
@@ -1043,8 +1130,8 @@ export function postgresLowerEntityHandles(
         namespaceId: coordinate.namespaceId,
         operation: policy.operation,
         roles: roleNames,
-        ...ifDefined('using', policy.using),
-        ...ifDefined('withCheck', policy.withCheck),
+        ...ifDefined('using', predicateText(policy.using, `Policy "${prefix}" using`)),
+        ...ifDefined('withCheck', predicateText(policy.withCheck, `Policy "${prefix}" withCheck`)),
       }),
     });
   }

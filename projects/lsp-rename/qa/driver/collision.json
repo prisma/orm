@@ -1,0 +1,46 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "steps": [
+    {
+      "id": "9.0",
+      "kind": "open",
+      "file": "extra.prisma"
+    },
+    {
+      "id": "9.1",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "9.2",
+      "kind": "rename",
+      "file": "extra.prisma",
+      "at": "model Memb|er",
+      "newName": "Post",
+      "apply": true
+    },
+    {
+      "id": "9.3",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "9.4",
+      "kind": "prepareRename",
+      "file": "extra.prisma",
+      "at": "model Po|st"
+    },
+    {
+      "id": "9.5",
+      "kind": "rename",
+      "file": "extra.prisma",
+      "at": "model Po|st",
+      "newName": "Member"
+    },
+    {
+      "id": "9.6",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "posts Po|st[]",
+      "newName": "Article"
+    }
+  ]
+}

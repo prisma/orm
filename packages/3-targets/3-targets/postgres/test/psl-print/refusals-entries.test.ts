@@ -185,10 +185,12 @@ describe('row-level security entries the PSL source would file differently', () 
 });
 
 describe('fields and the columns they are stored in', () => {
-  it('refuses a field stored in no column', () => {
-    expect(
+  it('never sees a field stored in no column: the contract is refused when it is read', () => {
+    expect(() =>
       printingWidget({ fields: { extra: INT_FIELD }, storageFields: { id: { column: 'id' } } }),
-    ).toThrow(refusal({ namespaceId: 'public', modelName: 'Widget', field: 'extra' }));
+    ).toThrow(
+      'Model "public:Widget" field "extra" has no entry in storage.fields, so no column holds it',
+    );
   });
 
   it('refuses a column stored under a field name the model does not declare', () => {

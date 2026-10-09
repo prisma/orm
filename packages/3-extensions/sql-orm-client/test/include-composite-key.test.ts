@@ -29,8 +29,15 @@ const orders = new Collection({ runtime: createMockRuntime(), context }, 'Order'
   namespaceId: 'public',
 });
 
+const modelOfTable: Record<string, string> = { customers: 'Customer', orders: 'Order' };
+
 function compile(state: CollectionState): SqlQueryPlan {
-  return compileSelectWithIncludes(contract, context.aggregateDescriptors, state);
+  return compileSelectWithIncludes(
+    contract,
+    context.aggregateDescriptors,
+    modelOfTable[state.tables.root.storage.tableName]!,
+    state,
+  );
 }
 
 function expectSelectAst(ast: unknown): asserts ast is SelectAst {

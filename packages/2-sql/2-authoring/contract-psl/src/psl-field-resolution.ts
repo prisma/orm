@@ -16,6 +16,7 @@ import type {
   Binder,
   BlockSymbol,
   DescribeUnsupportedAttribute,
+  FieldAttributeSpecContext,
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
@@ -83,7 +84,7 @@ function lowerEnumDefaultForField(input: {
       model,
       field,
       binder: input.binder,
-      controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
+      defaultFunctionRegistry: input.defaultFunctionRegistry,
       dataTypes: input.dataTypes,
     }),
   );
@@ -99,12 +100,19 @@ function lowerEnumDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const member = interpreted.value;
-  if (Array.isArray(member)) {
-    if (member.includes(null) && rejectStrictListNullDefault({ ...input, node })) return {};
-    const values = member.map((entry) =>
-      entry === null
+  if (member.kind === 'member-list') {
+    if (
+      rejectStrictListNullDefault({
+        ...input,
+        elements: member.elements,
+        source: diagnosticSource(input.sources, node.syntax),
+      })
+    )
+      return {};
+    const values = member.elements.map((entry) =>
+      entry.kind === 'null'
         ? null
-        : enumHandle.enumMembers.find((candidate) => candidate.name === entry)?.value,
+        : enumHandle.enumMembers.find((candidate) => candidate.name === entry.name)?.value,
     );
     return {
       defaultValue: {
@@ -116,11 +124,8 @@ function lowerEnumDefaultForField(input: {
       },
     };
   }
-  invariant(
-    typeof member === 'string',
-    'the enum @default grammar admits only member identifiers, so the parsed value is a string',
-  );
-  const match = enumHandle.enumMembers.find((m) => m.name === member);
+  invariant(member.kind === 'member', 'the enum @default grammar admits only member identifiers');
+  const match = enumHandle.enumMembers.find((m) => m.name === member.name);
   if (!match) return {};
 
   return {
@@ -281,6 +286,7 @@ function extractFieldConstraintNames(input: {
   readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
+  readonly specContext: FieldAttributeSpecContext;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
@@ -299,7 +305,7 @@ function extractFieldConstraintNames(input: {
       : interpretFieldAttribute({
           node: idNode,
           symbols: input.symbolTable,
-          spec: sqlAttributeSpecs.field.id(),
+          spec: sqlAttributeSpecs.field.id(input.specContext),
           model: input.model,
           field: input.field,
           sources: input.sources,
@@ -313,7 +319,7 @@ function extractFieldConstraintNames(input: {
       : interpretFieldAttribute({
           node: uniqueNode,
           symbols: input.symbolTable,
-          spec: sqlAttributeSpecs.field.unique(),
+          spec: sqlAttributeSpecs.field.unique(input.specContext),
           model: input.model,
           field: input.field,
           sources: input.sources,
@@ -338,6 +344,7 @@ function lowerNoCheckForField(input: {
   readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
+  readonly specContext: FieldAttributeSpecContext;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly isListColumn: boolean;
@@ -349,7 +356,7 @@ function lowerNoCheckForField(input: {
   if (node === undefined) return undefined;
   const interpreted = interpretFieldAttribute({
     node,
-    spec: sqlAttributeSpecs.field.noCheck(),
+    spec: sqlAttributeSpecs.field.noCheck(input.specContext),
     symbols: input.symbolTable,
     model: input.model,
     field: input.field,
@@ -639,10 +646,19 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       continue;
     }
     const mappedColumnName = storageName(field, input.physicalNames);
+    const specContext = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field,
+      binder,
+      defaultFunctionRegistry,
+      dataTypes,
+    });
     const { idAttribute, uniqueAttribute, idName, uniqueName } = extractFieldConstraintNames({
       symbolTable: input.symbolTable,
       model,
       field,
+      specContext,
       sources: input.sources,
       binder: input.binder,
       diagnostics,
@@ -690,6 +706,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           symbolTable: input.symbolTable,
           model,
           field,
+          specContext,
           sources: input.sources,
           binder: input.binder,
           isListColumn,

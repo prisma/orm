@@ -1,4 +1,5 @@
 export {
+  accessMethodOf,
   createIndexTypeRegistry,
   defineIndexTypes,
   type IndexTypeBuilder,
@@ -6,4 +7,6 @@ export {
   type IndexTypeMap,
   type IndexTypeRegistration,
   type IndexTypeRegistry,
+  indexTypeRegistryOf,
+  rendersIndexBody,
 } from '../index-types';

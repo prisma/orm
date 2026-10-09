@@ -2,7 +2,7 @@
 
 ## Principles
 
-- Prisma 7 stays the source of truth for the database until cutover. Prisma 8 adopts the database read-only during the transition.
+- The Prisma 7 schema stays the source of truth until cutover. Prisma 8 adopts the database read-only at first, and can take over its migrations before cutover (slice 5).
 - A construct is either expressible in the contract or a hard error. No warnings, no silent behaviour changes.
 - The Prisma 7 dialect is frozen. Nothing is added to it.
 - Fidelity is defined by what `db verify` compares, not by what the PSL can spell.
@@ -35,7 +35,7 @@ The rule behind that: **Prisma 8 does not compromise its parser or its interpret
 
 ## The public upgrade guide (read 2026-09-14)
 
-[Prisma ORM 7 to 8 (PostgreSQL)](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) documents the side-by-side story this project serves. Prisma 7 becomes the `@prisma/prisma7` dev dependency with a `prisma7` binary and a `prisma7.config.ts` (`defineConfig` from `@prisma/prisma7/config`); Prisma 8 is the `prisma` package with the `prisma` binary and a `prisma.config.ts` (`definePrismaConfig` from `prisma/config` wrapping `@prisma/orm-postgres/config`). There is no binary collision; the `parallel-install.md` project note that assumes `prisma-next` is stale. The guide's phase 2 today is `contract infer` followed by two hand edits (delete the `PrismaMigrations` model, add `@@map` to every model); the Prisma 7 source replaces that step. Its phase 4 cutover is `migration plan --name baseline`, `db sign`, `migration ref set db <timestamp>_baseline`; slice 3's converter must fit that routine, and its docs should describe cutover in those terms. The [MongoDB guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb) is a Prisma 6 to 8 port with no side-by-side phase, which slice 2 must take into account.
+[Prisma ORM 7 to 8 (PostgreSQL)](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) documents the side-by-side story this project serves. Prisma 7 becomes the `@prisma/prisma7` dev dependency with a `prisma7` binary and a `prisma7.config.ts` (`defineConfig` from `@prisma/prisma7/config`); Prisma 8 is the `prisma` package with the `prisma` binary and a `prisma.config.ts` (`definePrismaConfig` from `prisma/config` wrapping `@prisma/orm-postgres/config`). There is no binary collision; the `parallel-install.md` project note that assumes `prisma-next` is stale. The guide's phase 2 today is `contract infer` followed by two hand edits (delete the `PrismaMigrations` model, add `@@map` to every model); the Prisma 7 source replaces that step. When read, its phase 4 handed migrations over with three commands: `migration plan --name baseline`, `db sign`, `migration ref set db <timestamp>_baseline`. That routine is obsolete. `db sign` sets the `db` ref, and the first `migration plan` after it writes the baseline itself, so the handover is `db sign` followed by the normal migration loop; prisma/web#8291 changed the guide to say so. Slice 5 proved the same handover on a `prisma7Schema` source, so it waits neither for cutover nor for `contract print`. The [MongoDB guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb) is a Prisma 6 to 8 port with no side-by-side phase, which slice 2 must take into account.
 
 ## References
 

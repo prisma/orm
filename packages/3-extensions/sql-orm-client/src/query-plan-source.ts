@@ -22,6 +22,7 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import { assertDefined } from '@internal/utils/assertions';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  getColumnsReadOnTable,
   type PolymorphismInfo,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
@@ -33,7 +34,6 @@ import {
 } from './collection-tables';
 import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { resolveTableColumns } from './query-plan-meta';
 import type { AliasedTable } from './table-scope';
 import type { CollectionState } from './types';
 import { paramRefForStorageColumn } from './where-binding';
@@ -292,7 +292,12 @@ function buildMtiJoins(
     );
 
     const { namespaceId, tableName } = variantTable.storage;
-    const variantColumns = resolveTableColumns(contract, namespaceId, tableName);
+    const variantColumns = getColumnsReadOnTable(
+      contract,
+      namespaceId,
+      variant.modelName,
+      tableName,
+    );
     const selectedVariantColumns = selectedColumnsByVariant?.get(variant.modelName);
     for (const col of variantColumns) {
       if (pkColumns.includes(col)) continue;

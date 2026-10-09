@@ -136,7 +136,7 @@ describe('table constraints survive the print and the read back', {
 
     const text = printContract(contract).text;
     expect(text).toContain(
-      '@@check(expression: "length(email) > 0", map: "widget_email_not_blank")',
+      '@@check(expression: sql`length(email) > 0`, map: "widget_email_not_blank")',
     );
 
     const readBack = storageTable(await readPsl(text), 'widget');

@@ -49,10 +49,10 @@ A collection's type is its class plus what the chain has established. Every meth
 export type Filtered<C> = C & HasWhere;
 export type Ordered<C> = C & HasOrderBy;
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
-export type Fragment<In, Out> = (collection: In) => Out;
+export type QueryFragment<In, Out> = (collection: In) => Out;
 ```
 
-`Fragment` places no constraint between `In` and `Out`, because a fragment written for one model may narrow the row, for example with `select`, so its output is not always a subtype of its input.
+`QueryFragment` places no constraint between `In` and `Out`, because a fragment written for one model may narrow the row, for example with `select`, so its output is not always a subtype of its input.
 
 Each fact has three names. The flag `hasWhere` in the type state is set to `true` by the interface `HasWhere`, and `Filtered<C>` is `C & HasWhere`. Users write `Filtered<C>`; TypeScript prints `HasWhere` when it explains why a type does not match. `hasOrderBy`, `HasOrderBy` and `Ordered<C>` are the same fact for an order.
 
@@ -194,7 +194,7 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 - **After `select` or `variant`, class methods are gone.** After `select` the rows are no longer the model's; after `variant` the type argument is a different one.
 - **A conditional between two differently flagged collections keeps a union.** `flag ? db.Post.withTitle('orm') : db.Post.newestFirst()` is `Filtered<PostCollection> | Ordered<PostCollection>`. Reads, `select`, `include` and class methods work on it; writes and `cursor` are refused, and `select` on it drops included relations from the type. A write on it fails with "The 'this' context of type 'Ordered<PostCollection> | Filtered<PostCollection>' is not assignable to method's 'this' of type 'HasWhere'", because one branch has no filter; filter both branches, or annotate the result as `PostCollection`, which reduces the union and states that the filter is not known.
 - **Chains print with the fact names.** A chain on the base type prints as `Ordered<Filtered<Collection<Contract, "Post", ...>>>`, and one on a custom class as `Ordered<Filtered<PostCollection>>`.
-- **These names are part of the public surface**, because fragment authors write them and declaration output needs them for any library that exports a collection class: `Fragment`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasTypeState`, `TypeState`, `RowType`, `CollectionTypeStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
+- **These names are part of the public surface**, because fragment authors write them and declaration output needs them for any library that exports a collection class: `QueryFragment`, `Filtered`, `Ordered`, `Including`, `HasWhere`, `HasOrderBy`, `HasRow`, `HasTypeState`, `TypeState`, `RowType`, `CollectionTypeStateOf`, `CollectionRowOf`, `AggregateIncludeReducers`, `AggregateSelector` and `IncludeScalar`.
 - **Declarations name the family package.** The declaration of an exported collection class, or of an exported chain, imports these names from `@prisma/orm-family-sql/orm-client`, the package the facade re-exports, not from the facade the application depends on. Under pnpm that package does not resolve from the application, and with `skipLibCheck` the consumer of the declaration silently gets `any`. This predates the decision: the same specifier appears for exported chains without it. It is a separate fix in how the facades publish their types.
 - **The state and the row are read with `CollectionTypeStateOf<C>` and `CollectionRowOf<C>`**, not by extracting a type argument of `Collection`. The type arguments hold what the collection started with, and the filter fact that `variant` writes into its new type argument; every other fact is in the intersection.
 - **`ReturnType` of a chaining method does not give a collection**, because `ReturnType` of a generic method uses the type parameter's constraint: `ReturnType<C['where']>` is `HasWhere`, and `ReturnType<C['limit']>` is `unknown`. Write `Filtered<C>` or `Ordered<C>`, or `C` for the methods that add nothing.

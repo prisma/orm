@@ -36,9 +36,7 @@ function interpret(schema: string) {
     schema,
     {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map(),
-      },
+      defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     },

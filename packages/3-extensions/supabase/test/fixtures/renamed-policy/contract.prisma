@@ -16,19 +16,19 @@ namespace public {
   policy_select profile_owner_read_v2 {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_select profile_public_read {
     target = Profile
     roles  = [anon]
-    using  = "true"
+    using  = sql`true`
   }
 
   policy_update profile_owner_write {
     target    = Profile
     roles     = [authenticated]
-    using     = "\"userId\"::uuid = auth.uid()"
-    withCheck = "\"userId\"::uuid = auth.uid()"
+    using     = sql`"userId"::uuid = auth.uid()`
+    withCheck = sql`"userId"::uuid = auth.uid()`
   }
 }

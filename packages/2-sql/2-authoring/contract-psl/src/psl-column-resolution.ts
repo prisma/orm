@@ -40,8 +40,7 @@ import type {
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
-  NumLiteral,
-  ParsedTaggedLiteral,
+  ParsedWrittenScalar,
   PslSpan,
   Resolution,
   ResolvedTypeConstructorCall,
@@ -50,6 +49,7 @@ import type {
 import {
   type DiagnosticSource,
   diagnosticSource,
+  nodePslSpan,
   type PslDiagnosticCollector,
 } from '@internal/psl-parser';
 import {
@@ -59,13 +59,7 @@ import {
   reportPresetNotCalled,
   reportTypeConstructorNotCalled,
 } from '@internal/psl-parser/interpret';
-import {
-  ArrayLiteralAst,
-  type ExpressionAst,
-  type FieldAttributeAst,
-  IdentifierAst,
-  type PslSources,
-} from '@internal/psl-parser/syntax';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   SQL_EXPRESSION_TAG,
@@ -75,13 +69,14 @@ import { checkSqlDefaultText, reservedSqlDefaultText } from '@internal/sql-contr
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
-import { type DefaultRefusalPlace, lowerDataTypeDefault } from './data-type-default';
+import { type DefaultSpans, lowerDataTypeDefault } from './data-type-default';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
 
 import { getAttribute } from './psl-attribute-parsing';
 import {
   fieldSpecContext,
   interpretFieldAttribute,
+  type ParsedNullLiteral,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 import {
@@ -629,38 +624,30 @@ const TAGGED_LITERAL_CANONICALIZATION_CODES = {
   'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
 } as const;
 
-function defaultValueExpression(node: FieldAttributeAst): ExpressionAst | undefined {
-  return [...(node.argList()?.args() ?? [])].find((arg) => arg.colon() === undefined)?.value();
-}
-
-function listElements(expression: ExpressionAst | undefined): readonly ExpressionAst[] {
-  const list = expression === undefined ? undefined : ArrayLiteralAst.cast(expression.syntax);
-  return list === undefined ? [] : [...list.elements()];
-}
-
+/**
+ * Refuses a `null` element in the list default of a field whose list elements are not nullable,
+ * at the first `null`. Returns whether it refused.
+ */
 export function rejectStrictListNullDefault(input: {
   readonly field: FieldSymbol;
   readonly modelName: string;
-  readonly node: FieldAttributeAst;
-  readonly sources: PslSources;
+  readonly elements: readonly { readonly kind: string }[];
+  readonly source: DiagnosticSource;
   readonly diagnostics: PslDiagnosticCollector;
 }): boolean {
   if (input.field.elementOptional) return false;
-  for (const arg of input.node.argList()?.args() ?? []) {
-    const expression = arg.value();
-    const list = expression ? ArrayLiteralAst.cast(expression.syntax) : undefined;
-    for (const element of list?.elements() ?? []) {
-      const identifier = IdentifierAst.cast(element.syntax);
-      if (identifier?.token()?.text !== 'null') continue;
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Field "${input.modelName}.${input.field.name}" has strict list elements and cannot use null in a literal list default. Make the element type nullable or remove null from the default.`,
-        ...diagnosticSource(input.sources, identifier.syntax).at(),
-      });
-      return true;
-    }
-  }
-  return false;
+  const nullElement = input.elements.find(isParsedNullLiteral);
+  if (nullElement === undefined) return false;
+  input.diagnostics.push({
+    code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+    message: `Field "${input.modelName}.${input.field.name}" has strict list elements and cannot use null in a literal list default. Make the element type nullable or remove null from the default.`,
+    ...input.source.at(nullElement.span),
+  });
+  return true;
+}
+
+function isParsedNullLiteral(element: { readonly kind: string }): element is ParsedNullLiteral {
+  return element.kind === 'null';
 }
 
 export function lowerDefaultForField(input: {
@@ -696,7 +683,7 @@ export function lowerDefaultForField(input: {
       model: input.model,
       field: input.field,
       binder: input.binder,
-      controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
+      defaultFunctionRegistry: input.defaultFunctionRegistry,
       dataTypes: input.dataTypes,
     }),
   );
@@ -712,13 +699,8 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
-  if (
-    Array.isArray(value) &&
-    value.includes(null) &&
-    rejectStrictListNullDefault({ ...input, node })
-  )
-    return {};
-  if (value === null) {
+  const attributeSpan = nodePslSpan(node.syntax, input.sources);
+  if (value.kind === 'null') {
     if (!input.field.optional) {
       input.diagnostics.push({
         code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
@@ -729,28 +711,24 @@ export function lowerDefaultForField(input: {
     }
     return { defaultValue: { kind: 'literal', value: null, canonical: true } };
   }
-  const valueExpression = defaultValueExpression(node);
-  const refusalLocation = (place: DefaultRefusalPlace) => {
-    if (place.kind === 'attribute') return source.at();
-    const expression =
-      place.elementIndex === undefined
-        ? valueExpression
-        : listElements(valueExpression)[place.elementIndex];
-    if (expression === undefined) {
-      throw new InternalError(
-        `Field "${input.modelName}.${input.fieldName}": the refused @default value has no written expression.`,
-      );
-    }
-    return diagnosticSource(input.sources, expression.syntax).at();
-  };
+  if (
+    value.kind === 'list' &&
+    rejectStrictListNullDefault({ ...input, elements: value.elements, source })
+  )
+    return {};
   // A list of value objects is stored in one column whose value is the whole list: a list literal
   // fills it element by element, as it fills a list column, and any other literal is read as the
   // whole value.
   const readsListElements = (written: WrittenValue) =>
     input.isListColumn || (input.field.list && written.kind === 'list');
-  const readAsLiteral = (written: WrittenValue, sourceElementIndexes?: readonly number[]) => {
+  const readAsLiteral = (
+    written: WrittenValue,
+    spans: DefaultSpans,
+    sourceElementIndexes?: readonly number[],
+  ) => {
     const lowered = lowerDataTypeDefault({
       written,
+      spans,
       sourceElementIndexes,
       isList: readsListElements(written),
       column: input.columnDescriptor,
@@ -762,16 +740,20 @@ export function lowerDefaultForField(input: {
       input.diagnostics.push({
         code: lowered.code,
         message: lowered.message,
-        ...refusalLocation(lowered.place),
+        ...source.at(lowered.span),
       });
       return {};
     }
     let restoredValue = lowered.value;
-    if (Array.isArray(value) && value.includes(null) && Array.isArray(lowered.value)) {
+    if (
+      value.kind === 'list' &&
+      value.elements.some(isParsedNullLiteral) &&
+      Array.isArray(lowered.value)
+    ) {
       let index = 0;
       const nonNullValues = lowered.value;
-      restoredValue = value.map((element) =>
-        element === null ? null : (nonNullValues[index++] ?? null),
+      restoredValue = value.elements.map((element) =>
+        element.kind === 'null' ? null : (nonNullValues[index++] ?? null),
       );
     }
     if (input.valueObjectDefault !== undefined) {
@@ -800,22 +782,14 @@ export function lowerDefaultForField(input: {
     return { defaultValue: { kind: 'literal' as const, value: restoredValue, canonical: true } };
   };
 
-  const writtenScalar = (
-    element: string | boolean | NumLiteral | ParsedTaggedLiteral,
-  ): WrittenScalar | { readonly ok: false } => {
-    if (typeof element === 'string') return { kind: 'string', text: element };
-    if (typeof element === 'boolean') return { kind: 'boolean', value: element };
-    if ('text' in element) return { kind: 'number', text: element.text };
-    const { canonicalization } = element;
-    if (!canonicalization.ok) {
-      input.diagnostics.push({
-        code: TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
-        message: describeTaggedLiteralFailure(canonicalization.reason),
-        ...source.at(element.span),
-      });
-      return { ok: false };
-    }
-    return { kind: 'tag', tag: element.tag, text: canonicalization.text };
+  const canonicalized = (scalar: ParsedWrittenScalar): WrittenScalar | undefined => {
+    if (scalar.written !== undefined) return scalar.written;
+    input.diagnostics.push({
+      code: TAGGED_LITERAL_CANONICALIZATION_CODES[scalar.reason],
+      message: describeTaggedLiteralFailure(scalar.reason),
+      ...source.at(scalar.span),
+    });
+    return undefined;
   };
 
   const sqlExpressionDefault = (text: string, span: PslSpan) => {
@@ -835,105 +809,115 @@ export function lowerDefaultForField(input: {
     return { defaultValue: { kind: 'function' as const, expression: text } };
   };
 
+  // An enum member identifier or list of them is lowered against its enum's handle, which a field without one lacks.
+  if (value.kind === 'member' || value.kind === 'member-list') return {};
+
   // A column bound to a value set (`pg.enum(Ref)`) takes member names, which are checked against the
   // value set rather than read as literals; its codec accepts no literal default at all.
   if (input.columnDescriptor.valueSet !== undefined) {
-    if (typeof value === 'string') return { defaultValue: { kind: 'literal', value } };
-    if (Array.isArray(value)) {
-      const members = value.filter(
-        (element): element is string | null => element === null || typeof element === 'string',
+    const memberName = (element: ParsedWrittenScalar | ParsedNullLiteral) =>
+      element.kind === 'scalar' && element.written?.kind === 'string'
+        ? element.written.text
+        : undefined;
+    if (value.kind === 'scalar') {
+      const member = memberName(value);
+      if (member !== undefined) return { defaultValue: { kind: 'literal', value: member } };
+    }
+    if (value.kind === 'list') {
+      const members = value.elements.map((element) =>
+        element.kind === 'null' ? null : memberName(element),
       );
-      if (members.length === value.length) {
+      if (members.every((member) => member !== undefined)) {
         return { defaultValue: { kind: 'literal', value: members } };
       }
     }
   }
 
-  if (Array.isArray(value)) {
+  if (value.kind === 'list') {
     const elements: WrittenValue[] = [];
     const sourceElementIndexes: number[] = [];
-    for (const [sourceIndex, element] of value.entries()) {
-      if (element === null) continue;
-      const written = writtenScalar(element);
-      if ('ok' in written) return {};
+    for (const [sourceIndex, element] of value.elements.entries()) {
+      if (element.kind === 'null') continue;
+      const written = canonicalized(element);
+      if (written === undefined) return {};
       elements.push(written);
       sourceElementIndexes.push(sourceIndex);
     }
-    return readAsLiteral({ kind: 'list', elements }, sourceElementIndexes);
+    return readAsLiteral(
+      { kind: 'list', elements },
+      {
+        attribute: attributeSpan,
+        value: value.span,
+        elements: value.elements.map((element) => element.span),
+      },
+      sourceElementIndexes,
+    );
   }
 
-  if (typeof value === 'string') return readAsLiteral({ kind: 'string', text: value });
-  if (typeof value === 'boolean') return readAsLiteral({ kind: 'boolean', value });
-
-  if ('text' in value) {
-    return readAsLiteral({ kind: 'number', text: value.text });
-  }
-
-  if ('tag' in value) {
-    const written = writtenScalar(value);
-    if ('ok' in written) return {};
+  if (value.kind === 'scalar') {
+    const written = canonicalized(value);
+    if (written === undefined) return {};
+    const spans = { attribute: attributeSpan, value: value.span, elements: [] };
+    if (written.kind !== 'tag') return readAsLiteral(written, spans);
     const read = readWrittenValue(input.dataTypes, written);
     if (read.ok && read.value.type === SQL_EXPRESSION_DATA_TYPE_ID) {
       return sqlExpressionDefault(sqlTextFromCanonical(read.value.value), value.span);
     }
-    return readAsLiteral(written);
+    return readAsLiteral(written, spans);
   }
 
-  if (typeof value === 'object') {
-    const context: DefaultFunctionLoweringContext = {
-      sourceId: input.sources.sourceFileFor(node.syntax).filename,
-      modelName: input.modelName,
-      fieldName: input.fieldName,
-      columnCodecId: input.columnDescriptor.codecId,
-    };
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: value,
-      registry: input.defaultFunctionRegistry,
-      context,
-      source,
+  const { call } = value;
+  const context: DefaultFunctionLoweringContext = {
+    sourceId: input.sources.sourceFileFor(node.syntax).filename,
+    modelName: input.modelName,
+    fieldName: input.fieldName,
+    columnCodecId: input.columnDescriptor.codecId,
+  };
+  const lowered = lowerDefaultFunctionWithRegistry({
+    call,
+    registry: input.defaultFunctionRegistry,
+    context,
+    source,
+  });
+
+  if (!lowered.ok) {
+    if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
+    else input.diagnostics.pushExternal(lowered.diagnostic);
+    return {};
+  }
+
+  if (lowered.value.kind === 'storage') {
+    return { defaultValue: lowered.value.defaultValue };
+  }
+
+  const generatorDescriptor = input.generatorDescriptorById.get(lowered.value.generated.id);
+  if (!generatorDescriptor) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
+      ...source.at(call.span),
     });
-
-    if (!lowered.ok) {
-      if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
-      else input.diagnostics.pushExternal(lowered.diagnostic);
-      return {};
-    }
-
-    if (lowered.value.kind === 'storage') {
-      return { defaultValue: lowered.value.defaultValue };
-    }
-
-    const generatorDescriptor = input.generatorDescriptorById.get(lowered.value.generated.id);
-    if (!generatorDescriptor) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
-        ...source.at(value.span),
-      });
-      return {};
-    }
-
-    // Preset-only generators (e.g. `timestampNow`) co-register their codec through the preset descriptor, so they don't carry an `applicableCodecIds` list. Such a generator surfacing on the `@default(...)` lowering path is itself the bug — emit a diagnostic pointing the user at the correct authoring surface.
-    if (generatorDescriptor.applicableCodecIds === undefined) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
-        ...source.at(value.span),
-      });
-      return {};
-    }
-
-    if (!generatorDescriptor.applicableCodecIds.includes(input.columnDescriptor.codecId)) {
-      input.diagnostics.push({
-        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
-        message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
-        ...source.at(value.span),
-      });
-      return {};
-    }
-
-    return { executionDefaults: { onCreate: lowered.value.generated } };
+    return {};
   }
 
-  return {};
+  // Preset-only generators (e.g. `timestampNow`) co-register their codec through the preset descriptor, so they don't carry an `applicableCodecIds` list. Such a generator surfacing on the `@default(...)` lowering path is itself the bug — emit a diagnostic pointing the user at the correct authoring surface.
+  if (generatorDescriptor.applicableCodecIds === undefined) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
+      ...source.at(call.span),
+    });
+    return {};
+  }
+
+  if (!generatorDescriptor.applicableCodecIds.includes(input.columnDescriptor.codecId)) {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
+      ...source.at(call.span),
+    });
+    return {};
+  }
+
+  return { executionDefaults: { onCreate: lowered.value.generated } };
 }

@@ -248,7 +248,7 @@ Reading a default is then:
 4. The value, cast or not, is validated by the codec instance for the column's parameters; a refusal is a diagnostic at the value with the codec's message.
 5. The value is stored in the column's canonical form. The contract's two default forms, a value and an expression, are unchanged.
 
-The TypeScript builder is not a text surface: `.default(value)` hands the codec a JS value that TypeScript has typed, and `encodeJson` produces the canonical form.
+The TypeScript builder is not a text surface: `.default(value)` hands the codec a JS value that TypeScript has typed, and `encodeJson` produces the canonical form. `sql/expression` has no codec, so it has a TypeScript value of its own: `SqlExpression`, made by the `sql` template tag, whose `text` is the canonical form. `.default()` stores it as the column's default expression, and every builder field that takes raw SQL takes only that value ([ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md)).
 
 ## Assembly
 
@@ -330,5 +330,6 @@ Whether temporal, bytes and interval types get tags of their own and stop castin
 
 - [ADR 184 — Codec-owned value serialization](ADR%20184%20-%20Codec-owned%20value%20serialization.md): the canonical form now belongs to the data type; the PSL half is replaced by this decision.
 - [ADR 129 — Tagged literals](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md): the tag syntax and the canonical text; a tag is how PSL writes a data type, and `sql` is the tag of `sql/expression`.
+- [ADR 268 — Raw SQL is a value of the data type `sql/expression`](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md): every place that holds raw SQL receives `sql/expression` through `dataTypeValue`.
 - [ADR 208 — Higher-order codecs for parameterized types](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md): parameters now belong to the data type; codec instances still check them.
 - [ADR 252 — An earlier Prisma version's schema is a contract source](ADR%20252%20-%20An%20earlier%20Prisma%20version's%20schema%20is%20a%20contract%20source.md): a second text source mapped onto the same types.

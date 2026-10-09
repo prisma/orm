@@ -147,20 +147,18 @@ function relativeLabel(path: string, scratchRootPath: string): string {
 
 /**
  * One scratch-project member as the client tracks it: its Monaco-facing
- * identity (`uri`/`path`), the text last known for it (the seed text until
- * its file is opened and edited, then whatever the editor model held when
- * the user last switched away), and whether `didOpen` has been sent for it
- * yet.
+ * identity (`uri`/`path`), its seed text (the pinned model holds the text
+ * once its file is opened), and whether `didOpen` has been sent for it yet.
  *
- * A file's document opens — and `didOpen` fires — only the first time it is
- * selected; re-selecting an already-opened file only swaps the visible
- * model, never re-opens it.
+ * A file's document opens — and `didOpen` fires — only once, the first time
+ * it is selected or a rename edits it; re-selecting an already-opened file
+ * only swaps the visible model, never re-opens it.
  */
 interface FileEntry {
   readonly uri: string;
   readonly path: string;
   readonly button: HTMLButtonElement;
-  text: string;
+  readonly text: string;
   opened: boolean;
   /**
    * A model reference held for the lifetime of the page once opened, never
@@ -289,6 +287,18 @@ async function main(): Promise<void> {
     },
     clientOptions: {
       documentSelector: [LANGUAGE_ID],
+      middleware: {
+        provideRenameEdits: async (document, position, newName, token, next) => {
+          const edit = await next(document, position, newName, token);
+          for (const [uri] of edit?.entries() ?? []) {
+            const entry = entryForUri(uri);
+            if (entry !== undefined) {
+              await enqueue(() => ensureOpened(entry));
+            }
+          }
+          return edit;
+        },
+      },
       initializationOptions: {
         completion: {
           supportsTriggerSuggestCommand: true,
@@ -356,10 +366,14 @@ async function main(): Promise<void> {
     }
   };
 
-  async function openEntry(entry: FileEntry): Promise<void> {
-    // First selection only: this is the one `didOpen` a never-selected file
-    // never sends. `openTextDocument` — via vscode-languageclient's
-    // document-sync feature — is what notifies the language server.
+  async function ensureOpened(entry: FileEntry): Promise<void> {
+    if (entry.opened) {
+      return;
+    }
+    // First selection or first rename edit only: this is the one `didOpen` a
+    // file that was never selected and never edited by a rename never sends.
+    // `openTextDocument` — via vscode-languageclient's document-sync
+    // feature — is what notifies the language server.
     await vscode.workspace.openTextDocument(vscode.Uri.parse(entry.uri));
     // Pin a second, independently-held model reference so the document stays
     // open server-side even after `updateCodeResources` later disposes its
@@ -373,45 +387,33 @@ async function main(): Promise<void> {
     if (entry === activeEntry) {
       return;
     }
-    if (!entry.opened) {
-      await openEntry(entry);
-    }
-    // Capture the outgoing entry's live edits as close to the swap as
-    // possible — right before `updateCodeResources`, not before the
-    // `openEntry` await above, so edits typed while that await was pending
-    // are not lost. `activeEntry` here is still the outgoing entry: this
-    // call is serialized (see `enqueueSelectEntry`), so nothing else can have
-    // reassigned it since this call started.
-    const outgoingEntry = activeEntry;
-    const outgoingModel = editorApp.getEditor()?.getModel();
-    if (outgoingModel !== null && outgoingModel !== undefined) {
-      outgoingEntry.text = outgoingModel.getValue();
-    }
-    await editorApp.updateCodeResources({ modified: { text: entry.text, uri: entry.path } });
+    await ensureOpened(entry);
+    const text = entry.pin?.object.textEditorModel?.getValue() ?? entry.text;
+    await editorApp.updateCodeResources({ modified: { text, uri: entry.path } });
     activeEntry = entry;
     setActiveStyling();
   }
 
-  // Every activation (the startup open below and every click) is serialized
-  // through one in-flight chain. Without this, two rapid clicks could both
-  // pass `selectEntry`'s `!entry.opened` check before either's `openEntry`
-  // resolves — racing `createModelReference` writes to the same `pin` field,
-  // and letting whichever `updateCodeResources` call happens to resolve last
-  // win the visible model regardless of click order. Serializing makes
-  // activations complete strictly in request order, so the last click always
-  // ends up active and no two opens for the same entry ever overlap.
-  let pendingSelection: Promise<void> = openEntry(firstEntry);
+  // Every activation (the startup open below, every click and every open for
+  // a rename edit) is serialized through one in-flight chain. Without this,
+  // two rapid clicks could both pass `ensureOpened`'s `entry.opened` check
+  // before either's open resolves — racing `createModelReference` writes to
+  // the same `pin` field, and letting whichever `updateCodeResources` call
+  // happens to resolve last win the visible model regardless of click order.
+  // Serializing makes activations complete strictly in request order, so the
+  // last click always ends up active and no two opens for the same entry ever
+  // overlap.
+  let pendingSelection: Promise<void> = ensureOpened(firstEntry);
+
+  function enqueue(task: () => Promise<void>): Promise<void> {
+    pendingSelection = pendingSelection.then(task, task).catch((error: unknown) => {
+      console.error(error);
+    });
+    return pendingSelection;
+  }
 
   function enqueueSelectEntry(entry: FileEntry): Promise<void> {
-    pendingSelection = pendingSelection
-      .then(
-        () => selectEntry(entry),
-        () => selectEntry(entry),
-      )
-      .catch((error: unknown) => {
-        console.error(error);
-      });
-    return pendingSelection;
+    return enqueue(() => selectEntry(entry));
   }
 
   for (const entry of entries) {
@@ -422,7 +424,7 @@ async function main(): Promise<void> {
 
   // The first file opens on startup exactly as the single-schema playground
   // always has (queued above, ahead of any click); every other file stays
-  // unmanaged until its own first selection.
+  // unmanaged until its own first selection or a rename that edits it.
   await pendingSelection;
   setActiveStyling();
 

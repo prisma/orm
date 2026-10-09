@@ -176,21 +176,49 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Postgres computes `to_tsvector` per row unless an index covers the predicate's expression — the same `to_tsvector`, the same configuration literal and the same column, which it compares as parsed expressions rather than as text. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so you never write it by hand:
+Postgres computes `to_tsvector` per row unless an index covers the predicate's expression — the same search document over the same columns, configuration and weights, which it compares as parsed expressions rather than as text. `@@fullTextIndex`, contributed by this package, declares that index from the fields and the language, so you never write the expression by hand:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
+@@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
+
+The fields are one field, or a list whose items are fields or lists of fields. Each top-level item is a weight group, strongest first: `title` and `subtitle` weigh `A`, `body` weighs `B`. There are at most four groups, `A` to `D`. A single field has no weight. The contract stores the index as data: an index of type `fullText` over the covered columns, whose `options` hold the weight groups (as storage column names) and the language. `fullText` is registered in this package's index type registry beside the access methods, with `gin` as its access method; in the database it is a `gin` index over the search document. Its `columns` are always the fields of its groups, in order, and a contract where they differ is refused:
+
+```json
+{ "columns": ["title", "subtitle", "body"], "type": "fullText", "options": { "weightGroups": [["title", "subtitle"], ["body"]], "language": "english" } }
+```
+
+One renderer turns those options into the search document, for the index DDL, for the schema that migrations and verification compare, and for the queries. With more than one group each field is weighted with `setweight`; with more than one field every column is wrapped in `coalesce(column, '')`, so the document does not depend on whether a column is nullable; one field alone is `to_tsvector('english', "text")`, the expression the column operations use.
 
 The TypeScript contract builder has the same helper, exported from the facade's contract-builder entry:
 
 ```typescript
-model('Message', { fields: { id, text } }).sql(({ cols }) => ({
-  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+model('Post', { fields: { id, title, subtitle, body } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex([[cols.title, cols.subtitle], cols.body], { name: 'post_search' })],
 }));
 ```
 
-It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+Both take an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index (a `sql` value in TypeScript), and `name:` xor `map:`; both are repeatable. The column names come from the resolved storage columns, so `@map` is honoured. With `map:` the index keeps the exact database name you give it, and `db verify` compares the rendered search document with the text Postgres prints back for the index exactly, character for character. Postgres prints it in its own form (`to_tsvector('english'::regconfig, title)`), so a `map:` full-text index reports drift; `@@fullTextIndex` and `fullTextIndex` warn about this with `PN_EXACT_NAME_BODY_COMPARISON`. Use `name:` unless the database already has the index under that name.
+
+To search a full-text index from the SQL builder, pass the index itself, read from the table's `indexes` by the name the contract gave it. `fullTextMatches` and `fullTextRank` then search the document the index was built over, with its weight groups and its language, so the query always matches the index:
+
+```typescript
+const q = websearchToTsquery(query);
+const post = db.sql.public.post;
+post
+  .select('id')
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((_f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' })
+  .build();
+```
+
+The index states its language, so passing `language` with one is a type error and raises `RUNTIME.ARGUMENT_INVALID`; so is an index of another type. An index read from an aliased table, `post.as('p').indexes.post_search`, searches that alias's columns.
+
+The document is one of three things: a full-text index, one column, or a document built by `fullTextDocument` from `./full-text`, which takes weight groups of columns, checks them by the same rules as an index, and searches several columns no index covers: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. With a column or a `fullTextDocument`, Postgres uses an index only when the groups, their order and the `language` are the index's; a mismatch is not an error, the query just falls back to a sequential scan. ``@@index(expression: sql`to_tsvector('english', "text")`, type: "gin", name: …)`` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+
+Every argument that holds raw SQL (`where:`, `expression:`, and a policy's `using` and `withCheck`) takes a `sql` literal in PSL and a `sql` value in the TypeScript builder; a plain string is refused. See [ADR 268](../../../../docs/architecture%20docs/adrs/ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md).
 
 ## Codec descriptor authoring
 

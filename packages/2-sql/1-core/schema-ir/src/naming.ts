@@ -239,19 +239,23 @@ export interface IndexContentHashParts {
  * status as the RLS tuple: any change re-suffixes every wire name.
  */
 /**
- * Canonicalizes one index option VALUE to the `on`/`off` boolean spelling:
- * JS booleans and the common catalog spellings (`pg_class.reloptions`
- * stores whatever spelling the DDL used, so a live index may carry
- * `'true'`/`'false'` or `'on'`/`'off'`) all map to one form; everything
- * else via `String()` (fully specified for numbers, so no platform
- * variance). Shared by the wire-name hash tuple, the node's option
- * equality, and the DDL renderer, so an authored `{ fastupdate: true }`
- * agrees with a live index created under any boolean spelling.
+ * Canonicalizes one index option VALUE to the `on`/`off` boolean spelling: JS booleans and the common catalog spellings (`pg_class.reloptions` stores whatever spelling the DDL used, so a live index may carry `'true'`/`'false'` or `'on'`/`'off'`) all map to one form; every other scalar via `String()` (fully specified for numbers, so no platform variance); an array or object as JSON, since `String()` would flatten `[['a', 'b']]` and `[['a'], ['b']]` to the same text, with object keys sorted at every depth so key order never changes the value. Shared by the wire-name hash tuple, the node's option equality, and the DDL renderer, so an authored `{ fastupdate: true }` agrees with a live index created under any boolean spelling.
  */
 export function normalizeIndexOptionValue(value: unknown): string {
   if (value === true || value === 'true' || value === 'on') return 'on';
   if (value === false || value === 'false' || value === 'off') return 'off';
+  if (typeof value === 'object' && value !== null) return JSON.stringify(withSortedKeys(value));
   return String(value);
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, entry]) => [key, withSortedKeys(entry)]),
+  );
 }
 
 export function computeIndexContentHash(parts: IndexContentHashParts): string {

@@ -1,4 +1,5 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import { sql } from '@internal/sql-contract/sql-expression';
 import { WIRE_NAME_PREFIX_MAX_BYTES } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -264,7 +265,7 @@ describe('constraints.index — full matrix', () => {
           },
         }).sql(({ constraints }) => ({
           table: 'user',
-          indexes: [constraints.index({ expression: 'lower(email)', name: 'users_email_eq' })],
+          indexes: [constraints.index({ expression: sql`lower(email)`, name: 'users_email_eq' })],
         })),
       },
     });
@@ -291,7 +292,7 @@ describe('constraints.index — full matrix', () => {
           table: 'user',
           indexes: [
             constraints.index([cols.email], {
-              where: '(deleted_at IS NULL)',
+              where: sql`(deleted_at IS NULL)`,
               unique: true,
               name: 'users_email_active',
             }),
@@ -342,7 +343,7 @@ describe('constraints.index — full matrix', () => {
           }).sql(({ constraints }) => ({
             table: 'user',
             indexes: [
-              constraints.index({ expression: 'lower(email)', map: 'users_email_adopted' }),
+              constraints.index({ expression: sql`lower(email)`, map: 'users_email_adopted' }),
             ],
           })),
         },
@@ -371,7 +372,7 @@ describe('constraints.index — full matrix', () => {
             },
           }).sql(({ constraints }) => ({
             table: 'user',
-            indexes: [constraints.index({ expression: 'lower(email)' })],
+            indexes: [constraints.index({ expression: sql`lower(email)` })],
           })),
         },
       });

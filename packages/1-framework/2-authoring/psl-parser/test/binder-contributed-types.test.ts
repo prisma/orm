@@ -12,7 +12,9 @@ import {
 } from '../src/binder';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
-import { buildSymbolTable } from '../src/symbol-table';
+import { buildSymbolTable, type FieldSymbol, type NamedTypeSymbol } from '../src/symbol-table';
+import { PathExprAst } from '../src/syntax/ast/expressions';
+import type { SyntaxNode } from '../src/syntax/red';
 
 const createdAt: AuthoringFieldPresetDescriptor = {
   kind: 'fieldPreset',
@@ -36,10 +38,22 @@ const varchar: AuthoringTypeConstructorDescriptor = {
   output: { codecId: 'fixture/varchar@1' },
 };
 
+const tagged: AuthoringTypeConstructorDescriptor = {
+  kind: 'typeConstructor',
+  entityRefArg: { index: 0, entityKind: 'tag' },
+  output: { codecId: 'fixture/tagged@1' },
+};
+
+const secondTagged: AuthoringTypeConstructorDescriptor = {
+  kind: 'typeConstructor',
+  entityRefArg: { index: 1, entityKind: 'tag' },
+  output: { codecId: 'fixture/tagged@1' },
+};
+
 function context(): BinderContext {
   return {
     authoringContributions: {
-      type: { String: text, db: { VarChar: varchar } },
+      type: { String: text, db: { VarChar: varchar, tagged, secondTagged } },
       field: { temporal: { createdAt }, db: { uuid } },
       entityTypes: {},
       attributeSpecs: { model: {}, field: {} },
@@ -66,8 +80,18 @@ function bindProject(text: string) {
     const node = field === undefined ? undefined : typeReferenceNode(field);
     return node === undefined ? undefined : binder.symbolForNode(node);
   };
-  return { resolve, diagnostics, binder };
+  return { resolve, diagnostics, binder, symbolTable, sources: pslSources };
 }
+
+function argumentNode(
+  holder: FieldSymbol | NamedTypeSymbol | undefined,
+  index = 0,
+): SyntaxNode | undefined {
+  return holder?.typeConstructor?.args[index]?.expression?.syntax;
+}
+
+const entities =
+  'tag TopTag {}\nmodel TopModel {\n  id String\n}\nnamespace auth {\n  tag AuthTag {}\n}\n';
 
 describe('createBinder — contributed types', () => {
   it('binds a field-preset name to the preset descriptor', () => {
@@ -157,6 +181,358 @@ describe('createBinder — contributed types', () => {
       expect(contributedTypeOf(resolve('author'), binder)).toBeUndefined();
       expect(contributedTypeOf(resolve('missing'), binder)).toBeUndefined();
       expect(contributedTypeOf(undefined, binder)).toBeUndefined();
+    });
+  });
+});
+
+describe('createBinder — entity argument of a type constructor', () => {
+  it('binds a name in scope to the block it names', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('binds a name that is a model, without checking the kind', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(TopModel)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'model',
+      symbol: symbolTable.topLevel.models['TopModel'],
+    });
+  });
+
+  it('binds a qualified name to the member, and its qualifier to the namespace', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(auth.AuthTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+    const [qualifier] = (argument && PathExprAst.cast(argument)?.segments()) ?? [];
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.namespaces['auth']?.blocks['AuthTag'],
+      namespace: symbolTable.topLevel.namespaces['auth'],
+    });
+    expect(qualifier && binder.symbolForNode(qualifier.syntax)).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.topLevel.namespaces['auth'],
+    });
+  });
+
+  it('reports an unknown name once, on the argument, and records it as unresolved', () => {
+    const { symbolTable, binder, diagnostics, sources } = bindProject(
+      `${entities}model Post {\n  value db.tagged(Nope)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+    const file = argument && sources.sourceFileFor(argument);
+
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "Nope"',
+        data: { reference: 'entity' },
+        filename: 'schema.prisma',
+        range: argument &&
+          file && {
+            start: file.positionAt(argument.offset),
+            end: file.positionAt(argument.endOffset),
+          },
+      },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'Nope',
+    });
+  });
+
+  it('does not see a name declared inside a namespace when it is written unqualified', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(AuthTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "AuthTag"' },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'AuthTag',
+    });
+  });
+
+  it('binds the positional argument at the index the constructor declares', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.secondTagged(TopModel, TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value'], 1);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('counts positional arguments only when named arguments are mixed in', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.secondTagged(TopModel, extra: TopModel, TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value'], 2);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('records nothing for a string', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged("TopTag")\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('records nothing for a number', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(1)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('records nothing for a path of three segments', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(auth.AuthTag.more)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('records nothing for a named argument', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged(tag: TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('records nothing for an empty argument list', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.tagged()\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('records nothing for the arguments of a constructor that declares no entity argument', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}model Post {\n  value db.VarChar(TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.models['Post']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toBeUndefined();
+  });
+
+  it('binds a name of the namespace of a model declared in a namespace', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}namespace auth {\n  model Post {\n    value db.tagged(AuthTag)\n  }\n}`,
+    );
+    const argument = argumentNode(
+      symbolTable.topLevel.namespaces['auth']?.models['Post']?.fields['value'],
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.namespaces['auth']?.blocks['AuthTag'],
+      namespace: symbolTable.topLevel.namespaces['auth'],
+    });
+  });
+
+  it('binds a top-level name from a model declared in a namespace', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}namespace auth {\n  model Post {\n    value db.tagged(TopTag)\n  }\n}`,
+    );
+    const argument = argumentNode(
+      symbolTable.topLevel.namespaces['auth']?.models['Post']?.fields['value'],
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('binds a qualified name and its qualifier from a model declared in a namespace', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}namespace auth {\n  model Post {\n    value db.tagged(auth.AuthTag)\n  }\n}`,
+    );
+    const argument = argumentNode(
+      symbolTable.topLevel.namespaces['auth']?.models['Post']?.fields['value'],
+    );
+    const [qualifier] = (argument && PathExprAst.cast(argument)?.segments()) ?? [];
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.namespaces['auth']?.blocks['AuthTag'],
+      namespace: symbolTable.topLevel.namespaces['auth'],
+    });
+    expect(qualifier && binder.symbolForNode(qualifier.syntax)).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.topLevel.namespaces['auth'],
+    });
+  });
+
+  it('reports an unknown name from a model declared in a namespace', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}namespace auth {\n  model Post {\n    value db.tagged(Nope)\n  }\n}`,
+    );
+    const argument = argumentNode(
+      symbolTable.topLevel.namespaces['auth']?.models['Post']?.fields['value'],
+    );
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "Nope"' },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'Nope',
+    });
+  });
+
+  it('binds a name in scope from a field of a composite type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}type Address {\n  value db.tagged(TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.compositeTypes['Address']?.fields['value']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('binds a qualified name and its qualifier from a field of a composite type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}type Address {\n  value db.tagged(auth.AuthTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.compositeTypes['Address']?.fields['value']);
+    const [qualifier] = (argument && PathExprAst.cast(argument)?.segments()) ?? [];
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.namespaces['auth']?.blocks['AuthTag'],
+      namespace: symbolTable.topLevel.namespaces['auth'],
+    });
+    expect(qualifier && binder.symbolForNode(qualifier.syntax)).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.topLevel.namespaces['auth'],
+    });
+  });
+
+  it('reports an unknown name from a field of a composite type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}type Address {\n  value db.tagged(Nope)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.compositeTypes['Address']?.fields['value']);
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "Nope"' },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'Nope',
+    });
+  });
+
+  it('binds a top-level name from a named type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}types {\n  Alias = db.tagged(TopTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.namedTypes['Alias']);
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['TopTag'],
+    });
+  });
+
+  it('binds a name of a namespace when it is qualified, from a named type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}types {\n  Alias = db.tagged(auth.AuthTag)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.namedTypes['Alias']);
+    const [qualifier] = (argument && PathExprAst.cast(argument)?.segments()) ?? [];
+
+    expect(diagnostics).toEqual([]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.namespaces['auth']?.blocks['AuthTag'],
+      namespace: symbolTable.topLevel.namespaces['auth'],
+    });
+    expect(qualifier && binder.symbolForNode(qualifier.syntax)).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.topLevel.namespaces['auth'],
+    });
+  });
+
+  it('reports an unknown name from a named type', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}types {\n  Alias = db.tagged(Nope)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.namedTypes['Alias']);
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "Nope"' },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'Nope',
+    });
+  });
+
+  it('does not resolve the own name of a named type to itself', () => {
+    const { symbolTable, binder, diagnostics } = bindProject(
+      `${entities}types {\n  Alias = db.tagged(Alias)\n}`,
+    );
+    const argument = argumentNode(symbolTable.topLevel.namedTypes['Alias']);
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "Alias"' },
+    ]);
+    expect(argument && binder.symbolForNode(argument)).toEqual({
+      kind: 'unresolved',
+      name: 'Alias',
     });
   });
 });

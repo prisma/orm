@@ -20,6 +20,7 @@ import {
   startsWithColumns,
 } from './index-equivalence';
 import { lowerAuthoredIndex } from './index-naming';
+import { accessMethodOf, type IndexTypeRegistry, rendersIndexBody } from './index-types';
 import type { ForeignKeyIndex, ForeignKeyInput, ReferentialAction } from './ir/foreign-key';
 import type { ForeignKeyReferenceInput } from './ir/foreign-key-reference';
 import type { PrimaryKeyInput } from './ir/primary-key';
@@ -57,8 +58,9 @@ export function materializeForeignKeysAndIndexes(input: {
   readonly uniques: readonly UniqueConstraintInput[];
   readonly primaryKey: PrimaryKeyInput | undefined;
   readonly warnings: AuthoringWarningSink;
+  readonly indexTypes: Pick<IndexTypeRegistry, 'get'> | undefined;
 }): MaterializedTableConstraints {
-  const { tableName, declaredIndexes, uniques, primaryKey } = input;
+  const { tableName, declaredIndexes, uniques, primaryKey, indexTypes } = input;
   const derivedIndexes: IndexCandidate[] = [];
   const intents = input.foreignKeys.map((foreignKey) => {
     const { constraint, index, ...reference } = foreignKey;
@@ -88,6 +90,7 @@ export function materializeForeignKeysAndIndexes(input: {
                 declaredIndexes,
                 uniques,
                 primaryKey,
+                indexTypes,
                 resolve,
               })
             : resolve({ kind: 'index', index });
@@ -157,6 +160,7 @@ export function defaultForeignKeyIndex(
     uniques: table.uniques,
     primaryKey: table.primaryKey,
     warnings: [],
+    indexTypes: undefined,
   }).foreignKeys;
   return typeof foreignKey?.index === 'object' ? foreignKey.index : undefined;
 }
@@ -177,7 +181,7 @@ function derivedBackingIndex(tableName: string, columns: readonly string[]): Ind
 }
 
 /**
- * What a relation's `index: "<name>"` points at. The name is the `name` or `map` the source gave an index, unique constraint or primary key, or an index's stored name; an unnamed index's default name does not count. Identical indexes count as one, so the name is resolved after they merge. The object must start with the foreign key's columns, in order, or it would not serve the foreign key's lookups.
+ * What a relation's `index: "<name>"` points at. The name is the `name` or `map` the source gave an index, unique constraint or primary key, or an index's stored name; an unnamed index's default name does not count. Identical indexes count as one, so the name is resolved after they merge. The object must start with the foreign key's columns, in order, or it would not serve the foreign key's lookups. An index of a type whose body is rendered from its options (see {@link rendersIndexBody}) is refused too: its columns are not its key.
  */
 function namedBackingObject(
   source: ForeignKeyReferenceInput,
@@ -186,6 +190,7 @@ function namedBackingObject(
     readonly declaredIndexes: readonly IndexCandidate[];
     readonly uniques: readonly UniqueConstraintInput[];
     readonly primaryKey: PrimaryKeyInput | undefined;
+    readonly indexTypes: Pick<IndexTypeRegistry, 'get'> | undefined;
     readonly resolve: (backing: BackingObject) => ForeignKeyIndex;
   },
 ): ForeignKeyIndex {
@@ -238,6 +243,18 @@ function namedBackingObject(
   }
   const [match] = resolvedIndexes;
   const key = keys[0];
+  const matchType = match?.index.index.type;
+  const typeEntry = matchType === undefined ? undefined : table.indexTypes?.get(matchType);
+  if (typeEntry !== undefined && rendersIndexBody(typeEntry)) {
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `${subject}, but it is a "${typeEntry.type}" index, a "${accessMethodOf(typeEntry)}" index whose key is rendered from its options rather than its columns, so it does not serve the foreign key's lookups.`,
+      {
+        fix: `Name an index, unique constraint or primary key whose first columns are (${columns.join(', ')}), or drop the index argument so the foreign key gets its own backing index beside the "${typeEntry.type}" index.`,
+        meta,
+      },
+    );
+  }
   const objectColumns = match !== undefined ? match.index.index.columns : key?.columns;
   if (objectColumns === undefined || !startsWithColumns(objectColumns, columns)) {
     const reason =

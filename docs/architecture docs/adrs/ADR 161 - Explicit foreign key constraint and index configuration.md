@@ -57,7 +57,7 @@ model Post {
   archivedAt DateTime?
   author     User      @relation(fields: [authorId], references: [id])
 
-  @@index([authorId], where: "\"archivedAt\" IS NULL", name: "post_author_live")
+  @@index([authorId], where: sql`"archivedAt" IS NULL`, name: "post_author_live")
 }
 ```
 

@@ -20,6 +20,7 @@ import type {
   PslTypeConstructorCall,
 } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -50,6 +51,11 @@ import { createUniqueFieldName } from '../psl-build/unique-name';
 import type { InferredColumnDefaults } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
+import {
+  defaultDoesNotReadBackNote,
+  printableIndex,
+  SQL_DOES_NOT_READ_BACK,
+} from './infer-sql-text';
 
 export function buildModel(
   table: SqlTableIR,
@@ -84,6 +90,7 @@ export function buildModel(
 
   const derivedCheckNames = computeDerivedCheckNames(table);
 
+  const defaultNotes: string[] = [];
   const fields: PslField[] = [];
   for (const column of Object.values(table.columns)) {
     fields.push(
@@ -101,6 +108,7 @@ export function buildModel(
         singlePkConstraintName,
         uniqueColumns,
         derivedCheckNames,
+        () => defaultNotes.push(defaultDoesNotReadBackNote(column.name)),
       ),
     );
   }
@@ -128,17 +136,29 @@ export function buildModel(
     }
   }
 
+  const sqlSkipNotes: string[] = [];
+  const skipNote = (kind: 'index' | 'check', name: string) =>
+    sqlSkipNotes.push(`// prisma: skipped ${kind} "${name}": ${SQL_DOES_NOT_READ_BACK}`);
+
   for (const index of table.indexes) {
-    const indexFieldNames = index.columns?.map((columnName) =>
+    const printable = printableIndex(index);
+    if (printable === undefined) {
+      skipNote('index', index.name);
+      continue;
+    }
+    const indexFieldNames = printable.columns?.map((columnName) =>
       resolveColumnFieldName(fieldNamesByTable, table.name, columnName),
     );
-    modelAttributes.push(buildIndexAttribute(index, indexFieldNames));
+    modelAttributes.push(buildIndexAttribute(printable, indexFieldNames));
   }
 
   for (const check of table.checks ?? []) {
-    if (!derivedCheckNames.has(check.name)) {
-      modelAttributes.push(buildCheckAttribute(check));
+    if (derivedCheckNames.has(check.name)) continue;
+    if (!sqlTextsReadBack([check.expression])) {
+      skipNote('check', check.name);
+      continue;
     }
+    modelAttributes.push(buildCheckAttribute(check));
   }
 
   if (mapName) {
@@ -170,6 +190,8 @@ export function buildModel(
   const commentLines = [
     ...(warnings.length > 0 ? [`// WARNING: ${warnings.join(' ')}`] : []),
     ...policySkipNotes,
+    ...sqlSkipNotes,
+    ...defaultNotes,
   ];
   const comment = commentLines.length > 0 ? commentLines.join('\n') : undefined;
 
@@ -233,6 +255,7 @@ function buildScalarField(
   singlePkConstraintName: string | undefined,
   uniqueColumns: ReadonlyMap<string, string | undefined>,
   derivedCheckNames: ReadonlySet<string>,
+  noteDefaultThatDoesNotReadBack: () => void,
 ): PslField {
   const resolvedField = fieldNameMap?.get(column.name);
   const fieldName = resolvedField?.fieldName ?? toFieldName(column.name).name;
@@ -297,6 +320,7 @@ function buildScalarField(
     },
     (value) =>
       columnDefaults.readsBack(value, resolution.pslType, isEnumColumn, column.many === true),
+    noteDefaultThatDoesNotReadBack,
   );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));
@@ -357,6 +381,7 @@ function inferDefaultAttribute(
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
   if (
     column.default === undefined &&
@@ -375,7 +400,13 @@ function inferDefaultAttribute(
     // SQL text read against the element type only yields a function, which
     // the interpreter rejects on a list column.
     return Array.isArray(column.resolvedDefault.value)
-      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping, readsBack)
+      ? literalOrRawAttribute(
+          column.resolvedDefault,
+          column,
+          defaultMapping,
+          readsBack,
+          noteTextThatDoesNotReadBack,
+        )
       : undefined;
   }
   const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
@@ -383,9 +414,15 @@ function inferDefaultAttribute(
     return undefined;
   }
   if (parsed.kind === 'literal') {
-    return literalOrRawAttribute(parsed, column, defaultMapping, readsBack);
+    return literalOrRawAttribute(
+      parsed,
+      column,
+      defaultMapping,
+      readsBack,
+      noteTextThatDoesNotReadBack,
+    );
   }
-  return mappedAttribute(parsed, defaultMapping);
+  return mappedAttribute(parsed, defaultMapping, noteTextThatDoesNotReadBack);
 }
 
 /**
@@ -397,6 +434,7 @@ function literalOrRawAttribute(
   column: SqlColumnIR,
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
   const printed: ColumnDefault =
     columnDefault.kind === 'literal'
@@ -417,14 +455,26 @@ function literalOrRawAttribute(
       : mapDefault(printed, defaultMapping);
   if (result !== undefined) return result.attribute;
   return typeof column.default === 'string'
-    ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
+    ? mappedAttribute(
+        { kind: 'function', expression: column.default },
+        defaultMapping,
+        noteTextThatDoesNotReadBack,
+      )
     : undefined;
 }
 
+/**
+ * A default expression prints even when its `sql` literal reads back as different text: dropping it
+ * would let the next plan drop the default. The caller notes it instead.
+ */
 function mappedAttribute(
   columnDefault: ColumnDefault,
   defaultMapping: DefaultMappingOptions | undefined,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
+  if (columnDefault.kind === 'function' && !sqlTextsReadBack([columnDefault.expression])) {
+    noteTextThatDoesNotReadBack();
+  }
   return mapDefault(columnDefault, defaultMapping)?.attribute;
 }
 

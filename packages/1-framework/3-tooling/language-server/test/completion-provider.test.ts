@@ -16,6 +16,7 @@ import {
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
+  type BlockSpecContext,
   blockAttribute,
   buildSymbolTable,
   entityRef,
@@ -47,6 +48,7 @@ import { testBinder } from './helpers/binder';
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
 const emptySnippetPlaceholder1 = '$' + '{1:}';
+const sqlExpressionSnippet = 'sql`$' + '{1:expression}`';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
@@ -254,8 +256,11 @@ interface ActualSqliteDataTypesModule {
 }
 
 interface ActualSqlExpressionModule {
-  readonly SQL_EXPRESSION_DATA_TYPE_ID: string;
-  readonly sqlExpressionAuthoringEntry: DataTypeAuthoringEntry;
+  readonly sqlExpressionRegistration: {
+    readonly authoring: {
+      readonly dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>>;
+    };
+  };
 }
 
 interface ActualMongoAttributeModule {
@@ -359,6 +364,13 @@ async function actualMongoStack(): Promise<CompletionTestStack> {
     entityTypes: blocks.mongoFamilyEntityTypes,
     pslBlockDescriptors: blocks.mongoFamilyPslBlockDescriptors,
   };
+}
+
+async function sqlExpressionDataTypes(): Promise<Readonly<Record<string, DataTypeAuthoringEntry>>> {
+  const family = await importFromPackageRoot<ActualSqlExpressionModule>(
+    '../../../2-sql/1-core/contract/src/exports/sql-expression.ts',
+  );
+  return family.sqlExpressionRegistration.authoring.dataTypes;
 }
 
 async function importFromPackageRoot<T>(relativePath: string): Promise<T> {
@@ -997,7 +1009,7 @@ namespace app {
     ).toEqual(['type']);
 
     const { items, sourceFile, cursorOffset } = completeWithActualStack(
-      ['model Post {', '  id Int', '  @@index(expression: "lower(name)", ma|)', '}'].join('\n'),
+      ['model Post {', '  id Int', '  @@index(expression: sql`lower(name)`, ma|)', '}'].join('\n'),
       stack,
     );
     expect(items.map((item) => item.label)).toEqual([
@@ -1040,20 +1052,81 @@ namespace app {
     const checkCompletion = completeWithActualStack(
       ['model Post {', '  id Int', '  @@che| // keep', '}'].join('\n'),
       stack,
-      { clientSupportsSnippets: true },
+      { clientSupportsSnippets: true, dataTypes: await sqlExpressionDataTypes() },
     );
     const checkItem = completionItemByLabel(checkCompletion.items, 'check');
     expect(checkItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `check(expression: "\${1:expression}")` },
+      textEdit: { newText: `check(expression: ${sqlExpressionSnippet})` },
     });
     expect(
       applyCompletionItem({ sourceFile: checkCompletion.sourceFile, item: checkItem }),
     ).toEqual(
-      ['model Post {', '  id Int', `  @@check(expression: "\${1:expression}") // keep`, '}'].join(
-        '\n',
-      ),
+      [
+        'model Post {',
+        '  id Int',
+        `  @@check(expression: ${sqlExpressionSnippet}) // keep`,
+        '}',
+      ].join('\n'),
     );
+  }, 5_000);
+
+  it('offers a sql literal where @@index and @@check take SQL', async () => {
+    const stack = await actualSqlStack();
+    const dataTypes = await sqlExpressionDataTypes();
+    const [entry] = Object.values(dataTypes);
+    const valuesAt = (attribute: string) =>
+      completeWithActualStack(
+        ['model Post {', '  id Int', `  ${attribute}`, '}'].join('\n'),
+        stack,
+        {
+          clientSupportsSnippets: true,
+          dataTypes,
+        },
+      ).items.map((item) => ({
+        label: item.label,
+        detail: item.detail,
+        newText: item.textEdit?.newText,
+        insertTextFormat: item.insertTextFormat,
+      }));
+    const sqlItem = {
+      label: 'sql',
+      detail: entry?.documentation,
+      newText: 'sql`$1`',
+      insertTextFormat: InsertTextFormat.Snippet,
+    };
+
+    expect(valuesAt('@@index([id], where: |)')).toEqual([sqlItem]);
+    expect(valuesAt('@@index(expression: |, map: "post_idx")')).toEqual([sqlItem]);
+    expect(valuesAt('@@check(expression: |, name: "post_check")')).toEqual([sqlItem]);
+  }, 5_000);
+
+  it('completes model and field attributes when the source has no data types', async () => {
+    const stack = await actualSqlStack();
+    const labelsAt = (markedSource: string) =>
+      completeWithActualStack(markedSource, stack).items.map((item) => item.label);
+
+    expect(labelsAt(['model Post {', '  id Int', '  @@|', '}'].join('\n'))).toEqual([
+      'base',
+      'check',
+      'control',
+      'discriminator',
+      'id',
+      'index',
+      'map',
+      'unique',
+    ]);
+    expect(labelsAt(['model Post {', '  id Int @|', '}'].join('\n'))).toEqual([
+      'default',
+      'id',
+      'map',
+      'noCheck',
+      'relation',
+      'unique',
+    ]);
+    expect(
+      labelsAt(['model Post {', '  id Int', '  @@check(expression: |)', '}'].join('\n')),
+    ).toEqual([]);
   }, 5_000);
 
   it('uses actual Mongo attribute specs for names and dynamic factory keys', async () => {
@@ -1342,8 +1415,9 @@ namespace app {
     expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
   });
 
-  it('calls the spec factory with the symbol table only and never invokes rule parsing', () => {
-    const factoryContexts: unknown[] = [];
+  it('calls the spec factory with the spec context and never invokes rule parsing', () => {
+    const dataTypes: DataTypeSupport = { entries: {}, lookup: createDataTypeLookup([]) };
+    const factoryContexts: BlockSpecContext[] = [];
     const throwingRule = {
       kind: 'str' as const,
       label: 'string',
@@ -1360,7 +1434,7 @@ namespace app {
           keyword: 'guard',
           discriminator: 'fixture-guard',
           name: { required: true },
-          spec: (ctx: unknown) => {
+          spec: (ctx: BlockSpecContext) => {
             factoryContexts.push(ctx);
             return structBlock({
               parameters: {
@@ -1370,13 +1444,15 @@ namespace app {
           },
         },
       },
+      dataTypes,
     });
 
     expect(items.map((item) => item.label)).toEqual(['shield']);
     expect(items[0]?.detail).toBe('The shield key.');
     expect(factoryContexts).toHaveLength(2);
     for (const ctx of factoryContexts) {
-      expect(ctx).toEqual({ symbols: expect.any(Object) });
+      expect(ctx).toEqual({ symbols: expect.any(Object), dataTypes: expect.any(Object) });
+      expect(ctx.dataTypes).toBe(dataTypes);
     }
   });
 
@@ -1587,7 +1663,7 @@ namespace app {
     const withFamilyEntry = (
       targetEntries: Readonly<Record<string, DataTypeAuthoringEntry>>,
     ): Readonly<Record<string, DataTypeAuthoringEntry>> => ({
-      [family.SQL_EXPRESSION_DATA_TYPE_ID]: family.sqlExpressionAuthoringEntry,
+      ...family.sqlExpressionRegistration.authoring.dataTypes,
       ...targetEntries,
     });
     const complete = (

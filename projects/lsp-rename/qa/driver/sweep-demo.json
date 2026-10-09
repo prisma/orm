@@ -1,0 +1,15 @@
+{
+  "files": ["src/prisma/contract.prisma"],
+  "steps": [
+    {
+      "id": "10.2",
+      "kind": "sweep",
+      "files": ["src/prisma/contract.prisma"],
+      "newName": "Renamed"
+    },
+    {
+      "id": "diag",
+      "kind": "diagnostics"
+    }
+  ]
+}

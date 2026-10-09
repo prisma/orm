@@ -107,9 +107,7 @@ function interpret(
     schema,
     {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map(),
-      },
+      defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
       ...overrides,
@@ -261,7 +259,7 @@ model Item {
         symbolTable,
         binder,
         scalarTypeCodecIds: new Map(),
-        controlMutationDefaults: context.controlMutationDefaults,
+        defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
@@ -449,6 +447,28 @@ model Item {
         storage: { collection: 'UserProfile' },
       });
       expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
+    });
+
+    it('keeps every storage name when a model and a field are renamed and mapped to their old names', () => {
+      const before = interpretOk(`
+        model User {
+          id   ObjectId @id @map("_id")
+          name String
+        }
+      `);
+      const after = interpretOk(`
+        model Account {
+          id       ObjectId @id @map("_id")
+          fullName String @map("name")
+
+          @@map("User")
+        }
+      `);
+
+      expect(after.storage).toEqual(before.storage);
+      expect(Object.keys(model(after, 'Account').fields)).toEqual(
+        Object.keys(model(before, 'User').fields),
+      );
     });
 
     it('uses @@map() to override collection name', () => {
@@ -2614,9 +2634,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 
@@ -2642,9 +2660,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 
@@ -2666,9 +2682,7 @@ model Post {
 `,
         {
           scalarTypeCodecIds: mongoScalarTypeDescriptors,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: new Map(),
-          },
+          defaultFunctionRegistry: new Map(),
         },
       );
 

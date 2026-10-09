@@ -43,6 +43,7 @@ import {
 } from '@internal/framework-components/psl-ast';
 import type { Binder } from '@internal/psl-parser';
 import {
+  type AttributeSpecContext,
   type BlockSymbol,
   type CompositeTypeSymbol,
   contributedTypeOf,
@@ -79,6 +80,7 @@ import {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { FOREIGN_KEY_INDEX_UNRESOLVED } from '@internal/sql-contract/foreign-key-materialization';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
+import { sqlTextFromCanonical } from '@internal/sql-contract/sql-expression';
 import {
   type AuthoredStorageTypeInstance,
   resolvedTypeParams,
@@ -142,9 +144,11 @@ import {
   validateBackrelationFieldAttributes,
 } from './psl-relation-resolution';
 import {
+  fieldSpecContext,
   interpretFieldAttribute,
   interpretModelAttribute,
   modelAttributeSpecsFrom,
+  modelSpecContext,
   PSL_CHECK_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
@@ -688,6 +692,12 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
   const { model, diagnostics } = input;
   const source = diagnosticSource(input.sources, model.node.syntax);
   const tableName = storageName(model, input.physicalNames);
+  const specContext = modelSpecContext({
+    symbols: input.symbolTable,
+    model,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
+    dataTypes: input.dataTypes,
+  });
   const modelNamespaceId = input.namespaceId;
   const namespaceExtensionEntitiesForModel =
     modelNamespaceId !== undefined
@@ -767,6 +777,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       const parsedRelation = interpretRelationAttribute({
         selfModel: model,
         field,
+        specContext: fieldSpecContext({ ...specContext, field, binder: input.binder }),
         symbols: input.symbolTable,
         sources: input.sources,
         binder: input.binder,
@@ -863,7 +874,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: sqlAttributeSpecs.model.control(),
+        spec: sqlAttributeSpecs.model.control(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -900,7 +911,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: sqlAttributeSpecs.model.id(),
+        spec: sqlAttributeSpecs.model.id(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -946,7 +957,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: sqlAttributeSpecs.model.unique(),
+        spec: sqlAttributeSpecs.model.unique(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -981,7 +992,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: sqlAttributeSpecs.model.index(),
+        spec: sqlAttributeSpecs.model.index(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -1016,8 +1027,13 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           'dynamically assembled from PSL arguments; the interpreter diagnoses both invalid shapes and lowerAuthoredIndex re-checks'
         >({
           ...ifDefined('columns', columnNames),
-          ...ifDefined('expression', parsed.expression),
-          where: parsed.where,
+          ...ifDefined(
+            'expression',
+            parsed.expression === undefined
+              ? undefined
+              : sqlTextFromCanonical(parsed.expression.value),
+          ),
+          where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value),
           unique: parsed.unique,
           name: parsed.name,
           map: parsed.map,
@@ -1042,7 +1058,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: sqlAttributeSpecs.model.check(),
+        spec: sqlAttributeSpecs.model.check(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -1053,7 +1069,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         continue;
       }
       checkNodes.push({
-        expression: parsed.expression,
+        expression: sqlTextFromCanonical(parsed.expression.value),
         name: parsed.name,
         map: parsed.map,
       });
@@ -1086,12 +1102,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const parsed = interpretModelAttribute({
         node,
-        spec: specFactory({
-          symbols: input.symbolTable,
-          model,
-          controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
-          dataTypes: input.dataTypes,
-        }),
+        spec: specFactory(specContext),
         model,
         symbols: input.symbolTable,
         sources: input.sources,
@@ -1205,6 +1216,11 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       const parsedRelation = interpretRelationAttribute({
         selfModel: model,
         field: relationAttribute.field,
+        specContext: fieldSpecContext({
+          ...specContext,
+          field: relationAttribute.field,
+          binder: input.binder,
+        }),
         symbols: input.symbolTable,
         sources: input.sources,
         binder: input.binder,
@@ -1368,6 +1384,11 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     const parsedRelation = interpretRelationAttribute({
       selfModel: model,
       field: relationAttribute.field,
+      specContext: fieldSpecContext({
+        ...specContext,
+        field: relationAttribute.field,
+        binder: input.binder,
+      }),
       symbols: input.symbolTable,
       sources: input.sources,
       binder: input.binder,
@@ -1659,6 +1680,7 @@ function collectPolymorphismDeclarations(
   symbols: SymbolTable,
   sources: PslSources,
   binder: Binder,
+  specContextFor: (model: ModelSymbol) => AttributeSpecContext,
   stringCodecId: string | undefined,
   diagnostics: PslDiagnosticCollector,
 ): {
@@ -1675,7 +1697,7 @@ function collectPolymorphismDeclarations(
       const parsed = interpretModelAttribute({
         node: discriminatorNode,
         symbols,
-        spec: sqlAttributeSpecs.model.discriminator(),
+        spec: sqlAttributeSpecs.model.discriminator(specContextFor(model)),
         model,
         sources,
         binder,
@@ -1701,7 +1723,7 @@ function collectPolymorphismDeclarations(
       const parsed = interpretModelAttribute({
         node: baseNode,
         symbols,
-        spec: sqlAttributeSpecs.model.base(),
+        spec: sqlAttributeSpecs.model.base(specContextFor(model)),
         model,
         sources,
         binder,
@@ -2098,6 +2120,10 @@ export function interpretPslDocumentToSqlContract(
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
   const { binder, dataTypes } = input;
+  const defaultFunctionRegistry: ControlMutationDefaultRegistry =
+    input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
+  const specContextFor = (model: ModelSymbol) =>
+    modelSpecContext({ symbols: input.symbolTable, model, defaultFunctionRegistry, dataTypes });
 
   const { topLevel } = input.symbolTable;
   const namespaceSymbols = Object.values(topLevel.namespaces);
@@ -2114,6 +2140,7 @@ export function interpretPslDocumentToSqlContract(
     sources: input.sources,
     pslBlockDescriptors: composedPslBlockDescriptors,
     binder,
+    dataTypes,
   });
   diagnostics.push(...blockDiagnostics);
   validateBlockModelAttributeRequirements({
@@ -2165,7 +2192,7 @@ export function interpretPslDocumentToSqlContract(
         : interpretModelAttribute({
             node: mapNode,
             symbols: input.symbolTable,
-            spec: sqlAttributeSpecs.model.map(),
+            spec: sqlAttributeSpecs.model.map(specContextFor(model)),
             model,
             sources: input.sources,
             binder,
@@ -2180,7 +2207,9 @@ export function interpretPslDocumentToSqlContract(
           : interpretFieldAttribute({
               node: mapNode,
               symbols: input.symbolTable,
-              spec: sqlAttributeSpecs.field.map(),
+              spec: sqlAttributeSpecs.field.map(
+                fieldSpecContext({ ...specContextFor(model), field, binder }),
+              ),
               model,
               field,
               sources: input.sources,
@@ -2195,8 +2224,6 @@ export function interpretPslDocumentToSqlContract(
   const composedExtensions = new Set(input.composedExtensions ?? []);
   const composedExtensionContracts: ReadonlyMap<string, Contract> =
     input.composedExtensionContracts;
-  const defaultFunctionRegistry: ControlMutationDefaultRegistry =
-    input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();
   for (const descriptor of generatorDescriptors) {
@@ -2608,6 +2635,7 @@ export function interpretPslDocumentToSqlContract(
     input.symbolTable,
     input.sources,
     binder,
+    specContextFor,
     input.scalarColumnDescriptors.get('String')?.codecId,
     diagnostics,
   );

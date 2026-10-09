@@ -185,7 +185,7 @@ describe('models and relations', () => {
             tags: {
               to: { namespace: PUBLIC, model: 'Tag' },
               cardinality: 'N:M',
-              on: { localFields: ['id'], targetFields: ['id'] },
+              on: { localFields: ['id'], targetFields: ['widgetId'] },
               through: {
                 table: 'WidgetTag',
                 namespaceId: 'public',

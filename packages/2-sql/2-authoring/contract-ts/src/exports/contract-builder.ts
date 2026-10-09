@@ -1,3 +1,4 @@
+export { type SqlExpression, sql } from '@internal/sql-contract/sql-expression';
 export { createComposedAuthoringHelpers } from '../composed-authoring-helpers';
 export type {
   ComposedAuthoringHelpers,
@@ -23,14 +24,19 @@ export type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
   CheckNode,
+  ColumnNode,
   ContractDefinition,
   FieldNode,
+  ForeignKeyModelReference,
   ForeignKeyNode,
+  ForeignKeyTableReference,
   IndexNode,
   ModelNode,
   PrimaryKeyNode,
   RelationNode,
   ScalarMemberNode,
+  TableNode,
+  TableProperties,
   UniqueConstraintNode,
   ValueObjectFieldNode,
   ValueObjectMemberNode,
@@ -42,8 +48,10 @@ export type {
   ColumnRef,
   DeferredIndexColumn,
   DeferredIndexExpression,
+  DeferredIndexOptions,
   IndexConstraint,
   IndexExpressionInput,
+  IndexOptionsInput,
   TargetFieldRef,
 } from '../contract-dsl';
 export { buildContractDefinition } from '../contract-lowering';
@@ -59,4 +67,3 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
-export { sql } from '../sql-default-literal';

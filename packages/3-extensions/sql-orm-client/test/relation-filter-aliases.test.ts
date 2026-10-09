@@ -8,8 +8,14 @@ import { baseContract, createCollectionFor } from './collection-fixtures';
 
 const adapter = createPostgresAdapter();
 
+const modelOfTable: Record<string, string> = { posts: 'Post', users: 'User' };
+
 function sqlOf(state: CollectionState): string {
-  const plan = compileSelect(baseContract, state);
+  const plan = compileSelect(
+    baseContract,
+    modelOfTable[state.tables.root.storage.tableName]!,
+    state,
+  );
   return adapter.lower(plan.ast, {
     contract: baseContract as unknown as PostgresContract,
     params: plan.params,

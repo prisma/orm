@@ -872,7 +872,7 @@ describe('SQL contract validators', () => {
 
     it('rejects an N:M relation whose through references a column absent from the junction table', () => {
       const c = manyToManyContract({
-        on: { localFields: ['id'], targetFields: ['ghost'] },
+        on: { localFields: ['id'], targetFields: ['user_id'] },
         through: { ...consistentThrough, parentColumns: ['ghost'] },
       });
       expect(() => validateSqlContractFully(c)).toThrow(

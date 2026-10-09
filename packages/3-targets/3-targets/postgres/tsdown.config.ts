@@ -16,6 +16,7 @@ export default defineConfig({
     'src/exports/diff-database-schema.ts',
     'src/exports/errors.ts',
     'src/exports/full-text.ts',
+    'src/exports/full-text-index-authoring.ts',
     'src/exports/issue-planner.ts',
     'src/exports/marker-lock.ts',
     'src/exports/migration.ts',

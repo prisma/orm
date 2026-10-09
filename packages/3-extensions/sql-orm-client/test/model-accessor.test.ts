@@ -22,8 +22,10 @@ import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import {
   buildMixedPolyContract,
+  fieldUnknown,
   getTestContext,
   getTestContract,
+  unmappedColumnPassed,
   withPatchedDomainModels,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
@@ -432,7 +434,7 @@ describe('createModelAccessor', () => {
 
     // Unknown fields in a shorthand predicate are surfaced loudly — silent skip would drop user intent (a typo'd filter would match every row).
     expect(() => user['posts']!.some({ unknown: 'value' })).toThrow(
-      /Shorthand filter on "Post\.unknown": field is not defined on the model/,
+      fieldUnknown('Post', 'unknown'),
     );
 
     // Undefined values are skipped before the field lookup, so a shorthand with an unknown field and undefined value is a no-op.
@@ -494,7 +496,7 @@ describe('createModelAccessor', () => {
     ).toThrow(/missing join columns/);
   });
 
-  it('supports composite relation joins and first-target fallback projection', () => {
+  it('supports composite relation joins and refuses a join with a missing target field', () => {
     const base = getTestContract();
     const compositeContract = withPatchedDomainModels(base, (models) => {
       const user = models['User'] as {
@@ -570,20 +572,19 @@ describe('createModelAccessor', () => {
       };
     });
 
-    const fallbackExpr = (
-      createModelAccessor(
-        { ...context, contract: noTargetFieldsContract } as never,
-        'public',
-        'User',
-        createCollectionTables(noTargetFieldsContract, 'public', 'User'),
-      ) as unknown as Record<string, { some: () => unknown }>
-    )['posts']!.some() as ExistsExpr;
-    expect(fallbackExpr.subquery.projection).toEqual([
-      ProjectionItem.of('_exists', ColumnRef.of('posts', 'id')),
-    ]);
+    expect(() =>
+      (
+        createModelAccessor(
+          { ...context, contract: noTargetFieldsContract } as never,
+          'public',
+          'User',
+          createCollectionTables(noTargetFieldsContract, 'public', 'User'),
+        ) as unknown as Record<string, { some: () => unknown }>
+      )['posts']!.some(),
+    ).toThrow('has no field "undefined" the contract names');
   });
 
-  it('returns undefined for fields whose storage table is not declared', () => {
+  it('fails with an internal error for a field whose storage table is not declared', () => {
     const base = getTestContract();
     const storageFallbackContract = withPatchedDomainModels(base, (models) => {
       const user = models['User'] as { storage: Record<string, unknown> };
@@ -606,10 +607,12 @@ describe('createModelAccessor', () => {
       'User',
       createCollectionTables(storageFallbackContract, 'public', 'User'),
     );
-    expect(accessor['name']).toBeUndefined();
+    expect(() => accessor['name']).toThrow(
+      'Field "User.name" maps column "name", which table "users_storage" does not have',
+    );
   });
 
-  it('resolves column when storage.table maps to a declared table with the field', () => {
+  it('refuses a field the model storage does not map, even when its table has a column of that name', () => {
     const base = getTestContract();
     const modelNameFallbackContract = withPatchedDomainModels(base, (models) => ({
       ...models,
@@ -621,13 +624,14 @@ describe('createModelAccessor', () => {
     }));
 
     expect(
-      createModelAccessor(
-        { ...context, contract: modelNameFallbackContract } as never,
-        'public',
-        'User',
-        createCollectionTables(modelNameFallbackContract, 'public', 'User'),
-      )['name']!.isNull(),
-    ).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'name')));
+      () =>
+        createModelAccessor(
+          { ...context, contract: modelNameFallbackContract } as never,
+          'public',
+          'User',
+          createCollectionTables(modelNameFallbackContract, 'public', 'User'),
+        )['name'],
+    ).toThrow(unmappedColumnPassed('User', 'users', 'name'));
   });
 
   it('combines relation shorthand fields with and() and rejects missing join arrays', () => {
@@ -833,7 +837,7 @@ describe('createModelAccessor', () => {
         ),
       );
       // Selecting an STI variant must not surface the MTI variant column.
-      expect(bug['priority']).toBeUndefined();
+      expect(() => bug['priority']).toThrow(fieldUnknown('Bug', 'priority'));
     });
 
     it('leaves base resolution untouched when no variant is selected', () => {
@@ -846,8 +850,7 @@ describe('createModelAccessor', () => {
       expect(task['title']!.eq('x')).toEqual(
         new BinaryExpr('eq', ColumnRef.of('tasks', 'title'), polyParam('tasks', 'title', 'x')),
       );
-      // Without a selected variant the MTI variant column is not resolvable.
-      expect(task['priority']).toBeUndefined();
+      expect(() => task['priority']).toThrow(fieldUnknown('Task', 'priority'));
     });
   });
 
@@ -905,7 +908,7 @@ describe('createModelAccessor', () => {
         'Task',
         createCollectionTables(polyContext.contract, 'public', 'Task'),
       ) as unknown as RelationBag;
-      expect(task['assignee']).toBeUndefined();
+      expect(() => task['assignee']).toThrow(fieldUnknown('Task', 'assignee'));
     });
 
     it('keeps a base relation resolving against the base table when a variant is selected', () => {

@@ -1,3 +1,4 @@
+import type { SqlExpression } from '@internal/sql-contract/sql-expression';
 import type { ScalarFieldBuilder } from '@internal/sql-contract-ts/contract-builder';
 import { POLICY_OPERATION_PREDICATES } from '@internal/target-postgres/rls-canonicalize';
 import type { RlsPolicyOperation } from '@internal/target-postgres/types';
@@ -48,8 +49,8 @@ export interface RlsPolicyHandle<Operation extends RlsPolicyOperation = RlsPolic
   /** Declared model refs, resolved to table coordinates by the generic contract build. */
   readonly refs: { readonly target: RlsTargetModel };
   readonly roles: readonly RlsRoleHandle[];
-  readonly using?: string;
-  readonly withCheck?: string;
+  readonly using?: SqlExpression;
+  readonly withCheck?: SqlExpression;
 }
 
 /**
@@ -66,12 +67,12 @@ interface RlsPolicyDescriptorBase {
 
 /** Descriptor for the USING-only operations: SELECT and DELETE. */
 export interface RlsUsingPolicyDescriptor extends RlsPolicyDescriptorBase {
-  readonly using: string;
+  readonly using: SqlExpression;
 }
 
 /** Descriptor for the WITH CHECK-only operation: INSERT. */
 export interface RlsWithCheckPolicyDescriptor extends RlsPolicyDescriptorBase {
-  readonly withCheck: string;
+  readonly withCheck: SqlExpression;
 }
 
 /**
@@ -83,12 +84,12 @@ export interface RlsWithCheckPolicyDescriptor extends RlsPolicyDescriptorBase {
  */
 export type RlsUsingWithCheckPolicyDescriptor =
   | (RlsPolicyDescriptorBase & {
-      readonly using: string;
-      readonly withCheck?: string;
+      readonly using: SqlExpression;
+      readonly withCheck?: SqlExpression;
     })
   | (RlsPolicyDescriptorBase & {
-      readonly using?: string;
-      readonly withCheck: string;
+      readonly using?: SqlExpression;
+      readonly withCheck: SqlExpression;
     });
 
 function assertNonEmptyName(helper: string, name: string): void {
@@ -113,8 +114,8 @@ function buildPolicyHandle<Operation extends RlsPolicyOperation>(
   operation: Operation,
   model: RlsTargetModel,
   descriptor: RlsPolicyDescriptorBase & {
-    readonly using?: string;
-    readonly withCheck?: string;
+    readonly using?: SqlExpression;
+    readonly withCheck?: SqlExpression;
   },
 ): RlsPolicyHandle<Operation> {
   const helper = HELPER_NAMES[operation];

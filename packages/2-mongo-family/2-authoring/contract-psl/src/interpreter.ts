@@ -31,7 +31,7 @@ import {
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
-import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
@@ -115,7 +115,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypes: DataTypeSupport;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
@@ -1341,6 +1341,7 @@ export function interpretPslDocumentToMongoContract(
     sources,
     pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
     binder,
+    dataTypes: input.dataTypes,
   });
   diagnostics.push(...blockDiagnostics);
   const topLevel = symbolTable.topLevel;
@@ -1355,7 +1356,7 @@ export function interpretPslDocumentToMongoContract(
   const specContextFor = (model: ModelSymbol): AttributeSpecContext => ({
     symbols: symbolTable,
     model,
-    controlMutationDefaults: input.controlMutationDefaults,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypes: input.dataTypes,
   });
   const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();

@@ -12,7 +12,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
-import { modelOf, resolveFieldToColumn } from './collection-contract';
+import { getModelFields, modelOf } from './collection-contract';
 import type { Filtered, HasTypeState, Ordered } from './collection-types';
 import { hasTrait, resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
@@ -58,32 +58,35 @@ type BuiltMultiplicity<Builder> = Builder extends { build(): infer Built }
   : false;
 
 /** A field builder from the contract DSL, such as `field.text().optional()`, with the codec and nullability it declares. */
-export type FragmentFieldBuilder<
+export type DeclaredFieldsFragmentFieldBuilder<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
 > = ScalarFieldDeclarationBuilder<CodecDescriptorRef<CodecId>, Nullable>;
 
 /** The fields a fragment for any model needs, each declared with a field builder or a {@link DeclaredField}. */
-export type FragmentFieldDeclarations<CodecId extends string = string> = Readonly<
-  Record<string, FragmentFieldBuilder<CodecId> | DeclaredField<CodecId, boolean, FieldMultiplicity>>
+export type DeclaredFieldsFragmentFieldDeclarations<CodecId extends string = string> = Readonly<
+  Record<
+    string,
+    DeclaredFieldsFragmentFieldBuilder<CodecId> | DeclaredField<CodecId, boolean, FieldMultiplicity>
+  >
 >;
 
 type DeclarationField<Declaration> =
-  Declaration extends FragmentFieldBuilder<infer Id, infer Nullable>
+  Declaration extends DeclaredFieldsFragmentFieldBuilder<infer Id, infer Nullable>
     ? DeclaredField<Id, Nullable, BuiltMultiplicity<Declaration>>
     : Declaration extends DeclaredField<infer Id, infer Nullable, FieldMultiplicity>
       ? DeclaredField<Id, Nullable, DeclaredMultiplicity<Declaration>>
       : never;
 
 /** The declared fields with each builder read as its codec and nullability. */
-export type DeclaredFields<Declarations extends FragmentFieldDeclarations> = {
+export type DeclaredFields<Declarations extends DeclaredFieldsFragmentFieldDeclarations> = {
   readonly [K in keyof Declarations]: DeclarationField<Declarations[K]>;
 } extends infer Fields
   ? { readonly [K in keyof Fields]: Fields[K] }
   : never;
 
 /** The model accessor of a fragment for any model: only the declared fields, typed by codec. */
-export type FragmentModelAccessor<
+export type DeclaredFieldsFragmentModelAccessor<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, AnyDeclaredField>>,
 > = {
@@ -108,16 +111,22 @@ export interface FragmentFacts {
 type OrderSelector<Row> = (row: Row) => OrderByItem;
 
 /** The collection the body of a fragment for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
-export interface FragmentCollection<Row, Facts extends FragmentFacts> {
+export interface DeclaredFieldsFragmentCollection<Row, Facts extends FragmentFacts> {
   readonly [FragmentFactsType]: Facts;
   where(
     fn: (row: Row) => WhereArg,
-  ): FragmentCollection<Row, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>;
+  ): DeclaredFieldsFragmentCollection<
+    Row,
+    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }
+  >;
   orderBy(
     selection: OrderSelector<Row> | ReadonlyArray<OrderSelector<Row>>,
-  ): FragmentCollection<Row, { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }>;
-  limit(n: number): FragmentCollection<Row, Facts>;
-  offset(n: number): FragmentCollection<Row, Facts>;
+  ): DeclaredFieldsFragmentCollection<
+    Row,
+    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }
+  >;
+  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
+  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
 }
 
 type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Many }
@@ -125,7 +134,7 @@ type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Man
   : false;
 
 /** The declared fields that the model lacks, or has with another codec or nullability, as a list where the declaration has one value or the reverse, or as a list whose elements differ in nullability from the declared ones. For a union of models, the fields any of them lacks. */
-export type MissingFragmentFields<
+export type MissingDeclaredFieldsFragmentFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
@@ -151,17 +160,17 @@ export type MissingFragmentFields<
   : never;
 
 /** What a fragment for any model requires of its receiver beyond the collection's own members: nothing when the model has the declared fields, otherwise a property whose name says why it is refused. */
-export type FragmentFieldsCheck<
+export type DeclaredFieldsFragmentFieldsCheck<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
   Fields extends Readonly<Record<string, AnyDeclaredField>>,
 > = string extends ModelName
   ? { readonly 'the fragment could not read the model of the collection from its type': ModelName }
-  : [MissingFragmentFields<TContract, ModelName, NsId, Fields>] extends [never]
+  : [MissingDeclaredFieldsFragmentFields<TContract, ModelName, NsId, Fields>] extends [never]
     ? unknown
     : {
-        readonly 'the model has no field that matches the declaration in the fragment': MissingFragmentFields<
+        readonly 'the model has no field that matches the declaration in the fragment': MissingDeclaredFieldsFragmentFields<
           TContract,
           ModelName,
           NsId,
@@ -179,7 +188,7 @@ export type WithFacts<C, Facts extends FragmentFacts> = Facts['hasOrderBy'] exte
 /**
  * A fragment made by the client's `fragment` method: it accepts a collection of any model that has the declared fields, checked against the collection's own contract, model and namespace, and returns that collection with what the body established. `with` reads the result from the receiver's type and the fragment's facts.
  */
-export interface FieldFragment<
+export interface DeclaredFieldsFragment<
   TContract extends Contract<SqlStorage>,
   Fields extends Readonly<Record<string, AnyDeclaredField>>,
   Facts extends FragmentFacts,
@@ -194,7 +203,7 @@ export interface FieldFragment<
       HasTypeState<{ readonly nsId: NsId }> & {
         readonly modelName: ModelName;
         readonly ctx: { readonly context: { readonly contract: ReceiverContract } };
-      } & FragmentFieldsCheck<ReceiverContract, ModelName, NsId, Fields>,
+      } & DeclaredFieldsFragmentFieldsCheck<ReceiverContract, ModelName, NsId, Fields>,
   ): WithFacts<C, Facts>;
   readonly [FragmentFactsType]: Facts;
 }
@@ -203,7 +212,7 @@ function nullability(nullable: boolean): string {
   return nullable ? 'may be null' : 'is never null';
 }
 
-function isFieldBuilder(value: object): value is FragmentFieldBuilder {
+function isFieldBuilder(value: object): value is DeclaredFieldsFragmentFieldBuilder {
   return 'build' in value && typeof value.build === 'function';
 }
 
@@ -412,7 +421,10 @@ export function modelLabel(collection: RuntimeModelCollection): string {
 }
 
 /** Throws `ORM.ARGUMENT_INVALID` unless `result`, what a fragment's body returned, is a collection of the receiver's model, namespace and class. */
-export function assertFragmentResult(receiver: RuntimeModelCollection, result: unknown): void {
+export function assertDeclaredFieldsFragmentResult(
+  receiver: RuntimeModelCollection,
+  result: unknown,
+): void {
   const sameCollection =
     isModelCollection(result) &&
     result.modelName === receiver.modelName &&
@@ -468,14 +480,14 @@ function describeField(field: {
     : `${value} and whose elements ${elementNullability(field.many.elementNullable)}`;
 }
 
-function assertFragmentFields(
+function assertDeclaredFieldsFragmentFields(
   collection: RuntimeModelCollection,
   fields: ReadonlyArray<readonly [string, FieldSpec]>,
 ): void {
   const { contract } = collection.ctx.context;
   const { modelName, namespaceId } = collection;
   const label = modelLabel(collection);
-  const model = modelOf(contract, namespaceId, modelName);
+  const modelFields = getModelFields(contract, namespaceId, modelName);
   for (const [name, spec] of fields) {
     const declared = `The fragment was declared for models that have a ${spec.many === false ? 'field' : 'list field'} ${name} ${describeField(spec)}.`;
     const meta = {
@@ -486,8 +498,8 @@ function assertFragmentFields(
       nullable: spec.nullable,
       many: spec.many,
     };
-    const modelFields = model?.fields ?? {};
-    if (!Object.hasOwn(modelFields, name)) {
+    const fieldColumn = Object.hasOwn(modelFields, name) ? modelFields[name] : undefined;
+    if (fieldColumn === undefined) {
       throw ormError(
         'ORM.FIELD_UNKNOWN',
         `Cannot apply a fragment to ${label}: it has no field ${name}`,
@@ -498,13 +510,8 @@ function assertFragmentFields(
         },
       );
     }
-    const fieldMany = multiplicity(modelFields[name]?.many);
-    const column = resolveColumn(
-      contract,
-      namespaceId,
-      collection.tableName,
-      resolveFieldToColumn(contract, namespaceId, modelName, name),
-    );
+    const fieldMany = multiplicity(domainFieldOf(contract, namespaceId, modelName, name)?.many);
+    const column = resolveColumn(contract, namespaceId, fieldColumn.table, fieldColumn.column);
     const actual =
       column === undefined
         ? `${label}.${name} has no column.`
@@ -532,38 +539,41 @@ function assertFragmentFields(
 /**
  * Define a fragment for any model that has the declared fields. Reached as the `fragment` method of the client `orm()` returns.
  */
-export function defineFieldFragment<
+export function defineDeclaredFieldsFragment<
   TContract extends Contract<SqlStorage>,
-  const Declarations extends FragmentFieldDeclarations,
+  const Declarations extends DeclaredFieldsFragmentFieldDeclarations,
   Facts extends FragmentFacts,
 >(
   declarations: Declarations,
   body: (
-    rows: FragmentCollection<
-      FragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+    rows: DeclaredFieldsFragmentCollection<
+      DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
       FragmentFacts
     >,
-  ) => FragmentCollection<FragmentModelAccessor<TContract, DeclaredFields<Declarations>>, Facts>,
-): FieldFragment<TContract, DeclaredFields<Declarations>, Facts> {
+  ) => DeclaredFieldsFragmentCollection<
+    DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+    Facts
+  >,
+): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
   assertFragmentBody(body);
   return blindCast<
-    FieldFragment<TContract, DeclaredFields<Declarations>, Facts>,
+    DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts>,
     'the facts are a declared property that exists only in the type'
   >((collection: unknown) => {
     const receiver: unknown = collection;
     assertFragmentReceiver(receiver);
-    assertFragmentFields(receiver, fields);
+    assertDeclaredFieldsFragmentFields(receiver, fields);
     const result: unknown = body(
       blindCast<
-        FragmentCollection<
-          FragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+        DeclaredFieldsFragmentCollection<
+          DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
           FragmentFacts
         >,
         'a collection offers where, orderBy, limit and offset with these run-time shapes'
       >(collection),
     );
-    assertFragmentResult(receiver, result);
+    assertDeclaredFieldsFragmentResult(receiver, result);
     return result;
   });
 }
@@ -610,13 +620,28 @@ function cutNote(subject: string, value: ShownText): string {
 
 function fieldCodecId(collection: RuntimeModelCollection, field: string): string | undefined {
   const { contract } = collection.ctx.context;
-  const column = resolveFieldToColumn(
-    contract,
-    collection.namespaceId,
-    collection.modelName,
-    field,
-  );
-  return resolveColumn(contract, collection.namespaceId, collection.tableName, column)?.codecId;
+  const modelFields = getModelFields(contract, collection.namespaceId, collection.modelName);
+  const fieldColumn = Object.hasOwn(modelFields, field) ? modelFields[field] : undefined;
+  if (fieldColumn === undefined) return undefined;
+  return resolveColumn(contract, collection.namespaceId, fieldColumn.table, fieldColumn.column)
+    ?.codecId;
+}
+
+/** The domain declaration of a model's own or inherited field. */
+function domainFieldOf(
+  contract: RuntimeModelCollection['ctx']['context']['contract'],
+  namespaceId: string,
+  modelName: string,
+  name: string,
+): { readonly many?: unknown } | undefined {
+  let model = modelOf(contract, namespaceId, modelName);
+  while (model !== undefined) {
+    const fields = model.fields ?? {};
+    if (Object.hasOwn(fields, name)) return fields[name];
+    const base = model.base;
+    model = base === undefined ? undefined : modelOf(contract, base.namespace, base.model);
+  }
+  return undefined;
 }
 
 function canOrder(collection: RuntimeModelCollection, field: string): boolean {
@@ -625,12 +650,12 @@ function canOrder(collection: RuntimeModelCollection, field: string): boolean {
 }
 
 function orderableFieldNames(collection: RuntimeModelCollection): readonly string[] {
-  const model = modelOf(
+  const modelFields = getModelFields(
     collection.ctx.context.contract,
     collection.namespaceId,
     collection.modelName,
   );
-  return Object.keys(model?.fields ?? {}).filter((field) => canOrder(collection, field));
+  return Object.keys(modelFields).filter((field) => canOrder(collection, field));
 }
 
 function whyNotOrderable(collection: RuntimeModelCollection, name: string): string {
@@ -640,7 +665,12 @@ function whyNotOrderable(collection: RuntimeModelCollection, name: string): stri
   if (Object.hasOwn(model?.relations ?? {}, name)) {
     return `${quoted} is a relation of ${modelName}, not a field.`;
   }
-  if (!Object.hasOwn(model?.fields ?? {}, name)) {
+  if (
+    !Object.hasOwn(
+      getModelFields(collection.ctx.context.contract, collection.namespaceId, modelName),
+      name,
+    )
+  ) {
     return `${modelName} has no field ${quoted}.`;
   }
   return canOrder(collection, name)

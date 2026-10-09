@@ -1,0 +1,102 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "shop.prisma", "roles.prisma"],
+  "steps": [
+    {
+      "id": "11.0",
+      "kind": "open",
+      "file": "post.prisma"
+    },
+    {
+      "id": "11.1",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.2",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "Account",
+      "apply": true
+    },
+    {
+      "id": "11.3",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.4",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Acc|ount",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    },
+    {
+      "id": "11.5",
+      "kind": "format",
+      "file": "auth.prisma"
+    },
+    {
+      "id": "11.6",
+      "kind": "save",
+      "to": "wip/qa-scratch/lsp-rename-qa-map/after-model"
+    },
+    {
+      "id": "11.7",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "author|Id Int",
+      "newName": "writerId",
+      "apply": true
+    },
+    {
+      "id": "11.8",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.9",
+      "kind": "format",
+      "file": "post.prisma"
+    },
+    {
+      "id": "11.10",
+      "kind": "save",
+      "to": "wip/qa-scratch/lsp-rename-qa-map/after-field"
+    },
+    {
+      "id": "11.11",
+      "kind": "rename",
+      "file": "shop.prisma",
+      "at": "pg.enum(Order|Status)",
+      "newName": "Stage"
+    },
+    {
+      "id": "11.12",
+      "kind": "rename",
+      "file": "shop.prisma",
+      "at": "native_enum Order|Status",
+      "newName": "Stage",
+      "apply": true
+    },
+    {
+      "id": "11.13",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "11.14",
+      "kind": "format",
+      "file": "shop.prisma"
+    },
+    {
+      "id": "11.15",
+      "kind": "save",
+      "to": "wip/qa-scratch/lsp-rename-qa-map/after-enum"
+    },
+    {
+      "id": "11.16",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "model Acc|ount",
+      "newName": "Member"
+    }
+  ]
+}

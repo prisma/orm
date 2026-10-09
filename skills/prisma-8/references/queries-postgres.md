@@ -100,11 +100,11 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` declares that index for you — pass it the field and, if you use one, the same language:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
-@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
 ```
 
 Give the index and the operation the same `language`: a mismatch raises no error, the query silently falls back to a sequential scan.
@@ -116,6 +116,28 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
   indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
 }));
 ```
+
+**Searching several columns with weights.** One index can cover several columns. Each top-level item of the list is a weight group, strongest first; fields in a nested list share a weight:
+
+```prisma
+@@fullTextIndex([[title, subtitle], body], name: "post_search")
+```
+
+**Searching an index from the SQL builder.** A table's `indexes` holds each of its indexes under the name the contract gave it, `name:` or `map:`. Pass the full-text index to `fns.fullTextMatches` and `fns.fullTextRank` in place of a column: the operation searches the document the index was built over, with the index's weight groups and language, so the query always matches the index and a title match ranks above a body match. The index states its language, so passing `language` with one is a type error. An index of another type is a type error too.
+
+```typescript
+const q = websearchToTsquery(query);
+const post = db.sql.public.post;
+const posts = post
+  .select('id', 'title')
+  .where((_f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((_f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' })
+  .build();
+```
+
+An index read from an aliased table searches that alias's columns, so `post.as('p').indexes.post_search` works in a self-join.
+
+To search several columns that no index covers, build the document with `fullTextDocument` from `@prisma/orm-postgres/target/full-text`, which takes the weight groups of columns, and pass the language in the options: `fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), q, { language: 'english' })`. Postgres uses an index only for a query over the same document, so a document with another grouping, order or language than an index runs without it, and raises no error. `fullTextHeadline` stays per column. One column, `fns.fullTextMatches(f.title, q)` or `row.title.fullTextMatches(q)`, searches that column and uses a single-field index with the same language.
 
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
@@ -309,7 +331,7 @@ The same holds for an `if` with an early return, a `switch`, a loop and a reassi
 A custom collection class gives a model its own named queries. Extend `Collection`, register the class with `orm({ collections })`, and build that client inside the request from `db.runtime()` and `db.context`:
 
 ```typescript
-import { Collection, type Filtered, type Fragment, type Ordered, orm } from '@prisma/orm-postgres/orm-client';
+import { Collection, type Filtered, type Ordered, orm, type QueryFragment } from '@prisma/orm-postgres/orm-client';
 import type { Contract } from './prisma/contract.d';
 
 class PostCollection extends Collection<Contract, 'Post'> {
@@ -341,10 +363,10 @@ After `.select(...)` or `.variant(...)` the class methods are gone: those return
 
 Inside a class body, a class method called on the result of another call loses what that call established. So a class method whose body chains two class methods loses the first call's facts for every caller: with `latest() { return this.byAuthor(id).newestFirst(); }`, `Post.latest()` is known to be ordered but not filtered. The same holds for `.prepared` after `.include(...)` inside the class: it describes the class's row without the included relation. Inside the class, follow a class method with built-in methods (`this.byAuthor(id).orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 
-`with(fn)` calls a function with the collection and returns its result. The function is a query fragment, described in Workflow — Query fragments below, of type `Fragment<In, Out>`, so a query can be written once and applied to any collection of that class:
+`with(fn)` calls a function with the collection and returns its result. The function is a query fragment, described in Workflow — Query fragments below, of type `QueryFragment<In, Out>`, so a query can be written once and applied to any collection of that class:
 
 ```typescript
-const newest: Fragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
+const newest: QueryFragment<PostCollection, Ordered<PostCollection>> = (posts) => posts.newestFirst();
 await Post.with(newest).limit(20).all();
 ```
 

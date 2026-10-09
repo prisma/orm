@@ -23,12 +23,14 @@ import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-agg
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
+import { fieldUnknown, getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
 
 const adapter = createPostgresAdapter();
 
+const modelOfTable: Record<string, string> = { posts: 'Post', users: 'User' };
+
 function planOf(state: CollectionState): SqlQueryPlan<unknown> {
-  return compileSelect(baseContract, state);
+  return compileSelect(baseContract, modelOfTable[state.tables.root.storage.tableName]!, state);
 }
 
 function sqlOf(plan: SqlQueryPlan<unknown>): string {
@@ -138,7 +140,7 @@ describe('a to-one relation accessor', () => {
     expect(descriptorFor.mock.calls).toEqual([['pg/text@1']]);
   });
 
-  it('yields nothing for a name that is not a related field', () => {
+  it('refuses a name that is not a related field', () => {
     const post = createModelAccessor(
       getTestContext(),
       'public',
@@ -146,9 +148,9 @@ describe('a to-one relation accessor', () => {
       createCollectionTables(getTestContext().contract, 'public', 'Post'),
     );
 
-    expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
-      [undefined, undefined],
-    );
+    expect(Reflect.get(post.author, 'toString')).toBe(Object.prototype.toString);
+    expect(Reflect.get(post.author, 'then')).toBeUndefined();
+    expect(() => Reflect.get(post.author, 'user_id')).toThrow(fieldUnknown('User', 'user_id'));
   });
 
   it('offers no count', () => {
@@ -299,7 +301,7 @@ describe('orderBy a relation inside an include', () => {
       posts.select('id').orderBy((post) => post.comments.count().desc()),
     ).state;
 
-    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "posts__rows"."id") ORDER BY "posts__rows"."posts__order_0" DESC), json_build_array()) AS "posts" FROM (SELECT "posts"."id" AS "id", (SELECT COUNT(*) AS "count" FROM "public"."comments" WHERE "comments"."post_id" = "posts"."id") AS "posts__order_0" FROM "public"."posts" WHERE "posts"."user_id" = "users"."id" ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."comments" WHERE "comments"."post_id" = "posts"."id") DESC) AS "posts__rows") AS "posts" FROM "public"."users""`,
@@ -312,7 +314,7 @@ describe('orderBy a relation inside an include', () => {
       invited.select('id').orderBy((user) => user.invitedBy.name.asc()),
     ).state;
 
-    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."address" AS "address", "users"."email" AS "email", "users"."id" AS "id", "users"."invited_by_id" AS "invited_by_id", "users"."name" AS "name", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id") ORDER BY "invitedUsers__rows"."invitedUsers__order_0" ASC), json_build_array()) AS "invitedUsers" FROM (SELECT "users_2"."id" AS "id", (SELECT "users_3"."name" AS "name" FROM "public"."users" AS "users_3" WHERE "users_3"."id" = "users_2"."invited_by_id") AS "invitedUsers__order_0" FROM "public"."users" AS "users_2" WHERE "users_2"."invited_by_id" = "users"."id" ORDER BY (SELECT "users_3"."name" AS "name" FROM "public"."users" AS "users_3" WHERE "users_3"."id" = "users_2"."invited_by_id") ASC) AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users""`,

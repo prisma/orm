@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlock } from '../src/block-spec/interpret';
@@ -28,6 +29,7 @@ function interpretOnlyBlock<S extends BlockSpec<unknown>>(
       symbolTable,
       pslBlockDescriptors: { [descriptor.keyword]: descriptor },
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
 }
 

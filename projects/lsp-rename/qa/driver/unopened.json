@@ -1,0 +1,27 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "prepareSupport": false,
+  "steps": [
+    {
+      "id": "7.1",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "Account"
+    },
+    {
+      "id": "7.2",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "au|th.User",
+      "newName": "identity"
+    },
+    {
+      "id": "7.3",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "references: [i|d]",
+      "newName": "uid"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import { defineIndexTypes, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
@@ -18,7 +19,8 @@ import {
 } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
-import { postgresIndexTypes } from '../src/core/index-types';
+import { FULL_TEXT_INDEX_TYPE, fullTextIndexType } from '../src/core/full-text-index-definition';
+import { postgresAccessMethodOf, postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
@@ -92,22 +94,71 @@ model Widgets {
 }
 
 describe('postgresIndexTypes', () => {
-  it('registers the six Postgres built-in access methods', () => {
-    expect(postgresIndexTypes.entries.map((e) => e.type)).toEqual([
-      'btree',
-      'hash',
-      'gin',
-      'gist',
-      'spgist',
-      'brin',
-    ]);
+  const accessMethods = ['btree', 'hash', 'gin', 'gist', 'spgist', 'brin'];
+
+  it('registers the six Postgres built-in access methods and the full-text index', () => {
+    expect(postgresIndexTypes.entries.map((e) => e.type)).toEqual([...accessMethods, 'fullText']);
   });
 
-  it('accepts an arbitrary options object for every registered method (permissive; per-method validation is a later slice)', () => {
-    for (const entry of postgresIndexTypes.entries) {
+  it('accepts an arbitrary options object for every access method', () => {
+    for (const entry of postgresIndexTypes.entries.filter((e) => accessMethods.includes(e.type))) {
       const result = entry.options({ anything: 'goes' });
       expect(result instanceof type.errors).toBe(false);
     }
+  });
+
+  it('creates a fullText index as a gin index', () => {
+    expect(postgresAccessMethodOf('fullText')).toBe('gin');
+    expect(postgresAccessMethodOf('btree')).toBe('btree');
+  });
+
+  it('registers fullText as the target, which converts it into a gin index', () => {
+    const registry = indexTypeRegistryOf({ id: 'postgres', indexTypes: postgresIndexTypes });
+
+    expect(registry.get(FULL_TEXT_INDEX_TYPE)).toMatchObject({ accessMethod: 'gin' });
+  });
+
+  it('refuses fullText registered by an extension pack, which cannot convert it', () => {
+    const copied = defineIndexTypes().add(FULL_TEXT_INDEX_TYPE, fullTextIndexType);
+
+    expect(() =>
+      indexTypeRegistryOf({ id: 'postgres' }, [{ id: 'copied-full-text', indexTypes: copied }]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        meta: { indexType: 'fullText', accessMethod: 'gin', packId: 'copied-full-text' },
+      }),
+    );
+  });
+});
+
+describe('fullText options', () => {
+  const fullText = postgresIndexTypes.entries.find((entry) => entry.type === 'fullText')!;
+  const accepts = (options: Record<string, unknown>) =>
+    !(fullText.options(options) instanceof type.errors);
+
+  it('accepts weight groups and a language', () => {
+    expect(accepts({ weightGroups: [['title', 'subtitle'], ['body']], language: 'english' })).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['weight groups without a language', { weightGroups: [['title']] }],
+    ['a language without weight groups', { language: 'english' }],
+    ['no weight group', { weightGroups: [], language: 'english' }],
+    ['an empty weight group', { weightGroups: [['title'], []], language: 'english' }],
+    [
+      'more than four weight groups',
+      { weightGroups: [['a'], ['b'], ['c'], ['d'], ['e']], language: 'english' },
+    ],
+    ['a field named twice', { weightGroups: [['title'], ['title']], language: 'english' }],
+    ['an empty field name', { weightGroups: [['']], language: 'english' }],
+    ['a field that is not a name', { weightGroups: [[1]], language: 'english' }],
+    ['a language Postgres does not ship', { weightGroups: [['title']], language: 'klingon' }],
+    ['any other option', { weightGroups: [['title']], language: 'english', fastupdate: 'off' }],
+  ])('rejects %s', (_label, options) => {
+    expect(accepts(options)).toBe(false);
   });
 });
 

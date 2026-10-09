@@ -112,7 +112,7 @@ describe("a relation's index argument", () => {
         psl: {
           authorId: ' @unique(map: "post_author_key")',
           relation: ', index: "post_author_key"',
-          model: '@@index([authorId], where: "id > 0", map: "post_author_key")',
+          model: '@@index([authorId], where: sql`id > 0`, map: "post_author_key")',
         },
         ts: {
           authorId: 'namedUnique',

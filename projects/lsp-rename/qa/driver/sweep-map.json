@@ -1,0 +1,11 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "shop.prisma", "roles.prisma"],
+  "steps": [
+    {
+      "id": "10.3",
+      "kind": "sweep",
+      "files": ["auth.prisma", "session.prisma", "post.prisma", "shop.prisma", "roles.prisma"],
+      "newName": "Renamed"
+    }
+  ]
+}

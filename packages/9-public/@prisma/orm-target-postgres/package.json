@@ -72,6 +72,7 @@
     "./target/diff-database-schema": "./dist/target__diff-database-schema.mjs",
     "./target/errors": "./dist/target__errors.mjs",
     "./target/full-text": "./dist/target__full-text.mjs",
+    "./target/full-text-index-authoring": "./dist/target__full-text-index-authoring.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
     "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",

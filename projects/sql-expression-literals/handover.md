@@ -1,47 +1,36 @@
-# Handover: SQL expression literals, 2026-09-30
+# Handover: SQL expression literals (TML-3282), 2026-10-08
 
-You take over the project in this folder from an agent whose session hit a usage limit. Read this file, then [status.md](status.md), then the parts of [plan.md](plan.md) and [design.md](design.md) the next slice needs.
+lagertha-65 holds the project. This file supersedes every earlier handover. Read it, then [status.md](status.md) ("State on 2026-10-08"), then the parts of [plan.md](plan.md), [design.md](design.md) and [design-notes.md](design-notes.md) your next step needs. Before acting, read the architecture docs and the ADRs this project depends on (129, 195, 231, 234, 243, 244, 249, 254, 262, 268); Will insists on it.
 
 ## Where things stand
 
-- Branch `tml-3296-sql-expression-data-type` holds slice 2a (Linear TML-3296): `sql` is the tag of the data type `sql/expression`, which the SQL family defines and registers. The branch also holds every file in this folder.
-- The branch is pushed to the `bot` remote. No pull request exists yet.
-- Slice 2a was implemented, reviewed by an architect reviewer and a code reviewer, and every finding (A01 to A14, F01 to F09) is fixed. The reports are in [slice-reviews/2a/](slice-reviews/2a/). The decisions on each finding are in [dispatches/2a-review-fixes-brief.md](dispatches/2a-review-fixes-brief.md).
-- The branch is based on `main` at `18e3711cbb`. `main` has moved since.
+- Slices 2a, 2t, 1, 4 and 2b are merged. 2b merged on 2026-10-08 as #30550.
+- Slice 3 (TML-3289, #30558, branch `tml-3289-sql-expression-ts`) is merged up to `main` and names its ADR 268. Next: review round 3 with `/drive-code-review` (two Opus reviewers), fixes, manual QA, then Will.
+- Slice 5 (TML-3297) is confirmed by Will. Start it only after slice 3 is with Will; never run two slices at once. Its design is section 17 of design.md, limited to the places section 17.1 names (planner-built SQL such as the SQLite rebuild postcheck stays a string). It must update the Migration System doc ("the contract-free factories still take strings") and record the exception in ADR 195.
+- Close-out after the last slice: plan.md "Close-out". design-notes.md decision 4 is out of date (the family registers `sql/expression` itself); map decisions from what shipped.
 
-## What to do next, in order
+## Rules Will set (also in the global CLAUDE.md and memory)
 
-1. Create a fresh worktree on `tml-3296-sql-expression-data-type`, run `pnpm install` and `pnpm build`.
-2. Merge `origin/main` into the branch (a merge commit; never rebase). Resolve conflicts.
-3. Run the commands in plan.md "Done conditions for every slice" after the merge. Do not run `pnpm test:integration` in full; run the integration files the slice touches alone and leave the full suite to CI. Save each output under `wip/` once and read the file.
-4. Run `/drive-code-review` without the walkthrough on the commits after `f768a4e831` (the review fixes). The first review covered the commits before that. Write the reports to `slice-reviews/2a-round-2/` (the `reviews/` folder is gitignored). Fix what it finds.
-5. Push, open the pull request for TML-3296 with the `create-pr` skill, and turn on the CI monitor. The title is "TML-3296: <sentence>", with no conventional-commit prefix.
-6. Update status.md.
-7. Start slice 2t (TML-3367). Another Linear project, "Data types own column types", is blocked until it merges. Its section in plan.md lists what it carries over from the slice 2a review.
+- Design with Will, then execute without interrupting him. Make engineering decisions yourself and state them.
+- Every subagent runs on Opus (`model: "opus"`), never Fable. Docs (ADRs, specs, plans, PR text, status) are written by the orchestrator, not delegated.
+- **Never run `pnpm test:integration`, `pnpm test:e2e` or `pnpm test:all` locally.** Run the files a change touches; integration files with `mise exec -- pnpm --filter integration-tests test <path>` (no `--` before the path). Put this in every brief.
+- Commits: `mise exec -- git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`, no AI attribution lines, never amend, squash, rebase or force-push. Push through the `bot` remote. Run node and pnpm through `mise exec --`. Update PR bodies with `gh api -X PATCH repos/prisma/orm/pulls/<n> -F body=@file` (`gh pr edit` fails under the bot token).
+- PR titles "TML-NNNN: sentence". Descriptions open with what a user sees, then the decision, then the build-up, alternatives last, `Agent: <your name>` before the attribution line.
+- Bot review comments: fix what is right, reply ending with `_🤖 Addressed by [Claude Code](https://claude.com/claude-code)_`, resolve the thread.
+- Write to Will in plain English, short sentences. Explain every mechanism you mention from scratch; he does not read briefs or tickets. No question UI, no task chips.
+- The three tarball tests fail locally on a registry refusal (`@vercel/detect-agent` trust downgrade); CI checks them.
 
-## Things that will surprise you
+## Context from earlier sessions
 
-- **Tarball tests fail locally.** The publish-shell and packaging tarball tests fail on Will's machine because `pnpm install` refuses `@vercel/detect-agent@1.2.5` as a "high-risk trust downgrade". It is the registry, not the branch. CI must show them green.
-- **Flaky tests.** These failed once and passed on rerun: the Postgres render round-trip, two CLI tests, the language server's `completion-provider.test.ts`, the telemetry e2e test, and the relation-mode port test.
-- **`contract infer` does not see family data types.** Its default mapping builds from the target's own lists. That is existing behaviour and out of scope; see [dispatches/2a-review-fixes-findings.md](dispatches/2a-review-fixes-findings.md).
-- **Fable usage limit.** Will's rule is Fable for implementer subagents and Opus for reviewers. Fable ran out twice in this session; the last implementer ran on Opus.
+lagertha-65 (2026-10-08): `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-da9f0f/095a0298-1adb-4af0-87f3-f80ae38d93c7.jsonl`
 
-## Rules Will set for this project
+This session's transcript (hammurabi-31, 2026-10-07 to 08):
 
-These are also in status.md. The most important:
+`/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-c716de/ede553f9-49a2-4dd1-a029-1816ec60bdc3.jsonl`
 
-- Design with Will, then execute without interrupting him. Make engineering decisions yourself. Go back to Will only when new information makes the design wrong.
-- Every slice gets `/drive-code-review` (no walkthrough), then fixes, then manual QA, before its pull request.
-- Commits: `git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`, no AI attribution lines, never amend, squash, rebase or force-push. Push through the `bot` remote.
-- No temp directories: scratch files go in the gitignored `wip/`.
-- Write to Will in plain English, briefly.
+Earlier sessions:
 
-## Context from the previous session
+- marconi-29: `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-handover-3c78f4/ea08b13e-c168-4c0e-a372-06c63f31c561.jsonl`
+- charon-96: `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-sql-expression-literals-e3d9e9/f34c3092-a059-4002-8e3e-116ce266d1ac.jsonl` and `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-index-where-check-rls-5be8b6/3a5b5af0-5cc1-4d56-8be1-c8709196bb41.jsonl`
 
-The transcript of the session that planned and started this project is on Will's machine at:
-
-`/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-index-where-check-rls-5be8b6/3a5b5af0-5cc1-4d56-8be1-c8709196bb41.jsonl`
-
-It is a large JSONL file. Do not read it whole. Search it for a topic, for example with `grep -n "A01"` or `grep -n "dataTypeValue"`, and read the lines around each match. The decisions it contains are already recorded in design-notes.md, status.md and this file; read the transcript only when those do not answer a question.
-
-The session in the Claude desktop app is `claude://claude.ai/epitaxy/local_8d92a7fd-7cce-4b23-9fb7-26503c53eb9b`.
+They are large JSONL files, readable from this account. Do not read them whole; grep for a topic and read the lines around each match. Will's own messages are `type == "user"` entries that are not `isMeta` and do not start with `<task-notification`, `<system-reminder` or `<command-`.

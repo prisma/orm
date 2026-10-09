@@ -107,7 +107,7 @@ const rowOrNull = await first.query(db.runtime(), {});
 const sqlRows = await byId.query(db.runtime(), { id: 1 });
 ```
 
-Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. For descriptions built with `.prepared.aggregate(selector, configure?)`, `query` returns an aggregate object promise on ungrouped collections (`Promise<AggregateResult<Spec>>`), or an array promise after `groupBy(...)` (`Promise<Array<GroupKeys & AggregateResult<Spec>>>`). See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for aggregate examples, HAVING, supported predicates, includes and pagination. Native SQLite database `prepare(sql)` is a separate API.
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise; `firstOrThrow` returns a row promise that rejects with `RUNTIME.NO_ROWS` when no row matches. For descriptions built with `.prepared.aggregate(selector, configure?)`, `query` returns an aggregate object promise on ungrouped collections (`Promise<AggregateResult<Spec>>`), or an array promise after `groupBy(...)` (`Promise<Array<GroupKeys & AggregateResult<Spec>>>`). See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for aggregate examples, HAVING, supported predicates, includes and pagination. Native SQLite database `prepare(sql)` is a separate API.
 
 ## Related Docs
 

@@ -1701,7 +1701,7 @@ describe('@@index parameter matrix diagnostics', () => {
     const schema = `model Doc {
   id Int @id
   body String
-  @@index([body], expression: "lower(body)", name: "doc_body_lower")
+  @@index([body], expression: sql\`lower(body)\`, name: "doc_body_lower")
 }`;
     const diagnostics = indexDiagnosticsFor(schema);
     const diagnostic = diagnostics.find((d) => d.code === 'PSL_INDEX_FIELDS_XOR_EXPRESSION');
@@ -1734,7 +1734,7 @@ describe('@@index parameter matrix diagnostics', () => {
     const schema = `model Doc {
   id Int @id
   body String
-  @@index(expression: "lower(body)")
+  @@index(expression: sql\`lower(body)\`)
 }`;
     const diagnostics = indexDiagnosticsFor(schema);
     const diagnostic = diagnostics.find((d) => d.code === 'PSL_INDEX_EXPRESSION_REQUIRES_NAME');
@@ -1765,7 +1765,7 @@ describe('@@index parameter matrix diagnostics', () => {
     const schema = `model Doc {
   id Int @id
   body String
-  @@index(expression: "lower(body)")
+  @@index(expression: sql\`lower(body)\`)
   @@index([body], name: "doc_body_idx", map: "doc_body_exact")
 }`;
     const diagnostics = indexDiagnosticsFor(schema);

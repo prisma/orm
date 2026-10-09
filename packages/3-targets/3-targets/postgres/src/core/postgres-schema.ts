@@ -26,6 +26,7 @@ import {
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
+import { assertFullTextIndexes } from './full-text-index-definition';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import type { PostgresRlsEnablement } from './postgres-rls-enablement';
 import type { PostgresRlsPolicy } from './postgres-rls-policy';
@@ -126,6 +127,7 @@ export class PostgresSchema extends SqlNamespaceBase {
         'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum descriptors'
       >(entriesInput),
     );
+    for (const table of Object.values(this.entries.table ?? {})) assertFullTextIndexes(table);
     Object.defineProperty(this, 'kind', {
       value: 'schema',
       writable: false,

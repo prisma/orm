@@ -440,6 +440,10 @@ function collectExpression(
   }
 
   if (expression instanceof TaggedLiteralExprAst) {
+    const tag = expression.tag();
+    addIdentifier(tag?.namespace(), 'namespace', tokens);
+    addIdentifier(tag?.identifier(), 'keyword', tokens);
+    addToken(expression.literal()?.token(), 'string', tokens);
     return;
   }
 

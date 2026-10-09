@@ -428,6 +428,44 @@ model Comment {
     ]);
   });
 
+  it('keeps every storage name when a model and a field are renamed and mapped to their old names', () => {
+    const before = interpretPostgresSchema(
+      `model Team {
+  id    Int    @id
+  label String
+}
+
+model Member {
+  id     Int  @id
+  teamId Int
+  team   Team @relation(fields: [teamId], references: [id])
+}
+`,
+      { controlMutationDefaults: builtinControlMutationDefaults },
+    );
+    const after = interpretPostgresSchema(
+      `model Squad {
+  id    Int    @id
+  title String @map("label")
+
+  @@map("Team")
+}
+
+model Member {
+  id     Int   @id
+  teamId Int
+  team   Squad @relation(fields: [teamId], references: [id])
+}
+`,
+      { controlMutationDefaults: builtinControlMutationDefaults },
+    );
+
+    expect(before.ok && after.ok).toBe(true);
+    if (!before.ok || !after.ok) return;
+
+    expect(after.value.storage).toEqual(before.value.storage);
+  });
+
   it('maps @@map and @map to storage table and column names', () => {
     const result = interpretPostgresSchema(
       `model Team {

@@ -12,6 +12,10 @@
       "model": "Comment",
       "namespace": "public"
     },
+    "documents": {
+      "model": "Document",
+      "namespace": "public"
+    },
     "posts": {
       "model": "Post",
       "namespace": "public"
@@ -115,6 +119,57 @@
               },
               "namespaceId": "public",
               "table": "comments"
+            }
+          },
+          "Document": {
+            "fields": {
+              "body": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "subtitle": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "body": {
+                  "column": "body"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "subtitle": {
+                  "column": "subtitle"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "public",
+              "table": "documents"
             }
           },
           "Post": {
@@ -431,25 +486,111 @@
               "foreignKeys": [],
               "indexes": [
                 {
-                  "expression": "to_tsvector('english', \"body\")",
-                  "name": "comments_body_live_a3f98ae2",
+                  "columns": [
+                    "body"
+                  ],
+                  "name": "comments_body_live_6eed9d3f",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_body_live",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false,
                   "where": "post_id = 1"
                 },
                 {
-                  "expression": "to_tsvector('english', \"body\")",
-                  "name": "comments_body_search_7b2cde4d",
+                  "columns": [
+                    "body"
+                  ],
+                  "name": "comments_body_search_5831ec58",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_body_search",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false
                 },
                 {
-                  "expression": "to_tsvector('english', \"subject\")",
-                  "name": "comments_subject_search_2b3d17a7",
+                  "columns": [
+                    "subject"
+                  ],
+                  "name": "comments_subject_search_803a5db2",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "subject"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_subject_search",
-                  "type": "gin",
+                  "type": "fullText",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "documents": {
+              "columns": {
+                "body": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "subtitle": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "title": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "title",
+                    "subtitle",
+                    "body"
+                  ],
+                  "name": "documents_search_2f1bb221",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "title",
+                        "subtitle"
+                      ],
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
+                  "prefix": "documents_search",
+                  "type": "fullText",
                   "unique": false
                 }
               ],
@@ -565,7 +706,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3cd23efa0ce9dbcbbd2f1922533b4326af0af3c4bbdda53a3646ba6f203f31a2"
+    "storageHash": "cc39ec65d731f934d15f8c51234782aed90989c29a9ba6cdba357fc6203aa29a"
   },
   "execution": {
     "executionHash": "551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84",

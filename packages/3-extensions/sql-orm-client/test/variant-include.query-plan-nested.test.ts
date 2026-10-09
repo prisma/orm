@@ -39,11 +39,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
+      'Project',
       tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const assigneeAggregate = rowAggregate('assignee', assigneeRows('features', 'assignee_id'), [
@@ -77,11 +77,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
+      'Project',
       tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const baseProjection = [
@@ -145,11 +145,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
+      'Project',
       tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
 
@@ -199,11 +199,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
+      'Project',
       tableSpecState(contract, 'projects_tbl', {
         includes: [tasksInclude(nested)],
         selectedFields: ['name'],
       }),
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const labelsProjection = childRows.projection.find((item) => item.alias === 'labels');

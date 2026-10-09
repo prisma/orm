@@ -14,8 +14,15 @@ import { buildMixedPolyContract, getTestAggregates } from './helpers';
 
 const adapter = createPostgresAdapter();
 
+const modelOfTable: Record<string, string> = { posts: 'Post', users: 'User' };
+
 function sqlOf(state: CollectionState): string {
-  const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
+  const plan = compileSelectWithIncludes(
+    baseContract,
+    getTestAggregates(),
+    modelOfTable[state.tables.root.storage.tableName]!,
+    state,
+  );
   return adapter.lower(plan.ast, {
     contract: blindCast<PostgresContract, 'the test contract targets postgres'>(baseContract),
     params: plan.params,
@@ -227,17 +234,12 @@ describe('table aliases in includes', () => {
       combine: undefined,
     };
 
-    const plan = compileSelectWithIncludes(
-      contract,
-      getTestAggregates(),
-      {
-        ...emptyState(tables),
-        selectedFields: ['id'],
-        variantName: 'Feature',
-        includes: [assignee],
-      },
-      'Task',
-    );
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), 'Task', {
+      ...emptyState(tables),
+      selectedFields: ['id'],
+      variantName: 'Feature',
+      includes: [assignee],
+    });
     const sql = adapter.lower(plan.ast, {
       contract: blindCast<PostgresContract, 'the test contract targets postgres'>(contract),
       params: plan.params,

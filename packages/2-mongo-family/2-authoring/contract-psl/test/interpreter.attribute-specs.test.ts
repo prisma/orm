@@ -16,7 +16,7 @@ function interpret(schema: string) {
     scalarTypeCodecIds,
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     dataTypes: EMPTY_DATA_TYPES,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
   });
 }
 

@@ -124,7 +124,7 @@ describe('distinctOn() capability gate', () => {
       ],
     });
 
-    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), state)).toThrow(
+    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), 'User', state)).toThrow(
       'distinctOn() requires capability postgres.distinctOn',
     );
   });
@@ -141,7 +141,7 @@ describe('distinctOn() capability gate', () => {
       includes: [{ ...include, scalar: createIncludeScalar<number>('count', include.nested) }],
     };
 
-    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), state)).toThrow(
+    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), 'User', state)).toThrow(
       'distinctOn() requires capability postgres.distinctOn',
     );
   });

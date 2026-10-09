@@ -85,6 +85,3 @@ export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
 }
-
-/** What an attribute spec needs to build its `@default` function arms. */
-export type ControlDefaultRegistries = Pick<ControlMutationDefaults, 'defaultFunctionRegistry'>;

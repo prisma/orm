@@ -220,6 +220,46 @@ describe('Collection.first annotations', () => {
   });
 });
 
+describe('Collection.firstOrThrow annotations', () => {
+  it('writes the applied annotation on the executed plan with and without a filter', async () => {
+    const { collection, runtime } = createCollection();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1 }]]);
+
+    await collection.firstOrThrow(undefined, (meta) => meta.annotate(cacheAnnotation({ ttl: 60 })));
+    await collection.firstOrThrow({ name: 'Alice' }, (meta) =>
+      meta.annotate(cacheAnnotation({ ttl: 30 })),
+    );
+
+    expect(runtime.executions.map(({ plan }) => cacheAnnotation.read(plan))).toEqual([
+      { ttl: 60 },
+      { ttl: 30 },
+    ]);
+  });
+
+  it('runtime gate names firstOrThrow when rejecting a write-only annotation', async () => {
+    const { collection } = createCollection();
+    await expect(
+      collection.firstOrThrow(undefined, (meta) => {
+        const annotateAny = meta.annotate as (annotation: unknown) => unknown;
+        annotateAny.call(meta, auditAnnotation({ actor: 'system' }));
+      }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.ANNOTATION_INAPPLICABLE',
+      details: { terminalName: 'firstOrThrow', kind: 'read' },
+    });
+    expect(() =>
+      collection.prepared.firstOrThrow(undefined, (meta) => {
+        const annotateAny = meta.annotate as (annotation: unknown) => unknown;
+        annotateAny.call(meta, auditAnnotation({ actor: 'system' }));
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        details: expect.objectContaining({ terminalName: 'firstOrThrow' }),
+      }),
+    );
+  });
+});
+
 describe('Collection annotations alongside framework-internal codecs metadata', () => {
   it('user annotations coexist with the framework-internal codecs map under its reserved namespace', async () => {
     const { collection, runtime } = createCollection();

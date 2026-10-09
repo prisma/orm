@@ -10,7 +10,6 @@ import type {
   Contract,
   ContractEnum,
   ContractField,
-  ExecutionMutationDefault,
   ScalarFieldType,
   ValueObjectFieldType,
 } from '@internal/contract/types';
@@ -19,6 +18,7 @@ import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-a
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
 import {
   type ForeignKey,
   type Index,
@@ -156,23 +156,6 @@ export function refuseGeneratorWithDatabaseDefault(input: {
     'Drop one of the two, or keep authoring this contract in its current source.',
     { coordinate: input.coordinate, onCreate: input.onCreate },
   );
-}
-
-/** Refuses a generated value the printer did not write with the field of its column. */
-export function refuseUnwrittenExecutionDefaults(
-  contract: Contract<SqlStorage>,
-  written: ReadonlySet<ExecutionMutationDefault>,
-): void {
-  for (const entry of contract.execution?.mutations.defaults ?? []) {
-    if (written.has(entry)) continue;
-    const coordinate = `"${entry.ref.namespace}"."${entry.ref.entry}"."${entry.ref.field}"`;
-    throw unsupported(
-      `a generated value names column ${coordinate}, which no field is stored in, so it cannot be written in Prisma 8 PSL.`,
-      'PSL writes a generated value on the field stored in its column.',
-      KEEP_SOURCE,
-      { coordinate },
-    );
-  }
 }
 
 // Fields and columns
@@ -336,20 +319,6 @@ export function refuseMemberCodecNeedingTypeParameters(codecId: string, coordina
     KEEP_SOURCE,
     { coordinate, codecId },
   );
-}
-
-/** Refuses a model field its storage does not store in a column. */
-export function refuseFieldsWithoutColumn(entry: ModelWithTable): void {
-  const storedFieldNames = new Set(Object.keys(entry.storage.fields));
-  for (const fieldName of Object.keys(entry.model.fields)) {
-    if (storedFieldNames.has(fieldName)) continue;
-    throw unsupported(
-      `field "${entry.namespaceId}.${entry.name}.${fieldName}" is stored in no column, so it cannot be written in Prisma 8 PSL.`,
-      'PSL declares a scalar or value-object field together with the column it is stored in.',
-      'The contract source produced a field without storage. Fix the field if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-      { namespaceId: entry.namespaceId, modelName: entry.name, field: fieldName },
-    );
-  }
 }
 
 /** Refuses a column a model stores under a field name the model does not declare. */
@@ -613,6 +582,46 @@ export function refuseUnwritableIndexOptions(entry: ModelWithTable, index: Index
       { ...meta, key },
     );
   }
+}
+
+type SqlTextOwner =
+  | {
+      readonly kind: 'index' | 'check' | 'policy';
+      readonly namespaceId: string;
+      readonly table: string;
+      readonly name: string;
+    }
+  | { readonly kind: 'default'; readonly coordinate: string };
+
+function describeSqlTextOwner(owner: SqlTextOwner): {
+  readonly subject: string;
+  readonly meta: Record<string, unknown>;
+} {
+  if (owner.kind === 'default') {
+    return {
+      subject: `default of column ${owner.coordinate}`,
+      meta: { coordinate: owner.coordinate },
+    };
+  }
+  const { kind, namespaceId, table, name } = owner;
+  return {
+    subject: `${kind} "${name}" on "${namespaceId}"."${table}"`,
+    meta: kind === 'policy' ? { namespaceId, table, policy: name } : { namespaceId, table, name },
+  };
+}
+
+/** Refuses an index, check, policy or column default whose SQL a `sql` literal cannot write back unchanged, because reading the literal canonicalizes it into different text. */
+export function refuseSqlTextThatDoesNotReadBack(
+  input: SqlTextOwner & { readonly texts: readonly (string | undefined)[] },
+): void {
+  if (sqlTextsReadBack(input.texts)) return;
+  const { subject, meta } = describeSqlTextOwner(input);
+  throw unsupported(
+    `${subject} holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.`,
+    'A sql literal is canonicalized when it is read: indentation shared by every line, blank lines at the start or end, a carriage return and a whitespace-only line are removed, so this text would read back as different SQL.',
+    "Write the SQL in that canonical form in the contract's source, or keep authoring this contract in its current source.",
+    meta,
+  );
 }
 
 // Relations

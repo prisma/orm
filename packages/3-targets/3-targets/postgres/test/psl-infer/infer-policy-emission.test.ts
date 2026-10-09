@@ -95,7 +95,7 @@ describe('policy block emission', () => {
     expect(psl).toContain('policy_select p_read {');
     expect(psl).toContain('target = Profile');
     expect(psl).toContain('roles = [app_user]');
-    expect(psl).toContain('using = "(owner_id = 1)"');
+    expect(psl).toContain('using = sql`(owner_id = 1)`');
     expect(psl).toContain('@@map("p_read_ab12cd34")');
     expect(psl).not.toContain('permissive');
   });
@@ -131,8 +131,8 @@ describe('policy block emission', () => {
     ]);
     expect(psl).toContain('policy_update p_write {');
     expect(psl).toContain('roles = [app_user, auditor]');
-    expect(psl).toContain('using = "(owner_id = 1)"');
-    expect(psl).toContain('withCheck = "(owner_id = 2)"');
+    expect(psl).toContain('using = sql`(owner_id = 1)`');
+    expect(psl).toContain('withCheck = sql`(owner_id = 2)`');
   });
 
   it('a non-wire physical name sanitizes into the head with @@map carrying the truth', () => {

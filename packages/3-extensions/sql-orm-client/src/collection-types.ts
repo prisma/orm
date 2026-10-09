@@ -35,7 +35,7 @@ export type Ordered<C> = C & HasOrderBy;
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
 
 /** A query fragment: a function from one collection to another. `collection.with(fragment)` runs it. A fragment that only adds conditions is also called a scope. */
-export type Fragment<In, Out> = (collection: In) => Out;
+export type QueryFragment<In, Out> = (collection: In) => Out;
 
 /** What a fragment made by `collection.fragment` accepts: a collection of the model, in the same namespace when the fragment's collection names one, whose rows have every field of the model and that is not narrowed to a variant. */
 export type ModelFragmentReceiver<

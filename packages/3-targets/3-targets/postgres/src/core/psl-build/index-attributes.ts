@@ -3,8 +3,11 @@ import type {
   PslModelAttribute,
 } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { printSqlExpressionLiteral } from '@internal/sql-contract/sql-expression';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
+import type { FullTextIndexDefinition } from '../full-text-index-definition';
+import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from '../text-search-languages';
 import { buildAttribute, namedArg, positionalArg } from './psl-literals';
 
 export function buildModelConstraintAttribute(
@@ -43,7 +46,7 @@ export type AttributeNaming =
  * live name parses as a wire name AND that hash recomputes from the
  * introspected content; otherwise exact.
  */
-function detectIndexNaming(index: IndexAttributeSource): AttributeNaming {
+export function detectIndexNaming(index: IndexAttributeSource): AttributeNaming {
   const parsed = parseWireName(index.name);
   const recomputed = computeIndexContentHash({
     ...(index.columns !== undefined ? { columns: index.columns } : {}),
@@ -81,13 +84,13 @@ export function buildIndexAttribute(
       index.expression,
       `buildIndexAttribute: index "${index.name}" carries neither columns nor expression; SqlIndexIR enforces exactly one`,
     );
-    args.push(namedArg('expression', `"${escapePslString(index.expression)}"`));
+    args.push(namedArg('expression', printSqlExpressionLiteral(index.expression)));
   }
 
   args.push(namingArg(naming, index.name));
 
   if (index.where !== undefined) {
-    args.push(namedArg('where', `"${escapePslString(index.where)}"`));
+    args.push(namedArg('where', printSqlExpressionLiteral(index.where)));
   }
   if (index.unique) {
     args.push(namedArg('unique', 'true'));
@@ -102,6 +105,33 @@ export function buildIndexAttribute(
     args.push(namedArg('options', `{ ${entries.join(', ')} }`));
   }
   return buildAttribute('model', 'index', args);
+}
+
+/**
+ * Emits one `@@fullTextIndex` attribute. A weight group of one field is written as the bare field,
+ * a larger group as a list, and the language only when it is not the default.
+ */
+export function buildFullTextIndexAttribute(
+  index: IndexAttributeSource,
+  definition: FullTextIndexDefinition,
+  fieldNameOf: (column: string) => string,
+  naming: AttributeNaming,
+): PslModelAttribute {
+  const groups = definition.weightGroups.map((group) => {
+    const names = group.map(fieldNameOf);
+    return names.length === 1 ? (names[0] ?? '') : `[${names.join(', ')}]`;
+  });
+  const args: PslAttributeArgument[] = [
+    positionalArg(`[${groups.join(', ')}]`),
+    namingArg(naming, index.name),
+  ];
+  if (definition.language !== DEFAULT_FULL_TEXT_SEARCH_LANGUAGE) {
+    args.push(namedArg('language', `"${definition.language}"`));
+  }
+  if (index.where !== undefined) {
+    args.push(namedArg('where', printSqlExpressionLiteral(index.where)));
+  }
+  return buildAttribute('model', 'fullTextIndex', args);
 }
 
 /**
@@ -129,7 +159,7 @@ export function buildCheckAttribute(
   naming: AttributeNaming = { kind: 'exact' },
 ): PslModelAttribute {
   return buildAttribute('model', 'check', [
-    namedArg('expression', `"${escapePslString(check.expression)}"`),
+    namedArg('expression', printSqlExpressionLiteral(check.expression)),
     namingArg(naming, check.name),
   ]);
 }

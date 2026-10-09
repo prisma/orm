@@ -7,7 +7,7 @@ import {
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { getFieldToColumnMap, modelOf } from './collection-contract';
+import { columnOfCallerField, getModelFieldColumns, modelOf } from './collection-contract';
 import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
@@ -44,7 +44,7 @@ export function shorthandToWhereExpr<
   table: AliasedTable,
 ): AnyExpression | undefined {
   const contract = context.contract;
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
 
   const exprs: AnyExpression[] = [];
   for (const [fieldName, value] of Object.entries(filters)) {
@@ -52,7 +52,13 @@ export function shorthandToWhereExpr<
       continue;
     }
 
-    const columnName = fieldToColumn[fieldName] ?? fieldName;
+    const columnName = columnOfCallerField(
+      contract,
+      namespaceId,
+      fieldColumns,
+      modelName,
+      fieldName,
+    );
     const left = table.column(columnName);
 
     if (value === null) {

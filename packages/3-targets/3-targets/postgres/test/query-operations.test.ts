@@ -3,6 +3,8 @@ import { LiteralExpr, OperationExpr, ParamRef } from '@internal/sql-relational-c
 import { describe, expect, it } from 'vitest';
 import { POSTGRES_TEXT_SEARCH_LANGUAGES } from '../src/core/text-search-languages';
 import {
+  type FullTextDocumentGroups,
+  fullTextDocument,
   phrasetoTsquery,
   plaintoTsquery,
   toTsquery,
@@ -110,6 +112,149 @@ describe('postgres target query operations', () => {
     it('dispatches on the textual trait', () => {
       expect(findOperation(method).self).toEqual({ traits: ['textual'] });
     });
+  });
+
+  describe.each([
+    ['fullTextMatches', (document: string) => `${document} @@ {{arg0}}`],
+    ['fullTextRank', (document: string) => `ts_rank(${document}, {{arg0}})`],
+  ])('%s over weight groups', (method, wrap) => {
+    const column = (name: string, nullable: boolean) => {
+      const ast = ParamRef.of(name, { codec: { codecId: 'pg/text@1' } });
+      return { returnType: { codecId: 'pg/text@1', nullable }, buildAst: () => ast };
+    };
+    const title = column('title', false);
+    const subtitle = column('subtitle', true);
+    const body = column('body', true);
+    const weightedDocument = `(setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg2}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg3}}, '')), 'B'))`;
+    const documentOf = (groups: unknown) => fullTextDocument(groups as FullTextDocumentGroups);
+
+    describe('of a full-text index', () => {
+      const searchIndex = {
+        type: 'fullText',
+        options: { weightGroups: [['title', 'subtitle'], ['body']], language: 'german' },
+        columns: { title, subtitle, body },
+      };
+
+      it('searches the document the index renders, in the language of the index', () => {
+        const ast = buildOpAst(method, searchIndex, 'prisma');
+
+        expect(ast.lowering?.template).toBe(wrap(weightedDocument));
+        expect(ast.self).toBe(title.buildAst());
+        expect(ast.args.slice(2)).toEqual([subtitle.buildAst(), body.buildAst()]);
+        expect((ast.args[1] as LiteralExpr).value).toBe('german');
+      });
+
+      it('refuses a language option, which the index states', () => {
+        expect(() => buildOpAst(method, searchIndex, 'prisma', { language: 'german' })).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.ARGUMENT_INVALID',
+            message: expect.stringContaining('language'),
+            meta: { helper: method, argument: 'options', received: 'german' },
+          }),
+        );
+      });
+
+      it('refuses an index of another type', () => {
+        const ginIndex = { type: 'gin', options: undefined, columns: { title } };
+
+        expect(() => buildOpAst(method, ginIndex, 'prisma')).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.ARGUMENT_INVALID',
+            message: expect.stringContaining('"gin"'),
+            meta: { helper: method, argument: 'document', received: 'gin' },
+          }),
+        );
+      });
+
+      it('refuses a full-text index without a column its weight groups name', () => {
+        const partial = { ...searchIndex, columns: { title, subtitle } };
+
+        expect(() => buildOpAst(method, partial, 'prisma')).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.ARGUMENT_INVALID',
+            meta: { helper: method, argument: 'document', received: 'body' },
+          }),
+        );
+      });
+
+      it('refuses a full-text index whose options are not a full-text definition', () => {
+        const broken = { ...searchIndex, options: { weightGroups: [['title']] } };
+
+        expect(() => buildOpAst(method, broken, 'prisma')).toThrow(
+          expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+        );
+      });
+    });
+
+    describe('of fullTextDocument', () => {
+      it('searches the weighted document, in the language option', () => {
+        const ast = buildOpAst(method, documentOf([[title, subtitle], [body]]), 'prisma', {
+          language: 'german',
+        });
+
+        expect(ast.lowering?.template).toBe(wrap(weightedDocument));
+        expect(ast.self).toBe(title.buildAst());
+        expect(ast.args.slice(2)).toEqual([subtitle.buildAst(), body.buildAst()]);
+        expect((ast.args[1] as LiteralExpr).value).toBe('german');
+      });
+
+      it('takes a bare column as a group of one', () => {
+        expect(buildOpAst(method, documentOf([title, body]), 'prisma').lowering?.template).toBe(
+          wrap(
+            `(setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg2}}, '')), 'B'))`,
+          ),
+        );
+      });
+
+      it('searches one column in one group exactly as the column form does', () => {
+        expect(buildOpAst(method, documentOf([[body]]), 'prisma').lowering).toEqual(
+          buildOpAst(method, body, 'prisma').lowering,
+        );
+      });
+    });
+
+    it('refuses weight groups passed as nested arrays, which name neither an index nor a document', () => {
+      expect(() => buildOpAst(method, [[title], [body]], 'prisma')).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ARGUMENT_INVALID',
+          message: expect.stringContaining('fullTextDocument'),
+          meta: { helper: method, argument: 'document', received: 'array' },
+        }),
+      );
+    });
+  });
+
+  describe('fullTextDocument', () => {
+    const column = {
+      returnType: { codecId: 'pg/text@1', nullable: false },
+      buildAst: () => TEXT_COLUMN_AST,
+    };
+
+    it.each([
+      ['no group', []],
+      ['an empty group', [[column], []]],
+      ['more than four groups', [[column], [column], [column], [column], [column]]],
+    ])('refuses %s', (_label, groups) => {
+      expect(() => fullTextDocument(groups as unknown as FullTextDocumentGroups)).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ARGUMENT_INVALID',
+          meta: expect.objectContaining({ helper: 'fullTextDocument', argument: 'groups' }),
+        }),
+      );
+    });
+  });
+
+  it('places the rank normalization before the trailing columns', () => {
+    const document = fullTextDocument([
+      [TEXT_COLUMN],
+      [TEXT_COLUMN],
+    ] as unknown as FullTextDocumentGroups);
+    const ast = buildOpAst('fullTextRank', document, 'prisma', { normalization: 32 });
+
+    expect(ast.lowering?.template).toBe(
+      `ts_rank((setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg3}}, '')), 'B')), {{arg0}}, {{arg2}})`,
+    );
+    expect((ast.args[2] as LiteralExpr).value).toBe(32);
   });
 
   describe('fullTextRank options', () => {

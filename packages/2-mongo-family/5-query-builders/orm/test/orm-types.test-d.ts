@@ -213,6 +213,25 @@ test('first() returns Promise of InferRootRow or null', () => {
   expectTypeOf<FirstResult>().toExtend<Promise<InferRootRow<Contract, 'User'> | null>>();
 });
 
+test('firstOrThrow() returns the first() row without null', () => {
+  const col = {} as MongoCollection<Contract, 'User'>;
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<Promise<InferRootRow<Contract, 'User'>>>();
+  expectTypeOf<Parameters<typeof col.firstOrThrow>>().toEqualTypeOf<[]>();
+});
+
+test('include().firstOrThrow() returns the included row without null', () => {
+  const col = ({} as MongoCollection<Contract, 'Task'>).include('assignee');
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<
+    Promise<InferRootRow<Contract, 'Task'> & { assignee: InferFullRow<Contract, 'User'> | null }>
+  >();
+});
+
 test('include() accepts reference relation keys', () => {
   type Col = MongoCollection<Contract, 'Task'>;
   type IncludeParam = Parameters<Col['include']>[0];

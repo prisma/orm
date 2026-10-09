@@ -49,6 +49,7 @@ describe('query plan mutations', () => {
     const plan = compileInsertReturning(
       contract,
       'public',
+      'User',
       'users',
       [
         { id: 10, name: 'Alice', email: 'alice@example.com' },
@@ -144,6 +145,7 @@ describe('query plan mutations', () => {
     const plan = compileInsertReturning(
       contract,
       'public',
+      'User',
       'users',
       [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
       ['id'],
@@ -182,6 +184,7 @@ describe('query plan mutations', () => {
     const plans = compileInsertReturningSplit(
       contract,
       'public',
+      'User',
       'users',
       [
         { id: 10, name: 'Alice', email: 'alice@example.com' },
@@ -203,6 +206,7 @@ describe('query plan mutations', () => {
     const plan = compileUpsertReturning(
       contract,
       'public',
+      'User',
       'users',
       { id: 10, name: 'Alice', email: 'alice@example.com' },
       {},
@@ -221,9 +225,9 @@ describe('query plan mutations', () => {
   it('compileInsertReturning() rejects empty rows array', () => {
     const contract = withReturningCapability(getTestContract());
 
-    expect(() => compileInsertReturning(contract, 'public', 'users', [], undefined)).toThrow(
-      'at least one row',
-    );
+    expect(() =>
+      compileInsertReturning(contract, 'public', 'User', 'users', [], undefined),
+    ).toThrow('at least one row');
   });
 
   it('compileInsertCount() rejects empty rows array', () => {
@@ -237,6 +241,7 @@ describe('query plan mutations', () => {
     const plan = compileUpsertReturning(
       contract,
       'public',
+      'User',
       'users',
       { id: 10, name: 'Alice', email: 'alice@example.com' },
       { name: 'Updated Alice' },
@@ -259,6 +264,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [
           { id: 1, name: 'Alice', email: 'a@a.com' },
@@ -276,6 +282,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [
           { id: 1, name: 'Alice', email: 'a@a.com' },
@@ -295,6 +302,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [
           { id: 1, name: 'Alice', email: 'a@a.com' },
@@ -311,6 +319,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [
           { id: 1, name: 'Alice', email: 'a@a.com' },
@@ -332,6 +341,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [
           { id: 1, name: 'Alice', email: 'a@a.com', invited_by_id: undefined },
@@ -349,6 +359,7 @@ describe('query plan mutations', () => {
       const plans = compileInsertReturningSplit(
         contract,
         'public',
+        'User',
         'users',
         [{ id: 1, name: 'Alice', email: 'a@a.com' }],
         undefined,
@@ -416,7 +427,7 @@ describe('query plan mutations', () => {
     it('compileInsertReturningSplit() rejects an empty rows array', () => {
       const contract = withReturningCapability(getTestContract());
       expect(() =>
-        compileInsertReturningSplit(contract, 'public', 'users', [], undefined),
+        compileInsertReturningSplit(contract, 'public', 'User', 'users', [], undefined),
       ).toThrowError(/at least one row/);
     });
 
@@ -443,6 +454,7 @@ describe('query plan mutations', () => {
       const contract = withReturningCapability(getTestContract());
       const plan = compileUpdateReturning(
         contract,
+        'User',
         tablesForTable(contract, 'users', 'public'),
         { name: 'Alice' },
         [eqOnUserId(7)],
@@ -469,6 +481,7 @@ describe('query plan mutations', () => {
       const contract = withReturningCapability(getTestContract());
       const planWithWhere = compileDeleteReturning(
         contract,
+        'User',
         tablesForTable(contract, 'users', 'public'),
         [eqOnUserId(3)],
         undefined,
@@ -478,6 +491,7 @@ describe('query plan mutations', () => {
 
       const planNoWhere = compileDeleteReturning(
         contract,
+        'User',
         tablesForTable(contract, 'users', 'public'),
         [],
         undefined,

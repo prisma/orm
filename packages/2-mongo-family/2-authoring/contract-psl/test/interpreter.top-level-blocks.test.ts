@@ -9,7 +9,7 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
     scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     dataTypes: EMPTY_DATA_TYPES,
-    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    defaultFunctionRegistry: new Map(),
   });
   if (result.ok) throw new Error('Expected interpretation to fail');
   return result.failure.diagnostics;

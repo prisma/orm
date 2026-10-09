@@ -2,6 +2,7 @@ import type {
   BlockSymbol,
   InferBlock,
   ModelSymbol,
+  ParsedTypedValue,
   ResolvedEntityReference,
 } from '@internal/psl-parser';
 import { describe, expectTypeOf, it } from 'vitest';
@@ -19,10 +20,10 @@ type WithCheckOnlyValues = InferBlock<ReturnType<typeof policyWithCheckOnlySpec>
 type BothValues = InferBlock<ReturnType<typeof policyBothPredicatesSpec>>;
 
 describe('policy specs infer the factory input values', () => {
-  it('pins the shared shape: checked target, optional roles/predicates/permissive', () => {
+  it('pins the shared shape: checked target, optional roles, typed predicates and permissive', () => {
     expectTypeOf<BothValues['target']>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>>();
-    expectTypeOf<BothValues['using']>().toEqualTypeOf<string | undefined>();
-    expectTypeOf<BothValues['withCheck']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<BothValues['using']>().toEqualTypeOf<ParsedTypedValue | undefined>();
+    expectTypeOf<BothValues['withCheck']>().toEqualTypeOf<ParsedTypedValue | undefined>();
     expectTypeOf<BothValues['permissive']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<BothValues['roles']>().toEqualTypeOf<
       (ResolvedEntityReference<BlockSymbol> | string)[] | undefined

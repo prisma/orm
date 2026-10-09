@@ -10,12 +10,13 @@ import {
   policyUpdate,
   rlsEnabled,
   role,
+  sql,
 } from '@internal/postgres/contract-builder';
 
 const anon = role('anon');
 const authenticated = role('authenticated');
 
-const ownerPredicate = '"userId"::uuid = auth.uid()';
+const ownerPredicate = sql`"userId"::uuid = auth.uid()`;
 
 const Profile = model('Profile', {
   fields: {
@@ -40,7 +41,7 @@ export const contract = defineContract({
       roles: [authenticated],
       using: ownerPredicate,
     }),
-    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: 'true' }),
+    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: sql`true` }),
     policyUpdate(Profile, {
       name: 'profile_owner_write',
       roles: [authenticated],
@@ -60,15 +61,15 @@ export const contract = defineContract({
     policyAll(Profile, {
       name: 'profile_admin_all',
       roles: [anon, authenticated],
-      using: 'true',
-      withCheck: 'true',
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
     policyUpdate(Profile, {
       name: 'profile_touch_write',
       roles: [authenticated],
       using: ownerPredicate,
     }),
-    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: 'true' }),
+    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: sql`true` }),
     role('app_role'),
   ],
 });

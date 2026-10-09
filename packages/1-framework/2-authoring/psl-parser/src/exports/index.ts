@@ -47,12 +47,18 @@ export { json } from '../attribute-spec/combinators/json';
 export { jsonValue } from '../attribute-spec/combinators/json-value';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
+export { mapArg } from '../attribute-spec/combinators/map-arg';
 export { num } from '../attribute-spec/combinators/num';
 export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
 export { taggedLiteral } from '../attribute-spec/combinators/tagged-literal';
+export type {
+  ParsedWrittenList,
+  ParsedWrittenScalar,
+} from '../attribute-spec/combinators/written-scalar';
+export { writtenList, writtenScalar } from '../attribute-spec/combinators/written-scalar';
 export { fieldAttribute } from '../attribute-spec/field-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
@@ -136,6 +142,7 @@ export {
   interpretExtensionBlockAttributes,
   interpretExtensionBlocks,
 } from '../block-spec/interpret';
+export { blockSpecContext } from '../block-spec/spec-context';
 export type {
   BlockEntryValueSpec,
   BlockSpec,

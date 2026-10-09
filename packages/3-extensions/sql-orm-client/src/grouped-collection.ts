@@ -22,7 +22,7 @@ import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
 import { resolveAggregate } from './aggregate-codecs';
 import { aggregateOperationNames } from './aggregate-operations';
-import { getFieldToColumnMap } from './collection-contract';
+import { columnOfCallerField, getModelFieldColumns } from './collection-contract';
 import { createStorageRowMapper } from './collection-runtime';
 import { withScopeCopy } from './collection-tables';
 import { createModelAccessor } from './model-accessor';
@@ -339,7 +339,7 @@ function createHavingBuilder<
   root: AliasedTable,
 ): HavingBuilder<TContract, ModelName, NsId> {
   const { tableName } = root.storage;
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
   const builder: Record<string, (field?: string) => HavingComparisonMethods<number | null>> = {};
   for (const operation of aggregateOperationNames(aggregates)) {
     builder[operation] = (field?: string) => {
@@ -354,9 +354,13 @@ function createHavingBuilder<
           },
         );
       }
+      const column =
+        field === undefined
+          ? undefined
+          : columnOfCallerField(contract, namespaceId, fieldColumns, modelName, field);
       const metric = new AggregateExpr(
         operation,
-        field === undefined ? undefined : root.column(fieldToColumn[field] ?? field),
+        column === undefined ? undefined : root.column(column),
       );
       return createHavingComparisonMethods(
         metric,
@@ -367,7 +371,7 @@ function createHavingBuilder<
             namespaceId,
             tableName,
             fn: operation,
-            column: field === undefined ? undefined : (fieldToColumn[field] ?? field),
+            column,
           }).codec.codecId,
       );
     };

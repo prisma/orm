@@ -60,7 +60,12 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
   ] as const;
 
   return cases.map(([label, state]) => {
-    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), state);
+    const plan = compileSelectWithIncludes(
+      baseContract,
+      getTestAggregates(),
+      state.tables.root.storage.tableName === 'users' ? 'User' : 'Project',
+      state,
+    );
     return [label, plan.ast as SelectAst] as const;
   });
 }

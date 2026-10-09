@@ -13,6 +13,7 @@
  *  3. Negative: a bare (value-less) member is a diagnostic, not accepted.
  */
 
+import { isAuthoringPslBlockDescriptor } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
@@ -103,6 +104,7 @@ function parsePsl(source: string) {
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
     binder: blockResolutionBinder(symbolTable, sources),
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return {
     symbolTable,
@@ -159,6 +161,15 @@ namespace auth {
   }
 }
 `;
+
+  it('declares the native_enum block name as the storage name, and no other block name', () => {
+    const keywords = Object.values(assembled.pslBlockDescriptors)
+      .filter(isAuthoringPslBlockDescriptor)
+      .filter((descriptor) => descriptor.nameIsStorageName === true)
+      .map((descriptor) => descriptor.keyword);
+
+    expect(keywords).toEqual(['native_enum']);
+  });
 
   it('parses the native_enum block without diagnostics', () => {
     const { diagnostics } = parsePsl(source);

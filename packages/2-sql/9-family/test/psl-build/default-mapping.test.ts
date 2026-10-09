@@ -13,11 +13,7 @@ import {
   printJsonText,
   signedRange,
 } from '@internal/sql-contract/data-type-support';
-import {
-  SQL_EXPRESSION_DATA_TYPE_ID,
-  sqlExpressionAuthoringEntry,
-  sqlExpressionDataType,
-} from '@internal/sql-contract/sql-expression';
+import { sqlExpressionRegistration } from '@internal/sql-contract/sql-expression';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type DefaultMappingOptions,
@@ -78,7 +74,7 @@ const types: readonly DataType[] = [
   vector,
   blob,
   date,
-  sqlExpressionDataType,
+  ...sqlExpressionRegistration.dataTypes,
 ];
 
 const classify = createNumberClassifier({
@@ -122,7 +118,7 @@ const entries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
     print: printJsonText,
     documentation: 'A JSON document.',
   },
-  [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry,
+  ...sqlExpressionRegistration.authoring.dataTypes,
 };
 
 function forColumn(
@@ -180,6 +176,12 @@ describe('mapDefault function defaults', () => {
       mapDefault({ kind: 'function', expression: "(now()\n  + '00:03:00'::interval)" }),
     ).toEqual({
       attribute: `@default(sql${BACKTICK}\n(now()\n  + '00:03:00'::interval)\n${BACKTICK})`,
+    });
+  });
+
+  it('prints an expression that would not read back unchanged, because defaults compare with whitespace ignored', () => {
+    expect(mapDefault({ kind: 'function', expression: "concat(E'a\n  \nb')" })).toEqual({
+      attribute: `@default(sql${BACKTICK}\nconcat(E'a\n  \nb')\n${BACKTICK})`,
     });
   });
 
