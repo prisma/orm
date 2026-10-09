@@ -3,10 +3,10 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import { ColumnRef, IdentifierRef } from '@internal/sql-relational-core/ast';
 import { codecOf } from '@internal/sql-relational-core/expression';
+import { ExpressionImpl } from '@internal/sql-relational-core/functions';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
 import { tableToScope } from '../../src/runtime/builder-base';
-import { ExpressionImpl } from '../../src/runtime/expression-impl';
 import { createFieldProxy } from '../../src/runtime/field-proxy';
 import { joinedScope, usersScope } from './test-helpers';
 

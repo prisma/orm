@@ -15,11 +15,15 @@ import {
   SubqueryExpr,
 } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
+import {
+  createFunctions,
+  ExpressionImpl,
+  type Functions,
+} from '@internal/sql-relational-core/functions';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AggregateFunctions, Functions } from '../../src/expression';
-import { ExpressionImpl } from '../../src/runtime/expression-impl';
+import type { AggregateFunctions } from '../../src/expression';
 import { createFieldProxy } from '../../src/runtime/field-proxy';
-import { createAggregateFunctions, createFunctions } from '../../src/runtime/functions';
+import { createAggregateFunctions } from '../../src/runtime/functions';
 import type { QueryContext, ScopeField } from '../../src/scope';
 import { joinedScope, makeSubquery, usersScope } from './test-helpers';
 

@@ -17,8 +17,9 @@ import type {
   Expression,
   ScalarListExpression,
 } from '@internal/sql-relational-core/expression';
+import type { Functions } from '@internal/sql-relational-core/functions';
 import { expectTypeOf, test } from 'vitest';
-import type { FieldProxy, Functions } from '../../src/expression';
+import type { FieldProxy } from '../../src/expression';
 import type { QueryContext, Scope } from '../../src/scope';
 
 type CT = {

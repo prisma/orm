@@ -9,6 +9,8 @@ export default defineConfig({
     'src/exports/codec-descriptor-registry.ts',
     'src/exports/contract-free.ts',
     'src/exports/expression.ts',
+    'src/exports/functions.ts',
+    'src/exports/index-reference.ts',
     'src/exports/middleware.ts',
     'src/exports/plan.ts',
     'src/exports/query-lane-context.ts',

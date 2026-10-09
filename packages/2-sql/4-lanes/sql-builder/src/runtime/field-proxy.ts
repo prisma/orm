@@ -1,8 +1,8 @@
 import { ColumnRef, IdentifierRef } from '@internal/sql-relational-core/ast';
+import { ExpressionImpl } from '@internal/sql-relational-core/functions';
 import { blindCast } from '@internal/utils/casts';
 import type { FieldProxy } from '../expression';
 import type { Scope, ScopeTable } from '../scope';
-import { ExpressionImpl } from './expression-impl';
 
 export function createFieldProxy<S extends Scope>(scope: S): FieldProxy<S> {
   return new Proxy(

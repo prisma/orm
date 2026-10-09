@@ -7,7 +7,8 @@ import type {
   StorageColumnMapAt,
   StorageTable,
 } from '@internal/sql-contract/types';
-import type { Expression, ExpressionBuilder, FieldProxy, Functions } from '../expression';
+import type { Functions } from '@internal/sql-relational-core/functions';
+import type { Expression, ExpressionBuilder, FieldProxy } from '../expression';
 import type {
   DefaultScope,
   EmptyRow,

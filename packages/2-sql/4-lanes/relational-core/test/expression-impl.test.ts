@@ -1,7 +1,7 @@
-import { BinaryExpr, ColumnRef, LiteralExpr, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { ExpressionImpl } from '../../src/runtime/expression-impl';
-import type { ScopeField } from '../../src/scope';
+import { BinaryExpr, ColumnRef, LiteralExpr, ParamRef } from '../src/ast/types';
+import type { ScopeField } from '../src/expression';
+import { ExpressionImpl } from '../src/expression-impl';
 
 describe('ExpressionImpl', () => {
   it('wraps an AST node with field metadata', () => {

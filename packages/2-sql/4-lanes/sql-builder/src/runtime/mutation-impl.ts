@@ -16,6 +16,7 @@ import {
   type TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
+import { createFunctions } from '@internal/sql-relational-core/functions';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
@@ -37,7 +38,6 @@ import {
   combineWhereExprs,
 } from './builder-base';
 import { createFieldProxy } from './field-proxy';
-import { createFunctions } from './functions';
 
 /**
  * Validates and merges a variadic annotations call into a builder's

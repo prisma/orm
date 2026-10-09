@@ -55,6 +55,8 @@
     "./codec-descriptor-registry": "./dist/exports/codec-descriptor-registry.mjs",
     "./contract-free": "./dist/exports/contract-free.mjs",
     "./expression": "./dist/exports/expression.mjs",
+    "./functions": "./dist/exports/functions.mjs",
+    "./index-reference": "./dist/exports/index-reference.mjs",
     "./middleware": "./dist/exports/middleware.mjs",
     "./plan": "./dist/exports/plan.mjs",
     "./query-lane-context": "./dist/exports/query-lane-context.mjs",

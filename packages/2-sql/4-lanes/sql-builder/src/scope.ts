@@ -3,7 +3,7 @@ import type {
   QueryOperationTypesBase,
   StorageTable,
 } from '@internal/sql-contract/types';
-import type { AnyFromSource, SelectAst } from '@internal/sql-relational-core/ast';
+import type { AnyFromSource } from '@internal/sql-relational-core/ast';
 import type { CodecTypesBase, ScopeField } from '@internal/sql-relational-core/expression';
 
 export type { ScopeField };
@@ -16,7 +16,6 @@ export type GatedMethod<Capabilities, Required, Method> = Capabilities extends R
   : never;
 
 export declare const JoinOuterScope: unique symbol;
-export declare const SubqueryMarker: unique symbol;
 
 export type Expand<T> = { [K in keyof T]: T[K] } & unknown;
 export type EmptyRow = Record<never, ScopeField>;
@@ -73,12 +72,6 @@ export type NullableScope<S extends Scope> = {
   namespaces: {
     [TableName in keyof S['namespaces']]: NullableScopeTable<S['namespaces'][TableName]>;
   };
-};
-
-export type Subquery<RowType extends Record<string, ScopeField>> = {
-  [SubqueryMarker]: RowType;
-  buildAst(): SelectAst;
-  getRowFields(): Record<string, ScopeField>;
 };
 
 export type QueryContext = {

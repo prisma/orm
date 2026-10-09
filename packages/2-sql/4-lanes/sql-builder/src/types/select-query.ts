@@ -4,15 +4,15 @@ import type {
   ValidAnnotations,
 } from '@internal/framework-components/runtime';
 import type { LockStrengthCapabilities } from '@internal/sql-relational-core/ast';
+import type { Functions, Subquery } from '@internal/sql-relational-core/functions';
 import type {
   Expression,
   ExpressionBuilder,
   FieldProxy,
-  Functions,
   OrderByOptions,
   OrderByScope,
 } from '../expression';
-import type { GatedMethod, QueryContext, Scope, ScopeField, Subquery } from '../scope';
+import type { GatedMethod, QueryContext, Scope, ScopeField } from '../scope';
 import type { GroupedQuery } from './grouped-query';
 import type {
   LockOptions,
