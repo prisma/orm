@@ -26,8 +26,8 @@ A user authors an RLS policy that lets authenticated users update their own prof
 policyUpdate(Profile, {
   name: 'profile_owner_write',
   roles: [authenticated],
-  using: '"userId"::uuid = auth.uid()',
-  withCheck: '"userId"::uuid = auth.uid()',
+  using: sql`"userId"::uuid = auth.uid()`,
+  withCheck: sql`"userId"::uuid = auth.uid()`,
 })
 ```
 
@@ -128,7 +128,7 @@ The `PostgresRlsPolicy` IR node carries the **full wire name** in its `name` fie
 
 ```ts
 // TS authoring — prefix only
-policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], using: 'true' })
+policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], using: sql`true` })
 ```
 
 ```prisma

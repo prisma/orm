@@ -11,10 +11,17 @@ import {
   type ResolvedPackEntityHandle,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { AuthoredIndexMethod } from '@internal/sql-contract/index-naming';
+import {
+  isSqlExpression,
+  readSqlExpression,
+  requireSqlExpression,
+  SqlExpression,
+} from '@internal/sql-contract/sql-expression';
 import type { AuthoredStorageTypeInstance } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import { isStructuredError } from '@internal/utils/structured-error';
 import type {
   AttachedEntities,
   CheckNode,
@@ -36,6 +43,7 @@ import {
   type ForeignKeyConstraint,
   type IdConstraint,
   type IndexConstraint,
+  type IndexExpressionInput,
   isCrossSpaceHandle,
   type ModelAttributesSpec,
   normalizeRelationFieldNames,
@@ -834,11 +842,62 @@ function resolveDeferredColumns(
   });
 }
 
+/**
+ * The text of an index expression. A string has no `render`, and `'render' in` a string throws a
+ * `TypeError`, so the `sql` value is recognized first and anything else is refused last.
+ */
+function indexExpressionText(
+  spec: Pick<RuntimeModelSpec, 'modelName' | 'fieldToColumn'>,
+  expression: IndexExpressionInput,
+  fieldCodecIds: Readonly<Record<string, string>>,
+  owner: string,
+): string {
+  const sqlExpression = readSqlExpression(expression);
+  if (sqlExpression !== undefined) return sqlExpression.text;
+  if (typeof expression === 'object' && expression !== null && 'render' in expression) {
+    return renderedSqlText(
+      expression.render(
+        resolveDeferredColumns(
+          spec,
+          expression.fields.map((ref) => ref.fieldName),
+          fieldCodecIds,
+        ),
+      ),
+      `${owner} expression`,
+    );
+  }
+  return requireSqlExpression(expression, `${owner} expression`).text;
+}
+
+function renderedSqlText(rendered: string, what: string): string {
+  try {
+    return new SqlExpression(rendered).text;
+  } catch (cause) {
+    if (!isStructuredError(cause) || cause.code !== 'CONTRACT.SQL_EXPRESSION_INVALID') throw cause;
+    throw contractError('CONTRACT.SQL_EXPRESSION_INVALID', `${what}: ${cause.message}`, {
+      meta: { what, ...cause.meta },
+      cause,
+    });
+  }
+}
+
+function constraintOwner(
+  kind: 'Index' | 'Check',
+  modelName: string,
+  constraint: { readonly name?: string | undefined; readonly map?: string | undefined },
+): string {
+  const name = constraint.name ?? constraint.map;
+  return name === undefined ? `${kind} on "${modelName}"` : `${kind} "${name}"`;
+}
+
 /** The fields an index covers, in order: its own, or those of its deferred expression. */
 function coveredFieldNames(index: IndexConstraint): readonly string[] {
   if (index.fields !== undefined) return index.fields;
-  if (index.expression === undefined || typeof index.expression === 'string') return [];
-  return index.expression.fields.map((ref) => ref.fieldName);
+  const { expression } = index;
+  if (expression === undefined || isSqlExpression(expression) || typeof expression !== 'object') {
+    return [];
+  }
+  return expression.fields.map((ref) => ref.fieldName);
 }
 
 function resolveModelNode(
@@ -904,8 +963,12 @@ function resolveModelNode(
       AuthoredIndexMethod,
       'the constraint type carries the union; reading the two fields separately loses the correlation'
     >({ type: index.type, options });
+    const owner = constraintOwner('Index', spec.modelName, index);
     const carried = {
-      where: index.where,
+      where:
+        index.where === undefined
+          ? undefined
+          : requireSqlExpression(index.where, `${owner} where`).text,
       unique: index.unique,
       name: index.name,
       map: index.map,
@@ -914,16 +977,7 @@ function resolveModelNode(
     return index.expression !== undefined
       ? {
           ...carried,
-          expression:
-            typeof index.expression === 'string'
-              ? index.expression
-              : index.expression.render(
-                  resolveDeferredColumns(
-                    spec,
-                    index.expression.fields.map((ref) => ref.fieldName),
-                    fieldCodecIds,
-                  ),
-                ),
+          expression: indexExpressionText(spec, index.expression, fieldCodecIds, owner),
         }
       : {
           ...carried,
@@ -936,7 +990,10 @@ function resolveModelNode(
   });
   const checks = (spec.sqlSpec?.checks ?? []).map(
     (authoredCheck): CheckNode => ({
-      expression: authoredCheck.expression,
+      expression: requireSqlExpression(
+        authoredCheck.expression,
+        `${constraintOwner('Check', spec.modelName, authoredCheck)} expression`,
+      ).text,
       name: authoredCheck.name,
       map: authoredCheck.map,
     }),

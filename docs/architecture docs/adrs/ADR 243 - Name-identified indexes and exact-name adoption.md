@@ -51,7 +51,7 @@ model User {
 }
 ```
 
-The expression is a `sql` literal, the only form PSL takes for raw SQL ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
+The expression is a `sql` literal, the only form PSL takes for raw SQL, and a `sql` value in the TypeScript builder, as in ``constraints.index({ expression: sql`eql_v3.eq_term(email)`, name: 'users_email_eq', type: 'btree', options: {} })`` ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 Lowering hashes the canonical content tuple and stores the wire name in the contract:
 

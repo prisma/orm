@@ -16,6 +16,7 @@
  *     `.sql({ table })` form and default (identity) naming both included.
  */
 
+import { sql } from '@internal/sql-contract/sql-expression';
 import { extensionModel } from '@internal/sql-contract-ts/contract-builder';
 import { formatWireName } from '@internal/sql-schema-ir/naming';
 import { computeContentHash } from '@internal/target-postgres/rls-canonicalize';
@@ -36,6 +37,7 @@ import {
   policyInsert,
   policySelect,
   policyUpdate,
+  type RlsEntityHandle,
   rlsEnabled,
   role,
 } from '../../src/exports/contract-builder';
@@ -66,7 +68,7 @@ function namespace(contract: { storage: { namespaces: Record<string, unknown> } 
 
 describe('entities lowering: every helper lands in entries with PSL-matching keys', () => {
   const Profile = makeProfile();
-  const usingSql = "owner_id = current_setting('app.uid')::int";
+  const usingSql = sql`owner_id = current_setting('app.uid')::int`;
 
   const contract = defineContract({
     models: { Profile },
@@ -74,7 +76,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
       role('app_user'),
       rlsEnabled(Profile),
       policySelect(Profile, { name: 'p_read', roles: [appUser], using: usingSql }),
-      policyInsert(Profile, { name: 'p_insert', roles: [appUser], withCheck: 'true' }),
+      policyInsert(Profile, { name: 'p_insert', roles: [appUser], withCheck: sql`true` }),
       policyUpdate(Profile, {
         name: 'p_write',
         roles: [appUser],
@@ -86,8 +88,8 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
       policyAll(Profile, {
         name: 'p_all',
         roles: [anon, appUser],
-        using: 'true',
-        withCheck: 'true',
+        using: sql`true`,
+        withCheck: sql`true`,
       }),
     ],
   });
@@ -134,7 +136,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
 
   it('lowers policySelect to the same entity shape and wire name as the PSL path', () => {
     const expectedHash = computeContentHash({
-      using: usingSql,
+      using: usingSql.text,
       roles: ['app_user'],
       operation: 'select',
       permissive: true,
@@ -149,7 +151,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
       namespaceId: 'public',
       operation: 'select',
       roles: ['app_user'],
-      using: usingSql,
+      using: usingSql.text,
       permissive: true,
     });
   });
@@ -164,17 +166,17 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
 
     expect(ns().policy['p_write']).toMatchObject({
       operation: 'update',
-      using: usingSql,
-      withCheck: usingSql,
+      using: usingSql.text,
+      withCheck: usingSql.text,
     });
 
     expect(ns().policy['p_write_using_only']).toMatchObject({
       operation: 'update',
-      using: usingSql,
+      using: usingSql.text,
     });
     expect(ns().policy['p_write_using_only']?.withCheck).toBeUndefined();
 
-    expect(ns().policy['p_delete']).toMatchObject({ operation: 'delete', using: usingSql });
+    expect(ns().policy['p_delete']).toMatchObject({ operation: 'delete', using: usingSql.text });
     expect(ns().policy['p_all']).toMatchObject({
       operation: 'all',
       using: 'true',
@@ -185,7 +187,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
 
   it('single-predicate update omits the absent predicate from the hash (PSL omission parity)', () => {
     const expectedHash = computeContentHash({
-      using: usingSql,
+      using: usingSql.text,
       roles: ['app_user'],
       operation: 'update',
       permissive: true,
@@ -231,7 +233,7 @@ describe('round-trip through the contract serializer', () => {
       entities: [
         role('app_user'),
         rlsEnabled(Profile),
-        policySelect(Profile, { name: 'p_read', roles: [appUser], using: 'true' }),
+        policySelect(Profile, { name: 'p_read', roles: [appUser], using: sql`true` }),
       ],
     });
 
@@ -253,6 +255,32 @@ describe('round-trip through the contract serializer', () => {
 });
 
 describe('load-time diagnostics name the prefix', () => {
+  it.each([
+    ['using', policySelect, { using: 'true' }],
+    ['withCheck', policyInsert, { withCheck: 'true' }],
+    ['using', policyUpdate, { using: 'true', withCheck: sql`true` }],
+    ['withCheck', policyUpdate, { using: sql`true`, withCheck: 'true' }],
+  ] as const)('refuses a string %s from an untyped caller', (predicate, helper, predicates) => {
+    const Profile = makeProfile();
+    const untypedHelper = helper as (model: unknown, descriptor: unknown) => RlsEntityHandle;
+    const what = `Policy "p" ${predicate}`;
+    expect(() =>
+      defineContract({
+        models: { Profile },
+        entities: [
+          rlsEnabled(Profile),
+          untypedHelper(Profile, { name: 'p', roles: [anon], ...predicates }),
+        ],
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `${what} must be a sql\`...\` value.`,
+        meta: { what },
+      }),
+    );
+  });
+
   it('rejects a duplicate policy prefix in one namespace', () => {
     const Profile = makeProfile();
     expect(() =>
@@ -260,8 +288,8 @@ describe('load-time diagnostics name the prefix', () => {
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
-          policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' }),
-          policyDelete(Profile, { name: 'p_read', roles: [anon], using: 'false' }),
+          policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` }),
+          policyDelete(Profile, { name: 'p_read', roles: [anon], using: sql`false` }),
         ],
       }),
     ).toThrow(/policy prefix "p_read" is declared more than once in namespace "public"/);
@@ -276,7 +304,7 @@ describe('load-time diagnostics name the prefix', () => {
     expect(() =>
       defineContract({
         models: { Profile },
-        entities: [policySelect(Orphan, { name: 'p_orphan', roles: [anon], using: 'true' })],
+        entities: [policySelect(Orphan, { name: 'p_orphan', roles: [anon], using: sql`true` })],
       }),
     ).toThrow(/policy "p_orphan" targets model "Orphan", which is not in the contract's models/);
   });
@@ -296,7 +324,7 @@ describe('load-time diagnostics name the prefix', () => {
     expect(() =>
       defineContract({
         models: { Profile },
-        entities: [policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' })],
+        entities: [policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` })],
       }),
     ).toThrow(/policy "p_read" targets model "Profile".*rlsEnabled/);
   });
@@ -314,7 +342,7 @@ describe('load-time diagnostics name the prefix', () => {
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
-          policySelect(AuthUser, { name: 'p_cross', roles: [anon], using: 'true' }),
+          policySelect(AuthUser, { name: 'p_cross', roles: [anon], using: sql`true` }),
         ],
       }),
     ).toThrow(/policy "p_cross" targets model "AuthUser", which lives in another contract space/);
@@ -350,7 +378,7 @@ describe('load-time diagnostics name the prefix', () => {
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
-          policySelect(Profile, { name: longPrefix, roles: [anon], using: 'true' }),
+          policySelect(Profile, { name: longPrefix, roles: [anon], using: sql`true` }),
         ],
       }),
     ).toThrow(new RegExp(`policy prefix "${longPrefix}" exceeds the 54-byte maximum`));
@@ -363,7 +391,7 @@ describe('load-time diagnostics name the prefix', () => {
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
-        policySelect(Profile, { name: maxPrefix, roles: [anon], using: 'true' }),
+        policySelect(Profile, { name: maxPrefix, roles: [anon], using: sql`true` }),
       ],
     });
     expect(namespace(contract, 'public').policy[maxPrefix]?.name).toMatch(/_[0-9a-f]{8}$/);
@@ -379,7 +407,7 @@ describe('tableName is always the build-resolved table name', () => {
       models: { Order },
       entities: [
         rlsEnabled(Order),
-        policySelect(Order, { name: 'p_orders', roles: [anon], using: 'true' }),
+        policySelect(Order, { name: 'p_orders', roles: [anon], using: sql`true` }),
       ],
     });
 
@@ -396,7 +424,7 @@ describe('tableName is always the build-resolved table name', () => {
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
-        policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' }),
+        policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` }),
       ],
     });
 
@@ -415,7 +443,7 @@ describe('tableName is always the build-resolved table name', () => {
       models: { Session },
       entities: [
         rlsEnabled(Session),
-        policySelect(Session, { name: 'p_sessions', roles: [authenticated], using: 'true' }),
+        policySelect(Session, { name: 'p_sessions', roles: [authenticated], using: sql`true` }),
       ],
     });
 
@@ -436,7 +464,7 @@ describe('entities coexist with the factory authoring form', () => {
       {
         entities: [
           rlsEnabled(Profile),
-          policySelect(Profile, { name: 'p_read', roles: [anon], using: 'true' }),
+          policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` }),
         ],
       },
       () => ({ models: { Profile } }),

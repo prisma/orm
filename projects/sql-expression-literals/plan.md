@@ -149,8 +149,8 @@ flowchart LR
 
 **Carried over from the slice 2b review:**
 
-- Export the SQL family's data type registration (the `sql/expression` declaration and its authoring entry) as one value from `@internal/sql-contract/sql-expression`, use it in `packages/2-sql/9-family/src/core/control-descriptor.ts`, and spread it in the four test fixtures that rebuild it by hand (`postgres/test/fixtures/postgres-data-type-support.ts`, `adapters/postgres/test/helpers/postgres-data-type-support.ts`, `contract-psl/test/fixture-data-types.ts`, `language-server/test/completion-provider.test.ts`).
-- A default expression whose string constant holds a whitespace-only line, a carriage return or indentation shared by every line reads back from its `sql` literal with that constant changed. `mapDefault` prints it without the read-back check, because `resolvedDefaultsEqual` compares default expressions with case and whitespace ignored, so no plan shows the change. After this slice makes every text a TypeScript contract builds canonical, only a contract built before this slice can hold such a default. Decide whether `mapDefault` checks defaults too (ADR 129).
+- **Done in slice 3** (`sqlExpressionRegistration`). Export the SQL family's data type registration (the `sql/expression` declaration and its authoring entry) as one value from `@internal/sql-contract/sql-expression`, use it in `packages/2-sql/9-family/src/core/control-descriptor.ts`, and spread it in the four test fixtures that rebuild it by hand (`postgres/test/fixtures/postgres-data-type-support.ts`, `adapters/postgres/test/helpers/postgres-data-type-support.ts`, `contract-psl/test/fixture-data-types.ts`, `language-server/test/completion-provider.test.ts`).
+- A default expression whose string constant holds a whitespace-only line, a carriage return or indentation shared by every line reads back from its `sql` literal with that constant changed. `mapDefault` prints it without the read-back check, because `resolvedDefaultsEqual` compares default expressions with case and whitespace ignored, so no plan shows the change. After this slice makes every text a TypeScript contract builds canonical, only a contract built before this slice can hold such a default. Decide whether `mapDefault` checks defaults too (ADR 129). **Done in slice 3:** `contract print` refuses such a default; `contract infer` prints it and notes it on the model (design section 11.2, ADR 129, ADR 268).
 
 ## Slice 4 — Migration files write template literals
 
@@ -168,7 +168,7 @@ flowchart LR
 
 ## Slice 5 (stretch) — Migration files write `sql` values
 
-**Linear:** TML-3297. **Design:** 17, 19 (ADR 195, Migration System doc), 20 (slice 5 row).
+**Linear:** TML-3297. **Design:** 17, 19 (ADR 195, Migration System doc), 20 (slice 5 row). Docs: the Migration System doc's "Planner IR" paragraph on `tsQuotedTextSource` and its "Opaque SQL in DDL" sentence saying the contract-free factories "still take strings" (which also lists `createPolicy` and `createIndex` among them wrongly); ADR 195's recorded exception; ADR 268's consequences.
 
 **Outcome.** Generated migration files write SQL texts as `sql` template literals when they read back unchanged, including multi-line texts; migration functions accept a `sql` value or a string.
 
@@ -177,7 +177,10 @@ flowchart LR
 - `framework-components/test/tagged-literal.test.ts` (extend): `renderTaggedTemplateSource` single-line, multi-line, backtick, backslash, `${`; fallback for leading whitespace, a blank first line, a carriage return, a line holding only a non-breaking space.
 - Adapter `render-typescript.roundtrip.test.ts` (update): a multi-line CHECK, a policy predicate with `"userId"`, an index with `where`, and a fallback text; `ops.json` equals `renderOps(calls)`.
 - Postgres target `test/postgres-migration-op-builders.test.ts`: each of `createIndex` (expression and `extras.where`), `addCheckConstraint`, `createRlsPolicy` (`using`, `withCheck`), `alterColumnType` (`using`), `fn` and `checkExpression`, called once with strings and once with `sql` values holding the same text, gives identical ops.
-- The committed `examples/prisma-8-demo/migrations/app/20260422T0720_initial/migration.ts` and `20260922T1218_add_post_title_search/migration.ts` still produce their committed `ops.json` (`pnpm migrations:regen:examples` shows no diff).
+- The committed `examples/prisma-8-demo` migrations `20260422T0720_initial`, `20260917T0818_add_post_expires_at` and `20260922T1218_add_post_title_search`, which write SQL as strings, still produce their committed `ops.json` (`pnpm migrations:regen:examples` shows no diff). This proves only that strings still work: the script runs committed files and never regenerates `migration.ts`.
+- A migration file written with `sql` values (Postgres and SQLite: a CHECK, an index `where`, a policy predicate, a function default, and on SQLite `addColumn` and `recreateTable` with a function default) runs and produces the same `ops.json` as the same file written with strings.
+- SQLite `renderPostcheck` still writes its planner-built SQL as a string; `renderTaggedTemplateSource` falls back for a lone surrogate, a control character, U+2028 and U+2029.
+- `sqlTextOf` rebuilds a `sql` value made by another installed copy (indented text comes back canonical) and refuses a value that is neither a string nor a `sql` value.
 - Postgres target `test/migrations/render-typescript.test.ts` (update): the facade exports `sql`; the `sql` import appears exactly when a template was printed.
 
 ## Other open work that touches the same files
@@ -199,6 +202,7 @@ Whichever PR merges second rebases. From [research/review-followups.md](research
 - The four DDL sites that render a string wrapped in `opaqueSql(...)` on the spot (`addCheckConstraint`, both targets' `buildColumnDefaultSql`, the `alterColumnType` USING clause) should become DDL nodes, so the type of the field enforces the render rule instead of the doc. Found by the slice 1 architect review (A01); it belongs to the typed-DDL work, not this project.
 - Column defaults refuse `--` at authoring and in `assertSafeDefaultExpression`, so a default cannot carry a line comment. Slice 1 keeps the ban and documents why; lifting it is a separate decision.
 - `contract infer` can also produce such a default from a database. Postgres reprints a default from its parsed form, so whitespace outside string constants is normalized, but a string constant is reprinted with its characters unchanged, including line breaks, carriage returns and whitespace-only lines. An inferred default holding such a constant prints as a `sql` literal that reads back as a different value, and a database created from the inferred schema gets that value. Whether infer should check defaults, or skip such a default with a note, is a separate decision.
+- A public way to build a `sql` value from a computed string. It is not offered because the `sql` tag is the one entry point: every text then passes through the tag's canonicalization, and dynamic SQL is composed by interpolating other `sql` values rather than by joining strings. Reconsider if a user needs SQL text generated at run time.
 
 ## Close-out
 

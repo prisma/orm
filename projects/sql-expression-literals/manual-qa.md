@@ -747,3 +747,178 @@ ok
 CONTRACT.SOURCE_LOAD_FAILED: Failed to resolve contract source
   PSL_VALUE_TYPE_INCOMPATIBLE [{"offset":94,"line":6,"column":27}] Expected sql`...`
 ```
+
+## Slice 3: the TypeScript builder takes `sql` values
+
+Slice 3 makes the TypeScript `sql` tag return a `SqlExpression` and makes every builder field that takes raw SQL accept only that value. The script reads each new refusal as a user sees it: the run-time refusals JavaScript that is not type-checked meets, the checks `.default()` now runs, and the compile-time refusals.
+
+### Script
+
+Revised 2026-10-08 after review round 3: the expected messages name the object, a case covers an unnamed full-text index with several fields, a case covers a value that carries the `sql` marker but is not a real `SqlExpression`, and the compile check runs through the package's `typecheck` script, because the repository's command hook refuses a direct `tsc`.
+
+1. Run `pnpm install` and `pnpm build` at the repository root.
+2. Create `examples/prisma-8-demo/src/wip-qa-3/` with the two files below. Do not commit it. The folder sits in the example's `src/` so that `@prisma/orm-postgres` resolves and the example's `typecheck` covers it.
+3. From `examples/prisma-8-demo`, run `pnpm exec tsx src/wip-qa-3/refusals.ts`, then `pnpm typecheck`. Every `typecheck` error must come from `src/wip-qa-3/compile-errors.ts`.
+4. Delete `examples/prisma-8-demo/src/wip-qa-3/`.
+
+`refusals.ts`:
+
+```ts
+import { int4Column, textColumn } from '@prisma/orm-postgres/adapter/column-types';
+import {
+  check,
+  defineContract,
+  field,
+  fullTextIndex,
+  model,
+  policySelect,
+  rlsEnabled,
+  role,
+  type SqlExpression,
+  sql,
+} from '@prisma/orm-postgres/contract-builder';
+
+const untyped = (value: unknown) => value as SqlExpression;
+const untypedSql = sql as unknown as (strings: TemplateStringsArray, ...values: unknown[]) => SqlExpression;
+const untypedFullText = fullTextIndex as unknown as (fields: unknown, options: unknown) => unknown;
+const marked = (text: unknown) => untyped({ [Symbol.for('@prisma/sql-expression')]: true, text });
+const fields = () => ({ id: field.column(int4Column).id(), email: field.column(textColumn), title: field.column(textColumn) });
+const indexWhere = (where: SqlExpression) =>
+  defineContract({ models: { U: model('U', { fields: fields() }).sql(({ cols, constraints }) => ({ indexes: [constraints.index([cols.email], { name: 'u_a', where })] })) } });
+
+const cases: [string, () => unknown][] = [
+  ['a string in index where', () => indexWhere(untyped('email IS NULL'))],
+  ['a string in index expression', () =>
+    defineContract({ models: { U: model('U', { fields: fields() }).sql(({ constraints }) => ({ indexes: [constraints.index({ expression: untyped('lower(email)'), name: 'u_e' })] })) } })],
+  ['a string in check', () =>
+    defineContract({ models: { U: model('U', { fields: fields() }).sql({ checks: [check({ expression: untyped('id > 0'), name: 'u_c' })] }) } })],
+  ['a string in a policy using', () => {
+    const U = model('U', { fields: fields() }).sql({ table: 'u' });
+    return defineContract({ models: { U }, entities: [rlsEnabled(U), policySelect(U, { name: 'u_read', roles: [role('anon')], using: untyped('true') })] });
+  }],
+  ['a string in an unnamed fullTextIndex where, two fields', () =>
+    untypedFullText([{ kind: 'columnRef', fieldName: 'title' }, { kind: 'columnRef', fieldName: 'email' }], { where: 'true' })],
+  ['a marked object with indented text in index where', () => indexWhere(marked('\n    email IS NULL\n  '))],
+  ['a marked object with a number as text in index where', () => indexWhere(marked(1))],
+  ['.default(sql`now()`)', () => field.column(textColumn).default(sql`now()`)],
+  ['.default(sql`autoincrement()`)', () => field.column(textColumn).default(sql`autoincrement()`)],
+  ['unsafe SQL in .default()', () => field.column(textColumn).default(sql`1; DROP TABLE u`)],
+  ['a string inside ${…}', () => untypedSql`a = ${'x'}`],
+  ['NUL text (a real NUL character in the raw template)', () => sql(Object.assign(['a\u0000b'], { raw: ['a\u0000b'] }))],
+];
+
+for (const [name, run] of cases) {
+  try {
+    const result = run() as { storage?: unknown } | undefined;
+    const where = JSON.stringify(result?.storage ?? null).match(/"where":"[^"]*"/)?.[0];
+    console.log(`${name}: no error${where ? ` ${where}` : ''}`);
+  } catch (error) {
+    const e = error as { code?: string; message: string; meta?: unknown };
+    console.log(`${name}: ${e.code} ${e.message} ${JSON.stringify(e.meta)}`);
+  }
+}
+const ok = sql`
+  ${sql`"userId" = auth.uid()`}
+    AND deleted_at IS NULL
+`;
+console.log(`composed text: ${JSON.stringify(ok.text)}`);
+```
+
+`compile-errors.ts`:
+
+```ts
+import { textColumn } from '@prisma/orm-postgres/adapter/column-types';
+import { check, field, fullTextIndex, model, policySelect, role, sql } from '@prisma/orm-postgres/contract-builder';
+
+const U = model('U', { fields: { id: field.column(textColumn).id(), email: field.column(textColumn) } });
+U.sql(({ cols, constraints }) => ({ indexes: [constraints.index([cols.email], { name: 'a', where: 'email IS NULL' })] }));
+check({ expression: 'id > 0', name: 'c' });
+policySelect(U, { name: 'p', roles: [role('anon')], using: 'true' });
+fullTextIndex({ kind: 'columnRef', fieldName: 'email' }, { name: 'f', where: 'true' });
+sql`a = ${'x'}`;
+export const notSql: ReturnType<typeof sql> = { text: 'x' };
+```
+
+### Expected
+
+- Each string in a raw-SQL field is `CONTRACT.ARGUMENT_INVALID`, naming the object and the field: ``Index "u_a" where must be a sql`...` value.``, `Index "u_e" expression`, `Check "u_c" expression`, `Policy "u_read" using`.
+- An unnamed full-text index names its fields: ``Full-text index on fields "title", "email" where must be a sql`...` value.``
+- A marked object with indented text builds, and the contract stores the canonical text, `"where":"email IS NULL"`. A marked object whose text is a number is `CONTRACT.ARGUMENT_INVALID`.
+- `` sql`now()` `` and `` sql`autoincrement()` `` compile and are refused by `.default()` with `CONTRACT.DEFAULT_INVALID` and the rewrite; unsafe SQL is refused by `.default()`.
+- A string inside `${…}` is `CONTRACT.SQL_EXPRESSION_INTERPOLATION` with its index; a NUL character is `CONTRACT.SQL_EXPRESSION_INVALID`.
+- A composed value keeps the relative indentation of the template and joins the interpolated text.
+- `pnpm typecheck` reports an error for each of lines 5 to 10 of `compile-errors.ts`: a string in `where`, `check`, a policy's `using`, `fullTextIndex`'s `where` and inside `${…}`, and an object with a `text` that lacks the marker. It reports nothing else.
+
+### Run, 2026-10-08, after review round 3 fixes (`cab6bcce23`)
+
+Every Expected bullet matches. Logs: `wip/3-qa/refusals.log`, `wip/3-qa/typecheck.log`.
+
+`refusals.ts`:
+
+```text
+a string in index where: CONTRACT.ARGUMENT_INVALID Index "u_a" where must be a sql`...` value. {"what":"Index \"u_a\" where"}
+a string in index expression: CONTRACT.ARGUMENT_INVALID Index "u_e" expression must be a sql`...` value. {"what":"Index \"u_e\" expression"}
+a string in check: CONTRACT.ARGUMENT_INVALID Check "u_c" expression must be a sql`...` value. {"what":"Check \"u_c\" expression"}
+a string in a policy using: CONTRACT.ARGUMENT_INVALID Policy "u_read" using must be a sql`...` value. {"what":"Policy \"u_read\" using"}
+a string in an unnamed fullTextIndex where, two fields: CONTRACT.ARGUMENT_INVALID Full-text index on fields "title", "email" where must be a sql`...` value. {"what":"Full-text index on fields \"title\", \"email\" where"}
+a marked object with indented text in index where: no error "where":"email IS NULL"
+a marked object with a number as text in index where: CONTRACT.ARGUMENT_INVALID Index "u_a" where must be a sql`...` value. {"what":"Index \"u_a\" where"}
+.default(sql`now()`): CONTRACT.DEFAULT_INVALID Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. {"reason":"reserved-function","expression":"now()"}
+.default(sql`autoincrement()`): CONTRACT.DEFAULT_INVALID Write .default(autoincrement()) instead of sql`autoincrement()`; autoincrement() is a Prisma default function, not raw SQL. {"reason":"reserved-function","expression":"autoincrement()"}
+unsafe SQL in .default(): CONTRACT.DEFAULT_INVALID Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries. {"reason":"unsafe-sql","expression":"1; DROP TABLE u"}
+a string inside ${…}: CONTRACT.SQL_EXPRESSION_INTERPOLATION sql`...` only interpolates other sql`...` values; write any other text inside the template. {"index":0}
+NUL text (a real NUL character in the raw template): CONTRACT.SQL_EXPRESSION_INVALID Tagged literals must not contain NUL characters. {"reason":"nul","offset":1}
+composed text: "\"userId\" = auth.uid()\n  AND deleted_at IS NULL"
+```
+
+`pnpm typecheck`:
+
+```text
+> prisma-8-demo@8.0.0-rc.17 typecheck /Users/wmadden/Projects/prisma/orm/.claude/worktrees/sql-expression-literals-handover-da9f0f/examples/prisma-8-demo
+> tsc --project tsconfig.json --noEmit
+
+src/wip-qa-3/compile-errors.ts(5,92): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+src/wip-qa-3/compile-errors.ts(6,9): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+src/wip-qa-3/compile-errors.ts(7,53): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+src/wip-qa-3/compile-errors.ts(8,71): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(fields: FullTextFieldsInput<ColumnRef>, options: FullTextIndexNameOptions<"f">): IndexConstraint<readonly string[], "f">', gave the following error.
+    Type 'string' is not assignable to type 'SqlExpression'.
+src/wip-qa-3/compile-errors.ts(9,11): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SqlExpression'.
+src/wip-qa-3/compile-errors.ts(10,14): error TS2741: Property '[SQL_EXPRESSION_MARKER]' is missing in type '{ text: string; }' but required in type 'SqlExpression'.
+ ELIFECYCLE  Command failed with exit code 2.
+```
+
+Wording notes from the run, kept as they are: the field after the object name is not quoted (``Index "u_a" where must be…``), the format settled in review round 1; the NUL refusal says "Tagged literals", because the TypeScript and PSL messages are shared on purpose; a marked object whose `text` is not a string gets the plain-string message, which only a hand-built object can reach.
+
+### Run, 2026-10-01 (the earlier script)
+
+`refusals.ts` (`wip/3/manual-qa-runtime.log`):
+
+```text
+a string in index where: CONTRACT.ARGUMENT_INVALID Index "where" must be a sql`...` value. {"what":"Index \"where\""}
+a string in index expression: CONTRACT.ARGUMENT_INVALID Index "expression" must be a sql`...` value. {"what":"Index \"expression\""}
+a string in check: CONTRACT.ARGUMENT_INVALID Check "expression" must be a sql`...` value. {"what":"Check \"expression\""}
+a string in a policy using: CONTRACT.ARGUMENT_INVALID Policy "using" must be a sql`...` value. {"what":"Policy \"using\""}
+.default(sql`now()`): CONTRACT.DEFAULT_INVALID Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. {"reason":"reserved-function","expression":"now()"}
+.default(sql`autoincrement()`): CONTRACT.DEFAULT_INVALID Write .default(autoincrement()) instead of sql`autoincrement()`; autoincrement() is a Prisma default function, not raw SQL. {"reason":"reserved-function","expression":"autoincrement()"}
+unsafe SQL in .default(): CONTRACT.DEFAULT_INVALID Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries. {"reason":"unsafe-sql","expression":"1; DROP TABLE u"}
+a string inside ${…}: CONTRACT.SQL_EXPRESSION_INTERPOLATION sql`...` only interpolates other sql`...` values; write any other text inside the template. {"index":0}
+NUL text (a real NUL character in the raw template): CONTRACT.SQL_EXPRESSION_INVALID Tagged literals must not contain NUL characters. {"reason":"nul","offset":1}
+composed text: "\"userId\" = auth.uid()\n  AND deleted_at IS NULL"
+```
+
+`tsc` (`wip/3/manual-qa-typecheck.log`):
+
+```text
+wip-qa-3/compile-errors.ts(5,92): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(6,9): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(7,53): error TS2322: Type 'string' is not assignable to type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(8,71): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(column: ColumnRef, options: FullTextIndexNameOptions<"f">): IndexConstraint<never, "f">', gave the following error.
+    Type 'string' is not assignable to type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(9,11): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(10,7): error TS2741: Property '[SQL_EXPRESSION_MARKER]' is missing in type '{ text: string; }' but required in type 'SqlExpression'.
+wip-qa-3/compile-errors.ts(10,7): error TS6133: 'notSql' is declared but its value is never read.
+```
+
+Every case gave the expected result. The last `tsc` line only says the scratch variable is unused.

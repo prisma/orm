@@ -49,7 +49,9 @@ import type {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import {
+  requireSqlExpression,
   SQL_EXPRESSION_DATA_TYPE_ID,
+  type SqlExpression,
   sqlTextFromCanonical,
 } from '@internal/sql-contract/sql-expression';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -963,8 +965,12 @@ interface RlsPolicyHandleShape {
   readonly operation: RlsPolicyOperation;
   readonly name: string;
   readonly roles: readonly { readonly name: string }[];
-  readonly using?: string;
-  readonly withCheck?: string;
+  readonly using?: SqlExpression;
+  readonly withCheck?: SqlExpression;
+}
+
+function predicateText(predicate: SqlExpression | undefined, what: string): string | undefined {
+  return predicate === undefined ? undefined : requireSqlExpression(predicate, what).text;
 }
 
 interface RlsTargetCoordinate {
@@ -1124,8 +1130,8 @@ export function postgresLowerEntityHandles(
         namespaceId: coordinate.namespaceId,
         operation: policy.operation,
         roles: roleNames,
-        ...ifDefined('using', policy.using),
-        ...ifDefined('withCheck', policy.withCheck),
+        ...ifDefined('using', predicateText(policy.using, `Policy "${prefix}" using`)),
+        ...ifDefined('withCheck', predicateText(policy.withCheck, `Policy "${prefix}" withCheck`)),
       }),
     });
   }

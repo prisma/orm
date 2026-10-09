@@ -23,11 +23,13 @@ import type {
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
+import { readSqlExpression, type SqlExpression } from '@internal/sql-contract/sql-expression';
 import type {
   AuthoredStorageTypeInstance,
   SqlNamespaceBase,
   SqlNamespaceInput,
 } from '@internal/sql-contract/types';
+import { checkSqlDefaultText, reservedSqlDefaultText } from '@internal/sql-contract/validators';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { NamedConstraintSpec } from './authoring-type-utils';
@@ -203,17 +205,39 @@ type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
 
 type DefaultArgumentOf<State> =
   | ([EnumHandleOf<State>] extends [never]
-      ? DefaultLiteralOf<State> | ColumnDefault
+      ? DefaultLiteralOf<State> | ColumnDefault | SqlExpression
       : IsList<State> extends true
         ? readonly (EnumHandleOf<State>['values'][number] | NullElementOf<State>)[]
         : EnumHandleOf<State>['values'][number])
   | (State extends { readonly nullable: true } ? null : never);
 
 function toColumnDefault(value: unknown): AuthoredColumnDefault {
+  const expression = readSqlExpression(value);
+  if (expression !== undefined) {
+    return sqlExpressionDefault(expression);
+  }
   if (isColumnDefault(value)) {
     return value;
   }
   return { kind: 'literal', value };
+}
+
+function sqlExpressionDefault(value: SqlExpression): AuthoredColumnDefault {
+  const reserved = reservedSqlDefaultText(value.text);
+  if (reserved !== undefined) {
+    throw contractError(
+      'CONTRACT.DEFAULT_INVALID',
+      `Write .default(${reserved}()) instead of sql\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
+      { meta: { reason: 'reserved-function', expression: value.text } },
+    );
+  }
+  const unsafe = checkSqlDefaultText(value.text);
+  if (unsafe !== undefined) {
+    throw contractError('CONTRACT.DEFAULT_INVALID', unsafe, {
+      meta: { reason: 'unsafe-sql', expression: value.text },
+    });
+  }
+  return { kind: 'function', expression: value.text };
 }
 
 type ApplyMany<State extends AnyScalarFieldState, ElementsNullable extends boolean> =
@@ -910,7 +934,7 @@ type IndexOptionsBase<Name extends string | undefined> = {
   /** Exact physical name — adopted verbatim, no wire hash. Xor `name`. */
   readonly map?: string;
   /** Opaque SQL: partial-index predicate (WHERE body, without the keyword). */
-  readonly where?: string;
+  readonly where?: SqlExpression;
   readonly unique?: boolean;
 };
 
@@ -930,7 +954,7 @@ type IndexInput<
 
 /**
  * The expression overload's input: the whole CREATE INDEX element list as
- * one opaque string. `name` or `map` is required — enforced at lowering
+ * one opaque `sql` value. `name` or `map` is required — enforced at lowering
  * with the same diagnostics as PSL.
  */
 type ExpressionIndexInput<
@@ -971,14 +995,6 @@ export type UniqueConstraint<
   readonly name?: Name;
 };
 
-/**
- * An index expression rendered at lowering, once the storage column names are
- * known. `fields` resolve exactly as the field-tuple form's do — a `.column()`
- * override first, then the contract's column naming convention — and `render`
- * receives the resolved names in the same order. Authoring code cannot know
- * either, so an expression over a column has to be written this way rather
- * than as a string, or it silently stops matching the column it names.
- */
 /** A field the lowering resolved, as the renderer sees it. */
 export type DeferredIndexColumn = {
   /** The storage column name, after `.column()` and the naming convention. */
@@ -987,13 +1003,21 @@ export type DeferredIndexColumn = {
   readonly codecId: string;
 };
 
+/**
+ * An index expression rendered at lowering, once the storage column names are
+ * known. `fields` resolve exactly as the field-tuple form's do — a `.column()`
+ * override first, then the contract's column naming convention — and `render`
+ * receives the resolved names in the same order. Authoring code cannot know
+ * either, so an expression over a column has to be written this way rather
+ * than as a `sql` value, or it silently stops matching the column it names.
+ */
 export type DeferredIndexExpression = {
   readonly fields: readonly ColumnRef[];
   readonly render: (columns: readonly DeferredIndexColumn[]) => string;
 };
 
 /** Opaque SQL, either written out or rendered at lowering. */
-export type IndexExpressionInput = string | DeferredIndexExpression;
+export type IndexExpressionInput = SqlExpression | DeferredIndexExpression;
 
 /**
  * Index options rendered at lowering from the storage columns the index covers, in order: its
@@ -1033,7 +1057,7 @@ export type IndexConstraint<
 > = IndexConstraintElements<FieldNames> &
   IndexConstraintMethod & {
     readonly kind: 'index';
-    readonly where?: string;
+    readonly where?: SqlExpression;
     readonly unique?: boolean;
     readonly name?: Name;
     readonly map?: string;
@@ -1047,7 +1071,7 @@ export type IndexConstraint<
  */
 export type AuthoredCheckConstraint = {
   readonly kind: 'check';
-  readonly expression: string;
+  readonly expression: SqlExpression;
   readonly name?: string;
   readonly map?: string;
 };
@@ -1229,7 +1253,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
           readonly expression: IndexExpressionInput;
           readonly name?: string;
           readonly map?: string;
-          readonly where?: string;
+          readonly where?: SqlExpression;
           readonly unique?: boolean;
           readonly type?: string;
           readonly options?: unknown;
@@ -1237,7 +1261,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     options?: {
       readonly name?: string;
       readonly map?: string;
-      readonly where?: string;
+      readonly where?: SqlExpression;
       readonly unique?: boolean;
       readonly type?: string;
       readonly options?: unknown;
@@ -1346,7 +1370,7 @@ export type ConstraintsDsl = ReturnType<typeof createConstraintsDsl>;
  * rather than a method on `constraints`.
  */
 export function check(input: {
-  readonly expression: string;
+  readonly expression: SqlExpression;
   readonly name?: string;
   readonly map?: string;
 }): AuthoredCheckConstraint {

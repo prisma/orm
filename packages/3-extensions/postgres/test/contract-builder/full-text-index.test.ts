@@ -7,6 +7,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import { sql } from '@internal/sql-contract/sql-expression';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
@@ -191,7 +192,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
 
   it('passes a where predicate through to a partial index', () => {
     const [index] = indexesOf((cols) => [
-      fullTextIndex(cols.title, { where: 'id > 0', name: 'message_title_search_live' }),
+      fullTextIndex(cols.title, { where: sql`id > 0`, name: 'message_title_search_live' }),
     ]);
 
     expect(index).toMatchObject({ where: 'id > 0', columns: ['title'] });
@@ -229,7 +230,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
     });
 
     it('warns once when the index also has a where predicate', () => {
-      indexesOf((cols) => [fullTextIndex(cols.title, { where: 'id > 0', map: 'legacy_live' })]);
+      indexesOf((cols) => [fullTextIndex(cols.title, { where: sql`id > 0`, map: 'legacy_live' })]);
 
       expect(exactNameWarnings()).toHaveLength(1);
     });
@@ -239,6 +240,52 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
 
       expect(exactNameWarnings()).toEqual([]);
     });
+  });
+
+  it('refuses a string where from an untyped caller, naming the index', () => {
+    const untypedFullTextIndex = fullTextIndex as (fields: unknown, options: unknown) => never;
+    const what = 'Full-text index "message_title_search_live" where';
+    expect(() =>
+      indexesOf((cols) => [
+        untypedFullTextIndex(cols.title, { where: 'id > 0', name: 'message_title_search_live' }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `${what} must be a sql\`...\` value.`,
+        meta: { what },
+      }),
+    );
+  });
+
+  it('refuses a string where from an untyped caller with no name or map, naming the field', () => {
+    const untypedFullTextIndex = fullTextIndex as (fields: unknown, options: unknown) => never;
+    const what = 'Full-text index on fields "title" where';
+    expect(() =>
+      indexesOf((cols) => [untypedFullTextIndex(cols.title, { where: 'id > 0' })]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `${what} must be a sql\`...\` value.`,
+        meta: { what },
+      }),
+    );
+  });
+
+  it('refuses a string where from an untyped caller with no name or map, naming every field', () => {
+    const untypedFullTextIndex = fullTextIndex as (fields: unknown, options: unknown) => never;
+    const what = 'Full-text index on fields "title", "subtitle", "text" where';
+    expect(() =>
+      indexesOf((cols) => [
+        untypedFullTextIndex([[cols.title, cols.subtitle], cols.text], { where: 'id > 0' }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `${what} must be a sql\`...\` value.`,
+        meta: { what },
+      }),
+    );
   });
 
   it('refuses a column that is not stored through a textual codec, naming the field and its codec', () => {

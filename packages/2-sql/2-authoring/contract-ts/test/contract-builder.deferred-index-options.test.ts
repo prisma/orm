@@ -2,6 +2,7 @@
  * An index's options may be a function rendered at lowering, from the storage columns its fields resolve to. A pack helper whose options name columns needs this, because a `.column()` override and the contract's column naming convention are both unknown while the model is being authored.
  */
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import type { SqlExpression } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
@@ -33,7 +34,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 function messageIndexes(options: {
   readonly mappedColumn?: string;
   readonly naming?: ContractInput['naming'];
-  readonly elements?: 'fields' | 'expression';
+  readonly elements?: 'fields' | 'expression' | 'untyped string expression';
 }) {
   const seen: DeferredIndexColumn[][] = [];
   const searchText = options.mappedColumn
@@ -58,18 +59,21 @@ function messageIndexes(options: {
           },
           name: 'message_search',
         };
+        const untypedStringExpression = 'lower(title)' as unknown as SqlExpression;
         const index: IndexConstraint =
-          options.elements === 'expression'
-            ? {
-                kind: 'index',
-                expression: {
-                  fields: [cols.title, cols.searchText],
-                  render: (columns) =>
-                    columns.map((column) => `lower("${column.name}")`).join(', '),
-                },
-                ...method,
-              }
-            : { kind: 'index', fields: ['title', 'searchText'], ...method };
+          options.elements === 'untyped string expression'
+            ? { kind: 'index', expression: untypedStringExpression, ...method }
+            : options.elements === 'expression'
+              ? {
+                  kind: 'index',
+                  expression: {
+                    fields: [cols.title, cols.searchText],
+                    render: (columns) =>
+                      columns.map((column) => `lower("${column.name}")`).join(', '),
+                  },
+                  ...method,
+                }
+              : { kind: 'index', fields: ['title', 'searchText'], ...method };
         return { table: 'message', indexes: [index] };
       }),
     },
@@ -110,6 +114,17 @@ describe('deferred index options', () => {
       options: { fields: [['title', 'body_text']] },
       prefix: 'message_search',
     });
+  });
+
+  it('refuses a string expression from an untyped caller before rendering options over no fields', () => {
+    const what = 'Index "message_search" expression';
+    expect(() => messageIndexes({ elements: 'untyped string expression' })).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `${what} must be a sql\`...\` value.`,
+        meta: { what },
+      }),
+    );
   });
 
   it("renders the contract's column naming convention", () => {

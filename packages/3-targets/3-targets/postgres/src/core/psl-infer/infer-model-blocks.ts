@@ -51,7 +51,11 @@ import { createUniqueFieldName } from '../psl-build/unique-name';
 import type { InferredColumnDefaults } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
-import { printableIndex, SQL_DOES_NOT_READ_BACK } from './infer-sql-text';
+import {
+  defaultDoesNotReadBackNote,
+  printableIndex,
+  SQL_DOES_NOT_READ_BACK,
+} from './infer-sql-text';
 
 export function buildModel(
   table: SqlTableIR,
@@ -86,6 +90,7 @@ export function buildModel(
 
   const derivedCheckNames = computeDerivedCheckNames(table);
 
+  const defaultNotes: string[] = [];
   const fields: PslField[] = [];
   for (const column of Object.values(table.columns)) {
     fields.push(
@@ -103,6 +108,7 @@ export function buildModel(
         singlePkConstraintName,
         uniqueColumns,
         derivedCheckNames,
+        () => defaultNotes.push(defaultDoesNotReadBackNote(column.name)),
       ),
     );
   }
@@ -185,6 +191,7 @@ export function buildModel(
     ...(warnings.length > 0 ? [`// WARNING: ${warnings.join(' ')}`] : []),
     ...policySkipNotes,
     ...sqlSkipNotes,
+    ...defaultNotes,
   ];
   const comment = commentLines.length > 0 ? commentLines.join('\n') : undefined;
 
@@ -248,6 +255,7 @@ function buildScalarField(
   singlePkConstraintName: string | undefined,
   uniqueColumns: ReadonlyMap<string, string | undefined>,
   derivedCheckNames: ReadonlySet<string>,
+  noteDefaultThatDoesNotReadBack: () => void,
 ): PslField {
   const resolvedField = fieldNameMap?.get(column.name);
   const fieldName = resolvedField?.fieldName ?? toFieldName(column.name).name;
@@ -312,6 +320,7 @@ function buildScalarField(
     },
     (value) =>
       columnDefaults.readsBack(value, resolution.pslType, isEnumColumn, column.many === true),
+    noteDefaultThatDoesNotReadBack,
   );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));
@@ -372,6 +381,7 @@ function inferDefaultAttribute(
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
   if (
     column.default === undefined &&
@@ -390,7 +400,13 @@ function inferDefaultAttribute(
     // SQL text read against the element type only yields a function, which
     // the interpreter rejects on a list column.
     return Array.isArray(column.resolvedDefault.value)
-      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping, readsBack)
+      ? literalOrRawAttribute(
+          column.resolvedDefault,
+          column,
+          defaultMapping,
+          readsBack,
+          noteTextThatDoesNotReadBack,
+        )
       : undefined;
   }
   const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
@@ -398,9 +414,15 @@ function inferDefaultAttribute(
     return undefined;
   }
   if (parsed.kind === 'literal') {
-    return literalOrRawAttribute(parsed, column, defaultMapping, readsBack);
+    return literalOrRawAttribute(
+      parsed,
+      column,
+      defaultMapping,
+      readsBack,
+      noteTextThatDoesNotReadBack,
+    );
   }
-  return mappedAttribute(parsed, defaultMapping);
+  return mappedAttribute(parsed, defaultMapping, noteTextThatDoesNotReadBack);
 }
 
 /**
@@ -412,6 +434,7 @@ function literalOrRawAttribute(
   column: SqlColumnIR,
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
   const printed: ColumnDefault =
     columnDefault.kind === 'literal'
@@ -432,14 +455,26 @@ function literalOrRawAttribute(
       : mapDefault(printed, defaultMapping);
   if (result !== undefined) return result.attribute;
   return typeof column.default === 'string'
-    ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
+    ? mappedAttribute(
+        { kind: 'function', expression: column.default },
+        defaultMapping,
+        noteTextThatDoesNotReadBack,
+      )
     : undefined;
 }
 
+/**
+ * A default expression prints even when its `sql` literal reads back as different text: dropping it
+ * would let the next plan drop the default. The caller notes it instead.
+ */
 function mappedAttribute(
   columnDefault: ColumnDefault,
   defaultMapping: DefaultMappingOptions | undefined,
+  noteTextThatDoesNotReadBack: () => void,
 ): string | undefined {
+  if (columnDefault.kind === 'function' && !sqlTextsReadBack([columnDefault.expression])) {
+    noteTextThatDoesNotReadBack();
+  }
   return mapDefault(columnDefault, defaultMapping)?.attribute;
 }
 
