@@ -27,6 +27,7 @@ model User {
 }
 
 enum Role {
+  @@type("pg/text@1")
   +BaseRoles
   GUEST
 }

@@ -66,7 +66,7 @@ Attributes are not checked for duplicates here. Whether two `@@index` or two `@@
 - **A mixin name in type position is rejected** the way a namespace name is today: `PSL_UNRESOLVED_REFERENCE`, `"<written>" is a mixin; a type reference must name a model, composite type, enum, or named type`.
 
 - **The binder passes the mixin itself as the owner.** `AttributeSpecContext.model`, `UnsupportedAttribute.owner` and `UnresolvedTypeReference.owner` are widened to accept a `MixinSymbol`. No object shaped like a model is built around a mixin.
-- **The family callbacks word their messages for a mixin.** `describeUnsupportedAttribute` (SQL and Mongo) and `describeUnresolvedType` (Mongo) say `Mixin "<name>"` where they say `Model "<name>"` for a model. For a mixin whose keyword is `type`, they do what they do for a composite type. This is a wording change only; interpretation never receives a mixin.
+- **The family callbacks word their messages for a mixin.** `describeUnsupportedAttribute` (SQL and Mongo) says `Mixin "<name>"` where it says `Model "<name>"` for a model. `describeUnresolvedType` (Mongo) receives the mixin too; its message has no such word, so it is unchanged. For a mixin whose keyword is `type`, they do what they do for a composite type. This is a wording change only; interpretation never receives a mixin.
 
 How the binder tells a block's own members from mixed-in ones is the implementer's choice, with one constraint: family interpreters, attribute specs and block specs are not given a way to ask.
 
